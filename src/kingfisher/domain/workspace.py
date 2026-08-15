@@ -21,7 +21,6 @@ and by durability, which is what makes retention safe:
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -34,6 +33,7 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "data",
     "derived",
     "skills",
+    "subagents",
     "memory",
     "reports",
     "runs",
@@ -61,6 +61,7 @@ TRACKED_PATHS: tuple[str, ...] = (
     "PROMPT.md",
     "reports",
     "skills",
+    "subagents",
     "memory",
     "runs",
 )

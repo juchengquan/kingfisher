@@ -34,3 +34,13 @@ def test_data_is_routed_so_the_deny_rule_is_legal(cfg):
     backend = build_backend(cfg)
     assert "/data/" in backend.routes
     assert str((cfg.workspace / "data").resolve()) == str(backend.routes["/data/"].cwd)
+
+
+def test_skills_is_routed_for_the_same_reason(cfg):
+    """A request that activates a subset of the skills needs deny rules for the
+    rest, and those rules are rejected unless /skills/ is a route too. Caught by
+    a live run, not by a unit test -- the wiring tests spy on create_deep_agent
+    and so never reach deepagents' own validation."""
+    backend = build_backend(cfg)
+    assert "/skills/" in backend.routes
+    assert str((cfg.workspace / "skills").resolve()) == str(backend.routes["/skills/"].cwd)

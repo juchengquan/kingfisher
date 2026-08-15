@@ -46,6 +46,12 @@ def shell_env(cfg: Config) -> dict[str, str]:
 
 DATA_ROUTE = "/data/"
 
+#: Routed for the same reason `/data/` is, not because skills need isolating:
+#: `FilesystemMiddleware` rejects `permissions=` outright unless every rule path
+#: is scoped to a route, and a request that activates a subset of the skills
+#: needs deny rules for the rest.
+SKILLS_ROUTE = "/skills/"
+
 
 def build_backend(cfg: Config) -> BackendProtocol:
     """Build the backend rooted at the workspace.
@@ -63,12 +69,18 @@ def build_backend(cfg: Config) -> BackendProtocol:
     default backend.
     """
     (cfg.workspace / ".kingfisher" / "tmp").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "data").mkdir(parents=True, exist_ok=True)
+    for routed in ("data", "skills"):
+        (cfg.workspace / routed).mkdir(parents=True, exist_ok=True)
 
     shell = LocalShellBackend(
         root_dir=str(cfg.workspace),
         env=shell_env(cfg),
         timeout=cfg.timeout_s,
     )
-    data = FilesystemBackend(root_dir=str(cfg.workspace / "data"))
-    return CompositeBackend(default=shell, routes={DATA_ROUTE: data})
+    return CompositeBackend(
+        default=shell,
+        routes={
+            DATA_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "data")),
+            SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "skills")),
+        },
+    )

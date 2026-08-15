@@ -98,7 +98,20 @@ def stream(
         yield RunEvent(kind="sweep_failed", text="; ".join(swept.failures))
     yield RunEvent(kind="run_start", text=turn.virtual_dir)
 
-    graph = agent if agent is not None else build_agent(cfg, checkpointer=checkpointer)
+    if agent is not None and not request.capabilities.is_unrestricted:
+        # An injected agent was built elsewhere, so this request's restrictions
+        # were never applied to it. Refusing beats running with more access
+        # than the caller asked for and saying nothing.
+        msg = "cannot honour request.capabilities against a pre-built agent"
+        raise ValueError(msg)
+
+    graph = (
+        agent
+        if agent is not None
+        else build_agent(
+            cfg, capabilities=request.capabilities, checkpointer=checkpointer
+        )
+    )
 
     # The turn directory is run-scoped, so it reaches the model here rather
     # than in the system prompt — putting it there would change the cached

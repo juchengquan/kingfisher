@@ -17,8 +17,11 @@ from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.adapters.backend import build_backend
+from kingfisher.adapters.capabilities import ScopedSkills, ToolAllowlist
 from kingfisher.adapters.models import build_model
+from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.config import Config
+from kingfisher.domain.subagent import SubagentSpec, load_all
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
@@ -40,6 +43,19 @@ USER_PROMPT_FILE = "PROMPT.md"
 
 SKILLS_SOURCES = ["/skills/"]
 MEMORY_SOURCES = ["/memory/AGENTS.md"]
+
+
+class CapabilityError(ValueError):
+    """A request named a tool, skill or subagent the workspace does not offer."""
+
+
+def _available_skills(workspace: Path) -> tuple[str, ...]:
+    """Skill names the workspace defines, by directory name."""
+    directory = Path(workspace) / "skills"
+    if not directory.is_dir():
+        return ()
+    return tuple(sorted(p.name for p in directory.iterdir() if (p / "SKILL.md").is_file()))
+
 
 # `/data` holds the only artifacts git cannot restore, because inputs are never
 # committed. `FilesystemOperation` is just read|write and `delete` maps to
@@ -117,9 +133,44 @@ def system_prompt(cfg: Config | None = None) -> str:
     )
 
 
+def _as_subagent(spec: SubagentSpec) -> dict[str, Any]:
+    """Translate kingfisher's definition into deepagents' `SubAgent`.
+
+    The mapping is 1:1 by design — the markdown format was chosen to fit it,
+    so nothing is lost or invented here.
+    """
+    subagent: dict[str, Any] = {
+        "name": spec.name,
+        "description": spec.description,
+        "system_prompt": spec.system_prompt,
+    }
+    if spec.tools is not None:
+        subagent["tools"] = list(spec.tools)
+    if spec.model is not None:
+        subagent["model"] = spec.model
+    return subagent
+
+
+def _skill_denials(activated: tuple[str, ...], available: tuple[str, ...]) -> list[FilesystemPermission]:
+    """Deny reads of skills this request did not activate.
+
+    The listing filter only stops the agent being *told*; this stops the file
+    tools reading it anyway. Neither stops `execute`, which bypasses tool-level
+    permissions entirely — so this is a real boundary only for a request that
+    did not activate the shell.
+    """
+    allowed = set(activated)
+    return [
+        FilesystemPermission(operations=["read"], paths=[f"/skills/{name}/**"], mode="deny")
+        for name in available
+        if name not in allowed
+    ]
+
+
 def build_agent(
     cfg: Config,
     *,
+    capabilities: Capabilities | None = None,
     model: Any | None = None,
     backend: Any | None = None,
     checkpointer: Any | None = None,
@@ -131,18 +182,53 @@ def build_agent(
     already carries anti-overuse guidance and a finishing convention that would
     only be rewritten worse.
     """
+    capabilities = capabilities or Capabilities()
+    resolved_backend = backend if backend is not None else build_backend(cfg)
+    middleware: list[Any] = [TodoListMiddleware()]
+    permissions = [DATA_IS_READ_ONLY]
     extras: dict[str, Any] = {}
-    if cfg.skills_enabled:
-        extras["skills"] = SKILLS_SOURCES
+
     if cfg.memory_enabled:
         extras["memory"] = MEMORY_SOURCES
 
+    if cfg.skills_enabled:
+        if capabilities.skills is None:
+            extras["skills"] = SKILLS_SOURCES
+        else:
+            available = _available_skills(cfg.workspace)
+            unknown = tuple(s for s in capabilities.skills if s not in available)
+            if unknown:
+                msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
+                raise CapabilityError(msg)
+            # Supplied as middleware rather than via `skills=`: passing that
+            # argument makes deepagents construct its own SkillsMiddleware,
+            # leaving no way to substitute a filtered one.
+            middleware.append(
+                ScopedSkills(
+                    allowed=capabilities.skills,
+                    backend=resolved_backend,
+                    sources=SKILLS_SOURCES,
+                )
+            )
+            permissions.extend(_skill_denials(capabilities.skills, available))
+
+    if capabilities.subagents is not None:
+        defined = load_all(cfg.workspace)
+        unknown = tuple(n for n in capabilities.subagents if n not in defined)
+        if unknown:
+            msg = f"unknown subagent(s): {', '.join(unknown)}; workspace defines {tuple(defined)}"
+            raise CapabilityError(msg)
+        extras["subagents"] = [_as_subagent(defined[n]) for n in capabilities.subagents]
+
+    if capabilities.tools is not None:
+        middleware.append(ToolAllowlist(capabilities.tools))
+
     return create_deep_agent(
         model=model if model is not None else build_model(cfg),
-        backend=backend if backend is not None else build_backend(cfg),
+        backend=resolved_backend,
         system_prompt=system_prompt(cfg),
-        middleware=[TodoListMiddleware()],
-        permissions=[DATA_IS_READ_ONLY],
+        middleware=middleware,
+        permissions=permissions,
         checkpointer=checkpointer,
         **extras,
     )
