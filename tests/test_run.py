@@ -14,17 +14,23 @@ class StubAgent:
     """Stands in for the compiled graph so the orchestration is testable.
 
     Emits the same (mode, chunk) shape LangGraph does for
-    `stream_mode=["updates", "values"]`.
+    `stream_mode=["updates", "values", "messages"]`. A `messages` chunk is a
+    `(message, metadata)` pair, which is why `tokens` is a list of pairs.
     """
 
-    def __init__(self, answer: str, *, updates: list | None = None) -> None:
+    def __init__(
+        self, answer: str, *, updates: list | None = None, tokens: list | None = None
+    ) -> None:
         self.answer = answer
         self.updates = updates or []
+        self.tokens = tokens or []
         self.state: dict | None = None
         self.config: dict | None = None
 
     def stream(self, state, config, stream_mode=None):
         self.state, self.config = state, config
+        for chunk in self.tokens:
+            yield ("messages", chunk)
         for update in self.updates:
             yield ("updates", update)
         yield ("values", {"messages": [AIMessage(content=self.answer)]})

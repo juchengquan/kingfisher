@@ -99,7 +99,12 @@ class RunEvent:
 
     # A flat dispatch, one branch per kind: fewer returns would mean more
     # nesting, not less branching.
-    def __str__(self) -> str:
+    def __str__(self) -> str:  # noqa: PLR0911
+        if self.kind == "token":
+            # A fragment, not a line. A tag would assert a boundary that is not
+            # there -- chunks split mid-word -- and `_line` would flatten the
+            # markdown the model is in the middle of writing.
+            return self.text
         if self.kind == "model_call":
             pairs = zip(self.tools, self.args or ({},) * len(self.tools), strict=True)
             rendered = ", ".join(_render_call(name, args) for name, args in pairs)

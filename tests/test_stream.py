@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from kingfisher.app.run import Request, stream
 from tests.conftest import StubCheckpointer
@@ -207,6 +207,61 @@ def test_events_render_as_readable_lines(cfg):
     rendered = [str(e) for e in _events(cfg, _agent_with_a_tool_call())]
     assert any("execute" in line for line in rendered)
     assert any("cached=80" in line for line in rendered)
+
+
+def test_prose_arrives_as_token_fragments(cfg):
+    """Chunks split mid-word; reassembly is the renderer's job, not the domain's."""
+    agent = StubAgent(
+        "42",
+        tokens=[
+            (AIMessageChunk(content="7 to"), {"langgraph_node": "model"}),
+            (AIMessageChunk(content=" seven.txt"), {"langgraph_node": "model"}),
+        ],
+    )
+    tokens = [e for e in _events(cfg, agent) if e.kind == "token"]
+
+    assert [t.text for t in tokens] == ["7 to", " seven.txt"]
+    assert all(t.channel == "answer" for t in tokens)
+
+
+def test_a_token_renders_as_its_bare_text(cfg):
+    """A fragment is not a line: a tag would assert a boundary that is not there."""
+    agent = StubAgent("x", tokens=[(AIMessageChunk(content="a\n\nb"), {})])
+    (token,) = [e for e in _events(cfg, agent) if e.kind == "token"]
+
+    assert str(token) == "a\n\nb"  # neither collapsed nor prefixed
+
+
+def test_token_content_blocks_are_read_as_text(cfg):
+    """The Responses API shape reaches this stream too."""
+    chunk = AIMessageChunk(content=[{"type": "text", "text": "The answer is 42."}])
+    agent = StubAgent("42", tokens=[(chunk, {})])
+    (token,) = [e for e in _events(cfg, agent) if e.kind == "token"]
+
+    assert token.text == "The answer is 42."
+    assert "'type':" not in token.text
+
+
+def test_tool_results_on_the_token_stream_are_not_prose(cfg):
+    """They arrive here untruncated; `tool_result` already carries them, bounded."""
+    agent = StubAgent(
+        "ok",
+        tokens=[
+            (
+                ToolMessage(content="x" * 5000, name="read_file", tool_call_id="c"),
+                {"langgraph_node": "tools"},
+            )
+        ],
+    )
+
+    assert not [e for e in _events(cfg, agent) if e.kind == "token"]
+
+
+def test_a_usage_only_chunk_produces_no_token(cfg):
+    """The last chunk of a turn carries the usage and no text."""
+    agent = StubAgent("ok", tokens=[(AIMessageChunk(content=""), {"langgraph_node": "model"})])
+
+    assert not [e for e in _events(cfg, agent) if e.kind == "token"]
 
 
 def test_the_adapter_owns_the_stream_modes(cfg):

@@ -25,7 +25,7 @@ from __future__ import annotations
 from collections.abc import Iterator, Mapping
 from typing import Any
 
-from langchain_core.messages import AIMessage, ToolMessage
+from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 from langgraph.types import StreamMode
 
 from kingfisher.domain.result import RunEvent
@@ -33,9 +33,20 @@ from kingfisher.domain.result import RunEvent
 #: How much of a tool result or message to keep on an event.
 PREVIEW = 300
 
+#: A `messages` chunk is a (message, metadata) pair.
+TOKEN_CHUNK_PARTS = 2
+
 #: The stream modes we ask for. `updates` drives progress events; `values`
-#: carries the full state, whose last emission holds the final answer.
-STREAM_MODES: list[StreamMode] = ["updates", "values"]
+#: carries the full state, whose last emission holds the final answer;
+#: `messages` carries the model's output as it is generated.
+#:
+#: `messages` is not a display choice. LangGraph installs a streaming callback
+#: handler to serve it, which makes `_should_stream` true and turns every model
+#: call into SSE. That is the point of asking for it: a non-streaming request
+#: has to complete the whole generation inside `timeout_s`, while SSE resets
+#: the read clock on every chunk. Streaming is how a long turn survives, not
+#: only how it is watched -- so it is not a flag, and `run()` gets it too.
+STREAM_MODES: list[StreamMode] = ["updates", "values", "messages"]
 
 
 def user_payload(text: str) -> dict[str, Any]:
@@ -112,6 +123,27 @@ def messages_in(update: Any) -> list[Any]:
     return list(messages) if isinstance(messages, (list, tuple)) else [messages]
 
 
+def _token_event(chunk: Any) -> RunEvent | None:
+    """One `messages` chunk into a token event, or nothing.
+
+    Tool results travel this stream too, and untruncated -- a `read_file` of a
+    large CSV arrives here in full. They are already carried, bounded to
+    `PREVIEW`, as `tool_result`, so letting them through would both duplicate
+    them and undo the bound. Chunks holding only usage, or only the fragments
+    of a tool call's arguments, carry no text and are likewise nothing to show.
+    """
+    if not isinstance(chunk, tuple) or len(chunk) != TOKEN_CHUNK_PARTS:
+        return None
+    message, _metadata = chunk
+    # `AIMessageChunk` and not `AIMessage`: the former is a subclass, and only
+    # it appears on this stream. Testing for the base class would admit the
+    # tool results this exists to exclude.
+    if not isinstance(message, AIMessageChunk):
+        return None
+    text = message.text
+    return RunEvent(kind="token", text=text) if text else None
+
+
 def events_in(mode: str, chunk: Any) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events.
 
@@ -121,6 +153,10 @@ def events_in(mode: str, chunk: Any) -> Iterator[RunEvent]:
     reach for `input_token_details` -- which is the duplication this module was
     written to end.
     """
+    if mode == "messages":
+        if (event := _token_event(chunk)) is not None:
+            yield event
+        return
     if mode != "updates":
         return
     for update in (chunk or {}).values():
