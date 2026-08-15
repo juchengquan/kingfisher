@@ -1,66 +1,32 @@
-"""Configuration, resolved from the environment.
+"""Reading configuration out of the environment.
+
+The `Config` record itself lives in `domain/`. What stays here is the part with
+a foreign system on the other side of it — the process environment — and the
+policy that goes with it.
 
 `api_style` is required and has no default (Q25): the Anthropic-compatible and
 OpenAI-compatible endpoints of the same gateway do not behave identically, so a
 default would silently pick the wrong shape the first time kingfisher is pointed
 somewhere new.
+
+Which variables a style reads is not written here. `adapters.models.PROVIDERS`
+holds it, alongside the builder that consumes it, so adding a provider is one
+record rather than an edit in two files that must agree.
 """
 
 from __future__ import annotations
 
 import os
 from collections.abc import Mapping
-from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal
 
-ApiStyle = Literal["anthropic", "openai"]
+from kingfisher.adapters.models import PROVIDERS
+from kingfisher.domain.config import API_STYLES, ROLES, Config, ConfigError
 
-API_STYLES: tuple[str, ...] = ("anthropic", "openai")
-ROLES: tuple[str, ...] = ("main", "subagent", "summarizer")
-
-_CREDENTIALS_BY_STYLE: Mapping[str, tuple[str, str]] = {
-    "anthropic": ("ANTHROPIC_BASE_URL", "ANTHROPIC_API_KEY"),
-    "openai": ("OPENAI_BASE_URL", "OPENAI_API_KEY"),
-}
-
-
-class ConfigError(RuntimeError):
-    """Raised when required configuration is missing or invalid."""
-
-
-@dataclass(frozen=True)
-class Config:
-    """Everything kingfisher needs to build an agent for one workspace."""
-
-    workspace: Path
-    api_style: ApiStyle
-    base_url: str
-    api_key: str
-    model: str
-    max_tokens: int = 4096
-    timeout_s: int = 120
-    keep_runs: int = 20
-    # Each agent turn costs 2-3 graph steps, so this is roughly a turn budget
-    # divided by three. 60 was sized against a toy task and cut a real
-    # 1,000-row analysis off mid-step at 20 turns.
-    recursion_limit: int = 150
-    shell_path_extra: tuple[str, ...] = ()
-    role_models: Mapping[str, str] = field(default_factory=dict)
-    # M2 capabilities. Off by default: a self-editing prompt makes runs
-    # non-reproducible, and reproducibility is what the smoke task depends on.
-    # Each flag gates both the middleware and its prompt section, so the agent
-    # is never told about a capability it does not have.
-    skills_enabled: bool = False
-    memory_enabled: bool = False
-
-    def model_for(self, role: str) -> str:
-        """Per-role model, falling back to the main model.
-
-        The seam exists from day one so per-role cost routing is a config
-        change rather than a refactor through every construction site.
-        """
-        return self.role_models.get(role, self.model)
+# Deliberately narrow: `Config` and friends are imported here to do the work,
+# not re-exported. One blessed import path for the record — `domain.config` —
+# is the whole point of it living there.
+__all__ = ["enforce_local_only_tracing", "from_env"]
 
 
 def _require(environ: Mapping[str, str], key: str) -> str:
@@ -102,7 +68,10 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         msg = f"KINGFISHER_API_STYLE must be one of {API_STYLES}, got {style!r}"
         raise ConfigError(msg)
 
-    url_key, api_key_key = _CREDENTIALS_BY_STYLE[style]
+    provider = PROVIDERS.get(style)
+    if provider is None:  # pragma: no cover -- bound to API_STYLES by test_models.py
+        msg = f"no provider registered for api_style {style!r}"
+        raise ConfigError(msg)
 
     role_models = {
         role: value
@@ -117,8 +86,8 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
     return Config(
         workspace=Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve(),
         api_style=style,  # type: ignore[arg-type]
-        base_url=_require(env, url_key),
-        api_key=_require(env, api_key_key),
+        base_url=_require(env, provider.url_env),
+        api_key=_require(env, provider.key_env),
         model=_require(env, "KINGFISHER_MODEL"),
         max_tokens=_int(env, "KINGFISHER_MAX_TOKENS", 4096),
         timeout_s=_int(env, "KINGFISHER_TIMEOUT_S", 120),

@@ -75,3 +75,18 @@ def test_domain_does_not_depend_on_the_layers_above_it():
         assert not any(m.startswith(("kingfisher.app", "kingfisher.adapters")) for m in modules), (
             f"domain/{path.name} depends on an outer layer"
         )
+
+
+def test_adapters_do_not_reach_back_into_app():
+    """The other half of that rule, which went unenforced for a while.
+
+    `Config` lived in `app/` and all four adapters imported it, inverting the
+    direction this module claims to hold. It lives in `domain/` now; this is
+    what stops it drifting back. `app/config.py` reads `adapters.models` for
+    the credential variable names, which is the legal direction.
+    """
+    for path in _modules_in("adapters"):
+        modules = _imported_modules(path)
+        assert not any(m.startswith("kingfisher.app") for m in modules), (
+            f"adapters/{path.name} depends on app/ — move the shared shape into domain/"
+        )
