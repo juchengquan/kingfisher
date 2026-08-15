@@ -152,7 +152,7 @@ def _unreachable(path: Path, error: OSError) -> str:
     return f"{path.name}: {error.strerror or error}"
 
 
-def protect_data(workspace: Path) -> tuple[str, ...]:
+def protect_data(session_dir: Path) -> tuple[str, ...]:
     """Make `data/` read-only at the OS level. Idempotent.
 
     Returns a description of every path whose mode could not be changed, and
@@ -174,7 +174,7 @@ def protect_data(workspace: Path) -> tuple[str, ...]:
     skipped was never what protected it. Where it is not safe, the deny rule is
     still in force and the caller is told which paths are bare.
     """
-    data = Path(workspace) / "data"
+    data = Path(session_dir) / "data"
     if not data.is_dir():
         return ()
 
@@ -189,11 +189,16 @@ def protect_data(workspace: Path) -> tuple[str, ...]:
 
 
 @contextmanager
-def writable_data(workspace: Path) -> Iterator[Path]:
+def writable_data(session_dir: Path) -> Iterator[Path]:
     """Temporarily make `data/` writable, for loading inputs.
 
-        with writable_data(ws) as data:
+        with writable_data(session.directory) as data:
             shutil.copy(source, data / "sales.csv")
+
+    Takes the session, not the workspace. `/data` is per-session -- one
+    caller's data, isolated by being a different root rather than by a path
+    check -- and this argument was called `workspace` for long enough that the
+    smoke seeded `workspace/data`, where no agent would ever look.
 
     The directory itself must become writable or there is nowhere to put the
     inputs, so a failure there is raised. Existing files are best-effort for
@@ -201,7 +206,7 @@ def writable_data(workspace: Path) -> Iterator[Path]:
     have overwritten anyway, and refusing to accept a new input because an
     unrelated old one is someone else's would be its own bug.
     """
-    data = Path(workspace) / "data"
+    data = Path(session_dir) / "data"
     data.mkdir(parents=True, exist_ok=True)
     _add_write_bits(data)
     for path in data.rglob("*"):
@@ -210,4 +215,4 @@ def writable_data(workspace: Path) -> Iterator[Path]:
     try:
         yield data
     finally:
-        protect_data(workspace)
+        protect_data(session_dir)

@@ -21,7 +21,7 @@ def load_result(run_dir: Path) -> dict | None:
         return None
 
 
-def promote_report(run_dir: Path, workspace: Path, name: str = "smoke") -> Path | None:
+def promote_report(run_dir: Path, destination_dir: Path, name: str = "smoke") -> Path | None:
     """Copy a run's report somewhere stable, so it can be read run-over-run.
 
     `/derived` because it survives sweeps, not because it is a report -- the
@@ -31,7 +31,7 @@ def promote_report(run_dir: Path, workspace: Path, name: str = "smoke") -> Path 
     source = Path(run_dir) / "report.md"
     if not source.exists():
         return None
-    destination = Path(workspace) / "derived" / f"{name}.md"
+    destination = Path(destination_dir) / f"{name}.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
     return destination
