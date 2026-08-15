@@ -4,7 +4,7 @@ import os
 
 import pytest
 
-from kingfisher.domain.workspace import protect_data, writable_data
+from kingfisher.adapters.workspace_fs import protect_data, writable_data
 
 
 def test_data_becomes_read_only_to_the_os(workspace):

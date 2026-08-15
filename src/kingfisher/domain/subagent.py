@@ -19,8 +19,9 @@ The optional `model` is where per-role cost routing lands naturally: reading
 heavy delegation on a cheap model, synthesis on the expensive one.
 
 Parsing lives in the domain because this is kingfisher's format, not a library's
-— nothing here knows deepagents exists. Translation into a `SubAgent` happens in
-the adapter.
+— nothing here knows deepagents exists, and nothing here reads a disk. Finding
+the files is `adapters.subagent_store`; translating a spec into deepagents'
+`SubAgent` is `adapters.agent`.
 """
 
 from __future__ import annotations
@@ -104,23 +105,3 @@ def parse(text: str, source: Path) -> SubagentSpec:
         tools=tools,
         model=_parse_scalar(fields["model"]) if fields.get("model") else None,
     )
-
-
-def load_all(workspace: Path) -> dict[str, SubagentSpec]:
-    """Every subagent the workspace defines, keyed by name.
-
-    The filename is not authoritative — the frontmatter `name` is, since that
-    is what a request names and what the `task` tool will use.
-    """
-    directory = Path(workspace) / DIRECTORY
-    if not directory.is_dir():
-        return {}
-
-    specs: dict[str, SubagentSpec] = {}
-    for path in sorted(directory.glob(f"*{SUFFIX}")):
-        spec = parse(path.read_text(encoding="utf-8"), path)
-        if spec.name in specs:
-            msg = f"{path.name}: duplicate subagent name {spec.name!r}"
-            raise SubagentError(msg)
-        specs[spec.name] = spec
-    return specs

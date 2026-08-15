@@ -3,8 +3,8 @@ from __future__ import annotations
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
+from kingfisher.adapters.workspace_fs import ensure_layout
 from kingfisher.config import Config
-from kingfisher.domain.workspace import ensure_layout
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -39,6 +39,15 @@ def _git_identity(monkeypatch):
         "GIT_COMMITTER_EMAIL": "test@example.invalid",
     }.items():
         monkeypatch.setenv(var, value)
+
+
+@pytest.fixture
+def dirs():
+    """The real `SessionDirs`. A test that wants to watch or break an
+    individual call substitutes its own object -- that is what the port buys."""
+    from kingfisher.adapters.workspace_fs import LocalSessionDirs
+
+    return LocalSessionDirs()
 
 
 @pytest.fixture

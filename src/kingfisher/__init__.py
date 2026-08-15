@@ -31,15 +31,15 @@ _EXPORTS = {
     "build_backend": "kingfisher.adapters.backend",
     "build_checkpointer": "kingfisher.adapters.checkpointing",
     "build_model": "kingfisher.adapters.models",
-    "ensure_layout": "kingfisher.domain.workspace",
+    "ensure_layout": "kingfisher.adapters.workspace_fs",
     "from_env": "kingfisher.app.config",
     "normalize_answer": "kingfisher.domain.result",
-    "protect_data": "kingfisher.domain.workspace",
+    "protect_data": "kingfisher.adapters.workspace_fs",
     "run": "kingfisher.app.run",
     "shell_env": "kingfisher.adapters.backend",
     "stream": "kingfisher.app.run",
     "system_prompt": "kingfisher.adapters.agent",
-    "writable_data": "kingfisher.domain.workspace",
+    "writable_data": "kingfisher.adapters.workspace_fs",
 }
 
 __all__ = [
@@ -74,6 +74,9 @@ if TYPE_CHECKING:
     from kingfisher.adapters.backend import shell_env as shell_env
     from kingfisher.adapters.checkpointing import build_checkpointer as build_checkpointer
     from kingfisher.adapters.models import build_model as build_model
+    from kingfisher.adapters.workspace_fs import ensure_layout as ensure_layout
+    from kingfisher.adapters.workspace_fs import protect_data as protect_data
+    from kingfisher.adapters.workspace_fs import writable_data as writable_data
     from kingfisher.app.config import from_env as from_env
     from kingfisher.app.run import run as run
     from kingfisher.app.run import stream as stream
@@ -84,9 +87,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.result import normalize_answer as normalize_answer
-    from kingfisher.domain.workspace import ensure_layout as ensure_layout
-    from kingfisher.domain.workspace import protect_data as protect_data
-    from kingfisher.domain.workspace import writable_data as writable_data
 
 
 def __getattr__(name: str) -> Any:

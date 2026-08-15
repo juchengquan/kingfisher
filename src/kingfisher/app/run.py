@@ -31,17 +31,14 @@ from kingfisher.adapters import runtime
 from kingfisher.adapters.agent import build_agent
 from kingfisher.adapters.checkpointing import build_checkpointer
 from kingfisher.adapters.runlog import JsonlRunLogger, log_path
+from kingfisher.adapters.workspace_fs import LocalSessionDirs, ensure_layout, protect_data
+from kingfisher.adapters.workspace_git import pre_run_commit
 from kingfisher.app import config as config_module
 from kingfisher.config import Config
+from kingfisher.domain import retention
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import Session
-from kingfisher.domain.workspace import (
-    ensure_layout,
-    pre_run_commit,
-    protect_data,
-    sweep,
-)
 
 __all__ = [
     "Request",
@@ -64,6 +61,7 @@ def stream(
     cfg: Config | None = None,
     agent: Any | None = None,
     checkpointer: Any | None = None,
+    dirs: Any | None = None,
 ) -> Iterator[RunEvent]:
     """Run one task, yielding progress as it happens.
 
@@ -83,6 +81,7 @@ def stream(
     workspace = ensure_layout(cfg.workspace)
     protect_data(workspace)  # kernel-level guard; the deny rule covers only file tools
     checkpointer = checkpointer if checkpointer is not None else build_checkpointer(cfg)
+    dirs = dirs if dirs is not None else LocalSessionDirs()
     session_id = request.session_id or new_session_id()
 
     if agent is not None and not request.capabilities.is_unrestricted:
@@ -106,10 +105,15 @@ def stream(
     )
 
     commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
-    swept = sweep(workspace, cfg.keep_runs, checkpointer)
+    # Decide, then act. `retention.plan` is pure -- it names victims from
+    # `(name, mtime)` pairs and touches nothing -- and `retention.apply` walks
+    # the list, leaving the per-session ordering to `Session.discard`.
+    runs = workspace / "runs"
+    sweep_plan = retention.plan(dirs.listing(runs), cfg.keep_runs)
+    swept = retention.apply(sweep_plan, runs, dirs, checkpointer)
 
     # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
-    turn = Session.open(workspace, session_id).allocate_turn(request.turn_id)
+    turn = Session.open(workspace, session_id, dirs).allocate_turn(dirs, request.turn_id)
 
     if request.inputs:
         turn.input_dir.mkdir(exist_ok=True)
@@ -194,13 +198,16 @@ def run(
     cfg: Config | None = None,
     agent: Any | None = None,
     checkpointer: Any | None = None,
+    dirs: Any | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed.
 
     A drain of `stream()` — there is no second orchestration path.
     """
     result: RunResult | None = None
-    for event in stream(request, cfg=cfg, agent=agent, checkpointer=checkpointer):
+    for event in stream(
+        request, cfg=cfg, agent=agent, checkpointer=checkpointer, dirs=dirs
+    ):
         if event.kind == "finished":
             result = event.result
 
