@@ -68,13 +68,17 @@ def _event_for(message: Any) -> RunEvent | None:
         return RunEvent(
             kind="tool_result",
             tool=getattr(message, "name", None),
-            text=str(message.content)[:PREVIEW],
+            text=message.text[:PREVIEW],
         )
     if isinstance(message, AIMessage):
         tools = tool_names(message)
         if tools:
             return RunEvent(kind="model_call", tools=tools, usage=usage_of(message))
-        text = str(message.content).strip()
+        # `.text` rather than `str(content)`: the Responses API returns a list
+        # of content blocks, and `str()` would render their repr straight into
+        # the answer. `.text` extracts the text across every content shape, and
+        # yields "" for a reasoning-only message, which the guard below drops.
+        text = message.text.strip()
         if text:
             return RunEvent(kind="message", text=text[:PREVIEW], usage=usage_of(message))
     return None
