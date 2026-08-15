@@ -23,6 +23,10 @@ class Request:
     `inputs` are files supplied with this request. They are copied into the
     turn's `input/` directory, never into `/data`: they arrive fresh each round
     and leave with the turn.
+    `data` are files supplied to the *session*. They are copied into `/data`,
+    where they stay: the next turn still has them without being handed them
+    again. That lifetime is the only difference from `inputs`, and it is why
+    both exist rather than one flag with a mode.
     Wanting files written is one kind of task among many, so there is no field
     for it: a request that wants `report.md`, a CSV, or nothing at all says so
     in `task`, in its own words. Nothing here privileges one convention.
@@ -36,6 +40,7 @@ class Request:
     session_id: str | None = None
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
+    data: tuple[Path, ...] = ()
     # Provisioning, not activation. These are catalogue ids: they say which
     # definitions to fetch and unpack for this session, while `capabilities`
     # still selects by name. Keeping them apart is what stops a catalogue's
@@ -51,6 +56,7 @@ class Request:
             raise ValueError(msg)
         # Normalise at the edge so everything downstream sees real paths.
         object.__setattr__(self, "inputs", tuple(Path(p) for p in self.inputs))
+        object.__setattr__(self, "data", tuple(Path(p) for p in self.data))
 
     @classmethod
     def coerce(cls, value: str | Request) -> Request:

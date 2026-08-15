@@ -265,3 +265,69 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
     )
     # Whatever the caller names, verbatim and unembellished.
     assert "findings.csv" in asked.state["messages"][0]["content"]
+
+
+def test_supplied_data_is_still_there_on_the_next_turn(cfg):
+    """The property `--input` deliberately lacks, and the whole reason this
+    exists: a turn's `input/` leaves with the turn, `/data` does not."""
+    source = cfg.workspace / "sales.csv"
+    source.write_text("a,b\n1,2\n")
+
+    start(cfg, "keeps")
+    ck = StubCheckpointer()
+    first = run(
+        Request("look at it", session_id="keeps", data=(source,)),
+        cfg=cfg,
+        agent=StubAgent("ok"),
+        checkpointer=ck,
+    )
+    second = run(
+        Request("and again", session_id="keeps"),
+        cfg=cfg,
+        agent=StubAgent("ok"),
+        checkpointer=ck,
+    )
+
+    session = first.run_dir.parent.parent
+    assert (session / "data" / "sales.csv").read_text() == "a,b\n1,2\n"
+    assert second.run_dir.parent.parent == session  # same session, second turn
+    assert not (second.run_dir / "input").exists()  # nothing was re-supplied
+
+
+def test_data_and_inputs_go_to_different_places(cfg):
+    """One flag with two lifetimes would be a mode. Two flags, two homes."""
+    durable = cfg.workspace / "keep.csv"
+    durable.write_text("keep")
+    transient = cfg.workspace / "once.csv"
+    transient.write_text("once")
+
+    start(cfg, "split")
+    result = run(
+        Request("go", session_id="split", inputs=(transient,), data=(durable,)),
+        cfg=cfg,
+        agent=StubAgent("ok"),
+        checkpointer=StubCheckpointer(),
+    )
+    session = result.run_dir.parent.parent
+
+    assert (session / "data" / "keep.csv").is_file()
+    assert (result.run_dir / "input" / "once.csv").is_file()
+    assert not (session / "data" / "once.csv").exists()
+    assert not (result.run_dir / "input" / "keep.csv").exists()
+
+
+def test_the_agent_is_told_what_arrived_in_data(cfg):
+    """It may already have looked at /data this session."""
+    source = cfg.workspace / "fresh.csv"
+    source.write_text("x")
+
+    start(cfg, "told")
+    agent = StubAgent("ok")
+    run(
+        Request("go", session_id="told", data=(source,)),
+        cfg=cfg,
+        agent=agent,
+        checkpointer=StubCheckpointer(),
+    )
+
+    assert "New files in /data: fresh.csv." in agent.state["messages"][0]["content"]
