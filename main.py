@@ -44,8 +44,15 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import TextIO
+
+    from kingfisher.domain.result import RunEvent, RunResult
 
 from evals.artifacts import load_result, promote_report
 from evals.checks import check_result
@@ -150,6 +157,21 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     if not specs:
         print("  (none)  — try --seed-examples")
     return 0
+
+
+def render(events: Iterable[RunEvent], out: TextIO) -> RunResult | None:
+    """Print a run as it happens, and return its result.
+
+    The terminal event carries the `RunResult` and is not itself printed:
+    everything it reports is already on screen or in the summary below.
+    """
+    result: RunResult | None = None
+    for event in events:
+        if event.kind == "finished":
+            result = event.result
+        else:
+            print(event, file=out, flush=True)
+    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -259,11 +281,7 @@ def main(argv: list[str]) -> int:
 
     result = None
     try:
-        for event in stream(request, cfg=cfg):
-            if event.kind == "finished":
-                result = event.result
-            else:
-                print(event, flush=True)
+        result = render(stream(request, cfg=cfg), sys.stdout)
     except CapabilityError as exc:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
