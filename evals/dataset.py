@@ -119,16 +119,21 @@ def build_dataset(seed: int = _SEED) -> tuple[str, GroundTruth]:
 GROUND_TRUTH = build_dataset()[1]
 
 
-def seed_sample_data(workspace: Path) -> bool:
+def seed_sample_data(session_dir: Path) -> bool:
     """Write the sample dataset, refreshing it if the generator has changed.
+
+    Takes a *session* directory, not the workspace. `/data` is rooted at a
+    session, so a fixture written at workspace level lands where no route
+    reaches it -- the seeding reports success and the agent finds `/data`
+    empty.
 
     Self-healing rather than write-once: a fixture that silently goes stale
     while `GROUND_TRUTH` moves would turn every check into a false failure.
     """
-    target = Path(workspace) / "data" / SAMPLE_NAME
+    target = Path(session_dir) / "data" / SAMPLE_NAME
     csv, _ = build_dataset()
     if target.exists() and target.read_text(encoding="utf-8") == csv:
         return False
-    with writable_data(workspace) as data:
+    with writable_data(session_dir) as data:
         (data / SAMPLE_NAME).write_text(csv, encoding="utf-8")
     return True

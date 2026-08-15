@@ -47,8 +47,10 @@ import argparse
 import json
 import shutil
 import sys
+import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
+from uuid import uuid4
 
 from dotenv import load_dotenv
 
@@ -68,8 +70,13 @@ from evals.task import SMOKE_TASK
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
 from kingfisher.adapters.subagent_store import load_all
-from kingfisher.adapters.workspace_fs import is_new_workspace
+from kingfisher.adapters.workspace_fs import (
+    LocalSessionDirs,
+    ensure_session_layout,
+    is_new_workspace,
+)
 from kingfisher.config import Config
+from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIR
 from kingfisher.domain.subagent import SubagentError
 
@@ -134,6 +141,28 @@ def seed_examples(workspace: Path) -> list[str]:
     return copied
 
 
+def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
+    """Put the smoke's fixtures where the agent will look for them.
+
+    `/data` is a *session's* directory, not the workspace's, so the dataset
+    cannot be seeded until the session it belongs to is known -- which is why
+    the smoke now fixes its session id before the run rather than letting one
+    be minted inside it.
+
+    Skills are not session-scoped and stay where they were: they are shared
+    definitions, and `/skills` still routes to the workspace.
+    """
+    session = Session.open(workspace, session_id, LocalSessionDirs())
+    ensure_session_layout(session.directory)
+
+    seeded = []
+    if seed_sample_data(session.directory):
+        seeded.append("dataset into /data")
+    if cfg.skills_enabled and seed_sample_skill(workspace):
+        seeded.append("skill into /skills")
+    return seeded
+
+
 def show_inventory(cfg: Config, workspace: Path) -> int:
     """What a request may activate here, which is what `--list` is for."""
     from kingfisher.adapters.agent import build_agent, registered_tools  # noqa: PLC0415
@@ -142,8 +171,14 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
 
     # Built rather than listed: the tool set is a property of the assembled
     # agent, and a hardcoded list here would drift from the real one.
+    # Rooted at a throwaway directory. An agent needs a session to root its
+    # backend at, but what a workspace *offers* is a question about the
+    # workspace, and answering it must not leave a session lying around --
+    # `keep_runs` would eventually reap a real one to make room for the decoy.
     print("tools")
-    for name in registered_tools(build_agent(cfg)) or ("(could not introspect)",):
+    with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
+        introspected = registered_tools(build_agent(cfg, session_dir=Path(scratch)))
+    for name in introspected or ("(could not introspect)",):
         print(f"  {name}")
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
@@ -255,12 +290,15 @@ def main(argv: list[str]) -> int:
 
     task = " ".join(args.task).strip()
     is_smoke = not task
+    session_id = args.session
     if is_smoke:
         task = SMOKE_TASK
-        if seed_sample_data(workspace):
-            print("seeded sample dataset into /data")
-        if cfg.skills_enabled and seed_sample_skill(workspace):
-            print("seeded sample skill into /skills")
+        # Fixed here rather than minted inside the run: the smoke's fixtures
+        # belong to a session's `/data`, so the session has to be named before
+        # there is anywhere to put them.
+        session_id = session_id or uuid4().hex[:12]
+        for seeded in prepare_smoke(cfg, workspace, session_id):
+            print(f"seeded sample {seeded}")
 
     capabilities = Capabilities(
         tools=_selection(args.tools),
@@ -272,7 +310,7 @@ def main(argv: list[str]) -> int:
     )
     request = Request(
         task=task,
-        session_id=args.session,
+        session_id=session_id,
         inputs=tuple(Path(p).expanduser() for p in args.input),
         capabilities=capabilities,
     )
