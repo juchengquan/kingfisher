@@ -20,12 +20,14 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from kingfisher import ConfigError, ensure_layout, from_env, stream
+from kingfisher.workspace import is_new_workspace
 from kingfisher.smoke import (
     SMOKE_TASK,
     check_result,
     load_result,
     promote_report,
     seed_sample_data,
+    seed_sample_skill,
 )
 
 
@@ -56,7 +58,10 @@ def main(argv: list[str]) -> int:
         print("copy .env.example to .env and fill it in", file=sys.stderr)
         return 2
 
+    fresh = is_new_workspace(cfg.workspace)
     workspace = ensure_layout(cfg.workspace)
+    if fresh:
+        print(f"created a new workspace at {workspace}")
 
     task = " ".join(argv[1:]).strip()
     is_smoke = not task
@@ -64,6 +69,8 @@ def main(argv: list[str]) -> int:
         task = SMOKE_TASK
         if seed_sample_data(workspace):
             print("seeded sample dataset into /data")
+        if cfg.skills_enabled and seed_sample_skill(workspace):
+            print("seeded sample skill into /skills")
 
     print(f"workspace : {workspace}")
     print(f"model     : {cfg.model} via {cfg.api_style}")

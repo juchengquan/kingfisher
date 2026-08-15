@@ -35,6 +35,16 @@ LAYOUT_DIRS: tuple[str, ...] = (
 
 MARKER = ".kingfisher/WORKSPACE"
 
+AGENTS_SCAFFOLD = """\
+# Project memory
+
+Durable facts about this project and how to work in it. Add entries below.
+
+## Conventions
+
+(none recorded yet)
+"""
+
 # Tracked-tier paths. `pre_run_commit` stages only these, never `git add -A`,
 # so pointing kingfisher at a directory that already holds unrelated work
 # cannot sweep that work into a commit.
@@ -74,6 +84,15 @@ class SweepResult:
     kept: int
 
 
+def is_new_workspace(workspace: Path) -> bool:
+    """True when this path has never been used as a workspace.
+
+    Surfaced by callers so a silently relocated workspace — an unstable `~`,
+    a changed env var — reads as "created new" rather than as a first run.
+    """
+    return not (Path(workspace) / MARKER).exists()
+
+
 def ensure_layout(workspace: Path) -> Path:
     """Create the workspace layout and its .gitignore. Idempotent."""
     workspace = Path(workspace).expanduser().resolve()
@@ -88,10 +107,12 @@ def ensure_layout(workspace: Path) -> Path:
     if not marker.exists():
         marker.write_text("kingfisher workspace\n", encoding="utf-8")
 
-    # Present but empty, so enabling memory later does not fail on a missing file.
+    # Scaffolded rather than empty: the memory prompt directs the agent to save
+    # knowledge with `edit_file`, which replaces existing text — an empty file
+    # offers nothing to anchor against.
     agents_md = workspace / "memory" / "AGENTS.md"
-    if not agents_md.exists():
-        agents_md.touch()
+    if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
+        agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
 
     return workspace
 
