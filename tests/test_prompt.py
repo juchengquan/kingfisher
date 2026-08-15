@@ -75,3 +75,17 @@ def test_assembly_leaves_no_blank_line_runs_or_markers():
             assert CAPABILITY_MARKER not in text
             assert "<!--" not in text
             assert not re.search(r"\n{3,}", text)
+
+
+def test_shell_section_does_not_contradict_the_injected_host_mappings():
+    """FilesystemMiddleware injects host path mappings whenever a CompositeBackend
+    is used, and instructs the agent to substitute them in shell commands. A
+    blanket ban on absolute paths here would contradict that, and the agent
+    would reasonably follow the more specific instruction.
+    """
+    # Collapse wrapping: the prompt is hard-wrapped, so phrases span newlines.
+    text = " ".join(render_system_prompt().lower().split())
+    assert "do not use host absolute paths" not in text
+    # And it must not repeat the middleware's misleading implication that
+    # unmapped mounts are unreachable from the shell.
+    assert "nothing in the workspace is out of the shell's reach" in text

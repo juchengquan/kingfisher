@@ -24,11 +24,16 @@ tracked and do not.
 The file tools (`ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`)
 take virtual paths rooted at the workspace, so an input file is `/data/<name>`.
 
-The shell (`execute`) runs on the host and starts in the workspace root, so the same
-file is `data/<name>` there.
+The shell (`execute`) runs on the host, starting in the workspace root. Every
+directory above is reachable from there by relative path — `data/<name>`,
+`derived/<name>`, your run directory — so relative paths are the simplest thing that
+works for anything inside the workspace, and nothing in the workspace is out of the
+shell's reach.
 
-Those are one file under two names. Do not use one view's paths with the other tool,
-and do not use host absolute paths with either.
+A virtual path is not a shell path: passing `/data/<name>` to `execute` addresses the
+host's root directory, not the workspace. Where these instructions give host path
+mappings for particular mounts, use those when you need an absolute path; otherwise
+stay relative.
 
 <!-- capabilities -->
 
