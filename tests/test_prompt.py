@@ -89,3 +89,13 @@ def test_shell_section_does_not_contradict_the_injected_host_mappings():
     # And it must not repeat the middleware's misleading implication that
     # unmapped mounts are unreachable from the shell.
     assert "nothing in the workspace is out of the shell's reach" in text
+
+
+def test_prompt_warns_about_host_paths_in_file_tools():
+    """virtual_mode makes `write_file('/tmp/x')` succeed by creating
+    `<workspace>/tmp/x`. Observed in a real run: a subagent recreated an entire
+    host path inside the workspace and believed it had written to /tmp.
+    """
+    text = " ".join(render_system_prompt().lower().split())
+    assert "a host path is not a file-tool path" in text
+    assert "recreated *inside* the workspace" in text

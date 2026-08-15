@@ -30,10 +30,18 @@ directory above is reachable from there by relative path — `data/<name>`,
 works for anything inside the workspace, and nothing in the workspace is out of the
 shell's reach.
 
-A virtual path is not a shell path: passing `/data/<name>` to `execute` addresses the
-host's root directory, not the workspace. Where these instructions give host path
-mappings for particular mounts, use those when you need an absolute path; otherwise
-stay relative.
+The two views do not mix, in either direction:
+
+- A virtual path is not a shell path. Passing `/data/<name>` to `execute` addresses
+  the host's root directory, not the workspace.
+- A host path is not a file-tool path. Passing an absolute host path such as
+  `/tmp/scratch.py` to `write_file` does not fail — the leading `/` is read as the
+  workspace root, so the whole path is recreated *inside* the workspace. The write
+  appears to succeed and the file is not where you think it is.
+
+Where these instructions give host path mappings for particular mounts, use those with
+the shell when you need an absolute path. For scratch files, write them in your run
+directory rather than `/tmp`.
 
 <!-- capabilities -->
 
