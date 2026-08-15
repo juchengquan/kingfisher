@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import concurrent.futures as futures
+from concurrent import futures
 
 from kingfisher.domain.session import Session
 

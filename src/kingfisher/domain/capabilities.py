@@ -23,6 +23,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 #: `None` means unrestricted; a tuple — including an empty one — is a whitelist.
+#:
+#: The declared contract is tuples, and consumers can rely on that. `__post_init__`
+#: is nonetheless lenient about what it will normalise, because a service
+#: deserialising JSON hands us lists; that leniency is a backstop, not the
+#: contract, so a caller holding a list should convert at its own edge.
 Selection = tuple[str, ...] | None
 
 
@@ -72,7 +77,9 @@ class Capabilities:
             subagents=_narrow(self.subagents, other.subagents),
         )
 
-    def unknown(self, *, tools: Iterable[str], skills: Iterable[str], subagents: Iterable[str]) -> tuple[str, ...]:
+    def unknown(
+        self, *, tools: Iterable[str], skills: Iterable[str], subagents: Iterable[str]
+    ) -> tuple[str, ...]:
         """Names asked for that the workspace does not offer.
 
         Reported so an unresolvable request fails loudly instead of running

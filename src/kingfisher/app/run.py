@@ -38,7 +38,15 @@ from kingfisher.domain.workspace import (
     sweep,
 )
 
-__all__ = ["Request", "RunEvent", "RunResult", "new_session_id", "normalize_answer", "run", "stream"]
+__all__ = [
+    "Request",
+    "RunEvent",
+    "RunResult",
+    "new_session_id",
+    "normalize_answer",
+    "run",
+    "stream",
+]
 
 
 def new_session_id() -> str:

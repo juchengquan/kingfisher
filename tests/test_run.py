@@ -23,7 +23,7 @@ class StubAgent:
         self.state: dict | None = None
         self.config: dict | None = None
 
-    def stream(self, state, config, stream_mode=None):  # noqa: ANN001, ARG002
+    def stream(self, state, config, stream_mode=None):
         self.state, self.config = state, config
         for update in self.updates:
             yield ("updates", update)
@@ -66,7 +66,12 @@ def test_run_creates_the_session_triple(cfg):
 def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
     """Run-scoped, so it goes in the message -- never the cached system prompt."""
     agent = StubAgent("ok")
-    run(Request("do a thing", session_id="abc"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
+    run(
+        Request("do a thing", session_id="abc"),
+        cfg=cfg,
+        agent=agent,
+        checkpointer=StubCheckpointer(),
+    )
 
     message = agent.state["messages"][0]["content"]
     assert "/runs/abc" in message
@@ -76,7 +81,12 @@ def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
 
 def test_run_logs_usage_shaped_records(cfg):
     agent = StubAgent("ok")
-    result = run(Request("t", session_id="logged"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
+    result = run(
+        Request("t", session_id="logged"),
+        cfg=cfg,
+        agent=agent,
+        checkpointer=StubCheckpointer(),
+    )
 
     records = [json.loads(line) for line in result.log_path.read_text().splitlines()]
     events = [r["event"] for r in records]
@@ -110,10 +120,14 @@ def test_a_second_turn_does_not_overwrite_the_first(cfg):
     """The defect this tier exists to fix: two turns in one session shared a
     directory, so turn two clobbered turn one's report and result."""
     ck = StubCheckpointer()
-    first = run(Request("turn one", session_id="sess"), cfg=cfg, agent=StubAgent("a"), checkpointer=ck)
+    first = run(
+        Request("turn one", session_id="sess"), cfg=cfg, agent=StubAgent("a"), checkpointer=ck
+    )
     (first.run_dir / "report.md").write_text("FROM TURN ONE")
 
-    second = run(Request("turn two", session_id="sess"), cfg=cfg, agent=StubAgent("b"), checkpointer=ck)
+    second = run(
+        Request("turn two", session_id="sess"), cfg=cfg, agent=StubAgent("b"), checkpointer=ck
+    )
     (second.run_dir / "report.md").write_text("FROM TURN TWO")
 
     assert first.turn_id == "t001"
@@ -133,7 +147,7 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
 
     agent = StubAgent("ok")
     result = run(
-        Request("summarise it", session_id="s", inputs=[supplied]),
+        Request("summarise it", session_id="s", inputs=(supplied,)),
         cfg=cfg,
         agent=agent,
         checkpointer=StubCheckpointer(),
@@ -148,7 +162,12 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
 
 def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
     agent = StubAgent("ok")
-    result = run(Request("just answer", session_id="s"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
+    result = run(
+        Request("just answer", session_id="s"),
+        cfg=cfg,
+        agent=agent,
+        checkpointer=StubCheckpointer(),
+    )
 
     assert not (result.run_dir / "input").exists()
     assert "input" not in agent.state["messages"][0]["content"]
@@ -172,7 +191,8 @@ def test_request_rejects_an_empty_task():
 def test_request_normalises_inputs_to_paths():
     from pathlib import Path as _Path
 
-    request = Request("t", inputs=["/tmp/a.csv", _Path("/tmp/b.csv")])
+    # Off-contract on purpose: strings and a list, both normalised away.
+    request = Request("t", inputs=["/tmp/a.csv", _Path("/tmp/b.csv")])  # ty: ignore[invalid-argument-type]
     assert all(isinstance(p, _Path) for p in request.inputs)
     assert isinstance(request.inputs, tuple)
 

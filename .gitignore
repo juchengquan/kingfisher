@@ -222,3 +222,6 @@ __marimo__/
 # per-environment variants. .env.example is tracked and is the template.
 .env.local
 .env.*.local
+
+# Claude Code worktrees are local scratch, not project content.
+.claude/worktrees/

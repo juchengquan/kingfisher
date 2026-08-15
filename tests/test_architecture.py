@@ -32,7 +32,7 @@ def _imported_modules(path: Path) -> set[str]:
 
 
 def _is_foreign(module: str) -> bool:
-    root = module.split(".")[0]
+    root = module.split(".", maxsplit=1)[0]
     return root in {f.split(".")[0] for f in FOREIGN}
 
 

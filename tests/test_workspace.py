@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 import shutil
 
-from tests.conftest import StubCheckpointer
-
 from kingfisher.domain.workspace import (
     LAYOUT_DIRS,
     ensure_layout,
@@ -12,6 +10,7 @@ from kingfisher.domain.workspace import (
     pre_run_commit,
     sweep,
 )
+from tests.conftest import StubCheckpointer
 
 
 def test_layout_is_created_and_idempotent(tmp_path):

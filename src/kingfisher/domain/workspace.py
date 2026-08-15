@@ -26,6 +26,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Any
 
 from kingfisher.domain.session import Session
 
@@ -176,8 +177,10 @@ def writable_data(workspace: Path) -> Iterator[Path]:
 
 
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
+    # S607: `git` by name, resolved through PATH. An absolute path would be
+    # wrong on a machine that installs it elsewhere, which is most of them.
     return subprocess.run(  # noqa: S603
-        ["git", "-C", str(workspace), *args],
+        ["git", "-C", str(workspace), *args],  # noqa: S607
         capture_output=True,
         text=True,
         check=False,
@@ -218,7 +221,7 @@ def pre_run_commit(workspace: Path, message: str) -> str | None:
     return _git(workspace, "rev-parse", "HEAD").stdout.strip() or None
 
 
-def sweep(workspace: Path, keep: int, checkpointer=None) -> SweepResult:
+def sweep(workspace: Path, keep: int, checkpointer: Any | None = None) -> SweepResult:
     """Keep the `keep` most recent run directories; delete the rest.
 
     A swept session loses its directory *and* its thread. There is no

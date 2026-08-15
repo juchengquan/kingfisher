@@ -180,7 +180,9 @@ def _as_subagent(spec: SubagentSpec, cfg: Config) -> dict[str, Any]:
     return subagent
 
 
-def _skill_denials(activated: tuple[str, ...], available: tuple[str, ...]) -> list[FilesystemPermission]:
+def _skill_denials(
+    activated: tuple[str, ...], available: tuple[str, ...]
+) -> list[FilesystemPermission]:
     """Deny reads of skills this request did not activate.
 
     The listing filter only stops the agent being *told*; this stops the file
@@ -266,9 +268,12 @@ def build_agent(
     # registered set is a property of the assembled graph. A typo would
     # otherwise narrow the allowlist in silence -- the same "quietly less than
     # you asked for" failure that skills and subagents already refuse.
-    if capabilities.tools is not None and (known := registered_tools(graph)):
-        if unknown := tuple(t for t in capabilities.tools if t not in known):
-            msg = f"unknown tool(s): {', '.join(unknown)}; this agent offers {known}"
-            raise CapabilityError(msg)
+    if (
+        capabilities.tools is not None
+        and (known := registered_tools(graph))
+        and (unknown := tuple(t for t in capabilities.tools if t not in known))
+    ):
+        msg = f"unknown tool(s): {', '.join(unknown)}; this agent offers {known}"
+        raise CapabilityError(msg)
 
     return graph

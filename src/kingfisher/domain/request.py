@@ -45,4 +45,4 @@ class Request:
     @classmethod
     def coerce(cls, value: str | Request) -> Request:
         """Accept a bare task string so `run("do a thing")` still reads well."""
-        return value if isinstance(value, cls) else cls(task=value)
+        return value if isinstance(value, Request) else cls(task=value)
