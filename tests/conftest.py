@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import pytest
+from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.adapters.workspace_fs import ensure_layout, ensure_session_layout
@@ -77,3 +78,27 @@ def cfg(workspace):
         keep_runs=2,
         timeout_s=30,
     )
+
+
+def capture_build(monkeypatch) -> dict:
+    """Record the arguments `create_deep_agent` was called with -- and let the
+    call through.
+
+    The recording used to *replace* the call, returning a stub. That made every
+    assertion here blind to anything deepagents validates while constructing,
+    and three separate bugs slipped past because of it: `permissions=` is
+    refused unless every rule path is scoped to a backend route, and `/data`,
+    `/skills` and `/memory` each had to be caught by a live run instead.
+
+    Calling through costs about 30ms per test and removes the whole category.
+    A test that genuinely wants no construction can still patch it directly.
+    """
+    captured: dict = {}
+    real = create_deep_agent
+
+    def spy(**kwargs):
+        captured.update(kwargs)
+        return real(**kwargs)
+
+    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", spy)
+    return captured

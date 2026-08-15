@@ -3,7 +3,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage
 
 from kingfisher.adapters.agent import build_agent, system_prompt
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, capture_build
 
 
 def _all_text(messages) -> str:
@@ -58,13 +58,7 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
     Asserted at the construction seam rather than by digging into compiled
     graph internals, which are not a public contract.
     """
-    captured: dict = {}
-
-    def spy(**kwargs):
-        captured.update(kwargs)
-        return object()
-
-    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", spy)
+    captured = capture_build(monkeypatch)
     build_agent(
         cfg,
         session_dir=session_dir,
@@ -93,10 +87,7 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
     """One switch drives both, so the prompt cannot describe a missing capability."""
     from dataclasses import replace
 
-    captured: dict = {}
-    monkeypatch.setattr(
-        "kingfisher.adapters.agent.create_deep_agent", lambda **kw: captured.update(kw)
-    )
+    captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, skills_enabled=True, memory_enabled=True),
         session_dir=session_dir,
