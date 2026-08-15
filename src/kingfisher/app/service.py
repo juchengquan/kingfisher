@@ -33,6 +33,7 @@ from kingfisher.adapters import runtime
 from kingfisher.adapters.agent import build_agent
 from kingfisher.adapters.checkpointing import build_checkpointer
 from kingfisher.adapters.runlog import JsonlRunLogger, log_path
+from kingfisher.adapters.uploads import provision
 from kingfisher.adapters.workspace_fs import (
     LocalSessionDirs,
     ensure_layout,
@@ -48,7 +49,7 @@ from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import Session
 
 if TYPE_CHECKING:
-    from kingfisher.domain.ports import SessionDirs, ThreadStore
+    from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
 
 
 class Kingfisher:
@@ -70,6 +71,7 @@ class Kingfisher:
         *,
         dirs: SessionDirs | None = None,
         threads: ThreadStore | None = None,
+        definitions: DefinitionStore | None = None,
         agent: Any | None = None,
     ) -> None:
         self.cfg = cfg or config_module.from_env()
@@ -81,6 +83,10 @@ class Kingfisher:
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         self.threads: Any = threads if threads is not None else build_checkpointer(self.cfg)
+        # No default. A deployment that never serves uploaded definitions has
+        # nothing to wire, and a request that supplies ids without one is a
+        # configuration error worth saying out loud rather than a silent no-op.
+        self.definitions: Any = definitions
         self._agent = agent
 
     def agent_for(self, request: Request, session_dir: Path) -> Any:
@@ -139,6 +145,10 @@ class Kingfisher:
         # to abort the run, and since this runs before anything else, one file
         # owned by another user made a session unusable for good.
         unprotected = protect_data(session.directory)
+
+        # Before the agent, which discovers definitions by reading the
+        # directories this writes.
+        provision(request, self.definitions, session.directory, cfg)
 
         # Built before anything is removed. Construction is side-effect free
         # but validation is not free of *consequence*: a request naming a

@@ -200,6 +200,13 @@ SKILLS_ROUTE = "/skills/"
 #: `permissions=` outright unless every rule path is scoped to a route.
 MEMORY_ROUTE = "/memory/"
 
+#: A request's own skills, unpacked into its session. A *longer* prefix than
+#: SKILLS_ROUTE, and CompositeBackend matches longest-first, so this wins for
+#: paths beneath it while everything else under /skills/ still reaches the
+#: shared catalogue. That is why the catalogue kept its plain path: uploads
+#: nest underneath it rather than forcing it to be renamed.
+UPLOADED_SKILLS_ROUTE = "/skills/uploaded/"
+
 
 def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     """Build the backend rooted at one session.
@@ -227,6 +234,8 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     prepare_scratch(cfg)
     for routed in ("data", "memory"):
         (session_dir / routed).mkdir(parents=True, exist_ok=True)
+    uploaded = session_dir / "skills" / "uploaded"
+    uploaded.mkdir(parents=True, exist_ok=True)
     cfg.skills_dir.mkdir(parents=True, exist_ok=True)
 
     shell = LocalShellBackend(
@@ -240,6 +249,7 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
             DATA_ROUTE: FilesystemBackend(root_dir=str(session_dir / "data")),
             SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.skills_dir)),
             MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
+            UPLOADED_SKILLS_ROUTE: FilesystemBackend(root_dir=str(uploaded)),
         },
         workspace=session_dir,
     )

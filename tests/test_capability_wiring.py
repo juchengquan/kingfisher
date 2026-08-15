@@ -7,7 +7,12 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.adapters.agent import CapabilityError, _available_skills, build_agent
+from kingfisher.adapters.agent import (
+    SKILLS_SOURCES,
+    CapabilityError,
+    _available_skills,
+    build_agent,
+)
 from kingfisher.adapters.backend import build_backend
 from kingfisher.adapters.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.adapters.subagent_store import load_all
@@ -127,7 +132,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, sessi
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    assert captured["skills"] == ["/skills/"]
+    assert captured["skills"] == SKILLS_SOURCES
     assert not any(isinstance(m, ScopedSkills) for m in captured["middleware"])
     assert len(captured["permissions"]) == 1  # just the /data rule
 
@@ -420,7 +425,7 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
     assert str(backend.routes["/skills/"].cwd) == str(catalogue.resolve())
     assert backend.read("/skills/shared/SKILL.md").error is None
     # Offered to the agent without any copy existing in the workspace.
-    assert _available_skills(relocated.skills_dir) == ("shared",)
+    assert _available_skills(relocated, None) == ("shared",)
     assert not (relocated.workspace / "skills" / "shared").exists()
 
 

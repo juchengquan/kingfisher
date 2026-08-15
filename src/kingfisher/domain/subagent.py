@@ -26,17 +26,13 @@ the files is `adapters.subagent_store`; translating a spec into deepagents'
 
 from __future__ import annotations
 
-import re
 from dataclasses import dataclass
 from pathlib import Path
 
+from kingfisher.domain import frontmatter
+
 DIRECTORY = "subagents"
 SUFFIX = ".md"
-
-#: The shortest quoted scalar is a pair of quotes with nothing between them.
-QUOTED_MINIMUM = 2
-
-_FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n(.*)\Z", re.DOTALL)
 
 
 class SubagentError(ValueError):
@@ -54,30 +50,18 @@ class SubagentSpec:
     model: str | None = None
 
 
-def _parse_scalar(value: str) -> str:
-    value = value.strip()
-    if value[:1] in {'"', "'"} and value[-1:] == value[:1] and len(value) >= QUOTED_MINIMUM:
-        return value[1:-1]
-    return value
-
-
 def _parse_frontmatter(text: str, source: Path) -> tuple[dict[str, str], str]:
-    match = _FRONTMATTER.match(text)
-    if not match:
+    split = frontmatter.split(text)
+    if split is None:
         msg = f"{source.name}: expected YAML frontmatter delimited by ---"
         raise SubagentError(msg)
 
-    fields: dict[str, str] = {}
-    for raw in match.group(1).splitlines():
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        key, sep, value = line.partition(":")
-        if not sep:
-            msg = f"{source.name}: cannot parse frontmatter line {line!r}"
-            raise SubagentError(msg)
-        fields[key.strip()] = value.strip()
-    return fields, match.group(2).strip()
+    header, body = split
+    fields = frontmatter.fields(header)
+    if isinstance(fields, str):
+        msg = f"{source.name}: cannot parse frontmatter line {fields!r}"
+        raise SubagentError(msg)
+    return fields, body
 
 
 def parse(text: str, source: Path) -> SubagentSpec:
@@ -96,12 +80,12 @@ def parse(text: str, source: Path) -> SubagentSpec:
     tools: tuple[str, ...] | None = None
     if raw_tools is not None:
         inner = raw_tools.strip().removeprefix("[").removesuffix("]")
-        tools = tuple(_parse_scalar(t) for t in inner.split(",") if t.strip())
+        tools = tuple(frontmatter.scalar(t) for t in inner.split(",") if t.strip())
 
     return SubagentSpec(
-        name=_parse_scalar(fields["name"]),
-        description=_parse_scalar(fields["description"]),
+        name=frontmatter.scalar(fields["name"]),
+        description=frontmatter.scalar(fields["description"]),
         system_prompt=body,
         tools=tools,
-        model=_parse_scalar(fields["model"]) if fields.get("model") else None,
+        model=frontmatter.scalar(fields["model"]) if fields.get("model") else None,
     )

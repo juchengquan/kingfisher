@@ -17,12 +17,15 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
+from kingfisher.adapters import skill_store
 from kingfisher.adapters.backend import build_backend
 from kingfisher.adapters.models import build_model
 from kingfisher.adapters.scoping import HostPathGuard, ScopedSkills, ToolAllowlist
 from kingfisher.adapters.subagent_store import load_all
 from kingfisher.config import Config
+from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import SubagentSpec
 
 if TYPE_CHECKING:
@@ -43,7 +46,11 @@ CAPABILITY_FILES = {
 #: `/memory/AGENTS.md`, which the agent writes: this file is yours.
 USER_PROMPT_FILE = "PROMPT.md"
 
-SKILLS_SOURCES = ["/skills/"]
+#: The catalogue first, then this session's uploads. deepagents loads sources
+#: in order and lets a later one override an earlier, which is exactly what
+#: `uploads` refuses to allow -- a collision is rejected before it can happen,
+#: so the ordering here never decides anything.
+SKILLS_SOURCES = [("/skills/", "Catalogue"), ("/skills/uploaded/", "Uploaded")]
 MEMORY_SOURCES = ["/memory/AGENTS.md"]
 
 #: For a request that declined memory a deployment did wire. Reads are denied
@@ -59,16 +66,27 @@ class CapabilityError(ValueError):
     """A request named a tool, skill or subagent the workspace does not offer."""
 
 
-def _available_skills(directory: Path) -> tuple[str, ...]:
-    """Skill names the catalogue offers, by directory name.
+def _uploaded_skills(session_dir: Path) -> Path:
+    """Where this session's own skills were unpacked."""
+    return Path(session_dir) / skill.DIRECTORY / skill.UPLOADED
 
-    Given the directory rather than a workspace to derive one from: the
-    catalogue may be deployed outside any workspace and shared by all of them.
+
+def _uploaded_subagents(session_dir: Path) -> Path:
+    """Where this session's own subagents were unpacked."""
+    return Path(session_dir) / SUBAGENT_DIRECTORY
+
+
+def _available_skills(cfg: Config, session_dir: Path | None) -> tuple[str, ...]:
+    """Every skill this request may activate: the catalogue, plus its own.
+
+    One flat set, because `capabilities.skills` names skills and not sources.
+    They cannot collide — `uploads` rejects an upload that shares a catalogue
+    name — so merging loses nothing.
     """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return ()
-    return tuple(sorted(p.name for p in directory.iterdir() if (p / "SKILL.md").is_file()))
+    names = set(skill_store.names(cfg.skills_dir))
+    if session_dir is not None:
+        names |= set(skill_store.names(_uploaded_skills(session_dir)))
+    return tuple(sorted(names))
 
 
 def registered_tools(graph: Any) -> tuple[str, ...]:
@@ -272,7 +290,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         if capabilities.skills is None:
             extras["skills"] = SKILLS_SOURCES
         else:
-            available = _available_skills(cfg.skills_dir)
+            available = _available_skills(cfg, session_dir)
             unknown = tuple(s for s in capabilities.skills if s not in available)
             if unknown:
                 msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
@@ -290,10 +308,14 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             permissions.extend(_skill_denials(capabilities.skills, available))
 
     if capabilities.subagents is not None:
-        defined = load_all(cfg.subagents_dir)
+        # The catalogue plus this session's own. They cannot collide: `uploads`
+        # rejects an upload sharing a catalogue name before it is written.
+        defined = dict(load_all(cfg.subagents_dir))
+        if session_dir is not None:
+            defined |= load_all(_uploaded_subagents(session_dir))
         unknown = tuple(n for n in capabilities.subagents if n not in defined)
         if unknown:
-            msg = f"unknown subagent(s): {', '.join(unknown)}; workspace defines {tuple(defined)}"
+            msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
             raise CapabilityError(msg)
         extras["subagents"] = [_as_subagent(defined[n], cfg) for n in capabilities.subagents]
 
