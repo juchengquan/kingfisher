@@ -30,8 +30,14 @@ class Turn:
 
     @property
     def virtual_dir(self) -> str:
-        """The directory as the agent addresses it — machine-independent."""
-        return f"/runs/{self.session_id}/{self.id}"
+        """The directory as the agent addresses it — machine-independent.
+
+        No session segment. The session directory *is* the backend root, so
+        the agent has no name for it and cannot address outside it; naming it
+        here would also put the id into the prompt, changing the cached prefix
+        on every session.
+        """
+        return f"/runs/{self.id}"
 
     @property
     def input_dir(self) -> Path:
@@ -53,9 +59,21 @@ class Session:
 
     @classmethod
     def open(cls, workspace: Path, session_id: str, dirs: SessionDirs) -> Session:
-        directory = Path(workspace) / "runs" / session_id
+        """Open (creating if needed) one session's directory.
+
+        Sessions live under `sessions/`, not `runs/`, because this directory is
+        now the backend root: it holds the whole vocabulary the agent addresses
+        — `data`, `derived`, `memory` and `runs` — rather than only that
+        session's turns.
+        """
+        directory = Path(workspace) / "sessions" / session_id
         dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
+
+    @property
+    def runs_dir(self) -> Path:
+        """Where this session's turns live, one level inside its root."""
+        return self.directory / "runs"
 
     def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
         """Create the next turn's directory and return it.
@@ -69,19 +87,22 @@ class Session:
         if the name is taken. Scanning for the highest id and *then* creating
         it is the race this avoids.
         """
+        runs = self.runs_dir
+        dirs.ensure(runs)
+
         if turn_id:
-            path = self.directory / turn_id
+            path = runs / turn_id
             dirs.ensure(path)
             return Turn(session_id=self.id, id=turn_id, directory=path)
 
-        existing = dirs.children(self.directory)
+        existing = dirs.children(runs)
         number = max(
             (int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()),
             default=0,
         )
         while True:
             number += 1
-            candidate = self.directory / f"t{number:03d}"
+            candidate = runs / f"t{number:03d}"
             if dirs.create_exclusive(candidate):
                 return Turn(session_id=self.id, id=candidate.name, directory=candidate)
             # Lost the race for this id; take the next one. The retry lives here
