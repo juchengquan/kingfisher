@@ -30,10 +30,9 @@ from kingfisher.config import Config
 from kingfisher.runlog import JsonlRunLogger, log_path
 from kingfisher.workspace import (
     ensure_layout,
-    next_turn_id,
+    allocate_turn_dir,
     pre_run_commit,
     protect_data,
-    run_dir,
     sweep,
     virtual_input_dir,
     virtual_run_dir,
@@ -170,6 +169,10 @@ def stream(
     single request within it: one directory per turn, so a second turn cannot
     overwrite the first one's answer.
 
+    Pass `turn_id` when the caller has a request id of its own — it makes a
+    retry idempotent and removes any need for kingfisher to guess where one
+    turn ends. Omitted, the next sequential id is allocated atomically.
+
     `inputs` are files supplied *with this request*. They are copied into the
     turn's `input/` directory rather than into `/data`, because they are not
     project data — they arrive fresh each round and leave with the turn.
@@ -185,9 +188,10 @@ def stream(
     commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
     swept = sweep(workspace, cfg.keep_runs, checkpointer)
 
-    turn_id = turn_id or next_turn_id(workspace, session_id)
-    rd = run_dir(workspace, session_id, turn_id)
-    rd.mkdir(parents=True, exist_ok=True)
+    # Allocation is atomic, and a caller-supplied id wins. A service should
+    # pass its own request id: only the caller knows the request boundary, and
+    # deriving one here cannot be made to match it.
+    turn_id, rd = allocate_turn_dir(workspace, session_id, turn_id)
 
     if inputs:
         input_dir = rd / "input"

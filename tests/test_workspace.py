@@ -88,3 +88,40 @@ def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
     ).stdout
     assert "reports/smoke.md" in listed
     assert "unrelated.txt" not in listed
+
+
+def test_caller_supplied_turn_id_wins_and_is_idempotent(workspace):
+    """A service passes its own request id, so a retry reuses the same turn
+    rather than forking a second one."""
+    from kingfisher.workspace import allocate_turn_dir
+
+    first_id, first = allocate_turn_dir(workspace, "sess", "req-abc")
+    again_id, again = allocate_turn_dir(workspace, "sess", "req-abc")
+
+    assert first_id == again_id == "req-abc"
+    assert first == again
+    assert first.is_dir()
+
+
+def test_concurrent_allocation_never_collides(workspace):
+    """Scanning for the highest id and then creating it is a race. Allocation
+    goes through mkdir, which fails if the name is taken, so two callers
+    cannot both decide they are t001."""
+    import concurrent.futures as futures
+
+    from kingfisher.workspace import allocate_turn_dir
+
+    with futures.ThreadPoolExecutor(max_workers=16) as pool:
+        results = list(
+            pool.map(lambda _: allocate_turn_dir(workspace, "busy")[0], range(40))
+        )
+
+    assert len(set(results)) == 40, f"collision: {len(results) - len(set(results))} duplicates"
+    assert all(r.startswith("t") for r in results)
+
+
+def test_allocated_ids_are_sequential_and_readable(workspace):
+    from kingfisher.workspace import allocate_turn_dir
+
+    ids = [allocate_turn_dir(workspace, "ordered")[0] for _ in range(3)]
+    assert ids == ["t001", "t002", "t003"]

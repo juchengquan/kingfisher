@@ -178,15 +178,45 @@ def run_dir(workspace: Path, session_id: str, turn_id: str) -> Path:
     return session_dir(workspace, session_id) / turn_id
 
 
-def next_turn_id(workspace: Path, session_id: str) -> str:
-    """The next sequential turn id for a session — `t001`, `t002`, ...
+def allocate_turn_dir(
+    workspace: Path,
+    session_id: str,
+    turn_id: str | None = None,
+) -> tuple[str, Path]:
+    """Create this turn's directory and return `(turn_id, path)`.
 
-    Sequential rather than random so a conversation reads in order on disk.
+    A caller-supplied `turn_id` wins, and is idempotent: handing back the same
+    id returns the same directory, so a retried request does not fork a second
+    turn. Services should pass their own request id — it is the only way the
+    turn boundary can match the request boundary.
+
+    The fallback allocates the next sequential id — `t001`, `t002` — so a
+    conversation reads in order on disk. Allocation is done by `mkdir` rather
+    than by scanning and then creating: `mkdir` fails if the name is taken, so
+    two concurrent callers cannot both decide they are `t001`. Scanning first
+    and creating second is precisely that race.
     """
     parent = session_dir(workspace, session_id)
-    existing = [p.name for p in parent.iterdir() if p.is_dir()] if parent.is_dir() else []
-    numbers = [int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()]
-    return f"t{max(numbers, default=0) + 1:03d}"
+    parent.mkdir(parents=True, exist_ok=True)
+
+    if turn_id:
+        path = parent / turn_id
+        path.mkdir(exist_ok=True)
+        return turn_id, path
+
+    existing = [p.name for p in parent.iterdir() if p.is_dir()]
+    number = max(
+        (int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()),
+        default=0,
+    )
+    while True:
+        number += 1
+        candidate = parent / f"t{number:03d}"
+        try:
+            candidate.mkdir()
+        except FileExistsError:
+            continue  # lost the race for this id; take the next one
+        return candidate.name, candidate
 
 
 def virtual_run_dir(session_id: str, turn_id: str) -> str:
