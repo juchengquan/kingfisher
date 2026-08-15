@@ -209,6 +209,17 @@ def test_events_render_as_readable_lines(cfg):
     assert any("cached=80" in line for line in rendered)
 
 
+def test_the_adapter_owns_the_stream_modes(cfg):
+    """`values` and `messages` are LangGraph's words, not orchestration's."""
+    from kingfisher.adapters import runtime
+
+    values = {"messages": [AIMessage(content="42")]}
+
+    assert runtime.answer_in("values", values) == "42"
+    assert runtime.answer_in("updates", values) is None
+    assert list(runtime.events_in("values", values)) == []
+
+
 def test_run_is_a_drain_of_stream(cfg):
     """One orchestration path: run() must not re-implement the sequence."""
     from kingfisher.app.run import run

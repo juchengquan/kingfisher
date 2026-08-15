@@ -186,12 +186,12 @@ class Kingfisher:
                 },
                 stream_mode=runtime.STREAM_MODES,
             ):
-                if mode == "values":
-                    # Full state each step; the last one carries the final answer.
-                    if (text := runtime.final_text(chunk)) is not None:
-                        answer = text
-                    continue
-                yield from runtime.events_in(chunk)
+                # Both are offered every chunk and each ignores the modes that
+                # are not its own. Which mode carries what is the adapter's
+                # knowledge, not this module's.
+                if (text := runtime.answer_in(mode, chunk)) is not None:
+                    answer = text
+                yield from runtime.events_in(mode, chunk)
 
             answer = normalize_answer(answer)
             ok = True

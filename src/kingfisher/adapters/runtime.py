@@ -112,17 +112,32 @@ def messages_in(update: Any) -> list[Any]:
     return list(messages) if isinstance(messages, (list, tuple)) else [messages]
 
 
-def events_in(chunk: Any) -> Iterator[RunEvent]:
-    """Translate one `updates` chunk into domain events."""
+def events_in(mode: str, chunk: Any) -> Iterator[RunEvent]:
+    """Translate one stream chunk into domain events.
+
+    Which modes exist, and what each carries, is decided here rather than by
+    the orchestration above. `updates`, `values` and `messages` are LangGraph's
+    vocabulary, and `app/` should no more compare against them than it should
+    reach for `input_token_details` -- which is the duplication this module was
+    written to end.
+    """
+    if mode != "updates":
+        return
     for update in (chunk or {}).values():
         for message in messages_in(update):
             if (event := _event_for(message)) is not None:
                 yield event
 
 
-def final_text(values_chunk: Any) -> str | None:
-    """The assistant's last message from a `values` chunk, if it has one."""
-    messages = messages_in(values_chunk)
+def answer_in(mode: str, chunk: Any) -> str | None:
+    """The assistant's last message from a `values` chunk, if it has one.
+
+    `None` for any other mode, so a caller can offer every chunk and keep the
+    last answer it is given: the final emission is the authoritative one.
+    """
+    if mode != "values":
+        return None
+    messages = messages_in(chunk)
     if not messages:
         return None
     return getattr(messages[-1], "text", None) or ""
