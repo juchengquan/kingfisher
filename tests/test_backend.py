@@ -183,3 +183,39 @@ def test_scratch_follows_a_relocated_state_dir(cfg, tmp_path):
     relocated = replace(cfg, state_root=tmp_path / "state")
 
     assert relocated.scratch_dir == tmp_path / "state" / "tmp"
+
+
+def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg):
+    """The guard exists to correct the model mid-turn, and its message names
+    the virtual path to use. That only works if the message arrives.
+
+    It raised straight out of the tool call instead, killing the run: three
+    live smoke runs died this way, on `analyze.py`, on a skill's SKILL.md, and
+    again with skills off. deepagents converts `ValueError` raised during path
+    *validation*, but `backend.write()` is called outside that guard.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.adapters.agent import build_agent
+    from tests.conftest import FakeToolCallingModel
+
+    host_path = f"{cfg.workspace}/runs/s1/t001/notes.md"
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "write_file", "args": {"file_path": host_path, "content": "x"}, "id": "c1"}
+            ],
+        ),
+        AIMessage(content="retried and finished"),
+    ]
+
+    agent = build_agent(cfg, model=FakeToolCallingModel(responses=responses))
+    out = agent.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
+    )
+
+    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+    assert "is a host path" in transcript  # the correction reached the model
+    assert "/runs/s1/t001/notes.md" in transcript  # including what to use instead
+    assert out["messages"][-1].content == "retried and finished"  # the run survived

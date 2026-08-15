@@ -18,7 +18,7 @@ from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.adapters.backend import build_backend
-from kingfisher.adapters.capabilities import ScopedSkills, ToolAllowlist
+from kingfisher.adapters.capabilities import HostPathGuard, ScopedSkills, ToolAllowlist
 from kingfisher.adapters.models import build_model
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.config import Config
@@ -215,7 +215,9 @@ def build_agent(
     """
     capabilities = capabilities or Capabilities()
     resolved_backend = backend if backend is not None else build_backend(cfg)
-    middleware: list[Any] = [TodoListMiddleware()]
+    # Unconditional: the backend rejects host paths on every run, so the
+    # thing that turns that rejection into a correction must always be here.
+    middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]
     permissions = [DATA_IS_READ_ONLY]
     extras: dict[str, Any] = {}
 

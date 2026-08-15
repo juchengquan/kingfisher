@@ -28,6 +28,8 @@ from deepagents.middleware.skills import SkillsMiddleware
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
+from kingfisher.adapters.backend import HostPathError
+
 
 def _tool_name(tool: Any) -> str | None:
     name = getattr(tool, "name", None)
@@ -116,3 +118,43 @@ class ScopedSkills(SkillsMiddleware):
         return super()._format_skills_list(
             [s for s in skills if s.get("name") in self._allowed]
         )
+
+
+class HostPathGuard(AgentMiddleware):
+    """Turn a rejected host path back into something the agent can act on.
+
+    `reject_host_path` exists to correct the model mid-turn -- its message
+    names the virtual path to use instead. But it raises from inside the
+    backend, and deepagents' file tools only convert `ValueError` raised during
+    *path validation*; `backend.write()` is called outside that guard. So the
+    exception escaped the tool, escaped the graph, and killed the run. The
+    message meant to teach the model never reached it.
+
+    Returning it as a failed `ToolMessage` is what makes the correction work,
+    exactly as `ToolAllowlist` does for a tool the request did not activate.
+    Only `HostPathError` is caught: a middleware that swallowed every
+    `ValueError` would hide real faults behind a retry.
+    """
+
+    def _as_tool_error(self, request: Any, exc: HostPathError) -> ToolMessage:
+        call = request.tool_call
+        return ToolMessage(
+            content=f"Error: {exc}",
+            tool_call_id=call.get("id", ""),
+            name=call.get("name"),
+            status="error",
+        )
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        try:
+            return handler(request)
+        except HostPathError as exc:
+            return self._as_tool_error(request, exc)
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        try:
+            return await handler(request)
+        except HostPathError as exc:
+            return self._as_tool_error(request, exc)
