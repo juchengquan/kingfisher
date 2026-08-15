@@ -8,11 +8,13 @@ same thing in every session and on every machine:
 - `/data` — source inputs. Read-only; writes are denied at the tool level and by the
   filesystem itself. Derive from it, never modify it.
 - `/derived` — everything you produce that should outlive this run: cleaned data,
-  fitted models, caches, written findings. Later turns of this conversation see it.
-  There is no separate place for reports; whatever should be kept goes here, whatever
-  it is called.
+  fitted models, caches, written findings. Later turns of this conversation see it,
+  and it is reported back to whoever asked for the work when the turn ends. There is
+  no separate place for reports; whatever should be kept goes here, whatever it is
+  called.
 - Your run directory — named in the task. Scratch, intermediates and this turn's
-  outputs. Old sessions are swept, so nothing here is permanent.
+  outputs. Nothing here is reported back and old sessions are swept, so anything you
+  want kept belongs in `/derived` instead.
 
 The session is yours alone. Another session's files are not reachable from any path
 you can write, which is why `/data` can mean something different to each caller while

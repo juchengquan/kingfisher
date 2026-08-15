@@ -36,6 +36,7 @@ from kingfisher.adapters.runlog import JsonlRunLogger, log_path
 from kingfisher.adapters.uploads import provision
 from kingfisher.adapters.workspace_fs import (
     LocalSessionDirs,
+    collect_artifacts,
     ensure_layout,
     ensure_session_layout,
     protect_data,
@@ -251,6 +252,10 @@ class Kingfisher:
                 log_path=log_path(cfg.state_dir, session_id),
                 swept=swept.removed,
                 commit=commit,
+                # Collected after the graph has finished, so it reflects what
+                # the turn actually left behind -- including what the shell
+                # wrote, which no file tool would have reported.
+                artifacts=collect_artifacts(session.directory),
             ),
         )
 
