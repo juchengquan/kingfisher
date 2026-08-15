@@ -106,7 +106,27 @@ Each produces working, testable software on its own.
 | **3** | Upload provisioning: `SkillStore` port, `skill_refs` on `Request`, collision rejection. | 2 |
 | **4** | Manifest: `RunResult` reports what changed under `/memory` and `/derived`. | 1 |
 | **5** | Lifecycle: `sweep()` off the request path, explicit delete, TTL janitor. | 1 |
-| **6** | Shared checkpointer and shared-storage validation. | 1 |
+| **6** | Sqlite configured for more than one process; storage guarantee pinned. | 1 |
+
+Phase 6 was specified as "move the checkpointer to a shared store", on the
+reading that sqlite is single-writer and would serialise many users. Measured,
+that was wrong in both directions and the phase changed shape.
+
+Within one process sqlite is not a bottleneck at all: sixteen threads, 320
+checkpoint writes, 57ms, no errors. Against a model call of seconds, it is not
+worth a database.
+
+Across processes it was broken, but by kingfisher rather than by sqlite. The
+connection was opened at defaults — no busy timeout, no WAL — so a process that
+found the file locked failed instead of waiting, and did so inside `setup()`,
+before serving anything. Measured through the real service: **3 of 30 processes
+crashed, intermittently**. With `busy_timeout` set *before* the WAL pragma, and
+the pragma tolerated when another process wins the race to set it: **0 of 30**.
+
+So a shared database is not what phase 6 needed; it is what a deployment needs
+when it outgrows one host, because sqlite's locking over a network filesystem is
+not dependable. That seam already exists — `Kingfisher(threads=…)` takes any
+saver — and is the whole of the change when the day comes.
 
 Phase 1 is load-bearing for everything. Phases 4, 5 and 6 are independent of 2
 and 3 and can be reordered against them freely.
@@ -187,9 +207,13 @@ These did not come up in the design session and each could change a phase:
   disk used, turns run. T4 puts every caller in one process, so a single caller
   can starve the others. Out of scope for the six phases, but it is the next
   thing a real deployment would hit.
-- **Shared storage.** `LocalShellBackend` runs real subprocesses against a real
-  filesystem. Whether the chosen shared store supports that (NFS/EFS yes;
-  S3-fuse, questionable) needs proving before phase 6 rather than after.
+- ~~**Shared storage.**~~ The guarantee kingfisher's correctness actually rests
+  on is narrower than "does a shell work here": `allocate_turn` is atomic only
+  because `mkdir` fails on an existing name. Verified exclusive across eight
+  processes claiming 200 names, zero double-claims, and pinned by a test in
+  `test_workspace.py`. A store that cannot honour that would silently let two
+  turns share a directory — the defect the turn tier exists to fix. That is the
+  question to ask of NFS, EFS or S3-fuse, and it is now the one a test asks.
 - **Concurrency within one session.** `allocate_turn` is atomic via `mkdir`, but
   nothing serialises two simultaneous requests for the same `session_id` against
   one checkpointer thread.
