@@ -12,6 +12,7 @@ from __future__ import annotations
 import shutil
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
+from dataclasses import dataclass
 from pathlib import Path
 
 from kingfisher.domain.layout import (
@@ -216,3 +217,61 @@ def writable_data(session_dir: Path) -> Iterator[Path]:
         yield data
     finally:
         protect_data(session_dir)
+
+
+class DataError(ValueError):
+    """A supplied file cannot be placed in a session's `/data`."""
+
+
+@dataclass(frozen=True)
+class DataPlacement:
+    """What `place_data` did. `replaced` is a subset of `placed`."""
+
+    placed: tuple[str, ...] = ()
+    replaced: tuple[str, ...] = ()
+
+
+def place_data(sources: tuple[Path, ...], session_dir: Path) -> DataPlacement:
+    """Copy caller-supplied files into a session's `/data`, and re-harden it.
+
+    The durable counterpart to a turn's `input/`: these survive the turn and
+    are there on the next one. That is the whole distinction, and the only
+    reason both exist.
+
+    Written through `writable_data`, whose `finally` drops the write bits
+    again -- including when a copy raises. Nothing outside this module should
+    ever chmod `/data`, because reaching for `sudo` when the directory refused
+    a copy is what put root-owned files in a workspace and made one session
+    unusable for good.
+
+    Everything is checked before anything is copied. A request that names a
+    file twice, or names one that is not there, must not leave half its data
+    behind for a later turn to find.
+    """
+    if not sources:
+        return DataPlacement()
+
+    seen: dict[str, Path] = {}
+    for source in sources:
+        name = Path(source).name
+        if name in {"", ".", ".."}:
+            msg = f"{source}: has no filename to place it under"
+            raise DataError(msg)
+        if not Path(source).is_file():
+            msg = f"{source}: no such file"
+            raise DataError(msg)
+        if name in seen:
+            # Keeping the last one silently loses a file the caller asked for.
+            msg = f"{name}: supplied twice, from {seen[name]} and {source}"
+            raise DataError(msg)
+        seen[name] = Path(source)
+
+    existing = {p.name for p in (Path(session_dir) / "data").glob("*")}
+    with writable_data(session_dir) as data:
+        for name, source in seen.items():
+            shutil.copy(source, data / name)
+
+    return DataPlacement(
+        placed=tuple(seen),
+        replaced=tuple(name for name in seen if name in existing),
+    )

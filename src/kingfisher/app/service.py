@@ -39,6 +39,7 @@ from kingfisher.adapters.workspace_fs import (
     collect_artifacts,
     ensure_layout,
     ensure_session_layout,
+    place_data,
     protect_data,
 )
 from kingfisher.app import config as config_module
@@ -221,6 +222,11 @@ class Kingfisher:
         # owned by another user made a session unusable for good.
         unprotected = protect_data(session.directory)
 
+        # Before the turn exists, and before anything is destroyed: a request
+        # naming a file that is not there must fail without having placed the
+        # ones that were. `place_data` re-hardens `/data` on its way out.
+        placement = place_data(request.data, session.directory)
+
         # Before the agent, which discovers definitions by reading the
         # directories this writes.
         brought = provision(request, self.definitions, session.directory, cfg)
@@ -253,6 +259,11 @@ class Kingfisher:
 
         if unprotected:
             yield RunEvent(kind="protect_failed", text="; ".join(unprotected))
+        if placement.placed:
+            # Replacement is the one dangerous case -- durable data, silently
+            # overwritten -- so it is named rather than assumed.
+            replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
+            yield RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
         yield RunEvent(kind="run_start", text=turn.virtual_dir)
 
         # The turn directory is run-scoped, so it reaches the model here rather
@@ -263,6 +274,12 @@ class Kingfisher:
             if request.inputs
             else ""
         )
+        # Named because `/data` changed under a session the agent may already
+        # have looked at. In the turn message, not the prompt, for the same
+        # reason the run directory is: the prompt's cached prefix must not move.
+        arrived = (
+            f" New files in /data: {', '.join(placement.placed)}." if placement.placed else ""
+        )
         # This turn's facts, and nothing more. What the task should produce is the
         # task's business: asking for a written report is one kind of request among
         # many, and a general agent should not carry one convention's filenames in
@@ -270,7 +287,7 @@ class Kingfisher:
         # greeting deliberate over two files nobody wanted.
         message = (
             f"{request.task}\n\n"
-            f"Your run directory for this task is {turn.virtual_dir}.{supplied}"
+            f"Your run directory for this task is {turn.virtual_dir}.{supplied}{arrived}"
         )
 
         answer = ""

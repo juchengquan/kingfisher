@@ -18,6 +18,15 @@ was reachable from here.
     uv run main.py "Just this once" --no-memory
     uv run main.py "And now?" --session 7f3a91c2b4e0
     uv run main.py "Profile this" --input ~/data.csv
+    uv run main.py "Analyse these" --data ~/a.pdf --data ~/b.pdf
+
+`--input` and `--data` differ only in how long the file lives, which is the
+only reason there are two. `--input` puts it in this turn's `/runs/<turn>/input`
+and it leaves with the turn. `--data` puts it in the session's `/data`, where
+the next turn still finds it without being handed it again. `/data` is
+read-only to the agent, and `--data` is the supported way to write there --
+copying files in by hand fails, and working around that with `sudo` leaves
+files the harness cannot manage.
 
 Nothing is written unless the task asks for it. Wanting a report on disk is one
 kind of request among many, so there is no flag for it -- say what you want in
@@ -239,7 +248,14 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="PATH",
         action="append",
         default=[],
-        help="a file supplied with this request; repeatable",
+        help="a file for this turn only, in /runs/<turn>/input; repeatable",
+    )
+    parser.add_argument(
+        "--data",
+        metavar="PATH",
+        action="append",
+        default=[],
+        help="a file kept for the whole session, in /data (read-only); repeatable",
     )
     for name in ("tools", "skills", "subagents"):
         parser.add_argument(
@@ -306,10 +322,11 @@ def main(argv: list[str]) -> int:
         task=task,
         session_id=session_id,
         inputs=tuple(Path(p).expanduser() for p in args.input),
+        data=tuple(Path(p).expanduser() for p in args.data),
         capabilities=capabilities,
     )
 
-    missing = [p for p in request.inputs if not p.is_file()]
+    missing = [p for p in (*request.inputs, *request.data) if not p.is_file()]
     if missing:
         print(f"no such input file(s): {', '.join(str(p) for p in missing)}", file=sys.stderr)
         return 2
@@ -325,6 +342,8 @@ def main(argv: list[str]) -> int:
             print(f"{'memory':<10}: {'on' if capabilities.memory else 'off'}")
     if request.inputs:
         print(f"inputs    : {', '.join(p.name for p in request.inputs)}")
+    if request.data:
+        print(f"data      : {', '.join(p.name for p in request.data)}")
     print(f"task      : {task}\n")
 
     # Streaming rather than run(): with no UI, a multi-minute analysis would
