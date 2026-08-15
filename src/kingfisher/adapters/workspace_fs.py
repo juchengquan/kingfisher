@@ -11,7 +11,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Iterator
-from contextlib import contextmanager
+from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from kingfisher.domain.layout import (
@@ -118,20 +118,45 @@ def _add_write_bits(path: Path) -> None:
     path.chmod(path.stat().st_mode | 0o200)
 
 
-def protect_data(workspace: Path) -> None:
+def _unreachable(path: Path, error: OSError) -> str:
+    """One path we were not allowed to touch, said in one line."""
+    return f"{path.name}: {error.strerror or error}"
+
+
+def protect_data(workspace: Path) -> tuple[str, ...]:
     """Make `data/` read-only at the OS level. Idempotent.
+
+    Returns a description of every path whose mode could not be changed, and
+    an empty tuple when all of them were.
 
     This is the layer the tool-level deny rule cannot provide: the kernel
     enforces it against `execute` too, and filesystem permissions in deepagents
     are applied only to the built-in file tools. Directories are included
     because deletion is governed by the *directory's* write bit, not the file's.
+
+    A path we cannot chmod is reported, not raised. `chmod` refuses anyone who
+    does not own the file, so a single input copied in by another user -- a
+    `sudo` run, a file restored from a backup -- used to abort the run. And it
+    aborted *every* run of that session afterwards, because this happens before
+    anything else, which made one root-owned file a permanent brick.
+
+    Degrading is safe in the case that actually arises: a file owned by someone
+    else is one this process cannot write either, so the mode change being
+    skipped was never what protected it. Where it is not safe, the deny rule is
+    still in force and the caller is told which paths are bare.
     """
     data = Path(workspace) / "data"
     if not data.is_dir():
-        return
-    for path in sorted(data.rglob("*"), reverse=True):
-        _drop_write_bits(path)
-    _drop_write_bits(data)
+        return ()
+
+    # Children first, then the directory itself.
+    failures = []
+    for path in (*sorted(data.rglob("*"), reverse=True), data):
+        try:
+            _drop_write_bits(path)
+        except OSError as exc:
+            failures.append(_unreachable(path, exc))
+    return tuple(failures)
 
 
 @contextmanager
@@ -140,12 +165,19 @@ def writable_data(workspace: Path) -> Iterator[Path]:
 
         with writable_data(ws) as data:
             shutil.copy(source, data / "sales.csv")
+
+    The directory itself must become writable or there is nowhere to put the
+    inputs, so a failure there is raised. Existing files are best-effort for
+    the same reason `protect_data` is: one we do not own is one we could not
+    have overwritten anyway, and refusing to accept a new input because an
+    unrelated old one is someone else's would be its own bug.
     """
     data = Path(workspace) / "data"
     data.mkdir(parents=True, exist_ok=True)
     _add_write_bits(data)
     for path in data.rglob("*"):
-        _add_write_bits(path)
+        with suppress(OSError):
+            _add_write_bits(path)
     try:
         yield data
     finally:

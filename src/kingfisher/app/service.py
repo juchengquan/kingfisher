@@ -134,8 +134,11 @@ class Kingfisher:
         # retry reuses it.
         session = Session.open(workspace, session_id, dirs)
         ensure_session_layout(session.directory)
-        # Kernel-level guard; the deny rule covers only the file tools.
-        protect_data(session.directory)
+        # Kernel-level guard; the deny rule covers only the file tools. Paths
+        # it could not harden are reported below rather than raised: they used
+        # to abort the run, and since this runs before anything else, one file
+        # owned by another user made a session unusable for good.
+        unprotected = protect_data(session.directory)
 
         # Built before anything is removed. Construction is side-effect free
         # but validation is not free of *consequence*: a request naming a
@@ -177,6 +180,8 @@ class Kingfisher:
         logger.swept(swept.removed, swept.kept)
         logger.run_start(request.task, turn.virtual_dir)
 
+        if unprotected:
+            yield RunEvent(kind="protect_failed", text="; ".join(unprotected))
         if swept.removed:
             yield RunEvent(kind="swept", text=", ".join(swept.removed))
         if swept.failures:

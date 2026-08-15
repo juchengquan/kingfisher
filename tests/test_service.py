@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from kingfisher import Kingfisher
@@ -84,6 +86,46 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     assert service.agent_for(Request("go"), session_dir) is not service.agent_for(
         Request("go"), session_dir
     )
+
+
+def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
+    """The bug this fixes: hardening `data/` ran before everything else, so one
+    file owned by another user -- a `sudo` run, a restored backup -- aborted
+    the turn, and every later turn of that session with it.
+
+    The tool-level deny rule is still in force; the caller is told which paths
+    are bare and the run proceeds.
+    """
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+
+    real_chmod = Path.chmod
+
+    def refuse_everything(self, mode, **kwargs):
+        raise PermissionError(1, "Operation not permitted", str(self))
+
+    Path.chmod = refuse_everything
+    try:
+        events = list(service.stream(Request("go", session_id="s")))
+    finally:
+        Path.chmod = real_chmod
+
+    assert [e.kind for e in events][-1] == "finished"
+    assert [e.kind for e in events if e.kind == "protect_failed"]
+
+
+def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
+    """Degrading quietly would be worse than crashing: the guard is weaker than
+    it looks and nobody would know."""
+    monkeypatch.setattr(
+        "kingfisher.app.service.protect_data", lambda _dir: ("theirs.pdf: Operation not permitted",)
+    )
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+
+    events = list(service.stream(Request("go", session_id="s")))
+    (failed,) = [e for e in events if e.kind == "protect_failed"]
+
+    assert "theirs.pdf" in failed.text
+    assert [e.kind for e in events][-1] == "finished"  # and the run went on
 
 
 def test_the_module_level_helpers_are_unchanged(cfg):
