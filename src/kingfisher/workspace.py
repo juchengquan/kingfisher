@@ -3,12 +3,18 @@
 The workspace splits by lifetime, not by session:
 
   durable, shared   /data /derived /skills /memory /reports
-  per-session       /runs/<session_id>/
+  per-session       /runs/<session_id>/          transcript, and its turns
+  per-turn          /runs/<session_id>/<turn>/   this request's inputs, scratch, answer
   harness-owned     /.kingfisher/   (thread db, run logs, tmp)
+
+A turn is one request. Its inputs are supplied fresh each time and are not
+project data; its conclusions are durable. Nesting turns inside their session
+means expiring a conversation takes its turns with it, with no lookup, while
+expiring stale inputs never touches the conversation.
 
 and by durability, which is what makes retention safe:
 
-  tracked in git    /reports, /skills, /memory, runs/*/report.md, runs/*/result.json
+  tracked in git    /reports, /skills, /memory, runs/*/*/report.md, runs/*/*/result.json
   ignored, swept    everything else under runs/*/
   ignored, kept     /data, /derived, /.kingfisher
 """
@@ -70,11 +76,14 @@ derived/
 .kingfisher/
 
 # Run output: conclusions are tracked, everything else is disposable scratch.
+# Two levels: runs/<session>/<turn>/. Every parent must be re-included or git
+# never descends far enough to see the negated files.
 runs/**
 !runs/
 !runs/*/
-!runs/*/report.md
-!runs/*/result.json
+!runs/*/*/
+!runs/*/*/report.md
+!runs/*/*/result.json
 """
 
 
@@ -159,14 +168,35 @@ def writable_data(workspace: Path) -> Iterator[Path]:
         protect_data(workspace)
 
 
-def run_dir(workspace: Path, session_id: str) -> Path:
-    """Absolute path of a session's run directory (host-side)."""
+def session_dir(workspace: Path, session_id: str) -> Path:
+    """Absolute path of a session's directory, which contains its turns."""
     return Path(workspace) / "runs" / session_id
 
 
-def virtual_run_dir(session_id: str) -> str:
+def run_dir(workspace: Path, session_id: str, turn_id: str) -> Path:
+    """Absolute path of one turn's directory (host-side)."""
+    return session_dir(workspace, session_id) / turn_id
+
+
+def next_turn_id(workspace: Path, session_id: str) -> str:
+    """The next sequential turn id for a session — `t001`, `t002`, ...
+
+    Sequential rather than random so a conversation reads in order on disk.
+    """
+    parent = session_dir(workspace, session_id)
+    existing = [p.name for p in parent.iterdir() if p.is_dir()] if parent.is_dir() else []
+    numbers = [int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()]
+    return f"t{max(numbers, default=0) + 1:03d}"
+
+
+def virtual_run_dir(session_id: str, turn_id: str) -> str:
     """The same directory as the agent sees it — virtual, machine-independent."""
-    return f"/runs/{session_id}"
+    return f"/runs/{session_id}/{turn_id}"
+
+
+def virtual_input_dir(session_id: str, turn_id: str) -> str:
+    """Where files supplied with this request are mounted, as the agent sees it."""
+    return f"{virtual_run_dir(session_id, turn_id)}/input"
 
 
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:

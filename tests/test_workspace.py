@@ -31,9 +31,12 @@ def test_gitignore_encodes_the_durability_tiers(workspace):
     # Run output: conclusions tracked, scratch ignored. Negation needs the
     # parent directories re-included or git will not reach the files.
     assert "runs/**" in text
+    # Two levels — runs/<session>/<turn>/ — and every parent must be
+    # re-included or git never descends far enough to see the negated files.
     assert "!runs/*/" in text
-    assert "!runs/*/report.md" in text
-    assert "!runs/*/result.json" in text
+    assert "!runs/*/*/" in text
+    assert "!runs/*/*/report.md" in text
+    assert "!runs/*/*/result.json" in text
 
 
 def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):

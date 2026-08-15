@@ -58,7 +58,7 @@ def test_run_creates_the_session_triple(cfg):
 
     assert isinstance(result, RunResult)
     assert result.answer == "42"
-    assert result.run_dir == cfg.workspace / "runs" / "sess123"
+    assert result.run_dir == cfg.workspace / "runs" / "sess123" / result.turn_id
     assert result.run_dir.is_dir()
     assert result.log_path.exists()
     assert agent.config["configurable"]["thread_id"] == "sess123"
@@ -104,3 +104,54 @@ def test_run_sweeps_old_sessions_before_creating_the_new_one(cfg):
     # The new run directory is created after the sweep, so it is never a
     # candidate for its own deletion.
     assert (cfg.workspace / "runs" / "s4").is_dir()
+
+
+
+def test_a_second_turn_does_not_overwrite_the_first(cfg):
+    """The defect this tier exists to fix: two turns in one session shared a
+    directory, so turn two clobbered turn one's report and result."""
+    ck = StubCheckpointer()
+    first = run("turn one", cfg=cfg, session_id="sess", agent=StubAgent("a"), checkpointer=ck)
+    (first.run_dir / "report.md").write_text("FROM TURN ONE")
+
+    second = run("turn two", cfg=cfg, session_id="sess", agent=StubAgent("b"), checkpointer=ck)
+    (second.run_dir / "report.md").write_text("FROM TURN TWO")
+
+    assert first.turn_id == "t001"
+    assert second.turn_id == "t002"
+    assert first.run_dir != second.run_dir
+    assert (first.run_dir / "report.md").read_text() == "FROM TURN ONE"
+    # Both turns live under one session, so expiring the conversation takes
+    # both with it and no lookup is needed.
+    assert first.run_dir.parent == second.run_dir.parent
+
+
+def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
+    """Files supplied with a request are not project data: they arrive fresh
+    each round and leave with the turn."""
+    supplied = tmp_path / "upload.csv"
+    supplied.write_text("a,b\n1,2\n")
+
+    agent = StubAgent("ok")
+    result = run(
+        "summarise it",
+        cfg=cfg,
+        session_id="s",
+        inputs=[supplied],
+        agent=agent,
+        checkpointer=StubCheckpointer(),
+    )
+
+    assert (result.run_dir / "input" / "upload.csv").read_text() == "a,b\n1,2\n"
+    assert not (cfg.workspace / "data" / "upload.csv").exists()
+    # The agent is told where they are, by virtual path, in the task message.
+    message = agent.state["messages"][0]["content"]
+    assert f"/runs/s/{result.turn_id}/input" in message
+
+
+def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
+    agent = StubAgent("ok")
+    result = run("just answer", cfg=cfg, session_id="s", agent=agent, checkpointer=StubCheckpointer())
+
+    assert not (result.run_dir / "input").exists()
+    assert "input" not in agent.state["messages"][0]["content"]

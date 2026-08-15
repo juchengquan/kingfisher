@@ -14,7 +14,8 @@ sweep is about to change.
 from __future__ import annotations
 
 import re
-from collections.abc import Iterator, Mapping
+import shutil
+from collections.abc import Iterator, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -29,10 +30,12 @@ from kingfisher.config import Config
 from kingfisher.runlog import JsonlRunLogger, log_path
 from kingfisher.workspace import (
     ensure_layout,
+    next_turn_id,
     pre_run_commit,
     protect_data,
     run_dir,
     sweep,
+    virtual_input_dir,
     virtual_run_dir,
 )
 
@@ -53,6 +56,8 @@ def normalize_answer(text: str) -> str:
 @dataclass(frozen=True)
 class RunResult:
     session_id: str
+    #: Sequential within the session — `t001`, `t002`. One turn is one request.
+    turn_id: str
     answer: str
     run_dir: Path
     log_path: Path
@@ -148,6 +153,8 @@ def stream(
     *,
     cfg: Config | None = None,
     session_id: str | None = None,
+    turn_id: str | None = None,
+    inputs: Sequence[Path | str] | None = None,
     agent: Any | None = None,
     checkpointer: Any | None = None,
 ) -> Iterator[RunEvent]:
@@ -158,9 +165,14 @@ def stream(
         for event in stream("profile /data/sales.csv"):
             print(event)
 
-    `session_id` is the LangGraph `thread_id`, the run directory name and the
-    log filename, so one string reaches this run's conversation state, its
-    artifacts and its trace.
+    `session_id` is the LangGraph `thread_id` and the log filename, so one
+    string reaches this conversation's state and its trace. `turn_id` scopes a
+    single request within it: one directory per turn, so a second turn cannot
+    overwrite the first one's answer.
+
+    `inputs` are files supplied *with this request*. They are copied into the
+    turn's `input/` directory rather than into `/data`, because they are not
+    project data — they arrive fresh each round and leave with the turn.
     """
     cfg = cfg or config_module.from_env()
     config_module.enforce_local_only_tracing()
@@ -173,8 +185,15 @@ def stream(
     commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
     swept = sweep(workspace, cfg.keep_runs, checkpointer)
 
-    rd = run_dir(workspace, session_id)
+    turn_id = turn_id or next_turn_id(workspace, session_id)
+    rd = run_dir(workspace, session_id, turn_id)
     rd.mkdir(parents=True, exist_ok=True)
+
+    if inputs:
+        input_dir = rd / "input"
+        input_dir.mkdir(exist_ok=True)
+        for source in inputs:
+            shutil.copy(source, input_dir / Path(source).name)
 
     logger = JsonlRunLogger(
         log_path(workspace, session_id),
@@ -183,21 +202,27 @@ def stream(
         session_id=session_id,
     )
     logger.swept(swept.removed, swept.kept)
-    logger.run_start(task, virtual_run_dir(session_id))
+    logger.run_start(task, virtual_run_dir(session_id, turn_id))
 
     if swept.removed:
         yield RunEvent(kind="swept", text=", ".join(swept.removed))
-    yield RunEvent(kind="run_start", text=virtual_run_dir(session_id))
+    yield RunEvent(kind="run_start", text=virtual_run_dir(session_id, turn_id))
 
     graph = agent if agent is not None else build_agent(cfg, checkpointer=checkpointer)
 
     # The run directory is run-scoped, so it reaches the model here rather than
     # in the system prompt — putting it in the prompt would change the cached
     # prefix on every session.
+    supplied = (
+        f" Files supplied with this request are in "
+        f"{virtual_input_dir(session_id, turn_id)}."
+        if inputs
+        else ""
+    )
     message = (
         f"{task}\n\n"
-        f"Your run directory for this task is {virtual_run_dir(session_id)}. "
-        f"Write report.md and result.json there."
+        f"Your run directory for this task is {virtual_run_dir(session_id, turn_id)}. "
+        f"Write report.md and result.json there.{supplied}"
     )
 
     final_messages: list[Any] = []
@@ -233,6 +258,7 @@ def stream(
         text=answer,
         result=RunResult(
             session_id=session_id,
+            turn_id=turn_id,
             answer=answer,
             run_dir=rd,
             log_path=log_path(workspace, session_id),
@@ -247,6 +273,8 @@ def run(
     *,
     cfg: Config | None = None,
     session_id: str | None = None,
+    turn_id: str | None = None,
+    inputs: Sequence[Path | str] | None = None,
     agent: Any | None = None,
     checkpointer: Any | None = None,
 ) -> RunResult:
@@ -256,7 +284,13 @@ def run(
     """
     result: RunResult | None = None
     for event in stream(
-        task, cfg=cfg, session_id=session_id, agent=agent, checkpointer=checkpointer
+        task,
+        cfg=cfg,
+        session_id=session_id,
+        turn_id=turn_id,
+        inputs=inputs,
+        agent=agent,
+        checkpointer=checkpointer,
     ):
         if event.kind == "finished":
             result = event.result
