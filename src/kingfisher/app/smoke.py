@@ -333,15 +333,16 @@ def load_result(run_dir: Path) -> dict | None:
 
 
 def promote_report(run_dir: Path, workspace: Path, name: str = "smoke") -> Path | None:
-    """Copy a run's report to a stable, tracked path.
+    """Copy a run's report somewhere stable, so it can be read run-over-run.
 
-    Still useful for reading run-over-run, but the pass/fail signal is
-    `check_result`, not this diff.
+    `/derived` because it survives sweeps, not because it is a report -- the
+    workspace has no notion of one. The pass/fail signal is `check_result`,
+    not this copy.
     """
     source = Path(run_dir) / "report.md"
     if not source.exists():
         return None
-    destination = Path(workspace) / "reports" / f"{name}.md"
+    destination = Path(workspace) / "derived" / f"{name}.md"
     destination.parent.mkdir(parents=True, exist_ok=True)
     shutil.copyfile(source, destination)
     return destination

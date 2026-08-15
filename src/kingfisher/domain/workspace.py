@@ -2,7 +2,7 @@
 
 The workspace splits by lifetime, not by session:
 
-  durable, shared   /data /derived /skills /memory /reports
+  durable, shared   /data /derived /skills /subagents /memory
   per-session       /runs/<session_id>/          transcript, and its turns
   per-turn          /runs/<session_id>/<turn>/   this request's inputs, scratch, answer
   harness-owned     /.kingfisher/   (thread db, run logs, tmp)
@@ -12,11 +12,16 @@ project data; its conclusions are durable. Nesting turns inside their session
 means expiring a conversation takes its turns with it, with no lookup, while
 expiring stale inputs never touches the conversation.
 
-and by durability, which is what makes retention safe:
+and by durability, which is what makes retention safe
 
-  tracked in git    /reports, /skills, /memory, runs/*/*/report.md, runs/*/*/result.json
-  ignored, swept    everything else under runs/*/
+  tracked in git    /skills, /subagents, /memory, PROMPT.md
+  ignored, swept    everything under runs/*/
   ignored, kept     /data, /derived, /.kingfisher
+
+Git tracks what a person authored; `/derived` holds what the agent produced and
+wants to keep. There is no directory for reports, because "a report" is one
+kind of output among many -- anything a run should outlive goes to `/derived`,
+whatever it is called.
 """
 
 from __future__ import annotations
@@ -36,7 +41,6 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "skills",
     "subagents",
     "memory",
-    "reports",
     "runs",
     ".kingfisher/runs",
     ".kingfisher/tmp",
@@ -60,11 +64,9 @@ Durable facts about this project and how to work in it. Add entries below.
 TRACKED_PATHS: tuple[str, ...] = (
     ".gitignore",
     "PROMPT.md",
-    "reports",
     "skills",
     "subagents",
     "memory",
-    "runs",
 )
 
 WORKSPACE_GITIGNORE = """\
@@ -79,15 +81,9 @@ derived/
 # Harness state: thread db, run logs, tmp. Local-only by design.
 .kingfisher/
 
-# Run output: conclusions are tracked, everything else is disposable scratch.
-# Two levels: runs/<session>/<turn>/. Every parent must be re-included or git
-# never descends far enough to see the negated files.
-runs/**
-!runs/
-!runs/*/
-!runs/*/*/
-!runs/*/*/report.md
-!runs/*/*/result.json
+# Run output: disposable scratch, all of it. A run that produces something
+# worth keeping puts it in derived/, which is never swept.
+runs/
 """
 
 

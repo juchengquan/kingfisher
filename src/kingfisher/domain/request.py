@@ -23,6 +23,9 @@ class Request:
     `inputs` are files supplied with this request. They are copied into the
     turn's `input/` directory, never into `/data`: they arrive fresh each round
     and leave with the turn.
+    Wanting files written is one kind of task among many, so there is no field
+    for it: a request that wants `report.md`, a CSV, or nothing at all says so
+    in `task`, in its own words. Nothing here privileges one convention.
     `capabilities` names the tools, skills and subagents this request activates.
     Unset means everything the workspace offers; a service clamps it with
     `intersect` before running, because authorising the caller is not the

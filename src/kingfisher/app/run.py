@@ -5,10 +5,15 @@ sequence (commit, sweep, turn directory, logging, normalisation) exists exactly
 once. Two entrypoints with two copies of that sequence would drift, and the
 drift would be silent.
 
-Ordering matters: commit, then sweep, then create this turn's directory. The
-sweep runs before the new directory exists so it is never a candidate for its
-own deletion, and after the commit so the restore point covers the state the
-sweep is about to change.
+Ordering matters. Anything that can reject the request is done first, while
+nothing has been written or removed yet: a request naming a capability the
+workspace does not offer used to raise only after the sweep had deleted old
+sessions, which made a typo destructive.
+
+Then commit, then sweep, then create this turn's directory. The sweep runs
+before the new directory exists so it is never a candidate for its own
+deletion, and after the commit so the restore point covers the state the sweep
+is about to change.
 
 This module speaks only kingfisher's vocabulary. Every LangChain and LangGraph
 shape lives behind `adapters.runtime`.
@@ -80,6 +85,26 @@ def stream(
     checkpointer = checkpointer if checkpointer is not None else build_checkpointer(cfg)
     session_id = request.session_id or new_session_id()
 
+    if agent is not None and not request.capabilities.is_unrestricted:
+        # An injected agent was built elsewhere, so this request's restrictions
+        # were never applied to it. Refusing beats running with more access
+        # than the caller asked for and saying nothing.
+        msg = "cannot honour request.capabilities against a pre-built agent"
+        raise ValueError(msg)
+
+    # Assembled before anything is written or removed. Construction is
+    # side-effect free but validation is not free of *consequence*: a request
+    # naming a capability the workspace lacks used to raise only after the
+    # sweep had deleted old sessions and a turn directory existed. A usage
+    # error must not be destructive.
+    graph = (
+        agent
+        if agent is not None
+        else build_agent(
+            cfg, capabilities=request.capabilities, checkpointer=checkpointer
+        )
+    )
+
     commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
     swept = sweep(workspace, cfg.keep_runs, checkpointer)
 
@@ -106,21 +131,6 @@ def stream(
         yield RunEvent(kind="sweep_failed", text="; ".join(swept.failures))
     yield RunEvent(kind="run_start", text=turn.virtual_dir)
 
-    if agent is not None and not request.capabilities.is_unrestricted:
-        # An injected agent was built elsewhere, so this request's restrictions
-        # were never applied to it. Refusing beats running with more access
-        # than the caller asked for and saying nothing.
-        msg = "cannot honour request.capabilities against a pre-built agent"
-        raise ValueError(msg)
-
-    graph = (
-        agent
-        if agent is not None
-        else build_agent(
-            cfg, capabilities=request.capabilities, checkpointer=checkpointer
-        )
-    )
-
     # The turn directory is run-scoped, so it reaches the model here rather
     # than in the system prompt — putting it there would change the cached
     # prefix on every session.
@@ -129,10 +139,14 @@ def stream(
         if request.inputs
         else ""
     )
+    # This turn's facts, and nothing more. What the task should produce is the
+    # task's business: asking for a written report is one kind of request among
+    # many, and a general agent should not carry one convention's filenames in
+    # its plumbing. They lived in the system prompt once, which made every
+    # greeting deliberate over two files nobody wanted.
     message = (
         f"{request.task}\n\n"
-        f"Your run directory for this task is {turn.virtual_dir}. "
-        f"Write report.md and result.json there.{supplied}"
+        f"Your run directory for this task is {turn.virtual_dir}.{supplied}"
     )
 
     answer = ""

@@ -33,14 +33,13 @@ def test_capability_flags_are_independent():
 
 
 def test_structural_contract_survives_every_combination():
-    """Workspace layout and the deliverable contract are not optional."""
+    """The workspace layout is what every turn needs to know, whatever else is
+    switched on. It is the one thing that genuinely belongs in every prompt."""
     for skills in (False, True):
         for memory in (False, True):
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
             assert "/data" in text
             assert "/derived" in text
-            assert "report.md" in text
-            assert "result.json" in text
 
 
 def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):
@@ -99,3 +98,21 @@ def test_prompt_warns_about_host_paths_in_file_tools():
     text = " ".join(render_system_prompt().lower().split())
     assert "a host path is not a file-tool path" in text
     assert "recreated *inside* the workspace" in text
+
+
+def test_the_system_prompt_demands_no_artifacts():
+    """A general agent is sometimes just answering, and this prompt is the
+    cached prefix for both kinds of turn -- the one place that cannot tell them
+    apart. Asking for files belongs on the request, not here.
+
+    Leaving it here produced both failure modes in one afternoon: a greeting
+    that deliberated over files nobody wanted, and, once softened to a
+    suggestion, a real analysis that recorded nothing.
+    """
+    for skills in (False, True):
+        for memory in (False, True):
+            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            assert "report.md" not in text
+            assert "result.json" not in text
+
+    assert "Answer the question. That is the deliverable" in render_system_prompt()

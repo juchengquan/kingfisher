@@ -52,7 +52,7 @@ class RunEvent:
     usage: Mapping[str, int] = field(default_factory=dict)
     result: RunResult | None = None
 
-    def _line(self, limit: int = 150) -> str:
+    def _line(self, limit: int = 800) -> str:
         """One-line rendering. `text` keeps full fidelity for consumers."""
         flat = " ".join(self.text.split())
         return flat if len(flat) <= limit else flat[: limit - 1] + "…"
