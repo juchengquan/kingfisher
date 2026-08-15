@@ -12,6 +12,7 @@ import shutil
 from pathlib import Path
 
 from evals.dataset import seed_sample_data
+from kingfisher.domain.skill import FILENAME
 
 SKILL_NAME = "tabular-qa"
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
@@ -25,9 +26,9 @@ def seed_sample_skill(workspace: Path) -> bool:
         msg = f"missing example skill: {source}"
         raise FileNotFoundError(msg)
 
-    installed = target / "SKILL.md"
+    installed = target / FILENAME
     existing = installed.read_text(encoding="utf-8") if installed.is_file() else None
-    if existing == (source / "SKILL.md").read_text(encoding="utf-8"):
+    if existing == (source / FILENAME).read_text(encoding="utf-8"):
         return False
     shutil.copytree(source, target, dirs_exist_ok=True)
     return True
