@@ -32,6 +32,10 @@ silently narrower run -- `--list` shows the valid names.
 It exists so a smoke run can be watched without a non-zero exit breaking
 whatever is driving it.
 
+Output is live. The model's prose is printed as it is written, untagged and
+keeping its own formatting, while progress stays tagged and aligned. The
+answer is not repeated at the end -- you watched it arrive.
+
 Configuration comes from .env (copy .env.example). KINGFISHER_API_STYLE has no
 default on purpose: the Anthropic-compatible and OpenAI-compatible endpoints of
 the same gateway do not behave identically.
@@ -44,8 +48,15 @@ import json
 import shutil
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
+
+if TYPE_CHECKING:
+    from collections.abc import Iterable
+    from typing import TextIO
+
+    from kingfisher.domain.result import RunEvent, RunResult
 
 from evals.artifacts import load_result, promote_report
 from evals.checks import check_result
@@ -152,6 +163,40 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     return 0
 
 
+def render(events: Iterable[RunEvent], out: TextIO) -> RunResult | None:
+    """Print a run as it happens, and return its result.
+
+    Token events are fragments, not lines: written with no newline and no tag,
+    so the model owns the left margin and its own formatting survives. Progress
+    stays tagged and aligned. That mix is the whole reason for `owed` -- a
+    newline is owed before the next tagged line, or it lands on the end of a
+    half-finished sentence.
+
+    The terminal event carries the `RunResult` and is not itself printed. Nor
+    is `result.answer` printed afterwards: it already arrived, a word at a
+    time, and saying it again below would read as the model answering twice.
+    """
+    result: RunResult | None = None
+    owed = False
+    for event in events:
+        if event.kind == "token":
+            out.write(event.text)
+            out.flush()
+            owed = True
+            continue
+        if owed:
+            out.write("\n")
+            owed = False
+        if event.kind == "finished":
+            result = event.result
+        else:
+            print(event, file=out, flush=True)
+    if owed:
+        out.write("\n")
+        out.flush()
+    return result
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="main.py",
@@ -251,7 +296,8 @@ def main(argv: list[str]) -> int:
     print(f"task      : {task}\n")
 
     # Streaming rather than run(): with no UI, a multi-minute analysis would
-    # otherwise print nothing at all until it finished.
+    # otherwise print nothing at all until it finished. The answer is not
+    # printed again after the summary -- it arrived as it was written.
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
     from kingfisher import stream  # noqa: PLC0415
@@ -259,11 +305,7 @@ def main(argv: list[str]) -> int:
 
     result = None
     try:
-        for event in stream(request, cfg=cfg):
-            if event.kind == "finished":
-                result = event.result
-            else:
-                print(event, flush=True)
+        result = render(stream(request, cfg=cfg), sys.stdout)
     except CapabilityError as exc:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
@@ -281,8 +323,6 @@ def main(argv: list[str]) -> int:
     print(f"usage     : {_usage_summary(result.log_path)}")
     if result.swept:
         print(f"swept     : {len(result.swept)} old session(s)")
-
-    print(f"\n{result.answer}\n")
 
     for name in ("report.md", "result.json"):
         path = result.run_dir / name
