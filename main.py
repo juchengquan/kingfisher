@@ -20,7 +20,13 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from kingfisher import ConfigError, ensure_layout, from_env, stream
-from kingfisher.smoke import SMOKE_TASK, promote_report, seed_sample_data
+from kingfisher.smoke import (
+    SMOKE_TASK,
+    check_result,
+    load_result,
+    promote_report,
+    seed_sample_data,
+)
 
 
 def _usage_summary(log_path: Path) -> str:
@@ -89,14 +95,28 @@ def main(argv: list[str]) -> int:
         path = result.run_dir / name
         print(f"{name:<12}: {'written' if path.exists() else 'MISSING'}  {path}")
 
-    if is_smoke:
-        promoted = promote_report(result.run_dir, workspace)
-        if promoted:
-            print(f"\npromoted to {promoted}")
-            print("compare against the previous run with:")
-            print(f"  git -C {workspace} diff -- reports/smoke.md")
+    if not is_smoke:
+        return 0
 
-    return 0
+    promoted = promote_report(result.run_dir, workspace)
+    if promoted:
+        print(f"promoted    : {promoted}")
+
+    # The regression signal is the structured result, not the prose: two runs
+    # on identical input rewrite the report entirely while the numbers hold.
+    payload = load_result(result.run_dir)
+    if payload is None:
+        print("\nresult.json missing or unparseable — cannot check", file=sys.stderr)
+        return 1
+
+    checks = check_result(payload)
+    print()
+    for check in checks:
+        print(check)
+
+    failed = [c for c in checks if not c.ok]
+    print(f"\n{len(checks) - len(failed)}/{len(checks)} checks passed")
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

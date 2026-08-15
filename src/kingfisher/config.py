@@ -41,7 +41,10 @@ class Config:
     max_tokens: int = 4096
     timeout_s: int = 120
     keep_runs: int = 20
-    recursion_limit: int = 60
+    # Each agent turn costs 2-3 graph steps, so this is roughly a turn budget
+    # divided by three. 60 was sized against a toy task and cut a real
+    # 1,000-row analysis off mid-step at 20 turns.
+    recursion_limit: int = 150
     shell_path_extra: tuple[str, ...] = ()
     role_models: Mapping[str, str] = field(default_factory=dict)
     # M2 capabilities. Off by default: a self-editing prompt makes runs
@@ -120,7 +123,7 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         max_tokens=_int(env, "KINGFISHER_MAX_TOKENS", 4096),
         timeout_s=_int(env, "KINGFISHER_TIMEOUT_S", 120),
         keep_runs=_int(env, "KINGFISHER_KEEP_RUNS", 20),
-        recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 60),
+        recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
         role_models=role_models,
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
