@@ -23,6 +23,7 @@ __version__ = "0.1.0"
 _EXPORTS = {
     "Capabilities": "kingfisher.domain.capabilities",
     "Config": "kingfisher.config",
+    "Kingfisher": "kingfisher.app.service",
     "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
     "RunEvent": "kingfisher.domain.result",
@@ -46,6 +47,7 @@ __all__ = [
     "Capabilities",
     "Config",
     "ConfigError",
+    "Kingfisher",
     "Request",
     "RunEvent",
     "RunResult",
@@ -80,6 +82,7 @@ if TYPE_CHECKING:
     from kingfisher.app.config import from_env as from_env
     from kingfisher.app.run import run as run
     from kingfisher.app.run import stream as stream
+    from kingfisher.app.service import Kingfisher as Kingfisher
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.domain.capabilities import Capabilities as Capabilities
