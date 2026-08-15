@@ -36,6 +36,12 @@ class RunResult:
     log_path: Path
     swept: tuple[str, ...]
     commit: str | None
+    #: Everything under `/derived` and `/memory` at the end of this turn, as
+    #: paths relative to the session root. What is *present*, not what changed:
+    #: `execute` writes without any file tool seeing it, so the only sound view
+    #: is the filesystem's, and a caller persisting incrementally diffs against
+    #: the previous turn's manifest -- which also tells it what was deleted.
+    artifacts: tuple[str, ...] = ()
 
 
 #: How much of one tool argument to show. `write_file` takes an entire file as

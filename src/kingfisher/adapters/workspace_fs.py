@@ -16,6 +16,7 @@ from pathlib import Path
 
 from kingfisher.domain.layout import (
     AGENTS_SCAFFOLD,
+    ARTIFACT_DIRS,
     LAYOUT_DIRS,
     MARKER,
     SESSION_DIRS,
@@ -108,6 +109,34 @@ def ensure_session_layout(session_dir: Path) -> Path:
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
 
     return session_dir
+
+
+def collect_artifacts(session_dir: Path) -> tuple[str, ...]:
+    """What this session holds that is worth keeping, as relative paths.
+
+    Present rather than changed. `execute` writes without any file tool seeing
+    it -- running a script is how most of `/derived` is produced -- so the only
+    sound view is the filesystem's, and the two ways to turn that into a change
+    list are both worse: mtime and size can collide, which loses work silently,
+    and hashing every file each turn costs the size of `/derived`.
+
+    A caller persisting incrementally diffs this against the previous turn's
+    manifest, which it already holds. That diff also names what was *deleted*,
+    which a list of changes could not.
+
+    Directories are omitted: an empty one carries nothing to persist, and it
+    reappears when its files are restored.
+    """
+    session_dir = Path(session_dir)
+    found: list[str] = []
+    for name in ARTIFACT_DIRS:
+        root = session_dir / name
+        if not root.is_dir():
+            continue
+        found.extend(
+            str(path.relative_to(session_dir)) for path in root.rglob("*") if path.is_file()
+        )
+    return tuple(sorted(found))
 
 
 def _drop_write_bits(path: Path) -> None:

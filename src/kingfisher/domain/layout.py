@@ -50,6 +50,15 @@ SESSION_DIRS: tuple[str, ...] = (
     "runs",
 )
 
+#: What a run produces and would lose. `/data` is read-only and came from the
+#: caller; `/runs` is scratch the prompt already calls disposable. These two are
+#: the ones the agent is told will outlive the run, so these are what a reaped
+#: session takes with it unless the caller is handed a list.
+ARTIFACT_DIRS: tuple[str, ...] = (
+    "derived",
+    "memory",
+)
+
 MARKER = ".kingfisher/WORKSPACE"
 
 AGENTS_SCAFFOLD = """\
