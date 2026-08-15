@@ -3,7 +3,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.adapters.workspace_fs import ensure_layout
+from kingfisher.adapters.workspace_fs import ensure_layout, ensure_session_layout
 from kingfisher.config import Config
 
 
@@ -53,6 +53,17 @@ def dirs():
 @pytest.fixture
 def workspace(tmp_path):
     return ensure_layout(tmp_path / "ws")
+
+
+@pytest.fixture
+def session_dir(workspace):
+    """One session's directory — the backend root.
+
+    Most tests want *a* session rather than a particular one, and building the
+    backend now needs somewhere to root. `Session.open` is not used here: this
+    fixture should keep working if the aggregate's naming changes.
+    """
+    return ensure_session_layout(workspace / "sessions" / "test-session")
 
 
 @pytest.fixture

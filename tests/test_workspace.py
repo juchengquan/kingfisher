@@ -6,7 +6,12 @@ import shutil
 from kingfisher.adapters.workspace_fs import LocalSessionDirs, ensure_layout
 from kingfisher.adapters.workspace_git import is_repo, pre_run_commit
 from kingfisher.domain import retention
-from kingfisher.domain.layout import LAYOUT_DIRS, TRACKED_PATHS, WORKSPACE_GITIGNORE
+from kingfisher.domain.layout import (
+    LAYOUT_DIRS,
+    SESSION_DIRS,
+    TRACKED_PATHS,
+    WORKSPACE_GITIGNORE,
+)
 from tests.conftest import StubCheckpointer
 
 
@@ -21,14 +26,13 @@ def test_layout_is_created_and_idempotent(tmp_path):
 
 def test_gitignore_encodes_the_durability_tiers(workspace):
     text = (workspace / ".gitignore").read_text()
-    # Ignored wholesale: irreplaceable inputs, expensive derived data, harness state.
-    assert "data/" in text
-    assert "derived/" in text
+    # Harness state is local by design.
     assert ".kingfisher/" in text
-    # Run output is scratch, all of it. Nothing under runs/ is re-included:
-    # a run that produces something worth keeping writes it to derived/.
-    assert "runs/" in text
-    assert "!runs" not in text
+    # Everything a session owns -- inputs, derived output, memory, run scratch
+    # -- is ignored wholesale. Nothing under sessions/ is re-included: what a
+    # run produces and wants kept leaves through the result, not through git.
+    assert "sessions/" in text
+    assert "!sessions" not in text
 
 
 def sweep(workspace, keep, checkpointer):
@@ -66,7 +70,10 @@ def test_sweep_is_a_noop_when_under_the_limit(workspace):
 
 def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
     """`git add -A` would sweep up unrelated work if the workspace is shared."""
-    (workspace / "memory" / "AGENTS.md").write_text("a durable fact\n")
+    # Skills are authored by a person and shared by every session, which is
+    # what the tracked tier is now for. Memory moved into the session.
+    (workspace / "skills" / "tabular-qa").mkdir(parents=True, exist_ok=True)
+    (workspace / "skills" / "tabular-qa" / "SKILL.md").write_text("---\nname: x\n---\nbody\n")
     stray = workspace / "unrelated.txt"
     stray.write_text("not kingfisher's business\n")
 
@@ -88,7 +95,7 @@ def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
         text=True,
         check=False,
     ).stdout
-    assert "memory/AGENTS.md" in listed
+    assert "skills/tabular-qa/SKILL.md" in listed
     assert "unrelated.txt" not in listed
 
 
@@ -162,7 +169,8 @@ def test_the_layout_names_no_genre_of_output():
     itself. Durability is the only thing the layout should encode: `/derived`
     survives, `runs/` does not, and what you call the file is your business."""
     assert "reports" not in LAYOUT_DIRS
-    assert "derived" in LAYOUT_DIRS
+    assert "reports" not in SESSION_DIRS
+    assert "derived" in SESSION_DIRS
 
     # And nothing is tracked for being a "report" either.
     assert not any("report" in path for path in TRACKED_PATHS)
@@ -173,6 +181,8 @@ def test_git_tracks_what_a_person_authored_not_what_a_run_produced(workspace):
     """The tiers are now clean: authored content is restorable from git,
     produced content lives in derived/ and is never swept, run scratch is
     disposable. Nothing straddles two tiers."""
-    assert set(TRACKED_PATHS) == {".gitignore", "PROMPT.md", "skills", "subagents", "memory"}
-    for produced in ("data/", "derived/", "runs/"):
-        assert produced in WORKSPACE_GITIGNORE
+    assert set(TRACKED_PATHS) == {".gitignore", "PROMPT.md", "skills", "subagents"}
+    # Everything a run produces now lives inside a session, and sessions are
+    # ignored wholesale -- so there is one line to check rather than three.
+    assert "sessions/" in WORKSPACE_GITIGNORE
+    assert not any(name in TRACKED_PATHS for name in SESSION_DIRS)

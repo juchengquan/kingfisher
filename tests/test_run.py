@@ -63,7 +63,7 @@ def test_run_creates_the_session_triple(cfg):
 
     assert isinstance(result, RunResult)
     assert result.answer == "42"
-    assert result.run_dir == cfg.workspace / "runs" / "sess123" / result.turn_id
+    assert result.run_dir == cfg.workspace / "sessions" / "sess123" / "runs" / result.turn_id
     assert result.run_dir.is_dir()
     assert result.log_path.exists()
     assert agent.config["configurable"]["thread_id"] == "sess123"
@@ -80,7 +80,7 @@ def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
     )
 
     message = agent.state["messages"][0]["content"]
-    assert "/runs/abc" in message
+    assert "/runs/t001" in message
     assert "do a thing" in message
     assert str(cfg.workspace) not in message  # virtual path only
 
@@ -106,7 +106,7 @@ def test_run_logs_usage_shaped_records(cfg):
 def test_run_sweeps_old_sessions_before_creating_the_new_one(cfg):
     """cfg.keep_runs is 2 in the fixture."""
     for i, name in enumerate(["s1", "s2", "s3"]):
-        d = cfg.workspace / "runs" / name
+        d = cfg.workspace / "sessions" / name
         d.mkdir(parents=True)
         os.utime(d, (1_000 + i * 100, 1_000 + i * 100))
 
@@ -114,11 +114,12 @@ def test_run_sweeps_old_sessions_before_creating_the_new_one(cfg):
     result = run(Request("t", session_id="s4"), cfg=cfg, agent=StubAgent("ok"), checkpointer=ckpt)
 
     assert "s1" in result.swept
-    assert not (cfg.workspace / "runs" / "s1").exists()
+    assert not (cfg.workspace / "sessions" / "s1").exists()
     assert ckpt.deleted == ["s1"]
-    # The new run directory is created after the sweep, so it is never a
-    # candidate for its own deletion.
-    assert (cfg.workspace / "runs" / "s4").is_dir()
+    # This session is exempted from the sweep by name, so a run can never
+    # delete itself -- even though its directory now exists before the sweep
+    # runs, because the agent's backend has to be rooted at it first.
+    assert (cfg.workspace / "sessions" / "s4").is_dir()
 
 
 
@@ -160,10 +161,10 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
     )
 
     assert (result.run_dir / "input" / "upload.csv").read_text() == "a,b\n1,2\n"
-    assert not (cfg.workspace / "data" / "upload.csv").exists()
+    assert not (cfg.workspace / "sessions" / "s" / "data" / "upload.csv").exists()
     # The agent is told where they are, by virtual path, in the task message.
     message = agent.state["messages"][0]["content"]
-    assert f"/runs/s/{result.turn_id}/input" in message
+    assert f"/runs/{result.turn_id}/input" in message
 
 
 def test_no_inputs_means_no_input_directory_and_no_mention(cfg):

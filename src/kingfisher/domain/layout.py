@@ -7,34 +7,47 @@ layout real is `adapters.workspace_fs`, and this is what it is told to make.
 The split matters because the tiers are a decision that wants reviewing, and it
 was previously buried among mkdir calls and subprocess invocations.
 
-  durable, shared   /data /derived /skills /subagents /memory
-  per-session       runs/<session_id>/
-  per-turn          runs/<session_id>/<turn>/
+  shared by all     /skills /subagents        definitions, authored by a person
+  per-session       sessions/<id>/            /data /derived /memory /runs
+  per-turn          sessions/<id>/runs/<turn>/
   harness-owned     .kingfisher/
 
-  tracked in git    /skills, /subagents, /memory, PROMPT.md
-  ignored, kept     /data, /derived, /.kingfisher
-  ignored, swept    everything under runs/*/
+  tracked in git    /skills, /subagents, PROMPT.md
+  ignored, kept     /.kingfisher
+  ignored, swept    everything under sessions/
 
-Git tracks what a person authored; `/derived` holds what the agent produced and
-wants to keep. There is no directory for reports, because "a report" is one kind
-of output among many.
+A session directory is the backend root, which is why it holds every name the
+agent addresses: `/data` means the same thing in every session while pointing
+somewhere different in each. Git tracks what a person authored; what a session
+produced leaves through the run's result. There is no directory for reports,
+because "a report" is one kind of output among many.
 """
 
 from __future__ import annotations
 
+#: Created once in the workspace. What remains here is what a session does not
+#: own: the definitions the sessions share, and the harness's own directory.
 LAYOUT_DIRS: tuple[str, ...] = (
-    "data",
-    "derived",
     "skills",
     "subagents",
-    "memory",
-    "runs",
+    # Sessions are the unit of isolation; each one is a backend root.
+    "sessions",
     # `.kingfisher` holds the marker. Its `runs/` and `tmp/` subdirectories are
     # not created here: both are relocatable (`KINGFISHER_STATE_DIR`,
     # `KINGFISHER_SCRATCH_DIR`) and each is created by whatever opens it, so
     # creating them here would leave empty decoys behind when they are moved.
     ".kingfisher",
+)
+
+#: Created inside every session directory, which is the backend root. These are
+#: the names the agent addresses — `/data`, `/derived`, `/memory`, `/runs` — so
+#: they mean the same thing in every session while pointing somewhere different
+#: in each. That is what makes one prompt serve every session.
+SESSION_DIRS: tuple[str, ...] = (
+    "data",
+    "derived",
+    "memory",
+    "runs",
 )
 
 MARKER = ".kingfisher/WORKSPACE"
@@ -57,22 +70,16 @@ TRACKED_PATHS: tuple[str, ...] = (
     "PROMPT.md",
     "skills",
     "subagents",
-    "memory",
 )
 
 WORKSPACE_GITIGNORE = """\
 # Managed by kingfisher. Durability tiers, not preferences.
 
-# Inputs: irreplaceable, never committed (and write-denied at the tool level).
-data/
-
-# Derived: regenerable but expensive. Never committed, never swept.
-derived/
-
 # Harness state: thread db, run logs, tmp. Local-only by design.
 .kingfisher/
 
-# Run output: disposable scratch, all of it. A run that produces something
-# worth keeping puts it in derived/, which is never swept.
-runs/
+# Session state: inputs, derived output, memory and run scratch. All of it
+# belongs to one session and none of it is a person's work, so what a session
+# produces and wants kept leaves through the run's result, not through git.
+sessions/
 """

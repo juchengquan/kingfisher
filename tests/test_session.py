@@ -44,10 +44,28 @@ def test_a_turn_knows_its_virtual_paths(workspace, dirs):
     without pinning the prompt to this host."""
     turn = Session.open(workspace, "s", dirs).allocate_turn(dirs, "t001")
 
-    assert turn.virtual_dir == "/runs/s/t001"
-    assert turn.virtual_input_dir == "/runs/s/t001/input"
+    assert turn.virtual_dir == "/runs/t001"
+    assert turn.virtual_input_dir == "/runs/t001/input"
     assert str(workspace) not in turn.virtual_dir
     assert turn.input_dir == turn.directory / "input"
+
+
+def test_a_turn_is_addressed_without_its_session(workspace, dirs):
+    """The session directory is the backend root, so naming the session in a
+    virtual path would address outside the root — and would put the id into
+    the prompt, changing the cached prefix on every session."""
+    turn = Session.open(workspace, "s1", dirs).allocate_turn(dirs)
+
+    assert turn.directory == workspace / "sessions" / "s1" / "runs" / "t001"
+    assert "s1" not in turn.virtual_dir
+
+
+def test_a_session_holds_the_whole_vocabulary_not_just_runs(workspace, dirs):
+    """It is the backend root now: `data` and `derived` live beside `runs`."""
+    session = Session.open(workspace, "s1", dirs)
+
+    assert session.directory == workspace / "sessions" / "s1"
+    assert session.runs_dir == session.directory / "runs"
 
 
 def test_discard_removes_the_thread_then_the_directory(workspace, dirs):

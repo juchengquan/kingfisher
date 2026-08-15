@@ -207,15 +207,37 @@ def _skill_denials(
     ]
 
 
-def build_agent(
+def _backend_for(cfg: Config, session_dir: Path | None, backend: Any | None) -> Any:
+    """The filesystem an agent sees: rooted at a session, or supplied ready-made.
+
+    Neither is a wiring mistake rather than a default worth guessing at. There
+    is no sensible fallback: an agent rooted at the workspace instead of at a
+    session would write one caller's files into a directory every other caller
+    can read.
+    """
+    if backend is not None:
+        return backend
+    if session_dir is not None:
+        return build_backend(cfg, session_dir)
+    msg = "build_agent needs either a session_dir to root a backend at, or a backend"
+    raise ValueError(msg)
+
+
+def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
+    # injectable collaborator, and folding them into a parameter object would
+    # hide exactly what a test is allowed to substitute.
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
+    session_dir: Path | None = None,
     model: Any | None = None,
     backend: Any | None = None,
     checkpointer: Any | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
+
+    `session_dir` is where the backend roots, so an agent belongs to one
+    session and cannot be reused across them.
 
     deepagents 0.7.6 ships no planning tool, so `TodoListMiddleware` is added
     explicitly. Its default prompt fragment is kept rather than trimmed: it
@@ -223,7 +245,7 @@ def build_agent(
     only be rewritten worse.
     """
     capabilities = capabilities or Capabilities()
-    resolved_backend = backend if backend is not None else build_backend(cfg)
+    resolved_backend = _backend_for(cfg, session_dir, backend)
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]

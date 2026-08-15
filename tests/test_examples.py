@@ -51,7 +51,7 @@ def test_example_skills_are_discovered(workspace_with_examples):
     }
 
 
-def test_the_readme_tool_table_matches_the_real_tool_surface(cfg):
+def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir):
     """The table is the reference a caller builds an allowlist from, so a stale
     row is a CapabilityError someone has to debug."""
     from langchain_core.messages import AIMessage
@@ -59,7 +59,10 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg):
     from kingfisher.adapters.agent import registered_tools
     from tests.conftest import FakeToolCallingModel
 
-    graph = build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+    graph = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
     # Only the tools table -- the file has other tables, and scooping up their
     # first columns too is how the first draft of this test "passed" nothing.
     readme = (EXAMPLES / "README.md").read_text(encoding="utf-8")
@@ -73,7 +76,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg):
     assert documented == set(registered_tools(graph))
 
 
-def test_the_readme_example_call_is_valid(workspace_with_examples):
+def test_the_readme_example_call_is_valid(workspace_with_examples, session_dir):
     """Exactly the capabilities the README shows, built for real."""
     from dataclasses import replace
 
@@ -83,6 +86,7 @@ def test_the_readme_example_call_is_valid(workspace_with_examples):
 
     build_agent(
         replace(workspace_with_examples, skills_enabled=True),
+        session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
             tools=("read_file", "ls", "glob", "grep", "execute", "task"),

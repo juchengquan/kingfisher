@@ -10,7 +10,7 @@ def _all_text(messages) -> str:
     return "\n".join(str(getattr(m, "content", "")) for m in messages)
 
 
-def test_agent_runs_shell_and_writes_files(cfg):
+def test_agent_runs_shell_and_writes_files(cfg, session_dir):
     """The wiring test that matters: a scripted tool sequence, no network.
 
     Exercises the three things most likely to be misconfigured at once -- the
@@ -37,7 +37,10 @@ def test_agent_runs_shell_and_writes_files(cfg):
         AIMessage(content="done"),
     ]
 
-    agent = build_agent(cfg, model=FakeToolCallingModel(responses=responses))
+    agent = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses))
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]},
         config={"recursion_limit": 12},
@@ -46,10 +49,10 @@ def test_agent_runs_shell_and_writes_files(cfg):
     # The shell actually ran, with a PATH we constructed rather than inherited.
     assert "42" in _all_text(out["messages"])
     # The virtual path /out.txt resolved to a real file inside root_dir.
-    assert (cfg.workspace / "out.txt").read_text().strip() == "42"
+    assert (session_dir / "out.txt").read_text().strip() == "42"
 
 
-def test_planning_and_permissions_are_wired(cfg, monkeypatch):
+def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
     """deepagents 0.7.6 ships no planning tool, and /data must be write-denied.
 
     Asserted at the construction seam rather than by digging into compiled
@@ -62,7 +65,10 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch):
         return object()
 
     monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", spy)
-    build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
     middleware_names = {type(m).__name__ for m in captured["middleware"]}
     assert "TodoListMiddleware" in middleware_names
@@ -79,7 +85,11 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch):
     assert "memory" not in captured
 
 
-def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(cfg, monkeypatch):
+def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
+    cfg,
+    monkeypatch,
+    session_dir,
+):
     """One switch drives both, so the prompt cannot describe a missing capability."""
     from dataclasses import replace
 
@@ -89,6 +99,7 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(cfg, mon
     )
     build_agent(
         replace(cfg, skills_enabled=True, memory_enabled=True),
+        session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
@@ -109,14 +120,17 @@ def test_system_prompt_carries_no_host_paths_or_session_ids():
     assert "/derived" in text
 
 
-def test_the_agent_exposes_the_expected_tool_surface(cfg):
+def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
     """A regression guard on the whole surface, not just one middleware.
 
     deepagents 0.7.6 ships no planning tool, so `write_todos` here proves
     TodoListMiddleware is wired; `task` proves the general-purpose subagent is
     present even though this model has no harness profile registered.
     """
-    agent = build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+    agent = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
     names = set()
     for node in agent.nodes.values():
