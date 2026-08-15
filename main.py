@@ -25,7 +25,6 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from kingfisher import ConfigError, ensure_layout, from_env, stream
-from kingfisher.domain.workspace import is_new_workspace
 from kingfisher.app.smoke import (
     SMOKE_TASK,
     check_result,
@@ -34,6 +33,7 @@ from kingfisher.app.smoke import (
     seed_sample_data,
     seed_sample_skill,
 )
+from kingfisher.domain.workspace import is_new_workspace
 
 
 def _usage_summary(log_path: Path) -> str:

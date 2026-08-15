@@ -75,7 +75,10 @@ def main() -> int:
     for name, ok in checks.items():
         print(f"[{'PASS' if ok else 'FAIL'}] {name}")
     print(f"\n{sum(checks.values())}/{len(checks)} passed")
-    print(f"turn dirs: {first.run_dir.name}, {second.run_dir.name} under {first.run_dir.parent.name}")
+    print(
+        f"turn dirs: {first.run_dir.name}, {second.run_dir.name} "
+        f"under {first.run_dir.parent.name}"
+    )
     return 0 if all(checks.values()) else 1
 
 

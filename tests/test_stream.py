@@ -85,7 +85,12 @@ def test_run_is_a_drain_of_stream(cfg):
     from kingfisher.app.run import run
 
     agent = StubAgent("<think>x</think>7")
-    result = run(Request("t", session_id="drained"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
+    result = run(
+        Request("t", session_id="drained"),
+        cfg=cfg,
+        agent=agent,
+        checkpointer=StubCheckpointer(),
+    )
 
     assert result.answer == "7"
     assert result.run_dir.is_dir()
@@ -100,7 +105,11 @@ def test_multiline_tool_output_renders_on_one_line(cfg):
             {
                 "tools": {
                     "messages": [
-                        ToolMessage(content="line one\nline two\n\nline three", name="execute", tool_call_id="c")
+                        ToolMessage(
+                            content="line one\nline two\n\nline three",
+                            name="execute",
+                            tool_call_id="c",
+                        )
                     ]
                 }
             }

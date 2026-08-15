@@ -70,7 +70,7 @@ class GroundTruth:
 
 def build_dataset(seed: int = _SEED) -> tuple[str, GroundTruth]:
     """Generate the CSV and the exact truth about it, from one pass."""
-    rng = Random(seed)
+    rng = Random(seed)  # noqa: S311
     rows: list[tuple[str, str, str, str, str, str]] = []
 
     for i in range(_ROWS):

@@ -44,7 +44,9 @@ if TYPE_CHECKING:
 
 
 def _anthropic(cfg: Config, model_id: str) -> BaseChatModel:
-    from langchain_anthropic import ChatAnthropic
+    # PLC0415: imported per provider, so a deployment using one style does
+    # not pay to import the other's SDK -- or require it to be installed.
+    from langchain_anthropic import ChatAnthropic  # noqa: PLC0415
 
     return ChatAnthropic(
         model=model_id,
@@ -56,7 +58,7 @@ def _anthropic(cfg: Config, model_id: str) -> BaseChatModel:
 
 
 def _openai(cfg: Config, model_id: str) -> BaseChatModel:
-    from langchain_openai import ChatOpenAI
+    from langchain_openai import ChatOpenAI  # noqa: PLC0415
 
     return ChatOpenAI(
         model=model_id,

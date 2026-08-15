@@ -57,7 +57,9 @@ class RunEvent:
         flat = " ".join(self.text.split())
         return flat if len(flat) <= limit else flat[: limit - 1] + "…"
 
-    def __str__(self) -> str:
+    # A flat dispatch, one branch per kind: fewer returns would mean more
+    # nesting, not less branching.
+    def __str__(self) -> str:  # noqa: PLR0911
         if self.kind == "model_call":
             calls = f"→ {', '.join(self.tools)}" if self.tools else ""
             cached = self.usage.get("cache_read", 0)

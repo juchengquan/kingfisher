@@ -54,9 +54,9 @@ def test_example_skills_are_discovered(workspace_with_examples):
 def test_the_readme_tool_table_matches_the_real_tool_surface(cfg):
     """The table is the reference a caller builds an allowlist from, so a stale
     row is a CapabilityError someone has to debug."""
-    from kingfisher.adapters.agent import registered_tools
     from langchain_core.messages import AIMessage
 
+    from kingfisher.adapters.agent import registered_tools
     from tests.conftest import FakeToolCallingModel
 
     graph = build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
@@ -75,11 +75,11 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg):
 
 def test_the_readme_example_call_is_valid(workspace_with_examples):
     """Exactly the capabilities the README shows, built for real."""
+    from dataclasses import replace
+
     from langchain_core.messages import AIMessage
 
     from tests.conftest import FakeToolCallingModel
-
-    from dataclasses import replace
 
     build_agent(
         replace(workspace_with_examples, skills_enabled=True),

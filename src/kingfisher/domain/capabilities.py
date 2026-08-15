@@ -77,7 +77,9 @@ class Capabilities:
             subagents=_narrow(self.subagents, other.subagents),
         )
 
-    def unknown(self, *, tools: Iterable[str], skills: Iterable[str], subagents: Iterable[str]) -> tuple[str, ...]:
+    def unknown(
+        self, *, tools: Iterable[str], skills: Iterable[str], subagents: Iterable[str]
+    ) -> tuple[str, ...]:
         """Names asked for that the workspace does not offer.
 
         Reported so an unresolvable request fails loudly instead of running
