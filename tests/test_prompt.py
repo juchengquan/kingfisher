@@ -1,0 +1,77 @@
+from __future__ import annotations
+
+from dataclasses import replace
+
+from kingfisher.agent import USER_PROMPT_FILE, render_system_prompt, system_prompt
+
+
+def test_base_prompt_names_no_dataset_and_no_domain():
+    """A general agent's base prompt must read the same whatever the project is.
+
+    The smoke fixture's filename leaked in here once; this is the guard.
+    """
+    text = render_system_prompt()
+    for leaked in ("sales", ".csv", "revenue", "region"):
+        assert leaked not in text.lower(), f"domain-specific token {leaked!r} in base prompt"
+
+
+def test_capability_sections_appear_only_when_enabled():
+    """The agent must never be told about a capability that is not wired."""
+    off = render_system_prompt()
+    assert "/skills" not in off
+    assert "/memory" not in off
+
+    on = render_system_prompt(skills_enabled=True, memory_enabled=True)
+    assert "/skills" in on
+    assert "/memory" in on
+
+
+def test_capability_flags_are_independent():
+    skills_only = render_system_prompt(skills_enabled=True)
+    assert "/skills" in skills_only
+    assert "/memory" not in skills_only
+
+
+def test_structural_contract_survives_every_combination():
+    """Workspace layout and the deliverable contract are not optional."""
+    for skills in (False, True):
+        for memory in (False, True):
+            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            assert "/data" in text
+            assert "/derived" in text
+            assert "report.md" in text
+            assert "result.json" in text
+
+
+def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):
+    (cfg.workspace / USER_PROMPT_FILE).write_text(
+        "Prefer polars over pandas in this project.\n", encoding="utf-8"
+    )
+    text = system_prompt(cfg)
+    assert "Prefer polars over pandas" in text
+    # Appended, not replacing the structural contract.
+    assert "/derived" in text
+
+
+def test_no_user_prompt_leaves_the_base_prompt_untouched(cfg):
+    assert system_prompt(cfg) == render_system_prompt()
+
+
+def test_enabling_capabilities_changes_the_rendered_prompt(cfg):
+    enabled = replace(cfg, skills_enabled=True, memory_enabled=True)
+    assert system_prompt(enabled) != system_prompt(cfg)
+    assert "/skills" in system_prompt(enabled)
+
+
+def test_assembly_leaves_no_blank_line_runs_or_markers():
+    """The marker is removed cleanly; the prefix ships on every step."""
+    import re
+
+    from kingfisher.agent import CAPABILITY_MARKER
+
+    for skills in (False, True):
+        for memory in (False, True):
+            text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
+            assert CAPABILITY_MARKER not in text
+            assert "<!--" not in text
+            assert not re.search(r"\n{3,}", text)
