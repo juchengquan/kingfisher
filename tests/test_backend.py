@@ -13,7 +13,7 @@ from kingfisher.adapters.backend import (
 )
 from kingfisher.adapters.checkpointing import checkpoint_db_path
 from kingfisher.adapters.runlog import log_path
-from kingfisher.domain.config import ConfigError
+from kingfisher.config import ConfigError
 
 
 def test_shell_env_carries_no_credentials(cfg):

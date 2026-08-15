@@ -8,7 +8,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.adapters.agent import CapabilityError, build_agent
-from kingfisher.adapters.capabilities import ScopedSkills, ToolAllowlist
+from kingfisher.adapters.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.domain.capabilities import Capabilities
 from tests.conftest import FakeToolCallingModel
 

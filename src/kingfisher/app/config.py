@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from kingfisher.adapters.models import PROVIDERS
-from kingfisher.domain.config import API_STYLES, ROLES, Config, ConfigError
+from kingfisher.config import API_STYLES, ROLES, Config, ConfigError
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `domain.config` —

@@ -111,3 +111,31 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
         [sys.executable, "-c", probe], capture_output=True, text=True, check=True
     )
     assert out.stdout.strip() == "False"
+
+
+def test_domain_does_not_read_deployment_config():
+    """`Config` holds base_url, api_key and timeout_s. It lived in `domain/`
+    on import-direction grounds -- both outer layers could reach it without
+    reaching each other -- but no domain rule ever read one.
+
+    A domain rule that needs a value takes the value. `sweep(workspace, keep)`
+    always did; this stops the record itself drifting back inward.
+    """
+    for path in _modules_in("domain"):
+        modules = _imported_modules(path)
+        assert "kingfisher.config" not in modules, (
+            f"domain/{path.name} imports Config — pass it the values it needs instead"
+        )
+
+
+def test_the_package_does_not_depend_on_the_eval_harness():
+    """`evals/` is test material and lives outside `src/`, so it is not in the
+    wheel. If the package imports it, an installed kingfisher breaks -- and the
+    348-line fixture module has quietly moved back in.
+    """
+    for layer in ("domain", "adapters", "app"):
+        for path in _modules_in(layer):
+            modules = _imported_modules(path)
+            assert not any(m.split(".")[0] == "evals" for m in modules), (
+                f"{layer}/{path.name} imports evals/ — the wheel does not ship it"
+            )

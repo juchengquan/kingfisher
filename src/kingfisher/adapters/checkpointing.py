@@ -14,7 +14,7 @@ from typing import TYPE_CHECKING
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from kingfisher.domain.config import Config
+from kingfisher.config import Config
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver

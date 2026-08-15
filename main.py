@@ -46,19 +46,16 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from evals.artifacts import load_result, promote_report
+from evals.checks import check_result
+from evals.seed import seed_sample_data, seed_sample_skill
+from evals.task import SMOKE_TASK
+
 # Only the light end of the package at module scope. `kingfisher.adapters`
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
-from kingfisher.app.smoke import (
-    SMOKE_TASK,
-    check_result,
-    load_result,
-    promote_report,
-    seed_sample_data,
-    seed_sample_skill,
-)
-from kingfisher.domain.config import Config
+from kingfisher.config import Config
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIR
 from kingfisher.domain.subagent import SubagentError, load_all
 from kingfisher.domain.workspace import is_new_workspace

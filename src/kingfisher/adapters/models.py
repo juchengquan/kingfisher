@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 from langchain_anthropic import ChatAnthropic
 from langchain_openai import ChatOpenAI
 
-from kingfisher.domain.config import Config, ConfigError
+from kingfisher.config import Config, ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

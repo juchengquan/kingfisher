@@ -21,7 +21,7 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 
-from kingfisher.domain.config import Config, ConfigError
+from kingfisher.config import Config, ConfigError
 
 if TYPE_CHECKING:
     from deepagents.backends import BackendProtocol

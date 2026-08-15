@@ -78,9 +78,9 @@ ignore = ["ANN401"]
 # A driver whose whole job is printing, with the branchiness that implies --
 # and one exit code per way a run can end, which is the clearer shape here.
 "main.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
-# The long lines are inside string literals: a skill's frontmatter description
-# must be one line, and so must the task's JSON schema commentary.
-"src/kingfisher/app/smoke.py" = ["E501"]
+# The long lines are inside string literals: the task's JSON schema commentary
+# has to stay on one line to read as one field.
+"evals/task.py" = ["E501"]
 # Tests assert, take untyped fixtures, import locally to keep a case readable,
 # and compare against literals -- that is what a test is. `RUF012` fires on a
 # pydantic field, where a mutable default is handled by the model.

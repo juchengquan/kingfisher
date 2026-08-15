@@ -22,8 +22,8 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from evals.dataset import SAMPLE_NAME, seed_sample_data
 from kingfisher import ensure_layout, from_env, stream
-from kingfisher.app.smoke import SAMPLE_NAME, seed_sample_data
 
 load_dotenv()
 

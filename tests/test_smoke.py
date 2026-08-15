@@ -3,13 +3,9 @@ from __future__ import annotations
 import csv
 import io
 
-from kingfisher.app.smoke import (
-    GROUND_TRUTH,
-    ISSUE_KINDS,
-    SMOKE_TASK,
-    build_dataset,
-    check_result,
-)
+from evals.checks import check_result
+from evals.dataset import GROUND_TRUTH, build_dataset
+from evals.task import ISSUE_KINDS, SMOKE_TASK
 
 
 def _rows(text: str) -> list[dict]:
