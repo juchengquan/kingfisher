@@ -375,7 +375,10 @@ def main(argv: list[str]) -> int:
     if not is_smoke:
         return 0
 
-    promoted = promote_report(result.run_dir, workspace)
+    # The state directory: host-side, outlives any session, and not a name
+    # the agent addresses. `workspace/derived` stopped being anywhere when
+    # `/derived` became a session directory.
+    promoted = promote_report(result.run_dir, cfg.state_dir)
     if promoted:
         print(f"promoted    : {promoted}")
 
