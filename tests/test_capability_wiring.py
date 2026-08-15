@@ -371,3 +371,56 @@ def test_role_models_override_a_subagents_declared_model(cfg, monkeypatch):
 
     (subagent,) = captured["subagents"]
     assert subagent["model"].model == "operator-choice"
+
+
+def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeypatch):
+    """The rule that makes two axes safe rather than confusing: `Config` says
+    what is wired and shapes the cached prompt; a request narrows within it.
+    Asking for memory a deployment never wired does not conjure it."""
+    captured = _capture(monkeypatch)
+    build_agent(
+        cfg,  # memory_enabled is False
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(memory=True),
+    )
+    assert "memory" not in captured
+
+
+def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, monkeypatch):
+    """The prompt still describes memory -- it is the cached prefix and must
+    not vary per request -- so a deny rule is what actually stops the read."""
+    captured = _capture(monkeypatch)
+    build_agent(
+        replace(cfg, memory_enabled=True),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(memory=False),
+    )
+
+    assert "memory" not in captured
+    denied = [r for r in captured["permissions"] if r.paths == ["/memory/**"]]
+    assert len(denied) == 1
+    assert denied[0].mode == "deny"
+
+
+def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch):
+    """The negative control: without it the two tests above would pass even if
+    memory were never wired at all."""
+    captured = _capture(monkeypatch)
+    build_agent(
+        replace(cfg, memory_enabled=True),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+    )
+    assert captured["memory"] == ["/memory/AGENTS.md"]
+    assert not any(r.paths == ["/memory/**"] for r in captured["permissions"])
+
+
+def test_declining_memory_builds_against_the_real_backend(cfg):
+    """The spy-based tests never reach deepagents' own validation, which is
+    what rejected this deny rule live -- `permissions=` is refused unless every
+    rule path is scoped to a backend route. Third time for this constraint:
+    /data, then /skills, now /memory."""
+    build_agent(
+        replace(cfg, memory_enabled=True),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(memory=False),
+    )

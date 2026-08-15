@@ -15,6 +15,7 @@ was reachable from here.
 
     uv run main.py "Review it" --skills code-review --subagents reviewer
     uv run main.py "Count the rows" --tools read_file,write_file
+    uv run main.py "Just this once" --no-memory
     uv run main.py "And now?" --session 7f3a91c2b4e0
     uv run main.py "Profile this" --input ~/data.csv
 
@@ -172,6 +173,11 @@ def build_parser() -> argparse.ArgumentParser:
             metavar="A,B",
             help=f"activate only these {name} (empty string for none)",
         )
+    parser.add_argument(
+        "--no-memory",
+        action="store_true",
+        help="do not read the workspace memory file on this turn",
+    )
     parser.add_argument("--list", action="store_true", help="show what the workspace offers")
     parser.add_argument(
         "--seed-examples", action="store_true", help="copy examples/ into the workspace"
@@ -215,6 +221,9 @@ def main(argv: list[str]) -> int:
         tools=_selection(args.tools),
         skills=_selection(args.skills),
         subagents=_selection(args.subagents),
+        # None, not False, when the flag is absent: "no opinion" is what keeps
+        # an unrestricted request unrestricted.
+        memory=False if args.no_memory else None,
     )
     request = Request(
         task=task,
@@ -235,6 +244,8 @@ def main(argv: list[str]) -> int:
             selected = getattr(capabilities, kind)
             if selected is not None:
                 print(f"{kind:<10}: {', '.join(selected) or '(none)'}")
+        if capabilities.memory is not None:
+            print(f"{'memory':<10}: {'on' if capabilities.memory else 'off'}")
     if request.inputs:
         print(f"inputs    : {', '.join(p.name for p in request.inputs)}")
     print(f"task      : {task}\n")

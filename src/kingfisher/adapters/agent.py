@@ -46,6 +46,14 @@ USER_PROMPT_FILE = "PROMPT.md"
 SKILLS_SOURCES = ["/skills/"]
 MEMORY_SOURCES = ["/memory/AGENTS.md"]
 
+#: For a request that declined memory a deployment did wire. Reads are denied
+#: rather than the prompt rewritten: the prompt is the cached prefix.
+MEMORY_IS_DENIED = FilesystemPermission(
+    operations=["read"],
+    paths=["/memory/**"],
+    mode="deny",
+)
+
 
 class CapabilityError(ValueError):
     """A request named a tool, skill or subagent the workspace does not offer."""
@@ -222,8 +230,17 @@ def build_agent(
     permissions = [DATA_IS_READ_ONLY]
     extras: dict[str, Any] = {}
 
-    if cfg.memory_enabled:
+    # Two axes, and this is where they meet: `cfg` says what is wired, the
+    # request says what it wants of that. Narrowing can only subtract --
+    # `memory=True` against a deployment that wired none stays off.
+    if cfg.memory_enabled and capabilities.memory is not False:
         extras["memory"] = MEMORY_SOURCES
+    elif cfg.memory_enabled:
+        # Wired but declined. The prompt still describes memory, because it is
+        # the cached prefix and must not vary per request; this stops the file
+        # being read anyway. deepagents puts memory behind its own cache
+        # breakpoint, so dropping the block leaves the prefix cached.
+        permissions.append(MEMORY_IS_DENIED)
 
     if cfg.skills_enabled:
         if capabilities.skills is None:
