@@ -55,10 +55,11 @@ from evals.task import SMOKE_TASK
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
+from kingfisher.adapters.subagent_store import load_all
+from kingfisher.adapters.workspace_fs import is_new_workspace
 from kingfisher.config import Config
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIR
-from kingfisher.domain.subagent import SubagentError, load_all
-from kingfisher.domain.workspace import is_new_workspace
+from kingfisher.domain.subagent import SubagentError
 
 EXAMPLES = Path(__file__).resolve().parent / "examples"
 

@@ -12,8 +12,8 @@ from pathlib import Path
 import pytest
 
 from kingfisher.adapters.agent import _available_skills, build_agent
+from kingfisher.adapters.subagent_store import load_all
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.subagent import load_all
 
 EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 

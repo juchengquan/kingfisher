@@ -6,7 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.subagent import SubagentError, load_all, parse
+from kingfisher.adapters.subagent_store import load_all
+from kingfisher.domain.subagent import SubagentError, parse
 
 MINIMAL = """---
 name: reviewer

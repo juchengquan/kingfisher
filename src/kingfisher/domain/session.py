@@ -14,19 +14,10 @@ session to discard itself.
 
 from __future__ import annotations
 
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Protocol
 
-
-class ThreadStore(Protocol):
-    """The slice of a checkpointer this aggregate needs.
-
-    Named here so the domain can state its requirement without importing one.
-    """
-
-    def delete_thread(self, thread_id: str) -> None: ...
+from kingfisher.domain.ports import SessionDirs, ThreadStore
 
 
 @dataclass(frozen=True)
@@ -61,12 +52,12 @@ class Session:
     directory: Path
 
     @classmethod
-    def open(cls, workspace: Path, session_id: str) -> Session:
+    def open(cls, workspace: Path, session_id: str, dirs: SessionDirs) -> Session:
         directory = Path(workspace) / "runs" / session_id
-        directory.mkdir(parents=True, exist_ok=True)
+        dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
 
-    def allocate_turn(self, turn_id: str | None = None) -> Turn:
+    def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
         """Create the next turn's directory and return it.
 
         A caller-supplied id wins and is idempotent: the same id returns the
@@ -80,10 +71,10 @@ class Session:
         """
         if turn_id:
             path = self.directory / turn_id
-            path.mkdir(exist_ok=True)
+            dirs.ensure(path)
             return Turn(session_id=self.id, id=turn_id, directory=path)
 
-        existing = [p.name for p in self.directory.iterdir() if p.is_dir()]
+        existing = dirs.children(self.directory)
         number = max(
             (int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()),
             default=0,
@@ -91,13 +82,13 @@ class Session:
         while True:
             number += 1
             candidate = self.directory / f"t{number:03d}"
-            try:
-                candidate.mkdir()
-            except FileExistsError:
-                continue  # lost the race for this id; take the next one
-            return Turn(session_id=self.id, id=candidate.name, directory=candidate)
+            if dirs.create_exclusive(candidate):
+                return Turn(session_id=self.id, id=candidate.name, directory=candidate)
+            # Lost the race for this id; take the next one. The retry lives here
+            # rather than in the adapter because it is the rule, not the
+            # primitive -- the port only has to refuse a name it cannot claim.
 
-    def discard(self, threads: ThreadStore | None = None) -> str | None:
+    def discard(self, dirs: SessionDirs, threads: ThreadStore | None = None) -> str | None:
         """Delete this session's thread and directory. Returns a failure, or None.
 
         There is no transaction across a filesystem and sqlite, so the order is
@@ -118,9 +109,5 @@ class Session:
             except Exception as exc:  # noqa: BLE001 -- reported, not swallowed
                 return f"{self.id}: thread not deleted ({type(exc).__name__})"
 
-        try:
-            shutil.rmtree(self.directory)  # not ignore_errors: partials must surface
-        except OSError as exc:
-            return f"{self.id}: directory not removed ({exc.strerror})"
-
-        return None
+        failure = dirs.remove_tree(self.directory)
+        return f"{self.id}: {failure}" if failure else None

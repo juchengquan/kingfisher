@@ -3,15 +3,10 @@ from __future__ import annotations
 import os
 import shutil
 
-from kingfisher.domain.workspace import (
-    LAYOUT_DIRS,
-    TRACKED_PATHS,
-    WORKSPACE_GITIGNORE,
-    ensure_layout,
-    is_repo,
-    pre_run_commit,
-    sweep,
-)
+from kingfisher.adapters.workspace_fs import LocalSessionDirs, ensure_layout
+from kingfisher.adapters.workspace_git import is_repo, pre_run_commit
+from kingfisher.domain import retention
+from kingfisher.domain.layout import LAYOUT_DIRS, TRACKED_PATHS, WORKSPACE_GITIGNORE
 from tests.conftest import StubCheckpointer
 
 
@@ -34,6 +29,16 @@ def test_gitignore_encodes_the_durability_tiers(workspace):
     # a run that produces something worth keeping writes it to derived/.
     assert "runs/" in text
     assert "!runs" not in text
+
+
+def sweep(workspace, keep, checkpointer):
+    """What `stream()` does: list, plan, apply. A helper here because the tests
+    below are about the outcome, not the three steps."""
+    dirs = LocalSessionDirs()
+    runs = workspace / "runs"
+    return retention.apply(
+        retention.plan(dirs.listing(runs), keep), runs, dirs, checkpointer
+    )
 
 
 def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):

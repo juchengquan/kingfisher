@@ -139,3 +139,67 @@ def test_the_package_does_not_depend_on_the_eval_harness():
             assert not any(m.split(".")[0] == "evals" for m in modules), (
                 f"{layer}/{path.name} imports evals/ — the wheel does not ship it"
             )
+
+
+#: Calls that reach outside the process. Not exhaustive as a security measure --
+#: it is a design guard, and its job is to make the *easy* violation loud.
+WORLD_CALLS = frozenset({
+    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
+    "write_text", "write_bytes", "read_text", "read_bytes", "open",
+    "unlink", "touch", "chmod", "rename", "replace",
+    "iterdir", "glob", "rglob", "walk", "exists", "is_dir", "is_file",
+    "stat", "resolve", "run", "check_output", "Popen",
+})
+
+WORLD_MODULES = frozenset({"subprocess", "shutil", "os", "tempfile", "io", "socket"})
+
+
+def _world_contact(path: Path) -> list[str]:
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [
+                f"L{node.lineno} import {a.name}"
+                for a in node.names
+                if a.name.split(".")[0] in WORLD_MODULES
+            ]
+        elif (
+            isinstance(node, ast.ImportFrom)
+            and node.module
+            and node.module.split(".")[0] in WORLD_MODULES
+        ):
+            found.append(f"L{node.lineno} from {node.module}")
+        elif (
+            isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in WORLD_CALLS
+        ):
+            found.append(f"L{node.lineno} .{node.func.attr}()")
+    return found
+
+
+@pytest.mark.parametrize("path", _modules_in("domain"), ids=lambda p: p.name)
+def test_domain_touches_nothing_outside_the_process(path):
+    """The boundary the older tests were mistaken for.
+
+    They checked that `domain/` imported nothing from langchain or deepagents,
+    and passed -- while `domain/workspace.py` shelled out to git, chmod'd files,
+    created directories and rmtree'd them. 35 such calls across three modules.
+    "No foreign imports" is not "no side effects", and only the second makes a
+    domain layer worth having: a rule you can read, run and trust without a
+    filesystem underneath it.
+
+    Where a rule genuinely needs a primitive -- turn allocation is atomic
+    because `mkdir` refuses a taken name -- it takes a port from
+    `domain.ports`. Where it does not, it returns a decision and the caller
+    acts: `retention.plan` names the sessions to drop and touches none of them.
+    """
+    contact = _world_contact(path)
+    assert not contact, f"domain/{path.name} reaches the world: {contact}"
+
+
+def test_the_adapters_are_the_ones_doing_the_touching():
+    """The other half: if nothing in adapters/ touches the world either, the
+    I/O did not move out, it moved somewhere less visible."""
+    assert any(_world_contact(p) for p in _modules_in("adapters"))
