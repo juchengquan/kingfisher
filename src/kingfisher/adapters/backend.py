@@ -66,6 +66,18 @@ _HOST_ROOTS: tuple[str, ...] = (
 )
 
 
+class HostPathError(ValueError):
+    """A host path reached a file tool.
+
+    A named type rather than a bare `ValueError` so the recovery middleware can
+    catch exactly this and nothing else. Raised from inside the backend, which
+    is past the point where deepagents converts errors into tool results: its
+    file tools catch `ValueError` around *path validation*, then call
+    `backend.write()` outside that guard. So this escapes on its own, and
+    `HostPathGuard` is what turns it back into a tool error.
+    """
+
+
 def reject_host_path(key: str, workspace: Path) -> None:
     """Refuse a host path handed to a file tool.
 
@@ -95,7 +107,7 @@ def reject_host_path(key: str, workspace: Path) -> None:
             f"workspace. Use {suggestion!r} instead. (Passing the host path would have "
             f"created it inside the workspace, under a mirror of its own location.)"
         )
-        raise ValueError(msg)
+        raise HostPathError(msg)
 
     if key.startswith(_HOST_ROOTS):
         msg = (
@@ -104,7 +116,7 @@ def reject_host_path(key: str, workspace: Path) -> None:
             f"you meant. Use the shell for host paths, or a virtual path such as "
             f"/runs/<session>/<turn>/ for files that belong to this task."
         )
-        raise ValueError(msg)
+        raise HostPathError(msg)
 
 
 class WorkspaceScopedBackend(CompositeBackend):
