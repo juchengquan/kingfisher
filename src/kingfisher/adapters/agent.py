@@ -17,8 +17,8 @@ from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.adapters.backend import build_backend
-from kingfisher.app.config import Config
 from kingfisher.adapters.models import build_model
+from kingfisher.domain.config import Config
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph

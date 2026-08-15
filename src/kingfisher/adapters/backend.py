@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 
-from kingfisher.app.config import Config
+from kingfisher.domain.config import Config
 
 if TYPE_CHECKING:
     from deepagents.backends import BackendProtocol
