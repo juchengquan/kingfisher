@@ -29,17 +29,17 @@ class SkillError(ValueError):
 
 def name_of(text: str, source: str = FILENAME) -> str:
     """The skill's declared name, which is also its directory name."""
-    split = frontmatter.split(text)
-    if split is None:
+    parts = frontmatter.split(text)
+    if parts is None:
         msg = f"{source}: expected YAML frontmatter delimited by ---"
         raise SkillError(msg)
 
-    fields = frontmatter.fields(split[0])
+    fields = frontmatter.fields(parts[0])
     if isinstance(fields, str):
-        msg = f"{source}: cannot parse frontmatter line {fields!r}"
+        msg = f"{source}: cannot read frontmatter ({fields})"
         raise SkillError(msg)
 
-    name = frontmatter.scalar(fields.get("name", ""))
+    name = frontmatter.text(fields.get("name"))
     if not name:
         msg = f"{source}: frontmatter is missing required field 'name'"
         raise SkillError(msg)

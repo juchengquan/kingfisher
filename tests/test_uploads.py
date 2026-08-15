@@ -98,3 +98,31 @@ def test_a_request_that_brings_nothing_needs_no_store(cfg, session_dir):
     provision(Request("t"), None, session_dir, cfg)
 
     assert not any((session_dir / "skills" / "uploaded").glob("*"))
+
+
+SPEC_SHAPED_SKILL = b"""---
+name: extractor
+description: >-
+  Pulls fields out of documents,
+  one record at a time.
+allowed-tools:
+  - read_file
+  - grep
+---
+Body.
+"""
+
+
+def test_a_skill_written_to_the_published_spec_can_be_uploaded(cfg, session_dir):
+    """The defect this closes: catalogue skills are never parsed by kingfisher
+    -- `skill_store.names` only lists directories -- but uploaded ones are. So
+    a skill using the Agent Skills spec\'s documented block list for
+    `allowed-tools`, or a folded description, loaded fine from the catalogue
+    and was refused on upload by a stricter parser of our own.
+    """
+    store = FakeStore(skl_1={"SKILL.md": SPEC_SHAPED_SKILL})
+
+    provision(Request("t", skill_refs=("skl_1",)), store, session_dir, cfg)
+
+    unpacked = session_dir / "skills" / "uploaded" / "extractor" / "SKILL.md"
+    assert unpacked.read_bytes() == SPEC_SHAPED_SKILL

@@ -50,16 +50,16 @@ class SubagentSpec:
     model: str | None = None
 
 
-def _parse_frontmatter(text: str, source: Path) -> tuple[dict[str, str], str]:
-    split = frontmatter.split(text)
-    if split is None:
+def _parse_frontmatter(text: str, source: Path) -> tuple[dict[str, object], str]:
+    parts = frontmatter.split(text)
+    if parts is None:
         msg = f"{source.name}: expected YAML frontmatter delimited by ---"
         raise SubagentError(msg)
 
-    header, body = split
+    header, body = parts
     fields = frontmatter.fields(header)
     if isinstance(fields, str):
-        msg = f"{source.name}: cannot parse frontmatter line {fields!r}"
+        msg = f"{source.name}: cannot read frontmatter ({fields})"
         raise SubagentError(msg)
     return fields, body
 
@@ -76,16 +76,12 @@ def parse(text: str, source: Path) -> SubagentSpec:
         msg = f"{source.name}: the body is the system prompt and must not be empty"
         raise SubagentError(msg)
 
-    raw_tools = fields.get("tools")
-    tools: tuple[str, ...] | None = None
-    if raw_tools is not None:
-        inner = raw_tools.strip().removeprefix("[").removesuffix("]")
-        tools = tuple(frontmatter.scalar(t) for t in inner.split(",") if t.strip())
-
     return SubagentSpec(
-        name=frontmatter.scalar(fields["name"]),
-        description=frontmatter.scalar(fields["description"]),
+        name=frontmatter.text(fields["name"]),
+        description=frontmatter.text(fields["description"]),
         system_prompt=body,
-        tools=tools,
-        model=frontmatter.scalar(fields["model"]) if fields.get("model") else None,
+        # `[read_file, grep]` and a block list are the same thing to YAML, so
+        # both reach here already parsed.
+        tools=frontmatter.names(fields.get("tools")),
+        model=frontmatter.text(fields["model"]) if fields.get("model") else None,
     )
