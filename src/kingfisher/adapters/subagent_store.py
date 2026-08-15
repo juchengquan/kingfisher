@@ -9,16 +9,20 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingfisher.domain.subagent import DIRECTORY, SUFFIX, SubagentError, SubagentSpec, parse
+from kingfisher.domain.subagent import SUFFIX, SubagentError, SubagentSpec, parse
 
 
-def load_all(workspace: Path) -> dict[str, SubagentSpec]:
-    """Every subagent the workspace defines, keyed by name.
+def load_all(directory: Path) -> dict[str, SubagentSpec]:
+    """Every subagent defined in `directory`, keyed by name.
+
+    Given the directory itself rather than a workspace to derive one from: the
+    catalogue can be deployed outside any workspace and shared by all of them,
+    so there is no longer a single parent to infer it from.
 
     The filename is not authoritative — the frontmatter `name` is, since that
     is what a request names and what the `task` tool will use.
     """
-    directory = Path(workspace) / DIRECTORY
+    directory = Path(directory)
     if not directory.is_dir():
         return {}
 

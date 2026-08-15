@@ -63,7 +63,7 @@ def test_malformed_definitions_are_rejected(text, because):
 
 
 def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
-    assert load_all(tmp_path) == {}
+    assert load_all(tmp_path / "subagents") == {}
 
 
 def test_load_all_keys_on_the_frontmatter_name_not_the_filename(tmp_path):
@@ -71,7 +71,7 @@ def test_load_all_keys_on_the_frontmatter_name_not_the_filename(tmp_path):
     directory.mkdir()
     (directory / "misnamed.md").write_text(MINIMAL, encoding="utf-8")
 
-    specs = load_all(tmp_path)
+    specs = load_all(tmp_path / "subagents")
     assert set(specs) == {"reviewer"}
 
 
@@ -83,4 +83,4 @@ def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
     (directory / "b.md").write_text(MINIMAL, encoding="utf-8")
 
     with pytest.raises(SubagentError, match="duplicate subagent name"):
-        load_all(tmp_path)
+        load_all(tmp_path / "subagents")

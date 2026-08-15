@@ -19,7 +19,7 @@ EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
 def test_every_example_subagent_parses():
-    specs = load_all(EXAMPLES)
+    specs = load_all(EXAMPLES / "subagents")
 
     assert set(specs) == {"reviewer", "extractor"}
     for spec in specs.values():
@@ -30,7 +30,7 @@ def test_every_example_subagent_parses():
 def test_the_extractor_example_demonstrates_the_optional_fields():
     """Both optional fields appear in at least one example, or they are
     documented in the README and shown nowhere."""
-    extractor = load_all(EXAMPLES)["extractor"]
+    extractor = load_all(EXAMPLES / "subagents")["extractor"]
 
     assert extractor.tools is not None
     assert "write_file" not in extractor.tools  # read-only, as its body claims
@@ -45,7 +45,7 @@ def workspace_with_examples(cfg):
 
 
 def test_example_skills_are_discovered(workspace_with_examples):
-    assert set(_available_skills(workspace_with_examples.workspace)) >= {
+    assert set(_available_skills(workspace_with_examples.skills_dir)) >= {
         "code-review",
         "release-notes",
     }

@@ -67,6 +67,13 @@ class Config:
     # by default. Read them through `state_dir` / `scratch_dir`, never directly.
     state_root: Path | None = None
     scratch_root: Path | None = None
+    # Where the definitions live. Also `None` for "derive from the workspace",
+    # but for a different reason than the two above: these hold *content a
+    # person authored*, and pointing several deployments at one directory is
+    # how a reviewed catalogue serves all of them instead of each keeping a
+    # copy nobody can audit centrally.
+    skills_root: Path | None = None
+    subagents_root: Path | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix
@@ -104,6 +111,22 @@ class Config:
         directory is created private and checked before use.
         """
         return self.scratch_root or self.state_dir / "tmp"
+
+    @property
+    def skills_dir(self) -> Path:
+        """The skills catalogue. Shared by every session this workspace serves.
+
+        Unlike `/data` and the rest, definitions are not owned by a session:
+        they are authored, reviewed and deployed. Relocating them is safe for
+        the same reason the state directory is — the agent reaches `/skills`
+        through a route, and the shell has no business there.
+        """
+        return self.skills_root or self.workspace / "skills"
+
+    @property
+    def subagents_dir(self) -> Path:
+        """The subagent catalogue. Read off disk, never addressed by the agent."""
+        return self.subagents_root or self.workspace / "subagents"
 
     def model_for(self, role: str) -> str:
         """Per-role model, falling back to the main model.

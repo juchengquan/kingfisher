@@ -7,8 +7,10 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.adapters.agent import CapabilityError, build_agent
+from kingfisher.adapters.agent import CapabilityError, _available_skills, build_agent
+from kingfisher.adapters.backend import build_backend
 from kingfisher.adapters.scoping import ScopedSkills, ToolAllowlist
+from kingfisher.adapters.subagent_store import load_all
 from kingfisher.domain.capabilities import Capabilities
 from tests.conftest import FakeToolCallingModel, capture_build
 
@@ -398,3 +400,40 @@ def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch, session
     assert captured["memory"] == ["/memory/AGENTS.md"]
     assert not any(r.paths == ["/memory/**"] for r in captured["permissions"])
 
+
+def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path):
+    """One reviewed set of definitions, deployed once, serving every workspace.
+
+    That is what making these roots configurable buys: a copy per workspace is
+    a copy nobody can audit centrally.
+    """
+    catalogue = tmp_path / "catalogue" / "skills"
+    (catalogue / "shared").mkdir(parents=True)
+    (catalogue / "shared" / "SKILL.md").write_text(
+        "---\nname: shared\ndescription: A procedure every deployment gets.\n---\nBody.\n",
+        encoding="utf-8",
+    )
+    relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
+
+    backend = build_backend(relocated, session_dir)
+
+    assert str(backend.routes["/skills/"].cwd) == str(catalogue.resolve())
+    assert backend.read("/skills/shared/SKILL.md").error is None
+    # Offered to the agent without any copy existing in the workspace.
+    assert _available_skills(relocated.skills_dir) == ("shared",)
+    assert not (relocated.workspace / "skills" / "shared").exists()
+
+
+def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
+    """A deployment may share one catalogue of procedures while keeping its own
+    delegates, or the reverse -- so they are two roots, not one."""
+    catalogue = tmp_path / "catalogue" / "subagents"
+    catalogue.mkdir(parents=True)
+    (catalogue / "reviewer.md").write_text(
+        "---\nname: reviewer\ndescription: Checks arithmetic.\n---\nYou review.\n",
+        encoding="utf-8",
+    )
+    relocated = replace(cfg, subagents_root=catalogue)
+
+    assert set(load_all(relocated.subagents_dir)) == {"reviewer"}
+    assert load_all(relocated.workspace / "subagents") == {}

@@ -93,3 +93,29 @@ def test_state_and_scratch_can_be_pointed_elsewhere(tmp_path):
 
     assert cfg.state_dir == tmp_path / "state"
     assert cfg.scratch_dir == tmp_path / "scratch"
+
+
+def test_the_catalogue_defaults_inside_the_workspace():
+    """Unset changes nothing: definitions stay where they have always been."""
+    cfg = from_env({**BASE_ENV, "KINGFISHER_API_STYLE": "anthropic"})
+
+    assert cfg.skills_root is None
+    assert cfg.subagents_root is None
+    assert cfg.skills_dir == cfg.workspace / "skills"
+    assert cfg.subagents_dir == cfg.workspace / "subagents"
+
+
+def test_the_catalogue_can_be_shared_between_workspaces(tmp_path):
+    """The point of the phase: one reviewed set of definitions, deployed once,
+    rather than a copy per workspace that nobody can audit centrally."""
+    cfg = from_env(
+        {
+            **BASE_ENV,
+            "KINGFISHER_API_STYLE": "anthropic",
+            "KINGFISHER_SKILLS_DIR": str(tmp_path / "catalogue" / "skills"),
+            "KINGFISHER_SUBAGENTS_DIR": str(tmp_path / "catalogue" / "subagents"),
+        }
+    )
+
+    assert cfg.skills_dir == tmp_path / "catalogue" / "skills"
+    assert cfg.subagents_dir == tmp_path / "catalogue" / "subagents"
