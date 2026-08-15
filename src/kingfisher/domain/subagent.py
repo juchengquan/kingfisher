@@ -2,9 +2,10 @@
 
 Deliberately the same shape as a skill — YAML frontmatter and a markdown body —
 so a contributor who has written one does not need to learn a second mechanism.
-The frontmatter maps 1:1 onto deepagents' `SubAgent`: `name` and `description`
-are required, `tools` and `model` are optional, and the body *is* the system
-prompt.
+`name` and `description` are required, `tools` and `model` are optional, and
+the body *is* the system prompt. `tools` selects from what the parent agent
+already has, by name; how that selection is enforced is the adapter's problem,
+not this format's.
 
     ---
     name: reviewer

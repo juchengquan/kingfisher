@@ -258,3 +258,116 @@ def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg):
     assert "execute is not available for this request" in transcript
     # Refused, not raised: the agent gets to carry on and choose another route.
     assert out["messages"][-1].content == "done"
+
+
+def test_a_typo_in_a_tool_name_is_caught(cfg):
+    """Without this, `read_fil` silently narrows the allowlist and the agent
+    runs crippled -- the same quiet failure skills and subagents refuse."""
+    with pytest.raises(CapabilityError, match="unknown tool"):
+        build_agent(
+            cfg,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(tools=("read_file", "read_fil")),
+        )
+
+
+def test_the_registered_tool_names_are_discoverable(cfg):
+    """Pins the introspection the check above depends on. If deepagents or
+    LangGraph moves the tool node, this fails loudly here rather than silently
+    turning tool validation into a no-op."""
+    from kingfisher.adapters.agent import registered_tools
+
+    graph = build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+    names = registered_tools(graph)
+
+    assert {"read_file", "write_file", "edit_file", "ls", "glob", "grep"} <= set(names)
+    assert "execute" in names  # the shell
+    assert "task" in names  # subagent delegation
+
+
+def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
+    from kingfisher.adapters.agent import registered_tools
+
+    assert registered_tools(object()) == ()
+
+
+RESTRICTED_SUBAGENT = """---
+name: reader
+description: Reads files and reports what they contain.
+tools: [read_file, glob]
+---
+You read files.
+"""
+
+
+def test_a_subagent_with_restricted_tools_builds_for_real(cfg):
+    """Regression: `SubAgent.tools` takes tool *objects* deepagents will
+    register, not a selection by name. Passing names raised inside ToolNode.
+    The spy-based test below never caught it, and the live run used a subagent
+    with no `tools:` field."""
+    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.md")
+
+    build_agent(
+        cfg,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reader",)),
+    )
+
+
+def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch):
+    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.md")
+    captured = _capture(monkeypatch)
+    build_agent(
+        cfg,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reader",)),
+    )
+
+    (subagent,) = captured["subagents"]
+    assert "tools" not in subagent  # names here would raise inside ToolNode
+    (allowlist,) = subagent["middleware"]
+    assert isinstance(allowlist, ToolAllowlist)
+    assert allowlist._allowed == {"read_file", "glob"}
+
+
+MODEL_SUBAGENT = """---
+name: cheap
+description: Does the bulk reading on a smaller model.
+model: some-small-model
+---
+You read things.
+"""
+
+
+def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch):
+    """A bare name would go to deepagents' `init_chat_model`, which infers its
+    own provider and reads credentials from the environment -- around the
+    configured base_url and api_style entirely."""
+    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
+    captured = _capture(monkeypatch)
+    build_agent(
+        cfg,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("cheap",)),
+    )
+
+    (subagent,) = captured["subagents"]
+    assert not isinstance(subagent["model"], str)
+    assert subagent["model"].model == "some-small-model"
+    # Same gateway as the main agent, not whatever the environment suggests.
+    assert str(subagent["model"].anthropic_api_url).startswith(cfg.base_url)
+
+
+def test_role_models_override_a_subagents_declared_model(cfg, monkeypatch):
+    """Cost routing is an operator decision, so it must not require editing
+    workspace content."""
+    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
+    captured = _capture(monkeypatch)
+    build_agent(
+        replace(cfg, role_models={"cheap": "operator-choice"}),
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("cheap",)),
+    )
+
+    (subagent,) = captured["subagents"]
+    assert subagent["model"].model == "operator-choice"
