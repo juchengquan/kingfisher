@@ -68,3 +68,28 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
     config_module.enforce_local_only_tracing()
     assert os.environ["LANGSMITH_TRACING"] == "false"
     assert os.environ["LANGCHAIN_TRACING_V2"] == "false"
+
+
+def test_state_and_scratch_default_to_the_workspace():
+    """Unset means self-contained: nothing is written outside the workspace."""
+    cfg = from_env({**BASE_ENV, "KINGFISHER_API_STYLE": "anthropic"})
+
+    assert cfg.state_root is None
+    assert cfg.scratch_root is None
+    assert cfg.state_dir == cfg.workspace / ".kingfisher"
+    assert cfg.scratch_dir == cfg.workspace / ".kingfisher" / "tmp"
+
+
+def test_state_and_scratch_can_be_pointed_elsewhere(tmp_path):
+    """Host-side state is relocatable; the agent addresses none of it by path."""
+    cfg = from_env(
+        {
+            **BASE_ENV,
+            "KINGFISHER_API_STYLE": "anthropic",
+            "KINGFISHER_STATE_DIR": str(tmp_path / "state"),
+            "KINGFISHER_SCRATCH_DIR": str(tmp_path / "scratch"),
+        }
+    )
+
+    assert cfg.state_dir == tmp_path / "state"
+    assert cfg.scratch_dir == tmp_path / "scratch"

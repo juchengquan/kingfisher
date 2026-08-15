@@ -55,12 +55,40 @@ class Config:
     recursion_limit: int = 150
     shell_path_extra: tuple[str, ...] = ()
     role_models: Mapping[str, str] = field(default_factory=dict)
+    # Overrides for the two host-side roots. `None` means "derive from the
+    # workspace", which is what keeps a workspace self-contained and copyable
+    # by default. Read them through `state_dir` / `scratch_dir`, never directly.
+    state_root: Path | None = None
+    scratch_root: Path | None = None
     # M2 capabilities. Off by default: a self-editing prompt makes runs
     # non-reproducible, and reproducibility is what the smoke task depends on.
     # Each flag gates both the middleware and its prompt section, so the agent
     # is never told about a capability it does not have.
     skills_enabled: bool = False
     memory_enabled: bool = False
+
+    @property
+    def state_dir(self) -> Path:
+        """Where harness state lives: run logs and the thread database.
+
+        Host-side only — the agent never addresses these by path, which is why
+        they can be relocated at all. Anything the agent reaches with *both*
+        the shell and a file tool has to stay under `workspace`: file tools are
+        routed, `execute` is not, so a split root would silently give the two
+        different views of the same name.
+        """
+        return self.state_root or self.workspace / ".kingfisher"
+
+    @property
+    def scratch_dir(self) -> Path:
+        """Where the agent's shell puts temporary files (`TMPDIR`).
+
+        Defaults inside the workspace so scratch is disposed of with it. Point
+        it at `/tmp` for one fixed location per machine — but see
+        `adapters.backend.prepare_scratch`: `/tmp` is world-writable, so the
+        directory is created private and checked before use.
+        """
+        return self.scratch_root or self.state_dir / "tmp"
 
     def model_for(self, role: str) -> str:
         """Per-role model, falling back to the main model.

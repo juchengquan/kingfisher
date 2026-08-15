@@ -117,7 +117,7 @@ def stream(
             shutil.copy(source, turn.input_dir / Path(source).name)
 
     logger = JsonlRunLogger(
-        log_path(workspace, session_id),
+        log_path(cfg.state_dir, session_id),
         model=cfg.model,
         api_style=cfg.api_style,
         session_id=session_id,
@@ -181,7 +181,7 @@ def stream(
             turn_id=turn.id,
             answer=answer,
             run_dir=turn.directory,
-            log_path=log_path(workspace, session_id),
+            log_path=log_path(cfg.state_dir, session_id),
             swept=swept.removed,
             commit=commit,
         ),

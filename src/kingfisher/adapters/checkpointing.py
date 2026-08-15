@@ -21,15 +21,16 @@ if TYPE_CHECKING:
 
 
 def checkpoint_db_path(cfg: Config) -> Path:
-    return cfg.workspace / ".kingfisher" / "threads.db"
+    return cfg.state_dir / "threads.db"
 
 
 def build_checkpointer(cfg: Config) -> BaseCheckpointSaver:
     """Open (creating if needed) the workspace's thread database.
 
     `check_same_thread=False` because LangGraph may touch the connection from
-    worker threads; the sqlite file lives inside the workspace so a project
-    stays self-contained and copyable.
+    worker threads; the sqlite file lives inside the workspace by default, so a
+    project stays self-contained and copyable unless `KINGFISHER_STATE_DIR`
+    deliberately moves it elsewhere.
     """
     db = checkpoint_db_path(cfg)
     db.parent.mkdir(parents=True, exist_ok=True)
