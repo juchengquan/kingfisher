@@ -15,7 +15,7 @@ from __future__ import annotations
 
 import re
 import shutil
-from collections.abc import Iterator, Mapping, Sequence
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any
@@ -50,6 +50,41 @@ _PREVIEW = 300
 def normalize_answer(text: str) -> str:
     """Remove inlined reasoning blocks from a final answer."""
     return _THINK.sub("", text or "").strip()
+
+
+@dataclass(frozen=True)
+class Request:
+    """One request: what the caller asks for, and nothing about wiring.
+
+    This is the turn boundary made explicit. A stateless service receives
+    exactly these four things and passes them straight through; `cfg`, `agent`
+    and `checkpointer` stay keyword arguments because they describe how this
+    kingfisher is configured, not what is being asked of it.
+
+    `session_id` continues a conversation; omitted, a new one starts.
+    `turn_id` should be the caller's own request id where one exists — it makes
+    a retry idempotent rather than forking a second turn.
+    `inputs` are files supplied with this request. They are copied into the
+    turn's `input/` directory, never into `/data`: they arrive fresh each round
+    and leave with the turn.
+    """
+
+    task: str
+    session_id: str | None = None
+    turn_id: str | None = None
+    inputs: tuple[Path, ...] = ()
+
+    def __post_init__(self) -> None:
+        if not self.task or not self.task.strip():
+            msg = "task must not be empty"
+            raise ValueError(msg)
+        # Normalise at the edge so everything downstream sees real paths.
+        object.__setattr__(self, "inputs", tuple(Path(p) for p in self.inputs))
+
+    @classmethod
+    def coerce(cls, value: str | Request) -> Request:
+        """Accept a bare task string so `run("do a thing")` still reads well."""
+        return value if isinstance(value, cls) else cls(task=value)
 
 
 @dataclass(frozen=True)
@@ -148,12 +183,9 @@ def _messages_in(update: Any) -> list[Any]:
 
 
 def stream(
-    task: str,
+    request: str | Request,
     *,
     cfg: Config | None = None,
-    session_id: str | None = None,
-    turn_id: str | None = None,
-    inputs: Sequence[Path | str] | None = None,
     agent: Any | None = None,
     checkpointer: Any | None = None,
 ) -> Iterator[RunEvent]:
@@ -162,6 +194,9 @@ def stream(
     The terminal event has `kind == "finished"` and carries the `RunResult`.
 
         for event in stream("profile /data/sales.csv"):
+            print(event)
+
+        for event in stream(Request(task, session_id=sid, turn_id=req.id)):
             print(event)
 
     `session_id` is the LangGraph `thread_id` and the log filename, so one
@@ -177,13 +212,16 @@ def stream(
     turn's `input/` directory rather than into `/data`, because they are not
     project data — they arrive fresh each round and leave with the turn.
     """
+    request = Request.coerce(request)
+    task, inputs = request.task, request.inputs
+
     cfg = cfg or config_module.from_env()
     config_module.enforce_local_only_tracing()
 
     workspace = ensure_layout(cfg.workspace)
     protect_data(workspace)  # kernel-level guard; the deny rule covers only file tools
     checkpointer = checkpointer if checkpointer is not None else build_checkpointer(cfg)
-    session_id = session_id or new_session_id()
+    session_id = request.session_id or new_session_id()
 
     commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
     swept = sweep(workspace, cfg.keep_runs, checkpointer)
@@ -191,7 +229,7 @@ def stream(
     # Allocation is atomic, and a caller-supplied id wins. A service should
     # pass its own request id: only the caller knows the request boundary, and
     # deriving one here cannot be made to match it.
-    turn_id, rd = allocate_turn_dir(workspace, session_id, turn_id)
+    turn_id, rd = allocate_turn_dir(workspace, session_id, request.turn_id)
 
     if inputs:
         input_dir = rd / "input"
@@ -273,12 +311,9 @@ def stream(
 
 
 def run(
-    task: str,
+    request: str | Request,
     *,
     cfg: Config | None = None,
-    session_id: str | None = None,
-    turn_id: str | None = None,
-    inputs: Sequence[Path | str] | None = None,
     agent: Any | None = None,
     checkpointer: Any | None = None,
 ) -> RunResult:
@@ -287,15 +322,7 @@ def run(
     A drain of `stream()` — there is no second orchestration path.
     """
     result: RunResult | None = None
-    for event in stream(
-        task,
-        cfg=cfg,
-        session_id=session_id,
-        turn_id=turn_id,
-        inputs=inputs,
-        agent=agent,
-        checkpointer=checkpointer,
-    ):
+    for event in stream(request, cfg=cfg, agent=agent, checkpointer=checkpointer):
         if event.kind == "finished":
             result = event.result
 

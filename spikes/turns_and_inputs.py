@@ -19,7 +19,7 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from kingfisher import ensure_layout, from_env, run
+from kingfisher import Request, ensure_layout, from_env, run
 
 load_dotenv()
 
@@ -40,20 +40,24 @@ def main() -> int:
 
     print("--- turn one: a file supplied with the request ---")
     first = run(
-        "What is the total headcount in the file supplied with this request? "
-        "Answer with the number and the filename you read.",
+        Request(
+            "What is the total headcount in the file supplied with this request? "
+            "Answer with the number and the filename you read.",
+            session_id=session,
+            inputs=[upload],
+        ),
         cfg=cfg,
-        session_id=session,
-        inputs=[upload],
     )
     print(f"  turn {first.turn_id}: {first.answer.splitlines()[0][:120]}")
 
     print("\n--- turn two: same session, no file supplied ---")
     second = run(
-        "Which team in that file had the fewest people? Answer from our earlier "
-        "exchange without reading any file.",
+        Request(
+            "Which team in that file had the fewest people? Answer from our earlier "
+            "exchange without reading any file.",
+            session_id=session,
+        ),
         cfg=cfg,
-        session_id=session,
     )
     print(f"  turn {second.turn_id}: {second.answer.splitlines()[0][:120]}")
 

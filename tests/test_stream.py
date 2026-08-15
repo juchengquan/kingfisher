@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher.run import stream
+from kingfisher.run import Request, stream
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -36,7 +36,7 @@ def _agent_with_a_tool_call() -> StubAgent:
 
 def _events(cfg, agent):
     return list(
-        stream("t", cfg=cfg, session_id="s", agent=agent, checkpointer=StubCheckpointer())
+        stream(Request("t", session_id="s"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
     )
 
 
@@ -85,7 +85,7 @@ def test_run_is_a_drain_of_stream(cfg):
     from kingfisher.run import run
 
     agent = StubAgent("<think>x</think>7")
-    result = run("t", cfg=cfg, session_id="drained", agent=agent, checkpointer=StubCheckpointer())
+    result = run(Request("t", session_id="drained"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
 
     assert result.answer == "7"
     assert result.run_dir.is_dir()

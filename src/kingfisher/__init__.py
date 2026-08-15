@@ -10,7 +10,7 @@ from kingfisher.backend import build_backend, shell_env
 from kingfisher.checkpointing import build_checkpointer
 from kingfisher.config import Config, ConfigError, from_env
 from kingfisher.models import build_model
-from kingfisher.run import RunEvent, RunResult, normalize_answer, run, stream
+from kingfisher.run import Request, RunEvent, RunResult, normalize_answer, run, stream
 from kingfisher.workspace import ensure_layout, protect_data, writable_data
 
 __version__ = "0.1.0"
@@ -18,6 +18,7 @@ __version__ = "0.1.0"
 __all__ = [
     "Config",
     "ConfigError",
+    "Request",
     "RunEvent",
     "RunResult",
     "build_agent",

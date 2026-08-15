@@ -6,7 +6,7 @@ import os
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.run import RunResult, normalize_answer, run
+from kingfisher.run import Request, RunResult, normalize_answer, run
 from tests.conftest import StubCheckpointer
 
 
@@ -49,9 +49,8 @@ def test_run_creates_the_session_triple(cfg):
     """One identifier reaches the thread, the run directory and the log."""
     agent = StubAgent("<think>done</think>\n\n42")
     result = run(
-        "count things",
+        Request("count things", session_id="sess123"),
         cfg=cfg,
-        session_id="sess123",
         agent=agent,
         checkpointer=StubCheckpointer(),
     )
@@ -67,7 +66,7 @@ def test_run_creates_the_session_triple(cfg):
 def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
     """Run-scoped, so it goes in the message -- never the cached system prompt."""
     agent = StubAgent("ok")
-    run("do a thing", cfg=cfg, session_id="abc", agent=agent, checkpointer=StubCheckpointer())
+    run(Request("do a thing", session_id="abc"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
 
     message = agent.state["messages"][0]["content"]
     assert "/runs/abc" in message
@@ -77,7 +76,7 @@ def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
 
 def test_run_logs_usage_shaped_records(cfg):
     agent = StubAgent("ok")
-    result = run("t", cfg=cfg, session_id="logged", agent=agent, checkpointer=StubCheckpointer())
+    result = run(Request("t", session_id="logged"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
 
     records = [json.loads(line) for line in result.log_path.read_text().splitlines()]
     events = [r["event"] for r in records]
@@ -96,7 +95,7 @@ def test_run_sweeps_old_sessions_before_creating_the_new_one(cfg):
         os.utime(d, (1_000 + i * 100, 1_000 + i * 100))
 
     ckpt = StubCheckpointer()
-    result = run("t", cfg=cfg, session_id="s4", agent=StubAgent("ok"), checkpointer=ckpt)
+    result = run(Request("t", session_id="s4"), cfg=cfg, agent=StubAgent("ok"), checkpointer=ckpt)
 
     assert "s1" in result.swept
     assert not (cfg.workspace / "runs" / "s1").exists()
@@ -111,10 +110,10 @@ def test_a_second_turn_does_not_overwrite_the_first(cfg):
     """The defect this tier exists to fix: two turns in one session shared a
     directory, so turn two clobbered turn one's report and result."""
     ck = StubCheckpointer()
-    first = run("turn one", cfg=cfg, session_id="sess", agent=StubAgent("a"), checkpointer=ck)
+    first = run(Request("turn one", session_id="sess"), cfg=cfg, agent=StubAgent("a"), checkpointer=ck)
     (first.run_dir / "report.md").write_text("FROM TURN ONE")
 
-    second = run("turn two", cfg=cfg, session_id="sess", agent=StubAgent("b"), checkpointer=ck)
+    second = run(Request("turn two", session_id="sess"), cfg=cfg, agent=StubAgent("b"), checkpointer=ck)
     (second.run_dir / "report.md").write_text("FROM TURN TWO")
 
     assert first.turn_id == "t001"
@@ -134,10 +133,8 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
 
     agent = StubAgent("ok")
     result = run(
-        "summarise it",
+        Request("summarise it", session_id="s", inputs=[supplied]),
         cfg=cfg,
-        session_id="s",
-        inputs=[supplied],
         agent=agent,
         checkpointer=StubCheckpointer(),
     )
@@ -151,7 +148,36 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
 
 def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
     agent = StubAgent("ok")
-    result = run("just answer", cfg=cfg, session_id="s", agent=agent, checkpointer=StubCheckpointer())
+    result = run(Request("just answer", session_id="s"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
 
     assert not (result.run_dir / "input").exists()
     assert "input" not in agent.state["messages"][0]["content"]
+
+
+def test_a_bare_task_string_still_works(cfg):
+    """`run("do a thing")` must stay readable; Request is for when you need it."""
+    result = run("just this", cfg=cfg, agent=StubAgent("ok"), checkpointer=StubCheckpointer())
+    assert result.answer == "ok"
+
+
+def test_request_rejects_an_empty_task():
+    """Validate at the edge: an empty query is a client error, not a run."""
+    import pytest as _pytest
+
+    for bad in ("", "   ", "\n"):
+        with _pytest.raises(ValueError, match="must not be empty"):
+            Request(bad)
+
+
+def test_request_normalises_inputs_to_paths():
+    from pathlib import Path as _Path
+
+    request = Request("t", inputs=["/tmp/a.csv", _Path("/tmp/b.csv")])
+    assert all(isinstance(p, _Path) for p in request.inputs)
+    assert isinstance(request.inputs, tuple)
+
+
+def test_coerce_is_idempotent():
+    original = Request("t", session_id="s")
+    assert Request.coerce(original) is original
+    assert Request.coerce("t").task == "t"
