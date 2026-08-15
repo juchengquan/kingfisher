@@ -33,7 +33,12 @@ from kingfisher.adapters import runtime
 from kingfisher.adapters.agent import build_agent
 from kingfisher.adapters.checkpointing import build_checkpointer
 from kingfisher.adapters.runlog import JsonlRunLogger, log_path
-from kingfisher.adapters.workspace_fs import LocalSessionDirs, ensure_layout, protect_data
+from kingfisher.adapters.workspace_fs import (
+    LocalSessionDirs,
+    ensure_layout,
+    ensure_session_layout,
+    protect_data,
+)
 from kingfisher.adapters.workspace_git import pre_run_commit
 from kingfisher.app import config as config_module
 from kingfisher.config import Config
@@ -70,21 +75,23 @@ class Kingfisher:
         self.cfg = cfg or config_module.from_env()
         config_module.enforce_local_only_tracing()
 
+        # Only what sessions share. Each session's own layout is made per
+        # request, because its path is not known until the request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
-        # Kernel-level guard; the deny rule covers only the file tools.
-        protect_data(self.workspace)
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         self.threads: Any = threads if threads is not None else build_checkpointer(self.cfg)
         self._agent = agent
 
-    def agent_for(self, request: Request) -> Any:
-        """The graph that serves one request.
+    def agent_for(self, request: Request, session_dir: Path) -> Any:
+        """The graph that serves one request, rooted at its session.
 
-        Built per request because capabilities narrow it and because it reads
-        workspace content that can change between turns. An injected agent is
-        returned as-is -- and refused if the request narrows anything, since
-        those restrictions were never applied to it.
+        Built per request because capabilities narrow it, because it reads
+        workspace content that can change between turns, and now because its
+        backend is anchored to the session -- two sessions cannot share a
+        graph without sharing a filesystem root. An injected agent is returned
+        as-is -- and refused if the request narrows anything, since those
+        restrictions were never applied to it.
         """
         if self._agent is not None:
             if not request.capabilities.is_unrestricted:
@@ -95,6 +102,7 @@ class Kingfisher:
         return build_agent(
             self.cfg,
             capabilities=request.capabilities,
+            session_dir=session_dir,
             checkpointer=self.threads,
         )
 
@@ -109,32 +117,51 @@ class Kingfisher:
         sweep had deleted old sessions, which made a typo destructive.
 
         Then commit, then sweep, then create this turn's directory. The sweep
-        runs before the new directory exists so it is never a candidate for its
-        own deletion, and after the commit so the restore point covers the
-        state the sweep is about to change.
+        runs after the commit, so the restore point covers the state it is
+        about to change, and skips this session by name so a run can never
+        delete itself.
         """
         request = Request.coerce(request)
         cfg, dirs, checkpointer = self.cfg, self.dirs, self.threads
         workspace = self.workspace
         session_id = request.session_id or uuid4().hex[:12]
 
-        # Built before anything is written or removed. Construction is
-        # side-effect free but validation is not free of *consequence*: a request
-        # naming a capability the workspace lacks used to raise only after the
-        # sweep had deleted old sessions and a turn directory existed. A usage
-        # error must not be destructive.
-        graph = self.agent_for(request)
+        # The session directory has to exist before the agent, because the
+        # agent's backend is rooted at it. Creating it first does not weaken
+        # the ordering rule below: that rule is about not *destroying*
+        # anything before the request is known to be valid, and an empty
+        # session directory left by a rejected request is idempotent -- the
+        # retry reuses it.
+        session = Session.open(workspace, session_id, dirs)
+        ensure_session_layout(session.directory)
+        # Kernel-level guard; the deny rule covers only the file tools.
+        protect_data(session.directory)
+
+        # Built before anything is removed. Construction is side-effect free
+        # but validation is not free of *consequence*: a request naming a
+        # capability the workspace lacks used to raise only after the sweep had
+        # deleted old sessions. A usage error must not be destructive.
+        graph = self.agent_for(request, session.directory)
 
         commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
         # Decide, then act. `retention.plan` is pure -- it names victims from
         # `(name, mtime)` pairs and touches nothing -- and `retention.apply` walks
         # the list, leaving the per-session ordering to `Session.discard`.
-        runs = workspace / "runs"
-        sweep_plan = retention.plan(dirs.listing(runs), cfg.keep_runs)
-        swept = retention.apply(sweep_plan, runs, dirs, checkpointer)
+        #
+        # This session is excluded by name rather than by running the sweep
+        # before its directory exists, which is how it used to be kept safe.
+        # It cannot run first any more -- the agent needs the session rooted
+        # before it can be built, and the agent is what validates the request.
+        # Naming the exemption is the better guarantee anyway: it does not
+        # depend on `keep_runs` being positive, or on this session's mtime
+        # happening to be the newest.
+        sessions = workspace / "sessions"
+        others = tuple(e for e in dirs.listing(sessions) if e[0] != session_id)
+        sweep_plan = retention.plan(others, cfg.keep_runs)
+        swept = retention.apply(sweep_plan, sessions, dirs, checkpointer)
 
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
-        turn = Session.open(workspace, session_id, dirs).allocate_turn(dirs, request.turn_id)
+        turn = session.allocate_turn(dirs, request.turn_id)
 
         if request.inputs:
             turn.input_dir.mkdir(exist_ok=True)

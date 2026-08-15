@@ -46,28 +46,34 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     assert turns == ["t001", "t002", "t003"]
 
 
-def test_construction_prepares_the_workspace(cfg):
-    """Eagerly, so a broken workspace fails at startup rather than mid-turn."""
+def test_construction_prepares_only_what_sessions_share(cfg):
+    """Eagerly, so a broken workspace fails at startup rather than mid-turn --
+    but only the shared tier. `/data` and the rest belong to a session, whose
+    path is not known until a request names it."""
     service = Kingfisher(cfg, threads=StubCheckpointer())
 
     assert service.workspace.is_dir()
-    assert (service.workspace / "data").is_dir()
+    assert (service.workspace / "skills").is_dir()
+    assert (service.workspace / "sessions").is_dir()
     assert (service.workspace / ".gitignore").is_file()
+    assert not (service.workspace / "data").exists()
 
 
-def test_an_injected_agent_is_reused_and_refuses_narrowing(cfg):
+def test_an_injected_agent_is_reused_and_refuses_narrowing(cfg, session_dir):
     """Injection is by collaborator, not by monkeypatching -- and an agent
     built elsewhere cannot honour restrictions it never saw."""
     agent = StubAgent("ok")
     service = Kingfisher(cfg, agent=agent, threads=StubCheckpointer())
 
-    assert service.agent_for(Request("go")) is agent
+    assert service.agent_for(Request("go"), session_dir) is agent
 
     with pytest.raises(ValueError, match="pre-built agent"):
-        service.agent_for(Request("go", capabilities=Capabilities(tools=("read_file",))))
+        service.agent_for(
+            Request("go", capabilities=Capabilities(tools=("read_file",))), session_dir
+        )
 
 
-def test_a_fresh_agent_is_built_per_request(cfg):
+def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     """Deliberately not cached: it reads the workspace's skills and subagent
     definitions, which a user can edit between turns. ~30ms against a model
     call of seconds is not a trade worth taking."""
@@ -75,7 +81,9 @@ def test_a_fresh_agent_is_built_per_request(cfg):
     # the saver it is handed.
     service = Kingfisher(cfg)
 
-    assert service.agent_for(Request("go")) is not service.agent_for(Request("go"))
+    assert service.agent_for(Request("go"), session_dir) is not service.agent_for(
+        Request("go"), session_dir
+    )
 
 
 def test_the_module_level_helpers_are_unchanged(cfg):

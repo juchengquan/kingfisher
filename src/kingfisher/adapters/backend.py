@@ -201,13 +201,21 @@ SKILLS_ROUTE = "/skills/"
 MEMORY_ROUTE = "/memory/"
 
 
-def build_backend(cfg: Config) -> BackendProtocol:
-    """Build the backend rooted at the workspace.
+def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
+    """Build the backend rooted at one session.
 
     `virtual_mode` is left at its default (`True`), so file tools address
-    virtual paths anchored to the workspace and `..` / `~` are blocked. That is
-    what makes the system prompt portable: `/data` means the same thing on
-    every machine.
+    virtual paths anchored to this session and `..` / `~` are blocked. The
+    session being the root is what lets `/data` mean the same thing in every
+    session while pointing somewhere different in each — one prompt, many
+    tenants — and it makes cross-session access impossible rather than denied:
+    there is no path from one root to another to check for.
+
+    `/skills/` is the exception, routed to the workspace because definitions are
+    shared by every session rather than owned by one. It therefore sits outside
+    the shell's root, which is a gain rather than a compromise: `_skill_denials`
+    can only bind file tools, so a skill the shell could still `cat` was never
+    really denied.
 
     A `CompositeBackend` is required rather than merely convenient.
     `FilesystemMiddleware` refuses `permissions=` outright when the backend
@@ -217,20 +225,21 @@ def build_backend(cfg: Config) -> BackendProtocol:
     default backend.
     """
     prepare_scratch(cfg)
-    for routed in ("data", "skills", "memory"):
-        (cfg.workspace / routed).mkdir(parents=True, exist_ok=True)
+    for routed in ("data", "memory"):
+        (session_dir / routed).mkdir(parents=True, exist_ok=True)
+    (cfg.workspace / "skills").mkdir(parents=True, exist_ok=True)
 
     shell = LocalShellBackend(
-        root_dir=str(cfg.workspace),
+        root_dir=str(session_dir),
         env=shell_env(cfg),
         timeout=cfg.timeout_s,
     )
     return WorkspaceScopedBackend(
         default=shell,
         routes={
-            DATA_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "data")),
+            DATA_ROUTE: FilesystemBackend(root_dir=str(session_dir / "data")),
             SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "skills")),
-            MEMORY_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "memory")),
+            MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
         },
-        workspace=cfg.workspace,
+        workspace=session_dir,
     )

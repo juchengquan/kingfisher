@@ -18,6 +18,7 @@ from kingfisher.domain.layout import (
     AGENTS_SCAFFOLD,
     LAYOUT_DIRS,
     MARKER,
+    SESSION_DIRS,
     WORKSPACE_GITIGNORE,
 )
 
@@ -67,7 +68,12 @@ def is_new_workspace(workspace: Path) -> bool:
 
 
 def ensure_layout(workspace: Path) -> Path:
-    """Create the workspace layout and its .gitignore. Idempotent."""
+    """Create the workspace layout and its .gitignore. Idempotent.
+
+    What the workspace still owns is what sessions share — the skill and
+    subagent definitions — plus the directory sessions live in. Everything the
+    agent addresses belongs to a session and is made by `ensure_session_layout`.
+    """
     workspace = Path(workspace).expanduser().resolve()
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
@@ -80,14 +86,28 @@ def ensure_layout(workspace: Path) -> Path:
     if not marker.exists():
         marker.write_text("kingfisher workspace\n", encoding="utf-8")
 
+    return workspace
+
+
+def ensure_session_layout(session_dir: Path) -> Path:
+    """Create one session's layout. Idempotent.
+
+    This directory is the backend root, so it carries the names the agent
+    addresses. Two sessions share a parent and nothing else, which is what
+    makes isolation structural rather than a matter of path checking.
+    """
+    session_dir = Path(session_dir).expanduser().resolve()
+    for name in SESSION_DIRS:
+        (session_dir / name).mkdir(parents=True, exist_ok=True)
+
     # Scaffolded rather than empty: the memory prompt directs the agent to save
     # knowledge with `edit_file`, which replaces existing text — an empty file
     # offers nothing to anchor against.
-    agents_md = workspace / "memory" / "AGENTS.md"
+    agents_md = session_dir / "memory" / "AGENTS.md"
     if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
 
-    return workspace
+    return session_dir
 
 
 def _drop_write_bits(path: Path) -> None:

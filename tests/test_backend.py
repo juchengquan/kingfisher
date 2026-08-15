@@ -35,38 +35,39 @@ def test_home_points_at_the_workspace_not_the_real_home(cfg):
     assert shell_env(cfg)["HOME"] == str(cfg.workspace)
 
 
-def test_backend_is_rooted_at_the_workspace(cfg):
-    """The default backend owns the workspace root; virtual paths anchor to it."""
-    backend = build_backend(cfg)
-    assert str(cfg.workspace.resolve()) == str(backend.default.cwd)
+def test_backend_is_rooted_at_the_session(cfg, session_dir):
+    """One session is one root: virtual paths anchor there, so /data means
+    this session's data and no path leads to another session's."""
+    backend = build_backend(cfg, session_dir)
+    assert str(session_dir.resolve()) == str(backend.default.cwd)
 
 
-def test_data_is_routed_so_the_deny_rule_is_legal(cfg):
+def test_data_is_routed_so_the_deny_rule_is_legal(cfg, session_dir):
     """deepagents refuses permissions on an execution backend unless every rule
     path is scoped to a route -- routing /data/ is what makes Q21 possible."""
-    backend = build_backend(cfg)
+    backend = build_backend(cfg, session_dir)
     assert "/data/" in backend.routes
-    assert str((cfg.workspace / "data").resolve()) == str(backend.routes["/data/"].cwd)
+    assert str((session_dir / "data").resolve()) == str(backend.routes["/data/"].cwd)
 
 
-def test_skills_is_routed_for_the_same_reason(cfg):
+def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
     """A request that activates a subset of the skills needs deny rules for the
     rest, and those rules are rejected unless /skills/ is a route too. Caught by
     a live run, not by a unit test -- the wiring tests spy on create_deep_agent
     and so never reach deepagents' own validation."""
-    backend = build_backend(cfg)
+    backend = build_backend(cfg, session_dir)
     assert "/skills/" in backend.routes
     assert str((cfg.workspace / "skills").resolve()) == str(backend.routes["/skills/"].cwd)
 
 
-def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg):
+def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
     """The observed bug: it succeeded, and the file was not where it looked.
 
     Passing `<workspace>/runs/s/t/report.md` produced
     `<workspace>/Users/.../runs/s/t/report.md`, so `load_result` never found
     the deliverable.
     """
-    backend = build_backend(cfg)
+    backend = build_backend(cfg, session_dir)
     host_path = f"{cfg.workspace}/runs/s1/t001/report.md"
 
     with pytest.raises(ValueError, match="is a host path"):
@@ -76,30 +77,30 @@ def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg):
     assert not (cfg.workspace / str(cfg.workspace).lstrip("/")).exists()
 
 
-def test_the_refusal_names_the_path_that_was_meant(cfg):
+def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
     """An error the model can act on beats one it can only apologise for."""
-    backend = build_backend(cfg)
+    backend = build_backend(cfg, session_dir)
 
-    with pytest.raises(ValueError, match=r"Use '/runs/s1/t001/report\.md' instead"):
-        backend.write(f"{cfg.workspace}/runs/s1/t001/report.md", "content")
+    with pytest.raises(ValueError, match=r"Use '/runs/t001/report\.md' instead"):
+        backend.write(f"{session_dir}/runs/t001/report.md", "content")
 
 
 @pytest.mark.parametrize(
     "host_path",
     ["/tmp/scratch.py", "/Users/someone/notes.md", "/etc/passwd", "/var/log/x"],
 )
-def test_other_host_roots_are_refused_too(cfg, host_path):
+def test_other_host_roots_are_refused_too(cfg, host_path, session_dir):
     """`/tmp/scratch.py` is the example system.md warns about by name."""
-    backend = build_backend(cfg)
+    backend = build_backend(cfg, session_dir)
 
     with pytest.raises(ValueError, match="is a host path"):
         backend.write(host_path, "content")
 
 
 @pytest.mark.parametrize("virtual_path", ["/runs/s1/t001/report.md", "/derived/x.csv"])
-def test_virtual_paths_still_work(cfg, virtual_path):
+def test_virtual_paths_still_work(cfg, virtual_path, session_dir):
     """The guard must not cost the agent its ordinary vocabulary."""
-    backend = build_backend(cfg)
+    backend = build_backend(cfg, session_dir)
     backend.write(virtual_path, "content")
 
     assert backend.read(virtual_path)
@@ -185,7 +186,7 @@ def test_scratch_follows_a_relocated_state_dir(cfg, tmp_path):
     assert relocated.scratch_dir == tmp_path / "state" / "tmp"
 
 
-def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg):
+def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):
     """The guard exists to correct the model mid-turn, and its message names
     the virtual path to use. That only works if the message arrives.
 
@@ -210,7 +211,10 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg):
         AIMessage(content="retried and finished"),
     ]
 
-    agent = build_agent(cfg, model=FakeToolCallingModel(responses=responses))
+    agent = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses))
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
     )
