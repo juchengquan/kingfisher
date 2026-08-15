@@ -10,7 +10,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.adapters.agent import CapabilityError, build_agent
 from kingfisher.adapters.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.domain.capabilities import Capabilities
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, capture_build
 
 SUBAGENT = """---
 name: reviewer
@@ -46,21 +46,10 @@ def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.md"):
     (directory / filename).write_text(text, encoding="utf-8")
 
 
-def _capture(monkeypatch) -> dict:
-    captured: dict = {}
-
-    def spy(**kwargs):
-        captured.update(kwargs)
-        return object()
-
-    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", spy)
-    return captured
-
-
 def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
     """The default has to stay zero-cost, or every existing caller pays for a
     feature it never asked for."""
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(
         cfg,
         session_dir=session_dir,
@@ -106,7 +95,7 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatc
     _write_skill(cfg.workspace, "other")
 
     with_skills = replace(cfg, skills_enabled=True)
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(
         with_skills,
         session_dir=session_dir,
@@ -129,7 +118,7 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatc
 def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, session_dir):
     """Unrestricted is not "restricted to everything": no filter, no deny rules."""
     _write_skill(cfg.workspace, "tabular-qa")
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, skills_enabled=True),
         session_dir=session_dir,
@@ -143,7 +132,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, sessi
 
 def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, session_dir):
     _write_subagent(cfg.workspace)
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",)),
@@ -159,7 +148,7 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, s
 
 def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, monkeypatch, session_dir):
     _write_subagent(cfg.workspace)
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=()),
@@ -226,20 +215,6 @@ def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
     # The unrestricted case still works, so the guard is not just "reject agent=".
     assert run(Request(task="go"), cfg=cfg, agent=prebuilt).answer == "ok"
 
-
-def test_scoping_skills_builds_against_the_real_backend(cfg, session_dir):
-    """The spy-based tests above never reach deepagents' own validation, which
-    is what rejected these deny rules live: FilesystemMiddleware refuses
-    `permissions=` unless every rule path is scoped to a backend route."""
-    _write_skill(cfg.workspace, "tabular-qa")
-    _write_skill(cfg.workspace, "other")
-
-    build_agent(
-        replace(cfg, skills_enabled=True),
-        session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        capabilities=Capabilities(skills=("other",)),
-    )
 
 
 def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, session_dir):
@@ -326,7 +301,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
 
 def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, session_dir):
     _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.md")
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reader",)),
@@ -353,7 +328,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     own provider and reads credentials from the environment -- around the
     configured base_url and api_style entirely."""
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
@@ -370,7 +345,7 @@ def test_role_models_override_a_subagents_declared_model(cfg, monkeypatch, sessi
     """Cost routing is an operator decision, so it must not require editing
     workspace content."""
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, role_models={"cheap": "operator-choice"}),
         session_dir=session_dir,
@@ -386,7 +361,7 @@ def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeyp
     """The rule that makes two axes safe rather than confusing: `Config` says
     what is wired and shapes the cached prompt; a request narrows within it.
     Asking for memory a deployment never wired does not conjure it."""
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,  # memory_enabled is False
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(memory=True),
@@ -397,7 +372,7 @@ def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeyp
 def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, monkeypatch, session_dir):
     """The prompt still describes memory -- it is the cached prefix and must
     not vary per request -- so a deny rule is what actually stops the read."""
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, memory_enabled=True),
         session_dir=session_dir,
@@ -414,7 +389,7 @@ def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, monkeypatch, 
 def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch, session_dir):
     """The negative control: without it the two tests above would pass even if
     memory were never wired at all."""
-    captured = _capture(monkeypatch)
+    captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, memory_enabled=True),
         session_dir=session_dir,
@@ -423,15 +398,3 @@ def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch, session
     assert captured["memory"] == ["/memory/AGENTS.md"]
     assert not any(r.paths == ["/memory/**"] for r in captured["permissions"])
 
-
-def test_declining_memory_builds_against_the_real_backend(cfg, session_dir):
-    """The spy-based tests never reach deepagents' own validation, which is
-    what rejected this deny rule live -- `permissions=` is refused unless every
-    rule path is scoped to a backend route. Third time for this constraint:
-    /data, then /skills, now /memory."""
-    build_agent(
-        replace(cfg, memory_enabled=True),
-        session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        capabilities=Capabilities(memory=False),
-    )

@@ -203,3 +203,31 @@ def test_the_adapters_are_the_ones_doing_the_touching():
     """The other half: if nothing in adapters/ touches the world either, the
     I/O did not move out, it moved somewhere less visible."""
     assert any(_world_contact(p) for p in _modules_in("adapters"))
+
+
+def test_no_test_stubs_out_agent_construction():
+    """The blind spot, closed and kept closed.
+
+    Patching `create_deep_agent` with something that does not call through
+    makes every assertion in that test blind to whatever deepagents validates
+    while constructing. Three bugs reached a live run that way -- `/data`,
+    `/skills` and `/memory` each needed a backend route before `permissions=`
+    would be accepted, and no unit test could see it.
+
+    `conftest.capture_build` records the arguments *and* lets the call happen,
+    which costs about 30ms and removes the category. This stops a future test
+    quietly reintroducing the stub.
+    """
+    here = Path(__file__).resolve()
+    offenders = []
+    for path in sorted(here.parent.glob("test_*.py")):
+        if path == here:  # this module names the thing it forbids
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            if "setattr" in line and "create_deep_agent" in line:
+                offenders.append(f"{path.name}:{number}")
+
+    assert not offenders, (
+        f"patch create_deep_agent directly at {offenders} — use conftest.capture_build, "
+        "which records the call and still lets deepagents validate it"
+    )
