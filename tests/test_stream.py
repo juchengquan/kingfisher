@@ -64,6 +64,61 @@ def test_stream_surfaces_tool_names_and_cache_usage(cfg):
     assert tool.text == "hi"
 
 
+def _agent_with_content_blocks() -> StubAgent:
+    """What the Responses API returns: content as a list of blocks.
+
+    Chat Completions returns a plain string, so this shape did not arise before
+    the openai style moved to `/v1/responses`.
+    """
+    return StubAgent(
+        "42",
+        updates=[
+            {
+                "agent": {
+                    "messages": [
+                        AIMessage(
+                            content=[
+                                {"type": "reasoning", "summary": []},
+                                {"type": "text", "text": "The answer is 42."},
+                            ]
+                        )
+                    ]
+                }
+            },
+            {
+                "tools": {
+                    "messages": [
+                        ToolMessage(
+                            content=[{"type": "text", "text": "hi"}],
+                            name="execute",
+                            tool_call_id="c1",
+                        )
+                    ]
+                }
+            },
+        ],
+    )
+
+
+def test_content_blocks_are_read_as_text_not_repr(cfg):
+    """`str(content)` on a block list renders its Python repr into the answer."""
+    events = _events(cfg, _agent_with_content_blocks())
+    message = next(e for e in events if e.kind == "message")
+    tool_result = next(e for e in events if e.kind == "tool_result")
+
+    assert message.text == "The answer is 42."
+    assert tool_result.text == "hi"
+    assert "'type':" not in message.text
+
+
+def test_a_reasoning_only_message_emits_nothing(cfg):
+    """Reasoning blocks carry no text; an empty event would be noise."""
+    message = AIMessage(content=[{"type": "reasoning", "summary": []}])
+    agent = StubAgent("42", updates=[{"agent": {"messages": [message]}}])
+
+    assert not [e for e in _events(cfg, agent) if e.kind == "message"]
+
+
 def test_finished_event_carries_the_normalized_answer(cfg):
     agent = StubAgent("<think>reasoning</think>\n\n42")
     (finished,) = [e for e in _events(cfg, agent) if e.kind == "finished"]

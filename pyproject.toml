@@ -18,6 +18,9 @@ classifiers = [
 ]
 dependencies = [
     "deepagents>=0.7.6",
+    # Imported directly by adapters/models.py. It also arrives transitively
+    # through deepagents, but a transitive dep is not a promise.
+    "langchain-anthropic>=1.5.4",
     "langchain-openai>=1.5.1",
     "langgraph-checkpoint-sqlite>=3.1.1",
     "python-dotenv>=1.2.2",

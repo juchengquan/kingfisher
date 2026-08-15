@@ -10,8 +10,9 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
+from langchain_openai import ChatOpenAI
 
-from kingfisher.adapters.models import PROVIDERS, build_model
+from kingfisher.adapters.models import PROVIDERS, Provider, build_model
 from kingfisher.domain.config import API_STYLES, ConfigError
 
 
@@ -24,17 +25,32 @@ def test_every_api_style_has_a_provider():
     assert set(PROVIDERS) == set(API_STYLES)
 
 
-def test_openai_never_uses_the_responses_api(cfg):
-    """The one value that must never flip.
+def test_openai_uses_the_responses_api(cfg):
+    """The openai style targets `/v1/responses`, and only that.
 
-    deepagents' built-in openai profile sets `use_responses_api=True`, which
-    sends requests to `/v1/responses` — unimplemented on the gateway. Passing
-    an instance sidesteps the profile, but the kwarg is still explicit here so
-    a rewrite of `_openai` cannot quietly drop it.
+    `ChatOpenAI` defaults `use_responses_api` to `None`, which lets LangChain
+    pick a surface per request — so the endpoint kingfisher talks to would vary
+    with the features a given call happens to use. Pinning it keeps the surface
+    the same on every call, which is what the run log claims when it records
+    the api_style.
     """
     model = build_model(replace(cfg, api_style="openai"))
 
-    assert model.use_responses_api is False
+    assert model.use_responses_api is True
+
+
+def test_a_provider_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
+    """`extra` is additive: it may not name one of the five Config kwargs.
+
+    A row that did would silently discard a value the user set. The duplicate
+    keyword raises instead, so the mistake surfaces at construction rather than
+    as a request that quietly ignores `KINGFISHER_MAX_TOKENS`.
+    """
+    colliding = Provider("OPENAI_BASE_URL", "OPENAI_API_KEY", ChatOpenAI, {"max_tokens": 1})
+    monkeypatch.setitem(PROVIDERS, "openai", colliding)
+
+    with pytest.raises(TypeError, match="multiple values for keyword argument"):
+        build_model(replace(cfg, api_style="openai"))
 
 
 def test_the_main_model_is_used_by_default(cfg):
