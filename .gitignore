@@ -216,3 +216,9 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# --- kingfisher ---------------------------------------------------------
+# The template above already ignores .env and .envrc; these cover the
+# per-environment variants. .env.example is tracked and is the template.
+.env.local
+.env.*.local

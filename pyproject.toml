@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kingfisher"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name="juchengquan"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "deepagents>=0.7.6",
+    "langchain-openai>=1.5.1",
+    "langgraph-checkpoint-sqlite>=3.1.1",
+    "python-dotenv>=1.2.2",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kingfisher"]
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
