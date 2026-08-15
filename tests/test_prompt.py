@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 
-from kingfisher.agent import USER_PROMPT_FILE, render_system_prompt, system_prompt
+from kingfisher.adapters.agent import USER_PROMPT_FILE, render_system_prompt, system_prompt
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():
@@ -67,7 +67,7 @@ def test_assembly_leaves_no_blank_line_runs_or_markers():
     """The marker is removed cleanly; the prefix ships on every step."""
     import re
 
-    from kingfisher.agent import CAPABILITY_MARKER
+    from kingfisher.adapters.agent import CAPABILITY_MARKER
 
     for skills in (False, True):
         for memory in (False, True):

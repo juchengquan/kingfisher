@@ -6,7 +6,7 @@ import os
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.run import Request, RunResult, normalize_answer, run
+from kingfisher.app.run import Request, RunResult, normalize_answer, run
 from tests.conftest import StubCheckpointer
 
 

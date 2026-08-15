@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from kingfisher.agent import build_agent, system_prompt
+from kingfisher.adapters.agent import build_agent, system_prompt
 from tests.conftest import FakeToolCallingModel
 
 
@@ -57,7 +57,7 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch):
         captured.update(kwargs)
         return object()
 
-    monkeypatch.setattr("kingfisher.agent.create_deep_agent", spy)
+    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", spy)
     build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
     middleware_names = {type(m).__name__ for m in captured["middleware"]}
@@ -80,7 +80,7 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(cfg, mon
     from dataclasses import replace
 
     captured: dict = {}
-    monkeypatch.setattr("kingfisher.agent.create_deep_agent", lambda **kw: captured.update(kw))
+    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", lambda **kw: captured.update(kw))
     build_agent(
         replace(cfg, skills_enabled=True, memory_enabled=True),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),

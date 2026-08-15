@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, ToolMessage
 
-from kingfisher.run import Request, stream
+from kingfisher.app.run import Request, stream
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -82,7 +82,7 @@ def test_events_render_as_readable_lines(cfg):
 
 def test_run_is_a_drain_of_stream(cfg):
     """One orchestration path: run() must not re-implement the sequence."""
-    from kingfisher.run import run
+    from kingfisher.app.run import run
 
     agent = StubAgent("<think>x</think>7")
     result = run(Request("t", session_id="drained"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())

@@ -28,6 +28,8 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 
+from kingfisher.domain.session import Session
+
 LAYOUT_DIRS: tuple[str, ...] = (
     "data",
     "derived",
@@ -91,6 +93,10 @@ runs/**
 class SweepResult:
     removed: tuple[str, ...]
     kept: int
+    #: Sessions that could not be fully removed, with why. Surfaced rather
+    #: than swallowed: a checkpointer that cannot delete at all should be
+    #: visible, not silently tolerated on every run.
+    failures: tuple[str, ...] = ()
 
 
 def is_new_workspace(workspace: Path) -> bool:
@@ -168,67 +174,6 @@ def writable_data(workspace: Path) -> Iterator[Path]:
         protect_data(workspace)
 
 
-def session_dir(workspace: Path, session_id: str) -> Path:
-    """Absolute path of a session's directory, which contains its turns."""
-    return Path(workspace) / "runs" / session_id
-
-
-def run_dir(workspace: Path, session_id: str, turn_id: str) -> Path:
-    """Absolute path of one turn's directory (host-side)."""
-    return session_dir(workspace, session_id) / turn_id
-
-
-def allocate_turn_dir(
-    workspace: Path,
-    session_id: str,
-    turn_id: str | None = None,
-) -> tuple[str, Path]:
-    """Create this turn's directory and return `(turn_id, path)`.
-
-    A caller-supplied `turn_id` wins, and is idempotent: handing back the same
-    id returns the same directory, so a retried request does not fork a second
-    turn. Services should pass their own request id — it is the only way the
-    turn boundary can match the request boundary.
-
-    The fallback allocates the next sequential id — `t001`, `t002` — so a
-    conversation reads in order on disk. Allocation is done by `mkdir` rather
-    than by scanning and then creating: `mkdir` fails if the name is taken, so
-    two concurrent callers cannot both decide they are `t001`. Scanning first
-    and creating second is precisely that race.
-    """
-    parent = session_dir(workspace, session_id)
-    parent.mkdir(parents=True, exist_ok=True)
-
-    if turn_id:
-        path = parent / turn_id
-        path.mkdir(exist_ok=True)
-        return turn_id, path
-
-    existing = [p.name for p in parent.iterdir() if p.is_dir()]
-    number = max(
-        (int(n[1:]) for n in existing if n.startswith("t") and n[1:].isdigit()),
-        default=0,
-    )
-    while True:
-        number += 1
-        candidate = parent / f"t{number:03d}"
-        try:
-            candidate.mkdir()
-        except FileExistsError:
-            continue  # lost the race for this id; take the next one
-        return candidate.name, candidate
-
-
-def virtual_run_dir(session_id: str, turn_id: str) -> str:
-    """The same directory as the agent sees it — virtual, machine-independent."""
-    return f"/runs/{session_id}/{turn_id}"
-
-
-def virtual_input_dir(session_id: str, turn_id: str) -> str:
-    """Where files supplied with this request are mounted, as the agent sees it."""
-    return f"{virtual_run_dir(session_id, turn_id)}/input"
-
-
 def _git(workspace: Path, *args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(  # noqa: S603
         ["git", "-C", str(workspace), *args],
@@ -275,10 +220,18 @@ def pre_run_commit(workspace: Path, message: str) -> str | None:
 def sweep(workspace: Path, keep: int, checkpointer=None) -> SweepResult:
     """Keep the `keep` most recent run directories; delete the rest.
 
-    A swept session loses its directory *and* its thread together, so the
-    checkpointer can never reference files that no longer exist — resuming a
-    swept session fails cleanly instead of producing an agent that cites
-    deleted paths.
+    A swept session loses its directory *and* its thread. There is no
+    transaction across a filesystem and sqlite, so the order is chosen to make
+    the surviving failure benign:
+
+      thread first, then directory
+        a failure leaves a directory whose thread still exists — the session
+        is intact and the next sweep retries it
+      directory first, then thread  (what this used to do)
+        a failure leaves a thread pointing at deleted files, which is exactly
+        the state that makes an agent cite paths that are not there
+
+    Nothing is half-deleted: if the thread will not go, the directory stays.
     """
     runs = workspace / "runs"
     if not runs.is_dir() or keep < 0:
@@ -292,14 +245,17 @@ def sweep(workspace: Path, keep: int, checkpointer=None) -> SweepResult:
     doomed = dirs[keep:]
 
     removed: list[str] = []
+    failures: list[str] = []
     for path in doomed:
-        session_id = path.name
-        shutil.rmtree(path, ignore_errors=True)
-        if checkpointer is not None:
-            try:
-                checkpointer.delete_thread(session_id)
-            except Exception:  # noqa: BLE001 -- housekeeping must not fail a run
-                pass
-        removed.append(session_id)
+        # The aggregate owns the ordering; this service only chooses victims.
+        failure = Session(id=path.name, directory=path).discard(checkpointer)
+        if failure:
+            failures.append(failure)
+        else:
+            removed.append(path.name)
 
-    return SweepResult(removed=tuple(removed), kept=len(dirs) - len(removed))
+    return SweepResult(
+        removed=tuple(removed),
+        kept=len(dirs) - len(removed),
+        failures=tuple(failures),
+    )

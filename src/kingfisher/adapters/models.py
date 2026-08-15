@@ -12,7 +12,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.config import Config
+from kingfisher.app.config import Config
 
 if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel

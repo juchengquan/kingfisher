@@ -3,7 +3,7 @@ from __future__ import annotations
 import csv
 import io
 
-from kingfisher.smoke import (
+from kingfisher.app.smoke import (
     GROUND_TRUTH,
     ISSUE_KINDS,
     SMOKE_TASK,

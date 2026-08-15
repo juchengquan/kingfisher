@@ -1,10 +1,11 @@
 from __future__ import annotations
 
 import os
+import shutil
 
 from tests.conftest import StubCheckpointer
 
-from kingfisher.workspace import (
+from kingfisher.domain.workspace import (
     LAYOUT_DIRS,
     ensure_layout,
     is_repo,
@@ -90,38 +91,66 @@ def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
     assert "unrelated.txt" not in listed
 
 
-def test_caller_supplied_turn_id_wins_and_is_idempotent(workspace):
-    """A service passes its own request id, so a retry reuses the same turn
-    rather than forking a second one."""
-    from kingfisher.workspace import allocate_turn_dir
+class BrokenCheckpointer:
+    """A checkpointer whose thread deletion fails."""
 
-    first_id, first = allocate_turn_dir(workspace, "sess", "req-abc")
-    again_id, again = allocate_turn_dir(workspace, "sess", "req-abc")
-
-    assert first_id == again_id == "req-abc"
-    assert first == again
-    assert first.is_dir()
+    def delete_thread(self, thread_id: str) -> None:
+        msg = f"cannot delete {thread_id}"
+        raise RuntimeError(msg)
 
 
-def test_concurrent_allocation_never_collides(workspace):
-    """Scanning for the highest id and then creating it is a race. Allocation
-    goes through mkdir, which fails if the name is taken, so two callers
-    cannot both decide they are t001."""
-    import concurrent.futures as futures
+def test_sweep_deletes_the_thread_before_the_directory(workspace):
+    """No transaction spans a filesystem and sqlite, so the order is chosen to
+    make the surviving failure benign."""
+    order: list[str] = []
 
-    from kingfisher.workspace import allocate_turn_dir
+    class Recording:
+        def delete_thread(self, thread_id: str) -> None:
+            order.append("thread")
 
-    with futures.ThreadPoolExecutor(max_workers=16) as pool:
-        results = list(
-            pool.map(lambda _: allocate_turn_dir(workspace, "busy")[0], range(40))
-        )
+    d = workspace / "runs" / "old"
+    d.mkdir(parents=True)
+    (d / "scratch.txt").write_text("x")
 
-    assert len(set(results)) == 40, f"collision: {len(results) - len(set(results))} duplicates"
-    assert all(r.startswith("t") for r in results)
+    original = shutil.rmtree
+
+    def watched(*args, **kwargs):
+        order.append("directory")
+        return original(*args, **kwargs)
+
+    shutil.rmtree = watched
+    try:
+        sweep(workspace, keep=0, checkpointer=Recording())
+    finally:
+        shutil.rmtree = original
+
+    assert order == ["thread", "directory"]
 
 
-def test_allocated_ids_are_sequential_and_readable(workspace):
-    from kingfisher.workspace import allocate_turn_dir
+def test_a_failed_thread_delete_leaves_the_session_whole(workspace):
+    """Nothing is half-deleted: if the thread will not go, the directory stays,
+    so the next sweep retries an intact session rather than finding a thread
+    that points at files which are gone."""
+    d = workspace / "runs" / "old"
+    d.mkdir(parents=True)
 
-    ids = [allocate_turn_dir(workspace, "ordered")[0] for _ in range(3)]
-    assert ids == ["t001", "t002", "t003"]
+    result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
+
+    assert result.removed == ()
+    assert d.is_dir(), "the directory was removed despite the thread surviving"
+    assert len(result.failures) == 1
+    assert "thread not deleted" in result.failures[0]
+
+
+def test_sweep_failures_are_reported_not_swallowed(workspace):
+    """A checkpointer that can never delete should be visible, not tolerated
+    silently on every single run."""
+    for name in ("a", "b"):
+        (workspace / "runs" / name).mkdir(parents=True)
+
+    result = sweep(workspace, keep=0, checkpointer=BrokenCheckpointer())
+
+    assert len(result.failures) == 2
+    # Each failure names the session it belongs to, so the report is actionable.
+    assert {f.split(":")[0] for f in result.failures} == {"a", "b"}
+    assert all("RuntimeError" in f for f in result.failures)

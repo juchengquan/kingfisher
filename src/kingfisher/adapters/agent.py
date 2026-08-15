@@ -16,9 +16,9 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
-from kingfisher.backend import build_backend
-from kingfisher.config import Config
-from kingfisher.models import build_model
+from kingfisher.adapters.backend import build_backend
+from kingfisher.app.config import Config
+from kingfisher.adapters.models import build_model
 
 if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
