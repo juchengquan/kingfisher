@@ -101,3 +101,56 @@ def test_no_result_when_the_stream_never_finishes():
 
     assert result is None
     assert "[start]" in text
+
+
+def test_the_inventory_lists_without_a_session(cfg, capsys):
+    """`--list` describes the workspace, and a workspace has no session.
+
+    Rooting each session at its own directory made `session_dir` mandatory for
+    `build_agent`, and this caller had none to give -- so `--list` raised
+    instead of listing.
+    """
+    assert main.show_inventory(cfg, cfg.workspace) == 0
+
+    printed = capsys.readouterr().out
+    assert "read_file" in printed
+    assert "could not introspect" not in printed
+
+
+def test_listing_the_inventory_leaves_no_session_behind(cfg):
+    """Introspection is a question, not a turn. It must not litter."""
+    main.show_inventory(cfg, cfg.workspace)
+
+    sessions = cfg.workspace / "sessions"
+    assert list(sessions.iterdir()) == []
+
+
+def test_the_smoke_seeds_its_dataset_where_the_agent_looks(cfg):
+    """`/data` is a *session's* directory, not the workspace's.
+
+    Seeding at workspace level wrote the fixture where no route reaches: the
+    smoke printed "seeded sample dataset into /data" and the agent found /data
+    empty, so every check failed for a reason nothing reported.
+    """
+    seeded = main.prepare_smoke(cfg, cfg.workspace, "smoke1")
+
+    assert (cfg.workspace / "sessions" / "smoke1" / "data" / "orders.csv").is_file()
+    assert any("dataset" in line for line in seeded)
+
+
+def test_the_smoke_never_creates_a_workspace_level_data_directory(cfg):
+    """The stray directory is the tell: nothing reads it, so nothing may make it."""
+    main.prepare_smoke(cfg, cfg.workspace, "smoke2")
+
+    assert not (cfg.workspace / "data").exists()
+
+
+def test_skills_stay_shared_across_sessions(cfg):
+    """Only `data` moved under the session. Skills are workspace-level, which
+    is where the backend's `/skills` route still points."""
+    from dataclasses import replace
+
+    main.prepare_smoke(replace(cfg, skills_enabled=True), cfg.workspace, "smoke3")
+
+    assert (cfg.workspace / "skills" / "tabular-qa" / "SKILL.md").is_file()
+    assert not (cfg.workspace / "sessions" / "smoke3" / "skills").exists()
