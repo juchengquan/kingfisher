@@ -231,3 +231,32 @@ def test_no_test_stubs_out_agent_construction():
         f"patch create_deep_agent directly at {offenders} — use conftest.capture_build, "
         "which records the call and still lets deepagents validate it"
     )
+
+
+def test_only_one_module_decides_what_a_skill_is():
+    """`--list` exists to tell a caller which names are valid, so it and
+    `build_agent` must mean the same thing by "a skill". The driver carried a
+    byte-identical copy of the lookup, so a change to the definition would have
+    left `--list` advertising names the validator then rejected.
+
+    `domain.skill` owns the filename and `adapters.skill_store` owns the
+    listing. Asserting they *agree* with a caller is tautological once the
+    caller imports them; what is worth asserting is that nothing else decides.
+    """
+    root = Path(__file__).resolve().parent.parent
+    owners = {
+        root / "src" / "kingfisher" / "domain" / "skill.py",
+        root / "src" / "kingfisher" / "adapters" / "skill_store.py",
+    }
+
+    searched = [*(root / "src").rglob("*.py"), root / "main.py", *(root / "evals").glob("*.py")]
+    offenders = [
+        path.relative_to(root)
+        for path in searched
+        if path not in owners and "SKILL.md" in path.read_text(encoding="utf-8")
+    ]
+
+    assert not offenders, (
+        f"{offenders} decide what a skill is; use domain.skill.FILENAME and "
+        "skill_store.names so the inventory and the validator cannot disagree"
+    )

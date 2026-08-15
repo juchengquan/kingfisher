@@ -16,12 +16,58 @@ from __future__ import annotations
 
 import json
 import time
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
 from kingfisher.adapters import runtime
+
+MODEL_CALL = "model_call"
+
+
+@dataclass(frozen=True)
+class Usage:
+    """What a session's model calls cost, read back from its log.
+
+    Reading lives here because writing does. The driver used to parse these
+    records itself, which duplicated the event name and all three field names
+    across a boundary with nothing keeping them in step -- the same shape of
+    bug the layering rules already exist to prevent, one level out.
+    """
+
+    calls: int
+    input_tokens: int
+    output_tokens: int
+    cache_read: int
+
+    @property
+    def cached_share(self) -> float | None:
+        """Fraction of input tokens served from cache, or None if none were sent."""
+        return self.cache_read / self.input_tokens if self.input_tokens else None
+
+
+def read_usage(path: Path) -> Usage:
+    """Total the model calls in one session's log. Absent or unreadable, zero."""
+    if not path.is_file():
+        return Usage(calls=0, input_tokens=0, output_tokens=0, cache_read=0)
+
+    records = []
+    for line in path.read_text(encoding="utf-8").splitlines():
+        try:
+            record = json.loads(line)
+        except json.JSONDecodeError:  # a torn final line; the rest still counts
+            continue
+        if record.get("event") == MODEL_CALL:
+            records.append(record)
+
+    return Usage(
+        calls=len(records),
+        input_tokens=sum(r.get("input_tokens", 0) for r in records),
+        output_tokens=sum(r.get("output_tokens", 0) for r in records),
+        cache_read=sum(r.get("cache_read", 0) for r in records),
+    )
 
 
 def log_path(state_dir: Path, session_id: str) -> Path:
@@ -69,7 +115,7 @@ class JsonlRunLogger(BaseCallbackHandler):
         message = _first_message(response)
         usage = runtime.usage_of(message)
         self._write(
-            "model_call",
+            MODEL_CALL,
             **usage,
             usage_present=bool(getattr(message, "usage_metadata", None)),
             tool_calls=list(runtime.tool_names(message)),

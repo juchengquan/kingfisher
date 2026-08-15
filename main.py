@@ -44,7 +44,6 @@ the same gateway do not behave identically.
 from __future__ import annotations
 
 import argparse
-import json
 import shutil
 import sys
 import tempfile
@@ -69,6 +68,8 @@ from evals.task import SMOKE_TASK
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
+from kingfisher.adapters import skill_store
+from kingfisher.adapters.runlog import read_usage
 from kingfisher.adapters.subagent_store import load_all
 from kingfisher.adapters.workspace_fs import (
     LocalSessionDirs,
@@ -96,27 +97,16 @@ def _selection(value: str | None) -> tuple[str, ...] | None:
 
 
 def _usage_summary(log_path: Path) -> str:
-    calls = [
-        json.loads(line)
-        for line in log_path.read_text(encoding="utf-8").splitlines()
-        if '"model_call"' in line
-    ]
-    if not calls:
+    """Render what `read_usage` totalled. Formatting is the driver's business;
+    knowing the log's shape is the log's."""
+    usage = read_usage(log_path)
+    if not usage.calls:
         return "no model calls logged"
-    total_in = sum(c["input_tokens"] for c in calls)
-    cached = sum(c["cache_read"] for c in calls)
-    share = f"{cached / total_in:.0%}" if total_in else "n/a"
+    share = "n/a" if usage.cached_share is None else f"{usage.cached_share:.0%}"
     return (
-        f"{len(calls)} model calls · in={total_in} "
-        f"out={sum(c['output_tokens'] for c in calls)} · cached={share}"
+        f"{usage.calls} model calls · in={usage.input_tokens} "
+        f"out={usage.output_tokens} · cached={share}"
     )
-
-
-def _skill_names(workspace: Path) -> tuple[str, ...]:
-    directory = workspace / "skills"
-    if not directory.is_dir():
-        return ()
-    return tuple(sorted(p.name for p in directory.iterdir() if (p / "SKILL.md").is_file()))
 
 
 def seed_examples(workspace: Path) -> list[str]:
@@ -167,7 +157,11 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     """What a request may activate here, which is what `--list` is for."""
     from kingfisher.adapters.agent import build_agent, registered_tools  # noqa: PLC0415
 
-    print(f"workspace : {workspace}\n")
+    print(f"workspace : {workspace}")
+    # Named rather than assumed: the catalogues may be deployed outside the
+    # workspace and shared by every deployment that points at them.
+    print(f"skills    : {cfg.skills_dir}")
+    print(f"subagents : {cfg.subagents_dir}\n")
 
     # Built rather than listed: the tool set is a property of the assembled
     # agent, and a hardcoded list here would drift from the real one.
@@ -182,12 +176,12 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         print(f"  {name}")
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
-    for name in _skill_names(workspace) or ("(none)",):
+    for name in skill_store.names(cfg.skills_dir) or ("(none)",):
         print(f"  {name}")
 
     print("\nsubagents")
     try:
-        specs = load_all(workspace)
+        specs = load_all(cfg.subagents_dir)
     except SubagentError as exc:
         print(f"  cannot load: {exc}")
         return 1
