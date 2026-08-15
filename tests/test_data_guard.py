@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from pathlib import Path
 
 import pytest
 
@@ -40,3 +41,61 @@ def test_protect_data_is_idempotent(workspace):
     protect_data(workspace)
     protect_data(workspace)
     assert not os.access(workspace / "data", os.W_OK)
+
+
+def _refuse(name: str, monkeypatch):
+    """Make `chmod` refuse one file, the way the kernel does for a file we do
+    not own. `chmod(2)` returns EPERM to anyone who is not the owner, so a
+    single input copied in by another user reproduces this exactly."""
+    real = Path.chmod
+
+    def chmod(self, mode, **kwargs):
+        if self.name == name:
+            raise PermissionError(1, "Operation not permitted", str(self))
+        return real(self, mode, **kwargs)
+
+    monkeypatch.setattr(Path, "chmod", chmod)
+
+
+def test_a_file_we_cannot_chmod_is_reported_not_raised(workspace, monkeypatch):
+    """One file owned by another user used to abort the run -- and since this
+    runs before anything else, every later run of that session too."""
+    with writable_data(workspace) as data:
+        (data / "theirs.pdf").write_text("x")
+        (data / "ours.csv").write_text("y")
+
+    _refuse("theirs.pdf", monkeypatch)
+    failures = protect_data(workspace)
+
+    assert len(failures) == 1
+    assert "theirs.pdf" in failures[0]
+    assert "Operation not permitted" in failures[0]
+
+
+def test_the_rest_of_the_directory_is_still_hardened(workspace, monkeypatch):
+    """Degrading is only acceptable if it degrades to *almost* protected."""
+    with writable_data(workspace) as data:
+        (data / "theirs.pdf").write_text("x")
+        (data / "ours.csv").write_text("y")
+
+    _refuse("theirs.pdf", monkeypatch)
+    protect_data(workspace)
+    monkeypatch.undo()
+
+    assert not os.access(workspace / "data", os.W_OK)
+    with pytest.raises(PermissionError):
+        (workspace / "data" / "ours.csv").write_text("clobbered")
+
+
+def test_an_input_can_still_be_added_beside_a_file_we_do_not_own(workspace, monkeypatch):
+    """Refusing a new input because an unrelated old one belongs to someone
+    else would be its own bug."""
+    with writable_data(workspace) as data:
+        (data / "theirs.pdf").write_text("x")
+
+    _refuse("theirs.pdf", monkeypatch)
+    with writable_data(workspace) as data:
+        (data / "fresh.csv").write_text("a,b\n")
+
+    monkeypatch.undo()
+    assert (workspace / "data" / "fresh.csv").read_text() == "a,b\n"
