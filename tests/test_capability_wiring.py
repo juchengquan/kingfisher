@@ -27,7 +27,7 @@ class RecordingModel(FakeToolCallingModel):
     #: BaseModel, so an annotation without a default is a *required* field.
     offered: list[str] = []
 
-    def bind_tools(self, tools, **kwargs):  # noqa: ANN001, ANN003, ARG002
+    def bind_tools(self, tools, **kwargs):
         self.offered = [getattr(t, "name", None) or t.get("name") for t in tools]
         return self
 

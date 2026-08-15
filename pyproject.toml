@@ -29,8 +29,66 @@ packages = ["src/kingfisher"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ruff>=0.16.3",
     "ty>=0.0.72",
 ]
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+# Chosen to match what the code was already written against: the `noqa`
+# directives predating this config name ANN001, ANN003, ARG002, BLE001 and
+# S603, none of which are on by default, so lint results depended on whoever
+# ran it. `D` is deliberately absent -- the docstrings here are written to be
+# read, and pydocstyle would have them rewritten to suit a checker.
+select = [
+    "E", "W",    # pycodestyle
+    "F",         # pyflakes
+    "I",         # import sorting
+    "UP",        # pyupgrade
+    "B",         # bugbear
+    "SIM",       # simplify
+    "C4",        # comprehensions
+    "RUF",       # ruff-specific
+    "ANN",       # annotations
+    "ARG",       # unused arguments
+    "BLE",       # blind except
+    "S",         # bandit
+    "PTH",       # pathlib over os.path
+    "RET",       # return consistency
+    "TID",       # tidy imports
+    "PL",        # pylint
+    "DTZ",       # naive datetimes
+    "EM",        # exception message literals
+    "TRY",       # exception antipatterns
+    "N",         # naming
+    "T20",       # stray print
+]
+# `Any` is load-bearing at the library seams -- deepagents and LangGraph hand
+# back shapes that are genuinely untyped, and pretending otherwise would mean
+# inventing protocols that do not match.
+ignore = ["ANN401"]
+
+[tool.ruff.lint.per-file-ignores]
+# A driver whose whole job is printing, with the branchiness that implies.
+"main.py" = ["T201", "PLR0912", "PLR0915"]
+# The long lines are inside string literals: a skill's frontmatter description
+# must be one line, and so must the task's JSON schema commentary.
+"src/kingfisher/app/smoke.py" = ["E501"]
+# Tests assert, take untyped fixtures, import locally to keep a case readable,
+# and compare against literals -- that is what a test is. `RUF012` fires on a
+# pydantic field, where a mutable default is handled by the model.
+"tests/**" = [
+    "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
+]
+# Throwaway probes, kept as a record of what was verified against the live
+# gateway rather than as maintained code.
+"spikes/**" = ["T201", "ANN", "PLC0415"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["kingfisher"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

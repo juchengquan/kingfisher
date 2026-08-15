@@ -9,6 +9,7 @@ else, including the thread deletion the sweep depends on.
 from __future__ import annotations
 
 import sqlite3
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from langgraph.checkpoint.sqlite import SqliteSaver
@@ -19,7 +20,7 @@ if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
-def checkpoint_db_path(cfg: Config):
+def checkpoint_db_path(cfg: Config) -> Path:
     return cfg.workspace / ".kingfisher" / "threads.db"
 
 

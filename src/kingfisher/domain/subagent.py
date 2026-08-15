@@ -32,6 +32,9 @@ from pathlib import Path
 DIRECTORY = "subagents"
 SUFFIX = ".md"
 
+#: The shortest quoted scalar is a pair of quotes with nothing between them.
+QUOTED_MINIMUM = 2
+
 _FRONTMATTER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n(.*)\Z", re.DOTALL)
 
 
@@ -52,7 +55,7 @@ class SubagentSpec:
 
 def _parse_scalar(value: str) -> str:
     value = value.strip()
-    if value[:1] in {'"', "'"} and value[-1:] == value[:1] and len(value) >= 2:
+    if value[:1] in {'"', "'"} and value[-1:] == value[:1] and len(value) >= QUOTED_MINIMUM:
         return value[1:-1]
     return value
 
@@ -64,8 +67,8 @@ def _parse_frontmatter(text: str, source: Path) -> tuple[dict[str, str], str]:
         raise SubagentError(msg)
 
     fields: dict[str, str] = {}
-    for line in match.group(1).splitlines():
-        line = line.strip()
+    for raw in match.group(1).splitlines():
+        line = raw.strip()
         if not line or line.startswith("#"):
             continue
         key, sep, value = line.partition(":")

@@ -15,7 +15,7 @@ class FakeToolCallingModel(FakeMessagesListChatModel):
     responses already contain the tool calls we want to drive.
     """
 
-    def bind_tools(self, tools, **kwargs):  # noqa: ANN001, ANN003, ARG002
+    def bind_tools(self, tools, **kwargs):
         return self
 
 

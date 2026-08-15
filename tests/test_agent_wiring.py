@@ -27,7 +27,11 @@ def test_agent_runs_shell_and_writes_files(cfg):
         AIMessage(
             content="",
             tool_calls=[
-                {"name": "write_file", "args": {"file_path": "/out.txt", "content": "42"}, "id": "c2"}
+                {
+                    "name": "write_file",
+                    "args": {"file_path": "/out.txt", "content": "42"},
+                    "id": "c2",
+                }
             ],
         ),
         AIMessage(content="done"),
@@ -80,7 +84,9 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(cfg, mon
     from dataclasses import replace
 
     captured: dict = {}
-    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", lambda **kw: captured.update(kw))
+    monkeypatch.setattr(
+        "kingfisher.adapters.agent.create_deep_agent", lambda **kw: captured.update(kw)
+    )
     build_agent(
         replace(cfg, skills_enabled=True, memory_enabled=True),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),

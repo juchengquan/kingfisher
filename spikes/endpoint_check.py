@@ -22,12 +22,11 @@ import traceback
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from deepagents import create_deep_agent
+from deepagents.backends import LocalShellBackend
 from dotenv import load_dotenv
 from langchain.agents.middleware import TodoListMiddleware
 from langchain_core.messages import AIMessage
-
-from deepagents import create_deep_agent
-from deepagents.backends import LocalShellBackend
 
 load_dotenv()
 
