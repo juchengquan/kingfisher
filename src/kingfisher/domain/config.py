@@ -23,7 +23,7 @@ ApiStyle = Literal["anthropic", "openai"]
 
 #: Derived from `ApiStyle`. Adding a style means editing the `Literal` and
 #: adding a `Provider`; nothing else needs to learn the name.
-API_STYLES: tuple[str, ...] = get_args(ApiStyle)
+API_STYLES: tuple[ApiStyle, ...] = get_args(ApiStyle)
 
 ROLES: tuple[str, ...] = ("main", "subagent", "summarizer")
 

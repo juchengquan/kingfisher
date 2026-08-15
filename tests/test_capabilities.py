@@ -17,7 +17,7 @@ def test_unset_means_everything_and_empty_means_none():
 
 
 def test_names_are_de_duplicated_but_keep_their_order():
-    caps = Capabilities(tools=["read_file", "glob", "read_file"])
+    caps = Capabilities(tools=("read_file", "glob", "read_file"))
     assert caps.tools == ("read_file", "glob")
 
 
@@ -26,9 +26,10 @@ def test_intersect_never_widens():
     granted = Capabilities(tools=("read_file", "glob"))
     asked = Capabilities(tools=("read_file", "execute"))
 
-    assert granted.intersect(asked).tools == ("read_file",)
+    narrowed = granted.intersect(asked).tools
+    assert narrowed == ("read_file",)
     # execute was requested and is simply absent, rather than an error
-    assert "execute" not in granted.intersect(asked).tools
+    assert narrowed is not None and "execute" not in narrowed
 
 
 def test_unrestricted_on_either_side_defers_to_the_other():
@@ -68,6 +69,11 @@ def test_unknown_ignores_dimensions_with_no_opinion():
 
 
 def test_capabilities_are_hashable_and_comparable():
-    """Value object semantics: two identical grants are the same grant."""
-    assert Capabilities(tools=("a",)) == Capabilities(tools=["a"])
+    """Value object semantics: two identical grants are the same grant.
+
+    The list is deliberately off-contract -- the declared field type is a
+    tuple, and this pins the normalisation that lets a service hand us a
+    freshly deserialised JSON array anyway.
+    """
+    assert Capabilities(tools=("a",)) == Capabilities(tools=["a"])  # ty: ignore[invalid-argument-type]
     assert len({Capabilities(tools=("a",)), Capabilities(tools=("a",))}) == 1

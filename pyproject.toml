@@ -29,8 +29,48 @@ packages = ["src/kingfisher"]
 [dependency-groups]
 dev = [
     "pytest>=9.1.1",
+    "ty>=0.0.72",
 ]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["."]
+
+[tool.ty.environment]
+python-version = "3.12"
+# Point at the project venv so third-party types (deepagents, langchain,
+# langgraph) are resolved. Without it ty sees only the standard library and
+# reports every library attribute as unresolved.
+python = ".venv"
+
+[tool.ty.src]
+include = ["src", "tests", "main.py", "spikes"]
+
+[tool.ty.terminal]
+output-format = "concise"
+# Warnings are findings we have not triaged yet, so they fail the run rather
+# than scrolling past. Anything genuinely not worth fixing gets an explicit
+# rule setting below, where the decision is visible and reviewable.
+error-on-warning = true
+
+# `spikes/` are throwaway probes kept as a record of what was verified against
+# the live gateway. They are not maintained, and holding them to the same bar
+# as shipped code would mean editing history to satisfy a checker.
+[[tool.ty.overrides]]
+include = ["spikes/**"]
+
+[tool.ty.overrides.rules]
+invalid-argument-type = "ignore"
+
+# Tests exercise seams a type checker cannot see through: fakes that stand in
+# for protocol implementations, monkeypatched module attributes, and stubs whose
+# fields are populated by the code under test. These three rules fire on that
+# and nothing else here, so they are scoped off for tests rather than silenced
+# globally -- the same rules still guard `src/`.
+[[tool.ty.overrides]]
+include = ["tests/**"]
+
+[tool.ty.overrides.rules]
+unresolved-attribute = "ignore"
+not-subscriptable = "ignore"
+invalid-assignment = "ignore"

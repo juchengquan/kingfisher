@@ -26,6 +26,7 @@ from collections.abc import Iterator, Mapping
 from typing import Any
 
 from langchain_core.messages import AIMessage, ToolMessage
+from langgraph.types import StreamMode
 
 from kingfisher.domain.result import RunEvent
 
@@ -34,7 +35,7 @@ PREVIEW = 300
 
 #: The stream modes we ask for. `updates` drives progress events; `values`
 #: carries the full state, whose last emission holds the final answer.
-STREAM_MODES = ["updates", "values"]
+STREAM_MODES: list[StreamMode] = ["updates", "values"]
 
 
 def user_payload(text: str) -> dict[str, Any]:

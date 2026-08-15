@@ -133,7 +133,7 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
 
     agent = StubAgent("ok")
     result = run(
-        Request("summarise it", session_id="s", inputs=[supplied]),
+        Request("summarise it", session_id="s", inputs=(supplied,)),
         cfg=cfg,
         agent=agent,
         checkpointer=StubCheckpointer(),
@@ -172,7 +172,8 @@ def test_request_rejects_an_empty_task():
 def test_request_normalises_inputs_to_paths():
     from pathlib import Path as _Path
 
-    request = Request("t", inputs=["/tmp/a.csv", _Path("/tmp/b.csv")])
+    # Off-contract on purpose: strings and a list, both normalised away.
+    request = Request("t", inputs=["/tmp/a.csv", _Path("/tmp/b.csv")])  # ty: ignore[invalid-argument-type]
     assert all(isinstance(p, _Path) for p in request.inputs)
     assert isinstance(request.inputs, tuple)
 
