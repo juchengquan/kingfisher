@@ -45,7 +45,7 @@ def workspace_with_examples(cfg):
 
 
 def test_example_skills_are_discovered(workspace_with_examples):
-    assert set(_available_skills(workspace_with_examples.skills_dir)) >= {
+    assert set(_available_skills(workspace_with_examples, None)) >= {
         "code-review",
         "release-notes",
     }

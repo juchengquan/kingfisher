@@ -13,6 +13,7 @@ a test satisfies them with a dict.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -51,4 +52,22 @@ class SessionDirs(Protocol):
 
     def remove_tree(self, path: Path) -> str | None:
         """Delete `path` and its contents. Returns a reason on failure."""
+        ...
+
+
+@runtime_checkable
+class DefinitionStore(Protocol):
+    """Where a request's own skills and subagents are fetched from, by id.
+
+    One port for both, because they differ in where they land rather than in
+    how they arrive. A skill is several files and a subagent is one, so the
+    return is a mapping of relative path to bytes either way.
+
+    Ids stop here. They are how a catalogue service names a definition; what
+    the agent sees is the name inside the definition, and `capabilities`
+    activates by that name. Neither vocabulary reaches the other.
+    """
+
+    def fetch(self, definition_id: str) -> Mapping[str, bytes]:
+        """The files making up one definition, keyed by path relative to it."""
         ...

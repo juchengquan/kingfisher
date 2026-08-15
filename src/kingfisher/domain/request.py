@@ -36,6 +36,13 @@ class Request:
     session_id: str | None = None
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
+    # Provisioning, not activation. These are catalogue ids: they say which
+    # definitions to fetch and unpack for this session, while `capabilities`
+    # still selects by name. Keeping them apart is what stops a catalogue's
+    # identifier scheme leaking into the agent's vocabulary, and the agent's
+    # naming rules leaking into the catalogue.
+    skill_refs: tuple[str, ...] = ()
+    subagent_refs: tuple[str, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
 
     def __post_init__(self) -> None:
