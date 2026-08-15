@@ -1,7 +1,11 @@
 # Session-scoped workspaces and a system skill catalogue
 
-**Status:** agreed design, not yet implemented
+**Status:** implemented. All six phases plus tenancy (T1–T4) and quotas.
 **Date:** 2026-08-16
+
+Read the phase notes below with the decisions: several phases changed shape once
+their premise was measured, and where they did, the correction is recorded next
+to the decision it overturned rather than by quietly editing it.
 
 Turning kingfisher from a personal agent that owns one durable project directory
 into something an API can put in front of many callers, without inventing a
@@ -203,10 +207,22 @@ that cannot change, and fails to produce it whenever two callers overlap.
 These did not come up in the design session and each could change a phase:
 
 - ~~**Tenancy.**~~ Answered above (T1–T4).
-- **Quotas.** Nothing bounds what one caller can consume — sessions opened,
-  disk used, turns run. T4 puts every caller in one process, so a single caller
-  can starve the others. Out of scope for the six phases, but it is the next
-  thing a real deployment would hit.
+- ~~**Quotas.**~~ Bounded where kingfisher can see: a turn's wall clock
+  (`KINGFISHER_TURN_TIMEOUT_S`, an hour by default) and a session's disk
+  (`KINGFISHER_SESSION_MAX_BYTES`, unset by default). Same split as T1 — these
+  bound a *session*, because kingfisher does not know who is calling; bounding
+  a *caller* stays with whatever does.
+
+  Two things followed from mechanism rather than preference. Disk is checked
+  before a turn starts and never during, because `execute` writes without any
+  file tool seeing it — the same fact that made the phase 4 manifest a
+  filesystem walk. And a turn that hits its deadline stops between steps and
+  returns what it produced, marked, because its files are already on disk and
+  in the manifest: discarding the answer would hide the work, not undo it.
+
+- **Per-caller quotas.** Still open, and now the only part left. Under T4 one
+  caller can still open unbounded sessions and starve the others; nothing here
+  can stop that, because nothing here knows who they are.
 - ~~**Shared storage.**~~ The guarantee kingfisher's correctness actually rests
   on is narrower than "does a shell work here": `allocate_turn` is atomic only
   because `mkdir` fails on an existing name. Verified exclusive across eight

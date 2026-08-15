@@ -75,7 +75,7 @@ def cfg(workspace):
         base_url="http://127.0.0.1:9/never-called",
         api_key="test-key-not-real",
         model="fake-model",
-        keep_runs=2,
+        turn_timeout_s=3600,
         timeout_s=30,
     )
 

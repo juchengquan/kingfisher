@@ -40,6 +40,10 @@ class RunResult:
     #: is the filesystem's, and a caller persisting incrementally diffs against
     #: the previous turn's manifest -- which also tells it what was deleted.
     artifacts: tuple[str, ...] = ()
+    #: The turn hit its wall-clock bound and stopped between steps. The answer
+    #: is whatever it had reached, and `artifacts` still lists what it wrote --
+    #: discarding either would hide work rather than undo it.
+    cut_short: bool = False
 
 
 #: How much of one tool argument to show. `write_file` takes an entire file as

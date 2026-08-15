@@ -140,6 +140,21 @@ def collect_artifacts(session_dir: Path) -> tuple[str, ...]:
     return tuple(sorted(found))
 
 
+def session_bytes(session_dir: Path) -> int:
+    """How much disk one session is holding, across everything in it.
+
+    Everything, not just the artifact directories: run scratch counts, because
+    the point is what the session costs the host rather than what is worth
+    keeping. Read before a turn starts and never during -- `execute` writes
+    without any file tool seeing it, so there is nothing to intercept mid-turn,
+    and a filesystem quota is the only thing that could.
+    """
+    session_dir = Path(session_dir)
+    if not session_dir.is_dir():
+        return 0
+    return sum(p.stat().st_size for p in session_dir.rglob("*") if p.is_file())
+
+
 def _drop_write_bits(path: Path) -> None:
     path.chmod(path.stat().st_mode & ~0o222)
 
