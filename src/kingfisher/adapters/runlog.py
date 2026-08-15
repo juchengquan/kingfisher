@@ -1,6 +1,7 @@
 """Local-only structured run log.
 
-One append-only JSONL file per session under `.kingfisher/runs/`. Nothing leaves
+One append-only JSONL file per session under `<state_dir>/runs/`, which is
+`<workspace>/.kingfisher/runs/` unless configured elsewhere. Nothing leaves
 the machine (Q13), and per-step token usage is recorded (Q18) because it is the
 only way the cost-control driver becomes measurable rather than aspirational.
 
@@ -23,8 +24,9 @@ from langchain_core.callbacks import BaseCallbackHandler
 from kingfisher.adapters import runtime
 
 
-def log_path(workspace: Path, session_id: str) -> Path:
-    return Path(workspace) / ".kingfisher" / "runs" / f"{session_id}.jsonl"
+def log_path(state_dir: Path, session_id: str) -> Path:
+    """One log per session, under the configured state directory."""
+    return Path(state_dir) / "runs" / f"{session_id}.jsonl"
 
 
 class JsonlRunLogger(BaseCallbackHandler):

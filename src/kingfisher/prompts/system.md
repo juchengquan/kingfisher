@@ -34,13 +34,22 @@ The two views do not mix, in either direction:
 - A virtual path is not a shell path. Passing `/data/<name>` to `execute` addresses
   the host's root directory, not the workspace.
 - A host path is not a file-tool path. Passing an absolute host path such as
-  `/tmp/scratch.py` to `write_file` does not fail — the leading `/` is read as the
-  workspace root, so the whole path is recreated *inside* the workspace. The write
-  appears to succeed and the file is not where you think it is.
+  `/tmp/scratch.py` to `write_file` is refused, and the error names the virtual path
+  to use instead. Left unguarded the leading `/` reads as the workspace root, so the
+  whole path is recreated *inside* the workspace: the write reports success and the
+  file is not where you think it is.
 
 Where these instructions give host path mappings for particular mounts, use those with
-the shell when you need an absolute path. For scratch files, write them in your run
-directory rather than `/tmp`.
+the shell when you need an absolute path.
+
+Scratch files go in one of two places, and never anywhere else:
+
+- Anything you want to survive the turn — a script you want reviewed, an intermediate
+  table worth keeping — goes in your run directory.
+- Anything genuinely throwaway goes under `$TMPDIR`, which the shell exports for you.
+  Write `"$TMPDIR/name.py"`, never a literal `/tmp/name.py`: `$TMPDIR` is configured
+  per workspace, so a hardcoded `/tmp` scatters files somewhere nothing will clean up
+  and nothing will find.
 
 <!-- capabilities -->
 

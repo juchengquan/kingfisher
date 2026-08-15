@@ -83,6 +83,10 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         part for part in (env.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":") if part
     )
 
+    def _optional_path(key: str) -> Path | None:
+        raw = (env.get(key) or "").strip()
+        return Path(raw).expanduser().resolve() if raw else None
+
     return Config(
         workspace=Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve(),
         api_style=style,  # type: ignore[arg-type]
@@ -95,6 +99,8 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
         role_models=role_models,
+        state_root=_optional_path("KINGFISHER_STATE_DIR"),
+        scratch_root=_optional_path("KINGFISHER_SCRATCH_DIR"),
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
         memory_enabled=_bool(env, "KINGFISHER_MEMORY"),
     )

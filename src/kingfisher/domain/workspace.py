@@ -5,7 +5,7 @@ The workspace splits by lifetime, not by session:
   durable, shared   /data /derived /skills /subagents /memory
   per-session       /runs/<session_id>/          transcript, and its turns
   per-turn          /runs/<session_id>/<turn>/   this request's inputs, scratch, answer
-  harness-owned     /.kingfisher/   (thread db, run logs, tmp)
+  harness-owned     /.kingfisher/   (thread db, run logs, tmp) — relocatable
 
 A turn is one request. Its inputs are supplied fresh each time and are not
 project data; its conclusions are durable. Nesting turns inside their session
@@ -22,6 +22,12 @@ Git tracks what a person authored; `/derived` holds what the agent produced and
 wants to keep. There is no directory for reports, because "a report" is one
 kind of output among many -- anything a run should outlive goes to `/derived`,
 whatever it is called.
+
+Only the harness-owned tier can be relocated (`KINGFISHER_STATE_DIR`,
+`KINGFISHER_SCRATCH_DIR`), because it is host-side and nothing addresses it by
+path. The others are reached by the agent through virtual paths, and file tools
+are routed while `execute` is not — so splitting one of those roots would give
+the two different views of the same name.
 """
 
 from __future__ import annotations
@@ -42,8 +48,11 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "subagents",
     "memory",
     "runs",
-    ".kingfisher/runs",
-    ".kingfisher/tmp",
+    # `.kingfisher` holds the marker. Its `runs/` and `tmp/` subdirectories are
+    # not created here: both are relocatable (`KINGFISHER_STATE_DIR`,
+    # `KINGFISHER_SCRATCH_DIR`) and each is created by whatever opens it, so
+    # creating them here would leave empty decoys behind when they are moved.
+    ".kingfisher",
 )
 
 MARKER = ".kingfisher/WORKSPACE"
