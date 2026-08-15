@@ -101,22 +101,96 @@ def _agent_with_content_blocks() -> StubAgent:
 
 
 def test_content_blocks_are_read_as_text_not_repr(cfg):
-    """`str(content)` on a block list renders its Python repr into the answer."""
-    events = _events(cfg, _agent_with_content_blocks())
-    message = next(e for e in events if e.kind == "message")
-    tool_result = next(e for e in events if e.kind == "tool_result")
+    """`str(content)` on a block list renders its Python repr into the answer.
 
-    assert message.text == "The answer is 42."
+    The assistant half of this now travels as tokens rather than as a
+    completed message -- see `test_token_content_blocks_are_read_as_text`.
+    """
+    tool_result = next(
+        e for e in _events(cfg, _agent_with_content_blocks()) if e.kind == "tool_result"
+    )
+
     assert tool_result.text == "hi"
-    assert "'type':" not in message.text
+    assert "'type':" not in tool_result.text
 
 
-def test_a_reasoning_only_message_emits_nothing(cfg):
-    """Reasoning blocks carry no text; an empty event would be noise."""
+def test_a_message_that_is_only_a_state_shuffle_emits_nothing(cfg):
+    """No tools, no text, no usage: nobody took a turn, so there is nothing to say.
+
+    Reasoning-only content blocks are the shape that raised this — `.text`
+    yields "" for them.
+    """
     message = AIMessage(content=[{"type": "reasoning", "summary": []}])
     agent = StubAgent("42", updates=[{"agent": {"messages": [message]}}])
 
-    assert not [e for e in _events(cfg, agent) if e.kind == "message"]
+    assert not [e for e in _events(cfg, agent) if e.kind == "model_call"]
+
+
+def test_a_turn_that_only_spoke_is_still_a_model_call(cfg):
+    """`message` is collapsed: a completed turn is a completed turn.
+
+    Its prose is not repeated here; that is the token stream's job.
+    """
+    agent = StubAgent(
+        "ok", updates=[{"agent": {"messages": [AIMessage(content="thinking out loud")]}}]
+    )
+    events = _events(cfg, agent)
+
+    assert "message" not in [e.kind for e in events]
+    (call,) = [e for e in events if e.kind == "model_call"]
+    assert call.tools == ()
+    assert call.args == ()
+    assert "thinking out loud" not in str(call)
+
+
+def test_a_tool_call_carries_its_arguments(cfg):
+    """The run log has recorded these all along; the terminal never showed them."""
+    (call,) = [e for e in _events(cfg, _agent_with_a_tool_call()) if e.kind == "model_call"]
+
+    assert call.tools == ("execute",)
+    assert call.args == ({"command": "echo hi"},)
+    assert len(call.args) == len(call.tools)
+    assert "execute(command=echo hi)" in str(call)
+
+
+def test_a_large_tool_argument_cannot_flood_the_line(cfg):
+    """`write_file` takes an entire file as one of its arguments."""
+    agent = StubAgent(
+        "ok",
+        updates=[
+            {
+                "agent": {
+                    "messages": [
+                        AIMessage(
+                            content="",
+                            tool_calls=[
+                                {
+                                    "name": "write_file",
+                                    "args": {"file_path": "/data/x", "content": "x" * 5000},
+                                    "id": "c1",
+                                }
+                            ],
+                        )
+                    ]
+                }
+            }
+        ],
+    )
+    (call,) = [e for e in _events(cfg, agent) if e.kind == "model_call"]
+
+    assert "/data/x" in str(call)  # the argument you needed is there
+    assert len(str(call)) < 300  # the one you did not is bounded
+    assert "…" in str(call)
+
+
+def test_tools_and_arguments_cannot_be_constructed_out_of_step():
+    """Two parallel tuples are only safe if nothing can make them disagree."""
+    import pytest as _pytest
+
+    from kingfisher.domain.result import RunEvent
+
+    with _pytest.raises(ValueError, match="parallel"):
+        RunEvent(kind="model_call", tools=("a", "b"), args=({},))
 
 
 def test_finished_event_carries_the_normalized_answer(cfg):

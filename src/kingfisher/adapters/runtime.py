@@ -58,9 +58,22 @@ def usage_of(message: Any) -> dict[str, int]:
     }
 
 
+def tool_calls(message: Any) -> tuple[tuple[str, ...], tuple[Mapping[str, Any], ...]]:
+    """Names and arguments of the tools a message asks for, index-aligned.
+
+    Both tuples are built from one list in one expression, so they cannot be
+    made to disagree about which arguments belong to which call.
+    """
+    calls = getattr(message, "tool_calls", None) or []
+    return (
+        tuple(call["name"] for call in calls),
+        tuple(call.get("args") or {} for call in calls),
+    )
+
+
 def tool_names(message: Any) -> tuple[str, ...]:
     """Names of the tools a message asks for, or an empty tuple."""
-    return tuple(tc["name"] for tc in (getattr(message, "tool_calls", None) or []))
+    return tool_calls(message)[0]
 
 
 def _event_for(message: Any) -> RunEvent | None:
@@ -71,16 +84,21 @@ def _event_for(message: Any) -> RunEvent | None:
             text=message.text[:PREVIEW],
         )
     if isinstance(message, AIMessage):
-        tools = tool_names(message)
-        if tools:
-            return RunEvent(kind="model_call", tools=tools, usage=usage_of(message))
+        # One event per completed turn, whether or not it called a tool. The
+        # prose is not carried: it has already arrived as tokens, and a
+        # truncated second copy here would be the same text twice.
+        #
+        # Arguments come along because the run log has been recording them all
+        # along while the terminal showed only the tool's name -- so you could
+        # see that `write_file` ran and not what it wrote where.
+        names, args = tool_calls(message)
         # `.text` rather than `str(content)`: the Responses API returns a list
-        # of content blocks, and `str()` would render their repr straight into
-        # the answer. `.text` extracts the text across every content shape, and
-        # yields "" for a reasoning-only message, which the guard below drops.
-        text = message.text.strip()
-        if text:
-            return RunEvent(kind="message", text=text[:PREVIEW], usage=usage_of(message))
+        # of content blocks, and `str()` would render their repr. A message
+        # with no text, no tools and no usage is not a turn anyone made -- it
+        # is a state shuffle, and announcing it would be noise.
+        if not (names or message.text.strip() or getattr(message, "usage_metadata", None)):
+            return None
+        return RunEvent(kind="model_call", tools=names, args=args, usage=usage_of(message))
     return None
 
 
