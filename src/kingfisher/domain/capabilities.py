@@ -23,6 +23,11 @@ from collections.abc import Iterable
 from dataclasses import dataclass
 
 #: `None` means unrestricted; a tuple — including an empty one — is a whitelist.
+#:
+#: The declared contract is tuples, and consumers can rely on that. `__post_init__`
+#: is nonetheless lenient about what it will normalise, because a service
+#: deserialising JSON hands us lists; that leniency is a backstop, not the
+#: contract, so a caller holding a list should convert at its own edge.
 Selection = tuple[str, ...] | None
 
 
