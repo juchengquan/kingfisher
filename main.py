@@ -42,8 +42,10 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env, stream
-from kingfisher.adapters.agent import CapabilityError, build_agent, registered_tools
+# Only the light end of the package at module scope. `kingfisher.adapters`
+# reaches deepagents, which costs about a second in provider SDKs, and `--help`
+# should not pay for a model it will never build.
+from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
 from kingfisher.app.smoke import (
     SMOKE_TASK,
     check_result,
@@ -120,6 +122,8 @@ def seed_examples(workspace: Path) -> list[str]:
 
 def show_inventory(cfg: Config, workspace: Path) -> int:
     """What a request may activate here, which is what `--list` is for."""
+    from kingfisher.adapters.agent import build_agent, registered_tools  # noqa: PLC0415
+
     print(f"workspace : {workspace}\n")
 
     # Built rather than listed: the tool set is a property of the assembled
@@ -235,6 +239,11 @@ def main(argv: list[str]) -> int:
 
     # Streaming rather than run(): with no UI, a multi-minute analysis would
     # otherwise print nothing at all until it finished.
+    # Deferred: this is the first thing that needs deepagents, and paths
+    # that never get here (--help, --list, a bad .env) should not pay for it.
+    from kingfisher import stream  # noqa: PLC0415
+    from kingfisher.adapters.agent import CapabilityError  # noqa: PLC0415
+
     result = None
     try:
         for event in stream(request, cfg=cfg):
@@ -264,7 +273,10 @@ def main(argv: list[str]) -> int:
 
     for name in ("report.md", "result.json"):
         path = result.run_dir / name
-        print(f"{name:<12}: {'written' if path.exists() else 'MISSING'}  {path}")
+        if path.exists():
+            print(f"{name:<12}: written  {path}")
+        elif is_smoke:
+            print(f"{name:<12}: MISSING  {path}")
 
     # Continuing this session is the next thing you will want, so say how.
     print(f"\ncontinue with: uv run main.py --session {result.session_id} \"...\"")

@@ -139,10 +139,15 @@ def stream(
         if request.inputs
         else ""
     )
+    # Offered, not demanded. Requiring artifacts of every task made a
+    # conversational turn deliberate about files it had no reason to write,
+    # and then report them missing. A task that wants them says so -- the
+    # smoke task specifies `result.json` down to its schema.
     message = (
         f"{request.task}\n\n"
         f"Your run directory for this task is {turn.virtual_dir}. "
-        f"Write report.md and result.json there.{supplied}"
+        f"If this task produces a written report or a structured result, put "
+        f"them there as report.md and result.json.{supplied}"
     )
 
     answer = ""

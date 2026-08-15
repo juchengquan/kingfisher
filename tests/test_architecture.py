@@ -90,3 +90,24 @@ def test_adapters_do_not_reach_back_into_app():
         assert not any(m.startswith("kingfisher.app") for m in modules), (
             f"adapters/{path.name} depends on app/ — move the shared shape into domain/"
         )
+
+
+def test_the_public_api_list_matches_the_lazy_export_table():
+    """`__all__` is a literal so a linter can see it, and `_EXPORTS` drives the
+    lazy loading. Nothing keeps them in step but this."""
+    import kingfisher
+
+    assert kingfisher.__all__ == sorted(kingfisher._EXPORTS)
+
+
+def test_importing_kingfisher_does_not_pull_in_deepagents():
+    """The point of the lazy re-exports: a consumer that only touches domain
+    types should not pay a second for three provider SDKs."""
+    import subprocess
+    import sys
+
+    probe = "import sys, kingfisher; print('deepagents' in sys.modules)"
+    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "False"
