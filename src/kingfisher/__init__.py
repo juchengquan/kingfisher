@@ -22,8 +22,8 @@ __version__ = "0.1.0"
 #: `__getattr__` and `__all__`, so the two cannot drift.
 _EXPORTS = {
     "Capabilities": "kingfisher.domain.capabilities",
-    "Config": "kingfisher.domain.config",
-    "ConfigError": "kingfisher.domain.config",
+    "Config": "kingfisher.config",
+    "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
@@ -77,9 +77,9 @@ if TYPE_CHECKING:
     from kingfisher.app.config import from_env as from_env
     from kingfisher.app.run import run as run
     from kingfisher.app.run import stream as stream
+    from kingfisher.config import Config as Config
+    from kingfisher.config import ConfigError as ConfigError
     from kingfisher.domain.capabilities import Capabilities as Capabilities
-    from kingfisher.domain.config import Config as Config
-    from kingfisher.domain.config import ConfigError as ConfigError
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult

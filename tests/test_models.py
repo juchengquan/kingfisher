@@ -13,7 +13,7 @@ import pytest
 from langchain_openai import ChatOpenAI
 
 from kingfisher.adapters.models import PROVIDERS, Provider, build_model
-from kingfisher.domain.config import API_STYLES, ConfigError
+from kingfisher.config import API_STYLES, ConfigError
 
 
 def test_every_api_style_has_a_provider():

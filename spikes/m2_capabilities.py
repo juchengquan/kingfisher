@@ -22,8 +22,9 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
+from evals.dataset import SAMPLE_NAME, seed_sample_data
+from evals.seed import SKILL_NAME, seed_sample_skill
 from kingfisher import ensure_layout, from_env, run
-from kingfisher.app.smoke import SAMPLE_NAME, SKILL_NAME, seed_sample_data, seed_sample_skill
 
 load_dotenv()
 

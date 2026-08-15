@@ -32,7 +32,7 @@ from kingfisher.adapters.agent import build_agent
 from kingfisher.adapters.checkpointing import build_checkpointer
 from kingfisher.adapters.runlog import JsonlRunLogger, log_path
 from kingfisher.app import config as config_module
-from kingfisher.domain.config import Config
+from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import Session

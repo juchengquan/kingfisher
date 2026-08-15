@@ -1,10 +1,17 @@
-"""Configuration, in kingfisher's own vocabulary.
+"""Deployment configuration. Belongs to no layer, which is why it sits here.
 
-`Config` is the frozen record every layer reads, so it lives in `domain/` where
-both `app/` and `adapters/` can depend on it without either depending on the
-other. Reading it out of the environment is a separate job and stays in
-`app/config.py`: the provider table that knows which variables to read lives in
-`adapters/`, and `domain/` may not reach outward.
+`Config` lived in `domain/` for a while, on the reasoning that both `app/` and
+`adapters/` could then read it without depending on each other. That reasoning
+is about import direction, not about modelling: no domain rule reads a `Config`,
+and `base_url`, `api_key` and `timeout_s` are not kingfisher's vocabulary. It
+was the innermost layer holding a record for the outer ones.
+
+So it lives at the package root, above the layers and outside them. `app/` and
+`adapters/` may read it; `domain/` may not, and a test enforces that -- a domain
+rule that needs a value takes the value, not the record.
+
+Reading it out of the environment is a separate job and stays in `app/config.py`:
+the provider table that knows which variables to read lives in `adapters/`.
 
 `ApiStyle` is the single source of truth for which endpoint styles exist.
 `API_STYLES` is derived from it rather than written twice, so the runtime gate

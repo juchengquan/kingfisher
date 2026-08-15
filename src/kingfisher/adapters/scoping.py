@@ -1,5 +1,9 @@
 """Applying a request's capabilities to the agent that runs it.
 
+Named `scoping`, not `capabilities`: `domain/capabilities.py` is the value
+object a caller passes, and this is the machinery that enforces it. Two files
+with one name across two layers made every import a small act of guessing.
+
 Two middleware, because the two restrictions bite in different places:
 
 `ToolAllowlist` works at two layers, and it needs both. Filtering

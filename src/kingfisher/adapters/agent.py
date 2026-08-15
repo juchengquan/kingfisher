@@ -18,10 +18,10 @@ from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.adapters.backend import build_backend
-from kingfisher.adapters.capabilities import HostPathGuard, ScopedSkills, ToolAllowlist
 from kingfisher.adapters.models import build_model
+from kingfisher.adapters.scoping import HostPathGuard, ScopedSkills, ToolAllowlist
+from kingfisher.config import Config
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.config import Config
 from kingfisher.domain.subagent import SubagentSpec, load_all
 
 if TYPE_CHECKING:
