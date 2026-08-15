@@ -12,8 +12,8 @@ same thing on every machine:
   a later session would want back.
 - `/reports` — long-lived reports.
 - Your run directory — named in the task. Outputs, plots, scratch and intermediates go
-  here. Assume everything in it except the two files named below may be deleted later,
-  so anything expensive belongs in `/derived` instead.
+  here. Old run directories are swept, so assume anything here may be deleted later and
+  put anything expensive in `/derived` instead.
 
 The workspace is a git repository, and its tracked contents are committed before each
 run, so those have a restore point. Inputs, derived data and run scratch are not
@@ -61,15 +61,16 @@ costly to get wrong.
 
 ## Finishing
 
-Write two files into your run directory before you finish:
+Answer the question. That is the deliverable. For many requests it is the whole of it —
+a greeting, a question about what you can do, a clarification, a piece of reasoning
+someone wanted talked through. Reply and stop, and do not manufacture files nobody
+asked for.
 
-- `report.md` — what you found, how you established it, and what you did not verify.
-  Point at the evidence: the paths you read, the commands you ran, the output you saw.
-- `result.json` — `{"answer": …, "artifacts": […], "assumptions": […], "unverified": […]}`
+When a request wants files written, it says so and gives the names. Follow that
+exactly; nothing here overrides it.
 
-Then give the answer itself, briefly, and name those two paths.
-
-Every claim in the report should trace to something you actually ran or read. If a step
+Every claim you make should trace to something you actually ran or read. If a step
 failed, or you skipped it, or a number came from an assumption rather than a
-computation, say so plainly — a result that quietly overstates what was checked is
-worse than one that admits a gap.
+computation, say so plainly — an answer that quietly overstates what was checked is
+worse than one that admits a gap. That holds for a one-line reply as much as for a
+long report.

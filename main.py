@@ -18,6 +18,10 @@ was reachable from here.
     uv run main.py "And now?" --session 7f3a91c2b4e0
     uv run main.py "Profile this" --input ~/data.csv
 
+Nothing is written unless the task asks for it. Wanting a report on disk is one
+kind of request among many, so there is no flag for it -- say what you want in
+the task, and name the files if you care what they are called.
+
 `--tools`, `--skills` and `--subagents` are per-request capability grants.
 Omitting one means "everything this workspace offers"; passing it with an empty
 value means none. Naming something that does not exist is an error, not a

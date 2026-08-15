@@ -228,3 +228,32 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
         )
 
     assert old.is_dir()  # nothing was removed
+
+
+def test_the_framework_never_asks_for_files_of_its_own(cfg):
+    """Wanting a written report is one kind of task among many. Nothing in the
+    plumbing may privilege a convention -- not the system prompt, not the turn
+    envelope. If the caller wants files, it says so in the task, and that is
+    the only route by which those names reach the model.
+
+    Both failure modes of the old design showed up live in one afternoon: a
+    greeting that deliberated over two files nobody wanted, and, once the
+    demand was softened to a suggestion, a real analysis that recorded nothing.
+    """
+    quiet = StubAgent("ok")
+    result = run(Request("say hello"), cfg=cfg, agent=quiet, checkpointer=StubCheckpointer())
+    sent = quiet.state["messages"][0]["content"]
+
+    assert result.run_dir.name in sent  # the turn directory is a fact, and reaches it
+    assert "report.md" not in sent
+    assert "result.json" not in sent
+
+    asked = StubAgent("ok")
+    run(
+        Request("Analyse it and write findings.csv"),
+        cfg=cfg,
+        agent=asked,
+        checkpointer=StubCheckpointer(),
+    )
+    # Whatever the caller names, verbatim and unembellished.
+    assert "findings.csv" in asked.state["messages"][0]["content"]
