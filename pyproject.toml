@@ -72,8 +72,9 @@ select = [
 ignore = ["ANN401"]
 
 [tool.ruff.lint.per-file-ignores]
-# A driver whose whole job is printing, with the branchiness that implies.
-"main.py" = ["T201", "PLR0912", "PLR0915"]
+# A driver whose whole job is printing, with the branchiness that implies --
+# and one exit code per way a run can end, which is the clearer shape here.
+"main.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
 # The long lines are inside string literals: a skill's frontmatter description
 # must be one line, and so must the task's JSON schema commentary.
 "src/kingfisher/app/smoke.py" = ["E501"]

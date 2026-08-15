@@ -201,3 +201,30 @@ def test_coerce_is_idempotent():
     original = Request("t", session_id="s")
     assert Request.coerce(original) is original
     assert Request.coerce("t").task == "t"
+
+
+def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
+    """A typo in a capability name must not be destructive. This used to raise
+    only after the sweep had already removed old sessions."""
+    from kingfisher.adapters.agent import CapabilityError
+    from kingfisher.domain.capabilities import Capabilities
+
+    workspace = cfg.workspace
+    old = workspace / "runs" / "ancient"
+    old.mkdir(parents=True)
+    (old / "t001").mkdir()
+
+    def must_not_run(*_args, **_kwargs):
+        msg = "sweep ran despite the request being rejected"
+        raise AssertionError(msg)
+
+    monkeypatch.setattr("kingfisher.app.run.sweep", must_not_run)
+
+    with pytest.raises(CapabilityError):
+        run(
+            Request("t", capabilities=Capabilities(subagents=("ghost",))),
+            cfg=cfg,
+            checkpointer=StubCheckpointer(),
+        )
+
+    assert old.is_dir()  # nothing was removed
