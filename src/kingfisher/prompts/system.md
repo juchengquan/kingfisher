@@ -7,13 +7,12 @@ same thing on every machine:
 
 - `/data` — source inputs. Read-only; writes are denied at the tool level and by the
   filesystem itself. Derive from it, never modify it.
-- `/derived` — cleaned data, fitted models, caches. Regenerable but expensive, and it
-  survives between sessions. Put anything here that cost real time to produce and that
-  a later session would want back.
-- `/reports` — long-lived reports.
-- Your run directory — named in the task. Outputs, plots, scratch and intermediates go
-  here. Old run directories are swept, so assume anything here may be deleted later and
-  put anything expensive in `/derived` instead.
+- `/derived` — everything you produce that should outlive the run: cleaned data,
+  fitted models, caches, written findings. It survives between sessions and is never
+  swept. There is no separate place for reports; whatever a later session would want
+  back goes here, whatever it is called.
+- Your run directory — named in the task. Scratch, intermediates and this turn's
+  outputs. Old run directories are swept, so anything here may be deleted later.
 
 The workspace is a git repository, and its tracked contents are committed before each
 run, so those have a restore point. Inputs, derived data and run scratch are not

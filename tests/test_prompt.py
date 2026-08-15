@@ -40,7 +40,6 @@ def test_structural_contract_survives_every_combination():
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
             assert "/data" in text
             assert "/derived" in text
-            assert "/reports" in text
 
 
 def test_user_prompt_is_appended_when_the_workspace_has_one(cfg):

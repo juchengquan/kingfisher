@@ -5,6 +5,8 @@ import shutil
 
 from kingfisher.domain.workspace import (
     LAYOUT_DIRS,
+    TRACKED_PATHS,
+    WORKSPACE_GITIGNORE,
     ensure_layout,
     is_repo,
     pre_run_commit,
@@ -28,15 +30,10 @@ def test_gitignore_encodes_the_durability_tiers(workspace):
     assert "data/" in text
     assert "derived/" in text
     assert ".kingfisher/" in text
-    # Run output: conclusions tracked, scratch ignored. Negation needs the
-    # parent directories re-included or git will not reach the files.
-    assert "runs/**" in text
-    # Two levels — runs/<session>/<turn>/ — and every parent must be
-    # re-included or git never descends far enough to see the negated files.
-    assert "!runs/*/" in text
-    assert "!runs/*/*/" in text
-    assert "!runs/*/*/report.md" in text
-    assert "!runs/*/*/result.json" in text
+    # Run output is scratch, all of it. Nothing under runs/ is re-included:
+    # a run that produces something worth keeping writes it to derived/.
+    assert "runs/" in text
+    assert "!runs" not in text
 
 
 def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
@@ -64,7 +61,7 @@ def test_sweep_is_a_noop_when_under_the_limit(workspace):
 
 def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
     """`git add -A` would sweep up unrelated work if the workspace is shared."""
-    (workspace / "reports" / "smoke.md").write_text("findings\n")
+    (workspace / "memory" / "AGENTS.md").write_text("a durable fact\n")
     stray = workspace / "unrelated.txt"
     stray.write_text("not kingfisher's business\n")
 
@@ -86,7 +83,7 @@ def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
         text=True,
         check=False,
     ).stdout
-    assert "reports/smoke.md" in listed
+    assert "memory/AGENTS.md" in listed
     assert "unrelated.txt" not in listed
 
 
@@ -153,3 +150,24 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
     # Each failure names the session it belongs to, so the report is actionable.
     assert {f.split(":")[0] for f in result.failures} == {"a", "b"}
     assert all("RuntimeError" in f for f in result.failures)
+
+
+def test_the_layout_names_no_genre_of_output():
+    """`/reports` privileged one kind of result in the workspace structure
+    itself. Durability is the only thing the layout should encode: `/derived`
+    survives, `runs/` does not, and what you call the file is your business."""
+    assert "reports" not in LAYOUT_DIRS
+    assert "derived" in LAYOUT_DIRS
+
+    # And nothing is tracked for being a "report" either.
+    assert not any("report" in path for path in TRACKED_PATHS)
+    assert "report" not in WORKSPACE_GITIGNORE
+
+
+def test_git_tracks_what_a_person_authored_not_what_a_run_produced(workspace):
+    """The tiers are now clean: authored content is restorable from git,
+    produced content lives in derived/ and is never swept, run scratch is
+    disposable. Nothing straddles two tiers."""
+    assert set(TRACKED_PATHS) == {".gitignore", "PROMPT.md", "skills", "subagents", "memory"}
+    for produced in ("data/", "derived/", "runs/"):
+        assert produced in WORKSPACE_GITIGNORE
