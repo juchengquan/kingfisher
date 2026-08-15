@@ -101,3 +101,24 @@ def test_system_prompt_carries_no_host_paths_or_session_ids():
     # It must still teach the virtual layout.
     assert "/data" in text
     assert "/derived" in text
+
+
+def test_the_agent_exposes_the_expected_tool_surface(cfg):
+    """A regression guard on the whole surface, not just one middleware.
+
+    deepagents 0.7.6 ships no planning tool, so `write_todos` here proves
+    TodoListMiddleware is wired; `task` proves the general-purpose subagent is
+    present even though this model has no harness profile registered.
+    """
+    agent = build_agent(cfg, model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
+
+    names = set()
+    for node in agent.nodes.values():
+        registry = getattr(getattr(node, "bound", None), "tools_by_name", None)
+        if isinstance(registry, dict):
+            names |= set(registry)
+
+    assert names == {
+        "ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep",
+        "execute", "task", "write_todos",
+    }
