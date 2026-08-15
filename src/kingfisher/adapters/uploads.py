@@ -14,6 +14,7 @@ the catalogue.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -49,12 +50,20 @@ def _write(root: Path, files: Mapping[str, bytes]) -> None:
         target.write_bytes(content)
 
 
+@dataclass(frozen=True)
+class Brought:
+    """The names a request supplied itself, by kind."""
+
+    skills: tuple[str, ...] = ()
+    subagents: tuple[str, ...] = ()
+
+
 def provision(
     request: Request,
     store: DefinitionStore | None,
     session_dir: Path,
     cfg: Config,
-) -> None:
+) -> Brought:
     """Unpack everything this request brought with it, or refuse to.
 
     Called before the agent is built, because the agent discovers definitions
@@ -63,16 +72,18 @@ def provision(
     that shadows a reviewed one, should fail before a turn directory exists.
     """
     if not request.skill_refs and not request.subagent_refs:
-        return
+        return Brought()
     if store is None:
         msg = "request supplies definitions by id, but no DefinitionStore is wired"
         raise UploadError(msg)
 
-    materialise_skills(
-        request.skill_refs, store, session_dir, skill_store.names(cfg.skills_dir)
-    )
-    materialise_subagents(
-        request.subagent_refs, store, session_dir, tuple(load_all(cfg.subagents_dir))
+    return Brought(
+        skills=materialise_skills(
+            request.skill_refs, store, session_dir, skill_store.names(cfg.skills_dir)
+        ),
+        subagents=materialise_subagents(
+            request.subagent_refs, store, session_dir, tuple(load_all(cfg.subagents_dir))
+        ),
     )
 
 

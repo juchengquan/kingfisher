@@ -7,9 +7,9 @@ context those sessions live in, not a root of its own: an aggregate holding
 every file in the project would be a concurrency bottleneck and the
 large-aggregate anti-pattern in one.
 
-Retention is deliberately *not* here. Keeping the last N sessions is a policy
-*across* sessions, so it is a domain service (`workspace.sweep`) that asks each
-session to discard itself.
+Retention is deliberately *not* here. Deciding which sessions to drop is a
+policy *across* sessions, so it lives in `domain.retention`, which names them
+and asks each to discard itself.
 """
 
 from __future__ import annotations
@@ -18,6 +18,18 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kingfisher.domain.ports import SessionDirs, ThreadStore
+
+
+class UnknownSessionError(ValueError):
+    """A request named a session that does not exist.
+
+    Raised rather than creating one. A session id names a conversation and the
+    files beside it, so it is a bearer credential: holding one is how a caller
+    proves the session is theirs, and they hold one by having started it. If a
+    supplied id could create a session, a service that forwarded an id from its
+    own caller would let that caller choose -- or guess -- the name, and read
+    somebody else's turn.
+    """
 
 
 @dataclass(frozen=True)

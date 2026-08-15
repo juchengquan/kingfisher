@@ -3,7 +3,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from kingfisher.app.run import Request, stream
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
 
 
@@ -35,6 +35,7 @@ def _agent_with_a_tool_call() -> StubAgent:
 
 
 def _events(cfg, agent):
+    start(cfg, "s")
     return list(
         stream(Request("t", session_id="s"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
     )
@@ -277,6 +278,7 @@ def test_the_adapter_owns_the_stream_modes(cfg):
 
 def test_run_is_a_drain_of_stream(cfg):
     """One orchestration path: run() must not re-implement the sequence."""
+    start(cfg, "drained")
     from kingfisher.app.run import run
 
     agent = StubAgent("<think>x</think>7")

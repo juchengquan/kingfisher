@@ -1,13 +1,12 @@
 from __future__ import annotations
 
 import json
-import os
 
 import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.app.run import Request, RunResult, normalize_answer, run
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 
 
 class StubAgent:
@@ -53,6 +52,7 @@ def test_normalize_strips_inlined_reasoning(raw, expected):
 
 def test_run_creates_the_session_triple(cfg):
     """One identifier reaches the thread, the run directory and the log."""
+    start(cfg, "sess123")
     agent = StubAgent("<think>done</think>\n\n42")
     result = run(
         Request("count things", session_id="sess123"),
@@ -71,6 +71,7 @@ def test_run_creates_the_session_triple(cfg):
 
 def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
     """Run-scoped, so it goes in the message -- never the cached system prompt."""
+    start(cfg, "abc")
     agent = StubAgent("ok")
     run(
         Request("do a thing", session_id="abc"),
@@ -86,6 +87,7 @@ def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
 
 
 def test_run_logs_usage_shaped_records(cfg):
+    start(cfg, "logged")
     agent = StubAgent("ok")
     result = run(
         Request("t", session_id="logged"),
@@ -103,29 +105,26 @@ def test_run_logs_usage_shaped_records(cfg):
     assert all(r["model"] == cfg.model and r["api_style"] == cfg.api_style for r in records)
 
 
-def test_run_sweeps_old_sessions_before_creating_the_new_one(cfg):
-    """cfg.keep_runs is 2 in the fixture."""
-    for i, name in enumerate(["s1", "s2", "s3"]):
-        d = cfg.workspace / "sessions" / name
-        d.mkdir(parents=True)
-        os.utime(d, (1_000 + i * 100, 1_000 + i * 100))
+def test_a_turn_disposes_of_nothing(cfg):
+    """Retention used to run here and keep the newest N sessions, counting
+    every caller's together -- so a busy caller evicted a quiet one on a turn
+    that had nothing to do with it. Disposal is asked for now."""
+    for name in ("s1", "s2", "s3"):
+        start(cfg, name)
+    start(cfg, "s4")
 
-    ckpt = StubCheckpointer()
-    result = run(Request("t", session_id="s4"), cfg=cfg, agent=StubAgent("ok"), checkpointer=ckpt)
+    run(Request("t", session_id="s4"), cfg=cfg, agent=StubAgent("ok"),
+        checkpointer=StubCheckpointer())
 
-    assert "s1" in result.swept
-    assert not (cfg.workspace / "sessions" / "s1").exists()
-    assert ckpt.deleted == ["s1"]
-    # This session is exempted from the sweep by name, so a run can never
-    # delete itself -- even though its directory now exists before the sweep
-    # runs, because the agent's backend has to be rooted at it first.
-    assert (cfg.workspace / "sessions" / "s4").is_dir()
+    for name in ("s1", "s2", "s3", "s4"):
+        assert (cfg.workspace / "sessions" / name).is_dir(), name
 
 
 
 def test_a_second_turn_does_not_overwrite_the_first(cfg):
     """The defect this tier exists to fix: two turns in one session shared a
     directory, so turn two clobbered turn one's report and result."""
+    start(cfg, "sess")
     ck = StubCheckpointer()
     first = run(
         Request("turn one", session_id="sess"), cfg=cfg, agent=StubAgent("a"), checkpointer=ck
@@ -149,6 +148,7 @@ def test_a_second_turn_does_not_overwrite_the_first(cfg):
 def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
     """Files supplied with a request are not project data: they arrive fresh
     each round and leave with the turn."""
+    start(cfg, "s")
     supplied = tmp_path / "upload.csv"
     supplied.write_text("a,b\n1,2\n")
 
@@ -168,6 +168,7 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
 
 
 def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
+    start(cfg, "s")
     agent = StubAgent("ok")
     result = run(
         Request("just answer", session_id="s"),

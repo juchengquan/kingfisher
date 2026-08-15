@@ -41,13 +41,14 @@ from kingfisher.adapters.workspace_fs import (
     ensure_session_layout,
     protect_data,
 )
-from kingfisher.adapters.workspace_git import pre_run_commit
 from kingfisher.app import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
+from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
-from kingfisher.domain.session import Session
+from kingfisher.domain.retention import SweepResult
+from kingfisher.domain.session import Session, UnknownSessionError
 
 if TYPE_CHECKING:
     from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
@@ -66,13 +67,16 @@ class Kingfisher:
     agent to drive a scripted conversation.
     """
 
-    def __init__(
+    def __init__(  # noqa: PLR0913 -- the composition root; each argument is one
+        # collaborator a deployment or a test substitutes, and folding them into
+        # a parameter object would hide exactly what is substitutable.
         self,
         cfg: Config | None = None,
         *,
         dirs: SessionDirs | None = None,
         threads: ThreadStore | None = None,
         definitions: DefinitionStore | None = None,
+        grants: Capabilities | None = None,
         agent: Any | None = None,
     ) -> None:
         self.cfg = cfg or config_module.from_env()
@@ -88,9 +92,79 @@ class Kingfisher:
         # nothing to wire, and a request that supplies ids without one is a
         # configuration error worth saying out loud rather than a silent no-op.
         self.definitions: Any = definitions
+        # What this deployment permits, before any request asks for anything.
+        # Unrestricted by default, so a single-caller deployment is unaffected;
+        # a service in front of many callers sets it, and `intersect` can only
+        # subtract, so no request can widen past it.
+        self.grants: Capabilities = grants or Capabilities()
         self._agent = agent
 
-    def agent_for(self, request: Request, session_dir: Path) -> Any:
+    def _session_id_for(self, request: Request, sessions_root: Path) -> str:
+        """Mint an id, or accept one that already names a session.
+
+        A supplied id may resume; it may not create. See `UnknownSessionError` --
+        the id is what proves a session is the caller's, and it is proof only
+        because it cannot be chosen.
+
+        Full `uuid4().hex` rather than the twelve characters this used to take.
+        Forty-eight bits is enough to avoid collisions, which is all it was for,
+        and far too few for something that opens a conversation and its files.
+        """
+        if request.session_id is None:
+            return uuid4().hex
+        if request.session_id not in self.dirs.children(sessions_root):
+            msg = f"no session {request.session_id!r}; omit session_id to start one"
+            raise UnknownSessionError(msg)
+        return request.session_id
+
+    def start_session(self, session_id: str | None = None) -> str:
+        """Open a new session and return its id.
+
+        The counterpart to `delete_session`, and the only way a session comes
+        into existence with a name someone chose. That is the whole of T2: a
+        *request* may not create, because its id may have come from whoever is
+        calling the service; the service itself may, because it knows who is
+        asking. Callers that just want a conversation omit `session_id` on the
+        first request and read the id off the result.
+        """
+        session_id = session_id or uuid4().hex
+        session = Session.open(self.workspace, session_id, self.dirs)
+        ensure_session_layout(session.directory)
+        return session_id
+
+    def delete_session(self, session_id: str) -> str | None:
+        """Dispose of one session and its thread. Returns a failure, or None.
+
+        Disposal is asked for rather than inferred. Retention used to run on
+        the request path and keep the newest N sessions, which counts every
+        caller's together -- so a busy caller evicted a quiet one's
+        conversation, on a turn that had nothing to do with it.
+        """
+        sessions_root = self.workspace / "sessions"
+        if session_id not in self.dirs.children(sessions_root):
+            return None
+        return Session(id=session_id, directory=sessions_root / session_id).discard(
+            self.dirs, self.threads
+        )
+
+    def reap(self, older_than_seconds: float, now: float) -> SweepResult:
+        """Dispose of every session untouched for `older_than_seconds`.
+
+        The backstop under `delete_session`, for callers that never call it.
+        Meant to be run by a janitor on its own schedule, not on a request:
+        deleting somebody else's session is not part of serving a turn, and
+        putting it there is what made retention a tenancy bug.
+
+        `now` is passed in rather than read, so the decision stays testable
+        and this stays a function of its arguments.
+        """
+        sessions_root = self.workspace / "sessions"
+        plan = retention.expired(self.dirs.listing(sessions_root), older_than_seconds, now)
+        return retention.apply(plan, sessions_root, self.dirs, self.threads)
+
+    def agent_for(
+        self, request: Request, session_dir: Path, capabilities: Capabilities | None = None
+    ) -> Any:
         """The graph that serves one request, rooted at its session.
 
         Built per request because capabilities narrow it, because it reads
@@ -108,7 +182,7 @@ class Kingfisher:
 
         return build_agent(
             self.cfg,
-            capabilities=request.capabilities,
+            capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
             checkpointer=self.threads,
         )
@@ -118,20 +192,20 @@ class Kingfisher:
 
         The terminal event has `kind == "finished"` and carries the `RunResult`.
 
-        Ordering matters. Anything that can reject the request is done first,
-        while nothing has been written or removed yet: a request naming a
-        capability the workspace does not offer used to raise only after the
-        sweep had deleted old sessions, which made a typo destructive.
+        Nothing is destroyed here. Retention used to run on this path, keeping
+        the newest N sessions -- which counts every caller's sessions together,
+        so one busy caller evicted another's conversation. Disposal is now
+        asked for: `delete_session` and `reap`.
 
-        Then commit, then sweep, then create this turn's directory. The sweep
-        runs after the commit, so the restore point covers the state it is
-        about to change, and skips this session by name so a run can never
-        delete itself.
+        Ordering still matters for the rest. Anything that can reject the
+        request happens before the turn directory exists, so a typo does not
+        leave one behind.
         """
         request = Request.coerce(request)
-        cfg, dirs, checkpointer = self.cfg, self.dirs, self.threads
+        cfg, dirs = self.cfg, self.dirs
         workspace = self.workspace
-        session_id = request.session_id or uuid4().hex[:12]
+        sessions_root = workspace / "sessions"
+        session_id = self._session_id_for(request, sessions_root)
 
         # The session directory has to exist before the agent, because the
         # agent's backend is rooted at it. Creating it first does not weaken
@@ -149,30 +223,17 @@ class Kingfisher:
 
         # Before the agent, which discovers definitions by reading the
         # directories this writes.
-        provision(request, self.definitions, session.directory, cfg)
+        brought = provision(request, self.definitions, session.directory, cfg)
 
-        # Built before anything is removed. Construction is side-effect free
-        # but validation is not free of *consequence*: a request naming a
-        # capability the workspace lacks used to raise only after the sweep had
-        # deleted old sessions. A usage error must not be destructive.
-        graph = self.agent_for(request, session.directory)
+        # What this deployment permits, narrowed by what the request asked for.
+        # Definitions the request brought itself are added back: their content
+        # came from the caller, so a grant list -- written before their names
+        # existed -- has no opinion about them.
+        allowed = self.grants.intersect(request.capabilities).including(
+            skills=brought.skills, subagents=brought.subagents
+        )
+        graph = self.agent_for(request, session.directory, capabilities=allowed)
 
-        commit = pre_run_commit(workspace, f"kingfisher: pre-run {session_id}")
-        # Decide, then act. `retention.plan` is pure -- it names victims from
-        # `(name, mtime)` pairs and touches nothing -- and `retention.apply` walks
-        # the list, leaving the per-session ordering to `Session.discard`.
-        #
-        # This session is excluded by name rather than by running the sweep
-        # before its directory exists, which is how it used to be kept safe.
-        # It cannot run first any more -- the agent needs the session rooted
-        # before it can be built, and the agent is what validates the request.
-        # Naming the exemption is the better guarantee anyway: it does not
-        # depend on `keep_runs` being positive, or on this session's mtime
-        # happening to be the newest.
-        sessions = workspace / "sessions"
-        others = tuple(e for e in dirs.listing(sessions) if e[0] != session_id)
-        sweep_plan = retention.plan(others, cfg.keep_runs)
-        swept = retention.apply(sweep_plan, sessions, dirs, checkpointer)
 
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
         turn = session.allocate_turn(dirs, request.turn_id)
@@ -188,15 +249,10 @@ class Kingfisher:
             api_style=cfg.api_style,
             session_id=session_id,
         )
-        logger.swept(swept.removed, swept.kept)
         logger.run_start(request.task, turn.virtual_dir)
 
         if unprotected:
             yield RunEvent(kind="protect_failed", text="; ".join(unprotected))
-        if swept.removed:
-            yield RunEvent(kind="swept", text=", ".join(swept.removed))
-        if swept.failures:
-            yield RunEvent(kind="sweep_failed", text="; ".join(swept.failures))
         yield RunEvent(kind="run_start", text=turn.virtual_dir)
 
         # The turn directory is run-scoped, so it reaches the model here rather
@@ -250,8 +306,6 @@ class Kingfisher:
                 answer=answer,
                 run_dir=turn.directory,
                 log_path=log_path(cfg.state_dir, session_id),
-                swept=swept.removed,
-                commit=commit,
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.

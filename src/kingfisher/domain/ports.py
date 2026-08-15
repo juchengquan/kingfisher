@@ -5,7 +5,7 @@ depends on a primitive: `allocate_turn` is atomic *because* `mkdir` fails on an
 existing name, and expressing that as "scan, then create" in a caller would
 reintroduce the race the loop exists to avoid. Where no primitive is load-
 bearing, the domain returns a decision instead and the caller acts on it --
-`retention.plan` names the sessions to drop and touches nothing.
+`retention.expired` names the sessions to drop and touches nothing.
 
 Protocols rather than base classes: an adapter satisfies these by shape, and
 a test satisfies them with a dict.

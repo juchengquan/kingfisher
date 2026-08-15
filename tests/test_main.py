@@ -29,8 +29,6 @@ def _a_result() -> RunResult:
         answer="42",
         run_dir=Path("/tmp/run"),
         log_path=Path("/tmp/log"),
-        swept=(),
-        commit=None,
     )
 
 

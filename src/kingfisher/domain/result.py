@@ -34,8 +34,6 @@ class RunResult:
     answer: str
     run_dir: Path
     log_path: Path
-    swept: tuple[str, ...]
-    commit: str | None
     #: Everything under `/derived` and `/memory` at the end of this turn, as
     #: paths relative to the session root. What is *present*, not what changed:
     #: `execute` writes without any file tool seeing it, so the only sound view

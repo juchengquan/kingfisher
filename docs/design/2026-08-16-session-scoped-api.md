@@ -111,15 +111,82 @@ Each produces working, testable software on its own.
 Phase 1 is load-bearing for everything. Phases 4, 5 and 6 are independent of 2
 and 3 and can be reordered against them freely.
 
+## Tenancy (decided 2026-08-16, after phase 4)
+
+Three things were true and none of them was written down:
+
+- **`Capabilities.intersect` had no production call sites.** It is implemented
+  and tested, and both `Request` and `Capabilities` state that a service clamps
+  with it before a request runs. Nothing did. Every request got everything the
+  deployment wired.
+- **`session_id` is caller-supplied and is the only key to anything.** It names
+  `<workspace>/sessions/<id>` — holding `/data`, `/derived`, `/memory` — and the
+  checkpointer thread that *is* the conversation. At `uuid4().hex[:12]` it
+  carried 48 bits, which is fine for avoiding collisions and far too little for
+  something that grants access.
+- **A skill's `allowed-tools` is prompt text, not enforcement.** deepagents
+  renders it into the skills listing and binds nothing. What binds tools is
+  kingfisher's own `ToolAllowlist`.
+
+| # | Decision | Why |
+|---|---|---|
+| T1 | **The boundary is outside kingfisher, with one guard inside.** No tenant concept in `Request` or `Config`. | `Capabilities` already says authorisation is not the request's job, and a tenant field would make kingfisher decide who may see what. But the contract that a service derives session ids was unwritten and failed silently, which is the asymmetry worth fixing. |
+| T2 | **Session ids are issued, not accepted.** Full `uuid4().hex`; a supplied id may resume an existing session but never create one. | Kingfisher cannot tell a service-derived id from a forwarded one — but it does know which sessions exist. Splitting resume from create makes the id a bearer credential, and 128 bits makes guessing infeasible. A service that forwards user input now gets "no such session" instead of a silent cross-tenant read. |
+| T3 | **`Kingfisher(grants=…)` clamps tools and catalogue names; uploaded definitions authorise themselves.** | A closed allowlist cannot cover uploads — their names come from their own frontmatter and are unknowable when grants are set, so clamping them would silently break phase 3. An upload is text the caller could have put in `task`, and `allowed-tools` grants nothing, so the tool clamp is the boundary that matters. |
+| T4 | **One *process*, many sessions.** Per-tenant `Kingfisher` objects inside it are cheap enough to be an ordinary choice, not a fallback. | Everything shared is deployment-authored — catalogue, `PROMPT.md`, grants — and nothing caller-written reaches workspace level, which phase 3 secured by landing uploads in the session. |
+
+T4 was first written as "one instance, many sessions", dismissing per-tenant
+instances as costing "an instance and a workspace each". Measured, that was
+wrong, and the correction changes what the decision is about:
+
+| | time | memory |
+|---|---|---|
+| resolving `Kingfisher` (the deepagents import) | 1310 ms | +115 MB |
+| first instance | 2 ms | +1 MB |
+| each further instance *in the same process* | 1.1 ms | +0.16 MB |
+
+The cost is the **process**, not the instance. Twenty tenants as twenty
+processes is 2.3 GB and 26s of startup; as twenty objects in one process it is
+118 MB and 1.3s. So process count follows *concurrency*, not tenancy — and a
+per-tenant instance, which buys a private catalogue, `PROMPT.md` and grants,
+costs 160 KB. At a few hundred it stays fine; past that each holds an open
+sqlite handle (`service.py`, eager `build_checkpointer`) and wants pooling.
+
+**Concurrency is a separate matter, and not yet available.** `stream()` is
+synchronous, so a process serves one request at a time. deepagents itself is
+ready — the graph has `astream`, every backend method has an async twin,
+`LocalShellBackend.aexecute` uses `asyncio.to_thread`, the async file paths run
+through `_get_backend_and_key` so the host-path guard still applies, and
+`AsyncSqliteSaver` exists. Kingfisher is not: sqlite is single-writer, so async
+would move the bottleneck rather than remove it, and ~67ms of blocking
+orchestration per turn (git 31.5ms, agent build ~30ms, `collect_artifacts` and
+`protect_data` growing with session size) would hold the loop for every other
+caller. Async belongs after phase 6's shared checkpointer, not before it.
+
+**Two consequences for phase 5.**
+
+Retention counts sessions globally, so one busy caller evicts another's session.
+Under T4 that is no longer only an ops concern: reaping has to be explicit,
+not a global newest-N.
+
+`pre_run_commit` has to leave the request path, and the reason is correctness
+rather than its 31.5ms. It commits the *workspace* repo on every turn, so under
+T4 concurrent turns race on `.git/index.lock` — measured at **seven of eight
+concurrent commits failing**, silently, since a failure returns `None`. And
+after phase 1 the tracked tier is `skills`, `subagents`, `PROMPT.md` and
+`.gitignore`, all deployment-authored and none of them modifiable by a run. So
+it spends most of a turn's blocking time producing a restore point for content
+that cannot change, and fails to produce it whenever two callers overlap.
+
 ## Still undecided
 
 These did not come up in the design session and each could change a phase:
 
-- **Tenancy.** Is a workspace per-tenant, or is one workspace shared with
-  sessions as the only boundary? Decision 7 makes sessions isolated from each
-  other, which may be sufficient — but nothing yet says who may activate which
-  system skills. `Capabilities.intersect` exists for a service to clamp with;
-  what does the clamping.
+- ~~**Tenancy.**~~ Answered above (T1–T4).
+- **Quotas.** Nothing bounds what one caller can consume — sessions opened,
+  disk used, turns run. T4 puts every caller in one process, so a single caller
+  can starve the others. Out of scope for the six phases, but it is the next
+  thing a real deployment would hit.
 - **Shared storage.** `LocalShellBackend` runs real subprocesses against a real
   filesystem. Whether the chosen shared store supports that (NFS/EFS yes;
   S3-fuse, questionable) needs proving before phase 6 rather than after.
