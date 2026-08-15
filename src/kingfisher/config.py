@@ -67,10 +67,18 @@ class Config:
     # by default. Read them through `state_dir` / `scratch_dir`, never directly.
     state_root: Path | None = None
     scratch_root: Path | None = None
-    # M2 capabilities. Off by default: a self-editing prompt makes runs
-    # non-reproducible, and reproducibility is what the smoke task depends on.
-    # Each flag gates both the middleware and its prompt section, so the agent
-    # is never told about a capability it does not have.
+    # What this deployment *wires*. Distinct from `Capabilities`, which is what
+    # a single request may *use* of it -- and the distinction is not stylistic:
+    # these two flags shape `render_system_prompt`, which is the cached prefix
+    # every turn is compared against. Varying them per request would trade a
+    # measured ~90% cache hit for a per-caller prompt.
+    #
+    # So: wiring is deployment-stable and lives here; narrowing is per-turn and
+    # lives on the request. Narrowing may only subtract -- a request asking for
+    # memory this deployment never wired does not get it.
+    #
+    # Off by default: a self-editing prompt makes runs non-reproducible, and
+    # reproducibility is what the smoke task depends on.
     skills_enabled: bool = False
     memory_enabled: bool = False
 

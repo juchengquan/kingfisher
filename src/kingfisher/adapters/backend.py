@@ -195,6 +195,11 @@ DATA_ROUTE = "/data/"
 #: needs deny rules for the rest.
 SKILLS_ROUTE = "/skills/"
 
+#: Routed for the same reason again: a request that declines the memory a
+#: deployment wired needs a deny rule, and FilesystemMiddleware rejects
+#: `permissions=` outright unless every rule path is scoped to a route.
+MEMORY_ROUTE = "/memory/"
+
 
 def build_backend(cfg: Config) -> BackendProtocol:
     """Build the backend rooted at the workspace.
@@ -212,7 +217,7 @@ def build_backend(cfg: Config) -> BackendProtocol:
     default backend.
     """
     prepare_scratch(cfg)
-    for routed in ("data", "skills"):
+    for routed in ("data", "skills", "memory"):
         (cfg.workspace / routed).mkdir(parents=True, exist_ok=True)
 
     shell = LocalShellBackend(
@@ -225,6 +230,7 @@ def build_backend(cfg: Config) -> BackendProtocol:
         routes={
             DATA_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "data")),
             SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "skills")),
+            MEMORY_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "memory")),
         },
         workspace=cfg.workspace,
     )

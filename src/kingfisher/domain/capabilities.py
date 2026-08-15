@@ -39,16 +39,28 @@ def _normalise(value: Iterable[str] | None) -> Selection:
 
 @dataclass(frozen=True)
 class Capabilities:
-    """The tools, skills and subagents active for one request.
+    """What one request may use, out of what the deployment has wired.
 
         Capabilities()                                  # everything configured
         Capabilities(tools=())                          # no tools at all
         Capabilities(tools=("read_file", "glob"))       # read-only
+        Capabilities(memory=False)                      # do not read the memory file
+
+    Three of these name things and one is a switch, because memory has no names
+    to choose between -- it is one file, either mounted or not. `None` still
+    means "no opinion" for all four, which is what keeps the default free.
+
+    This is the *narrowing* axis. The other one is `Config.memory_enabled` and
+    `Config.skills_enabled`: what this deployment wired at all. Those shape the
+    system prompt and so must stay stable across requests; these do not, and
+    vary per turn. Narrowing can only ever subtract from wiring -- asking for
+    memory a deployment never wired does not conjure it.
     """
 
     tools: Selection = None
     skills: Selection = None
     subagents: Selection = None
+    memory: bool | None = None
 
     def __post_init__(self) -> None:
         for field_name in ("tools", "skills", "subagents"):
@@ -57,7 +69,12 @@ class Capabilities:
     @property
     def is_unrestricted(self) -> bool:
         """True when nothing is narrowed, so the agent can be built as configured."""
-        return self.tools is None and self.skills is None and self.subagents is None
+        return (
+            self.tools is None
+            and self.skills is None
+            and self.subagents is None
+            and self.memory is None
+        )
 
     def intersect(self, other: Capabilities) -> Capabilities:
         """Narrow these capabilities by another set. Never widens.
@@ -75,6 +92,7 @@ class Capabilities:
             tools=_narrow(self.tools, other.tools),
             skills=_narrow(self.skills, other.skills),
             subagents=_narrow(self.subagents, other.subagents),
+            memory=_narrow_switch(self.memory, other.memory),
         )
 
     def unknown(
@@ -97,6 +115,20 @@ class Capabilities:
             known = set(available)
             missing.extend(f"{label}:{name}" for name in requested if name not in known)
         return tuple(missing)
+
+
+def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
+    """A refusal from either side wins; otherwise the side with an opinion does.
+
+    `False` is the only value that can subtract, which is what makes this
+    narrowing rather than negotiation: a caller cannot turn memory on by asking
+    when the other side said no.
+    """
+    if left is False or right is False:
+        return False
+    if left is True or right is True:
+        return True
+    return None
 
 
 def _narrow(left: Selection, right: Selection) -> Selection:

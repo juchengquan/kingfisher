@@ -77,3 +77,25 @@ def test_capabilities_are_hashable_and_comparable():
     """
     assert Capabilities(tools=("a",)) == Capabilities(tools=["a"])  # ty: ignore[invalid-argument-type]
     assert len({Capabilities(tools=("a",)), Capabilities(tools=("a",))}) == 1
+
+
+def test_memory_is_a_switch_not_a_selection():
+    """It is one file, mounted or not -- there are no names to choose between.
+    `None` still means "no opinion", so the default stays free."""
+    assert Capabilities().memory is None
+    assert Capabilities().is_unrestricted
+    assert not Capabilities(memory=False).is_unrestricted
+    assert not Capabilities(memory=True).is_unrestricted
+
+
+def test_a_refusal_of_memory_wins_from_either_side():
+    """`False` is the only value that subtracts, which is what makes this
+    narrowing rather than negotiation."""
+    granted = Capabilities(memory=False)
+    assert granted.intersect(Capabilities(memory=True)).memory is False
+    assert Capabilities(memory=True).intersect(granted).memory is False
+
+    # And no opinion still defers to the side that has one.
+    assert Capabilities().intersect(Capabilities(memory=True)).memory is True
+    assert Capabilities(memory=True).intersect(Capabilities()).memory is True
+    assert Capabilities().intersect(Capabilities()).memory is None
