@@ -8,6 +8,7 @@ no network, no database, and no sweeping.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from functools import lru_cache
 from importlib import resources
 from pathlib import Path
@@ -55,6 +56,20 @@ def _available_skills(workspace: Path) -> tuple[str, ...]:
     if not directory.is_dir():
         return ()
     return tuple(sorted(p.name for p in directory.iterdir() if (p / "SKILL.md").is_file()))
+
+
+def registered_tools(graph: Any) -> tuple[str, ...]:
+    """Tool names the compiled agent can actually dispatch.
+
+    Derived from the graph rather than listed here, because a hardcoded list
+    would drift the first time deepagents adds or renames a tool. The path into
+    the tool node is not a public contract, so a shape we do not recognise
+    yields `()` — which callers read as "cannot check" — rather than raising and
+    taking down every build over an introspection detail.
+    """
+    node = getattr(graph, "nodes", {}).get("tools")
+    by_name = getattr(getattr(node, "bound", None), "tools_by_name", None)
+    return tuple(sorted(by_name)) if isinstance(by_name, dict) else ()
 
 
 # `/data` holds the only artifacts git cannot restore, because inputs are never
@@ -133,11 +148,16 @@ def system_prompt(cfg: Config | None = None) -> str:
     )
 
 
-def _as_subagent(spec: SubagentSpec) -> dict[str, Any]:
+def _as_subagent(spec: SubagentSpec, cfg: Config) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
 
-    The mapping is 1:1 by design — the markdown format was chosen to fit it,
-    so nothing is lost or invented here.
+    Every field maps directly except `tools`. deepagents' `SubAgent.tools` is a
+    sequence of tool *objects* it will register, not a selection from the ones
+    the parent already has — handing it names raises inside `ToolNode`. The
+    objects are built from the backend deep inside `create_deep_agent` and are
+    not reachable here, so the restriction is applied the same way a request's
+    own tool restriction is: a `ToolAllowlist` on the subagent's middleware,
+    which selects by name and refuses anything else.
     """
     subagent: dict[str, Any] = {
         "name": spec.name,
@@ -145,9 +165,18 @@ def _as_subagent(spec: SubagentSpec) -> dict[str, Any]:
         "system_prompt": spec.system_prompt,
     }
     if spec.tools is not None:
-        subagent["tools"] = list(spec.tools)
-    if spec.model is not None:
-        subagent["model"] = spec.model
+        subagent["middleware"] = [ToolAllowlist(spec.tools)]
+
+    # A *name* here would be resolved by deepagents' `init_chat_model`, which
+    # infers its own provider and reads credentials from the environment --
+    # around the provider table, the configured base_url, and the api_style
+    # this deployment chose. It also re-enables the profile behaviour that
+    # `adapters.models` exists to avoid. So we build the instance ourselves.
+    #
+    # `role_models` wins over the definition: which model a role runs on is an
+    # operator's cost decision, and it should not require editing content.
+    if (model_id := cfg.role_models.get(spec.name, spec.model)) is not None:
+        subagent["model"] = build_model(replace(cfg, model=model_id))
     return subagent
 
 
@@ -218,12 +247,12 @@ def build_agent(
         if unknown:
             msg = f"unknown subagent(s): {', '.join(unknown)}; workspace defines {tuple(defined)}"
             raise CapabilityError(msg)
-        extras["subagents"] = [_as_subagent(defined[n]) for n in capabilities.subagents]
+        extras["subagents"] = [_as_subagent(defined[n], cfg) for n in capabilities.subagents]
 
     if capabilities.tools is not None:
         middleware.append(ToolAllowlist(capabilities.tools))
 
-    return create_deep_agent(
+    graph = create_deep_agent(
         model=model if model is not None else build_model(cfg),
         backend=resolved_backend,
         system_prompt=system_prompt(cfg),
@@ -232,3 +261,14 @@ def build_agent(
         checkpointer=checkpointer,
         **extras,
     )
+
+    # Tool names are checked here rather than before construction, because the
+    # registered set is a property of the assembled graph. A typo would
+    # otherwise narrow the allowlist in silence -- the same "quietly less than
+    # you asked for" failure that skills and subagents already refuse.
+    if capabilities.tools is not None and (known := registered_tools(graph)):
+        if unknown := tuple(t for t in capabilities.tools if t not in known):
+            msg = f"unknown tool(s): {', '.join(unknown)}; this agent offers {known}"
+            raise CapabilityError(msg)
+
+    return graph
