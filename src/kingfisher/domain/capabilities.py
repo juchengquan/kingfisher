@@ -76,6 +76,32 @@ class Capabilities:
             and self.memory is None
         )
 
+    def including(
+        self, *, skills: tuple[str, ...] = (), subagents: tuple[str, ...] = ()
+    ) -> Capabilities:
+        """Widen by definitions the request brought with it.
+
+        The only thing allowed to widen, and it does not really: an uploaded
+        definition is the caller's own text, so permitting it grants nothing
+        they did not already hold. A grant list is written before an upload
+        exists and its name is unknowable then, so clamping against it would
+        strip every upload rather than authorise it.
+
+        What bounds an uploaded skill is the tool selection, which this does
+        not touch. A skill's `allowed-tools` is prompt text to deepagents and
+        binds nothing.
+
+        Unrestricted stays unrestricted: it already includes these.
+        """
+        return Capabilities(
+            tools=self.tools,
+            skills=self.skills if self.skills is None else (*self.skills, *skills),
+            subagents=(
+                self.subagents if self.subagents is None else (*self.subagents, *subagents)
+            ),
+            memory=self.memory,
+        )
+
     def intersect(self, other: Capabilities) -> Capabilities:
         """Narrow these capabilities by another set. Never widens.
 

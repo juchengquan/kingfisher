@@ -33,20 +33,18 @@ class SweepPlan:
     kept: int
 
 
-def plan(entries: Sequence[tuple[str, float]], keep: int) -> SweepPlan:
-    """Choose which sessions to drop. Pure: nothing here reads or writes.
+def expired(
+    entries: Sequence[tuple[str, float]], older_than_seconds: float, now: float
+) -> SweepPlan:
+    """Name every session untouched for longer than `older_than_seconds`.
 
-    `entries` is `(name, modified_at)` per session. A negative `keep` is read
-    as "keep everything" rather than as an instruction to delete the lot --
-    a misconfigured retention setting should not be the thing that empties a
-    workspace.
+    Age rather than count. Keeping the newest N counts every caller's sessions
+    together, so a busy caller evicts a quiet one -- fine when one person owned
+    the workspace, a tenancy bug once many callers share it. Age asks only how
+    long a session has been idle, which is a property of that session alone.
     """
-    if keep < 0:
-        return SweepPlan(doomed=(), kept=0)
-
-    newest_first = sorted(entries, key=lambda entry: entry[1], reverse=True)
-    doomed = tuple(name for name, _ in newest_first[keep:])
-    return SweepPlan(doomed=doomed, kept=len(newest_first) - len(doomed))
+    doomed = tuple(name for name, modified in entries if now - modified > older_than_seconds)
+    return SweepPlan(doomed=doomed, kept=len(entries) - len(doomed))
 
 
 def apply(

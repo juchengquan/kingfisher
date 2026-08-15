@@ -80,6 +80,19 @@ def cfg(workspace):
     )
 
 
+def start(cfg, session_id: str) -> str:
+    """Create a named session, as a service would before serving a turn.
+
+    A request cannot create one -- an id it carries may have come from whoever
+    called the service -- so a test that wants to name its session has to open
+    it the way the service does.
+    """
+    from kingfisher.adapters.workspace_fs import ensure_session_layout
+
+    ensure_session_layout(cfg.workspace / "sessions" / session_id)
+    return session_id
+
+
 def capture_build(monkeypatch) -> dict:
     """Record the arguments `create_deep_agent` was called with -- and let the
     call through.

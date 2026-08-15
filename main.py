@@ -353,8 +353,6 @@ def main(argv: list[str]) -> int:
     print(f"session   : {result.session_id}")
     print(f"run_dir   : {result.run_dir}")
     print(f"usage     : {_usage_summary(result.log_path)}")
-    if result.swept:
-        print(f"swept     : {len(result.swept)} old session(s)")
 
     for name in ("report.md", "result.json"):
         path = result.run_dir / name

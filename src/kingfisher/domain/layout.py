@@ -12,9 +12,9 @@ was previously buried among mkdir calls and subprocess invocations.
   per-turn          sessions/<id>/runs/<turn>/
   harness-owned     .kingfisher/
 
-  tracked in git    /skills, /subagents, PROMPT.md
-  ignored, kept     /.kingfisher
-  ignored, swept    everything under sessions/
+  authored          /skills, /subagents, PROMPT.md   -- version them if you like
+  harness-owned     /.kingfisher
+  disposable        everything under sessions/
 
 A session directory is the backend root, which is why it holds every name the
 agent addresses: `/data` means the same thing in every session while pointing
@@ -70,16 +70,6 @@ Durable facts about this project and how to work in it. Add entries below.
 
 (none recorded yet)
 """
-
-# Tracked-tier paths. `pre_run_commit` stages only these, never `git add -A`,
-# so pointing kingfisher at a directory that already holds unrelated work
-# cannot sweep that work into a commit.
-TRACKED_PATHS: tuple[str, ...] = (
-    ".gitignore",
-    "PROMPT.md",
-    "skills",
-    "subagents",
-)
 
 WORKSPACE_GITIGNORE = """\
 # Managed by kingfisher. Durability tiers, not preferences.

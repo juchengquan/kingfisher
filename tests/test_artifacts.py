@@ -4,12 +4,13 @@ from __future__ import annotations
 
 from kingfisher.adapters.workspace_fs import collect_artifacts
 from kingfisher.app.run import Request, run
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
 
 
 def test_what_the_turn_left_in_derived_comes_back(cfg):
     """The session is reapable, so anything not reported is lost."""
+    start(cfg, "s")
     result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
     session = cfg.workspace / "sessions" / "s"
@@ -24,6 +25,7 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
 
 def test_memory_is_reported_too(cfg):
     """It is scaffolded at session creation, so it is there from turn one."""
+    start(cfg, "s")
     result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
 
@@ -32,6 +34,7 @@ def test_memory_is_reported_too(cfg):
 
 def test_run_scratch_is_not_reported(cfg):
     """`/runs` is disposable by design, and the prompt tells the agent so."""
+    start(cfg, "s")
     result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
     (result.run_dir / "scratch.txt").write_text("intermediate")
@@ -45,6 +48,7 @@ def test_run_scratch_is_not_reported(cfg):
 def test_inputs_are_not_reported(cfg):
     """`/data` came from the caller and is read-only; handing it back would be
     asking them to store what they already have."""
+    start(cfg, "s")
     session = cfg.workspace / "sessions" / "s"
     result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
                  checkpointer=StubCheckpointer())

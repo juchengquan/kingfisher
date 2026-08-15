@@ -4,12 +4,10 @@ import os
 import shutil
 
 from kingfisher.adapters.workspace_fs import LocalSessionDirs, ensure_layout
-from kingfisher.adapters.workspace_git import is_repo, pre_run_commit
 from kingfisher.domain import retention
 from kingfisher.domain.layout import (
     LAYOUT_DIRS,
     SESSION_DIRS,
-    TRACKED_PATHS,
     WORKSPACE_GITIGNORE,
 )
 from tests.conftest import StubCheckpointer
@@ -36,25 +34,33 @@ def test_gitignore_encodes_the_durability_tiers(workspace):
 
 
 def sweep(workspace, keep, checkpointer):
-    """What `stream()` does: list, plan, apply. A helper here because the tests
-    below are about the outcome, not the three steps."""
+    """What `reap()` does: list, choose by age, apply.
+
+    `keep` is read as "keep sessions younger than this many seconds", which is
+    what replaced keeping the newest N -- a count compares every caller's
+    sessions against each other, and age asks only about the session itself.
+    """
+    import time
+
     dirs = LocalSessionDirs()
     runs = workspace / "runs"
-    return retention.apply(
-        retention.plan(dirs.listing(runs), keep), runs, dirs, checkpointer
-    )
+    plan = retention.expired(dirs.listing(runs), older_than_seconds=keep, now=time.time())
+    return retention.apply(plan, runs, dirs, checkpointer)
 
 
 def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
     """A swept session loses its directory and its thread together, so the
     checkpointer can never point at files that no longer exist."""
-    for i, name in enumerate(["oldest", "middle", "newest"]):
+    import time
+
+    now = time.time()
+    for name, age in (("oldest", 10_000), ("middle", 20), ("newest", 1)):
         d = workspace / "runs" / name
         d.mkdir(parents=True)
-        os.utime(d, (1_000 + i * 100, 1_000 + i * 100))
+        os.utime(d, (now - age, now - age))
 
     ckpt = StubCheckpointer()
-    result = sweep(workspace, keep=2, checkpointer=ckpt)
+    result = sweep(workspace, keep=100, checkpointer=ckpt)  # idle over 100s goes
 
     assert result.removed == ("oldest",)
     assert not (workspace / "runs" / "oldest").exists()
@@ -64,39 +70,9 @@ def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
 
 def test_sweep_is_a_noop_when_under_the_limit(workspace):
     (workspace / "runs" / "only").mkdir(parents=True)
-    result = sweep(workspace, keep=5, checkpointer=StubCheckpointer())
+    result = sweep(workspace, keep=10_000, checkpointer=StubCheckpointer())
     assert result.removed == ()
 
-
-def test_pre_run_commit_stages_only_the_tracked_tier(workspace):
-    """`git add -A` would sweep up unrelated work if the workspace is shared."""
-    # Skills are authored by a person and shared by every session, which is
-    # what the tracked tier is now for. Memory moved into the session.
-    (workspace / "skills" / "tabular-qa").mkdir(parents=True, exist_ok=True)
-    (workspace / "skills" / "tabular-qa" / "SKILL.md").write_text("---\nname: x\n---\nbody\n")
-    stray = workspace / "unrelated.txt"
-    stray.write_text("not kingfisher's business\n")
-
-    os.environ.setdefault("GIT_AUTHOR_NAME", "kingfisher-test")
-    os.environ.setdefault("GIT_AUTHOR_EMAIL", "test@example.invalid")
-    os.environ.setdefault("GIT_COMMITTER_NAME", "kingfisher-test")
-    os.environ.setdefault("GIT_COMMITTER_EMAIL", "test@example.invalid")
-
-    sha = pre_run_commit(workspace, "kingfisher: pre-run test")
-
-    assert is_repo(workspace)
-    if sha is None:  # git unavailable in this environment
-        return
-    import subprocess
-
-    listed = subprocess.run(  # noqa: S603
-        ["git", "-C", str(workspace), "ls-files"],
-        capture_output=True,
-        text=True,
-        check=False,
-    ).stdout
-    assert "skills/tabular-qa/SKILL.md" in listed
-    assert "unrelated.txt" not in listed
 
 
 class BrokenCheckpointer:
@@ -173,16 +149,6 @@ def test_the_layout_names_no_genre_of_output():
     assert "derived" in SESSION_DIRS
 
     # And nothing is tracked for being a "report" either.
-    assert not any("report" in path for path in TRACKED_PATHS)
     assert "report" not in WORKSPACE_GITIGNORE
 
 
-def test_git_tracks_what_a_person_authored_not_what_a_run_produced(workspace):
-    """The tiers are now clean: authored content is restorable from git,
-    produced content lives in derived/ and is never swept, run scratch is
-    disposable. Nothing straddles two tiers."""
-    assert set(TRACKED_PATHS) == {".gitignore", "PROMPT.md", "skills", "subagents"}
-    # Everything a run produces now lives inside a session, and sessions are
-    # ignored wholesale -- so there is one line to check rather than three.
-    assert "sessions/" in WORKSPACE_GITIGNORE
-    assert not any(name in TRACKED_PATHS for name in SESSION_DIRS)

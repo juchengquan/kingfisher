@@ -9,7 +9,7 @@ import pytest
 from kingfisher import Kingfisher
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
 
 
@@ -42,6 +42,7 @@ def test_the_deployment_scoped_wiring_happens_once(cfg, monkeypatch):
 
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     """Wiring is shared; per-turn state is not."""
+    start(cfg, "s")
     service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
 
     turns = [service.run(Request("go", session_id="s")).turn_id for _ in range(3)]
@@ -96,6 +97,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
     The tool-level deny rule is still in force; the caller is told which paths
     are bare and the run proceeds.
     """
+    start(cfg, "s")
     service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
 
     real_chmod = Path.chmod
@@ -116,6 +118,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
 def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     """Degrading quietly would be worse than crashing: the guard is weaker than
     it looks and nobody would know."""
+    start(cfg, "s")
     monkeypatch.setattr(
         "kingfisher.app.service.protect_data", lambda _dir: ("theirs.pdf: Operation not permitted",)
     )
