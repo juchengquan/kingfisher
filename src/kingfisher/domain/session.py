@@ -32,6 +32,17 @@ class UnknownSessionError(ValueError):
     """
 
 
+class QuotaExceededError(ValueError):
+    """A session is already holding more than the deployment allows.
+
+    Raised before a turn starts rather than during one. `execute` writes
+    without any file tool seeing it, so there is nothing to intercept while a
+    turn runs -- a turn already going can exceed the bound, and only a
+    filesystem quota underneath could stop it. What this prevents is the *next*
+    turn making it worse.
+    """
+
+
 @dataclass(frozen=True)
 class Turn:
     """One request within a conversation."""

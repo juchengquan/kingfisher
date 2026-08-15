@@ -55,6 +55,22 @@ def _int(environ: Mapping[str, str], key: str, default: int) -> int:
         raise ConfigError(msg) from exc
 
 
+def _optional_int(environ: Mapping[str, str], key: str) -> int | None:
+    """An integer, or `None` when the deployment did not set one.
+
+    Distinct from `_int`: for a bound, "unset" is a meaningful value -- it
+    means unbounded -- and is not the same as any number this could default to.
+    """
+    raw = (environ.get(key) or "").strip()
+    if not raw:
+        return None
+    try:
+        return int(raw)
+    except ValueError as exc:
+        msg = f"{key} must be an integer, got {raw!r}"
+        raise ConfigError(msg) from exc
+
+
 def from_env(environ: Mapping[str, str] | None = None) -> Config:
     """Build a `Config` from environment variables.
 
@@ -95,7 +111,9 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         model=_require(env, "KINGFISHER_MODEL"),
         max_tokens=_int(env, "KINGFISHER_MAX_TOKENS", 4096),
         timeout_s=_int(env, "KINGFISHER_TIMEOUT_S", 120),
-        keep_runs=_int(env, "KINGFISHER_KEEP_RUNS", 20),
+        turn_timeout_s=_int(env, "KINGFISHER_TURN_TIMEOUT_S", 3600),
+        session_max_bytes=_optional_int(env, "KINGFISHER_SESSION_MAX_BYTES"),
+        session_ttl_s=_int(env, "KINGFISHER_SESSION_TTL_S", 7 * 24 * 3600),
         recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
         role_models=role_models,

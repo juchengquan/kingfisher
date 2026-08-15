@@ -55,7 +55,27 @@ class Config:
     model: str
     max_tokens: int = 4096
     timeout_s: int = 120
-    keep_runs: int = 20
+    # What one session may consume. Session-scoped because that is what
+    # kingfisher can see: it is tenant-blind by design (T1), so bounding a
+    # *caller* is the job of whatever knows who is calling. These protect the
+    # process from one runaway session, not one caller from another.
+    #
+    # `recursion_limit` bounds graph steps and `timeout_s` bounds a single
+    # model call or shell command; nothing bounded their product, so a turn
+    # could hold a process for 150 x 120s ~= 5 hours. An hour is far past any
+    # real turn -- a 1,000-row analysis is ~20 turns of seconds each -- so this
+    # only ever fires on the pathological case.
+    turn_timeout_s: int = 3600
+    # Unset by default: workspaces vary by orders of magnitude, and refusing a
+    # turn over a number nobody chose is worse than not bounding it. Checked
+    # before a turn starts, never during -- `execute` writes without any file
+    # tool seeing it, so there is nothing to intercept.
+    session_max_bytes: int | None = None
+    # How long an idle session survives, when a janitor calls `reap` without
+    # saying. Age rather than a count of sessions kept: how long one has been
+    # idle is a property of that session, where "newest twenty" compares every
+    # caller's against each other.
+    session_ttl_s: int = 7 * 24 * 3600
     # Each agent turn costs 2-3 graph steps, so this is roughly a turn budget
     # divided by three. 60 was sized against a toy task and cut a real
     # 1,000-row analysis off mid-step at 20 turns.

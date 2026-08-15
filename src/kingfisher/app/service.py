@@ -26,6 +26,7 @@ from __future__ import annotations
 import shutil
 from collections.abc import Iterator
 from pathlib import Path
+from time import monotonic
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -41,6 +42,7 @@ from kingfisher.adapters.workspace_fs import (
     ensure_session_layout,
     place_data,
     protect_data,
+    session_bytes,
 )
 from kingfisher.app import config as config_module
 from kingfisher.config import Config
@@ -49,7 +51,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.retention import SweepResult
-from kingfisher.domain.session import Session, UnknownSessionError
+from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
 
 if TYPE_CHECKING:
     from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
@@ -118,6 +120,25 @@ class Kingfisher:
             raise UnknownSessionError(msg)
         return request.session_id
 
+    def _refuse_if_over_budget(self, session: Session) -> None:
+        """Stop a session that is already too large from growing further.
+
+        Checked between turns and never during one. `execute` writes without
+        any file tool seeing it, so there is nothing to intercept while a turn
+        runs -- one already going can exceed the bound, and only a filesystem
+        quota underneath could stop it. What this prevents is the next turn
+        making it worse.
+        """
+        if self.cfg.session_max_bytes is None:
+            return
+        held = session_bytes(session.directory)
+        if held > self.cfg.session_max_bytes:
+            msg = (
+                f"session {session.id} holds {held} bytes, over the "
+                f"{self.cfg.session_max_bytes} allowed; delete it or raise the bound"
+            )
+            raise QuotaExceededError(msg)
+
     def start_session(self, session_id: str | None = None) -> str:
         """Open a new session and return its id.
 
@@ -148,7 +169,7 @@ class Kingfisher:
             self.dirs, self.threads
         )
 
-    def reap(self, older_than_seconds: float, now: float) -> SweepResult:
+    def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
         """Dispose of every session untouched for `older_than_seconds`.
 
         The backstop under `delete_session`, for callers that never call it.
@@ -160,7 +181,8 @@ class Kingfisher:
         and this stays a function of its arguments.
         """
         sessions_root = self.workspace / "sessions"
-        plan = retention.expired(self.dirs.listing(sessions_root), older_than_seconds, now)
+        age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
+        plan = retention.expired(self.dirs.listing(sessions_root), age, now)
         return retention.apply(plan, sessions_root, self.dirs, self.threads)
 
     def agent_for(
@@ -221,6 +243,11 @@ class Kingfisher:
         # to abort the run, and since this runs before anything else, one file
         # owned by another user made a session unusable for good.
         unprotected = protect_data(session.directory)
+
+        # Before the data is placed, not after: placing it grows the session,
+        # so checking afterwards would let a request that is already over
+        # budget add to it and only then be refused.
+        self._refuse_if_over_budget(session)
 
         # Before the turn exists, and before anything is destroyed: a request
         # naming a file that is not there must fail without having placed the
@@ -292,6 +319,8 @@ class Kingfisher:
 
         answer = ""
         ok = False
+        cut_short = False
+        deadline = monotonic() + cfg.turn_timeout_s
         try:
             for mode, chunk in graph.stream(
                 runtime.user_payload(message),
@@ -308,6 +337,18 @@ class Kingfisher:
                 if (text := runtime.answer_in(mode, chunk)) is not None:
                     answer = text
                 yield from runtime.events_in(mode, chunk)
+
+                # Between chunks, which is the only place there is to stop.
+                # What the turn produced is already on disk and in the
+                # manifest, so ending here keeps the work and loses only the
+                # steps that had not happened yet.
+                if monotonic() > deadline:
+                    cut_short = True
+                    yield RunEvent(
+                        kind="cut_short",
+                        text=f"turn stopped after {cfg.turn_timeout_s}s",
+                    )
+                    break
 
             answer = normalize_answer(answer)
             ok = True
@@ -327,6 +368,7 @@ class Kingfisher:
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.
                 artifacts=collect_artifacts(session.directory),
+                cut_short=cut_short,
             ),
         )
 
