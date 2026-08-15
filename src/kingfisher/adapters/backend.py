@@ -227,7 +227,7 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     prepare_scratch(cfg)
     for routed in ("data", "memory"):
         (session_dir / routed).mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "skills").mkdir(parents=True, exist_ok=True)
+    cfg.skills_dir.mkdir(parents=True, exist_ok=True)
 
     shell = LocalShellBackend(
         root_dir=str(session_dir),
@@ -238,7 +238,7 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
         default=shell,
         routes={
             DATA_ROUTE: FilesystemBackend(root_dir=str(session_dir / "data")),
-            SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.workspace / "skills")),
+            SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.skills_dir)),
             MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
         },
         workspace=session_dir,

@@ -59,9 +59,13 @@ class CapabilityError(ValueError):
     """A request named a tool, skill or subagent the workspace does not offer."""
 
 
-def _available_skills(workspace: Path) -> tuple[str, ...]:
-    """Skill names the workspace defines, by directory name."""
-    directory = Path(workspace) / "skills"
+def _available_skills(directory: Path) -> tuple[str, ...]:
+    """Skill names the catalogue offers, by directory name.
+
+    Given the directory rather than a workspace to derive one from: the
+    catalogue may be deployed outside any workspace and shared by all of them.
+    """
+    directory = Path(directory)
     if not directory.is_dir():
         return ()
     return tuple(sorted(p.name for p in directory.iterdir() if (p / "SKILL.md").is_file()))
@@ -268,7 +272,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         if capabilities.skills is None:
             extras["skills"] = SKILLS_SOURCES
         else:
-            available = _available_skills(cfg.workspace)
+            available = _available_skills(cfg.skills_dir)
             unknown = tuple(s for s in capabilities.skills if s not in available)
             if unknown:
                 msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
@@ -286,7 +290,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             permissions.extend(_skill_denials(capabilities.skills, available))
 
     if capabilities.subagents is not None:
-        defined = load_all(cfg.workspace)
+        defined = load_all(cfg.subagents_dir)
         unknown = tuple(n for n in capabilities.subagents if n not in defined)
         if unknown:
             msg = f"unknown subagent(s): {', '.join(unknown)}; workspace defines {tuple(defined)}"
