@@ -152,3 +152,27 @@ def test_the_layout_names_no_genre_of_output():
     assert "report" not in WORKSPACE_GITIGNORE
 
 
+
+
+def test_turn_names_are_claimed_exclusively(workspace):
+    """The one filesystem guarantee kingfisher's correctness rests on.
+
+    `allocate_turn` is atomic *because* mkdir fails on an existing name -- that
+    is why `SessionDirs` has `create_exclusive` at all. A shared filesystem
+    that does not honour it would let two concurrent turns share a directory,
+    which is the defect the turn tier was built to fix, silently restored.
+
+    Threads rather than processes because the primitive is the kernel's: what
+    is being checked is that two callers racing for one name produce one
+    winner.
+    """
+    from concurrent.futures import ThreadPoolExecutor
+
+    dirs = LocalSessionDirs()
+    runs = workspace / "runs"
+    runs.mkdir(parents=True, exist_ok=True)
+
+    with ThreadPoolExecutor(max_workers=8) as pool:
+        won = list(pool.map(lambda _: dirs.create_exclusive(runs / "t001"), range(8)))
+
+    assert sum(won) == 1, "two callers both believed they had claimed the name"
