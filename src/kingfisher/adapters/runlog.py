@@ -20,6 +20,8 @@ from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
+from kingfisher.adapters import runtime
+
 
 def log_path(workspace: Path, session_id: str) -> Path:
     return Path(workspace) / ".kingfisher" / "runs" / f"{session_id}.jsonl"
@@ -63,16 +65,12 @@ class JsonlRunLogger(BaseCallbackHandler):
 
     def on_llm_end(self, response: Any, **_: Any) -> None:
         message = _first_message(response)
-        usage = getattr(message, "usage_metadata", None) or {}
-        details = usage.get("input_token_details") or {}
+        usage = runtime.usage_of(message)
         self._write(
             "model_call",
-            input_tokens=usage.get("input_tokens", 0),
-            output_tokens=usage.get("output_tokens", 0),
-            cache_read=details.get("cache_read", 0),
-            cache_creation=details.get("cache_creation", 0),
-            usage_present=bool(usage),
-            tool_calls=[tc.get("name") for tc in (getattr(message, "tool_calls", None) or [])],
+            **usage,
+            usage_present=bool(getattr(message, "usage_metadata", None)),
+            tool_calls=list(runtime.tool_names(message)),
         )
 
     def on_tool_start(self, serialized: dict[str, Any] | None, input_str: str, **_: Any) -> None:

@@ -13,7 +13,7 @@ from typing import TYPE_CHECKING
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
-from kingfisher.config import Config
+from kingfisher.app.config import Config
 
 if TYPE_CHECKING:
     from langgraph.checkpoint.base import BaseCheckpointSaver

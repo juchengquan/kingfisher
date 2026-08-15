@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from kingfisher.backend import build_backend, shell_env
+from kingfisher.adapters.backend import build_backend, shell_env
 
 
 def test_shell_env_carries_no_credentials(cfg):

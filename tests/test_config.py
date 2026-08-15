@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from kingfisher import config as config_module
-from kingfisher.config import ConfigError, from_env
+from kingfisher.app import config as config_module
+from kingfisher.app.config import ConfigError, from_env
 
 BASE_ENV = {
     "KINGFISHER_WORKSPACE": "/tmp/kf-test-ws",
