@@ -2,15 +2,17 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+
+from kingfisher.domain.capabilities import Capabilities
 
 
 @dataclass(frozen=True)
 class Request:
     """One request: the turn boundary made explicit.
 
-    A stateless service receives exactly these four things and passes them
+    A stateless service receives exactly these five things and passes them
     straight through; `cfg`, `agent` and `checkpointer` stay keyword arguments
     on the entrypoint because they describe how this kingfisher is configured,
     not what is being asked of it.
@@ -21,12 +23,17 @@ class Request:
     `inputs` are files supplied with this request. They are copied into the
     turn's `input/` directory, never into `/data`: they arrive fresh each round
     and leave with the turn.
+    `capabilities` names the tools, skills and subagents this request activates.
+    Unset means everything the workspace offers; a service clamps it with
+    `intersect` before running, because authorising the caller is not the
+    request's job.
     """
 
     task: str
     session_id: str | None = None
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
+    capabilities: Capabilities = field(default_factory=Capabilities)
 
     def __post_init__(self) -> None:
         if not self.task or not self.task.strip():
