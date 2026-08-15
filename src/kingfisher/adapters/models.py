@@ -29,11 +29,9 @@ now, because this module names it and a transitive dependency is not a promise.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from importlib import import_module
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
-
-from langchain_anthropic import ChatAnthropic
-from langchain_openai import ChatOpenAI
 
 from kingfisher.config import Config, ConfigError
 
@@ -57,12 +55,24 @@ class Provider:
     and cannot name one of the five that come from `Config` — Python raises on
     the duplicate, which is the intended outcome: a provider row must not
     quietly overrule a value the user configured.
+
+    `chat_class` is a `"module:Name"` path rather than the class, resolved
+    when a model is actually built. Holding the classes meant importing every
+    provider's SDK to describe *one* endpoint style, and a deployment can only
+    use one -- `api_style` picks it. It buys nothing today, because deepagents
+    imports `langchain_openai` itself wherever it is installed; what it buys is
+    the option of not installing it, which naming the class made impossible.
     """
 
     url_env: str
     key_env: str
-    chat_class: type[BaseChatModel]
+    chat_class: str
     extra: Mapping[str, Any] = _NO_EXTRA
+
+    def resolve(self) -> type[BaseChatModel]:
+        """Import the chat class this row names."""
+        module_name, _, class_name = self.chat_class.partition(":")
+        return getattr(import_module(module_name), class_name)
 
 
 #: The one place a provider is described. `from_env` reads the credential
@@ -73,7 +83,7 @@ PROVIDERS: Mapping[str, Provider] = {
     "anthropic": Provider(
         "ANTHROPIC_BASE_URL",
         "ANTHROPIC_API_KEY",
-        ChatAnthropic,
+        "langchain_anthropic:ChatAnthropic",
     ),
     # OpenAI proper, on the Responses API. This style is *not* a general
     # OpenAI-compatible client: `/v1/responses` is what we target, and
@@ -83,7 +93,7 @@ PROVIDERS: Mapping[str, Provider] = {
     "openai": Provider(
         "OPENAI_BASE_URL",
         "OPENAI_API_KEY",
-        ChatOpenAI,
+        "langchain_openai:ChatOpenAI",
         MappingProxyType({"use_responses_api": True}),
     ),
 }
@@ -97,7 +107,7 @@ def build_model(cfg: Config, role: str = "main") -> BaseChatModel:
         msg = f"no model builder for api_style {cfg.api_style!r}; known: {tuple(PROVIDERS)}"
         raise ConfigError(msg) from None
 
-    return provider.chat_class(
+    return provider.resolve()(
         model=cfg.model_for(role),
         base_url=cfg.base_url,
         api_key=cfg.api_key,
