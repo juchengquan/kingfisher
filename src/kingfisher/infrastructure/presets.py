@@ -29,11 +29,16 @@ from kingfisher.config import Config
 
 #: Where the shipped definitions live, as an import path rather than a
 #: filesystem one -- an installed package is not in this repo's directory tree.
+from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
+
 PACKAGE = "kingfisher.presets"
 
 #: The kinds a preset can be, which are the directories inside it. Each is
-#: copied to the workspace directory of the same name.
-KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
+#: copied to the workspace directory of the same name -- so they are the
+#: catalogue's kinds by construction, not by coincidence, and taking them from
+#: there is what keeps a preset that seeds a fourth kind from being silently
+#: ignored.
+KINDS: tuple[str, ...] = CATALOGUE_KINDS
 
 
 @contextmanager
