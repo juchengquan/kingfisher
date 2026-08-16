@@ -423,7 +423,7 @@ class Kingfisher:
     def _prepare(self, request: str | Request) -> _Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
-        Blocking, and deliberately so: filesystem and git work plus building
+        Blocking, and deliberately so: filesystem work plus building
         the agent, measured at 15-46ms end to end -- of which 9.2ms is the
         agent. `astream` runs it on a worker thread rather than pretending
         otherwise.
@@ -612,7 +612,7 @@ class Kingfisher:
         code at 15-46ms of 1.5-1.9s. It is concurrency. Four turns measured against
         the live gateway cost 0.4-1.2 turns of wall clock instead of four.
 
-        `_prepare` is filesystem and git work, so it runs on a worker thread
+        `_prepare` is filesystem work, so it runs on a worker thread
         rather than blocking every other turn sharing this loop.
 
         Needs a checkpointer with async methods: `SqliteSaver` raises on

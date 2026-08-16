@@ -60,7 +60,6 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     assert service.workspace.is_dir()
     assert (service.workspace / "skills").is_dir()
     assert (service.workspace / "sessions").is_dir()
-    assert (service.workspace / ".gitignore").is_file()
     assert not (service.workspace / "data").exists()
 
 

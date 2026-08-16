@@ -7,7 +7,6 @@ from kingfisher.domain import retention
 from kingfisher.domain.layout import (
     LAYOUT_DIRS,
     SESSION_DIRS,
-    WORKSPACE_GITIGNORE,
 )
 from kingfisher.infrastructure.workspace_fs import LocalSessionDirs, ensure_layout
 from tests.conftest import StubCheckpointer
@@ -18,19 +17,21 @@ def test_layout_is_created_and_idempotent(tmp_path):
     ensure_layout(ws)
     for name in LAYOUT_DIRS:
         assert (ws / name).is_dir()
-    assert (ws / ".gitignore").exists()
     assert (ws / ".kingfisher" / "WORKSPACE").exists()
 
 
-def test_gitignore_encodes_the_durability_tiers(workspace):
-    text = (workspace / ".gitignore").read_text()
-    # Harness state is local by design.
-    assert ".kingfisher/" in text
-    # Everything a session owns -- inputs, derived output, memory, run scratch
-    # -- is ignored wholesale. Nothing under sessions/ is re-included: what a
-    # run produces and wants kept leaves through the result, not through git.
-    assert "sessions/" in text
-    assert "!sessions" not in text
+def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
+    """Kingfisher ran git once -- `pre_run_commit` snapshotted the tracked tier
+    before each turn -- and that went with `adapters/workspace_git.py`. The
+    ignore file outlived it, describing a review workflow the code no longer
+    had, for a repo nothing created or read.
+
+    It was also wrong rather than merely idle: it named two of the five things a
+    workspace holds, so `Library/` sat outside it and a `git add -A` offered to
+    commit a 21MB pip cache. An operator who wants their workspace versioned is
+    better served writing the rules they want than inheriting stale ones.
+    """
+    assert not (workspace / ".gitignore").exists()
 
 
 def sweep(workspace, keep, checkpointer):
@@ -147,9 +148,6 @@ def test_the_layout_names_no_genre_of_output():
     assert "reports" not in LAYOUT_DIRS
     assert "reports" not in SESSION_DIRS
     assert "derived" in SESSION_DIRS
-
-    # And nothing is tracked for being a "report" either.
-    assert "report" not in WORKSPACE_GITIGNORE
 
 
 

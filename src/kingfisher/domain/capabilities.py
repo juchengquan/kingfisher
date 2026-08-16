@@ -8,7 +8,8 @@ rebuilt. A caller passing the same set every turn keeps its cache hits.
 
 Names, never definitions. A request activates what the workspace already
 offers; it cannot invent a tool or write a subagent's prompt. That keeps
-definitions reviewable in git and means an untrusted caller can widen nothing.
+definitions reviewable wherever the operator keeps them and means an untrusted
+caller can widen nothing.
 
 Unset means "everything this workspace offers"; an empty tuple means none. That
 default is deliberate and its consequence is deliberate too: authorisation is

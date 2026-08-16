@@ -129,9 +129,10 @@ def registered_tools(graph: Any) -> tuple[str, ...]:
     return tuple(sorted(by_name)) if isinstance(by_name, dict) else ()
 
 
-# `/data` holds the only artifacts git cannot restore, because inputs are never
-# committed. `FilesystemOperation` is just read|write and `delete` maps to
-# write, so this single rule covers write_file, edit_file and delete.
+# `/data` holds what a caller supplied and nothing else has a copy of: it is
+# never re-derivable from the workspace, and kingfisher versions nothing.
+# `FilesystemOperation` is just read|write and `delete` maps to write, so this
+# single rule covers write_file, edit_file and delete.
 #
 # It does not cover `execute` — filesystem permissions are applied by
 # FilesystemMiddleware at the tool level, and the shell bypasses them entirely,
