@@ -238,3 +238,23 @@ def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
     (cfg.skills_dir / "code-review" / "SKILL.md").write_text("clobber me", encoding="utf-8")
 
     assert presets.seed(cfg).overwritten == ("skills/code-review/SKILL.md",)
+
+
+def test_the_readme_subagent_table_matches_the_real_field_set(shipped):
+    """The table is where a contributor learns which fields exist, and now that
+    an unlisted one is an error, a stale row is a definition that will not load.
+
+    It had gone stale three times over -- `skills`, `middleware` and `provider`
+    all shipped without a row.
+    """
+    from kingfisher.domain.subagent import KNOWN
+
+    readme = (shipped / "README.md").read_text(encoding="utf-8")
+    table = readme.split("## Subagents")[1].split("\n---")[0]
+    documented = {
+        line.split("|")[1].strip().strip("`")
+        for line in table.splitlines()
+        if line.startswith("| `")
+    }
+
+    assert documented == KNOWN

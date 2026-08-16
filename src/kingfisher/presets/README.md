@@ -124,7 +124,10 @@ YAML frontmatter, then a body that *is* the subagent's system prompt.
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `tools` | optional | Inline list, `[read_file, grep]`. Unset inherits the parent's tools |
+| `tools` | optional | `[read_file, grep]` or a block list. Unset inherits the parent's tools |
+| `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
+| `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
+| `provider` | optional | Which endpoint it runs against, by style. Moves together with `model` |
 | `model` | optional | Must be a model your gateway serves. This is where per-role cost routing goes |
 
 Two reasons to reach for one, one example each:
@@ -136,8 +139,21 @@ Two reasons to reach for one, one example each:
   large pile of files and returns a short answer; the bulk stays in its context
   rather than yours. Note the narrower `tools` and the cheaper `model`.
 
-The parser is deliberately small — single-line values, inline `[a, b]` lists. It
-is not full YAML, and it will tell you so rather than guessing.
+The frontmatter is real YAML, parsed with `yaml.safe_load` — block lists,
+folded scalars and typed values all work, and a skill and a subagent are read
+by the same parser so the two formats cannot drift.
+
+**A field not in that table is an error, not a field that gets ignored.**
+Ignoring one is indistinguishable from honouring it: `tolls:` used to give a
+delegate *every* tool its parent had, because unset `tools` means inherit. A
+near miss is named (`did you mean 'tools'?`), and the fields deepagents knows
+but this format declines — `permissions`, `subagents`, `interrupt_on`,
+`response_format` — each say why, because "unknown field" reads as an
+omission worth working around when the answer is that honouring it would be
+wrong.
+
+Skills are the opposite and deliberately so: kingfisher does not own that
+format, so an unrecognised key there is left alone.
 
 ---
 
