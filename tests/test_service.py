@@ -296,8 +296,10 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
     which is also what makes a grant go stale when a workspace gains a tool."""
     from kingfisher.infrastructure import presets
 
-    service = Kingfisher(cfg)
-    presets.seed(cfg)  # adds http_fetch, sql_query, sql_tables
+    # Seeded before the service, not after: a catalogue is read when a
+    # deployment is wired, so definitions written afterwards are not its.
+    presets.seed(cfg)
+    service = Kingfisher(cfg)  # adds http_fetch, sql_query, sql_tables
     service.start_session("s")
 
     admitted = service._admit(
@@ -321,8 +323,10 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     same way. One line per kind, and only for kinds that lost something."""
     from kingfisher.infrastructure import presets, skill_store, subagent_store
 
-    service = Kingfisher(cfg)
+    # Seeded before the service, not after: a catalogue is read when a
+    # deployment is wired, so definitions written afterwards are not its.
     presets.seed(cfg)
+    service = Kingfisher(cfg)
     service.start_session("s")
 
     admitted = service._admit(
@@ -363,8 +367,10 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg):
     """Narrowing tools should not produce a line about skills."""
     from kingfisher.infrastructure import presets
 
-    service = Kingfisher(cfg)
+    # Seeded before the service, not after: a catalogue is read when a
+    # deployment is wired, so definitions written afterwards are not its.
     presets.seed(cfg)
+    service = Kingfisher(cfg)
     service.start_session("s")
 
     admitted = service._admit(

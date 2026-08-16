@@ -394,7 +394,10 @@ class Kingfisher:
         # request so a deployment that fetches them pays once, and so a
         # catalogue that cannot be read fails at startup rather than serving an
         # agent that has quietly been told about nothing.
-        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue_roots)
+        # Read now rather than on the first turn: a definition that will not
+        # parse is a wiring mistake, and this is the last moment it is cheap
+        # to say so. `--list` deliberately does not do this -- see `warm`.
+        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue_roots).warm()
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the

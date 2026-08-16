@@ -112,11 +112,17 @@ def test_the_wire_form_names_every_axis():
     assert set(CapabilitiesBody.model_fields) == set(AXES)
 
 
-def test_the_catalogue_kinds_are_the_preset_kinds():
-    """Presets seed the catalogue, so a preset kind that the catalogue does not
-    read would be copied where nothing looks. One list, taken from the side that
-    defines what a catalogue is."""
+def test_presets_seed_only_kinds_the_catalogue_reads():
+    """A preset kind the catalogue does not read would be copied where nothing
+    looks. There is no second name for the list -- `presets` uses the
+    catalogue's directly, so this asserts the seeding matches what ships.
+    """
     from kingfisher.infrastructure import presets
     from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-    assert presets.KINDS is CATALOGUE_KINDS
+    with presets.opened() as root:
+        shipped = {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")}
+
+    assert shipped <= set(CATALOGUE_KINDS), (
+        f"{sorted(shipped - set(CATALOGUE_KINDS))} ships as a preset but is not a catalogue kind"
+    )

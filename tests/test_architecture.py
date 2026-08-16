@@ -403,11 +403,12 @@ def test_the_package_ships_its_presets():
     and nothing else would notice.
     """
     from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
     assert (SRC / "presets" / "skills").is_dir()
     # And reachable the way an installed one reaches them, not by path.
     with presets.opened() as root:
-        for kind in presets.KINDS:
+        for kind in CATALOGUE_KINDS:
             assert (root / kind).is_dir(), kind
 
 

@@ -67,7 +67,7 @@ from kingfisher.infrastructure.scoping import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.subagent_store import load_all
-from kingfisher.infrastructure.tool_store import load_tools, tool_name
+from kingfisher.infrastructure.tool_store import tool_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -113,7 +113,9 @@ def available_skills(
     The session's own half never varies with it: uploads land under the session
     by definition, and a deployment relocating its catalogue does not move them.
     """
-    names = set(skill_store.names((catalogue or Catalogue.from_config(cfg)).skills))
+    # The catalogue's half is read once, when the deployment is wired; only
+    # the session's half is looked at per turn.
+    names = set((catalogue or Catalogue.from_config(cfg)).skill_names)
     if session_dir is not None:
         names |= set(skill_store.names(_uploaded_skills(session_dir)))
     return tuple(sorted(names))
@@ -132,7 +134,9 @@ def defined_subagents(
     which of them a request did not grant. Written out at both, the rule about
     what a session adds to the catalogue would exist twice.
     """
-    defined = dict(load_all((catalogue or Catalogue.from_config(cfg)).subagents))
+    # `dict(...)` and not the mapping itself: the catalogue's copy is cached
+    # and shared by every turn, and the next line merges into what it returns.
+    defined = dict((catalogue or Catalogue.from_config(cfg)).subagent_specs)
     if session_dir is not None:
         defined |= load_all(_uploaded_subagents(session_dir))
     return defined
@@ -381,8 +385,8 @@ def workspace_tool_names(
     Knowable off disk, unlike the built-in set. That asymmetry is why the two
     axes resolve differently and why only one of them needs a probe.
     """
-    directory = (catalogue or Catalogue.from_config(cfg)).tools
-    return tuple(sorted(n for tool in load_tools(directory) if (n := tool_name(tool))))
+    found = (catalogue or Catalogue.from_config(cfg)).tools_found
+    return tuple(sorted(n for entry in found if (n := tool_name(entry.tool))))
 
 
 def _workspace_tool_names(
@@ -754,7 +758,9 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             **extras,
         )
 
-    tools, tool_sources = _workspace_catalogue(roots.tools, workspace_tools)
+    # The catalogue walked these when the deployment was wired; a caller that
+    # has already walked them itself -- `--list` -- still wins.
+    tools, tool_sources = _workspace_catalogue(roots.tools, workspace_tools or roots.tools_found)
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
