@@ -36,6 +36,7 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
     Selection,
+    belongs_in,
     narrowed,
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
@@ -288,9 +289,11 @@ def _refuse_unknown_tools(
         if asked in (ALL, None):
             continue
         if misplaced := tuple(n for n in asked if n in set(other)):
+            was = "is not a" if len(misplaced) == 1 else "are not"
             msg = (
-                f"{', '.join(misplaced)} is not a {here[:-1]} of this workspace; "
-                f"it is a {there[:-1].replace('_', ' ')} -- name it in {there}"
+                f"{', '.join(misplaced)} {was} {here[:-1]}"
+                f"{'' if len(misplaced) == 1 else 's'} of this workspace; "
+                f"{belongs_in(misplaced, field=there)}"
             )
             raise CapabilityError(msg)
         if unknown := tuple(n for n in asked if n not in set(own)):
