@@ -79,6 +79,25 @@ CODE_FOR_STATUS: dict[int, str] = {
 }
 
 
+def outcome(error: BaseException) -> tuple[int, str]:
+    """What this exception will become on the wire: status, and code.
+
+    One function because there are two askers -- the handlers below, which turn
+    it into a response, and the audit log, which records what the caller was
+    told. They had drifted the moment there were two: the audit resolved through
+    `STATUS` alone, so an `HTTPException` carrying its own 422 was recorded as a
+    500 called "error" while the caller correctly received 422
+    "invalid_request". A log that disagrees with the response is worse than no
+    log, because it is believed.
+    """
+    found = STATUS.get(type(error))
+    if found is not None:
+        return found
+    if isinstance(error, HTTPException):
+        return error.status_code, CODE_FOR_STATUS.get(error.status_code, "error")
+    return int(HTTPStatus.INTERNAL_SERVER_ERROR), "error"
+
+
 def problem(status: int, code: str, message: str, **extra: object) -> JSONResponse:
     """The one shape a refusal takes.
 
@@ -100,7 +119,7 @@ def install(app: FastAPI) -> None:
     """
 
     async def from_kingfisher(_: Request, error: Exception) -> JSONResponse:
-        status, code = STATUS[type(error)]
+        status, code = outcome(error)
         return problem(status, code, str(error))
 
     for error_type in STATUS:
@@ -108,8 +127,8 @@ def install(app: FastAPI) -> None:
 
     async def from_http(_: Request, error: Exception) -> JSONResponse:
         assert isinstance(error, HTTPException)  # noqa: S101 -- registered for this type
-        code = CODE_FOR_STATUS.get(error.status_code, "error")
-        return problem(error.status_code, code, str(error.detail))
+        status, code = outcome(error)
+        return problem(status, code, str(error.detail))
 
     app.add_exception_handler(HTTPException, from_http)
 
