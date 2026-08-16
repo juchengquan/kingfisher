@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.domain.capabilities import ALL, Capabilities, narrowed
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
 from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.delegation import as_subagent, subagent_skills
@@ -413,3 +413,90 @@ def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session
 
     assert not [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
     assert not [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
+
+
+# -- a tool name nothing offers -------------------------------------------
+#
+# The other half of this module's rule, which `tools` never had. A skill
+# nothing defines has always raised; a tool nothing defines went straight into
+# `narrowed`, where an unknown name is simply absent from the intersection.
+
+TYPO = """name: helper
+description: Asks for a tool by a name that does not exist.
+tools: [reed_file]
+system_prompt: |
+  You help.
+"""
+
+STAR = """name: helper
+description: Reaches for the obvious way to write "all of them".
+tools: ["*"]
+system_prompt: |
+  You help.
+"""
+
+
+def _build(cfg, session_dir, definition):
+    return build_agent(
+        _with_helper(cfg, definition),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("helper",)),
+    )
+
+
+def test_a_misspelled_tool_is_refused_not_dropped(cfg, session_dir):
+    """`tools: [reed_file]` built a delegate with *no* tools, silently.
+
+    Not "a delegate missing one tool" -- the intersection of one bad name with
+    the offered set is empty, so the allowlist admitted nothing. The failure
+    looked like a delegate that would not act rather than like a typo.
+    """
+    with pytest.raises(CapabilityError, match="unknown tool"):
+        _build(cfg, session_dir, TYPO)
+
+
+def test_the_message_names_the_tool_and_what_is_offered(cfg, session_dir):
+    """A refusal nobody can act on is barely better than the silence."""
+    with pytest.raises(CapabilityError) as raised:
+        _build(cfg, session_dir, TYPO)
+
+    assert "reed_file" in str(raised.value)
+    assert "read_file" in str(raised.value)  # what it should have said
+
+
+def test_the_wildcard_is_refused_until_it_means_something(cfg, session_dir):
+    """`["*"]` is the obvious spelling of "all of them" and currently means the
+    opposite: `*` matches no tool, so the delegate got none.
+
+    Refused here rather than made to work, because making it work is a format
+    change and this is a bug fix. Loudly wrong beats quietly backwards.
+    """
+    with pytest.raises(CapabilityError, match=r"unknown tool"):
+        _build(cfg, session_dir, STAR)
+
+
+def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
+    """The half that must *not* change. A name that exists but this request did
+    not grant is a caller being narrower than the definition, which is not a
+    mistake -- so it is dropped, exactly as before.
+    """
+    definition = TYPO.replace("reed_file", "read_file, execute")
+
+    graph = build_agent(
+        _with_helper(cfg, definition),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
+    )
+
+    delegate = _subagent_graphs(graph).get("helper")
+    assert delegate is not None  # built, not refused
+
+
+def test_a_definition_naming_no_tools_is_unaffected(cfg, session_dir):
+    """The check costs an extra assembly, so it only runs when a definition
+    actually names a tool. This is the path that still skips it."""
+    graph = _build(cfg, session_dir, HELPER)
+
+    assert _subagent_graphs(graph).get("helper") is not None

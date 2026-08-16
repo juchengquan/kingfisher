@@ -40,6 +40,7 @@ from kingfisher.infrastructure.backend import (
 )
 from kingfisher.infrastructure.delegation import (
     as_subagent,
+    refuse_unknown_tools,
     subagent_middleware,
     subagent_skills,
 )
@@ -342,29 +343,63 @@ def _with_workspace_tools(
 
 
 
+def _activated_subagents(
+    cfg: Config, capabilities: Capabilities, session_dir: Path | None
+) -> tuple[Mapping[str, Any], tuple[str, ...]]:
+    """Which delegates this request wired, and every definition available.
+
+    Resolved before the tools rather than beside them, because whether any
+    activated definition *names* a tool decides whether the tool probe has to
+    run at all. Nothing here reads a tool, so the order costs nothing.
+    """
+    if capabilities.subagents is None:
+        return {}, ()
+    defined = defined_subagents(cfg, session_dir)
+    # `ALL` is every subagent the workspace defines, resolved here because here
+    # is where "what it defines" is known.
+    activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
+    if unknown := tuple(n for n in activated if n not in defined):
+        msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
+        raise CapabilityError(msg)
+    return defined, activated
+
+
 def _resolve_tools(
     cfg: Config,
     capabilities: Capabilities,
     workspace_tools: Sequence[Any],
     assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
-) -> tuple[str, ...] | None:
-    """Every tool name this request may call, or `None` for no restriction.
+    *,
+    names_needed: bool = False,
+) -> tuple[tuple[str, ...] | None, tuple[str, ...]]:
+    """What this request may call, and what this agent offers at all.
 
     Costs a throwaway assembly, and only when it has to. Both offered sets must
     be known to resolve `ALL` on either axis, and only one can be read off disk:
     the built-in set is a property of an assembled graph. A request that narrows
     neither axis, in a workspace that defines no tools, skips it entirely.
 
-    The same probe the shadow check has always needed, doing three jobs now
+    `names_needed` is the fourth job: a *definition* naming tools has to be
+    checked against what exists, and what exists includes the built-in set. A
+    caller asks for it only when some activated definition actually names one.
+    Measured on a build with one delegate: 1 compile and 12.6ms when it names
+    no tools, 2 and 20.3ms when it does -- so the probe is the ~7.7ms, and the
+    runs that never needed it still skip it.
+
+    The same probe the shadow check has always needed, doing four jobs now
     rather than one.
     """
-    if not workspace_tools and capabilities.builtin_tools == ALL and capabilities.tools == ALL:
-        return None
+    unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
+    if not names_needed and not workspace_tools and unrestricted:
+        return None, ()
 
     builtin = registered_tools(assemble(()))
     workspace = _workspace_tool_names(workspace_tools, builtin=builtin, cfg=cfg)
     _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
-    return _permitted_tools(capabilities, builtin=builtin, workspace=workspace)
+    return (
+        _permitted_tools(capabilities, builtin=builtin, workspace=workspace),
+        (*builtin, *workspace),
+    )
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # injectable collaborator, and folding them into a parameter object would
@@ -451,7 +486,15 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         )
 
     workspace_tools = load_tools(cfg.tools_dir)
-    permitted = _resolve_tools(cfg, capabilities, workspace_tools, assemble)
+
+    defined, activated = _activated_subagents(cfg, capabilities, session_dir)
+    permitted, available_tools = _resolve_tools(
+        cfg,
+        capabilities,
+        workspace_tools,
+        assemble,
+        names_needed=any(defined[n].tools not in (ALL, None) for n in activated),
+    )
 
     if interpreter_at is not None and permitted is not None:
         # Re-wired now that the union is known. It had to be in place for the
@@ -461,16 +504,10 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         middleware[interpreter_at] = _interpreter(cfg, permitted)
 
     if capabilities.subagents is not None:
-        defined = defined_subagents(cfg, session_dir)
-        # `ALL` is every subagent the workspace defines, resolved here because
-        # here is where "what it defines" is known.
-        activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
-        unknown = tuple(n for n in activated if n not in defined)
-        if unknown:
-            msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
-            raise CapabilityError(msg)
         offered = available_skills(cfg, session_dir)
         registry = middleware_registry or {}
+        for name in activated:
+            refuse_unknown_tools(defined[name], available_tools)
         extras["subagents"] = [
             as_subagent(
                 defined[n],

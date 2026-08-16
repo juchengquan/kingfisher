@@ -36,6 +36,34 @@ if TYPE_CHECKING:
     from kingfisher.config import Config
     from kingfisher.domain.subagent import SubagentSpec
 
+def refuse_unknown_tools(spec: SubagentSpec, available: tuple[str, ...]) -> None:
+    """Refuse a tool name nothing offers, before narrowing quietly drops it.
+
+    The half of this module's rule that `tools` never had. The docstring above
+    lists `tools` among the fields where "a name nothing defines is a mistake
+    and raises", and `subagent_skills` does exactly that -- but a declared tool
+    name went straight into `narrowed`, where a name nothing offers is simply
+    absent from the intersection and leaves no trace.
+
+    So `tools: [reed_file]` built a delegate with *no* tools rather than one
+    missing a tool, and `tools: ["*"]` -- the obvious way to write "all of
+    them" -- did the same. Both silently, which is the failure this format
+    refuses unknown *keys* to avoid; the keys were checked and the values
+    were not.
+
+    Only the refusal. Narrowing stays in `as_subagent`, where the ceiling has
+    to be applied to exist at all.
+    """
+    if spec.tools in (ALL, None):
+        return
+    if unknown := tuple(name for name in spec.tools if name not in available):
+        msg = (
+            f"subagent {spec.name!r} names unknown tool(s): {', '.join(unknown)}; "
+            f"this agent offers {available}"
+        )
+        raise CapabilityError(msg)
+
+
 def subagent_skills(
     spec: SubagentSpec, available: tuple[str, ...], activated: Selection
 ) -> Selection:
