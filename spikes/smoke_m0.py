@@ -9,6 +9,12 @@ definition of each rather than two that drift apart.
 from __future__ import annotations
 
 import sys
+from pathlib import Path
+
+# The repo root, so `main` imports. A spike is run as a script, so `sys.path`
+# starts at `spikes/` -- `kingfisher` resolves because the package is
+# installed, and `main.py` is not part of it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from main import main
 
