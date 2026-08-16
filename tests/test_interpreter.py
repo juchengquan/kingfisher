@@ -155,3 +155,44 @@ def _dispatch_enabled(interpreter):
             return getattr(interpreter, attribute)
     pytest.fail("could not read whether code-side dispatch is enabled")
     return None
+
+
+def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir, monkeypatch):
+    """The library serialises the whole QuickJS heap into the checkpoint at the
+    end of every turn -- measured at a constant 1,280KB, written whether or not
+    `eval` was ever called. One observed run called it zero times out of
+    forty-five tool calls and still paid it. Capping took a workspace's thread
+    database from 2.94MB to 0.31MB across two turns.
+
+    Asserted against the cap the middleware is holding rather than the argument
+    passed, so the check survives the library renaming its keyword.
+    """
+    captured = capture_build(monkeypatch)
+    build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
+
+    interpreter = _interpreter_in(captured)
+    cap = next(
+        (getattr(interpreter, a) for a in ("_max_snapshot_bytes", "max_snapshot_bytes")
+         if hasattr(interpreter, a)),
+        None,
+    )
+    assert cap is not None, "could not read the interpreter's snapshot cap"
+    assert cap < 1_280_000, (
+        f"the cap is {cap}, at or above the 1,280KB image, so every turn stores one"
+    )
+
+
+def test_the_cap_is_not_the_librarys_default(cfg, session_dir, monkeypatch):
+    """Left unset the cap becomes `memory_limit` -- 64MB, far above any real
+    image, so nothing is ever dropped. The point of setting it is that the
+    default keeps everything.
+    """
+    from langchain_quickjs import CodeInterpreterMiddleware
+
+    captured = capture_build(monkeypatch)
+    build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
+
+    ours = _interpreter_in(captured)._max_snapshot_bytes
+    theirs = CodeInterpreterMiddleware()._max_snapshot_bytes
+
+    assert ours < theirs, f"cap {ours} is no tighter than the library default {theirs}"

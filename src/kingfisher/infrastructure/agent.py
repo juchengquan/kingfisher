@@ -176,7 +176,28 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
 
     `mode="thread"` because a thread here is a kingfisher session -- the
     checkpointer already keys on the same id, so REPL state and conversation
-    state expire together rather than one outliving the other.
+    state expire together rather than one outliving the other. Largely moot
+    while the snapshot is capped below, and kept so that raising the cap gives
+    the aligned lifetime rather than a second decision to remember.
+
+    `max_snapshot_bytes=1` drops the VM image instead of storing it, and that
+    is the whole reason the sandbox is affordable to leave on. The library
+    otherwise serialises the entire QuickJS heap into the checkpoint at the end
+    of every turn: measured at exactly 1,280KB each time, a floor rather than a
+    cost that scales with the work, and written whether or not `eval` was
+    called at all. In one observed run it was called zero times out of
+    forty-five tool calls and still cost that. Capping it took a workspace's
+    thread database from 2.94MB to 0.31MB across the same two turns.
+
+    What that buys the deployment is the sandbox forgetting between calls: a
+    value computed in one `eval` is gone by the next. Everything measured here
+    did its whole calculation in a single call -- including the fan-out spike,
+    whose loop runs inside one `eval` -- so nothing observed paid for the
+    memory it was storing. A deployment that genuinely builds state across
+    calls should raise this, and pay the 1,280KB a turn knowingly.
+
+    There is no useful middle value. The image is a constant 1,280KB, so any
+    cap under it drops everything and any cap over it keeps everything.
 
     Dispatching subagents from code needs the *async* path. `task()` inside the
     REPL awaits, so a sync `SqliteSaver` raises `does not support async
@@ -210,6 +231,9 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
         # the shape the delegate ceiling exists to close.
         subagents=permitted is None or TASK_TOOL in permitted,
         mode="thread",
+        # Below any real snapshot, so every one is dropped. See the docstring:
+        # the image is a constant 1,280KB written every turn regardless of use.
+        max_snapshot_bytes=1,
         timeout=float(cfg.timeout_s),
     )
 
