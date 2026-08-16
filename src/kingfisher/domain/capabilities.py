@@ -241,7 +241,10 @@ class Capabilities:
 
 
 
-#: Every axis a request can be narrowed on, derived from the type that owns them
+#: Every axis a request can be narrowed on, derived from the type that owns them.
+#: Named `AXES` rather than `KINDS` because `domain.result.KINDS` already means
+#: something else and is a published wire contract -- two `KINDS` in one layer
+#: is a reader's problem even when it is not an importer's.
 #: rather than written a second time. `API_STYLES` does the same with its
 #: `Literal`, for the same reason: a list kept by hand beside the thing it
 #: describes is a list that drifts from it.
@@ -251,7 +254,7 @@ class Capabilities:
 #: measurement (`subagents` is `None` because wiring one costs 4.3ms). So what is
 #: shared is the *names*, and every by-kind type in the package is checked
 #: against them: it either has a field for a kind or says in one place why not.
-KINDS: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
+AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 
 def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
     """A refusal from either side wins; otherwise the side with an opinion does.

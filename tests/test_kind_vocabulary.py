@@ -16,7 +16,7 @@ from __future__ import annotations
 from dataclasses import fields
 
 import main as driver
-from kingfisher.domain.capabilities import KINDS, Capabilities
+from kingfisher.domain.capabilities import AXES, Capabilities
 from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.uploads import Brought
 
@@ -52,13 +52,13 @@ NOT_SUBTRACTABLE = {
 
 def test_the_vocabulary_is_derived_rather_than_written_twice():
     """If it were a hand-kept tuple it would be one more thing to drift."""
-    assert tuple(f.name for f in fields(Capabilities)) == KINDS
-    assert len(KINDS) == len(set(KINDS))
+    assert tuple(f.name for f in fields(Capabilities)) == AXES
+    assert len(AXES) == len(set(AXES))
 
 
 def test_every_kind_is_a_field_on_capabilities_or_is_not_a_kind():
     """The type that owns the vocabulary has to cover all of it, by construction."""
-    assert set(KINDS) == {f.name for f in fields(Capabilities)}
+    assert set(AXES) == {f.name for f in fields(Capabilities)}
 
 
 def test_what_a_request_may_upload_is_accounted_for():
@@ -68,7 +68,7 @@ def test_what_a_request_may_upload_is_accounted_for():
     """
     covered = {f.name for f in fields(Brought)}
 
-    assert covered | set(NOT_UPLOADABLE) == set(KINDS)
+    assert covered | set(NOT_UPLOADABLE) == set(AXES)
     assert not covered & set(NOT_UPLOADABLE), "a kind cannot be both carried and refused"
 
 
@@ -77,14 +77,14 @@ def test_what_the_catalogue_loads_is_accounted_for():
     of them is a thing to glob."""
     covered = {f.name for f in fields(Catalogue)}
 
-    assert covered | set(NOT_ON_DISK) == set(KINDS)
+    assert covered | set(NOT_ON_DISK) == set(AXES)
     assert not covered & set(NOT_ON_DISK)
 
 
 def test_what_a_caller_can_subtract_is_accounted_for():
     """The driver exposes four. The four it does not are the ones whose narrowing
     is not a list of names to remove."""
-    assert set(driver.GRANTS) | set(NOT_SUBTRACTABLE) == set(KINDS)
+    assert set(driver.GRANTS) | set(NOT_SUBTRACTABLE) == set(AXES)
     assert not set(driver.GRANTS) & set(NOT_SUBTRACTABLE)
 
 
@@ -92,7 +92,31 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
     """The point of all of the above. Adding a field to `Capabilities` and
     nothing else used to pass the suite, ruff and ty -- measured by doing it.
     """
-    unaccounted = set(KINDS) - (
+    unaccounted = set(AXES) - (
         {f.name for f in fields(Brought)} | set(NOT_UPLOADABLE)
     )
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
+
+
+def test_the_wire_form_names_every_axis():
+    """`CapabilitiesBody` is the HTTP shape, and the one that matters most for a
+    library: a caller narrows over the wire, not through `main.py`. It mirrors
+    `Capabilities` field for field today and nothing said so, which is how the
+    two come to disagree about what a caller may ask for.
+
+    Not a default check -- `test_capabilities_on_the_wire` already owns that.
+    This is only that the vocabulary is the same on both sides.
+    """
+    from kingfisher.server.capabilities import CapabilitiesBody
+
+    assert set(CapabilitiesBody.model_fields) == set(AXES)
+
+
+def test_the_catalogue_kinds_are_the_preset_kinds():
+    """Presets seed the catalogue, so a preset kind that the catalogue does not
+    read would be copied where nothing looks. One list, taken from the side that
+    defines what a catalogue is."""
+    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
+
+    assert presets.KINDS is CATALOGUE_KINDS
