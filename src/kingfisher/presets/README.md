@@ -123,7 +123,7 @@ A YAML document. Everything the delegate is, in one file.
 ```yaml
 name: reviewer
 description: Re-checks numeric claims against the files they came from. Use before reporting figures you computed once.
-tools: [read_file, glob, grep]
+builtin_tools: [read_file, glob, grep]
 system_prompt: |
   You verify claims. You do not improve prose or add analysis — another
   agent has already done that work and you are the check on it.
@@ -134,6 +134,35 @@ system_prompt: |
 
 That is a whole definition: three required fields, one optional, nothing else
 needed.
+
+### Two tool lists, not one
+
+`builtin_tools` is the set that comes with deepagents — the table further down
+lists them. `tools` is whatever *your* workspace defines in `tools/`.
+
+They are separate because they are granted separately, and one list meant a
+delegate could not ask for a workspace tool without giving up every built-in:
+
+```yaml
+builtin_tools: [read_file, glob]   # named, so only these two
+tools: [http_fetch]                # and this one, costing no built-in
+```
+
+**Omitting a list means all of it. An empty list means none.** That difference
+does real work: every shipped preset writes `tools: []`, because "read-only"
+has to keep meaning read-only rather than quietly growing whatever the
+workspace adds later.
+
+To say "all of them" out loud, write `["*"]`:
+
+```yaml
+builtin_tools: ["*"]   # same as leaving the line out, said on purpose
+```
+
+A list, because every selection here is a list. Bare `"*"` is refused by name —
+a *request* spells it that way, and one spelling in one place beats two
+spellings everywhere. Mixing is refused too: `["*", read_file]` cannot mean
+both things at once.
 
 Sending a delegate somewhere cheaper — or somewhere else entirely — is up to
 two more lines:
@@ -179,7 +208,8 @@ for.
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
 | `system_prompt` | required | The delegate's whole instruction, written after `\|` |
-| `tools` | optional | Unset inherits the parent's tools |
+| `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none |
+| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `provider` | optional | Which endpoint it runs against, by style. Requires `model` |

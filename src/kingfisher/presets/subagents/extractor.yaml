@@ -1,6 +1,12 @@
 name: extractor
 description: Reads a large or numerous set of files and returns only the facts asked for. Use to keep bulk reading out of the main context.
-tools: [read_file, ls, glob, grep]
+# Both tool lists, because they are granted apart. `builtin_tools` is
+# deepagents' own set; `tools` is whatever this workspace defines, and an
+# empty list is how you say none of them. Omitting it would mean *all* of
+# them, which would make a delegate that exists to read files able to
+# fetch URLs and query databases.
+builtin_tools: [read_file, ls, glob, grep]
+tools: []
 # Reading is the cheap half of delegation, so it runs on the cheap model. No
 # `provider:` -- a model alone runs wherever the deployment does, and naming
 # the endpoint here would only stop this file working on a deployment pointed

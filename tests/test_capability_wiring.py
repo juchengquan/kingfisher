@@ -287,7 +287,7 @@ def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
 
 RESTRICTED_SUBAGENT = """name: reader
 description: Reads files and reports what they contain.
-tools: [read_file, glob]
+builtin_tools: [read_file, glob]
 system_prompt: |
   You read files.
 
