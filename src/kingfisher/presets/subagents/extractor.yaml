@@ -7,11 +7,22 @@ description: Reads a large or numerous set of files and returns only the facts a
 # fetch URLs and query databases.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []
-# Reading is the cheap half of delegation, so it runs on the cheap model. No
-# `provider:` -- a model alone runs wherever the deployment does, and naming
-# the endpoint here would only stop this file working on a deployment pointed
-# somewhere else. `second-opinion.yaml` is where naming one earns its place.
-model: MiniMax-M2.5
+# Reading is the cheap half of delegation, so this is exactly the delegate that
+# wants a cheap model -- and a file shipped inside the wheel cannot name one.
+# It said `model: MiniMax-M2.5`, a vendor's model id, which is portable nowhere:
+# on a deployment with no MiniMax entry that is refused, and before the
+# catalogue was closed it was worse, reaching whatever endpoint was configured
+# and failing as a 404 mid-run.
+#
+# So it names the *kind* of model it wants and your models.yaml says which one:
+#
+#     aliases:
+#       cheap: MiniMax-M2.5
+#
+# Unbound, activating this delegate is refused and the message says what to
+# write. That is deliberate -- running the expensive model is the outcome
+# nobody asked for and nobody would see.
+alias: cheap
 system_prompt: |
   You read a lot and return a little.
 

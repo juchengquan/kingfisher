@@ -4,7 +4,7 @@ import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Config
+from kingfisher.config import Config, Endpoint, ModelProfile, Models
 from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
 
@@ -55,16 +55,47 @@ def session_dir(workspace):
     return ensure_session_layout(workspace / "sessions" / "test-session")
 
 
+#: The endpoint every fixture builds against. Port 9 is discard: a test that
+#: accidentally makes a real call hangs on connect rather than reaching anyone.
+FAKE_ENDPOINT = Endpoint(
+    api="anthropic",
+    base_url="http://127.0.0.1:9/never-called",
+    api_key="test-key-not-real",
+)
+
+#: Two models on one endpoint, which is the shape the catalogue exists to allow
+#: and the shape a delegate test needs: `cheap-model` carries params that differ
+#: from the default's, so a test asserting a delegate got *its own* ceiling
+#: cannot pass by accident on the deployment's.
+FAKE_MODELS = {
+    "fake-model": ModelProfile(model="fake-model", endpoint="fake"),
+    "cheap-model": ModelProfile(
+        model="cheap-model", endpoint="fake", max_tokens=321, timeout_s=45
+    ),
+}
+
+
+#: What the shipped presets name. Bound here because an unbound alias refuses
+#: the build, which is the behaviour under test elsewhere -- a fixture that left
+#: them unbound would make every preset test a test of that refusal instead.
+FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "cheap-model"}
+
+#: One record where the fixture used to set four fields on `Config`.
+FAKE_CATALOGUE = Models(
+    models=FAKE_MODELS,
+    endpoints={"fake": FAKE_ENDPOINT},
+    default="fake-model",
+    aliases=FAKE_ALIASES,
+)
+
+
 @pytest.fixture
 def cfg(workspace):
     return Config(
         workspace=workspace,
-        api_style="anthropic",
-        base_url="http://127.0.0.1:9/never-called",
-        api_key="test-key-not-real",
-        model="fake-model",
+        models=FAKE_CATALOGUE,
         turn_timeout_s=3600,
-        timeout_s=30,
+        execution_timeout_s=30,
     )
 
 

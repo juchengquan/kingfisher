@@ -11,12 +11,16 @@ So it lives at the package root, above the layers and outside them. `application
 rule that needs a value takes the value, not the record.
 
 Reading it out of the environment is a separate job and stays in `application/config.py`:
-the provider table that knows which variables to read lives in `infrastructure/`.
+the file that describes the endpoints and models lives in the workspace, and
+`infrastructure/model_catalogue.py` is what reads it.
 
-`ApiStyle` is the single source of truth for which endpoint styles exist.
-`API_STYLES` is derived from it rather than written twice, so the runtime gate
-and the static type cannot drift apart. The set of styles that can actually be
-*constructed* is `infrastructure.models.PROVIDERS`; a test binds the two together.
+There was an `ApiStyle` literal here, naming the endpoint styles a deployment
+could choose between. It conflated two things: which *wire format* to construct
+and which *endpoint* to send to, welded 1:1 -- so a deployment had exactly one
+endpoint per wire format and two Anthropic-compatible gateways were
+unconfigurable. The wire formats are now a closed registry in
+`infrastructure.models`, keyed by `api`, and endpoints are open data read from
+`models.yaml`. See `docs/design/2026-08-16-model-catalogue.md`.
 """
 
 from __future__ import annotations
@@ -24,31 +28,226 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Literal, get_args
+from types import MappingProxyType
+from typing import Any
 
-ApiStyle = Literal["anthropic", "openai"]
+_NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
-#: Derived from `ApiStyle`. Adding a style means editing the `Literal` and
-#: adding a `Provider`; nothing else needs to learn the name.
-API_STYLES: tuple[ApiStyle, ...] = get_args(ApiStyle)
 
 @dataclass(frozen=True)
 class Endpoint:
     """One place to send a model call, and the credentials for it.
 
-    A *style* is an endpoint in this deployment's terms: `anthropic` names the
-    gateway path, `openai` names OpenAI proper on the Responses API. They are
-    not two dialects of one destination -- see `.env.example` -- so naming a
-    style names where the traffic goes.
+    `api` names a wire format from `infrastructure.models.ADAPTERS`, which is
+    closed and ships with kingfisher; everything else here is open data a
+    deployment writes. Several endpoints may share one `api` -- that is the
+    point of the split, and what the old `api_style` could not express.
+
+    Credentials and wire format, and no name. It carried one for a while, so an
+    error about where a prompt would have gone could say which entry it came
+    from -- but that name is already written on the other side of the pair:
+    `ModelProfile.endpoint` is how a model *reaches* here, and every caller
+    holding an `Endpoint` was handed the profile beside it. Two fields saying
+    one thing, one of them able to disagree with its own mapping key.
     """
 
-    api_style: ApiStyle
+    api: str
     base_url: str
     api_key: str
 
 
+@dataclass(frozen=True)
+class ModelProfile:
+    """One model this deployment can run, and how.
+
+    `model` is the id sent on the wire and is also this entry's key in
+    `models.yaml`. It stays duplicated where `Endpoint.name` did not, because
+    the two are not alike: an endpoint's name is written on the profile that
+    reaches it, so removing it lost nothing, while a profile's model id has
+    nowhere else to be. `build_model` takes a profile and an endpoint and must
+    know what to *send*; handing the name separately would make the lookup
+    return a third thing solely to carry it back.
+
+    Duplicated, then, but not able to drift -- `Models` refuses a mapping whose
+    key and `model` disagree.
+
+    Every param is optional and, apart from the two with real defaults, omitted
+    means *the kwarg is not passed at all* rather than passed as some default we
+    chose. `temperature` is why: defaulting it would silently change every
+    deployment's behaviour, in the one file whose purpose is to hand that
+    decision to the operator.
+
+    `max_tokens` and `timeout_s` keep defaults because a missing ceiling behaves
+    differently per vendor, and because a model timeout has nowhere else to fall
+    back to -- `Config.execution_timeout_s` bounds the shell and the interpreter,
+    and reusing it here would rebuild the conflation this design took apart.
+
+    `extra` is additive only, and carries kwargs peculiar to one endpoint --
+    `reasoning_effort`, a thinking budget. It may not name one of the values
+    above: Python raises on the duplicate keyword, which is the intended
+    outcome, exactly as it is for `Adapter.extra`.
+    """
+
+    model: str
+    endpoint: str
+    max_tokens: int = 4096
+    timeout_s: int = 120
+    temperature: float | None = None
+    top_p: float | None = None
+    extra: Mapping[str, Any] = _NO_EXTRA
+
+    def kwargs(self) -> dict[str, Any]:
+        """The model params to build with, omitting everything unset.
+
+        Not a dict comprehension over the fields: `max_tokens` and `timeout_s`
+        always go, the optional ones go only when set, and `extra` is spread
+        last so a collision raises rather than overwriting.
+        """
+        params: dict[str, Any] = {"max_tokens": self.max_tokens, "timeout": self.timeout_s}
+        if self.temperature is not None:
+            params["temperature"] = self.temperature
+        if self.top_p is not None:
+            params["top_p"] = self.top_p
+        return params
+
+
 class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
+
+
+@dataclass(frozen=True)
+class Models:
+    """What this deployment can run, where, and under which names.
+
+    Five fields on `Config` before this, and a `Config` is a flat bag a
+    deployment fills in -- which is the wrong shape for a cluster with
+    invariants between its parts. `default` is a key of `models`; every alias
+    binds a key of `models`; every profile's `endpoint` is a key of `endpoints`.
+    None of that was expressible while the five were siblings of
+    `shell_sandbox`, and the two questions worth asking of them -- what does
+    this name resolve to, what is bound here -- had nowhere to live but `Config`
+    itself.
+
+    The same move `Catalogue` made, for the same two reasons its docstring
+    gives. This comes from a file that is deliberately relocatable and shared
+    across a fleet, and it is addressed by name everywhere, so a type is what
+    makes `.defualt` an error before the code runs rather than a `KeyError`
+    while it does.
+
+    Not named by analogy with `Catalogue`, though, because the two are not of a
+    kind: that one holds three paths and deliberately does not read them, and
+    this one holds parsed records that refer to each other and answers questions
+    about them.
+
+    It lives here rather than in `infrastructure` for the reason
+    `Config.catalogue_roots` does *not* return a `Catalogue`: this file sits
+    above the layers and imports none of them. Nothing this record does needs
+    one -- `model_catalogue` reads the file and hands one back, and everything
+    after that is a lookup.
+    """
+
+    #: Keyed by the id sent on the wire. **Closed**: a name absent from here is
+    #: refused rather than passed to an endpoint that has never heard of it.
+    models: Mapping[str, ModelProfile]
+    #: Every endpoint whose credentials are actually present. One whose
+    #: `key_env` is unset is dropped before it reaches here, with a warning, so
+    #: one reviewed file works across a fleet holding different subsets of keys.
+    endpoints: Mapping[str, Endpoint]
+    #: What runs when nothing names another. Guaranteed to be a key of `models`
+    #: -- `model_catalogue.load` refuses a file where it is not, which is what
+    #: makes `resolve()` total.
+    default: str
+    #: General names bound to models of this deployment's choosing, for
+    #: definitions that know what *kind* of model they want and cannot know its
+    #: name. A second namespace, kept apart from `models` on purpose.
+    #:
+    #: Not called `roles`. That word belonged to `KINGFISHER_MODEL_{role}` and
+    #: `model_for("main")`, deleted for being the wrong granularity, and reusing
+    #: it would revive the vocabulary of the thing that was removed.
+    aliases: Mapping[str, str] = field(default_factory=dict)
+    #: Where all of it was read from. Informational, so a refusal can name the
+    #: file that should have defined what it could not find.
+    source: Path | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a mapping whose key disagrees with the profile under it.
+
+        `ModelProfile.model` is the id sent on the wire and the key is what
+        everything looks up by, so a pair that disagree means a delegate asking
+        for one model and a client built for another -- silently, since both
+        names are real. `model_catalogue` builds these from the key and cannot
+        get it wrong; a test fixture or a caller assembling one by hand can.
+
+        The check `Endpoint` no longer needs, which is why it kept no name.
+        """
+        wrong = tuple(f"{key!r} holds {p.model!r}" for key, p in self.models.items()
+                      if p.model != key)
+        if wrong:
+            msg = (
+                f"models keyed by a name the profile does not carry: {', '.join(sorted(wrong))}. "
+                f"The key is the id sent on the wire, so the two cannot differ"
+            )
+            raise ConfigError(msg)
+
+    def bound(self, alias: str) -> str:
+        """The model this deployment binds `alias` to.
+
+        Refuses rather than falling back to the default, which is the whole
+        point of the indirection. A definition writing `alias: alternate` is
+        saying it needs a model unlike the one beside it; quietly handing it
+        that very model is the failure the alias exists to prevent, and it is
+        invisible -- the delegate still builds, still answers, and the answer is
+        worth nothing.
+
+        So an unbound alias stops the build and says what to write. Loud is
+        cheap here: it fires only when a request activates the delegate, so
+        seeding a preset you have not bound for costs nothing until you use it.
+        """
+        model = self.aliases.get(alias)
+        if model is None:
+            known = tuple(sorted(self.aliases))
+            where = f" in {self.source}" if self.source else ""
+            msg = (
+                f"no model bound to alias {alias!r}{where}; this deployment binds {known}. "
+                f"Add it under 'aliases:', naming one of {tuple(sorted(self.models))}"
+            )
+            raise ConfigError(msg)
+        return model
+
+    def resolve(self, name: str | None = None) -> tuple[ModelProfile, Endpoint]:
+        """Which model to build, and where to send it. One question, one answer.
+
+        `None` is the ordinary case: whatever the deployment named as default.
+
+        Raises rather than falling back, on both halves. A name this deployment
+        cannot run would otherwise reach an endpoint that has never heard of it
+        -- a 404 if you are lucky and a wrong-model run if you are not -- and a
+        model whose endpoint went missing would otherwise run somewhere its
+        author did not choose. Both decide where the prompt goes, which is the
+        one thing worth being loud about here.
+
+        Returned as a pair because they are never wanted apart: `build_model`
+        needs the params from one and the credentials from the other, and
+        splitting them into two lookups is how they drift.
+        """
+        wanted = self.default if name is None else name
+        profile = self.models.get(wanted)
+        if profile is None:
+            known = tuple(sorted(self.models))
+            where = f" defined in {self.source}" if self.source else ""
+            msg = f"no model {wanted!r}{where}; this deployment can run {known}"
+            raise ConfigError(msg)
+        endpoint = self.endpoints.get(profile.endpoint)
+        if endpoint is None:
+            # Unreachable for the default, which `load` checks. Reachable for a
+            # model a request named, whose endpoint was dropped for having no
+            # credentials on this machine.
+            msg = (
+                f"model {wanted!r} runs on endpoint {profile.endpoint!r}, which this "
+                f"deployment has no credentials for; it has {tuple(sorted(self.endpoints))}"
+            )
+            raise ConfigError(msg)
+        return profile, endpoint
 
 
 @dataclass(frozen=True)
@@ -61,22 +260,33 @@ class Config:
     """
 
     workspace: Path
-    api_style: ApiStyle
-    base_url: str
-    api_key: str
-    model: str
-    max_tokens: int = 4096
-    timeout_s: int = 120
+    #: What this deployment can run, where, and under which names.
+    #:
+    #: One field where there were five -- `models`, `endpoints`, `default_model`,
+    #: `aliases`, `models_file` -- plus the two methods that read only those. A
+    #: `Config` is a flat bag a deployment fills in, and the cluster has
+    #: invariants between its parts that siblings of `shell_sandbox` could not
+    #: express. See `Models`.
+    models: Models
+    #: What bounds one shell command or one interpreter run.
+    #:
+    #: Not the model timeout. This was `timeout_s` and served three unrelated
+    #: consumers -- the model call, `execute`, and the interpreter sandbox --
+    #: which is the same conflation `api_style` was. The model half moved into
+    #: the table, where it is per-model; what is left is renamed for the two it
+    #: still bounds. Splitting those two further is deferred until someone has a
+    #: case for diverging values.
+    execution_timeout_s: int = 120
     # What one session may consume. Session-scoped because that is what
     # kingfisher can see: it is tenant-blind by design (T1), so bounding a
     # *caller* is the job of whatever knows who is calling. These protect the
     # process from one runaway session, not one caller from another.
     #
-    # `recursion_limit` bounds graph steps and `timeout_s` bounds a single
-    # model call or shell command; nothing bounded their product, so a turn
-    # could hold a process for 150 x 120s ~= 5 hours. An hour is far past any
-    # real turn -- a 1,000-row analysis is ~20 turns of seconds each -- so this
-    # only ever fires on the pathological case.
+    # `recursion_limit` bounds graph steps and a model's own `timeout_s` bounds
+    # a single call; nothing bounded their product, so a turn could hold a
+    # process for 150 x 120s ~= 5 hours. An hour is far past any real turn -- a
+    # 1,000-row analysis is ~20 turns of seconds each -- so this only ever fires
+    # on the pathological case.
     turn_timeout_s: int = 3600
     # Unset by default: workspaces vary by orders of magnitude, and refusing a
     # turn over a number nobody chose is worse than not bounding it. Checked
@@ -100,12 +310,6 @@ class Config:
     # shell could read this deployment's own API keys, `~/.aws` and the GitHub
     # CLI's token, and `http_fetch` is one tool call away from sending them.
     shell_sandbox: str = "auto"
-    #: Every *other* style this deployment has credentials for. The one named
-    #: by `api_style` is not in here -- it is the three fields above, which is
-    #: what everything reads when nothing says otherwise. Populated by
-    #: `from_env` from whichever `*_BASE_URL` / `*_API_KEY` pairs are set, so a
-    #: deployment that filled in both already has two endpoints.
-    endpoints: Mapping[str, Endpoint] = field(default_factory=dict)
     # Overrides for the two host-side roots. `None` means "derive from the
     # workspace", which is what keeps a workspace self-contained and copyable
     # by default. Read them through `state_dir` / `scratch_dir`, never directly.
@@ -200,28 +404,6 @@ class Config:
     def subagents_dir(self) -> Path:
         """The subagent catalogue. Read off disk, never addressed by the agent."""
         return self.subagents_root or self.workspace / "subagents"
-
-    @property
-    def default_endpoint(self) -> Endpoint:
-        """Where a call goes when nothing names somewhere else."""
-        return Endpoint(self.api_style, self.base_url, self.api_key)
-
-    def endpoint_for(self, style: str | None) -> Endpoint:
-        """The endpoint for `style`, or the default when `style` is `None`.
-
-        Raises rather than falling back. A definition naming a style this
-        deployment has no credentials for would otherwise run somewhere the
-        author did not choose, which is the one failure mode worth being loud
-        about here: it decides where the prompt goes.
-        """
-        if style is None or style == self.api_style:
-            return self.default_endpoint
-        endpoint = self.endpoints.get(style)
-        if endpoint is None:
-            configured = (self.api_style, *sorted(self.endpoints))
-            msg = f"no endpoint configured for style {style!r}; this deployment has {configured}"
-            raise ConfigError(msg)
-        return endpoint
 
     @property
     def tools_dir(self) -> Path:

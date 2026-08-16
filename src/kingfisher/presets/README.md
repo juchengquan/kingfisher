@@ -51,7 +51,7 @@ from kingfisher import Request, RunOn
 run(Request(
     task="Check these figures",
     capabilities=Capabilities(subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)),
-    run_on={"second-opinion": RunOn("MiniMax-M2.5", provider="anthropic")},
+    run_on={"second-opinion": RunOn("MiniMax-M2.5")},
 ))
 ```
 
@@ -62,14 +62,15 @@ caller safe to accept. Naming a model is the one thing that *chooses*, and
 models differ in price by more than an order of magnitude. `models` is `None`
 by default, so a caller who was granted nothing can choose nothing.
 
-**It replaces where the delegate runs, never half of it.** A model alone runs
-at the deployment's own endpoint, dropping whatever the file pinned. Name both
-and it runs where you say. What you cannot get is the file's endpoint with your
-model — a model name sent somewhere that has never heard of it is a 404 if you
-are lucky and a wrong-model run if you are not.
+**It replaces what the delegate runs, and where follows from that.** There
+were two fields here once, and a rule that an override had to replace both or
+neither — the file's endpoint joined to your model is a 404 if you are lucky
+and a wrong-model run if you are not. One field cannot be half of anything, so
+the rule is gone: name a model, and its entry in `models.yaml` says where it
+runs.
 
-The `provider` half keeps its own permission. Overriding is not an exemption
-from where a request's prompts may go.
+The endpoint that model resolves to keeps its own permission. Choosing a model
+is not an exemption from where a request's prompts may go.
 
 ---
 
@@ -248,44 +249,64 @@ a *request* spells it that way, and one spelling in one place beats two
 spellings everywhere. Mixing is refused too: `["*", read_file]` cannot mean
 both things at once.
 
-Sending a delegate somewhere cheaper — or somewhere else entirely — is up to
-two more lines:
+Sending a delegate somewhere cheaper — or somewhere else entirely — is one
+more line:
 
 ```yaml
-provider: openai        # a style this deployment has credentials for
-model: gpt-5            # a model that endpoint serves
+model: gpt-5            # an entry in your models.yaml
 ```
 
-Omit both and it runs on the deployment's own model, at the deployment's own
-endpoint. That is the usual case, and `reviewer` is the shipped example of it.
+Omit it and the delegate runs whatever the deployment runs. That is the usual
+case, and `reviewer` is the shipped example of it.
 
-`model` alone is fine: it names something to run and nothing about where, so it
-runs where everything else does. `extractor` does this — cheap is the decision,
-and it stays true wherever you point kingfisher.
+There was a `provider:` beside it, naming an endpoint by style, and a rule that
+the two moved together. Both are gone. An endpoint is a property of the model —
+`models.yaml` says which one serves `gpt-5` — so there is no second line to keep
+in step, and the half-pair mistake cannot be written.
 
-`provider` alone is refused, by name, when the file is read. A model name means
-nothing without the endpoint that serves it, so naming an endpoint and not what
-to run there sends *your* model's name somewhere that has never heard of it.
-Name both or neither. `second-opinion` is the one preset that names both, and
-says in a comment why.
-
-This is the only place either is said. There is no environment variable for it:
-one could only say "every delegate", which is the wrong size for the decision —
-it would silently defeat `second-opinion`, whose whole job is to be a different
+This is the only place it is said. There is no environment variable for it: one
+could only say "every delegate", which is the wrong size for the decision — it
+would silently defeat `second-opinion`, whose whole job is to be a different
 model from the one beside it.
 
-**`provider` is a requirement, not decoration.** It is checked when the agent
-is built, so activating a preset whose style your deployment has no credentials
-for fails immediately:
+**The name has to be one your catalogue defines.** The table in `models.yaml` is
+closed, and a definition naming a model outside it is refused when the agent is
+built, rather than reaching an endpoint that has never heard of it:
 
 ```
-no endpoint configured for style 'openai'; this deployment has ('anthropic',)
+subagent 'second-opinion': no model 'gpt-5'; this deployment can run ('MiniMax-M3',)
 ```
 
-It fails only for the preset you activated — a subagent is wired only when a
-request names it, so seeding one you cannot reach costs nothing until you ask
-for it. Edit the pair to match your gateway, which is what copying a preset is
-for.
+It fails only for the preset you *activated* — a subagent is wired only when a
+request names it, so seeding one you cannot run costs nothing until you ask for
+it. And `run_on` can rescue it without editing the file, which is why this is
+not checked across the whole catalogue up front: the refusal would fire before
+the override could apply.
+
+Which is why **no preset ships with a `model:` line.** A file inside the wheel
+cannot portably name a vendor's model id: `extractor` said `MiniMax-M2.5` and
+would refuse to start for anyone without a MiniMax entry.
+
+They name an `alias:` instead — a general name your catalogue binds:
+
+```yaml
+# models.yaml
+aliases:
+  cheap: MiniMax-M2.5     # extractor, profiler
+  alternate: gpt-5        # second-opinion
+```
+
+A definition writes `model:` *or* `alias:`, never both: an alias is a model name
+once bound, so a file saying both has said one thing twice with no rule for
+which wins.
+
+**An unbound alias refuses the build**, and does not fall back to the default.
+That is the whole reason the indirection is worth having. `second-opinion` exists
+in order not to be the model beside it; handing it that very model because
+nobody bound `alternate` is the answer nobody asked for, and it is invisible —
+the delegate builds, answers, and the answer is worth nothing. Refusing fires
+only when a request *activates* the delegate, so seeding presets you have not
+bound for still costs nothing until you use them.
 
 | Field | | |
 | --- | --- | --- |
@@ -297,8 +318,8 @@ for.
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
-| `provider` | optional | Which endpoint it runs against, by style. Requires `model` |
-| `model` | optional | Must be a model that endpoint serves. Fine on its own; this is where cost routing goes |
+| `model` | optional | An entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes |
+| `alias` | optional | A general name your `models.yaml` binds to a model. For a definition that knows what *kind* of model it needs and cannot know its name. Not with `model` |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 ### A delegate that consults another
@@ -357,11 +378,12 @@ Three reasons to reach for one, one example each:
   errors that re-reading your own work does not.
 - [`extractor.yaml`](subagents/extractor.yaml) — **context isolation.** It reads
   a large pile of files and returns a short answer; the bulk stays in its
-  context rather than yours. Note the narrower `tools` and the cheaper `model`.
+  context rather than yours. Note the narrower `tools`, and add a cheap `model:`
+  of your own.
 - [`second-opinion.yaml`](subagents/second-opinion.yaml) — **a different
-  model.** Two models from one family share failure modes, so this one answers
-  on another endpoint entirely. It is the only one that names a `provider`, and
-  the reason the field exists.
+  model.** Two models from one family share failure modes, so this one is meant
+  to answer somewhere else entirely. It is the one preset that is worth nothing
+  until you give it a `model:`, and its comment says so.
 
 ### Writing the prompt
 

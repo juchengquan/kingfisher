@@ -26,7 +26,7 @@ NOT_UPLOADABLE = {
     "builtin_tools": "deepagents brings them; there is nothing to supply",
     "tools": "code, imported into this process -- never caller-supplied",
     "middleware": "selects code the deployment registered",
-    "providers": "decides which credentials are used",
+    "endpoints": "decides which credentials are used",
     "models": "an assignment, not a definition",
     "memory": "a switch, not names",
 }
@@ -35,7 +35,7 @@ NOT_UPLOADABLE = {
 NOT_ON_DISK = {
     "builtin_tools": "deepagents brings them",
     "middleware": "registered in the process, not staged as files",
-    "providers": "settings, not assets",
+    "endpoints": "settings, not assets",
     "models": "settings, not assets",
     "memory": "a switch, not names",
 }
@@ -44,7 +44,7 @@ NOT_ON_DISK = {
 #: the axes a *library* caller narrows differently too.
 NOT_SUBTRACTABLE = {
     "middleware": "selects code, and `including` never widens it",
-    "providers": "decides which credentials are used",
+    "endpoints": "decides which credentials are used",
     "models": "an assignment, not a permission",
     "memory": "a switch, not names -- `--no-memory` says it",
 }

@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import replace
 
 from kingfisher.application.service import opening_events
-from kingfisher.config import Endpoint
+from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
@@ -23,7 +23,6 @@ from kingfisher.infrastructure.agent import indistinct_delegates
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
-provider: openai
 model: gpt-5
 system_prompt: |
   You answer on your own.
@@ -32,6 +31,13 @@ system_prompt: |
 ASKED_FOR_A_MODEL = """name: cheap
 description: Reads a lot.
 model: {model}
+system_prompt: |
+  You read.
+"""
+
+ASKED_BY_ALIAS = """name: cheap
+description: Reads a lot.
+alias: {alias}
 system_prompt: |
   You read.
 """
@@ -59,8 +65,18 @@ def _define(cfg, *definitions: str) -> None:
 
 
 def _elsewhere(cfg, url: str):
-    """A deployment whose second endpoint points wherever `url` says."""
-    return replace(cfg, endpoints={"openai": Endpoint("openai", url, "sk-test")})
+    """A deployment whose `gpt-5` lives at whatever host `url` names."""
+    return replace(
+        cfg,
+        models=replace(
+            cfg.models,
+            endpoints={
+                **cfg.models.endpoints,
+                "openai": Endpoint("openai", url, "sk-test"),
+            },
+            models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        ),
+    )
 
 
 def _found(cfg, session_dir, names, **kwargs):
@@ -75,12 +91,12 @@ def _found(cfg, session_dir, names, **kwargs):
 def test_a_second_endpoint_pointing_at_the_same_host_is_reported(cfg, session_dir):
     """The live case, and the one a style name cannot show.
 
-    `OPENAI_BASE_URL` may be filled with a gateway that also serves the
-    `anthropic` style -- and then `provider: openai` reads as "somewhere else"
-    while being the same machine. Measured on a real deployment: both endpoints
-    resolved to `api.minimaxi.com`.
+A model id says nothing about which machine serves it, so two catalogue
+    entries may name one host -- and then `model: gpt-5` reads as "somewhere
+    else" while being the same gateway. Measured on a real deployment: both
+    endpoints resolved to `api.minimaxi.com`.
     """
-    same = _elsewhere(cfg, cfg.base_url.replace("/anthropic", "/v1"))
+    same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
 
     found = _found(same, session_dir, ("second-opinion",))
@@ -104,7 +120,7 @@ def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
 def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
     """Reads as a decision, behaves as a no-op -- and stops being a no-op the
     day someone runs it on a deployment whose default differs."""
-    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.model))
+    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
 
     found = _found(cfg, session_dir, ("cheap",))
 
@@ -112,12 +128,61 @@ def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
 
 
 def test_pinning_a_different_model_is_not_reported(cfg, session_dir):
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="something-else"))
+    """The negative control, and it has to name a model on another *host* --
+    not merely another entry. Several models behind one gateway is the ordinary
+    case, so a different model id is not by itself evidence of anywhere else.
+    """
+    elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
+    _define(elsewhere, ASKED_FOR_A_MODEL.format(model="gpt-5"))
 
-    assert _found(cfg, session_dir, ("cheap",)) == {}
+    assert _found(elsewhere, session_dir, ("cheap",)) == {}
+
+
+def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
+    """`cheap-model` is a different model and the same machine. Worth a line for
+    the reason the whole check exists: a second opinion served by the gateway
+    that produced the first is the disappointment nothing else would show."""
+    _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
+
+    assert "same host" in _found(cfg, session_dir, ("cheap",))["cheap"]
 
 
 # -- only a delegate that asked ------------------------------------------
+
+
+def test_asking_by_alias_counts_as_asking(cfg, session_dir):
+    """The hole this check briefly had, and the reason aliases exist.
+
+    When the presets were stripped of their `model:` lines, `second-opinion`
+    asked for nothing -- so it ran the main agent's model *and* this said
+    nothing about it, which is the exact silence the whole check was written to
+    break. An alias is a delegate asking to be elsewhere, so it is checked like
+    one, against whatever the deployment bound it to.
+    """
+    bound = replace(
+        cfg, models=replace(cfg.models, aliases={"alternate": cfg.models.default})
+    )
+    _define(bound, ASKED_BY_ALIAS.format(alias="alternate"))
+
+    assert "same model as the main agent" in _found(bound, session_dir, ("cheap",))["cheap"]
+
+
+def test_an_alias_bound_somewhere_else_is_not_reported(cfg, session_dir):
+    """The negative control: a binding that did what it was for."""
+    base = _elsewhere(cfg, "https://api.openai.com/v1")
+    routed = replace(base, models=replace(base.models, aliases={"alternate": "gpt-5"}))
+    _define(routed, ASKED_BY_ALIAS.format(alias="alternate"))
+
+    assert _found(routed, session_dir, ("cheap",)) == {}
+
+
+def test_an_unbound_alias_is_left_to_the_build_to_refuse(cfg, session_dir):
+    """Reporting is not refusing -- the module says so. The build raises with
+    the message worth reading; saying it twice here, worded for a different
+    question, would only get in the way."""
+    _define(cfg, ASKED_BY_ALIAS.format(alias="nobody-bound-this"))
+
+    assert _found(cfg, session_dir, ("cheap",)) == {}
 
 
 def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
@@ -142,13 +207,13 @@ def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir
 def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir):
     """A caller may put a delegate on the main model deliberately. Saying so is
     still worth a line: they chose the model, not the consequence."""
-    _define(cfg, ASKED_FOR_A_MODEL.format(model="something-else"))
+    _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
     found = _found(
         cfg,
         session_dir,
         ("cheap",),
-        run_on={"cheap": RunOn(cfg.model)},
+        run_on={"cheap": RunOn(cfg.models.default)},
     )
 
     assert "same model as the main agent" in found["cheap"]
@@ -167,7 +232,7 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
     """
     from kingfisher import Kingfisher
 
-    same = _elsewhere(cfg, cfg.base_url.replace("/anthropic", "/v1"))
+    same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
     service = Kingfisher(same)
     service.start_session("s")
@@ -207,8 +272,8 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
 
 
 def test_the_message_names_the_delegate(cfg, session_dir):
-    """`[indistinct] second-opinion names endpoint 'openai', which points at
-    the same host as the default (…)` -- readable without knowing the field."""
+    """`[indistinct] second-opinion runs 'gpt-5' on endpoint 'openai', which
+    points at the same host as the default (…)` -- readable without the field."""
     from kingfisher.domain.result import RunEvent
 
     rendered = str(RunEvent(kind="indistinct", text="second-opinion runs 'M3'", agent="x"))

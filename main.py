@@ -600,7 +600,7 @@ def main(argv: list[str]) -> int:
         return 2
 
     print(f"workspace : {workspace}")
-    print(f"model     : {cfg.model} via {cfg.api_style}")
+    print(f"model     : {cfg.models.default} via {cfg.models.resolve()[0].endpoint}")
     warn_if_unconfined(cfg)
     if not capabilities.is_unrestricted:
         for kind in GRANTS:

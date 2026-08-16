@@ -324,7 +324,7 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, ses
 
 MODEL_SUBAGENT = """name: cheap
 description: Does the bulk reading on a smaller model.
-model: some-small-model
+model: cheap-model
 system_prompt: |
   You read things.
 
@@ -334,7 +334,7 @@ system_prompt: |
 def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch, session_dir):
     """A bare name would go to deepagents' `init_chat_model`, which infers its
     own provider and reads credentials from the environment -- around the
-    configured base_url and api_style entirely."""
+    configured endpoint entirely."""
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
@@ -344,9 +344,11 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
 
     (subagent,) = captured["subagents"]
     assert not isinstance(subagent["model"], str)
-    assert subagent["model"].model == "some-small-model"
+    assert subagent["model"].model == "cheap-model"
     # Same gateway as the main agent, not whatever the environment suggests.
-    assert str(subagent["model"].anthropic_api_url).startswith(cfg.base_url)
+    assert str(subagent["model"].anthropic_api_url).startswith(
+        cfg.models.resolve()[1].base_url
+    )
 
 
 def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir):
@@ -374,7 +376,7 @@ def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir
     )
 
     (subagent,) = captured["subagents"]
-    assert subagent["model"].model == "some-small-model"
+    assert subagent["model"].model == "cheap-model"
 
 
 def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeypatch, session_dir):
@@ -462,7 +464,7 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, 
     """The override wins, but only when there is one."""
     (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
     (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
-        "name: reviewer\ndescription: d\nmodel: FROM-DEFINITION\nsystem_prompt: |\n  You review.\n",
+        "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  You review.\n",
         encoding="utf-8",
     )
     captured = capture_build(monkeypatch)
@@ -475,4 +477,4 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, 
     )
 
     (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
-    assert spec["model"].model == "FROM-DEFINITION"
+    assert spec["model"].model == "cheap-model"

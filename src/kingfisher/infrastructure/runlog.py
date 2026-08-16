@@ -78,11 +78,11 @@ def log_path(state_dir: Path, session_id: str) -> Path:
 class JsonlRunLogger(BaseCallbackHandler):
     """Writes one JSON object per line for each model call and tool call."""
 
-    def __init__(self, path: Path, *, model: str, api_style: str, session_id: str) -> None:
+    def __init__(self, path: Path, *, model: str, endpoint: str, session_id: str) -> None:
         self.path = Path(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self._model = model
-        self._api_style = api_style
+        self._endpoint = endpoint
         self._session_id = session_id
 
     def _write(self, event: str, **fields: Any) -> None:
@@ -91,7 +91,7 @@ class JsonlRunLogger(BaseCallbackHandler):
             "session_id": self._session_id,
             "event": event,
             "model": self._model,
-            "api_style": self._api_style,
+            "endpoint": self._endpoint,
             **fields,
         }
         with self.path.open("a", encoding="utf-8") as fh:
