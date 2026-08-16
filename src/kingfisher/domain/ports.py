@@ -83,3 +83,33 @@ class DefinitionStore(Protocol):
     def fetch(self, definition_id: str) -> Mapping[str, bytes]:
         """The files making up one definition, keyed by path relative to it."""
         ...
+
+
+class FileStore(Protocol):
+    """Where a request's files are fetched from, by id.
+
+    The same shape as `DefinitionStore` and for the same reason. A remote caller
+    has no host paths, so `Request.inputs` and `data` cannot express what they
+    want -- they name an id instead, and a store the deployment wired resolves
+    it. Kingfisher never receives bytes over its own wire and never holds them
+    beyond the turn that asked.
+
+    A mapping rather than plain bytes, so one ref may name a small bundle and
+    the two ports read alike. The keys are paths relative to wherever the files
+    land, and a caller-supplied key is exactly what `layout.within` refuses to
+    let escape.
+
+    Ids stop here, as they do for definitions: what the agent sees is a filename
+    in `/data` or the turn's `input/`, never the id it was fetched by.
+    """
+
+    def fetch(self, file_id: str) -> Mapping[str, bytes]:
+        """The files this reference names, keyed by path relative to it.
+
+        Raises `references.UnknownReferenceError` for a ref it cannot resolve
+        and `references.UnsafeReferenceError` for one that names somewhere it
+        was not allowed to. Part of the contract rather than each adapter's own
+        choice: a bare `FileNotFoundError` cannot be told from the deployment's
+        own disk being wrong, and would answer 500 to a caller's typo.
+        """
+        ...

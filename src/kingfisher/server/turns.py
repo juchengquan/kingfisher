@@ -34,8 +34,7 @@ if TYPE_CHECKING:
 class TurnBody(BaseModel):
     """What a caller sends to start a turn.
 
-    `task` and what the request asks to be allowed. File references follow;
-    that one is a decision with a shape of its own and is not guessed at here.
+    A task, what the request asks to be allowed, and the files it brings.
 
     No `turn_id`. The library takes one and reuses that directory, but then runs
     the turn again in full -- so over HTTP a field of that name would read as an
@@ -58,6 +57,18 @@ class TurnBody(BaseModel):
     #: `grants.intersect(request.capabilities)`, so this states intent and the
     #: deployment decides what intent is honoured.
     capabilities: CapabilitiesBody | None = None
+    #: Files, by id, resolved by whatever `FileStore` the deployment wired.
+    #:
+    #: Ids rather than bytes, so kingfisher never receives a payload over its
+    #: own wire -- the same decision `skill_refs` made one phase earlier, for
+    #: the same reason. `inputs` and `data` stay host paths for CLI and library
+    #: callers; these are the remote form of the same two.
+    #:
+    #: The distinction is lifetime and nothing else: `data_refs` land in the
+    #: session's `/data` and are there next turn, `input_refs` land in this
+    #: turn's `input/` and leave with it.
+    input_refs: list[str] = []
+    data_refs: list[str] = []
 
 
 def turn_for(body: TurnBody, session_id: str | None = None) -> TurnRequest:
@@ -75,7 +86,13 @@ def turn_for(body: TurnBody, session_id: str | None = None) -> TurnRequest:
     # `Request` defaults to anyway. One path rather than two.
     asked = body.capabilities if body.capabilities is not None else CapabilitiesBody()
     try:
-        return TurnRequest(body.task, session_id=session_id, capabilities=asked.selected())
+        return TurnRequest(
+            body.task,
+            session_id=session_id,
+            capabilities=asked.selected(),
+            input_refs=tuple(body.input_refs),
+            data_refs=tuple(body.data_refs),
+        )
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
 

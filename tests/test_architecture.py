@@ -154,7 +154,8 @@ LIGHT_EXPORTS = frozenset({
     # run without. Public so a consumer outside the package can catch them by
     # name and open one -- the server being the first such consumer.
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
-    "SubagentError", "UnknownSessionError", "UploadError", "async_checkpointer",
+    "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
+    "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
 })
@@ -420,7 +421,8 @@ def test_the_package_ships_its_presets():
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
-    "SubagentError", "UnknownSessionError", "UploadError",
+    "SubagentError", "UnknownReferenceError", "UnknownSessionError",
+    "UnsafeReferenceError", "UploadError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
@@ -429,7 +431,10 @@ CALLER_FACING_ERRORS = frozenset({
 #: private -- `ConfigError` was public long before this rule existed -- it
 #: means a consumer is not expected to branch on it.
 DEPLOYMENT_ERRORS = frozenset({
-    "ConfigError", "DataError", "HostPathError", "ToolError",
+    # `MissingStoreError` is here rather than above on purpose: a request naming
+    # files by id with no `FileStore` wired is a deployment that forgot one, and
+    # nothing the caller sends can fix it.
+    "ConfigError", "DataError", "HostPathError", "MissingStoreError", "ToolError",
 })
 
 
