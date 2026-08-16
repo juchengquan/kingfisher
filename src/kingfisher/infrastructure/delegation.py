@@ -22,6 +22,7 @@ from kingfisher.domain.capabilities import (
     approved_middleware,
     narrowed,
 )
+from kingfisher.domain.subagent import resolved_endpoint
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
@@ -92,38 +93,20 @@ def subagent_middleware(
 def _subagent_endpoint(
     spec: SubagentSpec, cfg: Config, allowed: tuple[str, ...] | None
 ) -> tuple[str | None, str | None]:
-    """The (provider, model) a delegate runs as, or refuse to choose one.
+    """Read the operator's overrides out of `Config`, and let the domain decide.
 
-    They move together. Overriding only the model, against a definition that
-    pins `provider: openai`, would send a MiniMax model name to OpenAI -- a 404
-    if you are lucky and a wrong-model run if you are not. Which endpoint runs
-    which model should not be settled by two people who cannot see each other's
-    half, so a half-override against a pinned provider is refused.
-
-    An operator who overrides both has said what they mean and wins, which is
-    the point of the override existing at all.
+    The whole of this layer's part is knowing that a role's overrides live at
+    `role_models[SUBAGENT_ROLE]` and `role_providers[SUBAGENT_ROLE]`. That the
+    pair is atomic, and that a pinned provider must be one the request may use,
+    is `subagent.resolved_endpoint` -- a rule about kingfisher's own vocabulary,
+    which happens to need two values a deployment supplies.
     """
-    model_override = cfg.role_models.get(SUBAGENT_ROLE)
-    provider_override = cfg.role_providers.get(SUBAGENT_ROLE)
-
-    if model_override is not None and provider_override is None and spec.provider is not None:
-        msg = (
-            f"subagent {spec.name!r} pins provider {spec.provider!r}, but an operator "
-            f"overrode only its model; set KINGFISHER_PROVIDER_SUBAGENT too, or neither"
-        )
-        raise CapabilityError(msg)
-
-    provider = provider_override if provider_override is not None else spec.provider
-    model = model_override if model_override is not None else spec.model
-
-    if provider is not None and allowed is not None and provider not in allowed:
-        msg = (
-            f"subagent {spec.name!r} names endpoint {provider!r}, which this request "
-            f"may not use; permitted {allowed}"
-        )
-        raise CapabilityError(msg)
-
-    return provider, model
+    return resolved_endpoint(
+        spec,
+        model_override=cfg.role_models.get(SUBAGENT_ROLE),
+        provider_override=cfg.role_providers.get(SUBAGENT_ROLE),
+        granted=allowed,
+    )
 
 
 def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
