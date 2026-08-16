@@ -1,7 +1,7 @@
 """Finding a workspace's own tools on disk.
 
 The third of the store trio, and the odd one out. A skill is markdown and a
-subagent is markdown with frontmatter; both are *data* the agent reads. A tool
+subagent is a YAML document; both are *data* the agent reads. A tool
 is Python, imported into this process and called in it. There is no format to
 parse here — only a module to import and a decision about what to refuse.
 

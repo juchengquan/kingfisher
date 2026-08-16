@@ -1,4 +1,4 @@
-"""Parsing `/subagents/<name>.md`."""
+"""Parsing `/subagents/<name>.yaml`."""
 
 from __future__ import annotations
 
@@ -10,25 +10,25 @@ from kingfisher.domain.subagent import KNOWN, REFUSED, SubagentError, SubagentSp
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 from kingfisher.infrastructure.subagent_store import load_all
 
-MINIMAL = """---
-name: reviewer
+MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.
----
-You review analyses. Be specific about what is wrong.
+system_prompt: |
+  You review analyses. Be specific about what is wrong.
+
 """
 
-FULL = """---
-name: reviewer
+FULL = """name: reviewer
 description: "Checks an analysis for arithmetic errors."
 tools: [read_file, glob, grep]
 model: MiniMax-M2.5
----
-You review analyses.
+system_prompt: |
+  You review analyses.
+
 """
 
 
 def test_minimal_definition_parses():
-    spec = read_subagent(MINIMAL, Path("reviewer.md"))
+    spec = read_subagent(MINIMAL, Path("reviewer.yaml"))
 
     assert spec.name == "reviewer"
     assert spec.description == "Checks an analysis for arithmetic errors."
@@ -39,7 +39,7 @@ def test_minimal_definition_parses():
 
 
 def test_optional_fields_and_quoting():
-    spec = read_subagent(FULL, Path("reviewer.md"))
+    spec = read_subagent(FULL, Path("reviewer.yaml"))
 
     assert spec.tools == ("read_file", "glob", "grep")
     assert spec.model == "MiniMax-M2.5"
@@ -49,30 +49,34 @@ def test_optional_fields_and_quoting():
 @pytest.mark.parametrize(
     ("text", "because"),
     [
-        ("no frontmatter at all", "expected YAML frontmatter"),
-        ("---\ndescription: x\n---\nbody\n", "missing required field 'name'"),
-        ("---\nname: x\n---\nbody\n", "missing required field 'description'"),
-        ("---\nname: x\ndescription: y\n---\n\n", "must not be empty"),
+        # A bare scalar is valid YAML and not a definition.
+        ("no fields at all", "expected a mapping of fields"),
+        ("description: x\nsystem_prompt: |\n  body\n", "missing required field 'name'"),
+        ("name: x\nsystem_prompt: |\n  body\n", "missing required field 'description'"),
+        ("name: x\ndescription: y\n", "missing required field 'system_prompt'"),
+        # Present but blank is a different mistake, and says so.
+        ("name: x\ndescription: y\nsystem_prompt: |\n", "'system_prompt' is present but empty"),
+        ("name: \ndescription: y\nsystem_prompt: |\n  body\n", "'name' is present but empty"),
         # YAML says why; we say which file. Rejected either way.
-        ("---\nname x\ndescription: y\n---\nbody\n", "cannot read frontmatter"),
-        ("---\n- not\n- a mapping\n---\nbody\n", "expected a mapping of fields"),
+        ("name x\ndescription: y\nsystem_prompt: |\n  body\n", "cannot read definition"),
+        ("- not\n- a mapping\n", "expected a mapping of fields"),
     ],
 )
 def test_malformed_definitions_are_rejected(text, because):
     """Loudly, at build time — a subagent that silently loses its prompt would
     fail much later and much less legibly."""
     with pytest.raises(SubagentError, match=because):
-        read_subagent(text, Path("broken.md"))
+        read_subagent(text, Path("broken.yaml"))
 
 
 def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
     assert load_all(tmp_path / "subagents") == {}
 
 
-def test_load_all_keys_on_the_frontmatter_name_not_the_filename(tmp_path):
+def test_load_all_keys_on_the_declared_name_not_the_filename(tmp_path):
     directory = tmp_path / "subagents"
     directory.mkdir()
-    (directory / "misnamed.md").write_text(MINIMAL, encoding="utf-8")
+    (directory / "misnamed.yaml").write_text(MINIMAL, encoding="utf-8")
 
     specs = load_all(tmp_path / "subagents")
     assert set(specs) == {"reviewer"}
@@ -82,23 +86,22 @@ def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
     """Otherwise one silently shadows the other depending on sort order."""
     directory = tmp_path / "subagents"
     directory.mkdir()
-    (directory / "a.md").write_text(MINIMAL, encoding="utf-8")
-    (directory / "b.md").write_text(MINIMAL, encoding="utf-8")
+    (directory / "a.yaml").write_text(MINIMAL, encoding="utf-8")
+    (directory / "b.yaml").write_text(MINIMAL, encoding="utf-8")
 
     with pytest.raises(SubagentError, match="duplicate subagent name"):
         load_all(tmp_path / "subagents")
 
 
-def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
+def test_folded_and_block_list_fields_are_accepted(tmp_path):
     """Two parsers read one format, and ours was the stricter.
 
-    deepagents reads skill frontmatter with `yaml.safe_load`. A block list is
+    deepagents reads a skill's header with `yaml.safe_load`. A block list is
     the Agent Skills spec's documented form for `allowed-tools`, and a folded
     scalar is how anyone writes a description longer than a line. Rejecting
     them made a skill that loads from the catalogue impossible to upload.
     """
     definition = (
-        "---\n"
         "name: extractor\n"
         "description: >-\n"
         "  Pulls fields out of documents,\n"
@@ -106,11 +109,11 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
         "tools:\n"
         "  - read_file\n"
         "  - grep\n"
-        "---\n"
-        "You extract.\n"
+        "system_prompt: |\n"
+        "  You extract.\n"
     )
 
-    spec = read_subagent(definition, tmp_path / "extractor.md")
+    spec = read_subagent(definition, tmp_path / "extractor.yaml")
 
     assert spec.name == "extractor"
     assert spec.tools == ("read_file", "grep")
@@ -120,9 +123,9 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
 # -- fields this format does not define ------------------------------------
 
 
-def _definition(*frontmatter_lines: str) -> str:
-    header = "\n".join(("name: reviewer", "description: d", *frontmatter_lines))
-    return f"---\n{header}\n---\nYou review analyses.\n"
+def _definition(*extra_lines: str) -> str:
+    header = "\n".join(("name: reviewer", "description: d", *extra_lines))
+    return f"{header}\nsystem_prompt: |\n  You review analyses.\n"
 
 
 def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
@@ -131,7 +134,7 @@ def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
     the delegate came out holding every tool its parent had.
     """
     with pytest.raises(SubagentError, match="tolls") as raised:
-        read_subagent(_definition("tolls: [read_file]"), tmp_path / "reviewer.md")
+        read_subagent(_definition("tolls: [read_file]"), tmp_path / "reviewer.yaml")
 
     assert "did you mean 'tools'?" in str(raised.value)
 
@@ -139,10 +142,10 @@ def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
 def test_a_typo_of_a_required_field_names_the_typo(tmp_path):
     """Not "missing required field 'name'", which sends the author looking for
     something they can plainly see they wrote."""
-    body = "---\nnmae: reviewer\ndescription: d\n---\nYou review.\n"
+    body = "nmae: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n"
 
     with pytest.raises(SubagentError, match="nmae") as raised:
-        read_subagent(body, tmp_path / "reviewer.md")
+        read_subagent(body, tmp_path / "reviewer.yaml")
 
     assert "did you mean 'name'?" in str(raised.value)
 
@@ -153,7 +156,7 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
     message does not pretend otherwise.
     """
     with pytest.raises(SubagentError, match="additional_abc") as raised:
-        read_subagent(_definition("additional_abc: 1"), tmp_path / "reviewer.md")
+        read_subagent(_definition("additional_abc: 1"), tmp_path / "reviewer.yaml")
 
     message = str(raised.value)
     assert "did you mean" not in message
@@ -161,12 +164,28 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
         assert field in message
 
 
+def test_every_unaccepted_field_is_reported_at_once(tmp_path):
+    """Not just the first. Two typos used to take two runs to find, and the
+    second only after fixing the first."""
+    with pytest.raises(SubagentError) as raised:
+        read_subagent(
+            _definition("tolls: [read_file]", "temperature: 0.2", "permissions: [deny]"),
+            tmp_path / "reviewer.yaml",
+        )
+
+    message = str(raised.value)
+    assert "tolls" in message
+    assert "temperature" in message
+    assert "permissions" in message
+    assert "did you mean 'tools'?" in message  # and each is explained in its own terms
+
+
 @pytest.mark.parametrize("field", sorted(REFUSED))
 def test_a_deliberately_unexposed_field_says_why(tmp_path, field):
     """These are not "not yet". Honouring them would be wrong, and the generic
     message reads as an omission someone might work around."""
     with pytest.raises(SubagentError, match=field) as raised:
-        read_subagent(_definition(f"{field}: something"), tmp_path / "reviewer.md")
+        read_subagent(_definition(f"{field}: something"), tmp_path / "reviewer.yaml")
 
     message = str(raised.value)
     assert "did you mean" not in message
@@ -178,7 +197,7 @@ def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
     and silently did nothing, so the definition read stricter than the agent it
     produced."""
     with pytest.raises(SubagentError) as raised:
-        read_subagent(_definition("permissions: [deny]"), tmp_path / "reviewer.md")
+        read_subagent(_definition("permissions: [deny]"), tmp_path / "reviewer.yaml")
 
     message = str(raised.value)
     assert "replace" in message
@@ -189,7 +208,6 @@ def test_every_known_field_still_parses(tmp_path):
     """The negative control: strictness that rejected a valid definition would
     be a worse bug than the one it fixes."""
     body = (
-        "---\n"
         "name: reviewer\n"
         "description: d\n"
         "tools: [read_file]\n"
@@ -197,10 +215,9 @@ def test_every_known_field_still_parses(tmp_path):
         "middleware: [audit]\n"
         "provider: openai\n"
         "model: gpt-5\n"
-        "---\n"
-        "You review.\n"
+        "system_prompt: |\n  You review.\n"
     )
-    spec = read_subagent(body, tmp_path / "reviewer.md")
+    spec = read_subagent(body, tmp_path / "reviewer.yaml")
 
     assert spec.tools == ("read_file",)
     assert spec.middleware == ("audit",)
@@ -210,9 +227,7 @@ def test_every_known_field_still_parses(tmp_path):
 def test_the_known_set_matches_the_spec_it_builds():
     """Two lists that must agree: a field added to the dataclass but not to
     KNOWN would be refused as unknown the moment anyone used it."""
-    read = set(SubagentSpec.__dataclass_fields__) - {"system_prompt"}
-
-    assert read == KNOWN
+    assert set(SubagentSpec.__dataclass_fields__) == KNOWN
 
 
 def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
@@ -221,3 +236,102 @@ def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
     body = "---\nname: code-review\nallowed-tools: [read_file]\nlicense: MIT\n---\nBody.\n"
 
     assert skill_name(body) == "code-review"
+
+
+def test_a_prompt_that_begins_indented_still_loads(tmp_path):
+    """`system_prompt: |` takes its indentation from the first line, so a prompt
+    opening with a code example *fails to parse*. The `2` pins the block to a
+    fixed column, which is why the presets and the docs use it.
+
+    The prompt's outer whitespace is still stripped, as the markdown body always
+    was -- what the indicator buys is that the document loads at all.
+    """
+    lines = "      ls -la /data\n  Then report what you found.\n"
+    header = "name: reviewer\ndescription: d\nsystem_prompt: "
+
+    spec = read_subagent(header + "|2\n" + lines, tmp_path / "reviewer.yaml")
+    assert "ls -la /data" in spec.system_prompt
+    assert "Then report what you found." in spec.system_prompt
+
+    # The same document without the indicator does not load at all.
+    with pytest.raises(SubagentError, match="cannot read definition"):
+        read_subagent(header + "|\n" + lines, tmp_path / "reviewer.yaml")
+
+
+def test_indentation_inside_a_prompt_is_preserved(tmp_path):
+    """Only the outer edges are stripped. A numbered list's continuation lines
+    carry their indent into the delegate's prompt, which is how the shipped
+    presets are written."""
+    definition = (
+        "name: reviewer\n"
+        "description: d\n"
+        "system_prompt: |\n"
+        "  1. Recompute the figure.\n"
+        "     Do not reuse the caller's script.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert "\n   Do not reuse" in spec.system_prompt
+
+
+# -- how the prompt is written ---------------------------------------------
+
+HEAD = "name: reviewer\ndescription: d\n"
+STEPS = "  1. Recompute the figure.\n  2. Say which definition you applied.\n"
+
+
+@pytest.mark.parametrize("style", ["|", "|2", "|-", "|+"])
+def test_every_literal_block_is_accepted(tmp_path, style):
+    """The indicator and the chomping marker are none of this check's business
+    -- they are all the same style, and all of them keep the line breaks."""
+    spec = read_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+
+    assert "Recompute the figure.\n2. Say" in spec.system_prompt
+
+
+@pytest.mark.parametrize("style", [">", ">-", ">2"])
+def test_a_folded_prompt_is_refused(tmp_path, style):
+    """`>` joins consecutive lines, so two numbered steps reach the delegate as
+    one run-on line -- valid YAML, correct-looking file, odd-behaving agent."""
+    with pytest.raises(SubagentError, match="reflows it") as raised:
+        read_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+
+    assert "system_prompt: |" in str(raised.value)
+
+
+def test_a_plain_prompt_is_refused(tmp_path):
+    """The same damage, without even a marker to notice."""
+    with pytest.raises(SubagentError, match="a plain scalar"):
+        read_subagent(HEAD + "system_prompt: Recompute the figure.\n", tmp_path / "reviewer.yaml")
+
+
+def test_a_quoted_prompt_is_refused(tmp_path):
+    with pytest.raises(SubagentError, match="reflows it"):
+        read_subagent(HEAD + 'system_prompt: "Recompute the figure."\n', tmp_path / "reviewer.yaml")
+
+
+def test_folding_is_what_the_refusal_is_about(tmp_path):
+    """The negative control, so the rule is justified rather than asserted:
+    this is what a folded prompt would have handed the delegate."""
+    import yaml as _yaml
+
+    folded = _yaml.safe_load(HEAD + "system_prompt: >\n" + STEPS)["system_prompt"]
+
+    assert folded == "1. Recompute the figure. 2. Say which definition you applied.\n"
+
+
+def test_the_description_may_still_be_folded(tmp_path):
+    """Only the prompt is checked. A description is one paragraph, and `>-` is
+    how anyone writes one longer than a line -- the skill spec's own form."""
+    definition = (
+        "name: reviewer\n"
+        "description: >-\n"
+        "  Checks an analysis for arithmetic errors,\n"
+        "  one claim at a time.\n"
+        "system_prompt: |\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert spec.description == "Checks an analysis for arithmetic errors, one claim at a time."

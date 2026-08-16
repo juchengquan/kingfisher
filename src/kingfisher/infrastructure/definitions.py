@@ -1,6 +1,6 @@
 """Reading a definition document into the value the domain works with.
 
-`domain.frontmatter` owns what the fields mean; this owns the one step that
+`domain.fields` owns what a field means; this owns the one step that
 needs a library. `yaml.safe_load` sat in the domain until the boundary was made
 deny-by-default — a domain module imports the standard library and
 `kingfisher.domain`, nothing else — and this is where it landed.
@@ -18,7 +18,7 @@ ones are, so a skill that loaded fine could not be uploaded.
 arrive from a catalogue service under `DefinitionStore`, which makes them input
 rather than something we wrote.
 
-Named `definitions` rather than `frontmatter`: one name across two layers makes
+Named `definitions` rather than `fields`: one name across two layers makes
 every import a small act of guessing, which is why `scoping` is not called
 `capabilities` either.
 """
@@ -29,10 +29,15 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import frontmatter, skill, subagent
+from kingfisher.domain import skill, subagent
 
 if TYPE_CHECKING:
     from pathlib import Path
+
+#: The scalar style that keeps a prompt's line breaks. `|`, `|2`, `|-` and
+#: `|+` are all this one style once parsed -- the suffix never reaches the node.
+LITERAL = "|"
+
 
 
 def decode(header: str) -> dict[str, object] | str:
@@ -65,7 +70,7 @@ def _opened(text: str, label: str, error: type[ValueError]) -> tuple[dict[str, o
     type, because `SkillError` and `SubagentError` are not interchangeable to
     someone reading a traceback.
     """
-    parts = frontmatter.split(text)
+    parts = skill.split(text)
     if parts is None:
         msg = f"{label}: expected YAML frontmatter delimited by ---"
         raise error(msg)
@@ -79,9 +84,57 @@ def _opened(text: str, label: str, error: type[ValueError]) -> tuple[dict[str, o
 
 
 def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
-    """One subagent definition. Raises `SubagentError` on anything malformed."""
-    fields, body = _opened(text, source.name, subagent.SubagentError)
-    return subagent.parse(fields, body, source)
+    """One subagent definition. Raises `SubagentError` on anything malformed.
+
+    The whole document, not a header and a body: a subagent is YAML through
+    and through, so there is no envelope to open. A skill still has one --
+    that format is deepagents', and it is markdown with a header.
+    """
+    fields = decode(text)
+    if isinstance(fields, str):
+        msg = f"{source.name}: cannot read definition ({fields})"
+        raise subagent.SubagentError(msg)
+    _require_literal_prompt(text, source)
+    return subagent.parse(fields, source)
+
+
+def _require_literal_prompt(text: str, source: Path) -> None:
+    """Refuse a `system_prompt` written in a style that reflows it.
+
+    `>` folds consecutive lines into one, so
+
+        1. Recompute the figure.
+        2. Say which definition you applied.
+
+    reaches the delegate as a single run-on line. The document is valid, the
+    definition looks right on screen, and the only symptom is a delegate
+    behaving oddly. A plain or quoted scalar does the same, harder.
+
+    Only the *style* is checked, not the indentation indicator: `|` and `|2`
+    are the same scalar to a parser -- the indicator is consumed by the scanner
+    and never reaches the node -- and the mistake it guards against already
+    refuses to load. Checking it would mean reading the document a second time
+    by hand, to catch something that is not silent.
+
+    Here rather than in `domain.subagent` because a scalar's style is a fact
+    about the document, not about what a subagent means. The domain is handed
+    fields; by then every style looks alike.
+    """
+    node = yaml.compose(text)
+    if not isinstance(node, yaml.MappingNode):  # pragma: no cover -- decode checked
+        return
+    for key, value in node.value:
+        if getattr(key, "value", None) != "system_prompt":
+            continue
+        if isinstance(value, yaml.ScalarNode) and value.style != LITERAL:
+            written = f"{value.style!r}" if value.style else "a plain scalar"
+            msg = (
+                f"{source.name}: system_prompt is written as {written}, which reflows it. "
+                f"Use a literal block -- `system_prompt: {LITERAL}` -- so the prompt "
+                "reaches the delegate with the line breaks you wrote"
+            )
+            raise subagent.SubagentError(msg)
+        return
 
 
 def skill_name(text: str, source: str = skill.FILENAME) -> str:

@@ -33,7 +33,7 @@ BASE_ENV = {
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
     (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / f"{name}.md").write_text(body, encoding="utf-8")
+    (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def build(cfg, session_dir, monkeypatch, **caps):
@@ -77,7 +77,8 @@ def test_naming_an_unconfigured_endpoint_is_refused():
 
 
 def test_a_delegate_runs_against_the_endpoint_it_names(cfg, session_dir, monkeypatch):
-    define(cfg, "---\nname: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  Go.\n")
     routed = replace(cfg, endpoints={"openai": ELSEWHERE})
 
     spec = build(routed, session_dir, monkeypatch)
@@ -87,7 +88,7 @@ def test_a_delegate_runs_against_the_endpoint_it_names(cfg, session_dir, monkeyp
 
 
 def test_omitting_provider_keeps_the_default(cfg, session_dir, monkeypatch):
-    define(cfg, "---\nname: reviewer\ndescription: d\nmodel: MiniMax-M2.5\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nmodel: MiniMax-M2.5\nsystem_prompt: |\n  Go.\n")
 
     spec = build(cfg, session_dir, monkeypatch)
 
@@ -98,7 +99,7 @@ def test_omitting_provider_keeps_the_default(cfg, session_dir, monkeypatch):
 
 
 def test_an_endpoint_a_request_may_not_use_is_refused(cfg, session_dir, monkeypatch):
-    define(cfg, "---\nname: reviewer\ndescription: d\nprovider: openai\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nsystem_prompt: |\n  Go.\n")
     routed = replace(cfg, endpoints={"openai": ELSEWHERE})
 
     with pytest.raises(CapabilityError, match="may not use"):
@@ -106,7 +107,8 @@ def test_an_endpoint_a_request_may_not_use_is_refused(cfg, session_dir, monkeypa
 
 
 def test_a_granted_endpoint_goes_through(cfg, session_dir, monkeypatch):
-    define(cfg, "---\nname: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  Go.\n")
     routed = replace(cfg, endpoints={"openai": ELSEWHERE})
 
     spec = build(routed, session_dir, monkeypatch, providers=("openai",))
@@ -141,7 +143,8 @@ def test_overriding_only_the_model_against_a_pinned_provider_is_refused(
 ):
     """A MiniMax model name sent to OpenAI is a 404 if you are lucky and a
     wrong-model run if you are not."""
-    define(cfg, "---\nname: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  Go.\n")
     half = replace(cfg, endpoints={"openai": ELSEWHERE}, role_models={"subagent": "CHEAP"})
 
     with pytest.raises(CapabilityError, match="overrode only its model"):
@@ -150,7 +153,8 @@ def test_overriding_only_the_model_against_a_pinned_provider_is_refused(
 
 def test_overriding_both_wins(cfg, session_dir, monkeypatch):
     """An operator who says what they mean is the point of the override."""
-    define(cfg, "---\nname: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  Go.\n")
     both = replace(
         cfg,
         endpoints={"openai": ELSEWHERE},
@@ -168,7 +172,7 @@ def test_overriding_the_model_alone_is_fine_when_nothing_is_pinned(
     cfg, session_dir, monkeypatch
 ):
     """The refusal is about a mismatch, not about overriding."""
-    define(cfg, "---\nname: reviewer\ndescription: d\nmodel: EXPENSIVE\n---\nGo.\n")
+    define(cfg, "name: reviewer\ndescription: d\nmodel: EXPENSIVE\nsystem_prompt: |\n  Go.\n")
 
     spec = build(replace(cfg, role_models={"subagent": "CHEAP"}), session_dir, monkeypatch)
 
@@ -180,7 +184,7 @@ def test_overriding_the_model_alone_is_fine_when_nothing_is_pinned(
 
 def test_the_field_parses(tmp_path):
     spec = read_subagent(
-        "---\nname: r\ndescription: d\nprovider: openai\nmodel: gpt-5\n---\nBody.\n",
+        "name: r\ndescription: d\nprovider: openai\nmodel: gpt-5\nsystem_prompt: |\n  Body.\n",
         tmp_path / "r.md",
     )
 
@@ -188,6 +192,6 @@ def test_the_field_parses(tmp_path):
 
 
 def test_omitting_it_means_the_default(tmp_path):
-    spec = read_subagent("---\nname: r\ndescription: d\n---\nBody.\n", tmp_path / "r.md")
+    spec = read_subagent("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md")
 
     assert spec.provider is None

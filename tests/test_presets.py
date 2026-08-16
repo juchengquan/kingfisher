@@ -126,7 +126,7 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
+        target.write_text("name: x\ndescription: d\nsystem_prompt: |\n  body\n", encoding="utf-8")
     (tmp_path / "not-a-skill").mkdir()
 
     assert skill_store.names(tmp_path) == ("flat",)
@@ -190,7 +190,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 #
 # `seed` says the entire point is that you edit your copy, and seeding is the
 # one operation that writes over those copies. It used to do so silently: an
-# edited `reviewer.md` came back as the shipped one, reported identically to a
+# edited `reviewer.yaml` came back as the shipped one, reported identically to a
 # file that had never been there. It still overwrites -- refusing would make
 # re-seeding after an upgrade impossible, which is the same trade `place_data`
 # makes -- but it no longer does it quietly.
@@ -213,12 +213,13 @@ def test_seeding_twice_unchanged_is_silent(cfg):
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
     presets.seed(cfg)
-    edited = cfg.subagents_dir / "reviewer.md"
-    edited.write_text("---\nname: reviewer\ndescription: mine\n---\nMy prompt.\n", encoding="utf-8")
+    edited = cfg.subagents_dir / "reviewer.yaml"
+    edited.write_text("name: reviewer\ndescription: mine\n"
+        "system_prompt: |\n  My prompt.\n", encoding="utf-8")
 
     seeding = presets.seed(cfg)
 
-    assert "subagents/reviewer.md" in seeding.overwritten
+    assert "subagents/reviewer.yaml" in seeding.overwritten
     assert "description: mine" not in edited.read_text(encoding="utf-8")
 
 
@@ -258,3 +259,43 @@ def test_the_readme_subagent_table_matches_the_real_field_set(shipped):
     }
 
     assert documented == KNOWN
+
+
+def test_every_readme_link_resolves(shipped):
+    """The README points at the presets by name, so renaming one breaks it
+    silently -- which is exactly what happened when the subagents became
+    `.yaml` and the two links kept pointing at `.md`.
+    """
+    import re
+
+    readme = (shipped / "README.md").read_text(encoding="utf-8")
+    targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", readme)]
+
+    assert targets, "the README links to its own examples; if it stopped, this test is stale"
+    broken = [t for t in targets if not (shipped / t).exists()]
+    assert not broken, f"README links to files that do not exist: {broken}"
+
+
+def test_every_complete_definition_in_the_readme_parses(shipped):
+    """The README shows a whole definition before it shows the field table, and
+    a documented example that does not load is worse than none -- it is copied,
+    it fails, and the format gets blamed.
+
+    Only the complete ones: a fenced block starting with `name:` is a
+    definition, while the fragments showing one field are not.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    from kingfisher.infrastructure.definitions import read_subagent
+
+    readme = (shipped / "README.md").read_text(encoding="utf-8")
+    blocks = [
+        body
+        for body in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL)
+        if body.startswith("name:")
+    ]
+
+    assert blocks, "the README opens the section with a whole definition"
+    for block in blocks:
+        read_subagent(block, _Path("readme.yaml"))

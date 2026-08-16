@@ -96,7 +96,7 @@ def materialise_skills(
 ) -> tuple[str, ...]:
     """Fetch each skill and unpack it under the session. Returns their names.
 
-    The name comes from the definition's own frontmatter rather than from the
+    The name comes from the definition's own `name` field rather than from the
     id, because deepagents validates it against the directory name and rejects
     the skill when they differ — so there is exactly one name a skill can be
     unpacked under, and the catalogue does not get to choose it.
@@ -137,7 +137,7 @@ def materialise_subagents(
 ) -> tuple[str, ...]:
     """Fetch each subagent and unpack it under the session. Returns their names.
 
-    A subagent is one file, and its name is the frontmatter's — the filename is
+    A subagent is one file, and its name is the `name` field's — the filename is
     not authoritative, so the definition is parsed before it is placed.
     """
     if not refs:

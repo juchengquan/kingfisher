@@ -26,7 +26,7 @@ class Audited(AgentMiddleware):
 
 def define(cfg, body: str, name: str = "reviewer") -> None:
     (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / f"{name}.md").write_text(body, encoding="utf-8")
+    (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
 def build(cfg, monkeypatch, registry=None, **caps):
@@ -46,7 +46,10 @@ def middleware_of(captured, name: str) -> list:
     return spec.get("middleware", [])
 
 
-NAMES_AUDIT = "---\nname: reviewer\ndescription: d\nmiddleware: [audit]\n---\nYou review.\n"
+NAMES_AUDIT = (
+    "name: reviewer\ndescription: d\nmiddleware: [audit]\n"
+    "system_prompt: |\n  You review.\n"
+)
 
 
 # -- the registry ---------------------------------------------------------
@@ -155,10 +158,11 @@ def test_including_cannot_be_asked_to_widen_middleware():
 
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
     inline = read_subagent(
-        "---\nname: r\ndescription: d\nmiddleware: [a, b]\n---\nBody.\n", tmp_path / "r.md"
+        "name: r\ndescription: d\nmiddleware: [a, b]\n"
+        "system_prompt: |\n  Body.\n", tmp_path / "r.md"
     )
     block = read_subagent(
-        "---\nname: r\ndescription: d\nmiddleware:\n  - a\n  - b\n---\nBody.\n",
+        "name: r\ndescription: d\nmiddleware:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n",
         tmp_path / "r.md",
     )
 
@@ -166,7 +170,7 @@ def test_the_field_parses_in_both_yaml_forms(tmp_path):
 
 
 def test_omitting_it_means_none(tmp_path):
-    spec = read_subagent("---\nname: r\ndescription: d\n---\nBody.\n", tmp_path / "r.md")
+    spec = read_subagent("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md")
 
     assert spec.middleware is None
 

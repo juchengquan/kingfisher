@@ -1,13 +1,10 @@
-"""Subagent definitions: `/subagents/<name>.md`.
+"""Subagent definitions: `/subagents/<name>.yaml`.
 
-Deliberately the same shape as a skill — YAML frontmatter and a markdown body —
-so a contributor who has written one does not need to learn a second mechanism.
-`name` and `description` are required, `tools`, `skills`, `middleware` and
-`model` are optional, and the body *is* the system prompt. `tools`, `skills`
-and `middleware` all select by name from what the deployment already offers;
-how each selection is enforced is the adapter's problem, not this format's.
+A YAML document. `name`, `description` and `system_prompt` are required;
+`tools`, `skills`, `middleware`, `provider` and `model` are optional and all
+select by name from what the deployment already offers — how each selection is
+enforced is the adapter's problem, not this format's.
 
-    ---
     name: reviewer
     description: Checks an analysis for arithmetic errors and unsupported claims.
     tools: [read_file, glob, grep]
@@ -15,8 +12,13 @@ how each selection is enforced is the adapter's problem, not this format's.
     middleware: [audit]
     provider: openai
     model: gpt-5
-    ---
-    You review analyses...
+    system_prompt: |
+      You review analyses...
+
+It was markdown with a YAML header until the header had grown into everything
+but the prompt. A skill still has that shape, because deepagents owns that
+format and kingfisher owns this one — which is also why they disagree about
+what an unrecognised field means.
 
 **Omitting `tools` inherits the parent's; omitting `skills` grants none.** The
 asymmetry is deliberate. Tools are what a delegate needs to *act* and it can do
@@ -74,10 +76,11 @@ from difflib import get_close_matches
 from pathlib import Path
 from types import MappingProxyType
 
-from kingfisher.domain import frontmatter
+from kingfisher.domain import fields
 
 DIRECTORY = "subagents"
-SUFFIX = ".md"
+SUFFIX = ".yaml"
+
 
 #: Every field this format defines. A key outside it is refused rather than
 #: ignored, because ignoring one is indistinguishable from honouring it: a
@@ -88,7 +91,16 @@ SUFFIX = ".md"
 #: deepagents owns the skill format and decides what a skill may say, so
 #: refusing keys there would reject fields valid in a format we do not define.
 KNOWN: frozenset[str] = frozenset(
-    {"name", "description", "tools", "skills", "middleware", "provider", "model"}
+    {
+        "name",
+        "description",
+        "system_prompt",
+        "tools",
+        "skills",
+        "middleware",
+        "provider",
+        "model",
+    }
 )
 
 #: Fields deepagents' `SubAgent` understands that this format deliberately does
@@ -152,59 +164,72 @@ class SubagentSpec:
     model: str | None = None
 
 
-def _refuse_unknown(fields: Mapping[str, object], source: Path) -> None:
-    """Refuse any field this format does not define, saying why for the ones we
-    know about.
+def _explain(key: str) -> str:
+    """Why this one field is not accepted, in the terms that fit it."""
+    if (reason := REFUSED.get(key)) is not None:
+        return f"{key!r} is not a field of this format -- {reason}"
+    near = get_close_matches(key, KNOWN, n=1, cutoff=_SIMILARITY)
+    # Parenthesised, not `; `-joined: that separates one field's explanation
+    # from the next, and a hint using it too would blur where each ends.
+    hint = f" (did you mean {near[0]!r}?)" if near else ""
+    return f"unknown field {key!r}{hint}"
+
+
+def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
+    """Refuse every field this format does not define, saying why for the ones
+    we know about.
 
     A key we ignore is a key the author believes took effect. That is merely
     annoying for `tolls:`, and worse than annoying for `permissions:`, which
     someone writes *to restrict a delegate* and which currently does nothing at
     all -- the definition reads tighter than the agent it produces.
+
+    All of them at once, not the first. Two typos in a definition used to take
+    two runs to find, and the second only after fixing the first -- the same
+    reason `place_data` checks every source before it copies any.
     """
-    for key in fields:
-        if key in KNOWN:
-            continue
-        if (reason := REFUSED.get(key)) is not None:
-            msg = f"{source.name}: {key!r} is not a field of this format -- {reason}"
-            raise SubagentError(msg)
+    problems = [_explain(key) for key in document if key not in KNOWN]
+    if not problems:
+        return
 
-        near = get_close_matches(key, KNOWN, n=1, cutoff=_SIMILARITY)
-        hint = f"; did you mean {near[0]!r}?" if near else ""
-        known = ", ".join(sorted(KNOWN))
-        msg = f"{source.name}: unknown field {key!r}{hint} (this format defines: {known})"
-        raise SubagentError(msg)
+    known = ", ".join(sorted(KNOWN))
+    msg = f"{source.name}: {'; '.join(problems)} (this format defines: {known})"
+    raise SubagentError(msg)
 
 
-def parse(fields: Mapping[str, object], body: str, source: Path) -> SubagentSpec:
-    """One definition, from its decoded fields and its body.
+def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
+    """One definition, from its decoded fields.
 
     Raises `SubagentError` on anything the format forbids. Whether the document
-    carried a header at all, and whether that header decoded, were settled
-    before this — reading YAML needs a library, so `infrastructure.definitions` does
-    that half. See `domain.frontmatter` for where the seam falls and why.
+    decoded at all was settled before this — reading YAML needs a library, so
+    `infrastructure.definitions` does that half.
     """
     # Before the required-field check, so `nmae:` is reported as the typo it is
     # rather than as a missing `name` the author plainly tried to write.
-    _refuse_unknown(fields, source)
+    _refuse_unknown(document, source)
 
-    for required in ("name", "description"):
-        if not fields.get(required):
-            msg = f"{source.name}: frontmatter is missing required field {required!r}"
+    for required in ("name", "description", "system_prompt"):
+        # Absent and blank are different mistakes and read differently in a
+        # traceback: "missing" sends someone looking for a line they can see
+        # they wrote, which is the wrong hunt.
+        if required not in document:
+            msg = f"{source.name}: missing required field {required!r}"
             raise SubagentError(msg)
-    if not body:
-        msg = f"{source.name}: the body is the system prompt and must not be empty"
-        raise SubagentError(msg)
+        if not fields.text(document[required]):
+            msg = f"{source.name}: {required!r} is present but empty"
+            raise SubagentError(msg)
 
     return SubagentSpec(
-        name=frontmatter.text(fields["name"]),
-        description=frontmatter.text(fields["description"]),
-        system_prompt=body,
+        name=fields.text(document["name"]),
+        description=fields.text(document["description"]),
+        system_prompt=fields.text(document["system_prompt"]),
         # `[read_file, grep]` and a block list are the same thing to YAML, so
         # both reach here already parsed.
-        tools=frontmatter.names(fields.get("tools")),
-        skills=frontmatter.names(fields.get("skills")),
-
-        middleware=frontmatter.names(fields.get("middleware")),
-        provider=frontmatter.text(fields["provider"]) if fields.get("provider") else None,
-        model=frontmatter.text(fields["model"]) if fields.get("model") else None,
+        tools=fields.names(document.get("tools")),
+        skills=fields.names(document.get("skills")),
+        middleware=fields.names(document.get("middleware")),
+        # `or None` rather than a conditional: unset and blank mean the same
+        # thing for these two -- run where everything else does.
+        provider=fields.text(document.get("provider")) or None,
+        model=fields.text(document.get("model")) or None,
     )

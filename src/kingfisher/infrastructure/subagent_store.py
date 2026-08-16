@@ -20,7 +20,7 @@ def load_all(directory: Path) -> dict[str, SubagentSpec]:
     catalogue can be deployed outside any workspace and shared by all of them,
     so there is no longer a single parent to infer it from.
 
-    The filename is not authoritative — the frontmatter `name` is, since that
+    The filename is not authoritative — the `name` field is, since that
     is what a request names and what the `task` tool will use.
     """
     directory = Path(directory)
