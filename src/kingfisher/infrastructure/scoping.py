@@ -200,11 +200,19 @@ class DeclaredDelegatesOnly(AgentMiddleware):
         if wanted in self._declared:
             return None
         offered = ", ".join(sorted(self._declared)) or "none"
+        # A missing argument is a different mistake from a refused name, and
+        # saying the wrong one costs the whole turn. Observed live: a model
+        # sent `subagentType`, read back "None is not a delegate this request
+        # may use. Available: ..., reviewer, ...", reported the tool as broken
+        # "despite listing reviewer as available", and answered around it
+        # rather than retrying. The name it could not find was its own typo.
+        detail = (
+            "no subagent_type was given -- the argument is `subagent_type`"
+            if wanted is None
+            else f"{wanted!r} is not a delegate this request may use"
+        )
         return ToolMessage(
-            content=(
-                f"Error: {wanted!r} is not a delegate this request may use. "
-                f"Available: {offered}."
-            ),
+            content=f"Error: {detail}. Available: {offered}.",
             tool_call_id=call.get("id", ""),
             name=call.get("name"),
             status="error",
