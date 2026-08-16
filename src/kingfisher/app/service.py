@@ -17,8 +17,38 @@ Module-level `run()` and `stream()` remain, over a default instance, so
 
 What is *not* hoisted: the agent. It reads the workspace's skills and subagent
 definitions at construction, so a cached one would serve a stale view of a
-directory the user can edit between turns. Building it costs ~30ms against a
-model call of two to three seconds, which is not a trade worth taking.
+directory the user can edit between turns, and uploads write definitions into
+it per request.
+
+Measured, so the trade is a fact rather than a guess: 9.2ms median and 10.0ms
+p95 for an unrestricted agent, of which 7.2ms is `create_deep_agent` compiling
+the graph -- everything kingfisher does around it is sub-millisecond. Against a
+turn of 1.5-1.9s that is 0.6%.
+
+What it scales with, per item added at construction:
+
+  subagent      +4.3ms   each compiles its own graph
+  custom tool   +0.47ms  linear to at least 50
+  middleware    +0.06ms
+  skill          0.0ms   sixteen measure the same as none
+  deny rule      0.0ms   a hundred measure the same as none
+
+Skills and permissions are free because they reach the agent as prompt text and
+as a rules list, not as anything compiled. Tools are an order of magnitude
+cheaper than subagents and an order dearer than middleware, so "adding things
+dynamically is cheap" is true or false depending entirely on which.
+
+The costs are additive: 10 tools, 5 middleware, 20 deny rules and 2 subagents
+predicts 20.8ms and measures 21.6ms, about 1% of a turn.
+
+Construction is CPU-bound Python, so it does not parallelise: ~100 builds per
+second per process, and worker threads make it slightly worse (0.85x) rather
+than better. At 1.5s a turn that ceiling is around 150 concurrent turns, or
+about 34 if every one activates eight subagents. Below that it is noise; above
+it, a cache keyed on session *and* capabilities *and* a fingerprint of the
+definitions would be the thing to reach for -- the fingerprint because uploads
+change what a session offers between turns, which is the staleness this avoids
+by not caching at all.
 """
 
 from __future__ import annotations
@@ -259,9 +289,10 @@ class Kingfisher:
     def _prepare(self, request: str | Request) -> _Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
-        Blocking, and deliberately so: it is filesystem and git work, measured
-        at 15-46ms, and `astream` runs it on a worker thread rather than
-        pretending otherwise.
+        Blocking, and deliberately so: filesystem and git work plus building
+        the agent, measured at 15-46ms end to end -- of which 9.2ms is the
+        agent. `astream` runs it on a worker thread rather than pretending
+        otherwise.
 
         Nothing is destroyed here. Ordering still matters: anything that can
         reject the request happens before the turn directory exists, so a typo
@@ -437,7 +468,7 @@ class Kingfisher:
         The same turn and the same ordering -- `_prepare` is shared, so there
         is one copy of the sequence that matters. What this buys is not a
         faster turn: a turn is the model's time, and measurement puts our own
-        code at 15-46ms of it. It is concurrency. Four turns measured against
+        code at 15-46ms of 1.5-1.9s. It is concurrency. Four turns measured against
         the live gateway cost 0.4-1.2 turns of wall clock instead of four.
 
         `_prepare` is filesystem and git work, so it runs on a worker thread
