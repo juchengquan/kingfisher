@@ -141,6 +141,7 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         scratch_root=_optional_path("KINGFISHER_SCRATCH_DIR"),
         skills_root=_optional_path("KINGFISHER_SKILLS_DIR"),
         subagents_root=_optional_path("KINGFISHER_SUBAGENTS_DIR"),
+        tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
         memory_enabled=_bool(env, "KINGFISHER_MEMORY"),
     )

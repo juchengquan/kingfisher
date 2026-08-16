@@ -29,10 +29,15 @@ asked for.
 
 ---
 
-## Tools — not files
+## Tools — `/tools/<module>.py`
 
-Tools are the fixed set the agent is built with; there is no markdown to write,
-only names to select from. As of deepagents 0.7.6:
+Two kinds. The **built-in set** comes with the agent and you select from it by
+name. **Workspace tools** are Python you write, imported from the workspace's
+`tools/` directory and added to that set.
+
+### The built-in set
+
+As of deepagents 0.7.6:
 
 | Tool | What it does |
 | --- | --- |
@@ -57,6 +62,45 @@ Three things worth knowing before you restrict this list:
   filesystem permission layer entirely, so a request that activates the shell
   can reach anything the process can, including skills it did not activate. Deny
   rules are a real boundary only for requests without it.
+
+### Workspace tools
+
+One `.py` file per module in `$KINGFISHER_WORKSPACE/tools/`, each defining
+`TOOLS` — the list of tools it contributes. Nothing is inferred: a helper in the
+same file stays a helper. Modules starting with `_` are skipped, so a tool can
+be split across files.
+
+- [`http_fetch.py`](tools/http_fetch.py) — **something the built-in set cannot
+  do at all.** The clearest reason to write one.
+- [`sql_query.py`](tools/sql_query.py) — **making an existing capability
+  narrower.** `execute` could already reach the database, but it could reach
+  everything else too. A tool states the reach in code, so a request can
+  activate `sql_query` and *not* the shell.
+
+The docstring is not decoration — it is what the model reads when deciding
+whether to call the tool, exactly like a skill's `description`. Write it as a
+trigger condition and say what the arguments mean in a caller's words.
+
+Four things the loader will refuse, all for the same reason: an agent quietly
+holding different tools than the workspace defines is worse than a run that
+stops.
+
+| Refused | Why |
+| --- | --- |
+| A module with no `TOOLS` | Scanning for callables would guess at intent |
+| A module that will not import | Skipping it gives the agent silently fewer tools |
+| Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence |
+| A tool named like a built-in | Same, except the thing that vanishes is `read_file` |
+
+**A tool is code, and it runs in the kingfisher process** — not in the agent's
+sandbox, and not under the filesystem permissions. `tools/` is deliberately
+*not* a backend route, so no file tool can reach it; the only agent that could
+write one is an agent already holding `execute`, which can run anything on the
+host regardless. Treat this directory the way you treat the rest of your
+source: it is yours, not the agent's.
+
+`KINGFISHER_TOOLS_DIR` relocates it, the way `KINGFISHER_SKILLS_DIR` does, so a
+catalogue of tools can be deployed once and shared by every workspace.
 
 ---
 

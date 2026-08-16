@@ -119,7 +119,7 @@ def _usage_summary(log_path: Path) -> str:
 
 
 def seed_examples(cfg: Config) -> list[str]:
-    """Copy the repo's example skills and subagents into the catalogues.
+    """Copy the repo's example skills, subagents and tools into the catalogues.
 
     Into `cfg.skills_dir` and `cfg.subagents_dir`, not the workspace. They are
     the same directory until a deployment moves them, and it was writing to the
@@ -133,11 +133,21 @@ def seed_examples(cfg: Config) -> list[str]:
     into one, so this is how you populate a catalogue to try things against.
     """
     copied = []
-    for kind, destination in (("skills", cfg.skills_dir), (SUBAGENT_DIR, cfg.subagents_dir)):
+    for kind, destination in (
+        ("skills", cfg.skills_dir),
+        (SUBAGENT_DIR, cfg.subagents_dir),
+        ("tools", cfg.tools_dir),
+    ):
         source = EXAMPLES / kind
         if not source.is_dir():
             continue
         for item in sorted(source.iterdir()):
+            # `tools/` holds Python, so importing the examples once -- a test
+            # run is enough -- leaves bytecode beside them. Seeding that would
+            # put a `__pycache__` in the catalogue and, worse, teach that it
+            # belongs there.
+            if item.name == "__pycache__" or item.name.startswith("."):
+                continue
             target = destination / item.name
             if item.is_dir():
                 shutil.copytree(item, target, dirs_exist_ok=True)
