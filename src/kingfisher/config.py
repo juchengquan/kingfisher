@@ -43,11 +43,14 @@ class Endpoint:
     deployment writes. Several endpoints may share one `api` -- that is the
     point of the split, and what the old `api_style` could not express.
 
-    `name` is carried rather than left implicit in the mapping key so an error
-    about where a prompt would have gone can say which entry it came from.
+    Credentials and wire format, and no name. It carried one for a while, so an
+    error about where a prompt would have gone could say which entry it came
+    from -- but that name is already written on the other side of the pair:
+    `ModelProfile.endpoint` is how a model *reaches* here, and every caller
+    holding an `Endpoint` was handed the profile beside it. Two fields saying
+    one thing, one of them able to disagree with its own mapping key.
     """
 
-    name: str
     api: str
     base_url: str
     api_key: str
@@ -58,8 +61,15 @@ class ModelProfile:
     """One model this deployment can run, and how.
 
     `model` is the id sent on the wire and is also this entry's key in
-    `models.yaml` -- carried here too so a profile answers "which model, where,
-    with what" without its mapping beside it.
+    `models.yaml`. It stays duplicated where `Endpoint.name` did not, because
+    the two are not alike: an endpoint's name is written on the profile that
+    reaches it, so removing it lost nothing, while a profile's model id has
+    nowhere else to be. `build_model` takes a profile and an endpoint and must
+    know what to *send*; handing the name separately would make the lookup
+    return a third thing solely to carry it back.
+
+    Duplicated, then, but not able to drift -- `Models` refuses a mapping whose
+    key and `model` disagree.
 
     Every param is optional and, apart from the two with real defaults, omitted
     means *the kwarg is not passed at all* rather than passed as some default we
@@ -158,6 +168,26 @@ class Models:
     #: Where all of it was read from. Informational, so a refusal can name the
     #: file that should have defined what it could not find.
     source: Path | None = None
+
+    def __post_init__(self) -> None:
+        """Refuse a mapping whose key disagrees with the profile under it.
+
+        `ModelProfile.model` is the id sent on the wire and the key is what
+        everything looks up by, so a pair that disagree means a delegate asking
+        for one model and a client built for another -- silently, since both
+        names are real. `model_catalogue` builds these from the key and cannot
+        get it wrong; a test fixture or a caller assembling one by hand can.
+
+        The check `Endpoint` no longer needs, which is why it kept no name.
+        """
+        wrong = tuple(f"{key!r} holds {p.model!r}" for key, p in self.models.items()
+                      if p.model != key)
+        if wrong:
+            msg = (
+                f"models keyed by a name the profile does not carry: {', '.join(sorted(wrong))}. "
+                f"The key is the id sent on the wire, so the two cannot differ"
+            )
+            raise ConfigError(msg)
 
     def bound(self, alias: str) -> str:
         """The model this deployment binds `alias` to.

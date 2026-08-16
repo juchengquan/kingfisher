@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.config import ConfigError
+from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
 from kingfisher.infrastructure.model_catalogue import load
 
 GOOD = """
@@ -178,6 +178,36 @@ def test_an_endpoint_missing_a_required_key_is_refused(tmp_path):
 def test_a_model_missing_its_endpoint_is_refused(tmp_path):
     with pytest.raises(ConfigError, match="missing required key 'endpoint'"):
         loaded(tmp_path, GOOD.replace("  main-model:\n    endpoint: gateway", "  main-model:"))
+
+
+# -- the one duplication that stayed, and why it cannot drift --------------
+
+
+def test_a_profile_keyed_by_another_name_is_refused():
+    """`ModelProfile.model` is the id sent on the wire and the key is what
+    everything looks up by, so a pair that disagree means a delegate asking for
+    one model and a client built for another -- silently, since both names are
+    real.
+
+    `Endpoint` carries no name at all for the same reason this check exists:
+    there was nothing it could say that `ModelProfile.endpoint` did not already,
+    so the field went rather than gaining a guard. A profile's model id has
+    nowhere else to be, so it stays and is checked.
+    """
+    with pytest.raises(ConfigError, match="the two cannot differ"):
+        Models(
+            models={"main-model": ModelProfile("something-else", "gateway")},
+            endpoints={"gateway": Endpoint("anthropic", "https://example.invalid", "sk")},
+            default="main-model",
+        )
+
+
+def test_the_loader_cannot_produce_a_mismatch(tmp_path):
+    """It builds every profile from its key, so this is a guard for a fixture or
+    a caller assembling one by hand -- not for `load`."""
+    catalogue = loaded(tmp_path)
+
+    assert all(name == profile.model for name, profile in catalogue.models.items())
 
 
 # -- aliases ---------------------------------------------------------------

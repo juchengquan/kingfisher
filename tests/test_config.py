@@ -239,7 +239,7 @@ def test_the_variables_that_chose_a_model_are_gone(env):
     )
 
     assert cfg.models.default == "MiniMax-M3"  # the file said so, not the environment
-    assert cfg.models.resolve()[1].name == "gateway"
+    assert cfg.models.resolve()[0].endpoint == "gateway"
     assert cfg.models.models["MiniMax-M3"].max_tokens == 4096
     assert not [f for f in fields(cfg) if f.name in {"model", "api_style", "max_tokens"}]
     assert "ignored" not in repr(cfg)

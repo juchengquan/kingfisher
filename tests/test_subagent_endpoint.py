@@ -25,7 +25,7 @@ from tests.conftest import FakeToolCallingModel, capture_build
 
 #: A second endpoint, on a different wire format, so a test can tell "went
 #: elsewhere" from "went to the default" by which attribute the value landed on.
-ELSEWHERE = Endpoint("openai", "openai", "https://api.openai.com/v1", "sk-elsewhere")
+ELSEWHERE = Endpoint("openai", "https://api.openai.com/v1", "sk-elsewhere")
 
 CATALOGUE = """
 endpoints:

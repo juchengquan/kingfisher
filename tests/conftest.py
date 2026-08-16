@@ -58,7 +58,6 @@ def session_dir(workspace):
 #: The endpoint every fixture builds against. Port 9 is discard: a test that
 #: accidentally makes a real call hangs on connect rather than reaching anyone.
 FAKE_ENDPOINT = Endpoint(
-    name="fake",
     api="anthropic",
     base_url="http://127.0.0.1:9/never-called",
     api_key="test-key-not-real",

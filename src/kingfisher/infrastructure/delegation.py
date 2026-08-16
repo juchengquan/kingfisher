@@ -280,11 +280,11 @@ def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | N
 
     if model == cfg.models.default:
         return f"runs {model!r}, the same model as the main agent"
-    _, endpoint = cfg.models.resolve(model)
+    profile, endpoint = cfg.models.resolve(model)
     default = _host(cfg.models.resolve()[1].base_url)
     if _host(endpoint.base_url) == default:
         return (
-            f"runs {model!r} on endpoint {endpoint.name!r}, which points at the "
+            f"runs {model!r} on endpoint {profile.endpoint!r}, which points at the "
             f"same host as the default ({default})"
         )
     return None
@@ -410,7 +410,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             msg = f"subagent {spec.name!r}: {exc}"
             raise ConfigError(msg) from exc
         refuse_ungranted_endpoint(
-            endpoint.name, granted=endpoints, subject=f"subagent {spec.name!r}"
+            profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
         )
         subagent["model"] = build_model(profile, endpoint)
     elif default_model is not None:

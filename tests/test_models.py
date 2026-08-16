@@ -14,7 +14,7 @@ import pytest
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.infrastructure.models import ADAPTERS, Adapter, build_model
 
-OPENAI = Endpoint("openai", "openai", "https://api.openai.com/v1", "sk-not-real")
+OPENAI = Endpoint("openai", "https://api.openai.com/v1", "sk-not-real")
 
 
 def test_openai_uses_the_responses_api(cfg):
@@ -111,7 +111,7 @@ LANDING_SITES = {
 @pytest.mark.parametrize("api", sorted(ADAPTERS))
 def test_every_value_reaches_the_client(api):
     """A dropped kwarg is invisible until the endpoint rejects the request."""
-    endpoint = Endpoint("somewhere", api, "https://example.invalid/v1", "sk-not-real")
+    endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real")
     profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
     model = build_model(profile, endpoint)
     sites = LANDING_SITES[api]
@@ -136,7 +136,7 @@ def test_an_unbuildable_api_fails_with_a_readable_error(cfg):
     thing that actually knows, and a bare `KeyError` from a dict lookup is not
     something anyone can act on.
     """
-    endpoint = Endpoint("somewhere", "gemini", "https://example.invalid", "sk-not-real")
+    endpoint = Endpoint("gemini", "https://example.invalid", "sk-not-real")
 
     with pytest.raises(ConfigError, match="names api 'gemini'"):
         build_model(cfg.models.models["fake-model"], endpoint)

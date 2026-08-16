@@ -100,7 +100,6 @@ def _endpoints(
             dropped.append(f"{name} ({entry['key_env']} is not set)")
             continue
         resolved[name] = Endpoint(
-            name=name,
             api=str(entry["api"]),
             base_url=str(entry["base_url"]),
             api_key=key,
