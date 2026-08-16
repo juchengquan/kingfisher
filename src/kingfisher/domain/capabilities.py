@@ -115,6 +115,17 @@ class Capabilities:
     #: stronger reason: this one decides which credentials are used and which
     #: endpoint receives the run's prompts and files.
     providers: Selection = ALL
+    #: Models a request may put a delegate on, overriding what its file says.
+    #:
+    #: `None` by default, and that default is the point. Every other axis here
+    #: only ever takes something away -- a request picks from what the
+    #: workspace offers and cannot invent anything, which is what makes an
+    #: untrusted caller safe to accept. Naming a model is the one thing that
+    #: *chooses* rather than narrows, and models differ in price by more than
+    #: an order of magnitude. So it is off until a deployment grants it, and
+    #: granted per name rather than as a switch: "on" with no list means any
+    #: caller may name the most expensive model you have credentials for.
+    models: Selection = None
     memory: bool | None = None
 
     def __post_init__(self) -> None:
@@ -125,6 +136,7 @@ class Capabilities:
             "subagents",
             "middleware",
             "providers",
+            "models",
         ):
             object.__setattr__(self, field_name, _normalise(getattr(self, field_name)))
 
@@ -176,6 +188,7 @@ class Capabilities:
             subagents=_widened(self.subagents, subagents),
             middleware=self.middleware,  # never widened; see above
             providers=self.providers,  # nor this: it chooses where prompts go
+            models=self.models,  # nor this: it chooses what the run costs
             memory=self.memory,
         )
 
@@ -199,6 +212,7 @@ class Capabilities:
             subagents=narrowed(other.subagents, by=self.subagents),
             middleware=narrowed(other.middleware, by=self.middleware),
             providers=narrowed(other.providers, by=self.providers),
+            models=narrowed(other.models, by=self.models),
             memory=_narrow_switch(self.memory, other.memory),
         )
 
@@ -358,6 +372,26 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
         )
         raise CapabilityError(msg)
     return withheld(excluded, offered=offered)
+
+
+def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subject: str) -> None:
+    """Refuse a model a request may not put a delegate on.
+
+    Raised rather than dropped, which is the opposite of how a narrower caller
+    is treated elsewhere -- and deliberately. Dropping a skill leaves a
+    delegate knowing less; silently ignoring "run it on the cheap model" leaves
+    it running on the expensive one, which is the answer nobody asked for and
+    the bill nobody expected. The same reasoning `approved_middleware` gives.
+    """
+    if granted == ALL:
+        return
+    permitted = set(granted or ())
+    if refused := tuple(name for name in wanted if name not in permitted):
+        msg = (
+            f"{subject} names model(s) this request may not use: "
+            f"{', '.join(sorted(refused))}; permitted {granted}"
+        )
+        raise CapabilityError(msg)
 
 
 def approved_middleware(

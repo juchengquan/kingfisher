@@ -26,6 +26,7 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
+    "RunOn": "kingfisher.domain.subagent",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
@@ -51,6 +52,7 @@ __all__ = [
     "Kingfisher",
     "Request",
     "RunEvent",
+    "RunOn",
     "RunResult",
     "SessionInfo",
     "build_agent",
@@ -83,6 +85,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.result import normalize_answer as normalize_answer
+    from kingfisher.domain.subagent import RunOn as RunOn
     from kingfisher.infrastructure.agent import build_agent as build_agent
     from kingfisher.infrastructure.backend import build_backend as build_backend
     from kingfisher.infrastructure.backend import shell_env as shell_env

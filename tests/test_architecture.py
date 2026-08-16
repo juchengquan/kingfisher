@@ -148,8 +148,8 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
 #: not guessed: each is 6-9ms and ~90 modules, against 817-1157ms and ~3100 for
 #: the heavy ones.
 LIGHT_EXPORTS = frozenset({
-    "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunResult",
-    "SessionInfo",
+    "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunOn",
+    "RunResult", "SessionInfo",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
 })

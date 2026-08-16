@@ -423,3 +423,26 @@ def test_the_reviewer_preset_gets_its_helper_when_granted(
 
     assert "task" in _reviewer_of(routed, session_dir, ("reviewer", "second-opinion"))
 
+
+def test_the_readme_run_on_example_is_valid(workspace_with_presets, session_dir):
+    """The second call the README shows, built for real.
+
+    A documented example that does not work is worse than none: it is copied,
+    it fails, and the format gets blamed. This one puts the shipped
+    `second-opinion` on a model the deployment can actually reach, which is the
+    situation it exists for.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher import RunOn
+    from tests.conftest import FakeToolCallingModel
+
+    build_agent(
+        workspace_with_presets,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(
+            subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)
+        ),
+        run_on={"second-opinion": RunOn("MiniMax-M2.5", provider="anthropic")},
+    )

@@ -39,6 +39,38 @@ Passing an empty tuple means *none*. Naming something that does not exist raises
 `CapabilityError` at build time rather than running with quietly less than you
 asked for.
 
+### Putting one delegate on a different model
+
+A definition says where its delegate runs. A request can override that for a
+delegate it names — useful when the file is not yours to edit, or when the
+model it pins is not one your credentials reach:
+
+```python
+from kingfisher import Request, RunOn
+
+run(Request(
+    task="Check these figures",
+    capabilities=Capabilities(subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)),
+    run_on={"second-opinion": RunOn("MiniMax-M2.5", provider="anthropic")},
+))
+```
+
+**It is off until a deployment grants it, and granted per model name.** Every
+other field here only ever takes something away — a request picks from what the
+workspace offers and cannot invent anything, which is what makes an untrusted
+caller safe to accept. Naming a model is the one thing that *chooses*, and
+models differ in price by more than an order of magnitude. `models` is `None`
+by default, so a caller who was granted nothing can choose nothing.
+
+**It replaces where the delegate runs, never half of it.** A model alone runs
+at the deployment's own endpoint, dropping whatever the file pinned. Name both
+and it runs where you say. What you cannot get is the file's endpoint with your
+model — a model name sent somewhere that has never heard of it is a 404 if you
+are lucky and a wrong-model run if you are not.
+
+The `provider` half keeps its own permission. Overriding is not an exemption
+from where a request's prompts may go.
+
 ---
 
 ## Tools — `/tools/<module>.py`

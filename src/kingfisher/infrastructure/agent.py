@@ -38,9 +38,10 @@ from kingfisher.domain.capabilities import (
     Selection,
     belongs_in,
     narrowed,
+    refuse_ungranted_models,
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
-from kingfisher.domain.subagent import refuse_helpers_with_helpers
+from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
@@ -426,6 +427,31 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
     return {name: tool for name, tool in by_name.items() if name != TASK_TOOL}
 
 
+def _wanted_endpoints(
+    run_on: Mapping[str, RunOn] | None, activated: tuple[str, ...], granted: Selection
+) -> Mapping[str, RunOn]:
+    """Where this request wants delegates to run, once it may say so.
+
+    Two refusals, both before anything is built and both raising rather than
+    dropping. Elsewhere a narrower caller is quietly given less, because less
+    is what they asked for; here the caller asked for the *cheap* model, and
+    silently giving them the expensive one is the outcome nobody wants and
+    nobody sees. Naming a delegate this request never activated is the same
+    kind of mistake as naming an unknown tool.
+    """
+    wanted = dict(run_on or {})
+    if stray := tuple(n for n in wanted if n not in activated):
+        msg = (
+            f"run_on names subagent(s) this request did not activate: "
+            f"{', '.join(sorted(stray))}; it activated {activated}"
+        )
+        raise CapabilityError(msg)
+    refuse_ungranted_models(
+        (where.model for where in wanted.values()), granted=granted, subject="run_on"
+    )
+    return wanted
+
+
 def _activated_subagents(
     cfg: Config,
     capabilities: Capabilities,
@@ -511,6 +537,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     backend: Any | None = None,
     checkpointer: Any | None = None,
     catalogue: Mapping[str, Path] | None = None,
+    run_on: Mapping[str, RunOn] | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
 
@@ -631,6 +658,8 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 workspace=surface.offered_workspace,
             )
 
+        wanted = _wanted_endpoints(run_on, activated, capabilities.models)
+
         def _built(
             name: str,
             *,
@@ -661,6 +690,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 helpers=helpers,
                 default_model=default_model,
                 tool_objects=tool_objects,
+                run_on=wanted.get(name),
                 extra_middleware=subagent_middleware(
                     defined[name], registry, capabilities.middleware
                 ),
