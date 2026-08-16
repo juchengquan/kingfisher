@@ -45,7 +45,7 @@ adds the caveat that already applies here five times over — permissions are
 enforced *at the tool level*, and *"direct backend usage does not currently
 incorporate permissions"*, which is the shell again.
 
-## `skills:` — a new field
+## `skills:` — a new field (implemented)
 
 Omitted means **none**; naming skills narrows to those, intersected with what
 the request activated so a delegate cannot reach past its caller.
@@ -108,7 +108,11 @@ an upload self-authorise one would reopen the hole T3 closed, one level down.
 
 ## Sequence
 
-1. **The YAML fix.** Independent of the rest, and a defect rather than a feature.
-2. **`skills:`.** Small and mechanical once the parser handles lists properly.
+1. ~~**The YAML fix.**~~ Done.
+2. ~~**`skills:`.**~~ Done. Two refusals fell out of it rather than being
+   designed: a definition naming a skill nothing defines *raises*, because that
+   is a mistake in the definition, while one naming a skill the request did not
+   activate is *dropped*, because that is a caller narrower than the definition
+   — the same distinction `build_agent` already draws for a request.
 3. **The middleware registry.** The only substantial one: a new `Capabilities`
    axis, a new injectable collaborator, and grant clamping.
