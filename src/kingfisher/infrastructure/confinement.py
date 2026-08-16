@@ -96,13 +96,32 @@ def profile(*, home: Path, readable: tuple[Path, ...], writable: tuple[Path, ...
     shell legitimately writes to is short and known: the workspace, `$TMPDIR`,
     and the character devices that make `2>/dev/null` work.
 
-    The known cost, stated rather than discovered later: a program that insists
-    on writing outside the workspace stops working. Headless Chrome is the case
-    to expect -- an observed run used it to render HTML, and it wants socket and
-    profile directories of its own. Pointing such a tool at `$TMPDIR` or a
-    directory inside the workspace is usually enough. This was not proven either
-    way here, because Chrome hung on this machine unsandboxed too, and a
-    baseline that does not run is not a comparison.
+    The known cost, and it is now measured rather than guessed at: a program
+    that writes to the operating system's own temp directory stops working, even
+    when everything it was *told* to write is inside the workspace.
+
+    Headless Chrome is the proven case. Unsandboxed it renders a PDF in 2.0s;
+    under this profile it fails in 0.4s with `Failed to create a ProcessSingleton
+    for your profile directory`. The cause is this rule and no other -- the same
+    profile with writes unrestricted works, and adding socket permissions does
+    not help. No flag avoids it: `--user-data-dir` inside the workspace still
+    fails, because Chrome reaches `/private/var/folders/<user>` regardless. An
+    earlier note here said the case was unproven because Chrome "hung"; it does
+    not hang, it writes the PDF and then never exits, so the measurement was
+    watching the wrong thing.
+
+    Left broken deliberately. Nothing here needs a browser: not this codebase,
+    not the shipped presets, and not the `pdf` skill, which prescribes `pypdf`,
+    `pdfplumber`, `pdftotext`, `qpdf` and `reportlab`. Chrome appeared once,
+    when an agent improvised it to look at its own HTML output. An agent
+    spawning a network-capable browser is nearer to what a boundary is for than
+    to something worth widening one to keep.
+
+    The fix, if a tool anyone actually depends on ever needs it, is one line:
+    allow writes to this user's own temp folder -- the parent of
+    `tempfile.gettempdir()`, not all of `/private/var/folders`. Verified to make
+    Chrome work while `.env`, the home and the repository stay refused. It is
+    not here because it should be added for a dependency, not for a guess.
     """
     lines = [
         "(version 1)",
