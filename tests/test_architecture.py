@@ -150,6 +150,11 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
 LIGHT_EXPORTS = frozenset({
     "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunOn",
     "RunResult", "SessionInfo",
+    # The errors a caller must tell apart, and the saver `astream` refuses to
+    # run without. Public so a consumer outside the package can catch them by
+    # name and open one -- the server being the first such consumer.
+    "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
+    "SubagentError", "UnknownSessionError", "UploadError", "async_checkpointer",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
 })
@@ -403,3 +408,69 @@ def test_the_package_ships_its_presets():
     with presets.opened() as root:
         for kind in presets.KINDS:
             assert (root / kind).is_dir(), kind
+
+
+# -- who caused it ---------------------------------------------------------
+#
+# A consumer that cannot name an error can only catch `ValueError`. Ten of the
+# eleven error types here are one, and so is `Request`'s empty-task check, and
+# so is whatever a dependency raises -- so that net turns a bug into a refusal
+# and a refusal into a 500. Naming them is what makes the difference reportable.
+
+#: Errors a caller can cause and must be able to tell apart. Public.
+CALLER_FACING_ERRORS = frozenset({
+    "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
+    "SubagentError", "UnknownSessionError", "UploadError",
+})
+
+#: The rest, which say the deployment is wrong rather than the caller.
+#: `HostPathError` is the backend refusing a host path the *agent* produced
+#: mid-turn, so it is not a request-time fault at all. Being here does not mean
+#: private -- `ConfigError` was public long before this rule existed -- it
+#: means a consumer is not expected to branch on it.
+DEPLOYMENT_ERRORS = frozenset({
+    "ConfigError", "DataError", "HostPathError", "ToolError",
+})
+
+
+def _error_classes() -> set[str]:
+    found = set()
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        found |= {
+            node.name
+            for node in ast.walk(tree)
+            if isinstance(node, ast.ClassDef) and node.name.endswith("Error")
+        }
+    return found
+
+
+def test_every_error_is_classified_by_who_caused_it():
+    """So a new error cannot arrive unclassified and be a 500 by default.
+
+    The same shape as the light/heavy split above, and it exists for the same
+    reason: a list nothing checks is a list that drifts.
+    """
+    assert _error_classes() == CALLER_FACING_ERRORS | DEPLOYMENT_ERRORS, (
+        "a new error type must be added to CALLER_FACING_ERRORS or "
+        "DEPLOYMENT_ERRORS -- caller-facing ones must also be exported"
+    )
+
+
+def test_every_caller_facing_error_is_public():
+    """The rule the split is for. Reaching into `kingfisher.domain.session` to
+    catch `SessionBusyError` is what a consumer does when the package will not
+    say the name out loud."""
+    import kingfisher
+
+    assert set(kingfisher.__all__) >= CALLER_FACING_ERRORS
+
+
+def test_a_caller_facing_error_is_the_same_class_either_way():
+    """The lazy export table resolves to the class itself, not a copy -- so a
+    consumer catching `kingfisher.SessionBusyError` catches what the domain
+    raises."""
+    import kingfisher
+    from kingfisher.domain.session import SessionBusyError
+
+    assert kingfisher.SessionBusyError is SessionBusyError

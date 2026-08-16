@@ -158,3 +158,25 @@ def test_an_unbounded_async_turn_is_untouched(cfg):
     service = Kingfisher(cfg, agent=AsyncStubAgent("ok"), threads=StubCheckpointer())
 
     assert not asyncio.run(service.arun(Request("go"))).cut_short
+
+
+def test_the_async_saver_is_reachable_from_outside_the_package(cfg):
+    """Why it is exported at all.
+
+    `astream` needs a saver with async methods -- `SqliteSaver` raises
+    `NotImplementedError` on `aget_tuple`, so a sync one does not merely block
+    the loop, it refuses. Until this was public, the only saver a consumer
+    could build was the one that cannot serve the async path, which made the
+    concurrency `astream` exists for unreachable from outside.
+
+    The refusal itself is pinned by
+    `test_a_sync_saver_is_refused_rather_than_blocking`; this is the other
+    half -- that the saver which does not refuse is reachable by name.
+    """
+    import kingfisher
+
+    async def open_and_ask():
+        async with kingfisher.async_checkpointer(cfg) as saver:
+            return await saver.aget_tuple({"configurable": {"thread_id": "nobody"}})
+
+    assert asyncio.run(open_and_ask()) is None

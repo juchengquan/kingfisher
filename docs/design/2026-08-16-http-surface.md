@@ -138,7 +138,7 @@ Each produces working, testable software on its own.
 
 | Phase | Deliverable | Depends on |
 |---|---|---|
-| **1** | Public surface: export the four errors and `async_checkpointer`; classify them in the export tests. No server code. | — |
+| **1** | Public surface: export the seven caller-facing errors and `async_checkpointer`; classify every error by who caused it, and every export as light or heavy. No server code. | — |
 | **2** | `kingfisher/server/` with the import rule and the sync-method rule in `test_architecture.py`; `create_app`; `ServerConfig`; the session endpoints (`POST`, `GET /{id}`, `DELETE`). | 1 |
 | **3** | Turns: `POST /sessions/{id}/turns` and `POST /turns` as SSE, named events, the heartbeat, first-event-before-response, and the kind-pinning test. | 2 |
 | **4** | Errors: the explicit map, the totality test, the body shape. | 2 |
