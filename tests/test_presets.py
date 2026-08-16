@@ -259,3 +259,18 @@ def test_the_readme_subagent_table_matches_the_real_field_set(shipped):
     }
 
     assert documented == KNOWN
+
+
+def test_every_readme_link_resolves(shipped):
+    """The README points at the presets by name, so renaming one breaks it
+    silently -- which is exactly what happened when the subagents became
+    `.yaml` and the two links kept pointing at `.md`.
+    """
+    import re
+
+    readme = (shipped / "README.md").read_text(encoding="utf-8")
+    targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", readme)]
+
+    assert targets, "the README links to its own examples; if it stopped, this test is stale"
+    broken = [t for t in targets if not (shipped / t).exists()]
+    assert not broken, f"README links to files that do not exist: {broken}"

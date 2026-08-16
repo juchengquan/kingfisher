@@ -118,16 +118,14 @@ catalogue of tools can be deployed once and shared by every workspace.
 
 ## Subagents — `/subagents/<name>.yaml`
 
-A YAML document. It was markdown with a YAML header until the header had
-grown into everything but the prompt, at which point the body was one field
-pretending to be a format.
+A YAML document. Everything the delegate is, in one file.
 
 | Field | | |
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `system_prompt` | required | The delegate's whole instruction, written after `\|`. The `\|` keeps your line breaks; indentation inside the prompt is kept, and the two spaces that hold the block in place are not |
-| `tools` | optional | `[read_file, grep]` or a block list. Unset inherits the parent's tools |
+| `system_prompt` | required | The delegate's whole instruction, written after `\|` |
+| `tools` | optional | Unset inherits the parent's tools |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `provider` | optional | Which endpoint it runs against, by style. Moves together with `model` |
@@ -135,76 +133,85 @@ pretending to be a format.
 
 Two reasons to reach for one, one example each:
 
-- [`reviewer.md`](subagents/reviewer.md) — **independence.** A second agent that
-  recomputes a claim without seeing how the first one got there catches errors
-  that re-reading your own work does not.
-- [`extractor.md`](subagents/extractor.md) — **context isolation.** It reads a
-  large pile of files and returns a short answer; the bulk stays in its context
-  rather than yours. Note the narrower `tools` and the cheaper `model`.
+- [`reviewer.yaml`](subagents/reviewer.yaml) — **independence.** A second agent
+  that recomputes a claim without seeing how the first one got there catches
+  errors that re-reading your own work does not.
+- [`extractor.yaml`](subagents/extractor.yaml) — **context isolation.** It reads
+  a large pile of files and returns a short answer; the bulk stays in its
+  context rather than yours. Note the narrower `tools` and the cheaper `model`.
 
-### What loads, and what does not
+### Writing the prompt
+
+`|` means *keep my line breaks*. That is the whole rule.
 
 ```yaml
-system_prompt: |           # ✅ the ordinary case
+system_prompt: |            # ✅ the ordinary case
   You verify claims.
   Be terse.
 
-system_prompt: |           # ✅ indentation inside the prompt is kept
+system_prompt: |            # ✅ indentation inside the prompt is kept
   1. Recompute.
      Do not reuse their script.
-
-system_prompt: |2          # ✅ the one case for the `2`: a prompt whose
-      ls -la /data         #    *first* line is indented deeper than the rest.
-  Then report.             #    Plain `|` cannot read this and says so.
-
-system_prompt: |           # ❌ nothing is indented, so nothing is in the block
-You verify claims.
-
-system_prompt: |           # ❌ 'system_prompt' is present but empty
-
-system_prompt: >          # ❌ refused: `>` joins consecutive lines, so
-  1. Recompute.           #    "1. Recompute. 2. Say which definition"
-  2. Say which definition. #   reaches the delegate as one line
-
-system_prompt: Recompute. # ❌ refused: same damage, without a marker to notice
 ```
 
-Write `|`. The `2` is only for the case marked above, and `|-` and `|+`
-differ from `|` only in the blank line at the very end — all of them keep
-your line breaks, which is the part that matters.
+The two spaces holding the block in place are not part of your text; anything
+indented past them is.
 
-`>` is refused for the prompt and allowed everywhere else — a `description`
-*is* one paragraph, and `>-` is how anyone writes one longer than a line. A
-prompt is structured text, and folding destroys exactly the structure while
-leaving the file valid and the definition looking correct.
+`>` is refused, because it joins consecutive lines. These two numbered steps
+would reach the delegate as one run-on line, in a file that loads without
+complaint and looks correct on screen:
+
+```yaml
+system_prompt: >            # ❌ refused
+  1. Recompute.
+  2. Say which definition you applied.
+```
+
+So is a prompt with no marker at all, or one in quotes — the same damage with
+nothing to notice. `|-` and `|+` are fine: they differ from `|` only in the
+blank line at the very end.
+
+`>` stays welcome everywhere else. A `description` *is* one paragraph, and `>-`
+is how anyone writes one longer than a line.
+
+Two shapes that do not load, both loudly:
+
+```yaml
+system_prompt: |            # ❌ nothing indented under it, so nothing is in the block
+You verify claims.
+
+system_prompt: |            # ❌ present but empty
+```
+
+There is one case for the rarely-needed `|2`, where the number fixes the left
+edge instead of letting YAML infer it from the first line:
+
+```yaml
+system_prompt: |2           # ✅ first line indented deeper than the rest
+      ls -la /data          #    plain `|` cannot read this, and says so
+  Then report.
+```
+
+### Lists, and fields that are not here
 
 `tools`, `skills` and `middleware` take either form:
 
 ```yaml
-tools: [read_file, grep]   # ✅
-tools:                     # ✅ the same thing
+tools: [read_file, grep]
+tools:
   - read_file
   - grep
 ```
 
-An unlisted field is refused rather than ignored — `tolls:` is answered with
-*did you mean 'tools'?*, and `permissions:` with the reason this format declines
-it.
-
-The frontmatter is real YAML, parsed with `yaml.safe_load` — block lists,
-folded scalars and typed values all work, and a skill and a subagent are read
-by the same parser so the two formats cannot drift.
-
-**A field not in that table is an error, not a field that gets ignored.**
-Ignoring one is indistinguishable from honouring it: `tolls:` used to give a
+**A field not in the table above is an error, not a field that gets ignored.**
+Ignoring one is indistinguishable from honouring it: `tolls:` used to hand a
 delegate *every* tool its parent had, because unset `tools` means inherit. A
-near miss is named (`did you mean 'tools'?`), and the fields deepagents knows
-but this format declines — `permissions`, `subagents`, `interrupt_on`,
-`response_format` — each say why, because "unknown field" reads as an
-omission worth working around when the answer is that honouring it would be
-wrong.
+near miss is named — *did you mean 'tools'?* — and the fields deepagents knows
+but this format declines (`permissions`, `subagents`, `interrupt_on`,
+`response_format`) each say why, since "unknown field" reads as an omission
+worth working around when the answer is that honouring it would be wrong.
 
-Skills are the opposite and deliberately so: kingfisher does not own that
+Skills take the opposite rule, deliberately: kingfisher does not own that
 format, so an unrecognised key there is left alone.
 
 ---
