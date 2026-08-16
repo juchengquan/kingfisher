@@ -21,7 +21,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from kingfisher.adapters.models import PROVIDERS
-from kingfisher.config import API_STYLES, ROLES, Config, ConfigError
+from kingfisher.config import API_STYLES, ROLES, Config, ConfigError, Endpoint
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `domain.config` —
@@ -95,6 +95,12 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         if (value := (env.get(f"KINGFISHER_MODEL_{role.upper()}") or "").strip())
     }
 
+    role_providers = {
+        role: value
+        for role in ROLES
+        if (value := (env.get(f"KINGFISHER_PROVIDER_{role.upper()}") or "").strip())
+    }
+
     path_extra = tuple(
         part for part in (env.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":") if part
     )
@@ -102,6 +108,18 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
     def _optional_path(key: str) -> Path | None:
         raw = (env.get(key) or "").strip()
         return Path(raw).expanduser().resolve() if raw else None
+
+    # Every *other* style whose credentials are present. `.env.example` has
+    # always carried both pairs and said "fill in whichever style you intend to
+    # use"; a deployment that filled in both has two endpoints, and only the
+    # default was ever read.
+    endpoints = {
+        name: Endpoint(name, url, key)  # ty: ignore[invalid-argument-type]
+        for name, other in PROVIDERS.items()
+        if name != style
+        and (url := (env.get(other.url_env) or "").strip())
+        and (key := (env.get(other.key_env) or "").strip())
+    }
 
     return Config(
         workspace=Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve(),
@@ -117,6 +135,8 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
         role_models=role_models,
+        role_providers=role_providers,
+        endpoints=endpoints,
         state_root=_optional_path("KINGFISHER_STATE_DIR"),
         scratch_root=_optional_path("KINGFISHER_SCRATCH_DIR"),
         skills_root=_optional_path("KINGFISHER_SKILLS_DIR"),

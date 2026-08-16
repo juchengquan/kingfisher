@@ -13,7 +13,8 @@ how each selection is enforced is the adapter's problem, not this format's.
     tools: [read_file, glob, grep]
     skills: [tabular-qa]
     middleware: [audit]
-    model: MiniMax-M2.5
+    provider: openai
+    model: gpt-5
     ---
     You review analyses...
 
@@ -30,6 +31,16 @@ the one field that selects code rather than content. It is empty until someone
 wires one, and a name must be both registered and granted — including for a
 definition a caller uploaded, which gets none of the leeway an uploaded skill
 does. An uploaded skill is the caller's own text; a middleware name is not.
+
+`provider` names which endpoint this delegate runs against, by style, out of
+those the deployment has credentials for. Omitted, it runs where everything
+else does. It is granted like `middleware` and for a stronger reason: it
+decides which endpoint receives this delegate's prompts and whose
+credentials pay for them.
+
+`provider` and `model` move together. An operator overriding only the model,
+against a definition that pins a provider, would send one endpoint's model
+name to another; that is refused rather than resolved.
 
 The optional `model` is where per-role cost routing lands naturally: reading
 heavy delegation on a cheap model, synthesis on the expensive one.
@@ -73,6 +84,10 @@ class SubagentSpec:
     #: deployment supplies. A name here selects *code*, which is why it is the
     #: one field never widened for an uploaded definition.
     middleware: tuple[str, ...] | None = None
+    #: Which endpoint this delegate runs against, by style name. `None` means
+    #: the deployment's default. Selecting one decides where the prompt goes
+    #: and whose credentials pay, which is why it is granted rather than free.
+    provider: str | None = None
     model: str | None = None
 
 
@@ -112,5 +127,6 @@ def parse(text: str, source: Path) -> SubagentSpec:
         skills=frontmatter.names(fields.get("skills")),
 
         middleware=frontmatter.names(fields.get("middleware")),
+        provider=frontmatter.text(fields["provider"]) if fields.get("provider") else None,
         model=frontmatter.text(fields["model"]) if fields.get("model") else None,
     )
