@@ -77,14 +77,21 @@ server = [
     "uvicorn>=0.40.0",
 ]
 
+[project.scripts]
+# Present whether or not the extra is installed -- a script that exists and says
+# "install the extra" is a better answer than one that is silently absent.
+kingfisher-server = "kingfisher.server.__main__:main"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
 [dependency-groups]
 dev = [
     # The server extra, so its tests always run rather than skipping quietly on
-    # a machine that happens not to have it.
+    # a machine that happens not to have it. uvicorn is here for the same
+    # reason: the entry point is only testable if it can be imported.
     "fastapi>=0.141.1",
+    "uvicorn>=0.40.0",
     "pytest>=9.1.1",
     "ruff>=0.16.3",
     "ty>=0.0.72",

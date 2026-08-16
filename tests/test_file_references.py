@@ -180,7 +180,7 @@ def test_a_request_with_no_references_never_asks_the_store(cfg, store):
 
     class Explodes:
         def fetch(self, file_id):
-            raise AssertionError("should not have been asked")
+            pytest.fail("a request naming no references must not consult the store")
 
     service = Kingfisher(
         cfg, agent=StubAgent("ok"), threads=StubCheckpointer(), files=Explodes()

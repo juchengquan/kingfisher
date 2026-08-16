@@ -1,6 +1,6 @@
 # An HTTP surface for kingfisher
 
-**Status:** phases 1–6 shipped. Packaging remains.
+**Status:** implemented. All seven phases.
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
@@ -154,7 +154,7 @@ Each produces working, testable software on its own.
 | **4** | Errors: the totality test over every error class, and one body shape for every refusal. | 3 |
 | **5** | Capabilities on the wire: sentinel default, all four states per axis tested. | 3 |
 | **6** | Files: `within()` in the domain, the `FileStore` port, `input_refs`/`data_refs` on `Request`, resolution in `_admit`, writers beside `place_inputs`/`place_data`, and the local adapter. | 3 |
-| **7** | Packaging: the `[server]` extra, the console entry point, request logging. | 3 |
+| **7** | Packaging: the console entry point, `kingfisher.server.asgi:app`, and an access log that does not write session ids. | 3 |
 
 Phase 1 is load-bearing and touches only the library. Phases 4, 5 and 6 are
 independent of each other. Phase 6 is the largest and the only one that changes
@@ -174,6 +174,11 @@ ship against a deployment that sends no files.
 - **Authentication and per-caller quotas.** Outside, by D1 and T1. Nothing here
   knows who is calling, so nothing here can stop one caller opening unbounded
   sessions and starving the others.
+- **Correlating requests in the log.** The access log records the route
+  template, never the concrete path, because a session id is a bearer credential
+  and four of the five routes carry one. Nothing else distinguishes two
+  requests. When something does, it should be a value the caller can be given
+  and can rotate — not the session id un-redacted.
 - **Rate limiting.** Same reason. The concurrency cap in `ServerConfig` bounds
   the *process*, not a caller.
 - **Cancellation of a quiet turn.** D6 stops a turn when the server next tries
