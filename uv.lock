@@ -626,6 +626,7 @@ dependencies = [
     { name = "langchain-openai" },
     { name = "langgraph-checkpoint-sqlite" },
     { name = "python-dotenv" },
+    { name = "pyyaml" },
 ]
 
 [package.dev-dependencies]
@@ -642,6 +643,7 @@ requires-dist = [
     { name = "langchain-openai", specifier = ">=1.5.1" },
     { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
+    { name = "pyyaml", specifier = ">=6.0" },
 ]
 
 [package.metadata.requires-dev]

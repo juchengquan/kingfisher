@@ -52,7 +52,9 @@ def test_optional_fields_and_quoting():
         ("---\ndescription: x\n---\nbody\n", "missing required field 'name'"),
         ("---\nname: x\n---\nbody\n", "missing required field 'description'"),
         ("---\nname: x\ndescription: y\n---\n\n", "must not be empty"),
-        ("---\nname x\ndescription: y\n---\nbody\n", "cannot parse frontmatter line"),
+        # YAML says why; we say which file. Rejected either way.
+        ("---\nname x\ndescription: y\n---\nbody\n", "cannot read frontmatter"),
+        ("---\n- not\n- a mapping\n---\nbody\n", "expected a mapping of fields"),
     ],
 )
 def test_malformed_definitions_are_rejected(text, because):
@@ -84,3 +86,31 @@ def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
 
     with pytest.raises(SubagentError, match="duplicate subagent name"):
         load_all(tmp_path / "subagents")
+
+
+def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
+    """Two parsers read one format, and ours was the stricter.
+
+    deepagents reads skill frontmatter with `yaml.safe_load`. A block list is
+    the Agent Skills spec's documented form for `allowed-tools`, and a folded
+    scalar is how anyone writes a description longer than a line. Rejecting
+    them made a skill that loads from the catalogue impossible to upload.
+    """
+    definition = (
+        "---\n"
+        "name: extractor\n"
+        "description: >-\n"
+        "  Pulls fields out of documents,\n"
+        "  one record at a time.\n"
+        "tools:\n"
+        "  - read_file\n"
+        "  - grep\n"
+        "---\n"
+        "You extract.\n"
+    )
+
+    spec = parse(definition, tmp_path / "extractor.md")
+
+    assert spec.name == "extractor"
+    assert spec.tools == ("read_file", "grep")
+    assert "one record at a time" in spec.description
