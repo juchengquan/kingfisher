@@ -8,6 +8,10 @@ Installed with the `server` extra. Nothing in `kingfisher.domain`,
 imports `kingfisher` and nothing deeper -- both halves enforced in
 `tests/test_architecture.py` rather than left to habit.
 
+To serve it, point a server at `kingfisher.server.asgi:app` -- not at
+`kingfisher.server:app`, which resolves to the `app` submodule. Or run
+`kingfisher-server`, which does the same thing with the same settings.
+
 That rule is the point of the split. It puts the server on the same footing as
 anyone outside the package, so when it needs something the library does not
 export, the answer is to export it deliberately. It found three such things

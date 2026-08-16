@@ -540,6 +540,12 @@ def test_no_part_of_the_library_imports_the_server(path):
 #: request, they block every other turn sharing the process.
 BLOCKING_METHODS = frozenset({"run", "stream"})
 
+#: Receivers whose `run` is not `Kingfisher.run`. Named one by one rather than
+#: loosening the rule, because the rule is worth exactly as much as the list is
+#: short: `uvicorn.run` is how the server is served, and it is not the
+#: loop-blocking mistake this watches for.
+NOT_KINGFISHER = frozenset({"uvicorn"})
+
 
 @pytest.mark.parametrize("path", _server_modules(), ids=lambda p: p.name)
 def test_the_server_calls_the_async_turn_methods(path):
@@ -557,6 +563,9 @@ def test_the_server_calls_the_async_turn_methods(path):
         if isinstance(node, ast.Call)
         and isinstance(node.func, ast.Attribute)
         and node.func.attr in BLOCKING_METHODS
+        and not (
+            isinstance(node.func.value, ast.Name) and node.func.value.id in NOT_KINGFISHER
+        )
     })
     assert not offenders, (
         f"server/{path.name} calls {offenders} — use arun/astream; the sync pair "
