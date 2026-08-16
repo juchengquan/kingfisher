@@ -151,3 +151,58 @@ def test_every_variable_read_is_documented():
     }
 
     assert not missing, f"read by config.py but absent from .env.example: {sorted(missing)}"
+
+
+def test_every_role_has_a_reader():
+    """`from_env` accepts `KINGFISHER_MODEL_<ROLE>` and `KINGFISHER_PROVIDER_<ROLE>`
+    for every entry here, so an entry nothing looks up is a variable that reads
+    as configuration and is not.
+
+    Three were: `PROVIDER_MAIN` and both `_SUMMARIZER` forms were parsed and
+    never read -- nothing builds a summarizer at all. This holds the tuple to
+    the one role that has a reader, so adding another means adding its lookup in
+    the same change.
+    """
+    from kingfisher.config import ROLES
+    from kingfisher.infrastructure.delegation import SUBAGENT_ROLE
+
+    assert set(ROLES) == {SUBAGENT_ROLE}
+
+
+def test_the_main_model_has_one_name():
+    """`KINGFISHER_MODEL_MAIN` used to shadow `KINGFISHER_MODEL`: `model_for`
+    consults `role_models` first, so the undocumented variable beat the
+    documented, required one and `build_model` used it.
+    """
+    environ = {
+        "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
+        "KINGFISHER_API_STYLE": "anthropic",
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9/a",
+        "ANTHROPIC_API_KEY": "k",
+        "KINGFISHER_MODEL": "the-one-that-counts",
+        "KINGFISHER_MODEL_MAIN": "the-one-that-used-to-win",
+    }
+
+    cfg = from_env(environ)
+
+    assert cfg.model == "the-one-that-counts"
+    assert cfg.model_for("main") == "the-one-that-counts"
+
+
+def test_the_subagent_override_still_works():
+    """The one role that survives, and the reason the mechanism exists: an
+    operator routes a delegate without editing a definition they may not own."""
+    environ = {
+        "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
+        "KINGFISHER_API_STYLE": "anthropic",
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9/a",
+        "ANTHROPIC_API_KEY": "k",
+        "KINGFISHER_MODEL": "main-model",
+        "KINGFISHER_MODEL_SUBAGENT": "cheap-model",
+        "KINGFISHER_PROVIDER_SUBAGENT": "anthropic",
+    }
+
+    cfg = from_env(environ)
+
+    assert cfg.model_for("subagent") == "cheap-model"
+    assert cfg.role_providers["subagent"] == "anthropic"

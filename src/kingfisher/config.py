@@ -32,7 +32,20 @@ ApiStyle = Literal["anthropic", "openai"]
 #: adding a `Provider`; nothing else needs to learn the name.
 API_STYLES: tuple[ApiStyle, ...] = get_args(ApiStyle)
 
-ROLES: tuple[str, ...] = ("main", "subagent", "summarizer")
+#: Roles an operator may route separately, as `KINGFISHER_MODEL_<ROLE>` and
+#: `KINGFISHER_PROVIDER_<ROLE>`. One, because one is all anything reads.
+#:
+#: `main` and `summarizer` were here and did nothing. Nothing builds a
+#: summarizer at all -- the word appears once in the source, in a comment --
+#: and `main` was worse than useless: `model_for("main")` consults this map
+#: first, so an undocumented `KINGFISHER_MODEL_MAIN` silently beat the
+#: documented, required `KINGFISHER_MODEL`. Dropping it makes that variable the
+#: one way to say which model a deployment runs on.
+#:
+#: A role earns a place here when something looks it up. Adding one means
+#: adding the lookup in the same change, or it is a variable that reads as
+#: configuration and is not.
+ROLES: tuple[str, ...] = ("subagent",)
 
 
 @dataclass(frozen=True)

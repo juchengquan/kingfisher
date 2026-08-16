@@ -177,11 +177,11 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # operator's cost decision, and it should not require editing content.
     #
     # Keyed by *role*, not by this subagent's name. `from_env` populates
-    # `role_models` from `KINGFISHER_MODEL_MAIN`, `_SUBAGENT` and `_SUMMARIZER`,
-    # so a lookup by name only ever matched a delegate literally called one of
-    # those -- the override above was documented, tested nowhere, and fired for
-    # nothing. Per-delegate overrides would need `ROLES` to become unbounded and
-    # its names to come from workspace content, which is a different decision.
+    # `role_models` from `KINGFISHER_MODEL_SUBAGENT`, so a lookup by name only
+    # ever matched a delegate literally called that -- the override above was
+    # documented, tested nowhere, and fired for nothing. Per-delegate overrides
+    # would need `ROLES` to become unbounded and its names to come from
+    # workspace content, which is a different decision.
     provider, model_id = _subagent_endpoint(spec, cfg, providers)
     if model_id is not None or provider is not None:
         # `replace` rather than a build_model parameter: an endpoint is exactly
