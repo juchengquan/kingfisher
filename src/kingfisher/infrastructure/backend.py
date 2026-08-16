@@ -26,6 +26,8 @@ from kingfisher.config import Config, ConfigError
 from kingfisher.infrastructure import confinement
 
 if TYPE_CHECKING:
+    from collections.abc import Mapping
+
     from deepagents.backends import BackendProtocol
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
@@ -54,7 +56,9 @@ def agent_home(session_dir: Path) -> Path:
     return Path(session_dir) / ".home"
 
 
-def shell_env(cfg: Config, session_dir: Path) -> dict[str, str]:
+def shell_env(
+    cfg: Config, session_dir: Path, *, catalogue: Mapping[str, Path] | None = None
+) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
     `HOME` is this session's `.home`, so tools that resolve `~` look there
@@ -70,12 +74,17 @@ def shell_env(cfg: Config, session_dir: Path) -> dict[str, str]:
     the shell cannot reach by dropping its leading slash: it is shared between
     sessions, so it lives above them. That used to be spelled `$HOME/skills`,
     which was only true while `HOME` was the workspace.
+
+    It follows `catalogue` for the same reason the sandbox profile does. Left on
+    `cfg` while the route and the profile pointed elsewhere, a skill's own
+    scripts would be told to look in a directory the deployment had moved away
+    from -- and `$KINGFISHER_SKILLS` is exactly how a skill addresses them.
     """
     path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
     return {
         "PATH": ":".join(path_parts),
         "HOME": str(agent_home(session_dir)),
-        "KINGFISHER_SKILLS": str(cfg.skills_dir),
+        "KINGFISHER_SKILLS": str((catalogue or cfg.catalogue_roots)["skills"]),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(cfg.scratch_dir),
@@ -289,7 +298,9 @@ SKILLS_SOURCES = [(SKILLS_ROUTE, "Catalogue"), (UPLOADED_SKILLS_ROUTE, "Uploaded
 MEMORY_SOURCES = [f"{MEMORY_ROUTE}AGENTS.md"]
 
 
-def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
+def build_backend(
+    cfg: Config, session_dir: Path, *, catalogue: Mapping[str, Path] | None = None
+) -> BackendProtocol:
     """Build the backend rooted at one session.
 
     `virtual_mode` is left at its default (`True`), so file tools address
@@ -299,11 +310,18 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     tenants — and it makes cross-session access impossible rather than denied:
     there is no path from one root to another to check for.
 
-    `/skills/` is the exception, routed to the workspace because definitions are
+    `/skills/` is the exception, routed to the catalogue because definitions are
     shared by every session rather than owned by one. It therefore sits outside
     the shell's root, which is a gain rather than a compromise: `_skill_denials`
     can only bind file tools, so a skill the shell could still `cat` was never
     really denied.
+
+    `catalogue` is where that route points, and where the shell is granted read
+    access. Omitted, it comes from `cfg` — the same fallback `model=` takes in
+    `build_agent`: derive from `cfg`, never invent. A deployment that stages its
+    definitions elsewhere passes them, and both the route and the sandbox
+    profile follow, because a catalogue the file tools could read and the shell
+    could not would be two different answers to one question.
 
     A `CompositeBackend` is required rather than merely convenient.
     `FilesystemMiddleware` refuses `permissions=` outright when the backend
@@ -312,13 +330,19 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     `execute` still works, because CompositeBackend delegates execution to its
     default backend.
     """
+    skills_dir = (catalogue or cfg.catalogue_roots)["skills"]
+
     prepare_scratch(cfg)
     for routed in ("data", "memory"):
         (session_dir / routed).mkdir(parents=True, exist_ok=True)
     agent_home(session_dir).mkdir(parents=True, exist_ok=True)
     uploaded = session_dir / "skills" / "uploaded"
     uploaded.mkdir(parents=True, exist_ok=True)
-    cfg.skills_dir.mkdir(parents=True, exist_ok=True)
+    # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
+    # already refused by `resolve_catalogue` if it did not, so this only ever
+    # creates a derived one -- and stays here for the callers that build a
+    # backend directly, without a service to have resolved anything for them.
+    skills_dir.mkdir(parents=True, exist_ok=True)
 
     shell = ConfinedShell(
         confinement.resolve(
@@ -327,17 +351,17 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
             state_dir=cfg.state_dir,
             scratch_dir=cfg.scratch_dir,
             extra=cfg.shell_path_extra,
-            skills=cfg.skills_dir,
+            skills=skills_dir,
         ),
         root_dir=str(session_dir),
-        env=shell_env(cfg, session_dir),
+        env=shell_env(cfg, session_dir, catalogue=catalogue),
         timeout=cfg.timeout_s,
     )
     return WorkspaceScopedBackend(
         default=shell,
         routes={
             DATA_ROUTE: FilesystemBackend(root_dir=str(session_dir / "data")),
-            SKILLS_ROUTE: FilesystemBackend(root_dir=str(cfg.skills_dir)),
+            SKILLS_ROUTE: FilesystemBackend(root_dir=str(skills_dir)),
             MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
             UPLOADED_SKILLS_ROUTE: FilesystemBackend(root_dir=str(uploaded)),
         },

@@ -64,6 +64,8 @@ def provision(
     store: DefinitionStore | None,
     session_dir: Path,
     cfg: Config,
+    *,
+    catalogue: Mapping[str, Path] | None = None,
 ) -> Brought:
     """Unpack everything this request brought with it, or refuse to.
 
@@ -71,6 +73,12 @@ def provision(
     by reading the directories these write. Refusing here rather than later is
     deliberate: a request that names a store it was never given, or a skill
     that shadows a reviewed one, should fail before a turn directory exists.
+
+    `catalogue` is what "already defined" is measured against, and it has to be
+    the same one the agent will read. Left to `cfg` while the agent read
+    somewhere else, an upload could take a name the catalogue already holds and
+    the collision rule below would never see it -- which is the silent override
+    it exists to refuse.
     """
     if not request.skill_refs and not request.subagent_refs:
         return Brought()
@@ -78,12 +86,13 @@ def provision(
         msg = "request supplies definitions by id, but no DefinitionStore is wired"
         raise UploadError(msg)
 
+    roots = catalogue or cfg.catalogue_roots
     return Brought(
         skills=materialise_skills(
-            request.skill_refs, store, session_dir, skill_store.names(cfg.skills_dir)
+            request.skill_refs, store, session_dir, skill_store.names(roots["skills"])
         ),
         subagents=materialise_subagents(
-            request.subagent_refs, store, session_dir, tuple(load_all(cfg.subagents_dir))
+            request.subagent_refs, store, session_dir, tuple(load_all(roots["subagents"]))
         ),
     )
 

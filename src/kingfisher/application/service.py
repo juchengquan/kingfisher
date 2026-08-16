@@ -90,6 +90,7 @@ from kingfisher.infrastructure.workspace_fs import (
     place_data,
     place_inputs,
     protect_data,
+    resolve_catalogue,
     session_bytes,
 )
 
@@ -149,16 +150,24 @@ class _Prepared:
 
 
 def _withheld_by_kind(
-    allowed: Capabilities, cfg: Config, session_dir: Path, graph: Any
+    allowed: Capabilities,
+    cfg: Config,
+    session_dir: Path,
+    graph: Any,
+    catalogue: Mapping[str, Path],
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
     Three axes, one rule. Each differs only in where "what the workspace offers"
     comes from, and none of the three is knowable without asking the thing that
     assembled the agent -- which is why a grant goes stale in the first place.
+
+    The catalogue is passed rather than re-derived, so what a caller is told it
+    did not grant is measured against the same directories the agent was built
+    from.
     """
     default = Capabilities()
-    workspace = tuple(workspace_tool_names(cfg))
+    workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported
         # apart: "3 tool(s) not granted" meant nothing when it could have been
@@ -167,8 +176,8 @@ def _withheld_by_kind(
             n for n in registered_tools(graph) if n not in set(workspace)
         )),
         ("tool", "tools", workspace),
-        ("skill", "skills", available_skills(cfg, session_dir)),
-        ("subagent", "subagents", tuple(defined_subagents(cfg, session_dir))),
+        ("skill", "skills", available_skills(cfg, session_dir, catalogue=catalogue)),
+        ("subagent", "subagents", tuple(defined_subagents(cfg, session_dir, catalogue=catalogue))),
     )
     found = []
     for what, field, names in offered:
@@ -297,6 +306,14 @@ class Kingfisher:
     Every collaborator is injectable, and by protocol rather than by patching:
     a test hands in its own `SessionDirs` to watch turn allocation, or its own
     agent to drive a scripted conversation.
+
+    `catalogue_roots` is the exception to that shape, and deliberately: it is
+    three paths rather than an object, because there is nothing for an object to
+    do yet. Whatever fetches a catalogue stages it and hands over the
+    directories; kingfisher reads them and never copies. An interface with a
+    `roots()` on it can be accepted alongside the mapping on the day a source
+    needs behaviour -- lazy fetching, version pinning, refresh without a restart
+    -- and until one does, inventing it would mean guessing at what it wants.
     """
 
     def __init__(  # noqa: PLR0913 -- the composition root; each argument is one
@@ -308,6 +325,7 @@ class Kingfisher:
         dirs: SessionDirs | None = None,
         threads: ThreadStore | None = None,
         definitions: DefinitionStore | None = None,
+        catalogue_roots: Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
         agent: Any | None = None,
@@ -318,6 +336,15 @@ class Kingfisher:
         # Only what sessions share. Each session's own layout is made per
         # request, because its path is not known until the request names it.
         self.workspace: Path = ensure_layout(self.cfg.workspace)
+
+        # Where the reviewed definitions are read from, settled once. Omitted,
+        # it is the three directories `cfg` names, which is what it has always
+        # been; supplied, a deployment has staged them somewhere itself and this
+        # is the only place that has to know. Resolved here rather than per
+        # request so a deployment that fetches them pays once, and so a
+        # catalogue that cannot be read fails at startup rather than serving an
+        # agent that has quietly been told about nothing.
+        self.catalogue: Mapping[str, Path] = resolve_catalogue(self.cfg, catalogue_roots)
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the
@@ -482,6 +509,7 @@ class Kingfisher:
             session_dir=session_dir,
             middleware_registry=self.middleware,
             checkpointer=self.threads,
+            catalogue=self.catalogue,
         )
 
     def _prepare(self, request: str | Request) -> _Prepared:
@@ -563,7 +591,9 @@ class Kingfisher:
 
         # Before the agent, which discovers definitions by reading the
         # directories this writes.
-        brought = provision(request, self.definitions, session.directory, cfg)
+        brought = provision(
+            request, self.definitions, session.directory, cfg, catalogue=self.catalogue
+        )
 
         # What this deployment permits, narrowed by what the request asked for.
         # Definitions the request brought itself are added back: their content
@@ -591,7 +621,7 @@ class Kingfisher:
             # Skills and subagents are not on the graph, so they are asked of
             # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
             # an admit already measured at 15-46ms.
-            withheld=_withheld_by_kind(allowed, cfg, session.directory, graph),
+            withheld=_withheld_by_kind(allowed, cfg, session.directory, graph, self.catalogue),
         )
 
     def _open_turn(self, admitted: _Admitted) -> _Prepared:

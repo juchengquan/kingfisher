@@ -220,3 +220,23 @@ class Config:
         """
         return self.tools_root or self.workspace / "tools"
 
+    @property
+    def catalogue_roots(self) -> dict[str, Path]:
+        """The three definition directories, together, as one answer.
+
+        The three above are what a deployment *sets*; this is what everything
+        that reads a catalogue *asks for*. Kept as a mapping rather than a tuple
+        of paths because the three are relocatable apart -- `skills_root` and
+        its siblings are separate overrides on purpose -- so there is no tree to
+        name them by position under.
+
+        A `Kingfisher` may be handed a different mapping, which is the whole
+        seam: this is the fallback, not the only source. See
+        `workspace_fs.resolve_catalogue`.
+        """
+        return {
+            "skills": self.skills_dir,
+            "subagents": self.subagents_dir,
+            "tools": self.tools_dir,
+        }
+

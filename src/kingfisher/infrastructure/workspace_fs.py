@@ -10,11 +10,12 @@ one makes a domain layer worth having.
 from __future__ import annotations
 
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
 
+from kingfisher.config import Config, ConfigError
 from kingfisher.domain.layout import (
     AGENTS_SCAFFOLD,
     ARTIFACT_DIRS,
@@ -22,6 +23,59 @@ from kingfisher.domain.layout import (
     MARKER,
     SESSION_DIRS,
 )
+
+#: What a catalogue is made of, named once so a caller can quote it in an error
+#: rather than writing the three out again.
+CATALOGUE_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
+
+
+def resolve_catalogue(cfg: Config, supplied: Mapping[str, Path] | None = None) -> dict[str, Path]:
+    """Where this deployment's definitions are read from, settled once.
+
+    Called at construction and nowhere else, so a deployment that stages its
+    catalogue from somewhere else pays for that once per `Kingfisher` rather
+    than once per turn.
+
+    The two cases differ in who owns the directories, and therefore in what a
+    missing one means:
+
+    * **Derived from `cfg`** -- kingfisher's own, so they are created. This is
+      what `ensure_layout` already does for a workspace that has not relocated
+      them, and doing it here extends that to one that has. `KINGFISHER_SKILLS_DIR`
+      pointing somewhere that does not exist yet used to yield an empty
+      catalogue and a clean start; only `skills_dir` was ever created, by
+      `build_backend`, and its two siblings were not.
+    * **Supplied by the caller** -- theirs, so they must already be there.
+      Creating one would hide a staging failure behind a catalogue that is
+      merely empty, and an agent told about no skills at all is exactly the
+      silent-emptiness this module's neighbours keep refusing.
+
+    Raises `ConfigError` either way, because a catalogue that cannot be read is
+    a wiring mistake and this is the last moment it is cheap to say so.
+    """
+    if supplied is None:
+        derived = cfg.catalogue_roots
+        for path in derived.values():
+            path.mkdir(parents=True, exist_ok=True)
+        return derived
+
+    if missing := tuple(kind for kind in CATALOGUE_KINDS if kind not in supplied):
+        msg = (
+            f"catalogue_roots is missing {', '.join(missing)}; it names all of "
+            f"{', '.join(CATALOGUE_KINDS)}, since a deployment that leaves one out "
+            "means an empty one rather than the configured one"
+        )
+        raise ConfigError(msg)
+
+    roots = {kind: Path(supplied[kind]) for kind in CATALOGUE_KINDS}
+    if absent := tuple(f"{kind} ({path})" for kind, path in roots.items() if not path.is_dir()):
+        msg = (
+            f"catalogue_roots names {', '.join(absent)}, which is not a directory; "
+            "a supplied catalogue is staged by whoever supplies it, and kingfisher "
+            "will not create one in case the staging is what failed"
+        )
+        raise ConfigError(msg)
+    return roots
 
 
 class LocalSessionDirs:

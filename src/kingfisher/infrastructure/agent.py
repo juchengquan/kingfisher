@@ -94,20 +94,28 @@ def _uploaded_subagents(session_dir: Path) -> Path:
     return Path(session_dir) / SUBAGENT_DIRECTORY
 
 
-def available_skills(cfg: Config, session_dir: Path | None) -> tuple[str, ...]:
+def available_skills(
+    cfg: Config, session_dir: Path | None, *, catalogue: Mapping[str, Path] | None = None
+) -> tuple[str, ...]:
     """Every skill this request may activate: the catalogue, plus its own.
 
     One flat set, because `capabilities.skills` names skills and not sources.
     They cannot collide — `uploads` rejects an upload that shares a catalogue
     name — so merging loses nothing.
+
+    `catalogue` says where the shared half is read from, falling back to `cfg`.
+    The session's own half never varies with it: uploads land under the session
+    by definition, and a deployment relocating its catalogue does not move them.
     """
-    names = set(skill_store.names(cfg.skills_dir))
+    names = set(skill_store.names((catalogue or cfg.catalogue_roots)["skills"]))
     if session_dir is not None:
         names |= set(skill_store.names(_uploaded_skills(session_dir)))
     return tuple(sorted(names))
 
 
-def defined_subagents(cfg: Config, session_dir: Path | None) -> dict[str, SubagentSpec]:
+def defined_subagents(
+    cfg: Config, session_dir: Path | None, *, catalogue: Mapping[str, Path] | None = None
+) -> dict[str, SubagentSpec]:
     """Every subagent this request may activate: the catalogue, plus its own.
 
     They cannot collide -- `uploads` rejects an upload sharing a catalogue name
@@ -118,7 +126,7 @@ def defined_subagents(cfg: Config, session_dir: Path | None) -> dict[str, Subage
     which of them a request did not grant. Written out at both, the rule about
     what a session adds to the catalogue would exist twice.
     """
-    defined = dict(load_all(cfg.subagents_dir))
+    defined = dict(load_all((catalogue or cfg.catalogue_roots)["subagents"]))
     if session_dir is not None:
         defined |= load_all(_uploaded_subagents(session_dir))
     return defined
@@ -224,35 +232,42 @@ def _skill_denials(
     ]
 
 
-def _backend_for(cfg: Config, session_dir: Path | None, backend: Any | None) -> Any:
+def _backend_for(
+    cfg: Config, session_dir: Path | None, backend: Any | None, catalogue: Mapping[str, Path]
+) -> Any:
     """The filesystem an agent sees: rooted at a session, or supplied ready-made.
 
     Neither is a wiring mistake rather than a default worth guessing at. There
     is no sensible fallback: an agent rooted at the workspace instead of at a
     session would write one caller's files into a directory every other caller
     can read.
+
+    A ready-made backend is taken as it is, catalogue included. It was built by
+    whoever passed it, and re-routing `/skills/` underneath them would be a
+    second answer to a question they already answered.
     """
     if backend is not None:
         return backend
     if session_dir is not None:
-        return build_backend(cfg, session_dir)
+        return build_backend(cfg, session_dir, catalogue=catalogue)
     msg = "build_agent needs either a session_dir to root a backend at, or a backend"
     raise ValueError(msg)
 
 
-
-
-
-def workspace_tool_names(cfg: Config) -> tuple[str, ...]:
+def workspace_tool_names(
+    cfg: Config, *, catalogue: Mapping[str, Path] | None = None
+) -> tuple[str, ...]:
     """The tools this workspace defines, by name, without assembling anything.
 
     Knowable off disk, unlike the built-in set. That asymmetry is why the two
     axes resolve differently and why only one of them needs a probe.
     """
-    return tuple(sorted(n for tool in load_tools(cfg.tools_dir) if (n := tool_name(tool))))
+    directory = (catalogue or cfg.catalogue_roots)["tools"]
+    return tuple(sorted(n for tool in load_tools(directory) if (n := tool_name(tool))))
+
 
 def _workspace_tool_names(
-    workspace_tools: Sequence[Any], *, builtin: tuple[str, ...], cfg: Config
+    workspace_tools: Sequence[Any], *, builtin: tuple[str, ...], directory: Path
 ) -> tuple[str, ...]:
     """What the workspace defines, refusing anything that shadows a built-in.
 
@@ -261,13 +276,17 @@ def _workspace_tool_names(
     "quietly different from what you asked for" failure the capability checks
     refuse elsewhere. It matters more now that the two are granted separately: a
     shadowed name would be permitted by one axis and enforced as the other.
+
+    Takes the directory rather than the `Config` it used to derive it from: the
+    only use is naming the place to go and rename them, and that place is now
+    whatever the catalogue says it is.
     """
     names = tuple(sorted(n for tool in workspace_tools if (n := tool_name(tool))))
     shadowed = tuple(n for n in names if n in set(builtin))
     if shadowed:
         msg = (
             f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
-            f"the same name; rename them in {cfg.tools_dir}"
+            f"the same name; rename them in {directory}"
         )
         raise CapabilityError(msg)
     return names
@@ -300,6 +319,7 @@ def _refuse_unknown_tools(
             msg = f"unknown {here[:-1]}(s): {', '.join(unknown)}; this agent offers {own}"
             raise CapabilityError(msg)
 
+
 def _permitted_tools(
     capabilities: Capabilities,
     *,
@@ -322,35 +342,6 @@ def _permitted_tools(
     granted_builtin = narrowed(capabilities.builtin_tools, by=builtin) or ()
     granted_workspace = narrowed(capabilities.tools, by=workspace) or ()
     return (*granted_builtin, *granted_workspace)
-
-def _with_workspace_tools(
-    cfg: Config, assemble: Callable[[tuple[Any, ...]], CompiledStateGraph]
-) -> CompiledStateGraph:
-    """Assemble the agent, adding whatever tools the workspace defines.
-
-    Assembled twice when there are any, and only then. `tools_by_name` is a
-    dict, so a workspace tool called `read_file` would take the name in silence
-    and the real one would simply stop existing -- the same "quietly different
-    from what you asked for" failure the capability checks refuse elsewhere.
-    The built-in set is a property of an assembled graph and cannot be listed
-    without building one, and ~30ms against a model call of seconds is a cheap
-    price for not guessing at it.
-    """
-    graph = assemble(())
-    workspace_tools = load_tools(cfg.tools_dir)
-    if not workspace_tools:
-        return graph
-
-    builtin = set(registered_tools(graph))
-    shadowed = tuple(sorted(n for t in workspace_tools if (n := tool_name(t)) in builtin))
-    if shadowed:
-        msg = (
-            f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
-            f"the same name; rename them in {cfg.tools_dir}"
-        )
-        raise CapabilityError(msg)
-    return assemble(workspace_tools)
-
 
 
 @dataclass(frozen=True)
@@ -388,7 +379,11 @@ class _ToolSurface:
 
 
 def _activated_subagents(
-    cfg: Config, capabilities: Capabilities, session_dir: Path | None
+    cfg: Config,
+    capabilities: Capabilities,
+    session_dir: Path | None,
+    *,
+    catalogue: Mapping[str, Path] | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which delegates this request wired, and every definition available.
 
@@ -398,7 +393,7 @@ def _activated_subagents(
     """
     if capabilities.subagents is None:
         return {}, ()
-    defined = defined_subagents(cfg, session_dir)
+    defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
@@ -409,7 +404,7 @@ def _activated_subagents(
 
 
 def _resolve_tools(
-    cfg: Config,
+    tools_dir: Path,
     capabilities: Capabilities,
     workspace_tools: Sequence[Any],
     assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
@@ -438,7 +433,7 @@ def _resolve_tools(
         return _ToolSurface()
 
     builtin = registered_tools(assemble(()))
-    workspace = _workspace_tool_names(workspace_tools, builtin=builtin, cfg=cfg)
+    workspace = _workspace_tool_names(workspace_tools, builtin=builtin, directory=tools_dir)
     _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
     return _ToolSurface(
         granted_builtin=narrowed(capabilities.builtin_tools, by=builtin) or (),
@@ -447,6 +442,7 @@ def _resolve_tools(
         offered_workspace=workspace,
         unrestricted=unrestricted,
     )
+
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # injectable collaborator, and folding them into a parameter object would
@@ -459,11 +455,19 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     model: Any | None = None,
     backend: Any | None = None,
     checkpointer: Any | None = None,
+    catalogue: Mapping[str, Path] | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
 
     `session_dir` is where the backend roots, so an agent belongs to one
     session and cannot be reused across them.
+
+    `catalogue` is where the shared skills, subagents and tools are read from,
+    as `{"skills": …, "subagents": …, "tools": …}`. Omitted, it is derived from
+    `cfg`, which is what it has always been -- the same fallback `model=` takes,
+    and for the same reason: derive from `cfg`, or raise, but never invent. A
+    deployment staging its definitions somewhere else resolves them once at
+    construction and passes the result down.
 
     deepagents 0.7.6 ships no planning tool, so `TodoListMiddleware` is added
     explicitly. Its default prompt fragment is kept rather than trimmed: it
@@ -471,7 +475,8 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     only be rewritten worse.
     """
     capabilities = capabilities or Capabilities()
-    resolved_backend = _backend_for(cfg, session_dir, backend)
+    roots = catalogue or cfg.catalogue_roots
+    resolved_backend = _backend_for(cfg, session_dir, backend, roots)
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]
@@ -496,7 +501,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         elif capabilities.skills is None:
             pass  # none: no index, and no deny rules to write for one
         else:
-            available = available_skills(cfg, session_dir)
+            available = available_skills(cfg, session_dir, catalogue=roots)
             unknown = tuple(s for s in capabilities.skills if s not in available)
             if unknown:
                 msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
@@ -532,11 +537,11 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             **extras,
         )
 
-    workspace_tools = load_tools(cfg.tools_dir)
+    workspace_tools = load_tools(roots["tools"])
 
-    defined, activated = _activated_subagents(cfg, capabilities, session_dir)
+    defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
-        cfg,
+        roots["tools"],
         capabilities,
         workspace_tools,
         assemble,
@@ -557,7 +562,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         middleware[interpreter_at] = _interpreter(cfg, permitted)
 
     if capabilities.subagents is not None:
-        offered = available_skills(cfg, session_dir)
+        offered = available_skills(cfg, session_dir, catalogue=roots)
         registry = middleware_registry or {}
         for name in activated:
             refuse_unknown_tools(
