@@ -10,7 +10,12 @@ from kingfisher import Kingfisher
 from kingfisher.domain import retention
 from kingfisher.domain.capabilities import ALL, UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.domain.session import Session, SessionBusyError, UnknownSessionError
+from kingfisher.domain.session import (
+    Session,
+    SessionBusyError,
+    UnknownSessionError,
+    known,
+)
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -427,3 +432,105 @@ def test_the_rule_itself_keeps_what_is_busy():
     assert retention.expired(entries, 1.0, now=100.0).doomed == ("a", "b")
     assert retention.expired(entries, 1.0, now=100.0, busy=("a",)).doomed == ("b",)
     assert retention.expired(entries, 1.0, now=100.0, busy=("a",)).kept == 1
+
+
+# -- asking about a session without running one ---------------------------
+#
+# There was no way to ask. The only way to learn a session existed was to start
+# a turn and catch `UnknownSessionError` -- which builds an agent, marks the
+# session used and takes its claim. A service validating an id would have
+# refreshed the very clock retention reads.
+
+
+def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg):
+    """`None` rather than raising: "is this still there" is an ordinary
+    question with two ordinary answers. `UnknownSessionError` is for a request
+    that named a session and meant to use it."""
+    kf = service(cfg)
+    session = kf.start_session()
+
+    assert kf.session(session).id == session
+    assert kf.session("0" * 32) is None
+
+
+def test_asking_does_not_disturb_the_session(cfg):
+    """The whole reason this exists. Validating an id must not refresh the
+    clock retention reads, nor hold the claim a turn needs."""
+    import os
+    import time
+
+    kf = service(cfg)
+    session = kf.start_session()
+    directory = cfg.workspace / "sessions" / session
+    stale = time.time() - 10_000
+    os.utime(directory, (stale, stale))
+
+    assert kf.session(session) is not None
+    assert kf.sessions()
+
+    assert directory.stat().st_mtime == pytest.approx(stale, abs=1)
+    assert not (cfg.state_dir / "claims" / session).exists()
+
+
+def test_sessions_come_back_most_recently_used_first(cfg):
+    """Ordering by last-used only became truthful when a turn began recording
+    it -- a turn writes *inside* a session, so before that the timestamp this
+    sorts on was not moved by use at all."""
+    kf = service(cfg)
+    first = kf.start_session()
+    second = kf.start_session()
+
+    kf.run(Request("go", session_id=first))
+
+    assert kf.sessions()[0].id == first
+    assert {s.id for s in kf.sessions()} == {first, second}
+
+
+def test_a_deleted_session_stops_being_listed(cfg):
+    kf = service(cfg)
+    kept = kf.start_session()
+    gone = kf.start_session()
+
+    kf.delete_session(gone)
+
+    assert [s.id for s in kf.sessions()] == [kept]
+    assert kf.session(gone) is None
+
+
+def test_what_comes_back_names_no_path(cfg):
+    """A service handed a directory would start reading files out of it, and
+    the layout would become a contract nobody wrote down. Ids and last-used is
+    kingfisher's own vocabulary: a name to pass back to `run`, and a clock."""
+    import dataclasses
+
+    kf = service(cfg)
+    kf.start_session()
+
+    (info,) = kf.sessions()
+
+    assert {f.name for f in dataclasses.fields(info)} == {"id", "last_used"}
+
+
+def test_the_ordering_rule_needs_no_filesystem():
+    """The domain half -- `known` takes what `listing` returns and nothing
+    more, so the rule is testable without a workspace."""
+    ordered = known((("old", 1.0), ("newest", 9.0), ("middle", 5.0)))
+
+    assert [s.id for s in ordered] == ["newest", "middle", "old"]
+    assert ordered[0].last_used == 9.0
+
+
+def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):
+    """Both read `listing`, so a session retention can end is one a caller can
+    ask about. Two answers to "which exist" would drift apart."""
+    import time
+
+    kf = service(cfg)
+    for _ in range(3):
+        kf.start_session()
+
+    listed = {s.id for s in kf.sessions()}
+    swept = set(kf.reap(older_than_seconds=0.0, now=time.time() + 10).removed)
+
+    assert listed == swept
+    assert kf.sessions() == ()

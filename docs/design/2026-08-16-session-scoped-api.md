@@ -220,9 +220,30 @@ These did not come up in the design session and each could change a phase:
   returns what it produced, marked, because its files are already on disk and
   in the manifest: discarding the answer would hide the work, not undo it.
 
-- **Per-caller quotas.** Still open, and now the only part left. Under T4 one
-  caller can still open unbounded sessions and starve the others; nothing here
-  can stop that, because nothing here knows who they are.
+- **Per-caller quotas.** Still open. Under T4 one caller can still open
+  unbounded sessions and starve the others; nothing here can stop that, because
+  nothing here knows who they are.
+- ~~**Asking about a session.**~~ `sessions()` and `session(id)`, reporting ids
+  and last-used and nothing else.
+
+  There had been no way to ask. The only way to learn a session existed was to
+  start a turn and catch `UnknownSessionError` — which builds an agent, marks
+  the session used and takes its claim, so a service validating an id refreshed
+  the very clock retention reads. The alternative to a read path was not "no
+  coupling"; it was a service stat-ing `sessions/<id>` itself, which is worse,
+  because then the directory layout is the contract.
+
+  So the record carries no path. Ids and last-used is kingfisher's own
+  vocabulary — a name to hand back to `run`, and a clock — and a service given
+  a directory would start reading files out of it. Turn counts (0.93 ms) and
+  disk used (8.08 ms, a walk per session) were measured and left out; the two
+  fields that ship cost 0.21 ms for fifty sessions, because `listing` already
+  returns both. It is the same call `reap` makes, so what a caller can ask
+  about and what retention can end cannot drift apart.
+
+  Ordering by last-used only became truthful in the same round: a turn writes
+  *inside* a session, so until a turn began recording use, the timestamp this
+  sorts on was not moved by using it.
 - ~~**Shared storage.**~~ The guarantee kingfisher's correctness actually rests
   on is narrower than "does a shell work here": `allocate_turn` is atomic only
   because `mkdir` fails on an existing name. Verified exclusive across eight
@@ -230,9 +251,12 @@ These did not come up in the design session and each could change a phase:
   `test_workspace.py`. A store that cannot honour that would silently let two
   turns share a directory — the defect the turn tier exists to fix. That is the
   question to ask of NFS, EFS or S3-fuse, and it is now the one a test asks.
-- **Concurrency within one session.** `allocate_turn` is atomic via `mkdir`, but
-  nothing serialises two simultaneous requests for the same `session_id` against
-  one checkpointer thread.
+- ~~**Concurrency within one session.**~~ A claim directory under
+  `state/claims/<id>`, taken by the same `mkdir` that makes turn allocation
+  atomic, with a staleness window so a crashed process does not lock a session
+  out forever. Two simultaneous requests for one session no longer share a
+  checkpointer thread; the second is refused with `SessionBusyError`. Retention
+  reads the same directory, so a sweep cannot delete a session mid-turn.
 - **Manifest granularity.** Changed-path detection by mtime, by content hash, or
   by recording writes as they happen. Affects whether phase 4 is cheap.
 - **Migration.** Existing workspaces have `data/`, `memory/` and `runs/` at the
