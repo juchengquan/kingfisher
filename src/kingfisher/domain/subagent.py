@@ -109,6 +109,7 @@ KNOWN: frozenset[str] = frozenset(
         "name",
         "description",
         "system_prompt",
+        "builtin_tools",
         "tools",
         "skills",
         "middleware",
@@ -161,6 +162,12 @@ class SubagentSpec:
     name: str
     description: str
     system_prompt: str
+    #: The two tool axes, granted apart because they are offered apart: the
+    #: built-ins come with deepagents, `tools` is what this workspace wrote.
+    #: One list meant a delegate could not ask for a workspace tool without
+    #: giving up every built-in, and nothing in the file showed it happening --
+    #: the same trade `_permitted_tools` split for a request.
+    builtin_tools: Selection = ALL
     tools: Selection = ALL
     #: Skills this delegate is told about. `None` means *none*, which is not
     #: what `tools` means, and the difference is deliberate: tools are what a
@@ -288,9 +295,14 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         # Absent means inherit for tools and none for skills -- the
         # asymmetry the format has always had, now said in the values
         # rather than in a reader that special-cases one of them.
-        tools=_selected(document.get("tools"), absent=ALL),
-        skills=_selected(document.get("skills"), absent=None),
-        middleware=_selected(document.get("middleware"), absent=None),
+        builtin_tools=_selected(
+            document.get("builtin_tools"), absent=ALL, key="builtin_tools", source=source
+        ),
+        tools=_selected(document.get("tools"), absent=ALL, key="tools", source=source),
+        skills=_selected(document.get("skills"), absent=None, key="skills", source=source),
+        middleware=_selected(
+            document.get("middleware"), absent=None, key="middleware", source=source
+        ),
         # `or None` rather than a conditional: unset and blank mean the same
         # thing for these two -- run where everything else does.
         provider=fields.text(document.get("provider")) or None,
@@ -300,15 +312,45 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
 
 
-def _selected(value: object, *, absent: Selection) -> Selection:
+def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Selection:
     """One name-list field, or what its absence means for that field.
 
     `absent` differs per field and that is the point: omitting `tools` inherits
     the caller's, omitting `skills` grants none. The format has always drawn
     that distinction; it used to live in a reader that treated `None` two ways.
+
+    `["*"]` is everything. A list, because every one of these fields is a list
+    and a field whose type changes with its value is one more thing to know.
+    The bare `"*"` is refused by name rather than read as a name -- the same
+    trade `system_prompt` makes by accepting one block style and naming the
+    others -- because a request spells this `"*"` and someone will carry the
+    habit across.
+
+    Mixing is refused too. `["*", read_file]` has no reading that is not a
+    guess, and it used to have the worst one: `*` matched no tool, so the star
+    silently contributed nothing.
     """
+    if isinstance(value, str) and value.strip() == ALL:
+        msg = (
+            f"{source.name}: {key} is written {value.strip()!r}; write [{ALL!r}] instead. "
+            f"Every selection here is a list, so everything is a list too"
+        )
+        raise SubagentError(msg)
+
     names = fields.names(value)
-    return absent if names is None else names
+    if names is None:
+        return absent
+    if ALL not in names:
+        return names
+    if len(names) > 1:
+        others = ", ".join(n for n in names if n != ALL)
+        msg = (
+            f"{source.name}: {key} mixes [{ALL!r}] with {others}; "
+            f"[{ALL!r}] is everything, so naming anything beside it means "
+            f"one of the two was not meant"
+        )
+        raise SubagentError(msg)
+    return ALL
 
 def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | None, str | None]:
     """Where a delegate runs, once the request has had its say.

@@ -21,6 +21,7 @@ caller of either.
 
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -30,7 +31,13 @@ from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
+from kingfisher.domain.capabilities import (
+    ALL,
+    Capabilities,
+    CapabilityError,
+    Selection,
+    narrowed,
+)
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
@@ -343,6 +350,40 @@ def _with_workspace_tools(
 
 
 
+@dataclass(frozen=True)
+class _ToolSurface:
+    """The tool picture one build works from, resolved once.
+
+    Four values rather than one flat allowlist, because a *delegate* narrows
+    the two axes separately and cannot do that from their union: `tools:
+    [http_fetch]` must cost it no built-in, which is only expressible while the
+    halves are still apart. `permitted` puts them back together for the
+    parent's own allowlist, which is one flat list by the time it reaches
+    `ToolAllowlist`.
+
+    The default is the skipped probe: nothing narrowed, nothing offered known,
+    and `permitted` `None` for "no allowlist at all". Safe because the probe is
+    only skipped when no definition names a tool either, so the `ALL`s below
+    are never asked to enumerate anything.
+    """
+
+    granted_builtin: Selection = ALL
+    granted_workspace: Selection = ALL
+    offered_builtin: tuple[str, ...] = ()
+    offered_workspace: tuple[str, ...] = ()
+    #: Whether the *request* narrowed neither axis. Distinct from the grants
+    #: being `ALL`: a workspace tool existing forces the probe, and then the
+    #: grants are enumerated while the request still narrowed nothing.
+    unrestricted: bool = True
+
+    @property
+    def permitted(self) -> tuple[str, ...] | None:
+        """The parent's allowlist, or `None` for no restriction at all."""
+        if self.unrestricted:
+            return None
+        return (*(self.granted_builtin or ()), *(self.granted_workspace or ()))
+
+
 def _activated_subagents(
     cfg: Config, capabilities: Capabilities, session_dir: Path | None
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
@@ -371,7 +412,7 @@ def _resolve_tools(
     assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
     *,
     names_needed: bool = False,
-) -> tuple[tuple[str, ...] | None, tuple[str, ...]]:
+) -> _ToolSurface:
     """What this request may call, and what this agent offers at all.
 
     Costs a throwaway assembly, and only when it has to. Both offered sets must
@@ -391,14 +432,17 @@ def _resolve_tools(
     """
     unrestricted = capabilities.builtin_tools == ALL and capabilities.tools == ALL
     if not names_needed and not workspace_tools and unrestricted:
-        return None, ()
+        return _ToolSurface()
 
     builtin = registered_tools(assemble(()))
     workspace = _workspace_tool_names(workspace_tools, builtin=builtin, cfg=cfg)
     _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
-    return (
-        _permitted_tools(capabilities, builtin=builtin, workspace=workspace),
-        (*builtin, *workspace),
+    return _ToolSurface(
+        granted_builtin=narrowed(capabilities.builtin_tools, by=builtin) or (),
+        granted_workspace=narrowed(capabilities.tools, by=workspace) or (),
+        offered_builtin=builtin,
+        offered_workspace=workspace,
+        unrestricted=unrestricted,
     )
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
@@ -488,13 +532,19 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     workspace_tools = load_tools(cfg.tools_dir)
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir)
-    permitted, available_tools = _resolve_tools(
+    surface = _resolve_tools(
         cfg,
         capabilities,
         workspace_tools,
         assemble,
-        names_needed=any(defined[n].tools not in (ALL, None) for n in activated),
+        # Either list naming anything is enough: both are checked against their
+        # own offered set, and neither set is knowable without the probe.
+        names_needed=any(
+            defined[n].tools not in (ALL, None) or defined[n].builtin_tools not in (ALL, None)
+            for n in activated
+        ),
     )
+    permitted = surface.permitted
 
     if interpreter_at is not None and permitted is not None:
         # Re-wired now that the union is known. It had to be in place for the
@@ -507,14 +557,19 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         offered = available_skills(cfg, session_dir)
         registry = middleware_registry or {}
         for name in activated:
-            refuse_unknown_tools(defined[name], available_tools)
+            refuse_unknown_tools(
+                defined[name],
+                builtin=surface.offered_builtin,
+                workspace=surface.offered_workspace,
+            )
         extras["subagents"] = [
             as_subagent(
                 defined[n],
                 cfg,
                 backend=resolved_backend,
                 providers=capabilities.providers,
-                tools=permitted if permitted is not None else ALL,
+                builtin_tools=surface.granted_builtin,
+                tools=surface.granted_workspace,
                 skills=subagent_skills(defined[n], offered, capabilities.skills),
                 extra_middleware=subagent_middleware(
                     defined[n], registry, capabilities.middleware

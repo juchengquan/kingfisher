@@ -1,6 +1,8 @@
 name: second-opinion
 description: Re-answers a question on a different provider, to catch what one model's habits hide. Use when a conclusion matters more than it costs.
-tools: [read_file, ls, glob, grep]
+# No workspace tools: `[]` is none, and omitting the line would mean all.
+builtin_tools: [read_file, ls, glob, grep]
+tools: []
 # The one preset that pins an endpoint, and the reason it does: this delegate
 # exists in order *not* to be the model that produced the answer. Two models
 # from one family share failure modes -- the same misreadings, the same
