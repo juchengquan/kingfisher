@@ -5,14 +5,15 @@ for the reasons its own docstring gives. What stays here is the part with a
 foreign system on the other side of it — the process environment — and the
 policy that goes with it.
 
-`api_style` is required and has no default (Q25): the Anthropic-compatible and
-OpenAI-compatible endpoints of the same gateway do not behave identically, so a
-default would silently pick the wrong shape the first time kingfisher is pointed
-somewhere new.
+Where prompts go is no longer read from here at all. `KINGFISHER_API_STYLE`,
+`KINGFISHER_MODEL` and `KINGFISHER_MAX_TOKENS` are gone, replaced by
+`models.yaml` -- one reviewed file naming every endpoint and every model, which
+`infrastructure.model_catalogue` reads. What is left in the environment is the
+workspace, one API key per endpoint, and operational flags.
 
-Which variables a style reads is not written here. `infrastructure.models.PROVIDERS`
-holds it, alongside the builder that consumes it, so adding a provider is one
-record rather than an edit in two files that must agree.
+The file is required and has no default, for the reason `api_style` was required
+and had none: a default would silently pick a destination nobody chose the first
+time kingfisher is pointed somewhere new.
 """
 
 from __future__ import annotations
@@ -21,8 +22,8 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from kingfisher.config import API_STYLES, Config, ConfigError, Endpoint
-from kingfisher.infrastructure.models import PROVIDERS
+from kingfisher.config import Config, ConfigError
+from kingfisher.infrastructure import model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `kingfisher.config`
@@ -75,20 +76,10 @@ def _optional_int(environ: Mapping[str, str], key: str) -> int | None:
 def from_env(environ: Mapping[str, str] | None = None) -> Config:
     """Build a `Config` from environment variables.
 
-    Required: `KINGFISHER_WORKSPACE`, `KINGFISHER_API_STYLE`, `KINGFISHER_MODEL`,
-    plus the base URL and key for the chosen style.
+    Required: `KINGFISHER_WORKSPACE`, a readable model catalogue, and the key
+    named by whichever endpoint in it the default model runs on.
     """
     env = os.environ if environ is None else environ
-
-    style = _require(env, "KINGFISHER_API_STYLE").lower()
-    if style not in API_STYLES:
-        msg = f"KINGFISHER_API_STYLE must be one of {API_STYLES}, got {style!r}"
-        raise ConfigError(msg)
-
-    provider = PROVIDERS.get(style)
-    if provider is None:  # pragma: no cover -- bound to API_STYLES by test_models.py
-        msg = f"no provider registered for api_style {style!r}"
-        raise ConfigError(msg)
 
     path_extra = tuple(
         part for part in (env.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":") if part
@@ -98,33 +89,29 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         raw = (env.get(key) or "").strip()
         return Path(raw).expanduser().resolve() if raw else None
 
-    # Every *other* style whose credentials are present. `.env.example` has
-    # always carried both pairs and said "fill in whichever style you intend to
-    # use"; a deployment that filled in both has two endpoints, and only the
-    # default was ever read.
-    endpoints = {
-        name: Endpoint(name, url, key)  # ty: ignore[invalid-argument-type]
-        for name, other in PROVIDERS.items()
-        if name != style
-        and (url := (env.get(other.url_env) or "").strip())
-        and (key := (env.get(other.key_env) or "").strip())
-    }
+    workspace = Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve()
+    # Defaults inside the workspace, like every other catalogue root, and
+    # relocatable for the same reason: it holds content a person authored and
+    # reviewed, so several deployments sharing one file is the point rather than
+    # an accident. Unlike the others it is a file, not a directory -- endpoints
+    # and models cross-reference, and splitting them across files would let half
+    # a catalogue load.
+    models_file = _optional_path("KINGFISHER_MODELS_FILE") or workspace / "models.yaml"
+    endpoints, models, default_model = model_catalogue.load(models_file, env)
 
     return Config(
-        workspace=Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve(),
-        api_style=style,  # type: ignore[arg-type]
-        base_url=_require(env, provider.url_env),
-        api_key=_require(env, provider.key_env),
-        model=_require(env, "KINGFISHER_MODEL"),
-        max_tokens=_int(env, "KINGFISHER_MAX_TOKENS", 4096),
-        timeout_s=_int(env, "KINGFISHER_TIMEOUT_S", 120),
+        workspace=workspace,
+        models=models,
+        endpoints=endpoints,
+        default_model=default_model,
+        models_file=models_file,
+        execution_timeout_s=_int(env, "KINGFISHER_EXECUTION_TIMEOUT_S", 120),
         turn_timeout_s=_int(env, "KINGFISHER_TURN_TIMEOUT_S", 3600),
         session_max_bytes=_optional_int(env, "KINGFISHER_SESSION_MAX_BYTES"),
         session_ttl_s=_int(env, "KINGFISHER_SESSION_TTL_S", 7 * 24 * 3600),
         recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
         shell_sandbox=env.get("KINGFISHER_SHELL_SANDBOX", "auto"),
-        endpoints=endpoints,
         state_root=_optional_path("KINGFISHER_STATE_DIR"),
         scratch_root=_optional_path("KINGFISHER_SCRATCH_DIR"),
         skills_root=_optional_path("KINGFISHER_SKILLS_DIR"),

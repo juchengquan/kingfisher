@@ -6,13 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.capabilities import ALL, CapabilityError
+from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.subagent import (
     KNOWN,
     REFUSED,
+    RunOn,
     SubagentError,
     SubagentSpec,
-    resolved_endpoint,
+    resolved_model,
 )
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 from kingfisher.infrastructure.subagent_store import load_all
@@ -167,7 +168,7 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
 
     message = str(raised.value)
     assert "did you mean" not in message
-    for field in ("name", "description", "tools", "skills", "middleware", "provider", "model"):
+    for field in ("name", "description", "tools", "skills", "middleware", "model"):
         assert field in message
 
 
@@ -220,7 +221,6 @@ def test_every_known_field_still_parses(tmp_path):
         "tools: [read_file]\n"
         "skills: [tabular-qa]\n"
         "middleware: [audit]\n"
-        "provider: openai\n"
         "model: gpt-5\n"
         "system_prompt: |\n  You review.\n"
     )
@@ -228,7 +228,7 @@ def test_every_known_field_still_parses(tmp_path):
 
     assert spec.tools == ("read_file",)
     assert spec.middleware == ("audit",)
-    assert spec.provider == "openai"
+    assert spec.model == "gpt-5"
 
 
 def test_the_known_set_matches_the_spec_it_builds():
@@ -353,41 +353,31 @@ def test_the_description_may_still_be_folded(tmp_path):
 # already enforces for the record itself.
 
 
-def _spec(provider: str | None = None, model: str | None = None) -> SubagentSpec:
-    return SubagentSpec(
-        name="reviewer", description="d", system_prompt="Go.", provider=provider, model=model
-    )
+def _spec(model: str | None = None) -> SubagentSpec:
+    return SubagentSpec(name="reviewer", description="d", system_prompt="Go.", model=model)
 
 
-def test_a_definition_that_pins_neither_runs_where_everything_else_does():
-    assert resolved_endpoint(_spec(), granted=ALL) == (None, None)
+def test_a_definition_that_pins_nothing_runs_what_everything_else_does():
+    assert resolved_model(_spec()) is None
 
 
 def test_the_definition_decides():
-    """The only author. There was an operator override taking precedence here,
-    from `KINGFISHER_MODEL_SUBAGENT` / `KINGFISHER_PROVIDER_SUBAGENT`, and with
-    it a rule refusing half of one -- a model name sent to an endpoint that has
-    never heard of it. Both are gone: the pair could only say "every delegate",
-    and the half-pair mistake is refused at `parse` instead, where the message
-    can name the file. What is left is the grant.
+    """The only author, and now the whole of what this resolves.
+
+    It was `resolved_endpoint` and returned a `(provider, model)` pair with two
+    refusals attached: an operator override that could only ever say "every
+    delegate", and the endpoint grant. The first went before this change. The
+    second cannot live in the domain any more -- an endpoint follows from the
+    model through a catalogue only `Config` holds -- so it is
+    `refuse_ungranted_endpoint`, called where the lookup happens.
     """
-    assert resolved_endpoint(_spec("openai", "gpt-5"), granted=ALL) == ("openai", "gpt-5")
+    assert resolved_model(_spec("gpt-5")) == "gpt-5"
 
 
-def test_an_endpoint_the_request_may_not_use_is_refused():
-    with pytest.raises(CapabilityError, match="may not use"):
-        resolved_endpoint(_spec("openai"), granted=())
-
-
-def test_a_granted_endpoint_goes_through():
-    assert resolved_endpoint(_spec("openai", "gpt-5"), granted=("openai",)) == ("openai", "gpt-5")
-
-
-def test_a_model_alone_is_never_clamped():
-    """The grant is about endpoints. A model name says nothing about where it
-    runs, so there is nothing for a request to narrow.
-    """
-    assert resolved_endpoint(_spec(model="cheap-one"), granted=()) == (None, "cheap-one")
+def test_a_request_replaces_what_the_file_said():
+    """Wholesale, which is now the only shape an override can have: there is no
+    second field to take half of."""
+    assert resolved_model(_spec("gpt-5"), override=RunOn(model="cheap-one")) == "cheap-one"
 
 
 # -- metadata --------------------------------------------------------------
@@ -457,25 +447,29 @@ def test_metadata_survives_loading_the_catalogue(tmp_path):
     assert owners == {"reviewer": "platform-team", "namer": "unowned"}
 
 
-def test_an_endpoint_without_a_model_is_refused(tmp_path):
-    """`provider` alone sends the *deployment's* model name to another endpoint
-    -- a 404 if you are lucky and a wrong-model run if you are not.
+def test_provider_is_no_longer_a_field(tmp_path):
+    """It named an endpoint by style, and moved in lockstep with `model` --
+    naming one without the other was refused, because a model sent somewhere
+    that has never heard of it is a 404 if you are lucky.
 
-    Refused here rather than at build time so the message can name the file
-    that got it wrong, which is the only thing anyone can act on.
+    A model names its own endpoint through the catalogue now, so the field has
+    nothing left to say. It is refused like any other unknown key rather than
+    ignored: a definition still carrying `provider: openai` would otherwise
+    keep running, silently somewhere else than its author wrote.
     """
     definition = (
-        "name: reviewer\ndescription: d\nprovider: openai\nsystem_prompt: |\n  You review.\n"
+        "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  You review.\n"
     )
 
-    with pytest.raises(SubagentError, match="but no model"):
+    with pytest.raises(SubagentError, match="provider"):
         read_subagent(definition, tmp_path / "reviewer.yaml")
 
 
-def test_a_model_without_an_endpoint_is_fine(tmp_path):
-    """Not symmetric, and deliberately. A model names something to run and
-    nothing about where, so it runs where the deployment does -- which is what
-    `extractor.yaml` relies on to be both cheap and portable.
+def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):
+    """One field, where there were two. The endpoint is not absent from the
+    definition -- it is derived from the model, which is why there is nothing
+    left to keep in step.
     """
     definition = (
         "name: reviewer\ndescription: d\nmodel: cheap-one\nsystem_prompt: |\n  You review.\n"
@@ -483,4 +477,4 @@ def test_a_model_without_an_endpoint_is_fine(tmp_path):
 
     spec = read_subagent(definition, tmp_path / "reviewer.yaml")
 
-    assert (spec.provider, spec.model) == (None, "cheap-one")
+    assert spec.model == "cheap-one"

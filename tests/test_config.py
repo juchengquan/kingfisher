@@ -9,45 +9,132 @@ from kingfisher.application import config as config_module
 from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError
 
-BASE_ENV = {
-    "KINGFISHER_WORKSPACE": "/tmp/kf-test-ws",
-    "KINGFISHER_MODEL": "MiniMax-M3",
-    "ANTHROPIC_BASE_URL": "https://example.invalid/anthropic",
-    "ANTHROPIC_API_KEY": "sk-anthropic",
-    "OPENAI_BASE_URL": "https://example.invalid/v1",
-    "OPENAI_API_KEY": "sk-openai",
-}
+CATALOGUE = """
+endpoints:
+  gateway:
+    api: anthropic
+    base_url: https://example.invalid/anthropic
+    key_env: GATEWAY_API_KEY
+  openai:
+    api: openai
+    base_url: https://example.invalid/v1
+    key_env: OPENAI_API_KEY
+
+default: MiniMax-M3
+
+models:
+  MiniMax-M3:
+    endpoint: gateway
+  gpt-5:
+    endpoint: openai
+"""
 
 
-def test_api_style_is_required_with_no_default():
-    """Q25: the two styles are not equivalent, so there is no safe default."""
-    with pytest.raises(ConfigError, match="KINGFISHER_API_STYLE"):
-        from_env(BASE_ENV)
+@pytest.fixture
+def env(tmp_path):
+    """A deployment with a catalogue on disk and both its keys present."""
+    path = tmp_path / "models.yaml"
+    path.write_text(CATALOGUE, encoding="utf-8")
+    return {
+        "KINGFISHER_WORKSPACE": str(tmp_path / "ws"),
+        "KINGFISHER_MODELS_FILE": str(path),
+        "GATEWAY_API_KEY": "sk-gateway",
+        "OPENAI_API_KEY": "sk-openai",
+    }
 
 
-def test_unknown_api_style_is_rejected():
-    with pytest.raises(ConfigError, match="must be one of"):
-        from_env({**BASE_ENV, "KINGFISHER_API_STYLE": "azure"})
+# -- the catalogue is required ---------------------------------------------
 
 
-@pytest.mark.parametrize(
-    ("style", "expected_url", "expected_key"),
-    [
-        ("anthropic", "https://example.invalid/anthropic", "sk-anthropic"),
-        ("openai", "https://example.invalid/v1", "sk-openai"),
-    ],
-)
-def test_credentials_are_selected_by_style(style, expected_url, expected_key):
-    cfg = from_env({**BASE_ENV, "KINGFISHER_API_STYLE": style})
-    assert cfg.api_style == style
-    assert cfg.base_url == expected_url
-    assert cfg.api_key == expected_key
+def test_the_catalogue_is_required_with_no_default(tmp_path):
+    """No fallback and no shipped table, for the reason `KINGFISHER_API_STYLE`
+    was required and had none: a default silently picks a destination nobody
+    chose the first time kingfisher is pointed somewhere new."""
+    with pytest.raises(ConfigError, match="no model catalogue at"):
+        from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
 
 
-def test_missing_credentials_for_the_chosen_style_fail_loudly():
-    env = {k: v for k, v in BASE_ENV.items() if k != "OPENAI_API_KEY"}
-    with pytest.raises(ConfigError, match="OPENAI_API_KEY"):
-        from_env({**env, "KINGFISHER_API_STYLE": "openai"})
+def test_the_absent_file_error_shows_a_working_example(tmp_path):
+    """It is the first thing a new deployment hits, replacing a message that
+    came with an unusually explanatory `.env.example`. A path alone would leave
+    someone guessing at a schema."""
+    with pytest.raises(ConfigError) as raised:
+        from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
+
+    message = str(raised.value)
+    for expected in ("endpoints:", "api: anthropic", "key_env:", "default:", "models:"):
+        assert expected in message
+
+
+def test_it_defaults_inside_the_workspace(tmp_path):
+    workspace = tmp_path / "ws"
+    workspace.mkdir()
+    (workspace / "models.yaml").write_text(CATALOGUE, encoding="utf-8")
+
+    cfg = from_env({"KINGFISHER_WORKSPACE": str(workspace), "GATEWAY_API_KEY": "sk-gateway"})
+
+    assert cfg.models_file == workspace / "models.yaml"
+
+
+# -- what it resolves to ---------------------------------------------------
+
+
+def test_endpoints_and_models_come_from_the_file(env):
+    cfg = from_env(env)
+
+    assert set(cfg.endpoints) == {"gateway", "openai"}
+    assert set(cfg.models) == {"MiniMax-M3", "gpt-5"}
+    assert cfg.default_model == "MiniMax-M3"
+
+
+def test_credentials_come_from_the_variable_each_endpoint_names(env):
+    """Keys are named, not written: the file is meant to be reviewed and shared,
+    which a file holding credentials could not be."""
+    cfg = from_env(env)
+
+    assert cfg.endpoints["gateway"].api_key == "sk-gateway"
+    assert cfg.endpoints["openai"].api_key == "sk-openai"
+    assert "sk-gateway" not in CATALOGUE
+
+
+def test_an_endpoint_without_its_key_is_dropped_and_warned_about(env):
+    """One reviewed file across a fleet is the point of `key_env`, so a machine
+    holding only some of the keys must still start. Warned even when nothing
+    names the endpoint: silence would make a typo'd `key_env` look identical to
+    a deployment that deliberately does not pay for that endpoint.
+    """
+    del env["OPENAI_API_KEY"]
+
+    with pytest.warns(UserWarning, match="OPENAI_API_KEY"):
+        cfg = from_env(env)
+
+    assert set(cfg.endpoints) == {"gateway"}
+    assert set(cfg.models) == {"MiniMax-M3"}  # its models went with it
+
+
+def test_a_default_whose_endpoint_has_no_key_is_refused(env):
+    """Dropping is for endpoints nothing needs. The default is needed by
+    definition, so a deployment that cannot run it has not finished being set
+    up -- and knowing that at startup is the whole point of closing the table.
+    """
+    del env["GATEWAY_API_KEY"]
+
+    with pytest.raises(ConfigError, match="no credentials"), pytest.warns(UserWarning):
+        from_env(env)
+
+
+def test_a_default_naming_nothing_is_a_different_error(env, tmp_path):
+    """A broken file and an unfinished deployment read differently and are
+    worded differently."""
+    (tmp_path / "models.yaml").write_text(
+        CATALOGUE.replace("default: MiniMax-M3", "default: typo-5"), encoding="utf-8"
+    )
+
+    with pytest.raises(ConfigError, match="is not defined here"):
+        from_env(env)
+
+
+# -- the rest of the environment -------------------------------------------
 
 
 def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
@@ -58,9 +145,9 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
     assert os.environ["LANGCHAIN_TRACING_V2"] == "false"
 
 
-def test_state_and_scratch_default_to_the_workspace():
+def test_state_and_scratch_default_to_the_workspace(env):
     """Unset means self-contained: nothing is written outside the workspace."""
-    cfg = from_env({**BASE_ENV, "KINGFISHER_API_STYLE": "anthropic"})
+    cfg = from_env(env)
 
     assert cfg.state_root is None
     assert cfg.scratch_root is None
@@ -68,12 +155,11 @@ def test_state_and_scratch_default_to_the_workspace():
     assert cfg.scratch_dir == cfg.workspace / ".kingfisher" / "tmp"
 
 
-def test_state_and_scratch_can_be_pointed_elsewhere(tmp_path):
+def test_state_and_scratch_can_be_pointed_elsewhere(env, tmp_path):
     """Host-side state is relocatable; the agent addresses none of it by path."""
     cfg = from_env(
         {
-            **BASE_ENV,
-            "KINGFISHER_API_STYLE": "anthropic",
+            **env,
             "KINGFISHER_STATE_DIR": str(tmp_path / "state"),
             "KINGFISHER_SCRATCH_DIR": str(tmp_path / "scratch"),
         }
@@ -83,9 +169,9 @@ def test_state_and_scratch_can_be_pointed_elsewhere(tmp_path):
     assert cfg.scratch_dir == tmp_path / "scratch"
 
 
-def test_the_catalogue_defaults_inside_the_workspace():
+def test_the_catalogue_defaults_inside_the_workspace(env):
     """Unset changes nothing: definitions stay where they have always been."""
-    cfg = from_env({**BASE_ENV, "KINGFISHER_API_STYLE": "anthropic"})
+    cfg = from_env(env)
 
     assert cfg.skills_root is None
     assert cfg.subagents_root is None
@@ -93,13 +179,12 @@ def test_the_catalogue_defaults_inside_the_workspace():
     assert cfg.subagents_dir == cfg.workspace / "subagents"
 
 
-def test_the_catalogue_can_be_shared_between_workspaces(tmp_path):
+def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
     """The point of the phase: one reviewed set of definitions, deployed once,
     rather than a copy per workspace that nobody can audit centrally."""
     cfg = from_env(
         {
-            **BASE_ENV,
-            "KINGFISHER_API_STYLE": "anthropic",
+            **env,
             "KINGFISHER_SKILLS_DIR": str(tmp_path / "catalogue" / "skills"),
             "KINGFISHER_SUBAGENTS_DIR": str(tmp_path / "catalogue" / "subagents"),
         }
@@ -130,54 +215,41 @@ def test_every_variable_read_is_documented():
     read = set(re.findall(r"KINGFISHER_[A-Z_]+", source))
     documented = set(re.findall(r"KINGFISHER_[A-Z_]+", (root / ".env.example").read_text()))
 
-    # An exact match, now that nothing builds a variable name at runtime. The
-    # prefix allowance this used to make existed for `KINGFISHER_MODEL_{role}`,
-    # and it let documenting `KINGFISHER_MODEL_SUBAGENT` satisfy a read of
-    # `KINGFISHER_MODEL` -- which is not what the check is for.
     missing = read - documented
 
     assert not missing, f"read by config.py but absent from .env.example: {sorted(missing)}"
 
 
-def test_the_per_role_variables_are_gone():
-    """`KINGFISHER_MODEL_SUBAGENT` and `KINGFISHER_PROVIDER_SUBAGENT` used to
-    override every delegate at once, and nothing reads them now.
-
-    A blanket override is the wrong shape for the decision: `second-opinion`
-    exists in order *not* to be the model beside it, so one variable saying
-    "all delegates" silently defeats the one delegate that most needs its own.
-    A definition says where it runs; see `presets/README.md`.
+def test_the_variables_that_chose_a_model_are_gone(env):
+    """`KINGFISHER_MODEL`, `KINGFISHER_API_STYLE` and `KINGFISHER_MAX_TOKENS`
+    are the catalogue's job now, and the per-role pair went before them.
 
     Asserted as absence, because the failure mode is a variable that reads as
     configuration and is not -- someone sets it, sees no error, and believes it.
     """
-    environ = {
-        "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
-        "KINGFISHER_API_STYLE": "anthropic",
-        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9/a",
-        "ANTHROPIC_API_KEY": "k",
-        "KINGFISHER_MODEL": "the-one-that-counts",
-        "KINGFISHER_MODEL_SUBAGENT": "cheap-model",
-        "KINGFISHER_PROVIDER_SUBAGENT": "openai",
-    }
+    cfg = from_env(
+        {
+            **env,
+            "KINGFISHER_MODEL": "ignored",
+            "KINGFISHER_API_STYLE": "openai",
+            "KINGFISHER_MAX_TOKENS": "999999",
+            "KINGFISHER_MODEL_SUBAGENT": "cheap-model",
+            "KINGFISHER_PROVIDER_SUBAGENT": "openai",
+        }
+    )
 
-    cfg = from_env(environ)
+    assert cfg.default_model == "MiniMax-M3"  # the file said so, not the environment
+    assert cfg.resolve_model()[1].name == "gateway"
+    assert cfg.models["MiniMax-M3"].max_tokens == 4096
+    assert not [f for f in fields(cfg) if f.name in {"model", "api_style", "max_tokens"}]
+    assert "ignored" not in repr(cfg)
 
-    assert cfg.model == "the-one-that-counts"
-    assert not [f for f in fields(cfg) if "role" in f.name]
-    assert "cheap-model" not in repr(cfg)
 
+def test_the_execution_timeout_is_named_for_what_it_bounds(env):
+    """It was `KINGFISHER_TIMEOUT_S` and bounded a model call as well as the
+    shell and the interpreter -- three unrelated jobs for one number. The model
+    half is per-model in the catalogue now."""
+    cfg = from_env({**env, "KINGFISHER_EXECUTION_TIMEOUT_S": "45"})
 
-def test_the_main_model_has_one_name():
-    """`KINGFISHER_MODEL_MAIN` was read too, and beat the documented, required
-    `KINGFISHER_MODEL` -- `model_for("main")` consulted the role map first."""
-    environ = {
-        "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
-        "KINGFISHER_API_STYLE": "anthropic",
-        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9/a",
-        "ANTHROPIC_API_KEY": "k",
-        "KINGFISHER_MODEL": "the-one-that-counts",
-        "KINGFISHER_MODEL_MAIN": "the-one-that-used-to-win",
-    }
-
-    assert from_env(environ).model == "the-one-that-counts"
+    assert cfg.execution_timeout_s == 45
+    assert not [f for f in fields(cfg) if f.name == "timeout_s"]

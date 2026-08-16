@@ -7,11 +7,19 @@ description: Reads a large or numerous set of files and returns only the facts a
 # fetch URLs and query databases.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []
-# Reading is the cheap half of delegation, so it runs on the cheap model. No
-# `provider:` -- a model alone runs wherever the deployment does, and naming
-# the endpoint here would only stop this file working on a deployment pointed
-# somewhere else. `second-opinion.yaml` is where naming one earns its place.
-model: MiniMax-M2.5
+# No `model:`, and its absence is the decision rather than an omission.
+#
+# Reading is the cheap half of delegation, so this is exactly the delegate that
+# wants a cheap model -- and a file that ships with kingfisher cannot name one.
+# It said `model: MiniMax-M2.5`, which is a vendor's model id: on a deployment
+# with no MiniMax entry in models.yaml that is now refused at startup, and
+# before the catalogue was closed it was worse, reaching whatever endpoint was
+# configured and failing as a 404 mid-run.
+#
+# Which model is cheap *here* is a deployment's answer, not a preset's -- the
+# same reason `KINGFISHER_MODEL_SUBAGENT` was deleted for being the wrong
+# granularity. Add a `model:` naming an entry in your own models.yaml and this
+# delegate gets much cheaper; leave it and it runs on the default.
 system_prompt: |
   You read a lot and return a little.
 

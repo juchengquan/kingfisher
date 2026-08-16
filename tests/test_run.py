@@ -114,7 +114,10 @@ def test_run_logs_usage_shaped_records(cfg):
     assert "run_end" in events
     # Model and API style ride along so a zero cache_read can be told apart
     # from a gateway that simply does not cache.
-    assert all(r["model"] == cfg.model and r["api_style"] == cfg.api_style for r in records)
+    assert all(
+        r["model"] == cfg.default_model and r["endpoint"] == cfg.resolve_model()[1].name
+        for r in records
+    )
 
 
 def test_a_turn_disposes_of_nothing(cfg):

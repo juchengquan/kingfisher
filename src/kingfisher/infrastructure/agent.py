@@ -42,7 +42,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
-from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, resolved_endpoint
+from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, resolved_model
 from kingfisher.infrastructure import skill_store, tool_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
@@ -151,7 +151,7 @@ def indistinct_delegates(
 
     Asked after the build rather than during it, the way `_withheld_by_kind`
     is: `build_agent` returns a graph, and a fact about the run is not one of
-    the things a graph can carry. It re-resolves through `resolved_endpoint`,
+    the things a graph can carry. It re-resolves through `resolved_model`,
     the same call the build makes, so the two cannot come to disagree about
     where a delegate ended up.
     """
@@ -166,10 +166,8 @@ def indistinct_delegates(
         spec = defined.get(name)
         if spec is None:
             continue  # `build_agent` refuses this; reporting is not its job
-        provider, model = resolved_endpoint(
-            spec, granted=capabilities.providers, override=wanted.get(name)
-        )
-        if why := indistinct(spec, cfg, provider=provider, model=model):
+        model = resolved_model(spec, override=wanted.get(name))
+        if why := indistinct(spec, cfg, model=model):
             found.append((name, why))
     return tuple(found)
 
@@ -329,7 +327,7 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
         # Below any real snapshot, so every one is dropped. See the docstring:
         # the image is a constant 1,280KB written every turn regardless of use.
         max_snapshot_bytes=1,
-        timeout=float(cfg.timeout_s),
+        timeout=float(cfg.execution_timeout_s),
     )
 
 
@@ -582,6 +580,18 @@ def _activated_subagents(
     # upload can break it by shadowing a catalogue name, which is why it cannot
     # be checked at seed time and left at that.
     refuse_helpers_with_helpers(defined)
+    # There is deliberately *no* matching check that every definition names a
+    # runnable model. It was written and taken out again: the two rules look
+    # alike and are not. Helper depth is structural -- a catalogue asking for
+    # two levels is incoherent however it is used, and no request can rescue it.
+    # An unrunnable model is not: `run_on` exists precisely so a caller can put
+    # a shipped delegate on a model their credentials reach, without editing a
+    # file they may not own, and a catalogue-wide refusal would fire before the
+    # override could apply and defeat it.
+    #
+    # So it stays per-delegate, at `as_subagent`, where the override has already
+    # been resolved -- and seeding a preset you cannot run costs nothing until
+    # you activate it.
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
@@ -744,7 +754,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
 
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
-            model=model if model is not None else build_model(cfg),
+            model=model if model is not None else build_model(*cfg.resolve_model()),
             backend=resolved_backend,
             system_prompt=system_prompt(cfg),
             middleware=middleware,
@@ -820,7 +830,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 defined[name],
                 cfg,
                 backend=resolved_backend,
-                providers=capabilities.providers,
+                endpoints=capabilities.endpoints,
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,
                 skills=subagent_skills(defined[name], offered, capabilities.skills),
@@ -839,7 +849,9 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 helpers=[
                     _built(
                         helper,
-                        default_model=model if model is not None else build_model(cfg),
+                        default_model=(
+                            model if model is not None else build_model(*cfg.resolve_model())
+                        ),
                         tool_objects=list(surface.objects.values()),
                     )
                     for helper in subagent_helpers(defined[n], defined, capabilities.subagents)

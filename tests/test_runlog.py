@@ -15,7 +15,7 @@ from kingfisher.infrastructure.runlog import JsonlRunLogger, read_usage
 
 def _logger(tmp_path):
     return JsonlRunLogger(
-        tmp_path / "session.jsonl", model="m", api_style="anthropic", session_id="s"
+        tmp_path / "session.jsonl", model="m", endpoint="gateway", session_id="s"
     )
 
 

@@ -111,10 +111,22 @@ class Capabilities:
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike the three above it is never widened by `including` -- see there.
     middleware: Selection = ALL
-    #: Endpoints a definition may name. Granted like `middleware` and for a
+    #: Endpoints a definition may reach. Granted like `middleware` and for a
     #: stronger reason: this one decides which credentials are used and which
     #: endpoint receives the run's prompts and files.
-    providers: Selection = ALL
+    #:
+    #: Was `providers`, when a definition named an endpoint directly. It names a
+    #: *model* now and the endpoint is looked up, so this is checked against
+    #: where that model resolves to -- the same question, asked one step later.
+    #: Renamed with the field it guards: `provider` is no longer a word this
+    #: format has, and a grant named after it would be the only survivor.
+    #:
+    #: It is not redundant against `models` below, though it overlaps: the two
+    #: have different subjects and deliberately opposite defaults. This narrows
+    #: what *reviewed definitions* may reach and starts open; that gates what an
+    #: *untrusted caller* may name and starts closed. Collapsing them would
+    #: force one default on both, and either choice is wrong for one of them.
+    endpoints: Selection = ALL
     #: Models a request may put a delegate on, overriding what its file says.
     #:
     #: `None` by default, and that default is the point. Every other axis here
@@ -135,7 +147,7 @@ class Capabilities:
             "skills",
             "subagents",
             "middleware",
-            "providers",
+            "endpoints",
             "models",
         ):
             object.__setattr__(self, field_name, _normalise(getattr(self, field_name)))
@@ -167,13 +179,13 @@ class Capabilities:
         not touch. A skill's `allowed-tools` is prompt text to deepagents and
         binds nothing.
 
-        **`middleware` and `providers` are deliberately absent**, and that
+        **`middleware` and `endpoints` are deliberately absent**, and that
         absence is the rule.
         A skill or subagent an upload brings is the caller's own text; a
         middleware *name* is a selector for code the deployment wrote. Widening
         it here would let anyone who can upload a definition activate anything
         the deployment registered, which is the escalation the rest of this
-        method exists to avoid. `providers` is the same argument with more at
+        method exists to avoid. `endpoints` is the same argument with more at
         stake: it chooses which endpoint receives the run's prompts and files,
         and whose credentials pay for them.
 
@@ -187,7 +199,7 @@ class Capabilities:
             skills=_widened(self.skills, skills),
             subagents=_widened(self.subagents, subagents),
             middleware=self.middleware,  # never widened; see above
-            providers=self.providers,  # nor this: it chooses where prompts go
+            endpoints=self.endpoints,  # nor this: it chooses where prompts go
             models=self.models,  # nor this: it chooses what the run costs
             memory=self.memory,
         )
@@ -211,7 +223,7 @@ class Capabilities:
             skills=narrowed(other.skills, by=self.skills),
             subagents=narrowed(other.subagents, by=self.subagents),
             middleware=narrowed(other.middleware, by=self.middleware),
-            providers=narrowed(other.providers, by=self.providers),
+            endpoints=narrowed(other.endpoints, by=self.endpoints),
             models=narrowed(other.models, by=self.models),
             memory=_narrow_switch(self.memory, other.memory),
         )
@@ -408,6 +420,30 @@ def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subjec
             f"{', '.join(sorted(refused))}; permitted {granted}"
         )
         raise CapabilityError(msg)
+
+
+def refuse_ungranted_endpoint(endpoint: str, *, granted: Selection, subject: str) -> None:
+    """Refuse an endpoint this request may not reach.
+
+    The other half of `refuse_ungranted_models`, and it is deliberately a second
+    check rather than the same one. A model grant says which names a caller may
+    ask for; this says which endpoints may receive prompts and whose credentials
+    may pay. They overlap and do not coincide -- "anything on the local gateway,
+    nothing on OpenAI" is one line here and an enumeration there, which goes
+    stale the moment a model is added.
+
+    Called with the endpoint a model *resolved to*, not one a definition wrote:
+    definitions name models now. Which is why this takes a name rather than a
+    spec -- by the time the endpoint is known, the caller has a `Config` and
+    this layer does not.
+    """
+    if granted == ALL or endpoint in (granted or ()):
+        return
+    msg = (
+        f"{subject} resolves to endpoint {endpoint!r}, which this request may not "
+        f"reach; permitted {granted}"
+    )
+    raise CapabilityError(msg)
 
 
 def approved_middleware(

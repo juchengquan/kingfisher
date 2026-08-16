@@ -355,7 +355,7 @@ def build_backend(
         ),
         root_dir=str(session_dir),
         env=shell_env(cfg, session_dir, catalogue=catalogue),
-        timeout=cfg.timeout_s,
+        timeout=cfg.execution_timeout_s,
     )
     return WorkspaceScopedBackend(
         default=shell,

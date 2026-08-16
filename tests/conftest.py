@@ -4,7 +4,7 @@ import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Config
+from kingfisher.config import Config, Endpoint, ModelProfile
 from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
 
@@ -55,16 +55,36 @@ def session_dir(workspace):
     return ensure_session_layout(workspace / "sessions" / "test-session")
 
 
+#: The endpoint every fixture builds against. Port 9 is discard: a test that
+#: accidentally makes a real call hangs on connect rather than reaching anyone.
+FAKE_ENDPOINT = Endpoint(
+    name="fake",
+    api="anthropic",
+    base_url="http://127.0.0.1:9/never-called",
+    api_key="test-key-not-real",
+)
+
+#: Two models on one endpoint, which is the shape the catalogue exists to allow
+#: and the shape a delegate test needs: `cheap-model` carries params that differ
+#: from the default's, so a test asserting a delegate got *its own* ceiling
+#: cannot pass by accident on the deployment's.
+FAKE_MODELS = {
+    "fake-model": ModelProfile(model="fake-model", endpoint="fake"),
+    "cheap-model": ModelProfile(
+        model="cheap-model", endpoint="fake", max_tokens=321, timeout_s=45
+    ),
+}
+
+
 @pytest.fixture
 def cfg(workspace):
     return Config(
         workspace=workspace,
-        api_style="anthropic",
-        base_url="http://127.0.0.1:9/never-called",
-        api_key="test-key-not-real",
-        model="fake-model",
+        models=FAKE_MODELS,
+        endpoints={"fake": FAKE_ENDPOINT},
+        default_model="fake-model",
         turn_timeout_s=3600,
-        timeout_s=30,
+        execution_timeout_s=30,
     )
 
 

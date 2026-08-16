@@ -6,9 +6,9 @@ untrusted caller safe to accept. This is the one thing that *chooses*, and
 models differ in price by more than an order of magnitude -- so it is off until
 a deployment grants it, and granted per name rather than as a switch.
 
-The case it exists for: a shipped `second-opinion` pins `openai`/`gpt-5`, and a
-deployment with different credentials wants it somewhere it can actually reach,
-without editing a file it may not own.
+The case it exists for: a shipped `second-opinion` names a model this
+deployment's catalogue does not define, and the caller wants it somewhere it can
+actually reach, without editing a file it may not own.
 """
 
 from __future__ import annotations
@@ -18,16 +18,17 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.config import Endpoint
+from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.agent import build_agent
 from tests.conftest import FakeToolCallingModel, capture_build
 
+ELSEWHERE = Endpoint("openai", "openai", "https://api.openai.com/v1", "sk-test")
+
 PINNED = """name: second-opinion
 description: Answers again, elsewhere.
-provider: openai
 model: gpt-5
 system_prompt: |
   You answer on your own.
@@ -118,7 +119,7 @@ def test_only_the_models_a_deployment_granted(cfg, session_dir, monkeypatch):
             session_dir,
             monkeypatch,
             granted_models=("MiniMax-M2.5",),
-            run_on={"second-opinion": RunOn("expensive-model", provider="anthropic")},
+            run_on={"second-opinion": RunOn("expensive-model")},
         )
 
 
@@ -129,11 +130,11 @@ def test_a_granted_model_goes_through(cfg, session_dir, monkeypatch):
         cfg,
         session_dir,
         monkeypatch,
-        granted_models=("MiniMax-M2.5",),
-        run_on={"second-opinion": RunOn("MiniMax-M2.5", provider="anthropic")},
+        granted_models=("cheap-model",),
+        run_on={"second-opinion": RunOn("cheap-model")},
     )
 
-    assert _model_of(specs, "second-opinion") == "MiniMax-M2.5"
+    assert _model_of(specs, "second-opinion") == "cheap-model"
 
 
 def test_the_deployment_clamps_what_a_request_asks_for():
@@ -148,18 +149,21 @@ def test_the_deployment_clamps_what_a_request_asks_for():
 def test_an_upload_cannot_widen_it():
     """`including` adds back a caller's *own* definitions. A model name is not
     the caller's text -- it is a bill -- so it is never widened, the same as
-    `providers` and `middleware`."""
+    `endpoints` and `middleware`."""
     assert Capabilities(models=("cheap",)).including(subagents=("mine",)).models == ("cheap",)
 
 
 # -- it replaces the endpoint, never half of it ---------------------------
 
 
-def test_naming_a_model_alone_runs_it_where_the_deployment_does(cfg, session_dir, monkeypatch):
-    """`second-opinion` pins `openai`, and this deployment has no OpenAI. A
-    model alone must therefore *drop* that pin, not keep it: keeping it would
-    send the new model to an endpoint the request never chose, which is the
-    half-pair the format refuses everywhere else.
+def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir, monkeypatch):
+    """`second-opinion` names `gpt-5`, which this deployment's catalogue does
+    not define -- so without the override it would not build at all.
+
+    There were two fields here once, and a rule that an override had to replace
+    both or neither. One field cannot be half of anything, so the rule is gone
+    and this is what is left of it: what the caller names is what runs, and
+    where it runs follows from that.
     """
     _define(cfg, PINNED)
 
@@ -167,18 +171,18 @@ def test_naming_a_model_alone_runs_it_where_the_deployment_does(cfg, session_dir
         cfg,
         session_dir,
         monkeypatch,
-        granted_models=("MiniMax-M2.5",),
-        run_on={"second-opinion": RunOn("MiniMax-M2.5")},
+        granted_models=("cheap-model",),
+        run_on={"second-opinion": RunOn("cheap-model")},
     )
 
-    assert _model_of(specs, "second-opinion") == "MiniMax-M2.5"
-    # And at the deployment's own endpoint, which is the point of the drop.
-    assert specs["second-opinion"]["model"] is not None
+    assert _model_of(specs, "second-opinion") == "cheap-model"
 
 
-def test_naming_both_sends_it_there(cfg, session_dir, monkeypatch):
+def test_an_override_reaches_another_endpoint(cfg, session_dir, monkeypatch):
     routed = replace(
-        cfg, endpoints={"openai": Endpoint("openai", "https://api.openai.com/v1", "sk-test")}
+        cfg,
+        endpoints={**cfg.endpoints, "openai": ELSEWHERE},
+        models={**cfg.models, "gpt-5": ModelProfile("gpt-5", "openai")},
     )
     _define(routed, PLAIN)
 
@@ -187,30 +191,35 @@ def test_naming_both_sends_it_there(cfg, session_dir, monkeypatch):
         session_dir,
         monkeypatch,
         granted_models=("gpt-5",),
-        run_on={"reviewer": RunOn("gpt-5", provider="openai")},
+        run_on={"reviewer": RunOn("gpt-5")},
         subagents=("reviewer",),
     )
 
     assert _model_of(specs, "reviewer") == "gpt-5"
+    assert specs["reviewer"]["model"].openai_api_base == ELSEWHERE.base_url
 
 
-def test_an_endpoint_the_request_may_not_use_is_still_refused(cfg, session_dir):
-    """The provider half keeps its own grant. Overriding is not an exemption
-    from where a request's prompts may go."""
+def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir):
+    """The endpoint grant is checked against where the *overridden* model
+    resolves. Choosing a model is not an exemption from where a request's
+    prompts may go -- the two grants are separate questions, and this is the one
+    about whose credentials pay."""
     routed = replace(
-        cfg, endpoints={"openai": Endpoint("openai", "https://api.openai.com/v1", "sk-test")}
+        cfg,
+        endpoints={**cfg.endpoints, "openai": ELSEWHERE},
+        models={**cfg.models, "gpt-5": ModelProfile("gpt-5", "openai")},
     )
     _define(routed, PLAIN)
 
-    with pytest.raises(CapabilityError, match="may not use"):
+    with pytest.raises(CapabilityError, match="may not"):
         build_agent(
             routed,
             session_dir=session_dir,
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             capabilities=Capabilities(
-                subagents=("reviewer",), models=("gpt-5",), providers=("anthropic",)
+                subagents=("reviewer",), models=("gpt-5",), endpoints=("fake",)
             ),
-            run_on={"reviewer": RunOn("gpt-5", provider="openai")},
+            run_on={"reviewer": RunOn("gpt-5")},
         )
 
 
@@ -234,7 +243,7 @@ def test_naming_a_delegate_the_request_did_not_activate_is_refused(cfg, session_
             monkeypatch,
             granted_models=ALL,
             subagents=("reviewer",),
-            run_on={"second-opinion": RunOn("MiniMax-M2.5")},
+            run_on={"second-opinion": RunOn("cheap-model")},
         )
 
 

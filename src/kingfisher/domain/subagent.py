@@ -1,7 +1,7 @@
 """Subagent definitions: `/subagents/<name>.yaml`.
 
 A YAML document. `name`, `description` and `system_prompt` are required;
-`tools`, `skills`, `middleware`, `provider` and `model` are optional and all
+`tools`, `skills`, `middleware` and `model` are optional and all
 select by name from what the deployment already offers — how each selection is
 enforced is the adapter's problem, not this format's.
 
@@ -10,7 +10,6 @@ enforced is the adapter's problem, not this format's.
     tools: [read_file, glob, grep]
     skills: [tabular-qa]
     middleware: [audit]
-    provider: openai
     model: gpt-5
     system_prompt: |
       You review analyses...
@@ -49,17 +48,17 @@ that would build the second level never runs. `refuse_helpers_with_helpers`
 refuses a *catalogue* that asks for one, so nobody writes a `subagents:` line
 that is silently ignored.
 
-`provider` names which endpoint this delegate runs against, by style, out of
-those the deployment has credentials for. Omitted, it runs where everything
-else does. It is granted like `middleware` and for a stronger reason: it
-decides which endpoint receives this delegate's prompts and whose
-credentials pay for them.
+`model` names what this delegate runs, out of the models `models.yaml`
+defines. Omitted, it runs whatever the deployment runs. It is granted like
+`middleware` and for a stronger reason: the model decides which endpoint
+receives this delegate's prompts and whose credentials pay for them.
 
-`provider` and `model` move together, in one direction. A definition naming an
-endpoint must say what to run there, or the deployment's own model name is sent
-somewhere that has never heard of it. `model` alone is fine -- it names
-something to run and nothing about where, so it runs where everything else
-does.
+There was a `provider:` beside it, naming an endpoint by style, and a rule that
+the two moved together -- a model name sent to an endpoint that has never heard
+of it is a 404 if you are lucky and a wrong-model run if you are not. Both are
+gone. A model resolves to its own endpoint through the catalogue, so the
+half-pair is not a thing that can be written, and the rule refusing it has
+nothing left to refuse.
 
 The definition is the only place either is said. There was an environment
 override too, and it is gone: `KINGFISHER_MODEL_SUBAGENT` could only say "every
@@ -105,7 +104,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
+from kingfisher.domain.capabilities import ALL, Selection
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -129,7 +128,6 @@ KNOWN: frozenset[str] = frozenset(
         "skills",
         "middleware",
         "subagents",
-        "provider",
         "model",
         "metadata",
     }
@@ -171,20 +169,19 @@ class SubagentError(ValueError):
 class RunOn:
     """Where a request wants one delegate to run, instead of what its file says.
 
-    A *replacement*, not an edit. Give a model alone and it runs at the
-    deployment's own endpoint; give both and it runs at the one you name. What
-    it can never be is half of each -- the file's endpoint with your model --
-    because a model name sent somewhere that has never heard of it is a 404 if
-    you are lucky and a wrong-model run if you are not. The format refuses that
-    pairing from the definition's side for the same reason.
+    One field, and it used to be two. There was a `provider` beside the model,
+    with a rule that an override had to be wholesale -- never the file's
+    endpoint joined to your model, because a model name sent somewhere that has
+    never heard of it is a 404 if you are lucky and a wrong-model run if you are
+    not. A model resolves to its own endpoint through the catalogue now, so that
+    pairing cannot be expressed and the rule has nothing left to guard.
 
-    Two fields rather than one `"provider:model"` string: that spelling is
+    A name, not a `"provider:model"` string: that spelling is
     `init_chat_model`'s, and resolving a model through *it* is exactly what
     `infrastructure.models` exists to avoid.
     """
 
     model: str
-    provider: str | None = None
 
 
 @dataclass(frozen=True)
@@ -221,10 +218,10 @@ class SubagentSpec:
     #: *catalogue* that would ask for one, so nobody writes a file whose
     #: `subagents:` is silently ignored.
     subagents: Selection = None
-    #: Which endpoint this delegate runs against, by style name. `None` means
-    #: the deployment's default. Selecting one decides where the prompt goes
-    #: and whose credentials pay, which is why it is granted rather than free.
-    provider: str | None = None
+    #: What this delegate runs, by model name, out of what the catalogue
+    #: defines. `None` means the deployment's own. Naming one decides where the
+    #: prompt goes and whose credentials pay -- the endpoint follows from the
+    #: model -- which is why it is granted rather than free.
     model: str | None = None
     #: The caller's own keys, carried and never interpreted. Kingfisher reads
     #: nothing here and never will: the moment it did, this would be a field
@@ -313,21 +310,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
-    # `provider` without `model` sends the *deployment's* model name to another
-    # endpoint -- a 404 if you are lucky and a wrong-model run if you are not.
-    # Caught here rather than at build time so the message can name the file
-    # that got it wrong.
-    #
-    # Not symmetric: `model` alone is fine. It names something to run and says
-    # nothing about where, so it runs wherever the deployment does.
-    if document.get("provider") and not document.get("model"):
-        msg = (
-            f"{source.name}: names provider {fields.text(document['provider'])!r} "
-            "but no model; a model name means nothing without the endpoint that "
-            "serves it, so name both or neither"
-        )
-        raise SubagentError(msg)
-
     return SubagentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
@@ -349,8 +331,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             document.get("subagents"), absent=None, key="subagents", source=source
         ),
         # `or None` rather than a conditional: unset and blank mean the same
-        # thing for these two -- run where everything else does.
-        provider=fields.text(document.get("provider")) or None,
+        # thing here -- run whatever the deployment runs.
         model=fields.text(document.get("model")) or None,
         metadata=_metadata(document, source),
     )
@@ -431,43 +412,23 @@ def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
                 raise SubagentError(msg)
 
 
-def resolved_endpoint(
-    spec: SubagentSpec, *, granted: Selection, override: RunOn | None = None
-) -> tuple[str | None, str | None]:
-    """Where a delegate runs, once the request has had its say.
+def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> str | None:
+    """What a delegate runs, once the request has had its say. `None` is the
+    deployment's own.
 
-    The definition is the only author. There was an operator override here --
-    `KINGFISHER_MODEL_SUBAGENT` and `KINGFISHER_PROVIDER_SUBAGENT` -- and with
-    it a rule about half-overrides, because a model name arriving at an
-    endpoint that has never heard of it is a 404 if you are lucky and a
-    wrong-model run if you are not. Both are gone: one variable pair could only
-    ever say "all delegates", which is not a decision anyone wanted to make,
-    and saying it per delegate is what the file already does. The half-pair
-    mistake is still refused, at `parse` -- from the definition's side, where
-    it can name the file that made it.
+    Almost nothing left, and that is the result rather than an oversight. This
+    was `resolved_endpoint` and returned a `(provider, model)` pair, carrying
+    two refusals with it: an operator override that could only ever say "all
+    delegates", and the endpoint grant. The first was deleted before this
+    change; the second cannot live here any more, because the endpoint is no
+    longer written in the definition -- it follows from the model, through a
+    catalogue only `Config` holds.
 
-    What is left is the grant. `provider` chooses which endpoint receives the
-    prompt and whose credentials pay, so a request may narrow it like anything
-    else, and a definition naming one it may not use is refused rather than
-    quietly run elsewhere.
-
-    A rule, and it takes the spec rather than the `Config` beside it: the
-    domain does not read deployment configuration, and
-    `test_domain_imports_only_the_standard_library_and_itself` holds it to that.
+    Which is the layering working rather than fighting it. The domain does not
+    read deployment configuration, and
+    `test_domain_imports_only_the_standard_library_and_itself` holds it to that,
+    so a rule needing the catalogue belongs where the catalogue is. What is
+    still a question about *names* -- may this request name this model, may it
+    reach this endpoint -- stays in `capabilities`.
     """
-    provider, model = spec.provider, spec.model
-    if override is not None:
-        # Wholesale. Taking the override's model and leaving the file's
-        # endpoint would rebuild the half-pair this format refuses everywhere
-        # else -- and it is the caller who would be surprised, having named one
-        # thing and got it joined to another.
-        provider, model = override.provider, override.model
-
-    if provider is not None and granted != ALL and provider not in (granted or ()):
-        msg = (
-            f"subagent {spec.name!r} names endpoint {provider!r}, which this request "
-            f"may not use; permitted {granted}"
-        )
-        raise CapabilityError(msg)
-
-    return provider, model
+    return override.model if override is not None else spec.model

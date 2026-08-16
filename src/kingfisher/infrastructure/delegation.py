@@ -14,12 +14,12 @@ largest of them and the most self-contained: nothing in here calls anything in
 
 from __future__ import annotations
 
-from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from deepagents.middleware import SubAgentMiddleware
 
+from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import (
     ALL,
     CapabilityError,
@@ -27,8 +27,9 @@ from kingfisher.domain.capabilities import (
     approved_middleware,
     belongs_in,
     narrowed,
+    refuse_ungranted_endpoint,
 )
-from kingfisher.domain.subagent import RunOn, resolved_endpoint
+from kingfisher.domain.subagent import RunOn, resolved_model
 from kingfisher.infrastructure import tool_store
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
@@ -228,9 +229,7 @@ def _host(url: str) -> str:
     return urlsplit(url).netloc
 
 
-def indistinct(
-    spec: SubagentSpec, cfg: Config, *, provider: str | None, model: str | None
-) -> str | None:
+def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | None:
     """Why this delegate is not running anywhere different, or `None`.
 
     Reported, never refused. Kingfisher cannot know that a delegate *needs* to
@@ -243,23 +242,24 @@ def indistinct(
     answers, and the answer is worth nothing -- there is no error to notice and
     nothing in the output that looks wrong.
 
-    Two ways to arrive there, and they read differently enough to say apart:
-    the endpoint named turns out to be the same machine, or the model named
-    turns out to be the same model.
+    Two ways to arrive there. Naming the model the deployment already runs is
+    the plain one. The other survives the catalogue: two endpoints may point at
+    one host, so a different model id is not proof of a different machine, and a
+    "second opinion" served by the same gateway is the disappointment this
+    exists to name.
     """
-    if not (spec.provider or spec.model):
+    if spec.model is None:
         return None  # it never asked to be anywhere in particular
 
-    default = _host(cfg.base_url)
-    if provider is not None and _host(cfg.endpoint_for(provider).base_url) == default:
+    if model == cfg.default_model:
+        return f"runs {model!r}, the same model as the main agent"
+    _, endpoint = cfg.resolve_model(model)
+    default = _host(cfg.resolve_model()[1].base_url)
+    if _host(endpoint.base_url) == default:
         return (
-            f"names endpoint {provider!r}, which points at the same host as "
-            f"the default ({default})"
+            f"runs {model!r} on endpoint {endpoint.name!r}, which points at the "
+            f"same host as the default ({default})"
         )
-    if (model or cfg.model) == cfg.model and _host(
-        cfg.endpoint_for(provider).base_url
-    ) == default:
-        return f"runs {cfg.model!r}, the same model as the main agent"
     return None
 
 
@@ -269,7 +269,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     spec: SubagentSpec,
     cfg: Config,
     *,
-    providers: Selection = ALL,
+    endpoints: Selection = ALL,
     builtin_tools: Selection = ALL,
     tools: Selection = ALL,
     backend: Any = None,
@@ -348,8 +348,8 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
 
     # A *name* here would be resolved by deepagents' `init_chat_model`, which
     # infers its own provider and reads credentials from the environment --
-    # around the provider table, the configured base_url, and the api_style
-    # this deployment chose. It also re-enables the profile behaviour that
+    # around the catalogue, its endpoint's base_url, and every param the
+    # profile carries. It also re-enables the profile behaviour that
     # `infrastructure.models` exists to avoid. So we build the instance ourselves.
     #
     # The definition decides, and nothing here second-guesses it. An operator
@@ -366,22 +366,26 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # goes in and the allowlist decides.
         subagent["tools"] = tool_objects
 
-    provider, model_id = resolved_endpoint(spec, granted=providers, override=run_on)
-    if model_id is not None or provider is not None:
-        # `replace` rather than a build_model parameter: an endpoint is exactly
-        # the three Config fields a model is built from, so swapping them says
-        # "build as if this deployment were pointed there" with nothing else
-        # changed.
-        endpoint = cfg.endpoint_for(provider)
-        subagent["model"] = build_model(
-            replace(
-                cfg,
-                model=model_id if model_id is not None else cfg.model,
-                api_style=endpoint.api_style,
-                base_url=endpoint.base_url,
-                api_key=endpoint.api_key,
-            )
+    model_id = resolved_model(spec, override=run_on)
+    if model_id is not None:
+        # A lookup, where this used to `replace` four fields of the `Config` and
+        # build from the copy. That copy is why the change happened: a param
+        # nobody remembered to add to it was silently the deployment's own, so
+        # a per-model `max_tokens` would have been dropped without a word. A
+        # profile carries every param, and there is nothing here to forget.
+        try:
+            profile, endpoint = cfg.resolve_model(model_id)
+        except ConfigError as exc:
+            # `resolve_model` knows the model and the catalogue; only here knows
+            # *who asked*. Without the name the reader is told `gpt-5` cannot be
+            # run and left to grep the catalogue for whoever wanted it -- and
+            # this is the one refusal that fires on a file they may not own.
+            msg = f"subagent {spec.name!r}: {exc}"
+            raise ConfigError(msg) from exc
+        refuse_ungranted_endpoint(
+            endpoint.name, granted=endpoints, subject=f"subagent {spec.name!r}"
         )
+        subagent["model"] = build_model(profile, endpoint)
     elif default_model is not None:
         subagent["model"] = default_model
     return subagent

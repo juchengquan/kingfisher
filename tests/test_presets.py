@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import shutil
 from contextlib import contextmanager
+from dataclasses import fields
 
 import pytest
 import yaml
@@ -89,7 +90,7 @@ def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
 
     assert extractor.tools is not None
     assert "write_file" not in extractor.tools  # read-only, as its body claims
-    assert extractor.model
+    assert extractor.builtin_tools is not None
 
 
 @pytest.fixture
@@ -383,22 +384,23 @@ def test_every_complete_definition_in_the_readme_parses(shipped):
         read_subagent(block, _Path("readme.yaml"))
 
 
-def test_only_the_preset_that_runs_elsewhere_names_an_endpoint(shipped):
-    """A pin has to earn its place, and naming the deployment's own default
-    does not: it reads as a decision, behaves as a no-op, and stops the file
-    working for anyone whose default differs.
+def test_no_preset_names_a_model(shipped):
+    """A file inside the wheel cannot portably name a vendor's model id.
 
-    So `second-opinion` names one -- being a different model is its whole
-    purpose -- and the others do not. `extractor` and `profiler` pin `model`
-    alone, which is the cheap-model decision and says nothing about where it
-    runs: both exist to keep bulk reading off the expensive model.
+    `extractor` and `profiler` said `MiniMax-M2.5` and `second-opinion` said
+    `gpt-5`. The catalogue is closed now, so any of those would refuse to start
+    for a deployment whose `models.yaml` lacks the entry -- and before it was
+    closed they were worse, reaching whatever endpoint was configured and
+    failing as a 404 mid-run.
+
+    Which model is cheap *here* is a deployment's answer, not a preset's: the
+    same reason `KINGFISHER_MODEL_SUBAGENT` was deleted for being the wrong
+    granularity. The cost-routing demonstration lives in the README instead.
     """
     specs = load_all(shipped / "subagents")
 
-    assert {name for name, s in specs.items() if s.provider} == {"second-opinion"}
-    assert {name for name, s in specs.items() if s.model} == {
-        "second-opinion", "extractor", "profiler",
-    }
+    assert {name for name, s in specs.items() if s.model} == set()
+    assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 
 # -- the one preset that consults another ---------------------------------
@@ -456,23 +458,18 @@ def test_the_reviewer_preset_still_works_without_its_helper(
 def test_the_reviewer_preset_gets_its_helper_when_granted(
     workspace_with_presets, session_dir
 ):
-    """Needs a second endpoint wired, because `second-opinion` pins one.
+    """No second endpoint needed any more: `second-opinion` ships without a
+    `model:`, so it builds anywhere and runs whatever the deployment runs.
 
-    That is not this test being awkward -- it is the preset working as
-    documented. Granting the helper on a deployment with no OpenAI credentials
-    fails at build time and says so, which is the same refusal a caller would
-    get for naming it directly.
+    Which is the cost of the rule, stated plainly: this test used to need a
+    routed deployment because the preset pinned one, and a preset that pins
+    nothing is a preset that does not do its job until someone gives it a model.
+    Its own comment says so.
     """
-    from dataclasses import replace
 
-    from kingfisher.config import Endpoint
-
-    routed = replace(
-        workspace_with_presets,
-        endpoints={"openai": Endpoint("openai", "https://api.openai.com/v1", "sk-test")},
+    assert "task" in _reviewer_of(
+        workspace_with_presets, session_dir, ("reviewer", "second-opinion")
     )
-
-    assert "task" in _reviewer_of(routed, session_dir, ("reviewer", "second-opinion"))
 
 
 def test_the_readme_run_on_example_is_valid(workspace_with_presets, session_dir):
@@ -493,7 +490,7 @@ def test_the_readme_run_on_example_is_valid(workspace_with_presets, session_dir)
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
-            subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)
+            subagents=("reviewer", "second-opinion"), models=("cheap-model",)
         ),
-        run_on={"second-opinion": RunOn("MiniMax-M2.5", provider="anthropic")},
+        run_on={"second-opinion": RunOn("cheap-model")},
     )
