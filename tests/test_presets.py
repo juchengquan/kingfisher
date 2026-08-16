@@ -10,15 +10,18 @@ from __future__ import annotations
 import shutil
 
 import pytest
+import yaml
 
+from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure import presets
+from kingfisher.infrastructure import presets, skill_store
 from kingfisher.infrastructure.agent import (
     CapabilityError,
     available_skills,
     build_agent,
     registered_tools,
 )
+from kingfisher.infrastructure.definitions import skill_name
 from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.tool_store import load_tools, tool_name
 
@@ -42,6 +45,37 @@ def test_every_preset_subagent_parses(shipped):
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
+
+
+def test_every_preset_skill_parses(shipped):
+    """The mirror of the subagent version, and absent until a probe went looking.
+
+    Seeding a fourth skill preset left the entire suite green, and dropping a
+    shipped one would have too. `test_preset_skills_are_discovered` asserts a
+    *superset*, which is the right shape for that test -- it is about discovery
+    reaching the catalogue -- and the wrong shape for declaring what ships.
+
+    The header's name is checked against the directory because the two are read
+    by different paths: a catalogue skill is found by directory
+    (`skill_store.names`), while an uploaded one is filed under the name in its
+    header (`uploads.skill_name`). A preset whose halves disagree is copied,
+    uploaded, and lands somewhere its author did not mean.
+    """
+    root = shipped / "skills"
+    shipped_skills = skill_store.names(root)
+
+    assert set(shipped_skills) == {"code-review", "release-notes", "tabular-qa"}
+    for name in shipped_skills:
+        text = (root / name / skill.FILENAME).read_text(encoding="utf-8")
+        parts = skill.split(text)
+
+        assert parts is not None, f"{name}: no `---` header"
+        header, body = parts
+        assert skill_name(text) == name  # header and directory agree
+        assert yaml.safe_load(header)["description"].strip()
+        # A real procedure, not a stub. The same threshold the subagent version
+        # uses; the shipped bodies measure 1222-1366 characters.
+        assert len(body.strip()) > 200
 
 
 def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
