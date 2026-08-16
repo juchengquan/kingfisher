@@ -165,11 +165,17 @@ and was deleted for it (above).
 shows `sql_tables  (sql_query.py)`. That tool has always been declared in a file
 named after its sibling, and nothing ever said so.
 
-One thing this does *not* fix, because it is neither new nor ours: importing a
-workspace tool leaves a `__pycache__` beside it, in the workspace. That is
-Python caching a module it was asked to import, it happened to flat presets
-already, and seeding itself carries none -- verified by seeding without building
-an agent.
+Importing a workspace tool used to leave a `__pycache__` beside it, in the
+workspace. That was noted here as neither new nor ours -- it happened to flat
+presets already -- and `main` fixed it independently while this was being built,
+by suppressing bytecode for the length of one `exec_module`.
+
+That fix made the seeder test above pass for the wrong reason: with no bytecode
+ever created in the preset tree, there was none to carry, and the test would
+have held whether the filter existed or not. It now plants the debris itself
+against a fixture tree. The filter still earns its place -- a developer
+importing a preset directly, or a wheel built with bytecode in it, puts the same
+files there by a route this loader never sees.
 
 ## Still undecided
 

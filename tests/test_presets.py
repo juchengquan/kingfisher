@@ -8,6 +8,7 @@ definitions the way an installed kingfisher would.
 from __future__ import annotations
 
 import shutil
+from contextlib import contextmanager
 
 import pytest
 import yaml
@@ -249,24 +250,39 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
     assert seeding.overwritten == ()
 
 
-def test_seeding_never_carries_bytecode_into_a_workspace(cfg):
-    """The guard that only had to hold one level deep until a preset tool
-    could be a package.
+def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypatch):
+    """The guard that only had to hold one level deep until a preset tool could
+    be a package.
 
-    `tools/` holds Python, so importing a preset once -- a test run is enough --
-    leaves a `__pycache__` beside it. That was skipped at the top level and then
-    the directory copy took everything underneath, which was harmless only while
-    a preset tool was always a single file. `csv_profile/` is a package now, so
-    the bytecode sits one level lower than the check was looking.
+    It skipped `__pycache__` among the top-level entries and then copied any
+    directory wholesale, which was safe only while a preset tool was always a
+    single file. A package puts bytecode one level below where the check looked.
 
-    Seeding it would put a `__pycache__` in the operator's workspace and, worse,
-    teach that it belongs there.
+    The debris is planted here rather than waited for. `_import` now suppresses
+    bytecode when it loads a workspace tool, so a test run no longer leaves any
+    in the preset tree -- which would make this pass whether the filter existed
+    or not. Something else can still put it there: a developer importing a
+    preset directly, or a wheel built with it. The seeder must not carry it
+    either way, and a test of that has to create the condition it is about.
     """
-    debris = cfg.tools_dir.parent  # nothing yet; seed creates the catalogue
+    source = tmp_path / "presets"
+    package = source / "tools" / "csv_profile"
+    (package / "__pycache__").mkdir(parents=True)
+    (package / "__init__.py").write_text("TOOLS = []\n", encoding="utf-8")
+    (package / "__pycache__" / "stale.pyc").write_bytes(b"\x00")
+    (source / "tools" / "__pycache__").mkdir(parents=True)
+    (source / "tools" / "__pycache__" / "flat.pyc").write_bytes(b"\x00")
+
+    @contextmanager
+    def _fixture():
+        yield source
+
+    monkeypatch.setattr(presets, "opened", _fixture)
     presets.seed(cfg)
 
-    found = [str(p.relative_to(debris)) for p in cfg.tools_dir.rglob("__pycache__")]
-    assert not found, f"seeding carried bytecode into the workspace: {found}"
+    carried = [str(p.relative_to(cfg.tools_dir)) for p in cfg.tools_dir.rglob("__pycache__")]
+    assert not carried, f"seeding carried bytecode into the workspace: {carried}"
+    assert (cfg.tools_dir / "csv_profile" / "__init__.py").is_file(), "and the package itself"
 
 
 def test_seeding_twice_unchanged_is_silent(cfg):
