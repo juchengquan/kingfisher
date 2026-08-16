@@ -245,9 +245,6 @@ def _backend_for(
     raise ValueError(msg)
 
 
-
-
-
 def workspace_tool_names(
     cfg: Config, *, catalogue: Mapping[str, Path] | None = None
 ) -> tuple[str, ...]:
@@ -311,6 +308,7 @@ def _refuse_unknown_tools(
             msg = f"unknown {here[:-1]}(s): {', '.join(unknown)}; this agent offers {own}"
             raise CapabilityError(msg)
 
+
 def _permitted_tools(
     capabilities: Capabilities,
     *,
@@ -333,35 +331,6 @@ def _permitted_tools(
     granted_builtin = narrowed(capabilities.builtin_tools, by=builtin) or ()
     granted_workspace = narrowed(capabilities.tools, by=workspace) or ()
     return (*granted_builtin, *granted_workspace)
-
-def _with_workspace_tools(
-    cfg: Config, assemble: Callable[[tuple[Any, ...]], CompiledStateGraph]
-) -> CompiledStateGraph:
-    """Assemble the agent, adding whatever tools the workspace defines.
-
-    Assembled twice when there are any, and only then. `tools_by_name` is a
-    dict, so a workspace tool called `read_file` would take the name in silence
-    and the real one would simply stop existing -- the same "quietly different
-    from what you asked for" failure the capability checks refuse elsewhere.
-    The built-in set is a property of an assembled graph and cannot be listed
-    without building one, and ~30ms against a model call of seconds is a cheap
-    price for not guessing at it.
-    """
-    graph = assemble(())
-    workspace_tools = load_tools(cfg.tools_dir)
-    if not workspace_tools:
-        return graph
-
-    builtin = set(registered_tools(graph))
-    shadowed = tuple(sorted(n for t in workspace_tools if (n := tool_name(t)) in builtin))
-    if shadowed:
-        msg = (
-            f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
-            f"the same name; rename them in {cfg.tools_dir}"
-        )
-        raise CapabilityError(msg)
-    return assemble(workspace_tools)
-
 
 
 def _resolve_tools(
@@ -387,6 +356,7 @@ def _resolve_tools(
     workspace = _workspace_tool_names(workspace_tools, builtin=builtin, directory=tools_dir)
     _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
     return _permitted_tools(capabilities, builtin=builtin, workspace=workspace)
+
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # injectable collaborator, and folding them into a parameter object would

@@ -130,7 +130,7 @@ fetched catalogue materialised into a kingfisher-owned directory under
 part that was wrong"* (`presets.py:122`). Once nothing was being copied, the
 concern evaporated. That deleted a third backend route, a third readable root in
 the sandbox profile, extra `_skill_denials`, a union in `available_skills`, and
-a merge in `_with_workspace_tools` that would have reopened tool shadowing.
+a merge in the tool loader that would have reopened tool shadowing.
 
 **"Materialise at construction" narrowed to "resolve at construction."**
 Kingfisher performs no catalogue I/O beyond creating its own derived directories
