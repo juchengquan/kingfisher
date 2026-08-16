@@ -102,6 +102,10 @@ ignore = ["ANN401"]
 "tests/**" = [
     "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
 ]
+# Not a test: a report you run by hand, so printing is its entire output. It
+# lives beside the tests because the AST tooling does -- `test_architecture`
+# reads the same trees -- and pytest does not collect it.
+"tests/audit_duplication.py" = ["T201"]
 # Throwaway probes, kept as a record of what was verified against the live
 # gateway rather than as maintained code.
 "spikes/**" = ["T201", "ANN", "PLC0415"]
