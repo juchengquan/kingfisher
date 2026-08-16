@@ -1,6 +1,6 @@
 """Reading a definition document into the value the domain works with.
 
-`domain.frontmatter` owns what the fields mean; this owns the one step that
+`domain.fields` owns what a field means; this owns the one step that
 needs a library. `yaml.safe_load` sat in the domain until the boundary was made
 deny-by-default — a domain module imports the standard library and
 `kingfisher.domain`, nothing else — and this is where it landed.
@@ -18,7 +18,7 @@ ones are, so a skill that loaded fine could not be uploaded.
 arrive from a catalogue service under `DefinitionStore`, which makes them input
 rather than something we wrote.
 
-Named `definitions` rather than `frontmatter`: one name across two layers makes
+Named `definitions` rather than `fields`: one name across two layers makes
 every import a small act of guessing, which is why `scoping` is not called
 `capabilities` either.
 """
@@ -29,7 +29,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import frontmatter, skill, subagent
+from kingfisher.domain import skill, subagent
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -70,7 +70,7 @@ def _opened(text: str, label: str, error: type[ValueError]) -> tuple[dict[str, o
     type, because `SkillError` and `SubagentError` are not interchangeable to
     someone reading a traceback.
     """
-    parts = frontmatter.split(text)
+    parts = skill.split(text)
     if parts is None:
         msg = f"{label}: expected YAML frontmatter delimited by ---"
         raise error(msg)

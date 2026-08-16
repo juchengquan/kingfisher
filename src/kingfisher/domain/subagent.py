@@ -76,7 +76,7 @@ from difflib import get_close_matches
 from pathlib import Path
 from types import MappingProxyType
 
-from kingfisher.domain import frontmatter
+from kingfisher.domain import fields
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -164,7 +164,7 @@ class SubagentSpec:
     model: str | None = None
 
 
-def _refuse_unknown(fields: Mapping[str, object], source: Path) -> None:
+def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
     """Refuse any field this format does not define, saying why for the ones we
     know about.
 
@@ -173,7 +173,7 @@ def _refuse_unknown(fields: Mapping[str, object], source: Path) -> None:
     someone writes *to restrict a delegate* and which currently does nothing at
     all -- the definition reads tighter than the agent it produces.
     """
-    for key in fields:
+    for key in document:
         if key in KNOWN:
             continue
         if (reason := REFUSED.get(key)) is not None:
@@ -187,7 +187,7 @@ def _refuse_unknown(fields: Mapping[str, object], source: Path) -> None:
         raise SubagentError(msg)
 
 
-def parse(fields: Mapping[str, object], source: Path) -> SubagentSpec:
+def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields.
 
     Raises `SubagentError` on anything the format forbids. Whether the document
@@ -196,29 +196,28 @@ def parse(fields: Mapping[str, object], source: Path) -> SubagentSpec:
     """
     # Before the required-field check, so `nmae:` is reported as the typo it is
     # rather than as a missing `name` the author plainly tried to write.
-    _refuse_unknown(fields, source)
+    _refuse_unknown(document, source)
 
     for required in ("name", "description", "system_prompt"):
         # Absent and blank are different mistakes and read differently in a
         # traceback: "missing" sends someone looking for a line they can see
         # they wrote, which is the wrong hunt.
-        if required not in fields:
+        if required not in document:
             msg = f"{source.name}: missing required field {required!r}"
             raise SubagentError(msg)
-        if not frontmatter.text(fields[required]):
+        if not fields.text(document[required]):
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
     return SubagentSpec(
-        name=frontmatter.text(fields["name"]),
-        description=frontmatter.text(fields["description"]),
-        system_prompt=frontmatter.text(fields["system_prompt"]),
+        name=fields.text(document["name"]),
+        description=fields.text(document["description"]),
+        system_prompt=fields.text(document["system_prompt"]),
         # `[read_file, grep]` and a block list are the same thing to YAML, so
         # both reach here already parsed.
-        tools=frontmatter.names(fields.get("tools")),
-        skills=frontmatter.names(fields.get("skills")),
-
-        middleware=frontmatter.names(fields.get("middleware")),
-        provider=frontmatter.text(fields["provider"]) if fields.get("provider") else None,
-        model=frontmatter.text(fields["model"]) if fields.get("model") else None,
+        tools=fields.names(document.get("tools")),
+        skills=fields.names(document.get("skills")),
+        middleware=fields.names(document.get("middleware")),
+        provider=fields.text(document["provider"]) if document.get("provider") else None,
+        model=fields.text(document["model"]) if document.get("model") else None,
     )

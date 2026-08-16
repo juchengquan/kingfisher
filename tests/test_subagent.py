@@ -73,7 +73,7 @@ def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
     assert load_all(tmp_path / "subagents") == {}
 
 
-def test_load_all_keys_on_the_frontmatter_name_not_the_filename(tmp_path):
+def test_load_all_keys_on_the_declared_name_not_the_filename(tmp_path):
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "misnamed.yaml").write_text(MINIMAL, encoding="utf-8")
@@ -93,10 +93,10 @@ def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
         load_all(tmp_path / "subagents")
 
 
-def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
+def test_folded_and_block_list_fields_are_accepted(tmp_path):
     """Two parsers read one format, and ours was the stricter.
 
-    deepagents reads skill frontmatter with `yaml.safe_load`. A block list is
+    deepagents reads a skill's header with `yaml.safe_load`. A block list is
     the Agent Skills spec's documented form for `allowed-tools`, and a folded
     scalar is how anyone writes a description longer than a line. Rejecting
     them made a skill that loads from the catalogue impossible to upload.
@@ -123,8 +123,8 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
 # -- fields this format does not define ------------------------------------
 
 
-def _definition(*frontmatter_lines: str) -> str:
-    header = "\n".join(("name: reviewer", "description: d", *frontmatter_lines))
+def _definition(*extra_lines: str) -> str:
+    header = "\n".join(("name: reviewer", "description: d", *extra_lines))
     return f"{header}\nsystem_prompt: |\n  You review analyses.\n"
 
 

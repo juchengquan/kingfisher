@@ -12,9 +12,10 @@ unpacked under the name it declares.
 
 from __future__ import annotations
 
+import re
 from collections.abc import Mapping
 
-from kingfisher.domain import frontmatter
+from kingfisher.domain import fields
 
 FILENAME = "SKILL.md"
 DIRECTORY = "skills"
@@ -29,14 +30,14 @@ class SkillError(ValueError):
     """Raised when a skill definition cannot be read."""
 
 
-def name_of(fields: Mapping[str, object], source: str = FILENAME) -> str:
+def name_of(document: Mapping[str, object], source: str = FILENAME) -> str:
     """The skill's declared name, which is also its directory name.
 
     Takes decoded fields rather than the document. Reading YAML needs a
     library, so `infrastructure.definitions` does that half and hands the result
-    here — see `domain.frontmatter` for where the seam falls and why.
+    here — see `domain.fields` for where the seam falls and why.
     """
-    name = frontmatter.text(fields.get("name"))
+    name = fields.text(document.get("name"))
     if not name:
         msg = f"{source}: frontmatter is missing required field 'name'"
         raise SkillError(msg)
@@ -46,3 +47,19 @@ def name_of(fields: Mapping[str, object], source: str = FILENAME) -> str:
         msg = f"{source}: {name!r} is not usable as a directory name"
         raise SkillError(msg)
     return name
+
+
+#: A skill is markdown with a `---` header. Kingfisher does not own that shape
+#: -- deepagents reads it -- but something has to find where the header ends,
+#: and it belongs with the one format that still has one.
+_HEADER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n(.*)\Z", re.DOTALL)
+
+
+def split(text: str) -> tuple[str, str] | None:
+    """The raw header and the body, or `None` if there is no header.
+
+    `None` rather than an exception: what a missing header *means* is the
+    caller's to say, in its own words and its own exception type.
+    """
+    match = _HEADER.match(text)
+    return (match.group(1), match.group(2).strip()) if match else None

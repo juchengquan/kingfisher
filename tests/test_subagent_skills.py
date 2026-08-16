@@ -136,7 +136,7 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch)
 
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
     """A block list is the skill spec's own form, and both reach the domain
-    already parsed now that frontmatter is read as YAML."""
+    already parsed now that a definition is read as YAML."""
     inline = read_subagent(
         "name: r\ndescription: d\nskills: [a, b]\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md"
     )

@@ -53,7 +53,7 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
     Each named something the domain must not import -- the harness, the layers
     above it, `Config` -- and passed for everything nobody had thought of.
     `yaml` was the standing example: a third-party parser sitting in
-    `domain/frontmatter.py`, which no rule mentioned and so no rule caught.
+    `domain/fields.py`, which no rule mentioned and so no rule caught.
 
     Turned around, there is nothing to keep up to date. A domain module may
     import the standard library and `kingfisher.domain`. Anything else is a
