@@ -64,13 +64,13 @@ from uuid import uuid4
 from kingfisher.application import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import Capabilities, withheld
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
 from kingfisher.infrastructure import runtime
-from kingfisher.infrastructure.agent import build_agent
+from kingfisher.infrastructure.agent import build_agent, registered_tools
 from kingfisher.infrastructure.checkpointing import build_checkpointer
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
@@ -115,6 +115,9 @@ class _Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
+    #: Tools this workspace offers that the request did not grant. Also crosses
+    #: rather than stopping: it is a fact about the run, not a refusal.
+    withheld_tools: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -138,7 +141,10 @@ class _Prepared:
 
 
 def opening_events(
-    turn_dir: str, unprotected: tuple[str, ...], placement: Any
+    turn_dir: str,
+    unprotected: tuple[str, ...],
+    placement: Any,
+    withheld_tools: tuple[str, ...] = (),
 ) -> tuple[RunEvent, ...]:
     """What the caller is told before the model is reached.
 
@@ -149,6 +155,16 @@ def opening_events(
     events: list[RunEvent] = []
     if unprotected:
         events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
+    if withheld_tools:
+        # A grant is a whitelist, so it means less than the workspace holds and
+        # says so nowhere. Told here rather than discovered when the model
+        # reaches for one and is refused halfway through a turn.
+        events.append(
+            RunEvent(
+                kind="withheld",
+                text=f"{len(withheld_tools)} tool(s) not granted: {', '.join(withheld_tools)}",
+            )
+        )
     if placement.placed:
         # Replacement is the one dangerous case -- durable data, silently
         # overwritten -- so it is named rather than assumed.
@@ -450,6 +466,10 @@ class Kingfisher:
             graph=graph,
             unprotected=unprotected,
             placement=placement,
+            # Off the assembled graph rather than a list kept somewhere: the
+            # tool surface includes whatever the workspace defined, so the only
+            # honest answer to "what was offered" is what was actually wired.
+            withheld_tools=withheld(allowed.tools, offered=registered_tools(graph)),
         )
 
     def _open_turn(self, admitted: _Admitted) -> _Prepared:
@@ -489,7 +509,12 @@ class Kingfisher:
                 "callbacks": [logger],
                 "recursion_limit": cfg.recursion_limit,
             },
-            events=opening_events(turn.virtual_dir, admitted.unprotected, admitted.placement),
+            events=opening_events(
+                turn.virtual_dir,
+                admitted.unprotected,
+                admitted.placement,
+                admitted.withheld_tools,
+            ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
         )

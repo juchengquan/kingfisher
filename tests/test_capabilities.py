@@ -9,6 +9,7 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
     approved_middleware,
+    withheld,
 )
 
 
@@ -172,3 +173,47 @@ def test_the_refusal_names_the_subject_it_was_asked_about():
         approved_middleware(
             ("ghost",), registered=(), granted=None, subject="subagent 'reviewer'"
         )
+
+
+# -- what a grant leaves out ----------------------------------------------
+#
+# A grant is a whitelist, so it can only mean *less* than the workspace holds,
+# and it said so nowhere. Measured before this existed: a caller wrote
+# "everything except execute" as the other nine names, someone later added a
+# tool, and it was refused with nothing said.
+
+
+def test_an_unrestricted_grant_withholds_nothing():
+    """`None` cannot go stale: it names nothing to go stale."""
+    assert withheld(None, offered=("a", "b")) == ()
+
+
+def test_it_names_what_the_workspace_has_and_the_grant_does_not():
+    assert withheld(("a",), offered=("a", "b", "c")) == ("b", "c")
+
+
+def test_a_grant_of_everything_withholds_nothing():
+    assert withheld(("a", "b"), offered=("a", "b")) == ()
+
+
+def test_an_empty_grant_withholds_all_of_it():
+    """`()` is the opposite of `None` here, as everywhere else in this module."""
+    assert withheld((), offered=("a", "b")) == ("a", "b")
+
+
+def test_a_grant_naming_something_gone_reports_only_what_is_there():
+    """The mirror of `unknown`, and deliberately silent about that case: a name
+    that does not exist is refused at build, which is a louder answer."""
+    assert withheld(("a", "vanished"), offered=("a", "b")) == ("b",)
+
+
+def test_a_grant_written_today_goes_stale_when_a_tool_arrives():
+    """The case that motivated this. The grant does not change; what it means
+    does."""
+    offered_today = ("execute", "ls", "read_file")
+    grant = tuple(n for n in offered_today if n != "execute")  # "everything but the shell"
+
+    assert withheld(grant, offered=offered_today) == ("execute",)
+
+    offered_tomorrow = (*offered_today, "publish_report")
+    assert withheld(grant, offered=offered_tomorrow) == ("execute", "publish_report")
