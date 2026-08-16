@@ -8,6 +8,7 @@ from kingfisher.domain.capabilities import (
     UNRESTRICTED,
     Capabilities,
     CapabilityError,
+    all_but,
     approved_middleware,
     withheld,
 )
@@ -217,3 +218,53 @@ def test_a_grant_written_today_goes_stale_when_a_tool_arrives():
 
     offered_tomorrow = (*offered_today, "publish_report")
     assert withheld(grant, offered=offered_tomorrow) == ("execute", "publish_report")
+
+
+# -- writing a grant by subtraction ---------------------------------------
+#
+# A whitelist cannot say "not the shell", only the other eleven names. This
+# resolves the subtraction against what is offered *now*, so what gets stored
+# and enforced is still a whitelist -- a stored subtraction would be a deny-list
+# and would let tomorrow's new tool through by default.
+
+
+def test_it_is_everything_offered_but_the_named():
+    assert all_but(("b",), offered=("a", "b", "c")) == ("a", "c")
+
+
+def test_excluding_nothing_grants_the_lot():
+    assert all_but((), offered=("a", "b")) == ("a", "b")
+
+
+def test_excluding_everything_grants_none_of_it():
+    """`()` again, arrived at from the other direction."""
+    assert all_but(("a", "b"), offered=("a", "b")) == ()
+
+
+def test_a_name_that_excludes_nothing_is_refused():
+    """`--without-tools exec` is a typo that would otherwise grant everything
+    quietly, which is the mirror of what `Capabilities.unknown` refuses."""
+    with pytest.raises(CapabilityError, match="cannot exclude unknown name"):
+        all_but(("exec",), offered=("execute", "ls"))
+
+
+def test_the_refusal_names_what_is_actually_on_offer():
+    with pytest.raises(CapabilityError, match=r"offers \('execute', 'ls'\)"):
+        all_but(("exec",), offered=("ls", "execute"))
+
+
+def test_it_is_the_same_difference_withheld_computes():
+    """One rule, two directions: `withheld` turns a grant into what it left out,
+    `all_but` turns what to leave out into a grant."""
+    offered = ("a", "b", "c")
+
+    assert all_but(("b",), offered=offered) == withheld(("b",), offered=offered)
+
+
+def test_the_result_is_an_ordinary_grant_that_narrowing_still_clamps():
+    """What it produces is a whitelist like any other, so a deployment's grant
+    still caps it -- subtraction is a way to write one, not a way past one."""
+    asked = Capabilities(tools=all_but(("execute",), offered=("execute", "ls", "read_file")))
+    granted = Capabilities(tools=("ls",))
+
+    assert granted.intersect(asked).tools == ("ls",)

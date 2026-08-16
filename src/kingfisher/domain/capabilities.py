@@ -236,6 +236,39 @@ def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
     return tuple(sorted(name for name in offered if name not in permitted))
 
 
+def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, ...]:
+    """The grant that "everything except these" means, against what is offered now.
+
+    Subtraction is what a caller usually means -- "not the shell", rather than
+    the other eleven names -- and it is the one thing a whitelist cannot say.
+
+    It resolves here rather than being stored, and that is the point. A stored
+    subtraction *is* a deny-list: it lets tomorrow's new tool through by
+    default, which is the wrong way to fail when the new tool is another
+    `execute`. Resolved at the moment it is written, what gets stored and
+    enforced is still an ordinary whitelist, and `withheld` still reports what
+    it left out.
+
+    A name that excludes nothing is refused. `--without-tools exec` is a typo
+    that would otherwise grant everything quietly, which is the failure this
+    area keeps being about -- the mirror of `Capabilities.unknown`, for the
+    other direction.
+
+    The set difference is `withheld`'s, asked the other way round: that one
+    turns a grant into what it leaves out, this one turns what to leave out
+    into a grant. One rule, two directions.
+    """
+    known = set(offered)
+    unknown = tuple(sorted(name for name in excluded if name not in known))
+    if unknown:
+        msg = (
+            f"cannot exclude unknown name(s): {', '.join(unknown)}; "
+            f"this workspace offers {tuple(sorted(known))}"
+        )
+        raise CapabilityError(msg)
+    return withheld(excluded, offered=offered)
+
+
 def approved_middleware(
     declared: Selection,
     *,
