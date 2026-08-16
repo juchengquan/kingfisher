@@ -18,7 +18,9 @@ from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.capabilities import (
+    ALL,
     CapabilityError,
+    Selection,
     approved_middleware,
     narrowed,
 )
@@ -35,8 +37,8 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import SubagentSpec
 
 def subagent_skills(
-    spec: SubagentSpec, available: tuple[str, ...], activated: tuple[str, ...] | None
-) -> tuple[str, ...] | None:
+    spec: SubagentSpec, available: tuple[str, ...], activated: Selection
+) -> Selection:
     """Which skills a delegate is told about, or `None` for none.
 
     Two different refusals, and the difference is the same one `build_agent`
@@ -51,8 +53,10 @@ def subagent_skills(
     copy of one rule. Only the refusal is this function's own -- `narrowed` has
     no opinion about what exists, and should not.
     """
-    if spec.skills is None:
-        return None
+    if spec.skills is None or spec.skills == ALL:
+        # `None` is none, `ALL` is whatever the request itself has -- neither
+        # names anything, so neither can name something the workspace lacks.
+        return narrowed(spec.skills, by=activated)
     unknown = tuple(name for name in spec.skills if name not in available)
     if unknown:
         msg = (
@@ -66,7 +70,7 @@ def subagent_skills(
 def subagent_middleware(
     spec: SubagentSpec,
     registry: Mapping[str, Callable[[], Any]],
-    allowed: tuple[str, ...] | None,
+    allowed: Selection,
 ) -> list[Any]:
     """Build the middleware a definition asked for.
 
@@ -95,10 +99,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     spec: SubagentSpec,
     cfg: Config,
     *,
-    providers: tuple[str, ...] | None = None,
-    tools: tuple[str, ...] | None = None,
+    providers: Selection = ALL,
+    tools: Selection = ALL,
     backend: Any = None,
-    skills: tuple[str, ...] | None = None,
+    skills: Selection = None,
     extra_middleware: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
@@ -128,12 +132,14 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # `execute` handed it straight to any delegate. The ceiling has to be
     # applied here to exist at all; deciding what it *is* does not belong here.
     ceiling = narrowed(spec.tools, by=tools)
-    if ceiling is not None:
-        middleware.append(ToolAllowlist(ceiling))
+    if ceiling != ALL:
+        # `None` is a delegate permitted nothing, which is an empty allowlist
+        # rather than an absent one -- the same split the parent makes.
+        middleware.append(ToolAllowlist(ceiling or ()))
     # A subagent inherits none of its parent's middleware, so an index it is
     # not given is an index it has no idea exists. `SubAgent.skills` would take
     # source *paths*; this selects by name, which is what a definition writes.
-    if skills is not None and backend is not None:
+    if skills is not None and skills != ALL and backend is not None:
         middleware.append(
             ScopedSkills(allowed=skills, backend=backend, sources=SKILLS_SOURCES)
         )

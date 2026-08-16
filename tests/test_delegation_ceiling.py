@@ -14,7 +14,7 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.domain.capabilities import Capabilities, narrowed
+from kingfisher.domain.capabilities import ALL, Capabilities, narrowed
 from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.delegation import as_subagent, subagent_skills
@@ -255,12 +255,16 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
 # one that has not drifted yet is an audit, not a test.
 
 NARROWING = [
-    (None, None, None),          # neither has an opinion
-    (None, ("a",), ("a",)),      # only the cap does
-    (("a",), None, ("a",)),      # only the selection does
-    (("a", "b"), ("b",), ("b",)),  # both do, and the overlap survives
-    (("a",), ("b",), ()),        # both do, and nothing overlaps
-    (("a",), (), ()),            # the cap permits nothing, which is not None
+    (ALL, ALL, ALL),             # neither end names anything
+    (ALL, ("a",), ("a",)),       # only the cap does
+    (("a",), ALL, ("a",)),       # only the selection does
+    (None, ALL, None),           # nothing, narrowed by everything, is nothing
+    (ALL, None, None),           # and the other way round
+    (None, ("a",), None),        # `None` absorbs whatever it meets
+    (("a",), None, None),
+    (("a", "b"), ("b",), ("b",)),  # both name things, the overlap survives
+    (("a",), ("b",), ()),        # both name things, nothing overlaps
+    (("a",), (), ()),            # an empty cap permits nothing, and is not None
     (("b", "a"), ("a", "b"), ("b", "a")),  # the selection's order is kept
 ]
 CASES = pytest.mark.parametrize(("selection", "cap", "expected"), NARROWING)
@@ -282,16 +286,18 @@ def test_a_request_is_narrowed_by_it(selection, cap, expected):
 def test_a_delegate_is_narrowed_by_it(cfg, selection, cap, expected):
     """The level that carried the copy.
 
-    `None` means no allowlist at all rather than an empty one, because an empty
-    tuple would say the opposite -- nothing permitted instead of no opinion.
+    `ALL` means no allowlist at all; `None` means an empty one. They are the
+    two ends and the difference is the whole point of spelling them apart.
     """
     spec = replace(read_subagent(HELPER, Path("helper.md")), tools=selection)
 
     built = as_subagent(spec, cfg, tools=cap)
 
     allowlists = [m for m in built.get("middleware", []) if isinstance(m, ToolAllowlist)]
-    if expected is None:
-        assert allowlists == []
+    if expected == ALL:
+        assert allowlists == []  # no allowlist at all, which is not an empty one
+    elif expected is None:
+        assert allowlists[0]._allowed == set()  # an empty one, which is not absent
     else:
         # It keeps a set, so order is not observable here; the rule test above
         # is where that case is pinned.
@@ -317,11 +323,13 @@ def test_a_delegates_skills_are_narrowed_by_it(selection, cap, expected):
     assert subagent_skills(spec, ("a", "b", "c"), cap) == expected
 
 
-def test_undeclared_skills_mean_none_rather_than_no_opinion():
-    """Where `tools` inherits, `skills` does not, and that asymmetry is older
-    than the shared rule. `narrowed` would hand back the caller's whole index;
-    the early return is what stops it."""
-    spec = replace(read_subagent(HELPER, Path("helper.yaml")), skills=None)
+def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
+    """Where `tools` inherits, `skills` does not. That asymmetry is older than
+    the shared rule, and it is two defaults now rather than two readings of one
+    value -- the reader no longer special-cases either."""
+    parsed = read_subagent(HELPER, Path("helper.yaml"))
 
-    assert subagent_skills(spec, ("a", "b"), ("a", "b")) is None
-    assert narrowed(None, by=("a", "b")) == ("a", "b")  # what it would have done
+    assert parsed.skills is None  # declared none, so none
+    assert parsed.tools == ALL  # declared nothing, so whatever the caller has
+    assert subagent_skills(parsed, ("a", "b"), ("a", "b")) is None
+    assert narrowed(parsed.tools, by=("a", "b")) == ("a", "b")

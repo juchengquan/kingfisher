@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.capabilities import CapabilityError
+from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.domain.subagent import (
     KNOWN,
     REFUSED,
@@ -41,7 +41,7 @@ def test_minimal_definition_parses():
     assert spec.description == "Checks an analysis for arithmetic errors."
     assert spec.system_prompt.startswith("You review analyses.")
     # Unset, not empty: the subagent inherits the parent's tools.
-    assert spec.tools is None
+    assert spec.tools == ALL  # declared nothing, so whatever its caller has
     assert spec.model is None
 
 
@@ -360,7 +360,7 @@ def _spec(provider: str | None = None, model: str | None = None) -> SubagentSpec
 
 
 def test_a_definition_that_pins_neither_runs_where_everything_else_does():
-    assert resolved_endpoint(_spec(), granted=None) == (None, None)
+    assert resolved_endpoint(_spec(), granted=ALL) == (None, None)
 
 
 def test_the_definition_decides():
@@ -371,7 +371,7 @@ def test_the_definition_decides():
     and the half-pair mistake is refused at `parse` instead, where the message
     can name the file. What is left is the grant.
     """
-    assert resolved_endpoint(_spec("openai", "gpt-5"), granted=None) == ("openai", "gpt-5")
+    assert resolved_endpoint(_spec("openai", "gpt-5"), granted=ALL) == ("openai", "gpt-5")
 
 
 def test_an_endpoint_the_request_may_not_use_is_refused():

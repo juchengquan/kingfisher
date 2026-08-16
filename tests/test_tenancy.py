@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher import Kingfisher
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import ALL, UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import UnknownSessionError
 from tests.conftest import StubCheckpointer
@@ -83,8 +83,13 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
 
 
 def test_grants_are_unrestricted_by_default(cfg):
-    """A deployment serving one caller is unaffected by any of this."""
-    assert Kingfisher(cfg, threads=StubCheckpointer()).grants.is_unrestricted
+    """A deployment serving one caller is unaffected by any of this.
+
+    `UNRESTRICTED`, not `Capabilities()`: a grant that said nothing about
+    subagents would clamp away every request that named one, because for a
+    *request* saying nothing means wiring none.
+    """
+    assert Kingfisher(cfg, threads=StubCheckpointer()).grants == UNRESTRICTED
 
 
 def test_an_uploaded_definition_is_added_back_after_clamping(cfg):
@@ -102,8 +107,10 @@ def test_an_uploaded_definition_is_added_back_after_clamping(cfg):
 
 
 def test_including_cannot_widen_an_unrestricted_set(cfg):
-    """Unrestricted already includes them; adding names would narrow it."""
-    assert Capabilities().including(skills=("theirs",)).skills is None
+    """`ALL` already includes them; adding names would narrow it. And `None`
+    asked for none, so an upload is not a way back through that door."""
+    assert Capabilities().including(skills=("theirs",)).skills == ALL
+    assert Capabilities(skills=None).including(skills=("theirs",)).skills is None
 
 
 # -- lifecycle: disposal is asked for -------------------------------------

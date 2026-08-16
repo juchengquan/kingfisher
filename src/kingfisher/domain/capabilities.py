@@ -10,25 +10,38 @@ Names, never definitions. A request activates what the workspace already
 offers; it cannot invent a tool or write a subagent's prompt. That keeps
 definitions reviewable in git and means an untrusted caller can widen nothing.
 
-Unset means "everything this workspace offers"; an empty tuple means none. That
-default is deliberate and its consequence is deliberate too: authorisation is
-not the request's job. A request states intent, and a service decides what a
-given caller may have, by clamping with `intersect` before the request is run.
-Baking fail-closed in here would make callers authorise themselves.
+`"*"` means everything, a list means exactly those, `None` means none. The
+default is `"*"`, and that default is deliberate: authorisation is not the
+request's job. A request states intent, and a service decides what a given
+caller may have, by clamping with `intersect` before the request is run. Baking
+fail-closed in here would make callers authorise themselves.
+
+`None` used to mean "no opinion, so everything", with an empty tuple for none.
+Two things were wrong with it. A JSON caller cannot tell an absent key from a
+null one, and both had to mean "everything" -- the least safe reading of a
+missing field. And narrowing needed a three-state rule at every step, because
+"no opinion" is neither a set nor the absence of one. Spelled `"*"` and `None`,
+the two ends are an ordinary lattice and narrowing is set intersection.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable
 from dataclasses import dataclass
+from typing import Literal
 
-#: `None` means unrestricted; a tuple — including an empty one — is a whitelist.
+#: Everything the workspace offers, whatever that turns out to be. The top of
+#: the lattice: narrowing by it changes nothing, and it does not go stale,
+#: because it names nothing that could.
+ALL: Literal["*"] = "*"
+
+#: `"*"` is everything, a tuple is exactly those names, `None` is nothing.
 #:
-#: The declared contract is tuples, and consumers can rely on that. `__post_init__`
-#: is nonetheless lenient about what it will normalise, because a service
-#: deserialising JSON hands us lists; that leniency is a backstop, not the
-#: contract, so a caller holding a list should convert at its own edge.
-Selection = tuple[str, ...] | None
+#: The declared contract is `ALL` or a tuple, and consumers can rely on that.
+#: `__post_init__` is nonetheless lenient about what it will normalise, because
+#: a service deserialising JSON hands us lists; that leniency is a backstop, not
+#: the contract, so a caller holding a list should convert at its own edge.
+Selection = Literal["*"] | tuple[str, ...] | None
 
 
 class CapabilityError(ValueError):
@@ -40,9 +53,19 @@ class CapabilityError(ValueError):
     """
 
 
-def _normalise(value: Iterable[str] | None) -> Selection:
+def _normalise(value: object) -> Selection:
     if value is None:
         return None
+    if value == ALL:
+        return ALL
+    if isinstance(value, str):
+        # A bare string is a caller meaning one name, or a typo for `ALL`.
+        # Either way, silently iterating its characters is the worst answer.
+        msg = f"a selection is {ALL!r}, a list of names, or None -- got {value!r}"
+        raise CapabilityError(msg)
+    if not isinstance(value, Iterable):
+        msg = f"a selection is {ALL!r}, a list of names, or None -- got {value!r}"
+        raise CapabilityError(msg)
     return tuple(dict.fromkeys(str(v) for v in value))  # de-duped, order kept
 
 
@@ -51,13 +74,14 @@ class Capabilities:
     """What one request may use, out of what the deployment has wired.
 
         Capabilities()                                  # everything configured
-        Capabilities(tools=())                          # no tools at all
+        Capabilities(tools=None)                        # no tools at all
         Capabilities(tools=("read_file", "glob"))       # read-only
         Capabilities(memory=False)                      # do not read the memory file
 
-    Four of these name things and one is a switch, because memory has no names
-    to choose between -- it is one file, either mounted or not. `None` still
-    means "no opinion" for all five, which is what keeps the default free.
+    Five of these name things and one is a switch, because memory has no names
+    to choose between -- it is one file, either mounted or not. The switch keeps
+    its own three states: `None` there is still "no opinion", because a bool has
+    no `"*"` to be the top of.
 
     This is the *narrowing* axis. The other one is `Config.memory_enabled` and
     `Config.skills_enabled`: what this deployment wired at all. Those shape the
@@ -66,16 +90,22 @@ class Capabilities:
     memory a deployment never wired does not conjure it.
     """
 
-    tools: Selection = None
-    skills: Selection = None
+    tools: Selection = ALL
+    skills: Selection = ALL
+    #: `None`, alone among these, and it is not an inconsistency in the model --
+    #: it is the one axis whose default differs from the others, for a reason
+    #: the model can now state. Wiring a subagent compiles a whole graph, at a
+    #: measured 4.3ms each, so a workspace with eight of them would charge every
+    #: unrestricted turn ~34ms for delegates it may never call. `"*"` here means
+    #: every subagent defined, and a request that wants them says so.
     subagents: Selection = None
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike the three above it is never widened by `including` -- see there.
-    middleware: Selection = None
+    middleware: Selection = ALL
     #: Endpoints a definition may name. Granted like `middleware` and for a
     #: stronger reason: this one decides which credentials are used and which
     #: endpoint receives the run's prompts and files.
-    providers: Selection = None
+    providers: Selection = ALL
     memory: bool | None = None
 
     def __post_init__(self) -> None:
@@ -84,15 +114,15 @@ class Capabilities:
 
     @property
     def is_unrestricted(self) -> bool:
-        """True when nothing is narrowed, so the agent can be built as configured."""
-        return (
-            self.tools is None
-            and self.skills is None
-            and self.subagents is None
-            and self.middleware is None
-            and self.providers is None
-            and self.memory is None
-        )
+        """True when nothing is narrowed, so the agent can be built as configured.
+
+        Compared against the defaults rather than field by field, because the
+        defaults are no longer one value: `subagents` starts at `None` and the
+        rest at `ALL`. Written out, this would be a list to keep in step with
+        the fields above -- and a new field added without a matching line here
+        would silently count as "narrowing nothing".
+        """
+        return self == Capabilities()
 
     def including(
         self, *, skills: tuple[str, ...] = (), subagents: tuple[str, ...] = ()
@@ -119,14 +149,14 @@ class Capabilities:
         stake: it chooses which endpoint receives the run's prompts and files,
         and whose credentials pay for them.
 
-        Unrestricted stays unrestricted: it already includes these.
+        `ALL` stays `ALL`: it already includes these. `None` stays `None` -- a
+        request that asked for no skills at all did not ask for its own either,
+        and an upload is not a way to reopen a door the caller shut.
         """
         return Capabilities(
             tools=self.tools,
-            skills=self.skills if self.skills is None else (*self.skills, *skills),
-            subagents=(
-                self.subagents if self.subagents is None else (*self.subagents, *subagents)
-            ),
+            skills=_widened(self.skills, skills),
+            subagents=_widened(self.subagents, subagents),
             middleware=self.middleware,  # never widened; see above
             providers=self.providers,  # nor this: it chooses where prompts go
             memory=self.memory,
@@ -140,9 +170,10 @@ class Capabilities:
 
             granted.intersect(request.capabilities)
 
-        Unrestricted on either side means "no opinion", so the other side wins;
-        where both name things, only the overlap survives. Because it can only
-        remove, a caller cannot escalate by asking for more.
+        `ALL` on either side is the identity, so the other side wins; where both
+        name things, only the overlap survives; `None` on either side wins
+        outright. Because it can only remove, a caller cannot escalate by asking
+        for more.
         """
         return Capabilities(
             tools=narrowed(other.tools, by=self.tools),
@@ -168,7 +199,8 @@ class Capabilities:
             (self.skills, skills, "skill"),
             (self.subagents, subagents, "subagent"),
         ):
-            if requested is None:
+            # Neither end names anything, so neither can name something wrong.
+            if requested is None or requested == ALL:
                 continue
             known = set(available)
             missing.extend(f"{label}:{name}" for name in requested if name not in known)
@@ -204,12 +236,26 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
     comparing them -- one convention away from a delegate quietly getting more
     than the request that summoned it.
     """
-    if selection is None:
+    if selection is None or by is None:
+        return None  # nothing, narrowed by anything at all, is still nothing
+    if selection == ALL:
         return by
-    if by is None:
+    if by == ALL:
         return selection
     allowed = set(by)
     return tuple(name for name in selection if name in allowed)
+
+
+def _widened(selection: Selection, extra: tuple[str, ...]) -> Selection:
+    """`selection` plus names the caller brought with it -- see `including`.
+
+    The two ends are left alone for opposite reasons. `ALL` already has them.
+    `None` asked for none, and an upload is not a way back through a door the
+    request itself closed.
+    """
+    if selection is None or selection == ALL:
+        return selection
+    return (*selection, *extra)
 
 
 def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
@@ -227,11 +273,13 @@ def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
     tool through by default, which is the worse of the two when the new tool is
     another `execute`. So the whitelist stays and the silence goes.
 
-    `None` withholds nothing: it is the unrestricted grant, and it does not go
-    stale because it names nothing to go stale.
+    `ALL` withholds nothing, and does not go stale, because it names nothing
+    that could. `None` withholds everything, which is the whole of what it says.
     """
-    if granted is None:
+    if granted == ALL:
         return ()
+    if granted is None:
+        return tuple(sorted(offered))
     permitted = set(granted)
     return tuple(sorted(name for name in offered if name not in permitted))
 
@@ -295,6 +343,12 @@ def approved_middleware(
     `SubagentSpec.middleware` are both name lists. Turning an approved name
     into an object needs the registry, and that is the caller's half.
     """
+    if declared is None:
+        return ()
+    if declared == ALL:
+        # Everything registered *and* granted -- a definition that asks for the
+        # deployment's middleware still cannot reach past what the request holds.
+        return tuple(n for n in registered if granted == ALL or n in (granted or ()))
     if not declared:
         return ()
 
@@ -307,8 +361,9 @@ def approved_middleware(
         )
         raise CapabilityError(msg)
 
-    if granted is not None:
-        permitted = set(granted)
+    if granted != ALL:
+        # `None` permits nothing, so everything declared is ungranted.
+        permitted = set(granted or ())
         ungranted = tuple(name for name in declared if name not in permitted)
         if ungranted:
             msg = (
@@ -320,5 +375,15 @@ def approved_middleware(
     return tuple(declared)
 
 
-#: No restriction at all — the default a bare `run("do a thing")` gets.
-UNRESTRICTED = Capabilities()
+#: Permits everything, which is not the same as the default a request gets.
+#:
+#: One type serves two jobs -- what a request *asks for*, and what a deployment
+#: *permits* -- and `subagents` is where they part. A request that says nothing
+#: should wire no delegates, because each one compiles a graph it may never use.
+#: A deployment that says nothing should permit all of them, or the first
+#: request to name one is clamped to nothing by a grant nobody wrote.
+#:
+#: So `Capabilities()` is the request default and this is the grant default, and
+#: the difference is one field. It was found by a test: a request naming a
+#: subagent was silently narrowed away by `Capabilities().intersect(...)`.
+UNRESTRICTED = Capabilities(subagents=ALL)

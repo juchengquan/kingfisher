@@ -5,6 +5,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.capabilities import (
+    ALL,
     UNRESTRICTED,
     Capabilities,
     CapabilityError,
@@ -14,15 +15,19 @@ from kingfisher.domain.capabilities import (
 )
 
 
-def test_unset_means_everything_and_empty_means_none():
-    """The distinction the whole default rests on: omitting a field is not the
-    same as asking for none of it."""
-    assert Capabilities().tools is None
+def test_the_two_ends_are_all_and_none():
+    """`ALL` and `None` are opposite ends, and the default is one of them --
+    per field, because `subagents` starts at the other."""
+    assert Capabilities().tools == ALL
+    assert Capabilities().subagents is None  # a delegate is wired when asked for
     assert Capabilities().is_unrestricted
 
-    none_at_all = Capabilities(tools=())
-    assert none_at_all.tools == ()
+    none_at_all = Capabilities(tools=None)
+    assert none_at_all.tools is None
     assert not none_at_all.is_unrestricted
+
+    empty = Capabilities(tools=())
+    assert empty.tools == ()  # still a whitelist, just an empty one
 
 
 def test_names_are_de_duplicated_but_keep_their_order():
@@ -42,12 +47,12 @@ def test_intersect_never_widens():
 
 
 def test_unrestricted_on_either_side_defers_to_the_other():
-    """Unrestricted means 'no opinion', not 'everything wins'."""
+    """`ALL` is the identity of narrowing, so the other side wins."""
     granted = Capabilities(tools=("read_file",))
 
     assert UNRESTRICTED.intersect(granted).tools == ("read_file",)
     assert granted.intersect(UNRESTRICTED).tools == ("read_file",)
-    assert UNRESTRICTED.intersect(UNRESTRICTED).is_unrestricted
+    assert UNRESTRICTED.intersect(UNRESTRICTED).tools == ALL
 
 
 def test_intersect_of_an_empty_grant_yields_nothing():
@@ -56,13 +61,13 @@ def test_intersect_of_an_empty_grant_yields_nothing():
 
 
 def test_intersect_handles_each_dimension_independently():
-    granted = Capabilities(tools=("read_file",), skills=("tabular-qa",))
+    granted = Capabilities(tools=("read_file",), skills=("tabular-qa",), subagents=ALL)
     asked = Capabilities(tools=("read_file", "execute"), subagents=("reviewer",))
 
     narrowed = granted.intersect(asked)
     assert narrowed.tools == ("read_file",)
-    assert narrowed.skills == ("tabular-qa",)  # asked had no opinion
-    assert narrowed.subagents == ("reviewer",)  # granted had no opinion
+    assert narrowed.skills == ("tabular-qa",)  # the request named nothing, so ALL
+    assert narrowed.subagents == ("reviewer",)  # the grant named nothing, so ALL
 
 
 def test_unknown_reports_what_the_workspace_cannot_offer():
@@ -152,18 +157,23 @@ def test_a_registered_name_that_was_not_granted_is_refused():
         )
 
 
-def test_no_grant_at_all_means_no_opinion():
-    """`None` is unrestricted, exactly as everywhere else in this module."""
+def test_granting_everything_lets_a_declaration_through():
+    """`ALL` is unrestricted, exactly as everywhere else in this module."""
     approved = approved_middleware(
-        ("audit",), registered=("audit",), granted=None, subject="x"
+        ("audit",), registered=("audit",), granted=ALL, subject="x"
     )
 
     assert approved == ("audit",)
 
 
+def test_granting_nothing_refuses_a_declaration():
+    """`None` is the other end, and it permits nothing at all."""
+    with pytest.raises(CapabilityError, match="may not use: audit"):
+        approved_middleware(("audit",), registered=("audit",), granted=None, subject="x")
+
+
 def test_an_empty_grant_permits_nothing():
-    """And is the opposite of `None`, which is the distinction the whole
-    default rests on."""
+    """`()` and `None` agree here; `ALL` is what differs."""
     with pytest.raises(CapabilityError, match="may not use: audit"):
         approved_middleware(("audit",), registered=("audit",), granted=(), subject="x")
 
@@ -185,8 +195,12 @@ def test_the_refusal_names_the_subject_it_was_asked_about():
 
 
 def test_an_unrestricted_grant_withholds_nothing():
-    """`None` cannot go stale: it names nothing to go stale."""
-    assert withheld(None, offered=("a", "b")) == ()
+    """`ALL` cannot go stale: it names nothing to go stale."""
+    assert withheld(ALL, offered=("a", "b")) == ()
+
+
+def test_a_grant_of_nothing_withholds_everything():
+    assert withheld(None, offered=("a", "b")) == ("a", "b")
 
 
 def test_it_names_what_the_workspace_has_and_the_grant_does_not():

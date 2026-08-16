@@ -30,7 +30,7 @@ from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
@@ -175,17 +175,23 @@ def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
     from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
 
     granted = capabilities.tools
+    # `None` here is the library's "no allowlist", which is our `ALL`. A request
+    # that granted no tools gets an empty list, which is the opposite and has to
+    # stay distinguishable from it.
+    ptc: list[Any] | None = (
+        None if granted == ALL else [t for t in (granted or ()) if t != TASK_TOOL]
+    )
     return CodeInterpreterMiddleware(
         # `task` is refused here by the library: it is always the top-level
         # `task()` global, and routing it through `tools.*` as well would give
         # two dispatch paths, the second losing `responseSchema`. Delegation is
         # governed by `subagents=` below instead.
-        ptc=[t for t in granted if t != TASK_TOOL] if granted is not None else None,
+        ptc=ptc,
         # Dispatch from code follows the same grant as dispatch from a tool
         # call. Left at its default this would let a request that withheld
         # `task` delegate anyway, from inside the sandbox -- a hole of exactly
         # the shape the delegate ceiling exists to close.
-        subagents=granted is None or TASK_TOOL in granted,
+        subagents=granted == ALL or TASK_TOOL in (granted or ()),
         mode="thread",
         timeout=float(cfg.timeout_s),
     )
@@ -297,8 +303,10 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         permissions.append(MEMORY_IS_DENIED)
 
     if cfg.skills_enabled:
-        if capabilities.skills is None:
+        if capabilities.skills == ALL:
             extras["skills"] = SKILLS_SOURCES
+        elif capabilities.skills is None:
+            pass  # none: no index, and no deny rules to write for one
         else:
             available = available_skills(cfg, session_dir)
             unknown = tuple(s for s in capabilities.skills if s not in available)
@@ -319,7 +327,10 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
 
     if capabilities.subagents is not None:
         defined = defined_subagents(cfg, session_dir)
-        unknown = tuple(n for n in capabilities.subagents if n not in defined)
+        # `ALL` is every subagent the workspace defines, resolved here because
+        # here is where "what it defines" is known.
+        activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
+        unknown = tuple(n for n in activated if n not in defined)
         if unknown:
             msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
             raise CapabilityError(msg)
@@ -337,14 +348,15 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                     defined[n], registry, capabilities.middleware
                 ),
             )
-            for n in capabilities.subagents
+            for n in activated
         ]
 
     if cfg.interpreter_enabled:
         middleware.append(_interpreter(cfg, capabilities))
 
-    if capabilities.tools is not None:
-        middleware.append(ToolAllowlist(capabilities.tools))
+    if capabilities.tools != ALL:
+        granted_tools = capabilities.tools or ()
+        middleware.append(ToolAllowlist(granted_tools))
         # deepagents supplies a `general-purpose` delegate with "the same
         # capabilities as the main agent" and none of our middleware, present
         # whenever `task` is. Supplying one by the same name *replaces* it --
@@ -355,7 +367,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         # there is no reason to reinvent either.
         supplied = list(extras.get("subagents", ()))
         supplied.append(
-            {**GENERAL_PURPOSE_SUBAGENT, "middleware": [ToolAllowlist(capabilities.tools)]}
+            {**GENERAL_PURPOSE_SUBAGENT, "middleware": [ToolAllowlist(granted_tools)]}
         )
         extras["subagents"] = supplied
         # Backstop. Only these names are reachable, so a delegate deepagents
@@ -382,7 +394,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # otherwise narrow the allowlist in silence -- the same "quietly less than
     # you asked for" failure that skills and subagents already refuse.
     if (
-        capabilities.tools is not None
+        capabilities.tools not in (ALL, None)
         and (known := registered_tools(graph))
         and (unknown := tuple(t for t in capabilities.tools if t not in known))
     ):

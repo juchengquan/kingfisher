@@ -64,7 +64,7 @@ from uuid import uuid4
 from kingfisher.application import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
-from kingfisher.domain.capabilities import Capabilities, withheld
+from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities, withheld
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.retention import SweepResult
@@ -155,13 +155,24 @@ def _withheld_by_kind(
     comes from, and none of the three is knowable without asking the thing that
     assembled the agent -- which is why a grant goes stale in the first place.
     """
+    default = Capabilities()
     offered = (
-        ("tool", registered_tools(graph), allowed.tools),
-        ("skill", available_skills(cfg, session_dir), allowed.skills),
-        ("subagent", tuple(defined_subagents(cfg, session_dir)), allowed.subagents),
+        ("tool", "tools", registered_tools(graph)),
+        ("skill", "skills", available_skills(cfg, session_dir)),
+        ("subagent", "subagents", tuple(defined_subagents(cfg, session_dir))),
     )
-    found = ((what, withheld(granted, offered=names)) for what, names, granted in offered)
-    return tuple((what, names) for what, names in found if names)
+    found = []
+    for what, field, names in offered:
+        granted = getattr(allowed, field)
+        # Silent when the request left an axis alone. `subagents` defaults to
+        # none, so reporting every axis at its default would put a line about
+        # undeclared delegates on every run -- which is the noise this event
+        # exists to avoid being.
+        if granted == getattr(default, field):
+            continue
+        if left_out := withheld(granted, offered=names):
+            found.append((what, left_out))
+    return tuple(found)
 
 
 def opening_events(
@@ -302,7 +313,7 @@ class Kingfisher:
         # Unrestricted by default, so a single-caller deployment is unaffected;
         # a service in front of many callers sets it, and `intersect` can only
         # subtract, so no request can widen past it.
-        self.grants: Capabilities = grants or Capabilities()
+        self.grants: Capabilities = grants if grants is not None else UNRESTRICTED
         # What a definition may name in its `middleware:` field. Empty by
         # default, so any such line fails loudly until a deployment wires one --
         # kingfisher cannot define these, only a deployment knows what its
