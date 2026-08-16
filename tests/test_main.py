@@ -12,8 +12,12 @@ from __future__ import annotations
 import io
 from pathlib import Path
 
+import pytest
+
 import main
+from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
+from kingfisher.infrastructure import agent as main_agent_module
 
 
 def _render(events: list[RunEvent]) -> tuple[str, RunResult | None]:
@@ -219,3 +223,78 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     # `ensure_layout` still makes the workspace directory, so the place to put
     # one is obvious. What must not happen is a preset landing in it.
     assert names(relocated.workspace / "tools") == ()
+
+
+# -- --without-tools and friends ------------------------------------------
+
+
+def _args(**kwargs):
+    import argparse
+
+    base = dict.fromkeys(
+        ("tools", "skills", "subagents", "without_tools", "without_skills", "without_subagents")
+    )
+    return argparse.Namespace(**{**base, **kwargs})
+
+
+def test_no_flags_leaves_every_kind_unrestricted(cfg):
+    """`None` per kind, not an enumerated list of everything: an enumeration
+    would go stale the moment the workspace gained a tool."""
+    assert main._grants(cfg, _args()) == {"tools": None, "skills": None, "subagents": None}
+
+
+def test_a_subtraction_becomes_the_enumerated_rest(cfg):
+    from kingfisher.infrastructure import presets
+
+    presets.seed(cfg)
+
+    tools = main._grants(cfg, _args(without_tools="execute,delete"))["tools"]
+
+    assert tools is not None
+    assert "execute" not in tools
+    assert "delete" not in tools
+    assert "http_fetch" in tools  # a workspace tool, so it had to be built to be seen
+    assert main._grants(cfg, _args(without_tools="execute"))["skills"] is None
+
+
+def test_subtracting_skills_and_subagents_too(cfg):
+    from kingfisher.infrastructure import presets
+
+    presets.seed(cfg)
+
+    grants = main._grants(cfg, _args(without_skills="tabular-qa", without_subagents="extractor"))
+
+    assert grants["skills"] == ("code-review", "release-notes")
+    assert grants["subagents"] == ("reviewer",)
+    assert grants["tools"] is None
+
+
+def test_naming_both_forms_of_one_kind_is_refused(cfg):
+    """Two ways to say the same thing; whichever precedence we picked, the
+    other reading is the one somebody meant."""
+    with pytest.raises(ValueError, match="not both: --tools and --without-tools"):
+        main._grants(cfg, _args(tools="ls", without_tools="execute"))
+
+
+def test_a_typo_in_a_subtraction_is_refused(cfg):
+    with pytest.raises(CapabilityError, match="cannot exclude unknown name"):
+        main._grants(cfg, _args(without_tools="exec"))
+
+
+def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
+    """Resolving needs to know what is offered, which needs an assembled agent.
+    A run that does not subtract should not pay for one."""
+    builds = []
+    real = main_agent_module.build_agent
+
+    def counted(*args, **kwargs):
+        builds.append(1)
+        return real(*args, **kwargs)
+
+    monkeypatch.setattr(main_agent_module, "build_agent", counted)
+
+    main._grants(cfg, _args(tools="ls"))
+    assert builds == []
+
+    main._grants(cfg, _args(without_tools="execute"))
+    assert len(builds) == 1

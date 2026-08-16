@@ -37,6 +37,18 @@ Omitting one means "everything this workspace offers"; passing it with an empty
 value means none. Naming something that does not exist is an error, not a
 silently narrower run -- `--list` shows the valid names.
 
+    uv run main.py "Review it" --without-tools execute,delete
+
+`--without-tools` and its two siblings say the same thing by subtraction, which
+is usually what you mean: "not the shell" rather than the other eleven names.
+It resolves against what the workspace offers *now* and stores the result, so a
+grant written this way is an ordinary list and behaves like one -- including
+going stale if the workspace later gains a tool. That is deliberate: a grant
+that kept subtracting would let a future tool through by default, and a run
+says which names it left out either way.
+
+Pass one form or the other for a given kind, not both.
+
 `--no-checks` skips the verification, not the analysis: the run costs the same.
 It exists so a smoke run can be watched without a non-zero exit breaking
 whatever is driving it.
@@ -77,6 +89,7 @@ from evals.task import SMOKE_TASK
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
 from kingfisher.config import Config
+from kingfisher.domain.capabilities import CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement, presets, skill_store
@@ -283,6 +296,11 @@ def build_parser() -> argparse.ArgumentParser:
             metavar="A,B",
             help=f"activate only these {name} (empty string for none)",
         )
+        parser.add_argument(
+            f"--without-{name}",
+            metavar="A,B",
+            help=f"activate every {name[:-1]} except these",
+        )
     parser.add_argument(
         "--no-memory",
         action="store_true",
@@ -295,6 +313,62 @@ def build_parser() -> argparse.ArgumentParser:
         help="copy the definitions kingfisher ships into the workspace",
     )
     return parser
+
+
+def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
+    """What this workspace offers right now, per kind.
+
+    Built rather than listed, for the reason `--list` builds too: the tool
+    surface includes whatever the workspace defined, so the only honest answer
+    is an assembled agent. Rooted at a throwaway directory so answering "what
+    is on offer" does not leave a session behind for `keep_runs` to reap.
+
+    Only called when a `--without-*` flag asked, so a run that does not
+    subtract pays nothing for this.
+    """
+    from kingfisher.infrastructure.agent import (  # noqa: PLC0415
+        available_skills,
+        build_agent,
+        defined_subagents,
+        registered_tools,
+    )
+
+    with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
+        root = Path(scratch)
+        return {
+            "tools": registered_tools(build_agent(cfg, session_dir=root)),
+            "skills": available_skills(cfg, root),
+            "subagents": tuple(defined_subagents(cfg, root)),
+        }
+
+
+def _grants(cfg: Config, args: argparse.Namespace) -> dict[str, tuple[str, ...] | None]:
+    """Each grant, whether it was written as a list or as a subtraction.
+
+    `--tools` and `--without-tools` are two ways to say the same thing, so
+    passing both is refused rather than resolved: whichever precedence we chose,
+    the other reading is the one somebody meant.
+    """
+    chosen: dict[str, tuple[str, ...] | None] = {}
+    excluded = {
+        kind: _selection(getattr(args, f"without_{kind}"))
+        for kind in ("tools", "skills", "subagents")
+    }
+    both = [k for k in excluded if getattr(args, k) is not None and excluded[k] is not None]
+    if both:
+        names = ", ".join(f"--{k} and --without-{k}" for k in both)
+        msg = f"pass one or the other, not both: {names}"
+        raise ValueError(msg)
+
+    offered = _offered(cfg) if any(v is not None for v in excluded.values()) else {}
+    for kind in ("tools", "skills", "subagents"):
+        leave_out = excluded[kind]
+        chosen[kind] = (
+            _selection(getattr(args, kind))
+            if leave_out is None
+            else all_but(leave_out, offered=offered[kind])
+        )
+    return chosen
 
 
 def main(argv: list[str]) -> int:
@@ -338,10 +412,14 @@ def main(argv: list[str]) -> int:
         for seeded in prepare_smoke(cfg, workspace, session_id):
             print(f"seeded sample {seeded}")
 
+    try:
+        selected = _grants(cfg, args)
+    except (CapabilityError, ValueError) as exc:
+        print(f"{exc}", file=sys.stderr)
+        return 2
+
     capabilities = Capabilities(
-        tools=_selection(args.tools),
-        skills=_selection(args.skills),
-        subagents=_selection(args.subagents),
+        **selected,
         # None, not False, when the flag is absent: "no opinion" is what keeps
         # an unrestricted request unrestricted.
         memory=False if args.no_memory else None,
@@ -381,7 +459,6 @@ def main(argv: list[str]) -> int:
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
     from kingfisher import stream  # noqa: PLC0415
-    from kingfisher.domain.capabilities import CapabilityError  # noqa: PLC0415
 
     result = None
     try:
