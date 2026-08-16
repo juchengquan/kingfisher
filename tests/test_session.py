@@ -150,3 +150,41 @@ def test_discard_will_not_report_success_without_a_way_to_delete(workspace, dirs
         session.discard()  # ty: ignore[missing-argument]
 
     assert session.directory.is_dir()
+
+
+def test_the_shell_form_of_a_run_directory_is_the_virtual_one_without_its_slash(workspace, dirs):
+    """The shell starts in the session root, which is what virtual `/` names,
+    so the two forms differ by exactly one character. Asserted against the real
+    `Turn` because `test_service` drives a hand-written double, and a double
+    that drifts is how the message and the filesystem come to disagree.
+    """
+    session = Session.open(workspace, "s1", dirs)
+    turn = session.allocate_turn(dirs)
+
+    assert turn.shell_dir == turn.virtual_dir.lstrip("/")
+    assert not turn.shell_dir.startswith("/")
+    assert (session.directory / turn.shell_dir) == turn.directory
+
+
+def test_the_turn_message_names_both_forms(workspace, dirs):
+    """Measured over ten runs of one task: told only the virtual path, the agent
+    passed it to `execute` 4 times in 10. Each failed with `No such file or
+    directory` and cost roughly three times the whole task to recover -- +5.2
+    model calls, +19s, +56k input tokens. The 6 that used the shell form first
+    never failed once.
+    """
+    from kingfisher.application.service import turn_message
+
+    session = Session.open(workspace, "s1", dirs)
+    turn = session.allocate_turn(dirs)
+
+    message = turn_message("count the rows", turn, (), has_inputs=False)
+
+    assert turn.virtual_dir in message
+    # Not a plain `in`: the virtual path *contains* the shell form as a
+    # substring, so that assertion passed even with the shell form removed.
+    # Caught by mutation-testing this test rather than by reading it.
+    without_virtual = message.replace(turn.virtual_dir, "")
+    assert turn.shell_dir in without_virtual, (
+        f"the shell form is only present as part of {turn.virtual_dir!r}"
+    )

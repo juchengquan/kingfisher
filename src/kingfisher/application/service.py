@@ -222,9 +222,16 @@ def turn_message(task: str, turn: Any, placed: tuple[str, ...], has_inputs: bool
         if has_inputs
         else ""
     )
+    # Both names for the one directory. `system.md` states the rule -- drop the
+    # leading slash for the shell -- and stating it there was not enough: over
+    # ten runs of one task the agent passed the virtual path to `execute` 4
+    # times, each failing and costing roughly three times the whole task to
+    # recover. The 6 that used the shell form first never failed. This line is
+    # already per-turn, so unlike the system prompt it costs no cache to say.
     return (
         f"{task}\n\n"
-        f"Your run directory for this task is {turn.virtual_dir}.{supplied}{arrived}"
+        f"Your run directory for this task is {turn.virtual_dir} "
+        f"(from the shell, {turn.shell_dir}).{supplied}{arrived}"
     )
 
 

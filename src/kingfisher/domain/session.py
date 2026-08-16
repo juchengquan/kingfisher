@@ -63,6 +63,20 @@ class Turn:
         return f"/runs/{self.id}"
 
     @property
+    def shell_dir(self) -> str:
+        """The same directory as `execute` addresses it.
+
+        The shell starts in the session root, which is what virtual `/` names,
+        so this is `virtual_dir` without its leading slash. Trivial, and worth
+        a name because the agent has to be *told*: measured over ten runs of one
+        task, it passed the virtual path to the shell 4 times out of 10. Every
+        one of those failed with `No such file or directory` and cost about
+        three times the whole task -- +5.2 model calls, +19s, +56k input tokens
+        -- to recover from. The 6 that started with this form never failed once.
+        """
+        return self.virtual_dir.lstrip("/")
+
+    @property
     def input_dir(self) -> Path:
         """Files supplied with this request. Never `/data`: they arrive fresh
         each round and leave with the turn."""
