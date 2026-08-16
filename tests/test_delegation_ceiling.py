@@ -333,3 +333,83 @@ def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
     assert parsed.tools == ALL  # declared nothing, so whatever the caller has
     assert subagent_skills(parsed, ("a", "b"), ("a", "b")) is None
     assert narrowed(parsed.tools, by=("a", "b")) == ("a", "b")
+
+
+def _built_with(cfg, session_dir, capabilities) -> dict:
+    """The arguments `create_deep_agent` was handed, letting the call through.
+
+    `conftest.capture_build` does this with a monkeypatch fixture; these two
+    want it without one, and letting the call happen still matters -- it is
+    what makes deepagents validate the spec we supply.
+    """
+    import kingfisher.infrastructure.agent as agent_module
+
+    seen: dict = {}
+    real = agent_module.create_deep_agent
+
+    def spy(**kwargs):
+        seen.update(kwargs)
+        return real(**kwargs)
+
+    agent_module.create_deep_agent = spy
+    try:
+        build_agent(
+            _with_helper(cfg),
+            session_dir=session_dir,
+            model=_model(),
+            capabilities=capabilities,
+        )
+    finally:
+        agent_module.create_deep_agent = real
+    return seen
+
+
+def test_the_builtin_delegate_gets_exactly_the_main_agents_tools(cfg, session_dir):
+    """deepagents ships it described to the model as having "access to all tools
+    as the main agent", and that description is handed straight through.
+
+    The sentence is true only because of the ceiling attached here, and only if
+    the two sets are *equal*. Broader makes it a lie in the dangerous direction
+    -- delegation as a way past a restriction, which is the escape this file is
+    about. Narrower makes it a lie in the confusing one: the model delegates on
+    the strength of it and is refused mid-task.
+
+    Equality rather than "the delegate is restricted", because a test for
+    restriction passes for a ceiling that is merely *different*.
+    """
+    seen = _built_with(cfg, session_dir, Capabilities(builtin_tools=("read_file", "task")))
+
+    (parent,) = [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
+    (builtin,) = [s for s in seen["subagents"] if s["name"] == "general-purpose"]
+    (delegate,) = [m for m in builtin["middleware"] if isinstance(m, ToolAllowlist)]
+
+    assert parent._allowed == delegate._allowed == {"read_file", "task"}
+
+
+def test_the_builtin_delegate_is_supplied_exactly_once(cfg, session_dir):
+    """Supplying the spec is the only hook there is.
+
+    deepagents builds this delegate itself and takes no middleware for it --
+    `GeneralPurposeSubagentProfile` offers `enabled`, `description` and
+    `system_prompt`, and nothing else. An explicit spec by the same name is the
+    documented override, and it is what carries the ceiling: measured, removing
+    it lets a request granted only `read_file` and `task` run `execute` through
+    the delegate.
+
+    Once, not twice: deepagents skips adding its own when the caller supplied
+    one, so a second would mean it stopped honouring that and the unrestricted
+    version was back alongside ours.
+    """
+    seen = _built_with(cfg, session_dir, Capabilities(builtin_tools=("read_file", "task")))
+
+    names = [s["name"] for s in seen["subagents"]]
+    assert names.count("general-purpose") == 1
+
+
+def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session_dir):
+    """Nothing was narrowed, so the delegate having everything the main agent
+    has is what deepagents would have done anyway."""
+    seen = _built_with(cfg, session_dir, Capabilities())
+
+    assert not [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
+    assert not [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
