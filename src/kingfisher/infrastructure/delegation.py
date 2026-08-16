@@ -16,6 +16,7 @@ from __future__ import annotations
 
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
+from urllib.parse import urlsplit
 
 from deepagents.middleware import SubAgentMiddleware
 
@@ -203,6 +204,52 @@ def subagent_middleware(
         subject=f"subagent {spec.name!r}",
     )
     return [registry[name]() for name in approved]
+
+
+def _host(url: str) -> str:
+    """The host a base URL points at, which is what "somewhere else" means.
+
+    Compared rather than the style name, because the names are kingfisher's and
+    the destination is not: a deployment is free to fill `OPENAI_BASE_URL` with
+    a gateway that also serves the `anthropic` style, and then `provider:
+    openai` reads as "somewhere else" while being the same machine.
+    """
+    return urlsplit(url).netloc
+
+
+def indistinct(
+    spec: SubagentSpec, cfg: Config, *, provider: str | None, model: str | None
+) -> str | None:
+    """Why this delegate is not running anywhere different, or `None`.
+
+    Reported, never refused. Kingfisher cannot know that a delegate *needs* to
+    differ -- `reviewer` deliberately runs on the deployment's own model, and
+    that is the right choice for it. Only a definition that asked to be
+    elsewhere can be disappointed, so only those are checked.
+
+    Which is also why silence is the failure worth catching here. A delegate
+    that ends up beside the agent it was meant to check still builds, still
+    answers, and the answer is worth nothing -- there is no error to notice and
+    nothing in the output that looks wrong.
+
+    Two ways to arrive there, and they read differently enough to say apart:
+    the endpoint named turns out to be the same machine, or the model named
+    turns out to be the same model.
+    """
+    if not (spec.provider or spec.model):
+        return None  # it never asked to be anywhere in particular
+
+    default = _host(cfg.base_url)
+    if provider is not None and _host(cfg.endpoint_for(provider).base_url) == default:
+        return (
+            f"names endpoint {provider!r}, which points at the same host as "
+            f"the default ({default})"
+        )
+    if (model or cfg.model) == cfg.model and _host(
+        cfg.endpoint_for(provider).base_url
+    ) == default:
+        return f"runs {cfg.model!r}, the same model as the main agent"
+    return None
 
 
 def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may

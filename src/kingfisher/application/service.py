@@ -83,6 +83,7 @@ from kingfisher.infrastructure.agent import (
     available_skills,
     build_agent,
     defined_subagents,
+    indistinct_delegates,
     registered_tools,
     workspace_tool_names,
 )
@@ -148,6 +149,10 @@ class _Admitted:
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
     #: withheld name is a fact about the run, not a refusal.
     withheld: tuple[tuple[str, tuple[str, ...]], ...] = ()
+    #: `(name, why)` for each delegate that asked to run elsewhere and did not.
+    #: A fact about the run, like `withheld` -- nothing is wrong enough to stop
+    #: for, and nothing else would ever say it.
+    indistinct: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -221,6 +226,7 @@ def opening_events(
     unprotected: tuple[str, ...],
     placement: Any,
     withheld: tuple[tuple[str, tuple[str, ...]], ...] = (),
+    indistinct: tuple[tuple[str, str], ...] = (),
 ) -> tuple[RunEvent, ...]:
     """What the caller is told before the model is reached.
 
@@ -242,6 +248,11 @@ def opening_events(
                 text=f"{len(names)} {what}(s) not granted: {', '.join(names)}",
             )
         )
+    # A delegate that meant to run elsewhere and did not. Said here because
+    # nothing later will: it builds, it answers, and an answer from the model
+    # it was supposed to be checking looks exactly like a good one.
+    for name, why in indistinct:
+        events.append(RunEvent(kind="indistinct", text=f"{name} {why}", agent=name))
     if placement.placed:
         # Replacement is the one dangerous case -- durable data, silently
         # overwritten -- so it is named rather than assumed.
@@ -814,6 +825,13 @@ class Kingfisher:
             # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
             # an admit already measured at 15-46ms.
             withheld=_withheld_by_kind(allowed, cfg, session.directory, graph, self.catalogue),
+            indistinct=indistinct_delegates(
+                cfg,
+                allowed,
+                session.directory,
+                catalogue=self.catalogue,
+                run_on=request.run_on,
+            ),
         )
 
     def _open_turn(self, admitted: _Admitted) -> _Prepared:
@@ -859,6 +877,7 @@ class Kingfisher:
                 admitted.unprotected,
                 admitted.placement,
                 admitted.withheld,
+                admitted.indistinct,
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
