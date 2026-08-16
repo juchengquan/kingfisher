@@ -2,18 +2,27 @@
 
 Deliberately the same shape as a skill — YAML frontmatter and a markdown body —
 so a contributor who has written one does not need to learn a second mechanism.
-`name` and `description` are required, `tools` and `model` are optional, and
-the body *is* the system prompt. `tools` selects from what the parent agent
-already has, by name; how that selection is enforced is the adapter's problem,
-not this format's.
+`name` and `description` are required, `tools`, `skills` and `model` are
+optional, and the body *is* the system prompt. Both `tools` and `skills` select
+by name from what the parent agent already has; how that selection is enforced
+is the adapter's problem, not this format's.
 
     ---
     name: reviewer
     description: Checks an analysis for arithmetic errors and unsupported claims.
     tools: [read_file, glob, grep]
+    skills: [tabular-qa]
     model: MiniMax-M2.5
     ---
     You review analyses...
+
+**Omitting `tools` inherits the parent's; omitting `skills` grants none.** The
+asymmetry is deliberate. Tools are what a delegate needs to *act* and it can do
+nothing without them, so inheriting is the useful default. Skills are what it
+needs to *know*, and the body below is already its procedure — a delegate that
+needed the whole index would not have been worth defining. Handing it over also
+costs: the listing is injected into the delegate's prompt, measured at ~464
+tokens for three skills and growing with the catalogue.
 
 The optional `model` is where per-role cost routing lands naturally: reading
 heavy delegation on a cheap model, synthesis on the expensive one.
@@ -47,6 +56,12 @@ class SubagentSpec:
     description: str
     system_prompt: str
     tools: tuple[str, ...] | None = None
+    #: Skills this delegate is told about. `None` means *none*, which is not
+    #: what `tools` means, and the difference is deliberate: tools are what a
+    #: delegate needs to act, skills are what it needs to know -- and its body
+    #: already is its procedure. Inheriting the caller's index would also put
+    #: it in a context whose narrowness is the reason to delegate at all.
+    skills: tuple[str, ...] | None = None
     model: str | None = None
 
 
@@ -83,5 +98,6 @@ def parse(text: str, source: Path) -> SubagentSpec:
         # `[read_file, grep]` and a block list are the same thing to YAML, so
         # both reach here already parsed.
         tools=frontmatter.names(fields.get("tools")),
+        skills=frontmatter.names(fields.get("skills")),
         model=frontmatter.text(fields["model"]) if fields.get("model") else None,
     )
