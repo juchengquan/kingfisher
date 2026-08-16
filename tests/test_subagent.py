@@ -428,3 +428,70 @@ def test_an_operators_provider_is_clamped_like_the_definitions():
             provider_override="openai",
             granted=("anthropic",),
         )
+
+
+# -- metadata --------------------------------------------------------------
+
+
+def test_metadata_is_carried_verbatim(tmp_path):
+    """Kingfisher does not interpret it. Whatever YAML made of the mapping is
+    what a middleware factory will be handed."""
+    definition = (
+        "name: reviewer\ndescription: d\n"
+        "metadata:\n  tier: gold\n  retries: 3\n  tags: [a, b]\n"
+        "system_prompt: |\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert spec.metadata == {"tier": "gold", "retries": 3, "tags": ["a", "b"]}
+
+
+def test_metadata_defaults_to_empty(tmp_path):
+    """Absent is the common case, and an empty mapping saves every reader a
+    `None` check for a field that means "nothing extra"."""
+    spec = read_subagent(MINIMAL, tmp_path / "reviewer.yaml")
+
+    assert spec.metadata == {}
+
+
+@pytest.mark.parametrize("written", ["metadata: gold", "metadata: [a, b]", "metadata: 3"])
+def test_metadata_must_be_a_mapping(tmp_path, written):
+    """A bag with no shape cannot be looked up by key, which is the only thing
+    anyone will do with it."""
+    definition = f"name: reviewer\ndescription: d\n{written}\nsystem_prompt: |\n  You review.\n"
+
+    with pytest.raises(SubagentError, match="metadata"):
+        read_subagent(definition, tmp_path / "reviewer.yaml")
+
+
+def test_empty_metadata_is_allowed(tmp_path):
+    """`metadata:` with nothing under it is not the same mistake as a blank
+    required field -- it is a caller who has none, spelled out."""
+    definition = "name: reviewer\ndescription: d\nmetadata:\nsystem_prompt: |\n  You review.\n"
+
+    assert read_subagent(definition, tmp_path / "reviewer.yaml").metadata == {}
+
+
+def test_metadata_survives_loading_the_catalogue(tmp_path):
+    """The only consumer there is. A deployment reads its own keys by loading
+    the directory itself -- no seam into a run, and none needed.
+    """
+    directory = tmp_path / "subagents"
+    directory.mkdir()
+    (directory / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: d\n"
+        "metadata:\n  owner: platform-team\n"
+        "system_prompt: |\n  You review.\n",
+        encoding="utf-8",
+    )
+    (directory / "namer.yaml").write_text(
+        "name: namer\ndescription: d\nsystem_prompt: |\n  One word.\n", encoding="utf-8"
+    )
+
+    owners = {
+        name: spec.metadata.get("owner", "unowned")
+        for name, spec in load_all(directory).items()
+    }
+
+    assert owners == {"reviewer": "platform-team", "namer": "unowned"}

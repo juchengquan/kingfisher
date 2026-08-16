@@ -56,11 +56,18 @@ definition read tighter than the agent it produced. Fields deepagents knows and
 this format deliberately declines are named individually with the reason, since
 a generic "unknown field" reads as an omission worth working around.
 
-There is deliberately no escape hatch for a caller's own keys. One was designed
--- a `metadata:` mapping, carried and never interpreted -- and held back until
-something can read it: a field that cannot influence a run is worse than no
-field, because it looks like configuration. Middleware factories take no
-arguments today, so nothing could.
+`metadata` is the one field this format has no opinion about: a mapping of the
+caller's own keys, carried and never interpreted.
+
+**Nothing in a run reads it, and that is deliberate.** It is for whatever loads
+the catalogue -- a deployment script deciding which definitions to install, an
+ownership report, a linter -- all of which call `subagent_store.load_all` and
+read `spec.metadata` without kingfisher's help. Wiring it into the run would
+mean choosing a consumer, and the obvious candidate (handing it to a middleware
+factory) changes a published constructor argument for a use nobody has yet.
+
+So the field exists and the seam does not. That way round is recoverable: a
+consumer can be added later without changing what a definition may say.
 
 Parsing lives in the domain because this is kingfisher's format, not a library's
 — nothing here knows deepagents exists, and nothing here reads a disk. Finding
@@ -71,7 +78,7 @@ the files is `infrastructure.subagent_store`; translating a spec into deepagents
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from difflib import get_close_matches
 from pathlib import Path
 from types import MappingProxyType
@@ -101,6 +108,7 @@ KNOWN: frozenset[str] = frozenset(
         "middleware",
         "provider",
         "model",
+        "metadata",
     }
 )
 
@@ -163,6 +171,36 @@ class SubagentSpec:
     #: and whose credentials pay, which is why it is granted rather than free.
     provider: str | None = None
     model: str | None = None
+    #: The caller's own keys, carried and never interpreted. Kingfisher reads
+    #: nothing here and never will: the moment it did, this would be a field
+    #: with rules, and the point of it is to be the one place a definition can
+    #: say something this format has no opinion about.
+    #:
+    #: Read by whatever loads the catalogue, not by the run -- see the module
+    #: docstring for why the seam into a turn was left unbuilt.
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
+def _metadata(document: Mapping[str, object], source: Path) -> Mapping[str, object]:
+    """The caller's own keys, if it brought any.
+
+    A mapping or nothing. `metadata: gold` is refused rather than wrapped,
+    because a bag with no shape cannot be looked up by key and looking up a key
+    is the only thing anyone will do with it.
+
+    Absent and empty both become `{}`, which saves every reader a `None` check
+    for a field whose whole meaning is "nothing extra".
+    """
+    raw = document.get("metadata")
+    if raw is None:
+        return {}
+    if not isinstance(raw, Mapping):
+        msg = (
+            f"{source.name}: metadata must be a mapping of your own keys, "
+            f"got {type(raw).__name__}"
+        )
+        raise SubagentError(msg)
+    return dict(raw)
 
 
 def _explain(key: str) -> str:
@@ -233,6 +271,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         # thing for these two -- run where everything else does.
         provider=fields.text(document.get("provider")) or None,
         model=fields.text(document.get("model")) or None,
+        metadata=_metadata(document, source),
     )
 
 

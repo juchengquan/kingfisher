@@ -145,6 +145,7 @@ needed.
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `provider` | optional | Which endpoint it runs against, by style. Moves together with `model` |
 | `model` | optional | Must be a model your gateway serves. This is where per-role cost routing goes |
+| `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 Two reasons to reach for one, one example each:
 
@@ -206,6 +207,37 @@ system_prompt: |2           # ✅ first line indented deeper than the rest
       ls -la /data          #    plain `|` cannot read this, and says so
   Then report.
 ```
+
+### Your own keys
+
+Everything above is a field this format defines. `metadata:` is the one place a
+definition can say something kingfisher has no opinion about:
+
+```yaml
+metadata:
+  tier: gold
+  owner: platform-team
+```
+
+It must be a mapping — a bag with no shape cannot be looked up by key, and
+looking up a key is the only thing anyone does with it. Kingfisher carries it
+and reads nothing.
+
+**Nothing in a run reads it.** It is for whatever loads the catalogue — a
+deployment script choosing which definitions to install, an ownership report, a
+check that every delegate names a team:
+
+```python
+from kingfisher.infrastructure.subagent_store import load_all
+
+for spec in load_all(cfg.subagents_dir).values():
+    print(spec.name, spec.metadata.get("owner", "unowned"))
+```
+
+Handing it to the agent would mean picking a consumer, and the obvious one —
+passing the definition to a middleware factory — changes a published argument
+for a use nobody has yet. The field is easy to add a consumer to later; a
+changed constructor is not easy to take back.
 
 ### Lists, and fields that are not here
 
