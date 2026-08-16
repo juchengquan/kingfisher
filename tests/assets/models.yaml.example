@@ -1,0 +1,138 @@
+# Where kingfisher sends prompts, and what it runs there.
+#
+# Required. There is no default and no fallback: a default would silently pick a
+# destination nobody chose the first time kingfisher is pointed somewhere new,
+# and a fallback would make "file absent" look exactly like "file found",
+# including when KINGFISHER_MODELS_FILE points at the wrong path.
+#
+# Defaults to <workspace>/models.yaml; move it with KINGFISHER_MODELS_FILE.
+# Point several deployments at one file and they share a reviewed catalogue
+# instead of each keeping a copy nobody can audit centrally -- which is why no
+# credential appears below. Keys are named, not written, so this file belongs in
+# version control and in code review. It says where your prompts go.
+
+# --- endpoints: where traffic can go ----------------------------------------
+#
+# `api` picks a wire format from the closed set kingfisher ships. It is not a
+# name you invent -- adding one needs a LangChain chat class and a kingfisher
+# release, which is why it is not open data like the rest of this file:
+#
+#   anthropic  Anthropic's wire format. This is the gateway path; MiniMax and
+#              anything else imitating it goes here.
+#   openai     OpenAI proper, on the Responses API (/v1/responses). NOT a
+#              general OpenAI-compatible client -- gateways do not implement
+#              that endpoint, so point them at the anthropic api instead.
+#
+# `base_url` is written here rather than read from a variable, because it is
+# topology and not a secret -- and because two gateways speaking one wire format
+# could not both be described by a single conventional variable name. That was
+# the old KINGFISHER_API_STYLE's hard limit: one endpoint per wire format,
+# forever. Several entries may share an `api`, which is the point.
+#
+# `key_env` names the variable holding the key. An endpoint whose variable is
+# unset is dropped with a warning and its models go with it, so one file works
+# across a fleet whose machines hold different subsets of the keys.
+endpoints:
+  minimax:
+    api: anthropic
+    base_url: https://api.minimaxi.com/anthropic
+    key_env: MINIMAX_API_KEY
+
+  # A second endpoint on the *same* wire format -- impossible before this file
+  # existed. Uncomment if you run one.
+  # vllm:
+  #   api: anthropic
+  #   base_url: http://localhost:8000
+  #   key_env: VLLM_API_KEY
+
+  openai:
+    api: openai
+    base_url: https://api.openai.com/v1
+    key_env: OPENAI_API_KEY
+
+# --- default: what runs when nothing says otherwise -------------------------
+#
+# Must name an entry under `models:` below, and one whose endpoint has its key
+# on this machine. Startup refuses a deployment where it does not, and says
+# which of the two went wrong.
+default: MiniMax-M3
+
+# --- models: what can run, and how ------------------------------------------
+#
+# The key is the model id sent on the wire. This table is **closed**: a name
+# absent from it is refused rather than passed through to an endpoint that has
+# never heard of it.
+#
+# Every param is optional. Omitted means the kwarg is *not passed at all*, not
+# passed as a default kingfisher chose -- `temperature` above all, where a
+# default would silently change what your deployment already does. The two
+# exceptions have real defaults, because a missing token ceiling behaves
+# differently per vendor and a model timeout has nowhere else to fall back to:
+#
+#   max_tokens   default 4096
+#   timeout_s    default 120. Bounds silence, not total generation: kingfisher
+#                streams, and the read clock resets on every chunk.
+#   temperature  unset
+#   top_p        unset
+#   extra        forwarded as kwargs, for settings peculiar to one endpoint.
+#                Additive only -- it may not name any of the above.
+#
+# A key this format does not define is refused, not ignored. `max_token:`
+# singular would otherwise parse, be dropped, and hand back the default with no
+# error anywhere.
+models:
+  MiniMax-M3:
+    endpoint: minimax
+    max_tokens: 4096
+
+  # Several models behind one gateway is the ordinary case, and the reason
+  # endpoints and models are separate tables: move the gateway and you edit one
+  # line, not one per model.
+  MiniMax-M2.5:
+    endpoint: minimax
+    max_tokens: 2048
+    timeout_s: 60
+
+  gpt-5:
+    endpoint: openai
+    max_tokens: 32000
+    extra:
+      reasoning_effort: high
+
+# --- aliases: general names for models this deployment chose ----------------
+#
+# A second namespace, kept apart from `models:` on purpose -- a definition
+# writes `model:` or `alias:` and never one meaning the other, so nobody has to
+# know which keys of a single table are wire ids and which stand for them.
+#
+# It exists because a definition can know what *kind* of model it needs and not
+# know its name. That is true of every definition kingfisher ships: `extractor`
+# wants a cheap model, `second-opinion` wants one unlike the main agent's, and
+# neither can spell that as a vendor's model id without refusing to start
+# everywhere else. So they name a kind, and you say what it is.
+#
+# The names are yours; these two are what the presets reference. An alias a
+# definition names and you have not bound **refuses the build** rather than
+# falling back to the default -- handing `second-opinion` the very model it
+# exists not to be is the answer nobody asked for, and nothing in the output
+# would look wrong. It fires only when a request activates that delegate.
+aliases:
+  cheap: MiniMax-M2.5
+  alternate: gpt-5
+
+# --- pointing a delegate at one of these ------------------------------------
+#
+# A subagent names a model from this table, or an alias from the one above:
+#
+#     # subagents/extractor.yaml
+#     alias: cheap            # your catalogue says which model that is
+#     model: MiniMax-M2.5     # or name one outright -- never both
+#
+# The endpoint follows from the model, so there is no second line to keep in
+# step with it. A name this table does not define is refused at startup, naming
+# the file that asked for it.
+#
+# This is where cost routing lives: reading-heavy delegation on a cheap model,
+# the second opinion somewhere else entirely. The presets ship without `model:`
+# lines because a file inside the wheel cannot portably name a vendor's model
+# id -- see presets/README.md.
