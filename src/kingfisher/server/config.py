@@ -1,6 +1,6 @@
 """What the server needs, kept out of what the library needs.
 
-`Config` is the library's — workspace, model, timeouts, retention. A bind
+`Config` is the library's — workspace, models, timeouts, retention. A bind
 address is none of its business, and putting one there is where the split
 between the two would blur first: `Config` is passed to `Kingfisher`, and a
 field on it reads as something a turn might consult.

@@ -99,9 +99,10 @@ models behind a single gateway, repeating `base_url` and `key_env` on each row.
 Move the gateway, miss a row, and traffic keeps going to the old URL with the
 old key — the failure `endpoint_for` already refuses to be quiet about.
 
-Two tables also land on types that exist. `Endpoint(api_style, base_url, api_key)`
-(`config.py:36`) *is* the first table, and `Config.endpoints` is already the
-mapping. The second is not new either: `resolved_endpoint` already returns a
+Two tables also land on types that exist. `Endpoint` *is* the first table --
+it was `Endpoint(api_style, base_url, api_key)` and becomes
+`Endpoint(api, base_url, api_key)`, the same record with the conflated field
+split -- and `Config.endpoints` is already the mapping. The second is not new either: `resolved_endpoint` already returns a
 `(provider, model)` pair — a profile with the params missing, written inline in
 each subagent file.
 
@@ -178,7 +179,9 @@ is the crude case, through `indistinct`, which now sees aliases too.
 ### `build_model` takes a profile, not a `Config`
 
 `Config` drops `model`, `api_style`, `base_url`, `api_key` and `max_tokens`, and
-gains `models: Mapping[str, ModelProfile]` plus the default name.
+gains the catalogue. Four fields at first -- `models`, `endpoints`,
+`default_model`, `aliases` -- and then one, once it was clear they were a record
+rather than four siblings. See *The catalogue is a type* below.
 
 Keeping the `Config` signature would reintroduce the defect this exists to
 remove. `Config.max_tokens` would mean "the default model's ceiling" while the
@@ -393,7 +396,7 @@ catalogue-wide refusal fires before the override can apply.
 So it stays per-delegate, at `as_subagent`, after the override has resolved.
 Seeding a preset you cannot run costs nothing until you activate it, which is
 what `presets/README.md` already documented. The refusal is wrapped there to
-name the delegate: `resolve_model` knows the model and the catalogue but not who
+name the delegate: `Models.resolve` knows the model and the catalogue but not who
 asked, and this is the one refusal that fires on a file the reader may not own.
 
 The error names the **variable**, not the endpoint. "endpoint `minimax` has no
@@ -449,6 +452,41 @@ model name and endpoint, but take the *deployment's* params, which is what
 `replace(cfg, model=…, base_url=…, api_key=…)` did. That failed **2 tests, both
 of them the new guards, and nothing else** — so the bug had no coverage before
 and the coverage it has now is targeted rather than incidental.
+
+## The catalogue is a type
+
+`Config` reached 22 fields, five of them one thing -- `models`, `endpoints`,
+`default_model`, `aliases`, `models_file` -- plus the only two methods that read
+them. A `Config` is a flat bag a deployment fills in, which is the wrong shape
+for a cluster with invariants between its parts: the default is a key of
+`models`, every alias binds a key of `models`, every profile's `endpoint` is a
+key of `endpoints`. None of that was sayable while they were siblings of
+`shell_sandbox`.
+
+So they become `Models`, and `Config.models` holds one. `cfg.resolve_model()`
+becomes `cfg.models.resolve()`; `cfg.default_model` becomes `cfg.models.default`.
+`model_catalogue.load` returns the record rather than a four-tuple.
+
+The same move `Catalogue` made, for the reasons its own docstring gives -- a
+file that is deliberately relocatable and shared, addressed by name everywhere,
+so a type is what makes `.defualt` an error before the code runs. Not named by
+analogy with it, though: `Catalogue` holds three paths and deliberately does not
+read them, and this holds parsed records that refer to each other. It stays in
+`config.py` for the reason `catalogue_roots` returns a mapping rather than a
+`Catalogue` -- that file sits above the layers and imports none of them, and
+nothing this record does needs one.
+
+**`Endpoint` lost its `name`; `ModelProfile` kept its `model`.** Both duplicated
+their mapping key, and the two looked like one cleanup until they were tried.
+Every reader of `endpoint.name` already held the profile beside it, and
+`ModelProfile.endpoint` *is* that name -- written on the side that needs it,
+since a model is what reaches an endpoint -- so the field said nothing new.
+A profile's model id is recoverable from nothing: `build_model` takes a profile
+and an endpoint and must know what to send, so dropping it would make `resolve`
+return a third element solely to carry the name back. It stays, and gets the
+guard the removal made unnecessary for `Endpoint`: `Models` refuses a mapping
+whose key and `model` disagree, which is the drift the duplication actually
+risked.
 
 ## Corrections
 
