@@ -77,6 +77,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
+from kingfisher.domain.capabilities import CapabilityError, Selection
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -233,3 +234,48 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         provider=fields.text(document.get("provider")) or None,
         model=fields.text(document.get("model")) or None,
     )
+
+
+def resolved_endpoint(
+    spec: SubagentSpec,
+    *,
+    model_override: str | None,
+    provider_override: str | None,
+    granted: Selection,
+) -> tuple[str | None, str | None]:
+    """Which endpoint and model a delegate runs as, or refuse to choose.
+
+    They move together. Overriding only the model, against a definition that
+    pins `provider: openai`, would send a MiniMax model name to OpenAI -- a 404
+    if you are lucky and a wrong-model run if you are not. Which endpoint runs
+    which model should not be settled by two people who cannot see each other's
+    half, so a half-override against a pinned provider is refused.
+
+    An operator who overrides both has said what they mean and wins, which is
+    the point of the override existing at all.
+
+    A rule, and it takes the two values it needs rather than the `Config` they
+    came from. `Config` holds base_url, api_key and timeout_s, none of which
+    this decides anything about, and the domain does not read deployment
+    configuration -- `test_domain_imports_only_the_standard_library_and_itself`
+    holds it to that. Reading `role_models[SUBAGENT_ROLE]` is the caller's job;
+    knowing that the pair is atomic is this one's.
+    """
+    if model_override is not None and provider_override is None and spec.provider is not None:
+        msg = (
+            f"subagent {spec.name!r} pins provider {spec.provider!r}, but an operator "
+            f"overrode only its model; set KINGFISHER_PROVIDER_SUBAGENT too, or neither"
+        )
+        raise CapabilityError(msg)
+
+    provider = provider_override if provider_override is not None else spec.provider
+    model = model_override if model_override is not None else spec.model
+
+    if provider is not None and granted is not None and provider not in granted:
+        msg = (
+            f"subagent {spec.name!r} names endpoint {provider!r}, which this request "
+            f"may not use; permitted {granted}"
+        )
+        raise CapabilityError(msg)
+
+    return provider, model

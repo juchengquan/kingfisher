@@ -6,7 +6,14 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.subagent import KNOWN, REFUSED, SubagentError, SubagentSpec
+from kingfisher.domain.capabilities import CapabilityError
+from kingfisher.domain.subagent import (
+    KNOWN,
+    REFUSED,
+    SubagentError,
+    SubagentSpec,
+    resolved_endpoint,
+)
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 from kingfisher.infrastructure.subagent_store import load_all
 
@@ -335,3 +342,89 @@ def test_the_description_may_still_be_folded(tmp_path):
     spec = read_subagent(definition, tmp_path / "reviewer.yaml")
 
     assert spec.description == "Checks an analysis for arithmetic errors, one claim at a time."
+
+
+# -- where a delegate runs ------------------------------------------------
+#
+# The rule used to sit in `infrastructure.delegation` and take a whole `Config`
+# to read two values out of. It takes the two values now, so it is reachable
+# without a deployment -- which is the same "a domain rule that needs a value
+# takes the value" that `test_domain_imports_only_the_standard_library_and_itself`
+# already enforces for the record itself.
+
+
+def _spec(provider: str | None = None, model: str | None = None) -> SubagentSpec:
+    return SubagentSpec(
+        name="reviewer", description="d", system_prompt="Go.", provider=provider, model=model
+    )
+
+
+def test_a_definition_that_pins_neither_runs_where_everything_else_does():
+    assert resolved_endpoint(
+        _spec(), model_override=None, provider_override=None, granted=None
+    ) == (None, None)
+
+
+def test_the_definition_wins_when_no_operator_spoke():
+    assert resolved_endpoint(
+        _spec("openai", "gpt-5"), model_override=None, provider_override=None, granted=None
+    ) == ("openai", "gpt-5")
+
+
+def test_an_operator_overriding_both_wins():
+    """The point of the override existing at all."""
+    assert resolved_endpoint(
+        _spec("openai", "gpt-5"),
+        model_override="MiniMax-M2.5",
+        provider_override="anthropic",
+        granted=None,
+    ) == ("anthropic", "MiniMax-M2.5")
+
+
+def test_overriding_only_the_model_against_a_pinned_provider_is_refused():
+    """A MiniMax model name sent to OpenAI is a 404 if you are lucky and a
+    wrong-model run if you are not."""
+    with pytest.raises(CapabilityError, match="overrode only its model"):
+        resolved_endpoint(
+            _spec("openai", "gpt-5"),
+            model_override="CHEAP",
+            provider_override=None,
+            granted=None,
+        )
+
+
+def test_overriding_only_the_model_is_fine_when_nothing_is_pinned():
+    """The refusal is about a mismatch, not about overriding."""
+    assert resolved_endpoint(
+        _spec(model="EXPENSIVE"),
+        model_override="CHEAP",
+        provider_override=None,
+        granted=None,
+    ) == (None, "CHEAP")
+
+
+def test_an_endpoint_the_request_may_not_use_is_refused():
+    with pytest.raises(CapabilityError, match="may not use"):
+        resolved_endpoint(
+            _spec("openai"), model_override=None, provider_override=None, granted=()
+        )
+
+
+def test_a_granted_endpoint_goes_through():
+    assert resolved_endpoint(
+        _spec("openai", "gpt-5"),
+        model_override=None,
+        provider_override=None,
+        granted=("openai",),
+    ) == ("openai", "gpt-5")
+
+
+def test_an_operators_provider_is_clamped_like_the_definitions():
+    """An override is an operator's decision, not an exemption from the grant."""
+    with pytest.raises(CapabilityError, match="may not use"):
+        resolved_endpoint(
+            _spec(),
+            model_override="m",
+            provider_override="openai",
+            granted=("anthropic",),
+        )
