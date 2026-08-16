@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.infrastructure.tool_store import ToolError, load_tools, tool_name
+from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError, tool_name
 
 MODULE = '''
 from langchain_core.tools import tool
@@ -31,20 +31,20 @@ def _write(directory, name: str, body: str):
 
 
 def test_a_module_contributes_the_tools_it_names(tmp_path):
-    tools = load_tools(_write(tmp_path / "tools", "maths.py", MODULE))
+    tools = LocalToolRepository(_write(tmp_path / "tools", "maths.py", MODULE)).tools
 
     assert [tool_name(t) for t in tools] == ["add"]
 
 
 def test_a_directory_that_does_not_exist_is_not_an_error(tmp_path):
     """Most workspaces have no tools of their own."""
-    assert load_tools(tmp_path / "absent") == ()
+    assert LocalToolRepository(tmp_path / "absent").tools == ()
 
 
 def test_an_empty_directory_contributes_nothing(tmp_path):
     (tmp_path / "tools").mkdir()
 
-    assert load_tools(tmp_path / "tools") == ()
+    assert LocalToolRepository(tmp_path / "tools").tools == ()
 
 
 def test_a_module_without_an_export_list_is_refused_by_name(tmp_path):
@@ -54,7 +54,7 @@ def test_a_module_without_an_export_list_is_refused_by_name(tmp_path):
     directory = _write(tmp_path / "tools", "quiet.py", "def add(a, b):\n    return a + b\n")
 
     with pytest.raises(ToolError, match=r"quiet\.py"):
-        load_tools(directory)
+        _ = LocalToolRepository(directory).tools
 
 
 def test_a_module_that_cannot_be_imported_is_refused_loudly(tmp_path):
@@ -63,7 +63,7 @@ def test_a_module_that_cannot_be_imported_is_refused_loudly(tmp_path):
     directory = _write(tmp_path / "tools", "broken.py", "import a_module_that_is_not_installed\n")
 
     with pytest.raises(ToolError, match=r"broken\.py"):
-        load_tools(directory)
+        _ = LocalToolRepository(directory).tools
 
 
 def test_two_modules_claiming_one_tool_name_are_refused(tmp_path):
@@ -72,7 +72,7 @@ def test_two_modules_claiming_one_tool_name_are_refused(tmp_path):
     _write(directory, "maths_again.py", MODULE)
 
     with pytest.raises(ToolError, match="add"):
-        load_tools(directory)
+        _ = LocalToolRepository(directory).tools
 
 
 def test_private_modules_are_skipped(tmp_path):
@@ -81,7 +81,7 @@ def test_private_modules_are_skipped(tmp_path):
     directory = _write(tmp_path / "tools", "maths.py", MODULE)
     _write(directory, "_helpers.py", "VALUE = 1\n")
 
-    assert [tool_name(t) for t in load_tools(directory)] == ["add"]
+    assert [tool_name(t) for t in LocalToolRepository(directory).tools] == ["add"]
 
 
 def test_the_export_must_be_a_sequence_not_a_single_tool(tmp_path):
@@ -89,7 +89,7 @@ def test_the_export_must_be_a_sequence_not_a_single_tool(tmp_path):
     directory = _write(tmp_path / "tools", "wrong.py", body)
 
     with pytest.raises(ToolError, match=r"wrong\.py"):
-        load_tools(directory)
+        _ = LocalToolRepository(directory).tools
 
 
 def test_modules_load_in_a_stable_order(tmp_path):
@@ -97,7 +97,7 @@ def test_modules_load_in_a_stable_order(tmp_path):
     directory = _write(tmp_path / "tools", "b_second.py", MODULE.replace("add", "beta"))
     _write(directory, "a_first.py", MODULE.replace("add", "alpha"))
 
-    assert [tool_name(t) for t in load_tools(directory)] == ["alpha", "beta"]
+    assert [tool_name(t) for t in LocalToolRepository(directory).tools] == ["alpha", "beta"]
 
 
 def test_importing_a_tool_leaves_no_bytecode_in_the_catalogue(tmp_path):
@@ -111,7 +111,7 @@ def test_importing_a_tool_leaves_no_bytecode_in_the_catalogue(tmp_path):
     """
     catalogue = _write(tmp_path / "tools", "maths.py", MODULE)
 
-    loaded = load_tools(catalogue)
+    loaded = LocalToolRepository(catalogue).tools
 
     assert len(loaded) == 1, "the tool did not import, so this proves nothing"
     assert not list(catalogue.rglob("__pycache__")), "bytecode was written into the catalogue"

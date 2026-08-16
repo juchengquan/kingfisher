@@ -18,6 +18,8 @@ import main
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure import agent as main_agent_module
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 
 
 def _render(events: list[RunEvent]) -> tuple[str, RunResult | None]:
@@ -227,7 +229,6 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
     from dataclasses import replace
 
     import main as driver
-    from kingfisher.infrastructure import skill_store
 
     catalogue = tmp_path / "catalogue"
     relocated = replace(
@@ -237,12 +238,12 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
 
     assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
 
-    assert skill_store.names(relocated.skills_dir)  # the catalogue was filled
-    assert not skill_store.names(relocated.workspace / "skills")  # and not the workspace
+    assert LocalSkillRepository(relocated.skills_dir).names  # the catalogue was filled
+    assert not LocalSkillRepository(relocated.workspace / "skills").names  # and not the workspace
 
     # And the listing that follows reflects it, which is what went wrong before.
     listed = capsys.readouterr().out
-    for name in skill_store.names(relocated.skills_dir):
+    for name in LocalSkillRepository(relocated.skills_dir).names:
         assert name in listed
 
 
@@ -250,14 +251,13 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, mo
     """The default, and the case the old code got right -- worth keeping, or
     the fix above could quietly break the ordinary setup."""
     import main as driver
-    from kingfisher.infrastructure import skill_store
 
     monkeypatch.setattr(driver, "from_env", lambda: cfg)
 
     # `--list` so it returns after seeding; without it the driver falls
     # through to running the task, which wants a model.
     assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
-    assert skill_store.names(cfg.skills_dir)
+    assert LocalSkillRepository(cfg.skills_dir).names
 
 
 def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
@@ -270,7 +270,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     from dataclasses import replace
 
     import main as driver
-    from kingfisher.infrastructure.tool_store import names
+    from kingfisher.infrastructure.tool_store import LocalToolRepository
 
     catalogue = tmp_path / "catalogue"
     relocated = replace(cfg, tools_root=catalogue / "tools")
@@ -278,10 +278,10 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
 
     assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
 
-    assert "http_fetch" in names(relocated.tools_dir)
+    assert "http_fetch" in LocalToolRepository(relocated.tools_dir).names
     # `ensure_layout` still makes the workspace directory, so the place to put
     # one is obvious. What must not happen is a preset landing in it.
-    assert names(relocated.workspace / "tools") == ()
+    assert LocalToolRepository(relocated.workspace / "tools").names == ()
 
 
 # -- --without-tools and friends ------------------------------------------
@@ -365,11 +365,11 @@ def test_subtracting_skills_and_subagents_too(cfg):
     tested is that the named one is gone and the others are enumerated, which
     is true at any catalogue size.
     """
-    from kingfisher.infrastructure import presets, skill_store, subagent_store
+    from kingfisher.infrastructure import presets
 
     presets.seed(cfg)
-    seeded_skills = set(skill_store.names(cfg.skills_dir))
-    seeded_subagents = set(subagent_store.load_all(cfg.subagents_dir))
+    seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
+    seeded_subagents = set(LocalSubagentRepository(cfg.subagents_dir).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
     # "the rest" equal to the whole of it, and this would still pass.
     assert {"tabular-qa"} < seeded_skills

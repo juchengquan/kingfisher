@@ -101,9 +101,9 @@ from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement, presets, skill_store, tool_store
 from kingfisher.infrastructure.runlog import read_usage
-from kingfisher.infrastructure.subagent_store import load_all
-from kingfisher.infrastructure.subagent_store import sources as subagent_sources
-from kingfisher.infrastructure.tool_store import ToolError
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -201,7 +201,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         # and the built-in set, which is only knowable from an assembled graph
         # -- and a tool module is Python, so fetching them apart ran every one
         # of them twice per `--list`.
-        found = tool_store.loaded(catalogue.tools)
+        found = LocalToolRepository(catalogue.tools).found
         with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
             introspected = registered_tools(
                 build_agent(
@@ -237,24 +237,29 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     print(tool_store.offered(defined_in, own))
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
-    for name in skill_store.names(catalogue.skills) or ("(none)",):
+    skills = LocalSkillRepository(catalogue.skills)
+    for name in skills.names or ("(none)",):
         print(f"  {name}")
     # Grouping skills into folders is the obvious thing to try and yields
     # nothing at all, because discovery is one level deep. Saying so is the
     # only difference between a catalogue that looks empty and one that is --
     # and it needs the reason now that tools and subagents nest freely.
-    for name in skill_store.misplaced(catalogue.skills):
+    for name in skills.misplaced:
         print(f"  ! {name}/ holds a skill too deep to load — they live at {skill_store.LAYOUT}")
         print("    (the agent reads skills itself and only looks one level down;")
         print("     tools and subagents are read by kingfisher, so those may nest)")
 
     print("\nsubagents")
+    # One repository, so the definitions are parsed once. Read as two calls --
+    # the specs, then where each came from -- this parsed every file in the
+    # catalogue twice per `--list`, exactly as the tools did before they were.
+    subagents = LocalSubagentRepository(catalogue.subagents)
     try:
-        specs = load_all(catalogue.subagents)
+        specs = subagents.specs
     except SubagentError as exc:
         print(f"  cannot load: {exc}")
         return 1
-    where = subagent_sources(catalogue.subagents)
+    where = subagents.sources
     for spec in specs.values() or ():
         print(f"  {spec.name}{_from(where.get(spec.name), f'{spec.name}.yaml')}"
               f" — {spec.description}")
@@ -437,7 +442,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
-    found = tool_store.loaded(catalogue.tools)
+    found = LocalToolRepository(catalogue.tools).found
     workspace = tuple(sorted(entry.name for entry in found))
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
         root = Path(scratch)

@@ -317,11 +317,17 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     of each kind, 81ms at a hundred.
 
     Counted through the module `agent` actually binds, not just the store's --
-    `agent.py` imports `load_all` by name, so patching only the store measured
-    nothing and reported a clean zero. That is why this patches both.
+    both `catalogue.py` and `agent.py` import `LocalSubagentRepository` by name,
+    so patching one measured nothing and reported a clean zero. That is why this
+    patches both.
+
+    Counted on the *read* and not on construction: a repository is cheap to make
+    and holds only a path, so what this is about is the walk-and-parse behind
+    `specs`.
     """
     from kingfisher.infrastructure import agent as agent_module
     from kingfisher.infrastructure import catalogue as catalogue_module
+    from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
     from tests.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):
@@ -331,14 +337,15 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     )
 
     reads = []
-    real = catalogue_module.load_all
 
-    def counting(directory):
-        reads.append(directory)
-        return real(directory)
+    class Counting(LocalSubagentRepository):
+        @property
+        def specs(self):
+            reads.append(self.root)
+            return LocalSubagentRepository(self.root).specs
 
-    monkeypatch.setattr(catalogue_module, "load_all", counting)
-    monkeypatch.setattr(agent_module, "load_all", counting)
+    monkeypatch.setattr(catalogue_module, "LocalSubagentRepository", Counting)
+    monkeypatch.setattr(agent_module, "LocalSubagentRepository", Counting)
 
     service = Kingfisher(cfg, agent=StubAgent("ok"))
     at_construction = len(reads)

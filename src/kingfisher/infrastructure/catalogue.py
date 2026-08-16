@@ -20,10 +20,10 @@ from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.subagent import SubagentSpec
-from kingfisher.infrastructure import skill_store
-from kingfisher.infrastructure.subagent_store import load_all
-from kingfisher.infrastructure.tool_store import Found
-from kingfisher.infrastructure.tool_store import loaded as load_tools_with_sources
+from kingfisher.domain.tool import Found
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.tool_store import LocalToolRepository
 
 CATALOGUE_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
 
@@ -43,12 +43,11 @@ class Catalogue:
     as the mapping did, and `build_agent` still resolves once and passes the
     result down. The count was never the problem; the anonymity was.
 
-    Thin on purpose. It holds the directories and does not read them --
-    `skill_store`, `subagent_store` and `tool_store` still take a `Path`, and
-    still do the reading. Making it read as well would leave `load_all` public
-    regardless, because a request's *uploaded* subagents come from the session
-    rather than from here, and two ways to load a subagent that differ only in
-    where they look is worse than one function called twice.
+    It holds the directories and delegates the reading to one repository per
+    kind. A session's uploads are those same repositories pointed somewhere
+    else, which is why the loading belongs to them and not to this type: two
+    ways to read a subagent that differ only in where they look would be worse
+    than one class built twice.
 
     `Config.catalogue_roots` still answers with a mapping and is deliberately
     not this type. `Config` is a record a deployment fills in, and it sits above
@@ -67,12 +66,12 @@ class Catalogue:
         Names and not more: deepagents opens the files itself, so kingfisher
         lists and denies but never parses one.
         """
-        return skill_store.names(self.skills)
+        return LocalSkillRepository(self.skills).names
 
     @cached_property
     def subagent_specs(self) -> Mapping[str, SubagentSpec]:
         """Every subagent this deployment defines, parsed, by name."""
-        return load_all(self.subagents)
+        return LocalSubagentRepository(self.subagents).specs
 
     @cached_property
     def tools_found(self) -> tuple[Found, ...]:
@@ -81,7 +80,7 @@ class Catalogue:
         The pair rather than the objects alone, because a listing and a refusal
         both need to say where a tool is defined.
         """
-        return load_tools_with_sources(self.tools)
+        return LocalToolRepository(self.tools).found
 
     def warm(self) -> Catalogue:
         """Read all three now, so a broken definition fails here.

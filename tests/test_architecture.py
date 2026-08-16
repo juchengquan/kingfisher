@@ -389,7 +389,7 @@ def test_only_one_module_decides_what_a_skill_is():
 
     assert not offenders, (
         f"{offenders} decide what a skill is; use domain.skill.FILENAME and "
-        "skill_store.names so the inventory and the validator cannot disagree"
+        "LocalSkillRepository.names so the inventory and the validator cannot disagree"
     )
 
 
