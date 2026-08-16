@@ -310,7 +310,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     from kingfisher.infrastructure import presets
 
     service = Kingfisher(cfg)
-    presets.seed(cfg)  # 3 tools, 3 skills, 2 subagents
+    presets.seed(cfg)  # 3 tools, 3 skills, 3 subagents
     service.start_session("s")
 
     admitted = service._admit(
@@ -327,7 +327,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     assert set(by_kind) == {"tool", "skill", "subagent"}
     assert "http_fetch" in by_kind["tool"]
     assert by_kind["skill"] == ("release-notes", "tabular-qa")
-    assert by_kind["subagent"] == ("extractor",)
+    assert by_kind["subagent"] == ("extractor", "second-opinion")
 
 
 def test_a_kind_that_lost_nothing_says_nothing(cfg):

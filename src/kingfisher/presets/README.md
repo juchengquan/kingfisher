@@ -160,7 +160,7 @@ every workspace, and a single-endpoint deployment could not activate it.
 | `model` | optional | Must be a model your gateway serves. This is where per-role cost routing goes |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
-Two reasons to reach for one, one example each:
+Three reasons to reach for one, one example each:
 
 - [`reviewer.yaml`](subagents/reviewer.yaml) — **independence.** A second agent
   that recomputes a claim without seeing how the first one got there catches
@@ -168,6 +168,11 @@ Two reasons to reach for one, one example each:
 - [`extractor.yaml`](subagents/extractor.yaml) — **context isolation.** It reads
   a large pile of files and returns a short answer; the bulk stays in its
   context rather than yours. Note the narrower `tools` and the cheaper `model`.
+- [`second-opinion.yaml`](subagents/second-opinion.yaml) — **a different
+  model.** Two models from one family share failure modes, so this one pins
+  `provider` and `model` to answer somewhere else entirely. **It needs a second
+  endpoint configured**, and is the only preset that does — activate it without
+  one and it refuses at build time, naming the missing style.
 
 ### Writing the prompt
 

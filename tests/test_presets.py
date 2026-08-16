@@ -38,7 +38,7 @@ def shipped():
 def test_every_preset_subagent_parses(shipped):
     specs = load_all(shipped / "subagents")
 
-    assert set(specs) == {"reviewer", "extractor"}
+    assert set(specs) == {"reviewer", "extractor", "second-opinion"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -299,3 +299,20 @@ def test_every_complete_definition_in_the_readme_parses(shipped):
     assert blocks, "the README opens the section with a whole definition"
     for block in blocks:
         read_subagent(block, _Path("readme.yaml"))
+
+
+def test_only_one_preset_pins_an_endpoint(shipped):
+    """`provider` is checked when the agent is built, so a preset naming one
+    this deployment lacks cannot be activated -- `no endpoint configured for
+    style 'openai'`.
+
+    Exactly one preset pays that price, and it is the one whose entire purpose
+    is to run somewhere else. If a second ever does, it is worth arguing about.
+    """
+    pinned = {
+        spec.name: spec.provider
+        for spec in load_all(shipped / "subagents").values()
+        if spec.provider is not None
+    }
+
+    assert pinned == {"second-opinion": "openai"}
