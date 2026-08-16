@@ -325,10 +325,11 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     every turn paid for nothing. Measured before building: 4ms per turn at five
     of each kind, 81ms at a hundred.
 
-    Counted through the module `agent` actually binds, not just the store's --
-    both `catalogue.py` and `agent.py` import `LocalSubagentRepository` by name,
-    so patching one measured nothing and reported a clean zero. That is why this
-    patches both.
+    Counted through the modules that actually bind the name, not just the
+    store's. Two do, and they are the two halves this is about: `catalogue.py`
+    builds the deployment's repository once, and `layered.py` builds the
+    session's per turn. Patching only one measured nothing and reported a clean
+    zero, which is what this originally did.
 
     Counted on the *read* and not on construction: a repository is cheap to make
     and holds only a path, so what this is about is the walk-and-parse behind
@@ -342,8 +343,8 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     """
     from functools import cached_property
 
-    from kingfisher.infrastructure import agent as agent_module
     from kingfisher.infrastructure import catalogue as catalogue_module
+    from kingfisher.infrastructure import layered as layered_module
     from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
     from tests.test_run import StubAgent
 
@@ -362,7 +363,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
             return LocalSubagentRepository(self.root).specs
 
     monkeypatch.setattr(catalogue_module, "LocalSubagentRepository", Counting)
-    monkeypatch.setattr(agent_module, "LocalSubagentRepository", Counting)
+    monkeypatch.setattr(layered_module, "LocalSubagentRepository", Counting)
 
     service = Kingfisher(cfg, agent=StubAgent("ok"))
     at_construction = len(reads)
