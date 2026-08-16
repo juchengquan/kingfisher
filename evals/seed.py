@@ -16,8 +16,8 @@ import shutil
 from pathlib import Path
 
 from evals.dataset import seed_sample_data
-from kingfisher.adapters import presets
 from kingfisher.domain.skill import FILENAME
+from kingfisher.infrastructure import presets
 
 SKILL_NAME = "tabular-qa"
 

@@ -5,7 +5,7 @@ import json
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.app.run import Request, RunResult, normalize_answer, run
+from kingfisher.application.run import Request, RunResult, normalize_answer, run
 from tests.conftest import StubCheckpointer, start
 
 
@@ -214,8 +214,8 @@ def test_coerce_is_idempotent():
 def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
     """A typo in a capability name must not be destructive. This used to raise
     only after the sweep had already removed old sessions."""
-    from kingfisher.adapters.agent import CapabilityError
     from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.infrastructure.agent import CapabilityError
 
     workspace = cfg.workspace
     old = workspace / "runs" / "ancient"

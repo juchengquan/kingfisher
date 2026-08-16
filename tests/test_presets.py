@@ -11,16 +11,16 @@ import shutil
 
 import pytest
 
-from kingfisher.adapters import presets
-from kingfisher.adapters.agent import (
+from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure import presets
+from kingfisher.infrastructure.agent import (
     CapabilityError,
     _available_skills,
     build_agent,
     registered_tools,
 )
-from kingfisher.adapters.subagent_store import load_all
-from kingfisher.adapters.tool_store import load_tools, tool_name
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.tool_store import load_tools, tool_name
 
 
 @pytest.fixture(scope="session")
@@ -73,7 +73,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, s
     row is a CapabilityError someone has to debug."""
     from langchain_core.messages import AIMessage
 
-    from kingfisher.adapters.agent import registered_tools
+    from kingfisher.infrastructure.agent import registered_tools
     from tests.conftest import FakeToolCallingModel
 
     graph = build_agent(
@@ -121,7 +121,7 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     nothing: no error, no warning, a catalogue that simply looks empty. The
     layout is a contract, so breaking it should say so.
     """
-    from kingfisher.adapters import skill_store
+    from kingfisher.infrastructure import skill_store
 
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
         target = tmp_path / path
@@ -136,7 +136,7 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
 def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
     """The negative control: only folders that actually hide one are named, or
     every stray directory in a catalogue becomes a warning."""
-    from kingfisher.adapters import skill_store
+    from kingfisher.infrastructure import skill_store
 
     (tmp_path / "notes").mkdir()
     (tmp_path / "notes" / "readme.txt").write_text("nothing to see", encoding="utf-8")

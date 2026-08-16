@@ -1,8 +1,9 @@
 """The layer boundary, enforced rather than remembered.
 
 `domain/` holds kingfisher's own vocabulary and must not know the harness
-exists. `app/` orchestrates and must reach the harness only through `adapters/`.
-`adapters/` is where foreign types belong — that is its entire job.
+exists. `application/` orchestrates and must reach the harness only through
+`infrastructure/`. `infrastructure/` is where foreign types belong — that is
+its entire job.
 
 Checked by parsing imports rather than grepping, because the docstrings
 legitimately discuss deepagents at length; it is the `import` that matters.
@@ -11,6 +12,7 @@ legitimately discuss deepagents at length; it is the `import` that matters.
 from __future__ import annotations
 
 import ast
+import sys
 from pathlib import Path
 
 import pytest
@@ -40,55 +42,84 @@ def _modules_in(layer: str) -> list[Path]:
     return sorted(p for p in (SRC / layer).glob("*.py") if p.name != "__init__.py")
 
 
+def _inside_domain(module: str) -> bool:
+    return module == "kingfisher.domain" or module.startswith("kingfisher.domain.")
+
+
 @pytest.mark.parametrize("path", _modules_in("domain"), ids=lambda p: p.name)
-def test_domain_knows_nothing_of_the_harness(path):
-    """If this fails, a foreign shape has entered kingfisher's vocabulary."""
-    foreign = {m for m in _imported_modules(path) if _is_foreign(m)}
-    assert not foreign, f"domain/{path.name} imports {sorted(foreign)}"
+def test_domain_imports_only_the_standard_library_and_itself(path):
+    """Deny by default, replacing three rules that were allowlists by omission.
+
+    Each named something the domain must not import -- the harness, the layers
+    above it, `Config` -- and passed for everything nobody had thought of.
+    `yaml` was the standing example: a third-party parser sitting in
+    `domain/frontmatter.py`, which no rule mentioned and so no rule caught.
+
+    Turned around, there is nothing to keep up to date. A domain module may
+    import the standard library and `kingfisher.domain`. Anything else is a
+    dependency the vocabulary should not have, whatever it is called:
+
+      * a foreign shape entering kingfisher's own types -- deepagents,
+        langchain -- which is what the first of the three rules watched for
+      * `kingfisher.application` or `kingfisher.infrastructure`, inverting the direction
+        dependencies point
+      * `kingfisher.config`, which holds base_url, api_key and timeout_s: a
+        domain rule that needs a value takes the value, as `sweep(workspace,
+        keep)` always did
+      * a library -- the case the other three could not see
+    """
+    outside = {
+        module
+        for module in _imported_modules(path)
+        if module.split(".")[0] not in sys.stdlib_module_names and not _inside_domain(module)
+    }
+    assert not outside, (
+        f"domain/{path.name} imports {sorted(outside)} -- the domain takes the standard "
+        "library and itself; have an adapter do that part and hand it the result"
+    )
 
 
-@pytest.mark.parametrize("path", _modules_in("app"), ids=lambda p: p.name)
-def test_app_reaches_the_harness_only_through_adapters(path):
+@pytest.mark.parametrize("path", _modules_in("application"), ids=lambda p: p.name)
+def test_application_reaches_the_harness_only_through_infrastructure(path):
     """Orchestration speaks Request/RunEvent/RunResult, never AIMessage.
 
     run.py and runlog.py once each carried their own copy of LangChain's
     usage-metadata shape, kept in sync by nobody. This is the guard.
     """
     foreign = {m for m in _imported_modules(path) if _is_foreign(m)}
-    assert not foreign, f"app/{path.name} imports {sorted(foreign)} — route it through adapters/"
+    assert not foreign, (
+        f"application/{path.name} imports {sorted(foreign)} — route it through infrastructure/"
+    )
 
 
-def test_adapters_are_where_foreign_types_live():
+def test_infrastructure_is_where_foreign_types_live():
     """Not a restriction — a check that the layer is actually doing its job.
 
     If no adapter imports anything foreign, the ACL has evaporated and the
     coupling has gone somewhere less visible.
     """
-    imports = {m for path in _modules_in("adapters") for m in _imported_modules(path)}
+    imports = {m for path in _modules_in("infrastructure") for m in _imported_modules(path)}
     assert any(_is_foreign(m) for m in imports)
 
 
-def test_domain_does_not_depend_on_the_layers_above_it():
-    """Dependencies point inward: app -> adapters -> domain, never back."""
-    for path in _modules_in("domain"):
-        modules = _imported_modules(path)
-        assert not any(m.startswith(("kingfisher.app", "kingfisher.adapters")) for m in modules), (
-            f"domain/{path.name} depends on an outer layer"
-        )
+def test_infrastructure_does_not_reach_back_into_application():
+    """The outward half of the rule, which went unenforced for a while.
 
+    Dependencies point inward: application -> infrastructure -> domain, never
+    back. The inward half is
+    `test_domain_imports_only_the_standard_library_and_itself`.
 
-def test_adapters_do_not_reach_back_into_app():
-    """The other half of that rule, which went unenforced for a while.
-
-    `Config` lived in `app/` and all four adapters imported it, inverting the
-    direction this module claims to hold. It lives in `domain/` now; this is
-    what stops it drifting back. `app/config.py` reads `adapters.models` for
-    the credential variable names, which is the legal direction.
+    `Config` lived in the application layer and every adapter imported it,
+    inverting the direction this module claims to hold. It sits at the package
+    root now, belonging to no layer, and this is what stops it drifting back
+    up. `application/config.py` reads `infrastructure.models` for the
+    credential variable names, which is the legal direction.
     """
-    for path in _modules_in("adapters"):
+    for path in _modules_in("infrastructure"):
         modules = _imported_modules(path)
-        assert not any(m.startswith("kingfisher.app") for m in modules), (
-            f"adapters/{path.name} depends on app/ — move the shared shape into domain/"
+        assert not any(m.startswith("kingfisher.application") for m in modules), (
+            f"infrastructure/{path.name} depends on application/ — "
+            "move the shared shape into domain/"
         )
 
 
@@ -113,27 +144,12 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
     assert out.stdout.strip() == "False"
 
 
-def test_domain_does_not_read_deployment_config():
-    """`Config` holds base_url, api_key and timeout_s. It lived in `domain/`
-    on import-direction grounds -- both outer layers could reach it without
-    reaching each other -- but no domain rule ever read one.
-
-    A domain rule that needs a value takes the value. `sweep(workspace, keep)`
-    always did; this stops the record itself drifting back inward.
-    """
-    for path in _modules_in("domain"):
-        modules = _imported_modules(path)
-        assert "kingfisher.config" not in modules, (
-            f"domain/{path.name} imports Config — pass it the values it needs instead"
-        )
-
-
 def test_the_package_does_not_depend_on_the_eval_harness():
     """`evals/` is test material and lives outside `src/`, so it is not in the
     wheel. If the package imports it, an installed kingfisher breaks -- and the
     348-line fixture module has quietly moved back in.
     """
-    for layer in ("domain", "adapters", "app"):
+    for layer in ("domain", "infrastructure", "application"):
         for path in _modules_in(layer):
             modules = _imported_modules(path)
             assert not any(m.split(".")[0] == "evals" for m in modules), (
@@ -199,10 +215,56 @@ def test_domain_touches_nothing_outside_the_process(path):
     assert not contact, f"domain/{path.name} reaches the world: {contact}"
 
 
-def test_the_adapters_are_the_ones_doing_the_touching():
-    """The other half: if nothing in adapters/ touches the world either, the
+#: Calls that *change* the filesystem, as opposed to reading it or the
+#: environment. Deliberately narrower than `WORLD_CALLS`: `open` and `replace`
+#: are left out because `Session.open` and `dataclasses.replace` are named the
+#: same and this rule runs over a layer where both are legitimate.
+MUTATING_CALLS = frozenset({
+    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
+    "write_text", "write_bytes", "unlink", "touch", "chmod", "rename",
+})
+
+
+def test_the_application_layer_does_not_write_to_disk_itself():
+    """Orchestration decides what happens; an adapter is what makes it happen.
+
+    This was not true when it was written. `service.py` copied a request's
+    input files itself -- a `mkdir` and a bare `shutil.copy`, the one place in
+    this layer doing its own I/O -- while the same files bound for `/data` went
+    through `place_data`, which refuses a duplicate basename or a missing file
+    before copying anything.
+
+    So the two sets of caller-supplied files had different guarantees, and the
+    difference was invisible: measured against the real service, two inputs
+    sharing a basename were accepted and one silently lost, and a missing one
+    left the earlier files behind in the turn. Both now go through `_checked`.
+
+    Reading is not the target. `application/config.py` reads the environment,
+    which is its job.
+    """
+    offenders = []
+    for path in _modules_in("application"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
+                offenders.append(f"application/{path.name}:{node.lineno} imports shutil")
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in MUTATING_CALLS
+            ):
+                offenders.append(f"application/{path.name}:{node.lineno} .{node.func.attr}()")
+
+    assert not offenders, (
+        f"{offenders} write to disk from the application layer — put it in "
+        "infrastructure/workspace_fs.py, where the guards already are"
+    )
+
+
+def test_infrastructure_is_the_layer_doing_the_touching():
+    """The other half: if nothing in infrastructure/ touches the world either, the
     I/O did not move out, it moved somewhere less visible."""
-    assert any(_world_contact(p) for p in _modules_in("adapters"))
+    assert any(_world_contact(p) for p in _modules_in("infrastructure"))
 
 
 def test_no_test_stubs_out_agent_construction():
@@ -239,14 +301,14 @@ def test_only_one_module_decides_what_a_skill_is():
     byte-identical copy of the lookup, so a change to the definition would have
     left `--list` advertising names the validator then rejected.
 
-    `domain.skill` owns the filename and `adapters.skill_store` owns the
+    `domain.skill` owns the filename and `infrastructure.skill_store` owns the
     listing. Asserting they *agree* with a caller is tautological once the
     caller imports them; what is worth asserting is that nothing else decides.
     """
     root = Path(__file__).resolve().parent.parent
     owners = {
         root / "src" / "kingfisher" / "domain" / "skill.py",
-        root / "src" / "kingfisher" / "adapters" / "skill_store.py",
+        root / "src" / "kingfisher" / "infrastructure" / "skill_store.py",
     }
 
     searched = [*(root / "src").rglob("*.py"), root / "main.py", *(root / "evals").glob("*.py")]
@@ -271,7 +333,7 @@ def test_the_package_ships_its_presets():
     them back out would break seeding for every user who is not in a checkout,
     and nothing else would notice.
     """
-    from kingfisher.adapters import presets
+    from kingfisher.infrastructure import presets
 
     assert (SRC / "presets" / "skills").is_dir()
     # And reachable the way an installed one reaches them, not by path.

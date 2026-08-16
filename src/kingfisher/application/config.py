@@ -1,7 +1,8 @@
 """Reading configuration out of the environment.
 
-The `Config` record itself lives in `domain/`. What stays here is the part with
-a foreign system on the other side of it — the process environment — and the
+The `Config` record itself lives at the package root, belonging to no layer,
+for the reasons its own docstring gives. What stays here is the part with a
+foreign system on the other side of it — the process environment — and the
 policy that goes with it.
 
 `api_style` is required and has no default (Q25): the Anthropic-compatible and
@@ -9,7 +10,7 @@ OpenAI-compatible endpoints of the same gateway do not behave identically, so a
 default would silently pick the wrong shape the first time kingfisher is pointed
 somewhere new.
 
-Which variables a style reads is not written here. `adapters.models.PROVIDERS`
+Which variables a style reads is not written here. `infrastructure.models.PROVIDERS`
 holds it, alongside the builder that consumes it, so adding a provider is one
 record rather than an edit in two files that must agree.
 """
@@ -20,12 +21,12 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from kingfisher.adapters.models import PROVIDERS
 from kingfisher.config import API_STYLES, ROLES, Config, ConfigError, Endpoint
+from kingfisher.infrastructure.models import PROVIDERS
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
-# not re-exported. One blessed import path for the record — `domain.config` —
-# is the whole point of it living there.
+# not re-exported. One blessed import path for the record — `kingfisher.config`
+# — is the whole point of it sitting where it does.
 __all__ = ["enforce_local_only_tracing", "from_env"]
 
 

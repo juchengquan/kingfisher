@@ -11,9 +11,9 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
-from kingfisher.adapters.agent import CapabilityError, build_agent
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.subagent import parse
+from kingfisher.infrastructure.agent import CapabilityError, build_agent
+from kingfisher.infrastructure.definitions import read_subagent
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, capture_build
 
 
@@ -153,10 +153,10 @@ def test_including_cannot_be_asked_to_widen_middleware():
 
 
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
-    inline = parse(
+    inline = read_subagent(
         "---\nname: r\ndescription: d\nmiddleware: [a, b]\n---\nBody.\n", tmp_path / "r.md"
     )
-    block = parse(
+    block = read_subagent(
         "---\nname: r\ndescription: d\nmiddleware:\n  - a\n  - b\n---\nBody.\n",
         tmp_path / "r.md",
     )
@@ -165,7 +165,9 @@ def test_the_field_parses_in_both_yaml_forms(tmp_path):
 
 
 def test_omitting_it_means_none(tmp_path):
-    assert parse("---\nname: r\ndescription: d\n---\nBody.\n", tmp_path / "r.md").middleware is None
+    spec = read_subagent("---\nname: r\ndescription: d\n---\nBody.\n", tmp_path / "r.md")
+
+    assert spec.middleware is None
 
 
 def test_a_request_with_no_opinion_is_still_unrestricted():

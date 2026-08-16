@@ -4,8 +4,8 @@ import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.adapters.workspace_fs import ensure_layout, ensure_session_layout
 from kingfisher.config import Config
+from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -46,7 +46,7 @@ def _git_identity(monkeypatch):
 def dirs():
     """The real `SessionDirs`. A test that wants to watch or break an
     individual call substitutes its own object -- that is what the port buys."""
-    from kingfisher.adapters.workspace_fs import LocalSessionDirs
+    from kingfisher.infrastructure.workspace_fs import LocalSessionDirs
 
     return LocalSessionDirs()
 
@@ -87,7 +87,7 @@ def start(cfg, session_id: str) -> str:
     called the service -- so a test that wants to name its session has to open
     it the way the service does.
     """
-    from kingfisher.adapters.workspace_fs import ensure_session_layout
+    from kingfisher.infrastructure.workspace_fs import ensure_session_layout
 
     ensure_session_layout(cfg.workspace / "sessions" / session_id)
     return session_id
@@ -113,5 +113,5 @@ def capture_build(monkeypatch) -> dict:
         captured.update(kwargs)
         return real(**kwargs)
 
-    monkeypatch.setattr("kingfisher.adapters.agent.create_deep_agent", spy)
+    monkeypatch.setattr("kingfisher.infrastructure.agent.create_deep_agent", spy)
     return captured

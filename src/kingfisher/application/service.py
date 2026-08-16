@@ -54,7 +54,6 @@ by not caching at all.
 from __future__ import annotations
 
 import asyncio
-import shutil
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -62,21 +61,7 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from kingfisher.adapters import runtime
-from kingfisher.adapters.agent import build_agent
-from kingfisher.adapters.checkpointing import build_checkpointer
-from kingfisher.adapters.runlog import JsonlRunLogger, log_path
-from kingfisher.adapters.uploads import provision
-from kingfisher.adapters.workspace_fs import (
-    LocalSessionDirs,
-    collect_artifacts,
-    ensure_layout,
-    ensure_session_layout,
-    place_data,
-    protect_data,
-    session_bytes,
-)
-from kingfisher.app import config as config_module
+from kingfisher.application import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
 from kingfisher.domain.capabilities import Capabilities
@@ -84,6 +69,21 @@ from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
+from kingfisher.infrastructure import runtime
+from kingfisher.infrastructure.agent import build_agent
+from kingfisher.infrastructure.checkpointing import build_checkpointer
+from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.uploads import provision
+from kingfisher.infrastructure.workspace_fs import (
+    LocalSessionDirs,
+    collect_artifacts,
+    ensure_layout,
+    ensure_session_layout,
+    place_data,
+    place_inputs,
+    protect_data,
+    session_bytes,
+)
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -356,10 +356,7 @@ class Kingfisher:
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
         turn = session.allocate_turn(dirs, request.turn_id)
 
-        if request.inputs:
-            turn.input_dir.mkdir(exist_ok=True)
-            for source in request.inputs:
-                shutil.copy(source, turn.input_dir / Path(source).name)
+        place_inputs(request.inputs, turn.input_dir)
 
         logger = JsonlRunLogger(
             log_path(cfg.state_dir, session_id),

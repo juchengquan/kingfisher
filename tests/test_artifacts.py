@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from kingfisher.adapters.workspace_fs import collect_artifacts
-from kingfisher.app.run import Request, run
+from kingfisher.application.run import Request, run
+from kingfisher.infrastructure.workspace_fs import collect_artifacts
 from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
 

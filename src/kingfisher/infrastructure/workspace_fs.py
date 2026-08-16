@@ -235,7 +235,58 @@ def writable_data(session_dir: Path) -> Iterator[Path]:
 
 
 class DataError(ValueError):
-    """A supplied file cannot be placed in a session's `/data`."""
+    """A caller-supplied file cannot be placed, in `/data` or in a turn's input."""
+
+
+def _checked(sources: tuple[Path, ...]) -> dict[str, Path]:
+    """Every source keyed by the name it will land under.
+
+    Raises before anything is copied, so a request that names a file twice or
+    names one that is not there leaves nothing half-placed behind.
+
+    Shared by both destinations deliberately. Every rule here is about what the
+    caller asked for rather than about where it goes, so applying them to
+    `/data` and not to a turn's input was an accident of which one happened to
+    be written first -- and it cost the second one both guarantees.
+    """
+    seen: dict[str, Path] = {}
+    for source in sources:
+        name = Path(source).name
+        if name in {"", ".", ".."}:
+            msg = f"{source}: has no filename to place it under"
+            raise DataError(msg)
+        if not Path(source).is_file():
+            msg = f"{source}: no such file"
+            raise DataError(msg)
+        if name in seen:
+            # Keeping the last one silently loses a file the caller asked for.
+            msg = f"{name}: supplied twice, from {seen[name]} and {source}"
+            raise DataError(msg)
+        seen[name] = Path(source)
+    return seen
+
+
+def place_inputs(sources: tuple[Path, ...], input_dir: Path) -> tuple[str, ...]:
+    """Copy a turn's supplied files into its `input/`, and name what landed.
+
+    The transient counterpart to `place_data`: these belong to one turn, where
+    `/data` survives into the next. That is the only difference, and it is why
+    there is no `writable_data` dance here -- a turn directory is ours and was
+    made moments ago.
+
+    This lived inline in the service as a `mkdir` and a bare `shutil.copy`, one
+    layer up from where the filesystem is supposed to be touched. It was the
+    only place in the application layer doing its own I/O, and it had silently
+    missed both of `_checked`'s guarantees for as long as it existed.
+    """
+    checked = _checked(sources)
+    if not checked:
+        return ()
+
+    input_dir.mkdir(exist_ok=True)
+    for name, source in checked.items():
+        shutil.copy(source, input_dir / name)
+    return tuple(checked)
 
 
 @dataclass(frozen=True)
@@ -259,28 +310,13 @@ def place_data(sources: tuple[Path, ...], session_dir: Path) -> DataPlacement:
     a copy is what put root-owned files in a workspace and made one session
     unusable for good.
 
-    Everything is checked before anything is copied. A request that names a
-    file twice, or names one that is not there, must not leave half its data
-    behind for a later turn to find.
+    Everything is checked before anything is copied -- see `_checked`, which
+    the turn's input directory now shares.
     """
     if not sources:
         return DataPlacement()
 
-    seen: dict[str, Path] = {}
-    for source in sources:
-        name = Path(source).name
-        if name in {"", ".", ".."}:
-            msg = f"{source}: has no filename to place it under"
-            raise DataError(msg)
-        if not Path(source).is_file():
-            msg = f"{source}: no such file"
-            raise DataError(msg)
-        if name in seen:
-            # Keeping the last one silently loses a file the caller asked for.
-            msg = f"{name}: supplied twice, from {seen[name]} and {source}"
-            raise DataError(msg)
-        seen[name] = Path(source)
-
+    seen = _checked(sources)
     existing = {p.name for p in (Path(session_dir) / "data").glob("*")}
     with writable_data(session_dir) as data:
         for name, source in seen.items():

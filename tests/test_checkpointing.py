@@ -8,7 +8,7 @@ work: measured, six processes against one fresh database and three died inside
 
 from __future__ import annotations
 
-from kingfisher.adapters.checkpointing import BUSY_TIMEOUT_MS, build_checkpointer
+from kingfisher.infrastructure.checkpointing import BUSY_TIMEOUT_MS, build_checkpointer
 
 
 def _pragma(saver, name: str):

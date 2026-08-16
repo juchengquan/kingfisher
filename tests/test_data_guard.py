@@ -5,9 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.adapters.workspace_fs import (
+from kingfisher.infrastructure.workspace_fs import (
     DataError,
     place_data,
+    place_inputs,
     protect_data,
     writable_data,
 )
@@ -145,7 +146,7 @@ def test_data_is_read_only_again_even_when_a_copy_fails(session_dir, tmp_path, m
     def explode(*_args, **_kwargs):
         raise OSError(gone)
 
-    monkeypatch.setattr("kingfisher.adapters.workspace_fs.shutil.copy", explode)
+    monkeypatch.setattr("kingfisher.infrastructure.workspace_fs.shutil.copy", explode)
 
     with pytest.raises(OSError, match=gone):
         place_data((source,), session_dir)
@@ -177,6 +178,62 @@ def test_a_missing_source_is_refused_before_anything_is_written(session_dir, tmp
         place_data((good, tmp_path / "ghost.csv"), session_dir)
 
     assert not (session_dir / "data" / "good.csv").exists()
+
+
+# -- a turn's input/ gets the same two guarantees ------------------------
+#
+# It did not, for as long as it existed. The copying was written inline in the
+# service as a `mkdir` and a bare `shutil.copy` -- the one place in the
+# application layer doing its own I/O -- so it never met the checks its
+# documented counterpart had. Both cases below were measured against the real
+# service before the fix: the first was accepted, and the second left
+# `runs/t001/input/present.csv` behind.
+
+
+def test_two_inputs_with_one_basename_are_refused(tmp_path):
+    """The same loss as for `/data`, and it was silent here."""
+    (tmp_path / "a").mkdir()
+    (tmp_path / "b").mkdir()
+    first = tmp_path / "a" / "report.csv"
+    second = tmp_path / "b" / "report.csv"
+    first.write_text("one")
+    second.write_text("two")
+    into = tmp_path / "input"
+
+    with pytest.raises(DataError, match=r"report\.csv"):
+        place_inputs((first, second), into)
+
+    assert not into.exists()
+
+
+def test_a_missing_input_leaves_nothing_half_placed(tmp_path):
+    present = tmp_path / "present.csv"
+    present.write_text("x")
+    into = tmp_path / "input"
+
+    with pytest.raises(DataError, match=r"gone\.csv"):
+        place_inputs((present, tmp_path / "gone.csv"), into)
+
+    assert not (into / "present.csv").exists()
+
+
+def test_placing_inputs_names_what_landed(tmp_path):
+    one = tmp_path / "one.csv"
+    two = tmp_path / "two.csv"
+    one.write_text("1")
+    two.write_text("2")
+    into = tmp_path / "input"
+
+    assert place_inputs((one, two), into) == ("one.csv", "two.csv")
+    assert sorted(p.name for p in into.iterdir()) == ["one.csv", "two.csv"]
+
+
+def test_no_inputs_makes_no_directory(tmp_path):
+    """A turn that supplied nothing should not look like one that did."""
+    into = tmp_path / "input"
+
+    assert place_inputs((), into) == ()
+    assert not into.exists()
 
 
 def test_resupplying_replaces_and_says_so(session_dir, tmp_path):

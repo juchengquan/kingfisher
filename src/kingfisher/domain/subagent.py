@@ -47,12 +47,13 @@ heavy delegation on a cheap model, synthesis on the expensive one.
 
 Parsing lives in the domain because this is kingfisher's format, not a library's
 — nothing here knows deepagents exists, and nothing here reads a disk. Finding
-the files is `adapters.subagent_store`; translating a spec into deepagents'
-`SubAgent` is `adapters.agent`.
+the files is `infrastructure.subagent_store`; translating a spec into deepagents'
+`SubAgent` is `infrastructure.agent`.
 """
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -91,24 +92,14 @@ class SubagentSpec:
     model: str | None = None
 
 
-def _parse_frontmatter(text: str, source: Path) -> tuple[dict[str, object], str]:
-    parts = frontmatter.split(text)
-    if parts is None:
-        msg = f"{source.name}: expected YAML frontmatter delimited by ---"
-        raise SubagentError(msg)
+def parse(fields: Mapping[str, object], body: str, source: Path) -> SubagentSpec:
+    """One definition, from its decoded fields and its body.
 
-    header, body = parts
-    fields = frontmatter.fields(header)
-    if isinstance(fields, str):
-        msg = f"{source.name}: cannot read frontmatter ({fields})"
-        raise SubagentError(msg)
-    return fields, body
-
-
-def parse(text: str, source: Path) -> SubagentSpec:
-    """Parse one definition. Raises `SubagentError` on anything malformed."""
-    fields, body = _parse_frontmatter(text, source)
-
+    Raises `SubagentError` on anything the format forbids. Whether the document
+    carried a header at all, and whether that header decoded, were settled
+    before this — reading YAML needs a library, so `infrastructure.definitions` does
+    that half. See `domain.frontmatter` for where the seam falls and why.
+    """
     for required in ("name", "description"):
         if not fields.get(required):
             msg = f"{source.name}: frontmatter is missing required field {required!r}"

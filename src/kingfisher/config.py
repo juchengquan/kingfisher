@@ -1,22 +1,22 @@
 """Deployment configuration. Belongs to no layer, which is why it sits here.
 
-`Config` lived in `domain/` for a while, on the reasoning that both `app/` and
-`adapters/` could then read it without depending on each other. That reasoning
+`Config` lived in `domain/` for a while, on the reasoning that both `application/` and
+`infrastructure/` could then read it without depending on each other. That reasoning
 is about import direction, not about modelling: no domain rule reads a `Config`,
 and `base_url`, `api_key` and `timeout_s` are not kingfisher's vocabulary. It
 was the innermost layer holding a record for the outer ones.
 
-So it lives at the package root, above the layers and outside them. `app/` and
-`adapters/` may read it; `domain/` may not, and a test enforces that -- a domain
+So it lives at the package root, above the layers and outside them. `application/` and
+`infrastructure/` may read it; `domain/` may not, and a test enforces that -- a domain
 rule that needs a value takes the value, not the record.
 
-Reading it out of the environment is a separate job and stays in `app/config.py`:
-the provider table that knows which variables to read lives in `adapters/`.
+Reading it out of the environment is a separate job and stays in `application/config.py`:
+the provider table that knows which variables to read lives in `infrastructure/`.
 
 `ApiStyle` is the single source of truth for which endpoint styles exist.
 `API_STYLES` is derived from it rather than written twice, so the runtime gate
 and the static type cannot drift apart. The set of styles that can actually be
-*constructed* is `adapters.models.PROVIDERS`; a test binds the two together.
+*constructed* is `infrastructure.models.PROVIDERS`; a test binds the two together.
 """
 
 from __future__ import annotations
@@ -105,7 +105,7 @@ class Config:
     endpoints: Mapping[str, Endpoint] = field(default_factory=dict)
     #: The operator's other half of `role_models`. Which endpoint a role
     #: runs against is the same kind of decision as which model, and the
-    #: two move together -- see `adapters.agent._subagent_endpoint`.
+    #: two move together -- see `infrastructure.agent._subagent_endpoint`.
     role_providers: Mapping[str, str] = field(default_factory=dict)
     # Overrides for the two host-side roots. `None` means "derive from the
     # workspace", which is what keeps a workspace self-contained and copyable
@@ -153,7 +153,7 @@ class Config:
 
         Defaults inside the workspace so scratch is disposed of with it. Point
         it at `/tmp` for one fixed location per machine — but see
-        `adapters.backend.prepare_scratch`: `/tmp` is world-writable, so the
+        `infrastructure.backend.prepare_scratch`: `/tmp` is world-writable, so the
         directory is created private and checked before use.
         """
         return self.scratch_root or self.state_dir / "tmp"
@@ -214,6 +214,6 @@ class Config:
         change rather than a refactor through every construction site.
 
         Returns a *string*. It must reach a model through `build_model`, never
-        through deepagents — see `adapters/models.py`.
+        through deepagents — see `infrastructure/models.py`.
         """
         return self.role_models.get(role, self.model)

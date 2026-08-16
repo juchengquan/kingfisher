@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.adapters.uploads import UploadError, provision
 from kingfisher.domain.ports import DefinitionStore
 from kingfisher.domain.request import Request
+from kingfisher.infrastructure.uploads import UploadError, provision
 
 SKILL = b"---\nname: extractor\ndescription: Pulls fields out of documents.\n---\nBody.\n"
 SUBAGENT = b"---\nname: reviewer\ndescription: Checks arithmetic.\n---\nYou review.\n"

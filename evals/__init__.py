@@ -1,6 +1,6 @@
 """Evaluation harness. Deliberately outside `src/kingfisher/`.
 
-It was `kingfisher/app/smoke.py` — at 348 lines the largest module in the
+It was `kingfisher/application/smoke.py` — at 348 lines the largest module in the
 package, imported by nothing in the library, and shipped in the wheel. A
 synthetic dataset, a task prompt and an assertion framework are test material,
 not product.

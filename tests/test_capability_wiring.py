@@ -7,16 +7,16 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.adapters.agent import (
+from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.agent import (
     SKILLS_SOURCES,
     CapabilityError,
     _available_skills,
     build_agent,
 )
-from kingfisher.adapters.backend import build_backend
-from kingfisher.adapters.scoping import ScopedSkills, ToolAllowlist
-from kingfisher.adapters.subagent_store import load_all
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.subagent_store import load_all
 from tests.conftest import FakeToolCallingModel, capture_build
 
 SUBAGENT = """---
@@ -204,7 +204,7 @@ def test_an_unnamed_tool_survives_the_allowlist():
 def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
     """It was built elsewhere, so the restrictions were never applied to it.
     Refusing beats running with more access than the caller asked for."""
-    from kingfisher.app.run import run
+    from kingfisher.application.run import run
     from kingfisher.domain.request import Request
 
     prebuilt = build_agent(
@@ -265,7 +265,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
     """Pins the introspection the check above depends on. If deepagents or
     LangGraph moves the tool node, this fails loudly here rather than silently
     turning tool validation into a no-op."""
-    from kingfisher.adapters.agent import registered_tools
+    from kingfisher.infrastructure.agent import registered_tools
 
     graph = build_agent(
         cfg,
@@ -279,7 +279,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
-    from kingfisher.adapters.agent import registered_tools
+    from kingfisher.infrastructure.agent import registered_tools
 
     assert registered_tools(object()) == ()
 

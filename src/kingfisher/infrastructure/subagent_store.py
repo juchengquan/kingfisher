@@ -1,15 +1,16 @@
 """Reading subagent definitions off disk.
 
 `domain.subagent` owns the format -- what a definition means and what makes one
-malformed. Finding the files is a different job, and it is this one. The domain
-parses text it is handed; nothing there globs a directory.
+malformed -- and `definitions` turns a document into one. Finding the files is a
+third job, and it is this one: nothing in either of those globs a directory.
 """
 
 from __future__ import annotations
 
 from pathlib import Path
 
-from kingfisher.domain.subagent import SUFFIX, SubagentError, SubagentSpec, parse
+from kingfisher.domain.subagent import SUFFIX, SubagentError, SubagentSpec
+from kingfisher.infrastructure.definitions import read_subagent
 
 
 def load_all(directory: Path) -> dict[str, SubagentSpec]:
@@ -28,7 +29,7 @@ def load_all(directory: Path) -> dict[str, SubagentSpec]:
 
     specs: dict[str, SubagentSpec] = {}
     for path in sorted(directory.glob(f"*{SUFFIX}")):
-        spec = parse(path.read_text(encoding="utf-8"), path)
+        spec = read_subagent(path.read_text(encoding="utf-8"), path)
         if spec.name in specs:
             msg = f"{path.name}: duplicate subagent name {spec.name!r}"
             raise SubagentError(msg)
