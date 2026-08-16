@@ -14,10 +14,11 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.domain.capabilities import ALL, Capabilities, narrowed
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
+from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.delegation import as_subagent, subagent_skills
+from kingfisher.infrastructure.delegation import as_subagent, subagent_skills, tool_ceiling
 from kingfisher.infrastructure.scoping import ToolAllowlist
 from tests.conftest import FakeToolCallingModel
 
@@ -286,12 +287,19 @@ def test_a_request_is_narrowed_by_it(selection, cap, expected):
 def test_a_delegate_is_narrowed_by_it(cfg, selection, cap, expected):
     """The level that carried the copy.
 
+    Both axes together, because a delegate now narrows two and a flat allowlist
+    is their union. Driving them with the same pair keeps this a test of the
+    rule rather than of the union: whatever `narrowed` yields once, it yields
+    twice, and the allowlist is a set.
+
     `ALL` means no allowlist at all; `None` means an empty one. They are the
     two ends and the difference is the whole point of spelling them apart.
     """
-    spec = replace(read_subagent(HELPER, Path("helper.md")), tools=selection)
+    spec = replace(
+        read_subagent(HELPER, Path("helper.md")), tools=selection, builtin_tools=selection
+    )
 
-    built = as_subagent(spec, cfg, tools=cap)
+    built = as_subagent(spec, cfg, tools=cap, builtin_tools=cap)
 
     allowlists = [m for m in built.get("middleware", []) if isinstance(m, ToolAllowlist)]
     if expected == ALL:
@@ -302,6 +310,61 @@ def test_a_delegate_is_narrowed_by_it(cfg, selection, cap, expected):
         # It keeps a set, so order is not observable here; the rule test above
         # is where that case is pinned.
         assert allowlists[0]._allowed == set(expected)
+
+
+# -- the two axes are resolved apart --------------------------------------
+
+
+def test_naming_a_workspace_tool_costs_a_delegate_no_builtin():
+    """The whole reason the definition's list was split.
+
+    One flat list meant a delegate could not ask for `http_fetch` without
+    giving up `read_file`, and nothing in the file showed it happening. #77
+    fixed exactly this for a *request*; this is the same fix one level in.
+    """
+    spec = replace(
+        read_subagent(HELPER, Path("helper.md")), tools=("http_fetch",), builtin_tools=ALL
+    )
+
+    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch", "sql_query"))
+
+    assert isinstance(ceiling, tuple)  # concrete, never `ALL`
+    assert set(ceiling) == {"read_file", "ls", "http_fetch"}
+
+
+def test_naming_a_builtin_costs_a_delegate_no_workspace_tool():
+    """And the mirror, which is the direction the presets go."""
+    spec = replace(
+        read_subagent(HELPER, Path("helper.md")), builtin_tools=("read_file",), tools=ALL
+    )
+
+    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch",))
+
+    assert isinstance(ceiling, tuple)  # concrete, never `ALL`
+    assert set(ceiling) == {"read_file", "http_fetch"}
+
+
+def test_an_empty_list_is_how_a_delegate_says_none_of_them():
+    """`tools: []` is none; omitting the line is all. The presets rely on the
+    difference -- read-only means read-only, not "plus whatever ships"."""
+    spec = replace(read_subagent(HELPER, Path("helper.md")), builtin_tools=("read_file",), tools=())
+
+    ceiling = tool_ceiling(spec, builtin=("read_file", "ls"), workspace=("http_fetch",))
+
+    assert isinstance(ceiling, tuple)  # concrete, never `ALL`
+    assert set(ceiling) == {"read_file"}
+
+
+def test_one_axis_unresolved_is_refused_rather_than_guessed():
+    """`ALL` is the string `"*"`. Unpacked into the union it contributes a tool
+    *named* `*` and silently drops the axis it stood for -- which is what this
+    did before the guard, and how the first draft of the split passed its own
+    tests while granting `{'*', 'b'}`.
+    """
+    spec = replace(read_subagent(HELPER, Path("helper.md")), builtin_tools=ALL, tools=("a",))
+
+    with pytest.raises(ValueError, match="one tool axis resolved"):
+        tool_ceiling(spec, builtin=ALL, workspace=("a",))
 
 
 #: The rows where the definition declared something. `skills` cannot use the
@@ -333,3 +396,232 @@ def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
     assert parsed.tools == ALL  # declared nothing, so whatever the caller has
     assert subagent_skills(parsed, ("a", "b"), ("a", "b")) is None
     assert narrowed(parsed.tools, by=("a", "b")) == ("a", "b")
+
+
+def _built_with(cfg, session_dir, capabilities) -> dict:
+    """The arguments `create_deep_agent` was handed, letting the call through.
+
+    `conftest.capture_build` does this with a monkeypatch fixture; these two
+    want it without one, and letting the call happen still matters -- it is
+    what makes deepagents validate the spec we supply.
+    """
+    import kingfisher.infrastructure.agent as agent_module
+
+    seen: dict = {}
+    real = agent_module.create_deep_agent
+
+    def spy(**kwargs):
+        seen.update(kwargs)
+        return real(**kwargs)
+
+    agent_module.create_deep_agent = spy
+    try:
+        build_agent(
+            _with_helper(cfg),
+            session_dir=session_dir,
+            model=_model(),
+            capabilities=capabilities,
+        )
+    finally:
+        agent_module.create_deep_agent = real
+    return seen
+
+
+def test_the_builtin_delegate_gets_exactly_the_main_agents_tools(cfg, session_dir):
+    """deepagents ships it described to the model as having "access to all tools
+    as the main agent", and that description is handed straight through.
+
+    The sentence is true only because of the ceiling attached here, and only if
+    the two sets are *equal*. Broader makes it a lie in the dangerous direction
+    -- delegation as a way past a restriction, which is the escape this file is
+    about. Narrower makes it a lie in the confusing one: the model delegates on
+    the strength of it and is refused mid-task.
+
+    Equality rather than "the delegate is restricted", because a test for
+    restriction passes for a ceiling that is merely *different*.
+    """
+    seen = _built_with(cfg, session_dir, Capabilities(builtin_tools=("read_file", "task")))
+
+    (parent,) = [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
+    (builtin,) = [s for s in seen["subagents"] if s["name"] == "general-purpose"]
+    (delegate,) = [m for m in builtin["middleware"] if isinstance(m, ToolAllowlist)]
+
+    assert parent._allowed == delegate._allowed == {"read_file", "task"}
+
+
+def test_the_builtin_delegate_is_supplied_exactly_once(cfg, session_dir):
+    """Supplying the spec is the only hook there is.
+
+    deepagents builds this delegate itself and takes no middleware for it --
+    `GeneralPurposeSubagentProfile` offers `enabled`, `description` and
+    `system_prompt`, and nothing else. An explicit spec by the same name is the
+    documented override, and it is what carries the ceiling: measured, removing
+    it lets a request granted only `read_file` and `task` run `execute` through
+    the delegate.
+
+    Once, not twice: deepagents skips adding its own when the caller supplied
+    one, so a second would mean it stopped honouring that and the unrestricted
+    version was back alongside ours.
+    """
+    seen = _built_with(cfg, session_dir, Capabilities(builtin_tools=("read_file", "task")))
+
+    names = [s["name"] for s in seen["subagents"]]
+    assert names.count("general-purpose") == 1
+
+
+def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session_dir):
+    """Nothing was narrowed, so the delegate having everything the main agent
+    has is what deepagents would have done anyway."""
+    seen = _built_with(cfg, session_dir, Capabilities())
+
+    assert not [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
+    assert not [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
+
+
+# -- a tool name nothing offers -------------------------------------------
+#
+# The other half of this module's rule, which `tools` never had. A skill
+# nothing defines has always raised; a tool nothing defines went straight into
+# `narrowed`, where an unknown name is simply absent from the intersection.
+
+TYPO = """name: helper
+description: Asks for a tool by a name that does not exist.
+builtin_tools: [reed_file]
+system_prompt: |
+  You help.
+"""
+
+STAR = """name: helper
+description: Writes the wildcard, which is the list form and only the list form.
+builtin_tools: ["*"]
+tools: ["*"]
+system_prompt: |
+  You help.
+"""
+
+BARE_STAR = STAR.replace('builtin_tools: ["*"]', 'builtin_tools: "*"')
+MIXED = STAR.replace('builtin_tools: ["*"]', 'builtin_tools: ["*", read_file]')
+
+
+def _build(cfg, session_dir, definition):
+    return build_agent(
+        _with_helper(cfg, definition),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("helper",)),
+    )
+
+
+def test_a_misspelled_tool_is_refused_not_dropped(cfg, session_dir):
+    """`tools: [reed_file]` built a delegate with *no* tools, silently.
+
+    Not "a delegate missing one tool" -- the intersection of one bad name with
+    the offered set is empty, so the allowlist admitted nothing. The failure
+    looked like a delegate that would not act rather than like a typo.
+    """
+    with pytest.raises(CapabilityError, match="unknown builtin_tool"):
+        _build(cfg, session_dir, TYPO)
+
+
+def test_the_message_names_the_tool_and_what_is_offered(cfg, session_dir):
+    """A refusal nobody can act on is barely better than the silence."""
+    with pytest.raises(CapabilityError) as raised:
+        _build(cfg, session_dir, TYPO)
+
+    assert "reed_file" in str(raised.value)
+    assert "read_file" in str(raised.value)  # what it should have said
+
+
+def test_the_wildcard_means_everything(cfg, session_dir):
+    """`["*"]` used to mean the opposite of what it says: `*` matched no tool,
+    so the obvious spelling of "all of them" produced a delegate with none.
+
+    A list, because every selection in this format is a list and a field whose
+    type changes with its value is one more thing to know.
+    """
+    graph = _build(cfg, session_dir, STAR)
+
+    delegate = _subagent_graphs(graph).get("helper")
+    assert delegate is not None
+
+    spec = read_subagent(STAR, Path("helper.yaml"))
+    assert spec.builtin_tools == ALL
+    assert spec.tools == ALL
+
+
+def test_the_bare_star_is_refused_by_name(cfg, session_dir):
+    """A request spells this `"*"`, so someone will carry the habit across.
+
+    Refused rather than accepted, the same trade `system_prompt` makes by
+    taking one block style and naming the others: two spellings both end up in
+    the wild and every reader has to know both.
+    """
+    with pytest.raises(SubagentError, match=r"write \['\*'\] instead"):
+        read_subagent(BARE_STAR, Path("helper.yaml"))
+
+
+def test_mixing_the_wildcard_with_a_name_is_refused(cfg, session_dir):
+    """`["*", read_file]` has no reading that is not a guess, and it used to
+    have the worst one -- `*` matched nothing, so the star contributed nothing
+    and the line quietly meant `[read_file]`.
+    """
+    with pytest.raises(SubagentError, match="mixes"):
+        read_subagent(MIXED, Path("helper.yaml"))
+
+
+def test_a_tool_the_request_withheld_is_still_dropped(cfg, session_dir):
+    """The half that must *not* change. A name that exists but this request did
+    not grant is a caller being narrower than the definition, which is not a
+    mistake -- so it is dropped, exactly as before.
+    """
+    definition = TYPO.replace("reed_file", "read_file, execute")
+
+    graph = build_agent(
+        _with_helper(cfg, definition),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
+    )
+
+    delegate = _subagent_graphs(graph).get("helper")
+    assert delegate is not None  # built, not refused
+
+
+def test_a_definition_naming_no_tools_is_unaffected(cfg, session_dir):
+    """The check costs an extra assembly, so it only runs when a definition
+    actually names a tool. This is the path that still skips it."""
+    graph = _build(cfg, session_dir, HELPER)
+
+    assert _subagent_graphs(graph).get("helper") is not None
+
+
+def test_a_builtin_named_under_tools_says_which_list_it_belongs_in(cfg, session_dir):
+    """The mistake this split creates, and the one every definition written
+    before it will make: `tools: [read_file]` was correct until now.
+
+    Falling through to "unknown tool: read_file" would send someone looking for
+    a bug in kingfisher, because `read_file` plainly exists. `_refuse_unknown_tools`
+    says the same thing to a request, for the same reason.
+    """
+    definition = TYPO.replace("builtin_tools: [reed_file]", "tools: [read_file]")
+
+    with pytest.raises(CapabilityError, match="name it in builtin_tools"):
+        _build(cfg, session_dir, definition)
+
+
+def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
+    """Five names and "it is a builtin tool" reads as machine output.
+
+    This is the message every definition written before the two tool lists
+    will hit, so it is the one worth reading like a sentence. Found by running
+    a real migration, not by review.
+    """
+    one = TYPO.replace("builtin_tools: [reed_file]", "tools: [read_file]")
+    many = TYPO.replace("builtin_tools: [reed_file]", "tools: [read_file, ls, glob]")
+
+    with pytest.raises(CapabilityError, match="that is a builtin tool -- name it in"):
+        _build(cfg, session_dir, one)
+
+    with pytest.raises(CapabilityError, match="those are builtin tools -- name them in"):
+        _build(cfg, session_dir, many)
+

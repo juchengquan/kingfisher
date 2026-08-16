@@ -90,6 +90,35 @@ def test_prose_is_closed_off_when_the_run_ends_on_it():
     assert result is not None
 
 
+def test_a_delegates_prose_is_marked_where_it_starts_and_ends():
+    """Two answers on one stream, with nothing between them, read as one.
+
+    The marker cannot go on the fragment: chunks split mid-word, so there is no
+    line to tag. It goes at the seam, which is the only place a boundary
+    actually exists.
+    """
+    text, _ = _render(
+        [
+            RunEvent(kind="token", text="Checking that. "),
+            RunEvent(kind="token", text="I recomputed it.", agent="reviewer"),
+            RunEvent(kind="token", text="Agreed."),
+        ]
+    )
+
+    assert text == "Checking that. \n[reviewer]\nI recomputed it.\n[main]\nAgreed.\n"
+
+
+def test_a_run_with_no_delegates_is_rendered_exactly_as_before():
+    """The regression that would be easy to miss: every run gaining a `[main]`
+    line it never had. The marker is printed on a *change* of speaker, and a
+    run with one speaker never changes."""
+    text, _ = _render(
+        [RunEvent(kind="token", text="7 to"), RunEvent(kind="token", text=" seven.txt")]
+    )
+
+    assert text == "7 to seven.txt\n"
+
+
 def test_the_models_own_formatting_survives():
     """Tokens carry markdown mid-stream; `_line` would flatten it."""
     text, _ = _render([RunEvent(kind="token", text="1. first\n\n2. second")])

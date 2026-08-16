@@ -27,11 +27,11 @@ class SlowAgent:
         self.steps = steps
         self.taken = 0
 
-    def stream(self, state, config, stream_mode=None):
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
         for _ in range(self.steps):
             self.taken += 1
-            yield ("updates", {"agent": {"messages": [AIMessage(content="working")]}})
-        yield ("values", {"messages": [AIMessage(content="done")]})
+            yield ((), "updates", {"agent": {"messages": [AIMessage(content="working")]}})
+        yield ((), "values", {"messages": [AIMessage(content="done")]})
 
 
 # -- the wall-clock bound -------------------------------------------------

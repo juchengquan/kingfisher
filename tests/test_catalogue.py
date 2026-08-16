@@ -18,6 +18,7 @@ import pytest
 
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
+from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.agent import (
     available_skills,
     build_agent,
@@ -26,7 +27,7 @@ from kingfisher.infrastructure.agent import (
 )
 from kingfisher.infrastructure.backend import SKILLS_ROUTE, build_backend
 from kingfisher.infrastructure.workspace_fs import resolve_catalogue
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, capture_build
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -222,6 +223,31 @@ def test_a_broken_catalogue_fails_at_startup(tmp_path, cfg):
     with pytest.raises(ConfigError):
         Kingfisher(cfg, catalogue_roots={"skills": missing, "subagents": missing,
                                          "tools": missing})
+
+
+def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, monkeypatch,
+                                                             session_dir):
+    """The subagent half, through `build_agent` rather than beside it.
+
+    `_activated_subagents` resolves what a request wired *before* the tools,
+    because whether a definition names one decides if the tool probe runs. It
+    reads the catalogue to do that, so it needs the same one everything else
+    got -- and a request activating a delegate the staged catalogue defines is
+    the only thing that shows it did.
+    """
+    roots = _staged(tmp_path / "staged", subagent=SUBAGENT)
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[]),
+        capabilities=Capabilities(subagents=("reviewer",)),
+        catalogue=roots,
+    )
+
+    names = [spec["name"] for spec in captured["subagents"]]
+    assert "reviewer" in names, "the staged catalogue's delegate was not wired"
 
 
 def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, session_dir):

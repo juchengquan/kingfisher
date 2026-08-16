@@ -89,7 +89,7 @@ def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
     define(
         cfg,
         "name: reviewer\ndescription: d\n"
-        "tools: [read_file]\nskills: [tabular-qa]\n"
+        "builtin_tools: [read_file]\nskills: [tabular-qa]\n"
         "system_prompt: |\n  You review.\n",
     )
 

@@ -240,6 +240,30 @@ def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
     return None
 
 
+def belongs_in(names: tuple[str, ...], *, field: str) -> str:
+    """"that is a builtin tool -- name it in builtin_tools", agreeing in number.
+
+    Both places that say this built the sentence for one name and then printed
+    it for however many there were:
+
+        names read_file, ls, glob, grep, execute in tools,
+        but it is a builtin tool -- name it in builtin_tools
+
+    Which is the message *every* definition written before the two tool lists
+    existed will hit, so it is the one worth reading like a sentence. `field`
+    is the plural key a name belongs under -- `builtin_tools` -- and the kind
+    is its singular, which is why the two never disagree.
+    """
+    # `split`/`join` rather than `.replace`, which `test_domain_touches_nothing`
+    # forbids here: `Path.replace` renames a file, and the check reads names
+    # rather than types. A blunt guard is the point of that test, so this bends
+    # to it rather than the other way round.
+    kind = " ".join(field[:-1].split("_"))
+    if len(names) == 1:
+        return f"that is a {kind} -- name it in {field}"
+    return f"those are {kind}s -- name them in {field}"
+
+
 def narrowed(selection: Selection, *, by: Selection) -> Selection:
     """`selection`, keeping only what `by` also allows. Never widens.
 

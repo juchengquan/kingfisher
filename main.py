@@ -243,10 +243,22 @@ class Progress:
     def __init__(self, out: TextIO) -> None:
         self._out = out
         self._owed = False
+        self._speaker: str | None = None
 
     def write(self, event: RunEvent) -> RunResult | None:
         """Show one event. Returns the `RunResult` if this was the last."""
         if event.kind == "token":
+            # Prose from a delegate arrives on the same stream as the caller's
+            # own, as the same type, with nothing between them -- so without a
+            # marker the two answers read as one. It cannot go on the fragment
+            # itself: chunks split mid-word, and there is no line to tag. So it
+            # goes at the seam, which is the only place a boundary exists.
+            if event.agent != self._speaker:
+                if self._owed:
+                    self._out.write("\n")
+                    self._owed = False
+                self._speaker = event.agent
+                print(f"[{event.agent or 'main'}]", file=self._out, flush=True)
             self._out.write(event.text)
             self._out.flush()
             self._owed = True
@@ -337,6 +349,11 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
 
     Only called when a `--without-*` flag asked, so a run that does not
     subtract pays nothing for this.
+
+    Through the resolved catalogue, for the reason `--list` is: what a
+    subtraction is taken from has to be what the run will actually offer, and
+    reading `cfg` here while the agent read somewhere else would make
+    `--without-skills X` refuse a name the run did not have.
     """
     from kingfisher.infrastructure.agent import (  # noqa: PLC0415
         available_skills,
@@ -344,13 +361,17 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
         defined_subagents,
         registered_tools,
     )
+    from kingfisher.infrastructure.workspace_fs import resolve_catalogue  # noqa: PLC0415
 
+    catalogue = resolve_catalogue(cfg)
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
         root = Path(scratch)
         return {
-            "tools": registered_tools(build_agent(cfg, session_dir=root)),
-            "skills": available_skills(cfg, root),
-            "subagents": tuple(defined_subagents(cfg, root)),
+            "tools": registered_tools(
+                build_agent(cfg, session_dir=root, catalogue=catalogue)
+            ),
+            "skills": available_skills(cfg, root, catalogue=catalogue),
+            "subagents": tuple(defined_subagents(cfg, root, catalogue=catalogue)),
         }
 
 

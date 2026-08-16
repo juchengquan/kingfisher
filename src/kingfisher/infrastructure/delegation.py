@@ -22,6 +22,7 @@ from kingfisher.domain.capabilities import (
     CapabilityError,
     Selection,
     approved_middleware,
+    belongs_in,
     narrowed,
 )
 from kingfisher.domain.subagent import resolved_endpoint
@@ -35,6 +36,83 @@ if TYPE_CHECKING:
 
     from kingfisher.config import Config
     from kingfisher.domain.subagent import SubagentSpec
+
+def tool_ceiling(spec: SubagentSpec, *, builtin: Selection, workspace: Selection) -> Selection:
+    """Every tool this delegate may call, from the two lists it may narrow.
+
+    Resolved apart against their own grants and then unioned, exactly as
+    `_permitted_tools` does it for a request -- which is the point of the
+    split: `tools: [http_fetch]` costs a delegate no built-in, the way it
+    stopped costing a caller one.
+
+    `builtin` and `workspace` arrive already resolved to names, or both `ALL`.
+    Never one of each: `ALL` here means "everything offered", and this cannot
+    enumerate that -- so a mixed pair would silently drop the unenumerable half.
+    `_resolve_tools` computes them together for exactly that reason.
+    """
+    from_builtin = narrowed(spec.builtin_tools, by=builtin)
+    from_workspace = narrowed(spec.tools, by=workspace)
+    if from_builtin == ALL and from_workspace == ALL:
+        # Narrowed by nobody on either axis, so no allowlist at all -- which is
+        # not an empty one, and the difference is what `ToolAllowlist` enforces.
+        return ALL
+    if ALL in (from_builtin, from_workspace):
+        # Unenumerable, and the failure is quiet if unguarded: `ALL` is the
+        # string `"*"`, so unpacking it into the union contributes a tool
+        # *named* `*` and drops the axis it stood for. An allowlist is one flat
+        # set of names and cannot say "all of those, plus these".
+        msg = (
+            f"subagent {spec.name!r}: one tool axis resolved to {ALL!r} while the "
+            f"other named tools ({from_builtin!r} / {from_workspace!r}). Resolve "
+            f"both against what is offered before calling this, or neither"
+        )
+        raise ValueError(msg)
+    return (*(from_builtin or ()), *(from_workspace or ()))
+
+
+def refuse_unknown_tools(
+    spec: SubagentSpec, *, builtin: tuple[str, ...], workspace: tuple[str, ...]
+) -> None:
+    """Refuse a tool name nothing offers, before narrowing quietly drops it.
+
+    The half of this module's rule that `tools` never had. The docstring above
+    lists `tools` among the fields where "a name nothing defines is a mistake
+    and raises", and `subagent_skills` does exactly that -- but a declared tool
+    name went straight into `narrowed`, where a name nothing offers is simply
+    absent from the intersection and leaves no trace.
+
+    So `tools: [reed_file]` built a delegate with *no* tools rather than one
+    missing a tool. Silently, which is the failure this format refuses unknown
+    *keys* to avoid; the keys were checked and the values were not.
+
+    Two lists now, so there is a second mistake to make and it deserves its own
+    sentence: a built-in named under `tools` exists, and telling someone their
+    `read_file` is unknown would send them looking for a bug in kingfisher.
+    `_refuse_unknown_tools` says the same thing to a request, for the same
+    reason.
+
+    Only the refusal. Narrowing stays in `tool_ceiling`, where the two axes
+    meet.
+    """
+    for asked, own, other, here, there in (
+        (spec.tools, workspace, builtin, "tools", "builtin_tools"),
+        (spec.builtin_tools, builtin, workspace, "builtin_tools", "tools"),
+    ):
+        if asked in (ALL, None):
+            continue
+        if misplaced := tuple(n for n in asked if n in set(other)):
+            msg = (
+                f"subagent {spec.name!r} names {', '.join(misplaced)} in {here}, "
+                f"but {belongs_in(misplaced, field=there)}"
+            )
+            raise CapabilityError(msg)
+        if unknown := tuple(n for n in asked if n not in set(own)):
+            msg = (
+                f"subagent {spec.name!r} names unknown {here[:-1]}(s): "
+                f"{', '.join(unknown)}; this agent offers {own}"
+            )
+            raise CapabilityError(msg)
+
 
 def subagent_skills(
     spec: SubagentSpec, available: tuple[str, ...], activated: Selection
@@ -100,6 +178,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     cfg: Config,
     *,
     providers: Selection = ALL,
+    builtin_tools: Selection = ALL,
     tools: Selection = ALL,
     backend: Any = None,
     skills: Selection = None,
@@ -131,7 +210,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # middleware, and a subagent inherits none of it, so a request that withheld
     # `execute` handed it straight to any delegate. The ceiling has to be
     # applied here to exist at all; deciding what it *is* does not belong here.
-    ceiling = narrowed(spec.tools, by=tools)
+    ceiling = tool_ceiling(spec, builtin=builtin_tools, workspace=tools)
     if ceiling != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist
         # rather than an absent one -- the same split the parent makes.
