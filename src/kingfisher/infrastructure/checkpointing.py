@@ -18,7 +18,7 @@ from __future__ import annotations
 import sqlite3
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from langgraph.checkpoint.sqlite import SqliteSaver
 
@@ -38,6 +38,32 @@ BUSY_TIMEOUT_MS = 30_000
 
 def checkpoint_db_path(cfg: Config) -> Path:
     return cfg.state_dir / "threads.db"
+
+
+def thread_ids(store: Any) -> tuple[str, ...] | None:
+    """Every thread the store holds, or `None` when it cannot say.
+
+    `ThreadStore` is "something that forgets a thread" and deliberately stays
+    that narrow; enumerating is a janitor's need, not the domain's, so it is
+    asked for here rather than widened into the port. A store that cannot
+    enumerate yields `None`, which the caller reads as "cannot reconcile" and
+    skips -- the same shape as `registered_tools` returning `()` for "cannot
+    check". An injected double is the usual case, and a sweep must not fail
+    because the thing it was handed does not answer this question.
+
+    Through the saver's public `list`, not a `SELECT DISTINCT thread_id`.
+    Direct SQL measured 411x faster on a real database -- under a millisecond
+    against 175ms -- and was still the wrong trade: this runs on a janitor's
+    schedule, never on a request, and the public call cannot be broken by an
+    upstream schema change. The cost is that `list` deserialises every
+    checkpoint, so the 175ms was for 1,894 of them and grows with the
+    database. If that ever matters, it is a reason to page, not a reason to
+    reach into the schema.
+    """
+    lister = getattr(store, "list", None)
+    if lister is None:
+        return None
+    return tuple({item.config["configurable"]["thread_id"] for item in lister(None)})
 
 
 def build_checkpointer(cfg: Config) -> BaseCheckpointSaver:
