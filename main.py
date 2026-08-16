@@ -457,6 +457,39 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
         }
 
 
+def _refuse_the_other_axis(
+    excluded: dict[str, tuple[str, ...] | None], offered: dict[str, tuple[str, ...]]
+) -> None:
+    """Name the flag a subtraction meant, when it named the other axis.
+
+    `--without-tools execute` is what this driver's docstring advertised until
+    the two axes were split, so it is the mistake someone arrives with. Left to
+    `all_but` it comes back as "cannot exclude unknown name(s): execute" beside
+    a list that does not contain it -- true, unhelpful, and the reader has no
+    way to know a second flag exists.
+
+    The same sentence a request already gets for the same mistake, said one step
+    earlier: `_refuse_unknown_tools` tells a caller naming `read_file` under
+    `tools` that it is a builtin tool. This tells them where to subtract it.
+    """
+    for kind, other, describes in (
+        ("tools", "builtin_tools", "builtin tool"),
+        ("builtin_tools", "tools", "tool of this workspace"),
+    ):
+        leave_out = excluded[kind]
+        if not leave_out:
+            continue
+        if misplaced := tuple(n for n in leave_out if n in set(offered[other])):
+            many = len(misplaced) > 1
+            msg = (
+                f"--without-{kind.replace('_', '-')} names {', '.join(misplaced)}, "
+                f"but {'those are' if many else 'that is a'} {describes}"
+                f"{'s' if many else ''} -- subtract "
+                f"{'them' if many else 'it'} with --without-{other.replace('_', '-')}"
+            )
+            raise CapabilityError(msg)
+
+
 def _grants(cfg: Config, args: argparse.Namespace) -> dict[str, tuple[str, ...] | None]:
     """Each grant, whether it was written as a list or as a subtraction.
 
@@ -479,6 +512,8 @@ def _grants(cfg: Config, args: argparse.Namespace) -> dict[str, tuple[str, ...] 
         raise ValueError(msg)
 
     offered = _offered(cfg) if any(v is not None for v in excluded.values()) else {}
+    if offered:
+        _refuse_the_other_axis(excluded, offered)
     for kind in GRANTS:
         leave_out = excluded[kind]
         named = getattr(args, kind)

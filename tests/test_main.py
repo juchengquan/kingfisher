@@ -383,6 +383,25 @@ def test_subtracting_skills_and_subagents_too(cfg):
     assert "builtin_tools" not in grants
 
 
+def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg):
+    """The mistake someone arrives with, because it used to be the advice.
+
+    `--without-tools execute` is what this driver's docstring advertised before
+    the axes were split. Left to `all_but` it comes back as "cannot exclude
+    unknown name(s): execute" beside a list not containing it -- true, and no
+    help at all if you do not know a second flag exists.
+    """
+    from kingfisher.infrastructure import presets
+
+    presets.seed(cfg)
+
+    with pytest.raises(CapabilityError, match=r"subtract it with --without-builtin-tools"):
+        main._grants(cfg, _args(without_tools="execute"))
+
+    with pytest.raises(CapabilityError, match=r"subtract it with --without-tools"):
+        main._grants(cfg, _args(without_builtin_tools="http_fetch"))
+
+
 def test_naming_both_forms_of_one_kind_is_refused(cfg):
     """Two ways to say the same thing; whichever precedence we picked, the
     other reading is the one somebody meant."""
