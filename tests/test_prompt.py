@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.delegation import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
     render_system_prompt,
@@ -171,3 +173,57 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     result = backend.execute('cat "$HOME/skills/demo/SKILL.md"')
     assert result.exit_code == 0, f"$HOME/skills does not reach the catalogue: {result}"
     assert "hello" in result.output
+
+
+# -- what a delegate's prompt carries -------------------------------------
+#
+# `PROMPT.md` is where a workspace writes what it wants said about its own
+# work. It reached the main agent and nothing the main agent delegated to, so a
+# house rule applied right up until the moment the work was handed on. Nothing
+# stated that as a decision; the asymmetry was just there.
+
+
+DELEGATE = """name: reviewer
+description: Checks an analysis.
+system_prompt: |
+  You review analyses for arithmetic errors.
+"""
+
+
+def _delegate(cfg):
+    spec = read_subagent(DELEGATE, Path("reviewer.yaml"))
+    return as_subagent(spec, cfg)["system_prompt"]
+
+
+def test_a_delegate_is_given_the_workspaces_own_instructions(cfg):
+    (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
+
+    assert "Always cite the file." in _delegate(cfg)
+
+
+def test_a_workspace_that_wrote_none_changes_nothing(cfg):
+    """The definition's own text, byte for byte -- no separator, no blank tail."""
+    assert _delegate(cfg) == "You review analyses for arithmetic errors."
+
+
+def test_a_delegate_is_not_given_the_harnesss_own_prompt(cfg):
+    """The part that must *not* be inherited. That document describes `/data`,
+    the shell and the skills index to an agent that has its own procedure and
+    its own narrower grant -- and it is 5,305 characters of it."""
+    (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
+    prompt = _delegate(cfg)
+
+    assert len(prompt) < 200
+    assert "/data" not in prompt
+
+
+def test_both_levels_separate_the_addition_the_same_way(cfg):
+    """One joining rule. Written out at each it would be one rule with two
+    spellings, which is how a separator comes to differ by a newline."""
+    (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
+
+    main = system_prompt(replace(cfg, skills_enabled=True))
+    delegate = _delegate(cfg)
+
+    assert "\n\n---\n\nAlways cite the file." in main
+    assert "\n\n---\n\nAlways cite the file." in delegate

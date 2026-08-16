@@ -81,12 +81,22 @@ def render_system_prompt(
     ]
     sections = "\n\n".join(_prompt_text(CAPABILITY_FILES[name]).strip() for name in enabled)
 
-    assembled = base.replace(CAPABILITY_MARKER, sections)
-    if extra.strip():
-        assembled = f"{assembled.strip()}\n\n---\n\n{extra.strip()}"
+    assembled = _joined(base.replace(CAPABILITY_MARKER, sections), extra)
     # Removing the marker leaves a run of blank lines behind; collapse them so
     # the prefix sent on every step stays tidy.
     return re.sub(r"\n{3,}", "\n\n", assembled).strip() + "\n"
+
+
+def _joined(prompt: str, extra: str) -> str:
+    """Two prompt parts, separated the one way this codebase separates them.
+
+    A function because it is applied twice: to the main agent's assembled
+    prompt, and to a delegate's own. Written out at both would be one rule with
+    two spellings, which is how a separator comes to differ by a newline.
+    """
+    if not extra.strip():
+        return prompt
+    return f"{prompt.strip()}\n\n---\n\n{extra.strip()}"
 
 
 def user_prompt(workspace: Path | None) -> str:
@@ -95,6 +105,21 @@ def user_prompt(workspace: Path | None) -> str:
         return ""
     path = Path(workspace) / USER_PROMPT_FILE
     return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
+
+
+def with_user_prompt(prompt: str, workspace: Path | None) -> str:
+    """`prompt`, plus whatever the workspace put in its own `PROMPT.md`.
+
+    For a delegate, which gets none of the assembled system prompt -- and
+    should not: that document is the harness describing itself, and a delegate
+    already has its own procedure. `PROMPT.md` is the other thing, the part a
+    *workspace* wrote about its own work, and it applied to the main agent and
+    silently not to anything the main agent delegated to.
+
+    Appended rather than prepended, so it reads as a qualifier on the
+    procedure, which is the order the main agent's prompt uses too.
+    """
+    return _joined(prompt, user_prompt(workspace))
 
 
 def system_prompt(cfg: Config | None = None) -> str:

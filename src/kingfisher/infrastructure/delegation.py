@@ -25,6 +25,7 @@ from kingfisher.domain.capabilities import (
 from kingfisher.domain.subagent import resolved_endpoint
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
+from kingfisher.infrastructure.prompting import with_user_prompt
 from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
 
 if TYPE_CHECKING:
@@ -138,7 +139,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     subagent: dict[str, Any] = {
         "name": spec.name,
         "description": spec.description,
-        "system_prompt": spec.system_prompt,
+        # Its own procedure, then the workspace's own instructions. A house
+        # rule written in `PROMPT.md` reached the main agent and nothing it
+        # delegated to, so delegated work quietly escaped it.
+        "system_prompt": with_user_prompt(spec.system_prompt, cfg.workspace),
     }
     middleware: list[Any] = []
     # The definition's own restriction, narrowed by the request's -- by the
