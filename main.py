@@ -180,37 +180,58 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     return 0
 
 
-def render(events: Iterable[RunEvent], out: TextIO) -> RunResult | None:
-    """Print a run as it happens, and return its result.
+class Progress:
+    """Print run events as they arrive, and keep the terminal readable.
 
     Token events are fragments, not lines: written with no newline and no tag,
     so the model owns the left margin and its own formatting survives. Progress
-    stays tagged and aligned. That mix is the whole reason for `owed` -- a
+    stays tagged and aligned. That mix is the whole reason for `_owed` -- a
     newline is owed before the next tagged line, or it lands on the end of a
     half-finished sentence.
 
-    The terminal event carries the `RunResult` and is not itself printed. Nor
-    is `result.answer` printed afterwards: it already arrived, a word at a
-    time, and saying it again below would read as the model answering twice.
+    A class rather than a loop because there are two loops: `stream` is
+    synchronous and `astream` is not, and the formatting is the same either
+    way. Writing it twice is how the two would come to disagree about when a
+    newline is owed.
     """
-    result: RunResult | None = None
-    owed = False
-    for event in events:
+
+    def __init__(self, out: TextIO) -> None:
+        self._out = out
+        self._owed = False
+
+    def write(self, event: RunEvent) -> RunResult | None:
+        """Show one event. Returns the `RunResult` if this was the last."""
         if event.kind == "token":
-            out.write(event.text)
-            out.flush()
-            owed = True
-            continue
-        if owed:
-            out.write("\n")
-            owed = False
+            self._out.write(event.text)
+            self._out.flush()
+            self._owed = True
+            return None
+        if self._owed:
+            self._out.write("\n")
+            self._owed = False
+        # The terminal event carries the result and is not itself printed. Nor
+        # is `result.answer` printed afterwards: it already arrived, a word at
+        # a time, and saying it again would read as the model answering twice.
         if event.kind == "finished":
-            result = event.result
-        else:
-            print(event, file=out, flush=True)
-    if owed:
-        out.write("\n")
-        out.flush()
+            return event.result
+        print(event, file=self._out, flush=True)
+        return None
+
+    def close(self) -> None:
+        """Settle any newline still owed, so the next writer starts clean."""
+        if self._owed:
+            self._out.write("\n")
+            self._out.flush()
+            self._owed = False
+
+
+def render(events: Iterable[RunEvent], out: TextIO) -> RunResult | None:
+    """Drain a synchronous stream through `Progress`."""
+    progress = Progress(out)
+    result: RunResult | None = None
+    for event in events:
+        result = progress.write(event) or result
+    progress.close()
     return result
 
 
