@@ -52,11 +52,39 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
+[project.optional-dependencies]
+# The HTTP surface. Optional because a library caller pays nothing for a server
+# they do not run, and separable because `kingfisher.server` is a consumer of
+# the public API rather than part of it -- it may import `kingfisher` and
+# nothing deeper, and no layer may import it back. `test_architecture.py` holds
+# that line; this extra is what makes it a distribution boundary too.
+server = [
+    # For inbound validation and the generated schema. Responses are built by
+    # hand from the dataclasses rather than mirrored as pydantic models:
+    # `RunResult` keeps `run_dir` and `log_path` as `Path` so `json.dumps`
+    # raises on them, and a mirror is a second home for that rule -- one where
+    # adding a `Path` serialiser makes the error go away and ships exactly the
+    # leak the original refuses.
+    #
+    # pydantic is not new weight: it already arrives through langchain. Starlette
+    # arrives through fastapi and is imported directly for `Response`, but is not
+    # named here -- fastapi's own floor is what decides which one is installed,
+    # and a second floor would only fight it.
+    "fastapi>=0.141.1",
+    # Imported by nothing in the package; it is how the app gets served. Named
+    # so `kingfisher[server]` installs something runnable rather than something
+    # that needs a second install nobody wrote down.
+    "uvicorn>=0.40.0",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
 [dependency-groups]
 dev = [
+    # The server extra, so its tests always run rather than skipping quietly on
+    # a machine that happens not to have it.
+    "fastapi>=0.141.1",
     "pytest>=9.1.1",
     "ruff>=0.16.3",
     "ty>=0.0.72",

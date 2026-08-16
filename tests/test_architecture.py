@@ -474,3 +474,86 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
     from kingfisher.domain.session import SessionBusyError
 
     assert kingfisher.SessionBusyError is SessionBusyError
+
+
+# -- the server is a consumer, not an insider ------------------------------
+#
+# `kingfisher.server` ships in this distribution and is separated from the
+# library by these two rules rather than by intention. The point is not tidiness:
+# it puts the server on the same footing as anybody outside the package, so when
+# it needs something the library does not export, the answer is to export it
+# deliberately. Three things came out that way before the server existed -- the
+# caller-facing errors, `async_checkpointer`, and a way to send a file.
+
+
+def _server_modules() -> list[Path]:
+    return sorted((SRC / "server").rglob("*.py"))
+
+
+def _reaches_past_the_public_api(module: str) -> bool:
+    return (
+        module.split(".", maxsplit=1)[0] == "kingfisher"
+        and module != "kingfisher"
+        and not module.startswith("kingfisher.server")
+    )
+
+
+@pytest.mark.parametrize("path", _server_modules(), ids=lambda p: p.name)
+def test_the_server_uses_the_library_only_through_its_public_api(path):
+    """`from kingfisher import X`, never `from kingfisher.domain.y import X`.
+
+    A server that reaches into `kingfisher.application.service` for something
+    unexported is a server that has quietly made a private name load-bearing --
+    and the next person to move it breaks an HTTP contract without touching
+    anything that looks like one.
+    """
+    reaching = {m for m in _imported_modules(path) if _reaches_past_the_public_api(m)}
+    assert not reaching, (
+        f"server/{path.name} imports {sorted(reaching)} — the server takes `kingfisher` "
+        "and nothing deeper; if it needs something private, export it on purpose"
+    )
+
+
+@pytest.mark.parametrize(
+    "path",
+    [p for layer in ("domain", "application", "infrastructure") for p in _modules_in(layer)]
+    + [SRC / "__init__.py", SRC / "config.py"],
+    ids=lambda p: f"{p.parent.name}/{p.name}",
+)
+def test_no_part_of_the_library_imports_the_server(path):
+    """The outward half. Dependencies point one way, and a library that imports
+    its own server makes the extra a lie -- `pip install kingfisher` would fail
+    at import without fastapi."""
+    modules = _imported_modules(path)
+    assert not any(m.startswith("kingfisher.server") for m in modules), (
+        f"{path.parent.name}/{path.name} imports kingfisher.server — the library "
+        "does not know its server exists"
+    )
+
+
+#: The synchronous pair. On an event loop these do not merely block one
+#: request, they block every other turn sharing the process.
+BLOCKING_METHODS = frozenset({"run", "stream"})
+
+
+@pytest.mark.parametrize("path", _server_modules(), ids=lambda p: p.name)
+def test_the_server_calls_the_async_turn_methods(path):
+    """`arun` and `astream`, never `run` and `stream`.
+
+    A one-line check for the mistake that turns a concurrent server into a
+    serial one, caught where it is written rather than under load. `astream`
+    exists for exactly this: four turns measured at 0.4-1.2 turns of wall clock
+    instead of four.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    offenders = sorted({
+        node.func.attr
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr in BLOCKING_METHODS
+    })
+    assert not offenders, (
+        f"server/{path.name} calls {offenders} — use arun/astream; the sync pair "
+        "blocks every other turn on this loop, not just this one"
+    )
