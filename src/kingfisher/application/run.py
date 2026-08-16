@@ -12,7 +12,6 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from typing import Any
-from uuid import uuid4
 
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
@@ -24,15 +23,10 @@ __all__ = [
     "Request",
     "RunEvent",
     "RunResult",
-    "new_session_id",
     "normalize_answer",
     "run",
     "stream",
 ]
-
-
-def new_session_id() -> str:
-    return uuid4().hex[:12]
 
 
 def _service(cfg: Config | None, agent: Any, checkpointer: Any, dirs: Any) -> Kingfisher:
