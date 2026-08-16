@@ -40,9 +40,12 @@ else does. It is granted like `middleware` and for a stronger reason: it
 decides which endpoint receives this delegate's prompts and whose
 credentials pay for them.
 
-`provider` and `model` move together. An operator overriding only the model,
-against a definition that pins a provider, would send one endpoint's model
-name to another; that is refused rather than resolved.
+`provider` and `model` move together, in one direction. A definition naming an
+endpoint must say what to run there, or the deployment's own model name is sent
+somewhere that has never heard of it. `model` alone is fine -- it names
+something to run and nothing about where, so it runs where everything else
+does. An operator overriding only the model against a definition that pins a
+provider is the same mistake from the other side, and refused too.
 
 The optional `model` is where per-role cost routing lands naturally: reading
 heavy delegation on a cheap model, synthesis on the expensive one.
@@ -257,6 +260,21 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         if not fields.text(document[required]):
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
+
+    # `provider` without `model` sends the *deployment's* model name to another
+    # endpoint -- a 404 if you are lucky and a wrong-model run if you are not.
+    # `resolved_endpoint` already refuses the operator's half of this; a
+    # definition naming half the pair is the same mistake from the other side.
+    #
+    # Not symmetric: `model` alone is fine. It names something to run and says
+    # nothing about where, so it runs wherever the deployment does.
+    if document.get("provider") and not document.get("model"):
+        msg = (
+            f"{source.name}: names provider {fields.text(document['provider'])!r} "
+            "but no model; a model name means nothing without the endpoint that "
+            "serves it, so name both or neither"
+        )
+        raise SubagentError(msg)
 
     return SubagentSpec(
         name=fields.text(document["name"]),

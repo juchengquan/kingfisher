@@ -495,3 +495,31 @@ def test_metadata_survives_loading_the_catalogue(tmp_path):
     }
 
     assert owners == {"reviewer": "platform-team", "namer": "unowned"}
+
+
+def test_an_endpoint_without_a_model_is_refused(tmp_path):
+    """`provider` alone sends the *deployment's* model name to another endpoint
+    -- a 404 if you are lucky and a wrong-model run if you are not.
+    `resolved_endpoint` already refuses an operator doing this half-way; this
+    is the same mistake from the definition's side.
+    """
+    definition = (
+        "name: reviewer\ndescription: d\nprovider: openai\nsystem_prompt: |\n  You review.\n"
+    )
+
+    with pytest.raises(SubagentError, match="but no model"):
+        read_subagent(definition, tmp_path / "reviewer.yaml")
+
+
+def test_a_model_without_an_endpoint_is_fine(tmp_path):
+    """Not symmetric, and deliberately. A model names something to run and
+    nothing about where, so it runs where the deployment does -- which is what
+    `extractor.yaml` relies on to be both cheap and portable.
+    """
+    definition = (
+        "name: reviewer\ndescription: d\nmodel: cheap-one\nsystem_prompt: |\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert (spec.provider, spec.model) == (None, "cheap-one")

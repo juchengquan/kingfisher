@@ -98,7 +98,11 @@ def test_omitting_provider_keeps_the_default(cfg, session_dir, monkeypatch):
 
 
 def test_an_endpoint_a_request_may_not_use_is_refused(cfg, session_dir, monkeypatch):
-    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nsystem_prompt: |\n  Go.\n")
+    define(
+        cfg,
+        "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  Go.\n",
+    )
     routed = replace(cfg, endpoints={"openai": ELSEWHERE})
 
     with pytest.raises(CapabilityError, match="may not use"):

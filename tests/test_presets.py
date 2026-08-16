@@ -301,18 +301,16 @@ def test_every_complete_definition_in_the_readme_parses(shipped):
         read_subagent(block, _Path("readme.yaml"))
 
 
-def test_every_preset_pins_both_halves_of_where_it_runs(shipped):
-    """`provider` and `model` move together -- a model name means nothing
-    without the endpoint that serves it, and overriding one against a
-    definition that pins the other is refused rather than resolved.
+def test_only_the_preset_that_runs_elsewhere_names_an_endpoint(shipped):
+    """A pin has to earn its place, and naming the deployment's own default
+    does not: it reads as a decision, behaves as a no-op, and stops the file
+    working for anyone whose default differs.
 
-    Every preset names both, so each one says where it runs rather than
-    inheriting it. The cost is that seeding them requires those endpoints:
-    `provider` is checked when the agent is built, so activating a preset
-    whose style this deployment lacks fails with `no endpoint configured`.
+    So `second-opinion` names one -- being a different model is its whole
+    purpose -- and the other two do not. `extractor` pins `model` alone, which
+    is the cheap-model decision and says nothing about where it runs.
     """
-    specs = load_all(shipped / "subagents").values()
+    specs = load_all(shipped / "subagents")
 
-    half_pinned = {s.name for s in specs if (s.provider is None) != (s.model is None)}
-    assert not half_pinned, f"these name one half of the pair: {sorted(half_pinned)}"
-    assert all(s.provider for s in specs)
+    assert {name for name, s in specs.items() if s.provider} == {"second-opinion"}
+    assert {name for name, s in specs.items() if s.model} == {"second-opinion", "extractor"}

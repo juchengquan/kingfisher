@@ -1,11 +1,10 @@
 name: extractor
 description: Reads a large or numerous set of files and returns only the facts asked for. Use to keep bulk reading out of the main context.
 tools: [read_file, ls, glob, grep]
-# Reading is the cheap half of delegation, so it runs on the cheap model.
-# The pair moves together: a model name means nothing without the endpoint that
-# serves it, and overriding one against a definition that pins the other is
-# refused rather than resolved.
-provider: anthropic
+# Reading is the cheap half of delegation, so it runs on the cheap model. No
+# `provider:` -- a model alone runs wherever the deployment does, and naming
+# the endpoint here would only stop this file working on a deployment pointed
+# somewhere else. `second-opinion.yaml` is where naming one earns its place.
 model: MiniMax-M2.5
 system_prompt: |
   You read a lot and return a little.
