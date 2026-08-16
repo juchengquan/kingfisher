@@ -30,7 +30,7 @@ from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
@@ -46,7 +46,6 @@ from kingfisher.infrastructure.delegation import (
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.scoping import (
-    CapabilityError,
     DeclaredDelegatesOnly,
     HostPathGuard,
     ScopedSkills,

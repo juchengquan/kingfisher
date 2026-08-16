@@ -31,6 +31,15 @@ from dataclasses import dataclass
 Selection = tuple[str, ...] | None
 
 
+class CapabilityError(ValueError):
+    """A request named a tool, skill, subagent or middleware it may not have.
+
+    Here rather than in `infrastructure`, where it lived, because it says
+    nothing about the harness: a name asked for and not offered is kingfisher's
+    own vocabulary, and the rules that raise it are in this module.
+    """
+
+
 def _normalise(value: Iterable[str] | None) -> Selection:
     if value is None:
         return None
@@ -201,6 +210,57 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
         return selection
     allowed = set(by)
     return tuple(name for name in selection if name in allowed)
+
+
+def approved_middleware(
+    declared: Selection,
+    *,
+    registered: Iterable[str],
+    granted: Selection,
+    subject: str,
+) -> tuple[str, ...]:
+    """Which of the middleware a definition names it may actually have.
+
+    Two refusals, and both raise -- neither is the "caller was narrower" case
+    that quietly drops a skill. A name nothing registered is a mistake in the
+    definition. A name the deployment registered but did not *grant* is an
+    escalation attempt or a misconfiguration, and running with silently less
+    middleware than the definition specified could mean running without the
+    rate limit or the audit hook it was written to have.
+
+    Checked identically for a catalogue definition and an uploaded one.
+    `Capabilities.including` widens skills and subagents for an upload because
+    those are the caller's own text; a middleware name selects code the
+    deployment wrote, so an upload gets no such exemption.
+
+    A rule, so it lives here. What it decides is *names*, which is all this
+    layer knows about middleware -- `Capabilities.middleware` and
+    `SubagentSpec.middleware` are both name lists. Turning an approved name
+    into an object needs the registry, and that is the caller's half.
+    """
+    if not declared:
+        return ()
+
+    known = set(registered)
+    unknown = tuple(name for name in declared if name not in known)
+    if unknown:
+        msg = (
+            f"{subject} names unregistered middleware: {', '.join(unknown)}; "
+            f"this deployment registered {tuple(registered)}"
+        )
+        raise CapabilityError(msg)
+
+    if granted is not None:
+        permitted = set(granted)
+        ungranted = tuple(name for name in declared if name not in permitted)
+        if ungranted:
+            msg = (
+                f"{subject} names middleware this request may not use: "
+                f"{', '.join(ungranted)}; permitted {granted}"
+            )
+            raise CapabilityError(msg)
+
+    return tuple(declared)
 
 
 #: No restriction at all — the default a bare `run("do a thing")` gets.

@@ -360,7 +360,7 @@ def main(argv: list[str]) -> int:
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
     from kingfisher import stream  # noqa: PLC0415
-    from kingfisher.infrastructure.agent import CapabilityError  # noqa: PLC0415
+    from kingfisher.domain.capabilities import CapabilityError  # noqa: PLC0415
 
     result = None
     try:

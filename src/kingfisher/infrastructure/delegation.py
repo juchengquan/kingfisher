@@ -17,10 +17,14 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.capabilities import narrowed
+from kingfisher.domain.capabilities import (
+    CapabilityError,
+    approved_middleware,
+    narrowed,
+)
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
-from kingfisher.infrastructure.scoping import CapabilityError, ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -64,41 +68,25 @@ def subagent_middleware(
     registry: Mapping[str, Callable[[], Any]],
     allowed: tuple[str, ...] | None,
 ) -> list[Any]:
-    """Build the middleware a definition asked for, or refuse to.
+    """Build the middleware a definition asked for.
 
-    Two refusals, and both raise -- neither is the "caller was narrower" case
-    that quietly drops a skill. A name nothing registered is a mistake in the
-    definition. A name the deployment registered but did not *grant* is an
-    escalation attempt or a misconfiguration, and running with silently less
-    middleware than the definition specified could mean running without the
-    rate limit or the audit hook it was written to have.
+    Which names it may have is `capabilities.approved_middleware`, and that is
+    the whole of the rule -- two refusals, both raising, neither the "caller was
+    narrower" case that quietly drops a skill. This half is the part that needs
+    the registry: an approved name is still only a name until something calls
+    the factory behind it.
 
-    Checked identically for a catalogue definition and an uploaded one.
-    `Capabilities.including` widens skills and subagents for an upload because
-    those are the caller's own text; a middleware name selects code the
-    deployment wrote, so an upload gets no such exemption.
+    Split that way because the decision is expressible in kingfisher's own
+    vocabulary and the construction is not. `Capabilities.middleware` and
+    `SubagentSpec.middleware` are both name lists; only the objects are ours.
     """
-    if not spec.middleware:
-        return []
-
-    unknown = tuple(name for name in spec.middleware if name not in registry)
-    if unknown:
-        msg = (
-            f"subagent {spec.name!r} names unregistered middleware: {', '.join(unknown)}; "
-            f"this deployment registered {tuple(registry)}"
-        )
-        raise CapabilityError(msg)
-
-    if allowed is not None:
-        ungranted = tuple(name for name in spec.middleware if name not in allowed)
-        if ungranted:
-            msg = (
-                f"subagent {spec.name!r} names middleware this request may not use: "
-                f"{', '.join(ungranted)}; permitted {allowed}"
-            )
-            raise CapabilityError(msg)
-
-    return [registry[name]() for name in spec.middleware]
+    approved = approved_middleware(
+        spec.middleware,
+        registered=registry,
+        granted=allowed,
+        subject=f"subagent {spec.name!r}",
+    )
+    return [registry[name]() for name in approved]
 
 
 def _subagent_endpoint(
