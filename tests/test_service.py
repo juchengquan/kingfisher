@@ -265,3 +265,93 @@ def test_the_admitted_request_is_what_opens_the_turn(cfg):
     import inspect
 
     assert list(inspect.signature(Kingfisher._open_turn).parameters) == ["self", "admitted"]
+
+
+def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
+    """The silence this closes: the caller found out when the model reached for
+    a tool mid-turn and was refused, not when the turn opened."""
+    events = opening_events("/runs/t001", (), FakePlacement(), (("tool", ("execute", "ls")),))
+
+    (said,) = [e for e in events if e.kind == "withheld"]
+    assert said.text == "2 tool(s) not granted: execute, ls"
+
+
+def test_an_unrestricted_request_is_told_nothing(cfg):
+    """Nothing was withheld, so there is nothing to say. A line on every run
+    would be noise, and noise is what gets scrolled past."""
+    events = opening_events("/runs/t001", (), FakePlacement(), ())
+
+    assert [e.kind for e in events] == ["run_start"]
+
+
+def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
+    """Not off a list kept somewhere. The tool surface includes whatever the
+    workspace defined, so the only honest answer is what was actually wired --
+    which is also what makes a grant go stale when a workspace gains a tool."""
+    from kingfisher.infrastructure import presets
+
+    service = Kingfisher(cfg)
+    presets.seed(cfg)  # adds http_fetch, sql_query, sql_tables
+    service.start_session("s")
+
+    admitted = service._admit(
+        Request("go", session_id="s", capabilities=Capabilities(tools=("read_file",)))
+    )
+
+    tools = dict(admitted.withheld)["tool"]
+
+    assert "http_fetch" in tools  # a workspace tool, not a built-in
+    assert "read_file" not in tools
+
+
+def test_every_kind_a_request_can_narrow_is_reported(cfg):
+    """Tools, skills and subagents all narrow the same way and all went silent
+    the same way. One line per kind, and only for kinds that lost something."""
+    from kingfisher.infrastructure import presets
+
+    service = Kingfisher(cfg)
+    presets.seed(cfg)  # 3 tools, 3 skills, 2 subagents
+    service.start_session("s")
+
+    admitted = service._admit(
+        Request(
+            "go",
+            session_id="s",
+            capabilities=Capabilities(
+                tools=("read_file",), skills=("code-review",), subagents=("reviewer",)
+            ),
+        )
+    )
+    by_kind = dict(admitted.withheld)
+
+    assert set(by_kind) == {"tool", "skill", "subagent"}
+    assert "http_fetch" in by_kind["tool"]
+    assert by_kind["skill"] == ("release-notes", "tabular-qa")
+    assert by_kind["subagent"] == ("extractor",)
+
+
+def test_a_kind_that_lost_nothing_says_nothing(cfg):
+    """Narrowing tools should not produce a line about skills."""
+    from kingfisher.infrastructure import presets
+
+    service = Kingfisher(cfg)
+    presets.seed(cfg)
+    service.start_session("s")
+
+    admitted = service._admit(
+        Request("go", session_id="s", capabilities=Capabilities(tools=("read_file",)))
+    )
+
+    assert [kind for kind, _ in admitted.withheld] == ["tool"]
+
+
+def test_each_kind_gets_its_own_line(cfg):
+    events = opening_events(
+        "/runs/t001",
+        (),
+        FakePlacement(),
+        (("tool", ("execute",)), ("subagent", ("extractor",))),
+    )
+
+    said = [e.text for e in events if e.kind == "withheld"]
+    assert said == ["1 tool(s) not granted: execute", "1 subagent(s) not granted: extractor"]

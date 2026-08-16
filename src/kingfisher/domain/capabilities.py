@@ -212,6 +212,30 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
     return tuple(name for name in selection if name in allowed)
 
 
+def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
+    """Names the workspace offers that this grant leaves out.
+
+    The mirror of `Capabilities.unknown`, which reports names asked for that do
+    not exist. This reports the ones that exist and were not asked for, and it
+    is reported for the same reason: a grant is a whitelist, so it can only ever
+    mean *less* than the workspace holds, and a caller cannot see how much less.
+
+    That gap widens on its own. A grant written as "everything except the
+    shell" is stored as the other names, so a tool added afterwards is outside
+    it -- refused, with nothing said, months after the list was written. The
+    alternative shape fails the other way: a deny-list would let tomorrow's new
+    tool through by default, which is the worse of the two when the new tool is
+    another `execute`. So the whitelist stays and the silence goes.
+
+    `None` withholds nothing: it is the unrestricted grant, and it does not go
+    stale because it names nothing to go stale.
+    """
+    if granted is None:
+        return ()
+    permitted = set(granted)
+    return tuple(sorted(name for name in offered if name not in permitted))
+
+
 def approved_middleware(
     declared: Selection,
     *,
