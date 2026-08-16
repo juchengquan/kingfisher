@@ -24,7 +24,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Catalogue, local_root
 
 if TYPE_CHECKING:
 
@@ -84,7 +84,9 @@ def shell_env(
     return {
         "PATH": ":".join(path_parts),
         "HOME": str(agent_home(session_dir)),
-        "KINGFISHER_SKILLS": str((catalogue or Catalogue.from_config(cfg)).skills),
+        "KINGFISHER_SKILLS": str(
+            local_root((catalogue or Catalogue.from_config(cfg)).skills, "skills")
+        ),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(cfg.scratch_dir),
@@ -330,7 +332,7 @@ def build_backend(
     `execute` still works, because CompositeBackend delegates execution to its
     default backend.
     """
-    skills_dir = (catalogue or Catalogue.from_config(cfg)).skills
+    skills_dir = local_root((catalogue or Catalogue.from_config(cfg)).skills, "skills")
 
     prepare_scratch(cfg)
     for routed in ("data", "memory"):

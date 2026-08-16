@@ -353,13 +353,12 @@ class Kingfisher:
     a test hands in its own `SessionDirs` to watch turn allocation, or its own
     agent to drive a scripted conversation.
 
-    `catalogue_roots` is the exception to that shape, and deliberately: it is
-    three paths rather than an object, because there is nothing for an object to
-    do yet. Whatever fetches a catalogue stages it and hands over the
-    directories; kingfisher reads them and never copies. An interface with a
-    `roots()` on it can be accepted alongside the mapping on the day a source
-    needs behaviour -- lazy fetching, version pinning, refresh without a restart
-    -- and until one does, inventing it would mean guessing at what it wants.
+    `catalogue` follows that shape too, and takes either form. A deployment
+    pointing at three directories passes the mapping and names no classes; one
+    holding its definitions somewhere kingfisher did not choose passes a
+    `Catalogue` of its own repositories. Both settle to the same object here, so
+    nothing downstream knows which arrived -- and swapping a single kind is
+    `replace(catalogue, subagents=...)`, since it is frozen.
     """
 
     def __init__(  # noqa: PLR0913 -- the composition root; each argument is one
@@ -375,7 +374,7 @@ class Kingfisher:
         threads: ThreadStore | Callable[[Path], Any] | None = None,
         definitions: DefinitionStore | None = None,
         files: FileStore | None = None,
-        catalogue_roots: Mapping[str, Path] | None = None,
+        catalogue: Catalogue | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
         agent: Any | None = None,
@@ -397,7 +396,7 @@ class Kingfisher:
         # Read now rather than on the first turn: a definition that will not
         # parse is a wiring mistake, and this is the last moment it is cheap
         # to say so. `--list` deliberately does not do this -- see `warm`.
-        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue_roots).warm()
+        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue).warm()
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the

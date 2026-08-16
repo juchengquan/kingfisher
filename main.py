@@ -101,9 +101,7 @@ from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement, presets, skill_store, tool_store
 from kingfisher.infrastructure.runlog import read_usage
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError
+from kingfisher.infrastructure.tool_store import ToolError
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -174,15 +172,18 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     coincidence of nobody having wired anything else yet.
     """
     from kingfisher.infrastructure.agent import build_agent, registered_tools  # noqa: PLC0415
-    from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
+    from kingfisher.infrastructure.catalogue import (  # noqa: PLC0415
+        resolve_catalogue,
+        source_of,
+    )
 
     catalogue = resolve_catalogue(cfg)
 
     print(f"workspace : {workspace}")
     # Named rather than assumed: the catalogues may be deployed outside the
     # workspace and shared by every deployment that points at them.
-    print(f"skills    : {catalogue.skills}")
-    print(f"subagents : {catalogue.subagents}\n")
+    print(f"skills    : {source_of(catalogue.skills)}")
+    print(f"subagents : {source_of(catalogue.subagents)}\n")
 
     # Built rather than listed: the tool set is a property of the assembled
     # agent, and a hardcoded list here would drift from the real one.
@@ -201,7 +202,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         # and the built-in set, which is only knowable from an assembled graph
         # -- and a tool module is Python, so fetching them apart ran every one
         # of them twice per `--list`.
-        found = LocalToolRepository(catalogue.tools).found
+        found = catalogue.tools.found
         with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
             introspected = registered_tools(
                 build_agent(
@@ -237,14 +238,14 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     print(tool_store.offered(defined_in, own))
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
-    skills = LocalSkillRepository(catalogue.skills)
+    skills = catalogue.skills
     for name in skills.names or ("(none)",):
         print(f"  {name}")
     # Grouping skills into folders is the obvious thing to try and yields
     # nothing at all, because discovery is one level deep. Saying so is the
     # only difference between a catalogue that looks empty and one that is --
     # and it needs the reason now that tools and subagents nest freely.
-    for name in skills.misplaced:
+    for name in getattr(skills, "misplaced", ()):
         print(f"  ! {name}/ holds a skill too deep to load — they live at {skill_store.LAYOUT}")
         print("    (the agent reads skills itself and only looks one level down;")
         print("     tools and subagents are read by kingfisher, so those may nest)")
@@ -253,13 +254,15 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # One repository, so the definitions are parsed once. Read as two calls --
     # the specs, then where each came from -- this parsed every file in the
     # catalogue twice per `--list`, exactly as the tools did before they were.
-    subagents = LocalSubagentRepository(catalogue.subagents)
+    subagents = catalogue.subagents
     try:
         specs = subagents.specs
     except SubagentError as exc:
         print(f"  cannot load: {exc}")
         return 1
-    where = subagents.sources
+    # Only a directory-backed store can say which file a definition came from;
+    # an inventory of one that cannot simply lists the names.
+    where = getattr(subagents, "sources", {})
     for spec in specs.values() or ():
         print(f"  {spec.name}{_from(where.get(spec.name), f'{spec.name}.yaml')}"
               f" — {spec.description}")
@@ -442,7 +445,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
-    found = LocalToolRepository(catalogue.tools).found
+    found = catalogue.tools.found
     workspace = tuple(sorted(entry.name for entry in found))
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
         root = Path(scratch)

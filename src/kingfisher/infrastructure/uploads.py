@@ -88,10 +88,10 @@ def provision(
     roots = catalogue or Catalogue.from_config(cfg)
     return Brought(
         skills=materialise_skills(
-            request.skill_refs, store, session_dir, roots.skill_names
+            request.skill_refs, store, session_dir, roots.skills.names
         ),
         subagents=materialise_subagents(
-            request.subagent_refs, store, session_dir, tuple(roots.subagent_specs)
+            request.subagent_refs, store, session_dir, tuple(roots.subagents.specs)
         ),
     )
 
