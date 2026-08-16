@@ -257,3 +257,80 @@ def test_the_default_and_a_factory_both_survive_two_turns(cfg, injected):
     second = kf.run(Request("two", session_id=first.session_id))
 
     assert second.answer == "ok"
+
+
+# -- or no conversation at all --------------------------------------------
+
+
+def test_conversation_can_be_turned_off_entirely(cfg):
+    """A graph takes `checkpointer=None` and runs; the turn simply starts cold.
+
+    For a request/response API that is the whole state story: no database, so
+    nothing to contend on, orphan, or vacuum.
+    """
+    from dataclasses import replace as replace_cfg
+
+    stateless = replace_cfg(cfg, conversation_enabled=False)
+    kf = Kingfisher(stateless, agent=StubAgent("ok"))
+
+    result = kf.run(Request("go"))
+
+    assert result.answer == "ok"
+    assert not session_db_path(_session_dir(cfg, result.session_id)).exists()
+    assert not any((cfg.workspace / "sessions").rglob("*threads.db*"))
+
+
+def test_files_survive_a_stateless_turn(cfg):
+    """"Stateless" is about the conversation, not the session. `/derived` and
+    `/memory` are on disk, and a resumed session still finds them -- so
+    `--session` keeps naming the same files while the agent starts cold.
+    """
+    from dataclasses import replace as replace_cfg
+
+    stateless = replace_cfg(cfg, conversation_enabled=False)
+    kf = Kingfisher(stateless, agent=StubAgent("ok"))
+    first = kf.run(Request("go"))
+    directory = _session_dir(cfg, first.session_id)
+    (directory / "derived" / "kept.txt").write_text("still here", encoding="utf-8")
+
+    second = kf.run(Request("again", session_id=first.session_id))
+
+    assert second.session_id == first.session_id
+    assert (directory / "derived" / "kept.txt").read_text() == "still here"
+
+
+def test_the_flag_wins_over_an_injected_store(cfg):
+    """A deployment that says it wants no conversation means it whatever it
+    wired earlier -- otherwise the flag would be advisory."""
+    from dataclasses import replace as replace_cfg
+
+    store = StubCheckpointer()
+    stateless = replace_cfg(cfg, conversation_enabled=False)
+    service = Kingfisher(stateless, agent=StubAgent("ok"), threads=store)
+
+    saver, release = service._checkpointer_for(_session_dir(cfg, "anything"))
+
+    assert saver is None
+    assert release is None
+
+
+def test_the_async_path_honours_it_too(cfg, session_dir):
+    """Otherwise a deployment would be stateless on one entry point and not the
+    other, which is the kind of gap that only shows up in the path nobody
+    tested."""
+    from contextlib import AsyncExitStack
+    from dataclasses import replace as replace_cfg
+
+    service = Kingfisher(replace_cfg(cfg, conversation_enabled=False), agent=StubAgent("ok"))
+
+    async def resolve() -> object:
+        async with AsyncExitStack() as stack:
+            return await service._async_checkpointer_for(stack, session_dir)
+
+    assert asyncio.run(resolve()) is None
+
+
+def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):
+    """A session that forgets is a surprising default for something that issues
+    session ids."""
+    assert cfg.conversation_enabled is True

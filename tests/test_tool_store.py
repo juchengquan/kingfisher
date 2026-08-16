@@ -98,3 +98,21 @@ def test_modules_load_in_a_stable_order(tmp_path):
     _write(directory, "a_first.py", MODULE.replace("add", "alpha"))
 
     assert [tool_name(t) for t in load_tools(directory)] == ["alpha", "beta"]
+
+
+def test_importing_a_tool_leaves_no_bytecode_in_the_catalogue(tmp_path):
+    """`__pycache__` beside the source means inside the tools catalogue -- a
+    directory holding what a person authored, and the one an operator is most
+    likely to version. Observed in a fresh workspace: two `.pyc` files sitting
+    next to the two tools, noise in `git status` at best.
+
+    Asserted on the directory rather than on `sys.dont_write_bytecode`, because
+    what matters is that nothing was written, not how that was arranged.
+    """
+    catalogue = _write(tmp_path / "tools", "maths.py", MODULE)
+
+    loaded = load_tools(catalogue)
+
+    assert len(loaded) == 1, "the tool did not import, so this proves nothing"
+    assert not list(catalogue.rglob("__pycache__")), "bytecode was written into the catalogue"
+    assert not list(catalogue.rglob("*.pyc"))
