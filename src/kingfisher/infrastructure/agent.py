@@ -30,7 +30,7 @@ from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
-from kingfisher.config import Config
+from kingfisher.config import Config, ConfigError
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import (
     ALL,
@@ -42,7 +42,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
-from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, resolved_model
+from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
 from kingfisher.infrastructure import skill_store, tool_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
@@ -53,6 +53,7 @@ from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.delegation import (
     as_subagent,
     indistinct,
+    model_for,
     refuse_unknown_tools,
     subagent_helpers,
     subagent_middleware,
@@ -151,7 +152,7 @@ def indistinct_delegates(
 
     Asked after the build rather than during it, the way `_withheld_by_kind`
     is: `build_agent` returns a graph, and a fact about the run is not one of
-    the things a graph can carry. It re-resolves through `resolved_model`,
+    the things a graph can carry. It re-resolves through `model_for`,
     the same call the build makes, so the two cannot come to disagree about
     where a delegate ended up.
     """
@@ -166,7 +167,15 @@ def indistinct_delegates(
         spec = defined.get(name)
         if spec is None:
             continue  # `build_agent` refuses this; reporting is not its job
-        model = resolved_model(spec, override=wanted.get(name))
+        try:
+            model = model_for(spec, cfg, override=wanted.get(name))
+        except ConfigError:
+            # An unbound alias, or a model this deployment cannot run. The build
+            # refuses it with the message worth reading; reporting is not
+            # refusing, and raising a second copy of that refusal from here
+            # would put it in front of the caller twice, worded for the wrong
+            # question. Skipped, and the build says why.
+            continue
         if why := indistinct(spec, cfg, model=model):
             found.append((name, why))
     return tuple(found)

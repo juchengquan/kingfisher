@@ -19,6 +19,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.agent import build_agent
 from tests.conftest import FakeToolCallingModel, capture_build
 
@@ -59,13 +60,14 @@ def define(cfg, body: str, name: str = "reviewer") -> None:
     (cfg.workspace / "subagents" / f"{name}.yaml").write_text(body, encoding="utf-8")
 
 
-def build(cfg, session_dir, monkeypatch, **caps):
+def build(cfg, session_dir, monkeypatch, *, run_on=None, **caps):
     captured = capture_build(monkeypatch)
     build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("reviewer",), **caps),
+        run_on=run_on,
     )
     (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
     return spec
@@ -221,6 +223,83 @@ def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir, mo
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
     assert build(cfg, session_dir, monkeypatch)["name"] == "reviewer"
+
+
+# -- aliases: a general name the deployment binds --------------------------
+
+
+def test_a_delegate_runs_the_model_its_alias_binds(cfg, session_dir, monkeypatch):
+    define(cfg, "name: reviewer\ndescription: d\nalias: cheap\nsystem_prompt: |\n  Go.\n")
+
+    spec = build(cfg, session_dir, monkeypatch)
+
+    assert spec["model"].model == "cheap-model"
+    assert spec["model"].max_tokens == 321  # and its own params, like any model
+
+
+def test_an_alias_reaches_wherever_its_model_lives(cfg, session_dir, monkeypatch):
+    """Binding is a lookup into the same table, so an alias is not a lesser way
+    of naming a model -- it reaches another endpoint exactly as `model:` does."""
+    define(cfg, "name: reviewer\ndescription: d\nalias: alternate\nsystem_prompt: |\n  Go.\n")
+    routed = replace(elsewhere(cfg), aliases={"alternate": "gpt-5"})
+
+    spec = build(routed, session_dir, monkeypatch)
+
+    assert spec["model"].model_name == "gpt-5"
+    assert spec["model"].openai_api_base == ELSEWHERE.base_url
+
+
+def test_an_unbound_alias_refuses_the_build(cfg, session_dir, monkeypatch):
+    """**The reason the indirection is worth having.** Falling back to the
+    default would hand `second-opinion` the very model it exists not to be, and
+    that failure is silent: the delegate builds, answers, and the answer is
+    worth nothing.
+    """
+    define(cfg, "name: reviewer\ndescription: d\nalias: nobody-bound-this\n"
+        "system_prompt: |\n  Go.\n")
+
+    with pytest.raises(ConfigError, match="no model bound to alias 'nobody-bound-this'"):
+        build(cfg, session_dir, monkeypatch)
+
+
+def test_the_unbound_message_names_the_delegate_and_what_to_write(cfg, session_dir, monkeypatch):
+    """`bound` knows the alias and the catalogue but not who asked, and this
+    refusal fires on a file the reader may not own."""
+    define(cfg, "name: reviewer\ndescription: d\nalias: missing\nsystem_prompt: |\n  Go.\n")
+
+    with pytest.raises(ConfigError) as raised:
+        build(cfg, session_dir, monkeypatch)
+
+    message = str(raised.value)
+    assert "subagent 'reviewer'" in message
+    assert "aliases:" in message  # what to write
+    assert "cheap-model" in message  # and what it may name
+
+
+def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(
+    cfg, session_dir, monkeypatch
+):
+    """Seeding presets you have not bound for is free, the same rule an
+    unrunnable `model:` follows."""
+    define(cfg, "name: unbound\ndescription: d\nalias: missing\nsystem_prompt: |\n  Go.\n")
+    define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
+
+    assert build(cfg, session_dir, monkeypatch)["name"] == "reviewer"
+
+
+def test_an_override_replaces_an_alias_wholesale(cfg, session_dir, monkeypatch):
+    """A caller naming a concrete model has said something more specific than
+    the file did. Keeping the alias beside it would mean resolving two answers
+    to one question."""
+    define(cfg, "name: reviewer\ndescription: d\nalias: nobody-bound-this\n"
+        "system_prompt: |\n  Go.\n")
+
+    spec = build(
+        cfg, session_dir, monkeypatch,
+        models=("cheap-model",), run_on={"reviewer": RunOn("cheap-model")},
+    )
+
+    assert spec["model"].model == "cheap-model"
 
 
 # -- granted, like middleware ----------------------------------------------

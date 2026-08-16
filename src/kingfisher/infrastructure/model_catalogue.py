@@ -36,8 +36,9 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-#: Top-level keys. `default` names a model; the other two are the tables.
-KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
+#: Top-level keys. `default` names a model, `aliases` binds general names to
+#: models, and the other two are the tables.
+KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default", "aliases"})
 
 #: What an endpoint entry may say. `api` picks a wire format from
 #: `models.ADAPTERS`; `base_url` is literal because it is topology, not a
@@ -157,9 +158,52 @@ def _models(
     return {n: p for n, p in profiles.items() if p.endpoint in endpoints}
 
 
+def _aliases(
+    document: Mapping[str, Any], models: Mapping[str, ModelProfile], source: Path
+) -> dict[str, str]:
+    """General names bound to models of this deployment's own choosing.
+
+    A second namespace beside `models`, kept apart on purpose: a definition
+    writes `alias:` or `model:` and never one meaning the other, so nobody has
+    to know which keys of a single table are wire ids and which stand for them.
+
+    A binding naming a model this file does not define is refused -- both halves
+    are in this document, so it is a plain contradiction rather than a fact
+    about the machine. A binding whose model was *dropped* for want of a key is
+    kept: it is a real binding this machine cannot currently follow, and saying
+    so at the point of use names the endpoint and the variable, where refusing
+    here could only name the alias.
+    """
+    declared = set(_mapping(document.get("models"), f"{source}: models"))
+    bindings: dict[str, str] = {}
+    for alias, raw in _mapping(document.get("aliases"), f"{source}: aliases").items():
+        model = str(raw or "").strip()
+        if not model:
+            msg = f"{source}: alias {alias!r} binds nothing; name a model or drop the line"
+            raise ConfigError(msg)
+        if model not in declared:
+            msg = (
+                f"{source}: alias {alias!r} binds {model!r}, which this file does not "
+                f"define; it defines {tuple(sorted(declared))}"
+            )
+            raise ConfigError(msg)
+        if alias in models:
+            # The one collision worth refusing across the two namespaces. An
+            # alias sharing a model's name makes the error messages lie -- "no
+            # model bound to alias 'gpt-5'" about a name that is plainly a model
+            # -- and there is no reason to write it.
+            msg = (
+                f"{source}: alias {alias!r} is also the name of a model; aliases stand "
+                f"for model names and cannot be one"
+            )
+            raise ConfigError(msg)
+        bindings[alias] = model
+    return bindings
+
+
 def load(
     path: Path, environ: Mapping[str, str]
-) -> tuple[dict[str, Endpoint], dict[str, ModelProfile], str]:
+) -> tuple[dict[str, Endpoint], dict[str, ModelProfile], str, dict[str, str]]:
     """Read `path` into endpoints, models, and the name of the default model.
 
     Required, with no fallback and no shipped default table. `api_style` was
@@ -225,4 +269,4 @@ def load(
         else:
             msg = f"{path}: default model {default!r} is not defined here; it defines {known}"
         raise ConfigError(msg)
-    return endpoints, models, default
+    return endpoints, models, default, _aliases(document, models, path)

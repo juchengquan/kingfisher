@@ -76,6 +76,12 @@ FAKE_MODELS = {
 }
 
 
+#: What the shipped presets name. Bound here because an unbound alias refuses
+#: the build, which is the behaviour under test elsewhere -- a fixture that left
+#: them unbound would make every preset test a test of that refusal instead.
+FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "cheap-model"}
+
+
 @pytest.fixture
 def cfg(workspace):
     return Config(
@@ -83,6 +89,7 @@ def cfg(workspace):
         models=FAKE_MODELS,
         endpoints={"fake": FAKE_ENDPOINT},
         default_model="fake-model",
+        aliases=FAKE_ALIASES,
         turn_timeout_s=3600,
         execution_timeout_s=30,
     )

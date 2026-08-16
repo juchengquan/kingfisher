@@ -13,6 +13,7 @@ from kingfisher.domain.subagent import (
     RunOn,
     SubagentError,
     SubagentSpec,
+    Wanted,
     resolved_model,
 )
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
@@ -358,7 +359,7 @@ def _spec(model: str | None = None) -> SubagentSpec:
 
 
 def test_a_definition_that_pins_nothing_runs_what_everything_else_does():
-    assert resolved_model(_spec()) is None
+    assert resolved_model(_spec()) == Wanted()
 
 
 def test_the_definition_decides():
@@ -371,13 +372,15 @@ def test_the_definition_decides():
     model through a catalogue only `Config` holds -- so it is
     `refuse_ungranted_endpoint`, called where the lookup happens.
     """
-    assert resolved_model(_spec("gpt-5")) == "gpt-5"
+    assert resolved_model(_spec("gpt-5")) == Wanted(model="gpt-5")
 
 
 def test_a_request_replaces_what_the_file_said():
     """Wholesale, which is now the only shape an override can have: there is no
     second field to take half of."""
-    assert resolved_model(_spec("gpt-5"), override=RunOn(model="cheap-one")) == "cheap-one"
+    assert resolved_model(_spec("gpt-5"), override=RunOn(model="cheap-one")) == Wanted(
+        model="cheap-one"
+    )
 
 
 # -- metadata --------------------------------------------------------------
@@ -464,6 +467,49 @@ def test_provider_is_no_longer_a_field(tmp_path):
 
     with pytest.raises(SubagentError, match="provider"):
         read_subagent(definition, tmp_path / "reviewer.yaml")
+
+
+def test_a_definition_may_not_name_both_a_model_and_an_alias(tmp_path):
+    """An alias *is* a model name once bound, so a file saying both has said one
+    thing twice with no rule for which wins.
+
+    Refused rather than ranked: a precedence order would be invisible in the
+    file that relies on it, and whichever way round it went, half the readers
+    would guess the other.
+    """
+    definition = (
+        "name: reviewer\ndescription: d\nmodel: gpt-5\nalias: cheap\n"
+        "system_prompt: |\n  You review.\n"
+    )
+
+    with pytest.raises(SubagentError, match="name one or the other"):
+        read_subagent(definition, tmp_path / "reviewer.yaml")
+
+
+def test_an_alias_alone_parses(tmp_path):
+    definition = (
+        "name: reviewer\ndescription: d\nalias: cheap\nsystem_prompt: |\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert (spec.alias, spec.model) == ("cheap", None)
+
+
+def test_an_alias_is_carried_through_resolution(tmp_path):
+    """The domain hands back which of the two was asked for; binding needs the
+    catalogue and happens a layer out."""
+    spec = SubagentSpec(name="r", description="d", system_prompt="Go.", alias="cheap")
+
+    assert resolved_model(spec) == Wanted(alias="cheap")
+
+
+def test_an_override_replaces_an_alias_rather_than_joining_it(tmp_path):
+    """Wholesale, like everything else `RunOn` does. A caller naming a concrete
+    model has said something more specific than the file did."""
+    spec = SubagentSpec(name="r", description="d", system_prompt="Go.", alias="cheap")
+
+    assert resolved_model(spec, override=RunOn(model="gpt-5")) == Wanted(model="gpt-5")
 
 
 def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):

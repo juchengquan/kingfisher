@@ -14,8 +14,9 @@ builtin_tools: [read_file, ls, glob]
 # delegate whose whole job is reading a file cheaply should use the tool that
 # reads it cheaply, not `read_file` on a million rows.
 tools: [csv_profile, csv_columns]
-# No `model:` -- see extractor.yaml. Profiling is cheap-model work too, and a
-# shipped file cannot portably name which model that is here.
+# Profiling is cheap-model work too -- see extractor.yaml for why this is an
+# alias your models.yaml binds rather than a model id written here.
+alias: cheap
 system_prompt: |
   You look at a dataset before anyone trusts it.
 

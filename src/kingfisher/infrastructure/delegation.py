@@ -229,6 +229,33 @@ def _host(url: str) -> str:
     return urlsplit(url).netloc
 
 
+def model_for(spec: SubagentSpec, cfg: Config, *, override: RunOn | None = None) -> str | None:
+    """The model this delegate will actually run, or `None` for the deployment's.
+
+    One function because two callers must not disagree: `as_subagent` builds
+    from it and `indistinct_delegates` reports from it, and a report about where
+    a delegate ended up is worthless if it is computed by a second copy of the
+    rule. `indistinct_delegates` said so already -- "it re-resolves through the
+    same call the build makes" -- and binding an alias is a second step that
+    would otherwise have to be written twice to keep that true.
+
+    The refusal wears the subagent's name. `bound` knows the alias and the
+    catalogue and not who asked, so a reader is otherwise told `alternate` is
+    unbound and left to grep for whoever wanted it -- and this is the one
+    refusal that fires on a file they may not own.
+    """
+    wanted = resolved_model(spec, override=override)
+    if wanted.model is not None:
+        return wanted.model
+    if wanted.alias is None:
+        return None  # it asked for neither: run whatever the deployment runs
+    try:
+        return cfg.bound(wanted.alias)
+    except ConfigError as exc:
+        msg = f"subagent {spec.name!r}: {exc}"
+        raise ConfigError(msg) from exc
+
+
 def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | None:
     """Why this delegate is not running anywhere different, or `None`.
 
@@ -248,7 +275,7 @@ def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | N
     "second opinion" served by the same gateway is the disappointment this
     exists to name.
     """
-    if spec.model is None:
+    if spec.model is None and spec.alias is None:
         return None  # it never asked to be anywhere in particular
 
     if model == cfg.default_model:
@@ -366,7 +393,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # goes in and the allowlist decides.
         subagent["tools"] = tool_objects
 
-    model_id = resolved_model(spec, override=run_on)
+    model_id = model_for(spec, cfg, override=run_on)
     if model_id is not None:
         # A lookup, where this used to `replace` four fields of the `Config` and
         # build from the copy. That copy is why the change happened: a param

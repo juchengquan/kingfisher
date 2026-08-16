@@ -3,27 +3,30 @@ description: Re-answers a question on a different provider, to catch what one mo
 # No workspace tools: `[]` is none, and omitting the line would mean all.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []
-# **This delegate is worth nothing until you give it a `model:`.** It ships
-# without one, and that is the one place the rule costs something real.
+# This delegate exists in order *not* to be the model that produced the answer.
+# Two models from one family share failure modes -- the same misreadings, the
+# same confident arithmetic -- so running it beside its caller defeats it
+# entirely, and silently: it still builds, still answers, and the answer is
+# worth nothing.
 #
-# It exists in order *not* to be the model that produced the answer. Two models
-# from one family share failure modes -- the same misreadings, the same
-# confident arithmetic -- so running it beside its caller defeats it entirely,
-# and silently: it still builds, still answers, and the answer is worth nothing.
+# Which is why it names an alias rather than nothing. It said `provider: openai`
+# / `model: gpt-5`; `provider` is no longer a field, and a shipped `gpt-5` is
+# portable nowhere. Binding is your half:
 #
-# It said `provider: openai` / `model: gpt-5`. Both are gone. `provider` is no
-# longer a field -- a model names its own endpoint through models.yaml -- and a
-# shipped `gpt-5` would now refuse to start on every deployment whose catalogue
-# has no such entry, since a catalogue naming a model this deployment cannot run
-# is refused at startup rather than mid-run.
+#     aliases:
+#       alternate: gpt-5
 #
-# So: add a line naming an entry in your own models.yaml that is genuinely
-# elsewhere -- another vendor, not another size of the same family:
+# Bind it to something genuinely elsewhere -- another vendor, not another size
+# of the same family. Kingfisher cannot check that for you: it knows hosts and
+# model ids, and neither tells it what a family is, least of all behind a
+# gateway serving several vendors. What it does check is the crude case, and
+# `--run` reports it when a delegate that asked to differ ended up on the
+# deployment's own model or its own host.
 #
-#     model: gpt-5
-#
-# `kingfisher --run` reports it when a delegate that asked to differ did not,
-# including when two endpoints turn out to be the same host.
+# Leave it unbound and activating this delegate is refused. That is the point:
+# an unbound alias falling back to the default would hand this delegate the one
+# model it exists not to be, and nothing in the output would look wrong.
+alias: alternate
 system_prompt: |
   You answer the question you are given, from the files, on your own.
 

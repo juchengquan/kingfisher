@@ -99,12 +99,34 @@ models:
     extra:
       reasoning_effort: high
 
+# --- aliases: general names for models this deployment chose ----------------
+#
+# A second namespace, kept apart from `models:` on purpose -- a definition
+# writes `model:` or `alias:` and never one meaning the other, so nobody has to
+# know which keys of a single table are wire ids and which stand for them.
+#
+# It exists because a definition can know what *kind* of model it needs and not
+# know its name. That is true of every definition kingfisher ships: `extractor`
+# wants a cheap model, `second-opinion` wants one unlike the main agent's, and
+# neither can spell that as a vendor's model id without refusing to start
+# everywhere else. So they name a kind, and you say what it is.
+#
+# The names are yours; these two are what the presets reference. An alias a
+# definition names and you have not bound **refuses the build** rather than
+# falling back to the default -- handing `second-opinion` the very model it
+# exists not to be is the answer nobody asked for, and nothing in the output
+# would look wrong. It fires only when a request activates that delegate.
+aliases:
+  cheap: MiniMax-M2.5
+  alternate: gpt-5
+
 # --- pointing a delegate at one of these ------------------------------------
 #
-# A subagent names a model from this table and nothing else:
+# A subagent names a model from this table, or an alias from the one above:
 #
 #     # subagents/extractor.yaml
-#     model: MiniMax-M2.5
+#     alias: cheap            # your catalogue says which model that is
+#     model: MiniMax-M2.5     # or name one outright -- never both
 #
 # The endpoint follows from the model, so there is no second line to keep in
 # step with it. A name this table does not define is refused at startup, naming

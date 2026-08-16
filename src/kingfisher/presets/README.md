@@ -285,8 +285,28 @@ the override could apply.
 
 Which is why **no preset ships with a `model:` line.** A file inside the wheel
 cannot portably name a vendor's model id: `extractor` said `MiniMax-M2.5` and
-would now refuse to start for anyone without a MiniMax entry. Which model is
-cheap *here* is your answer, not a preset's — add the line after you copy it.
+would refuse to start for anyone without a MiniMax entry.
+
+They name an `alias:` instead — a general name your catalogue binds:
+
+```yaml
+# models.yaml
+aliases:
+  cheap: MiniMax-M2.5     # extractor, profiler
+  alternate: gpt-5        # second-opinion
+```
+
+A definition writes `model:` *or* `alias:`, never both: an alias is a model name
+once bound, so a file saying both has said one thing twice with no rule for
+which wins.
+
+**An unbound alias refuses the build**, and does not fall back to the default.
+That is the whole reason the indirection is worth having. `second-opinion` exists
+in order not to be the model beside it; handing it that very model because
+nobody bound `alternate` is the answer nobody asked for, and it is invisible —
+the delegate builds, answers, and the answer is worth nothing. Refusing fires
+only when a request *activates* the delegate, so seeding presets you have not
+bound for still costs nothing until you use them.
 
 | Field | | |
 | --- | --- | --- |
@@ -299,6 +319,7 @@ cheap *here* is your answer, not a preset's — add the line after you copy it.
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | An entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes |
+| `alias` | optional | A general name your `models.yaml` binds to a model. For a definition that knows what *kind* of model it needs and cannot know its name. Not with `model` |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 ### A delegate that consults another

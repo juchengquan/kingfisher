@@ -26,7 +26,7 @@ unconfigurable. The wire formats are now a closed registry in
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 from typing import Any
@@ -128,6 +128,23 @@ class Config:
     #: `models`: `from_env` refuses a deployment where it is not, which is what
     #: makes every other lookup here total.
     default_model: str
+    #: General names a deployment binds to models of its own, for definitions
+    #: that know what *kind* of model they want and cannot know its name.
+    #:
+    #: A file inside the wheel is the case: `extractor` wants a cheap model and
+    #: `second-opinion` wants one unlike the main agent's, and neither can name
+    #: a vendor's model id without refusing to start everywhere else. So they
+    #: name `cheap` and `alternate`, and a deployment says what those are here.
+    #:
+    #: A second namespace, deliberately kept apart from `models`. A definition
+    #: writes `alias:` or `model:`, never one meaning the other, so a reader
+    #: never has to know which keys of a single table are wire ids and which
+    #: are not.
+    #:
+    #: Not called `roles`. That word belonged to `KINGFISHER_MODEL_{role}` and
+    #: `model_for("main")`, deleted for being the wrong granularity, and reusing
+    #: it would revive the vocabulary of the thing that was removed.
+    aliases: Mapping[str, str] = field(default_factory=dict)
     #: What bounds one shell command or one interpreter run.
     #:
     #: Not the model timeout. This was `timeout_s` and served three unrelated
@@ -268,6 +285,31 @@ class Config:
     def subagents_dir(self) -> Path:
         """The subagent catalogue. Read off disk, never addressed by the agent."""
         return self.subagents_root or self.workspace / "subagents"
+
+    def bound(self, alias: str) -> str:
+        """The model this deployment binds `alias` to.
+
+        Refuses rather than falling back to the default, which is the whole
+        point of the indirection. A definition writing `alias: alternate` is
+        saying it needs a model unlike the one beside it; quietly handing it
+        that very model is the failure the alias exists to prevent, and it is
+        invisible -- the delegate still builds, still answers, and the answer is
+        worth nothing.
+
+        So an unbound alias stops the build and says what to write. Loud is
+        cheap here: it fires only when a request activates the delegate, so
+        seeding a preset you have not bound for costs nothing until you use it.
+        """
+        model = self.aliases.get(alias)
+        if model is None:
+            known = tuple(sorted(self.aliases))
+            where = f" in {self.models_file}" if self.models_file else ""
+            msg = (
+                f"no model bound to alias {alias!r}{where}; this deployment binds {known}. "
+                f"Add it under 'aliases:', naming one of {tuple(sorted(self.models))}"
+            )
+            raise ConfigError(msg)
+        return model
 
     def resolve_model(self, name: str | None = None) -> tuple[ModelProfile, Endpoint]:
         """Which model to build, and where to send it. One question, one answer.

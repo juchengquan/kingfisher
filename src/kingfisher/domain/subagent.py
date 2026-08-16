@@ -53,10 +53,25 @@ defines. Omitted, it runs whatever the deployment runs. It is granted like
 `middleware` and for a stronger reason: the model decides which endpoint
 receives this delegate's prompts and whose credentials pay for them.
 
-There was a `provider:` beside it, naming an endpoint by style, and a rule that
-the two moved together -- a model name sent to an endpoint that has never heard
-of it is a 404 if you are lucky and a wrong-model run if you are not. Both are
-gone. A model resolves to its own endpoint through the catalogue, so the
+`alias` says the same thing generally: a name the *deployment* binds to a model
+of its own, under `aliases:` in `models.yaml`. It exists because a definition
+can know what *kind* of model it needs and not know its name -- which is true of
+every definition shipped inside the wheel, since a vendor's model id is portable
+nowhere. `extractor` wants a cheap model; `second-opinion` wants one unlike the
+main agent's. Neither can spell that as `MiniMax-M2.5` without refusing to start
+for everyone else.
+
+An unbound alias stops the build. Falling back to the deployment's own model
+would hand `second-opinion` the very model it exists not to be, and that failure
+is silent -- the delegate builds, answers, and the answer is worth nothing.
+
+Name one or the other, never both: an alias *is* a model name once bound, so a
+file saying both has said one thing twice with no rule for which wins.
+
+There was a `provider:` beside `model:`, naming an endpoint by style, and a rule
+that the two moved together -- a model name sent to an endpoint that has never
+heard of it is a 404 if you are lucky and a wrong-model run if you are not. Both
+are gone. A model resolves to its own endpoint through the catalogue, so the
 half-pair is not a thing that can be written, and the rule refusing it has
 nothing left to refuse.
 
@@ -129,6 +144,7 @@ KNOWN: frozenset[str] = frozenset(
         "middleware",
         "subagents",
         "model",
+        "alias",
         "metadata",
     }
 )
@@ -223,6 +239,11 @@ class SubagentSpec:
     #: prompt goes and whose credentials pay -- the endpoint follows from the
     #: model -- which is why it is granted rather than free.
     model: str | None = None
+    #: The same decision, made generally: a name the *deployment* binds to a
+    #: model of its own. For a definition that knows what kind of model it needs
+    #: and cannot know its name -- which is every definition shipped inside the
+    #: wheel, since a vendor's model id is not portable.
+    alias: str | None = None
     #: The caller's own keys, carried and never interpreted. Kingfisher reads
     #: nothing here and never will: the moment it did, this would be a field
     #: with rules, and the point of it is to be the one place a definition can
@@ -310,6 +331,18 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
+    # Two ways to say what a delegate runs, and a file saying both has said one
+    # thing twice with no rule for which wins. Refused rather than ranked: a
+    # precedence order here would be invisible in the file that relies on it,
+    # and whichever way round it went, half the readers would guess the other.
+    if document.get("model") and document.get("alias"):
+        msg = (
+            f"{source.name}: names both a model ({fields.text(document['model'])!r}) and "
+            f"an alias ({fields.text(document['alias'])!r}); an alias *is* a model name "
+            f"once this deployment binds it, so name one or the other"
+        )
+        raise SubagentError(msg)
+
     return SubagentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
@@ -333,6 +366,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         # `or None` rather than a conditional: unset and blank mean the same
         # thing here -- run whatever the deployment runs.
         model=fields.text(document.get("model")) or None,
+        alias=fields.text(document.get("alias")) or None,
         metadata=_metadata(document, source),
     )
 
@@ -412,17 +446,40 @@ def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
                 raise SubagentError(msg)
 
 
-def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> str | None:
-    """What a delegate runs, once the request has had its say. `None` is the
-    deployment's own.
+@dataclass(frozen=True)
+class Wanted:
+    """What a delegate asked to run, in whichever of the two ways it may ask.
 
-    Almost nothing left, and that is the result rather than an oversight. This
-    was `resolved_endpoint` and returned a `(provider, model)` pair, carrying
-    two refusals with it: an operator override that could only ever say "all
-    delegates", and the endpoint grant. The first was deleted before this
+    Exactly one of these is ever set, and both being `None` is the ordinary
+    case: run whatever the deployment runs. `model` is a wire id and needs no
+    deployment to interpret it; `alias` is a general name and means nothing
+    until something binds it, which is `Config.bound`.
+
+    A record rather than a bare string because the two cannot be told apart by
+    looking. Returned as `"cheap"`, a caller has no way to know whether to send
+    that to an endpoint or to look it up -- and sending an alias to an endpoint
+    is a 404 at best.
+    """
+
+    model: str | None = None
+    alias: str | None = None
+
+
+def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> Wanted:
+    """What a delegate runs, once the request has had its say.
+
+    The override replaces wholesale, and that includes replacing an *alias* with
+    a model. A caller naming a concrete model has said something more specific
+    than the file did, and keeping the file's alias beside it would mean
+    resolving two answers to one question.
+
+    Almost nothing else left, and that is the result rather than an oversight.
+    This was `resolved_endpoint` and returned a `(provider, model)` pair,
+    carrying two refusals with it: an operator override that could only ever say
+    "all delegates", and the endpoint grant. The first was deleted before this
     change; the second cannot live here any more, because the endpoint is no
     longer written in the definition -- it follows from the model, through a
-    catalogue only `Config` holds.
+    catalogue only `Config` holds. Binding an alias needs that catalogue too.
 
     Which is the layering working rather than fighting it. The domain does not
     read deployment configuration, and
@@ -431,4 +488,6 @@ def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> str 
     still a question about *names* -- may this request name this model, may it
     reach this endpoint -- stays in `capabilities`.
     """
-    return override.model if override is not None else spec.model
+    if override is not None:
+        return Wanted(model=override.model)
+    return Wanted(model=spec.model, alias=spec.alias)

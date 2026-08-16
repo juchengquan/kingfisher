@@ -35,6 +35,13 @@ system_prompt: |
   You read.
 """
 
+ASKED_BY_ALIAS = """name: cheap
+description: Reads a lot.
+alias: {alias}
+system_prompt: |
+  You read.
+"""
+
 ASKED_FOR_NOTHING = """name: reviewer
 description: Checks figures.
 system_prompt: |
@@ -135,6 +142,38 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
 
 
 # -- only a delegate that asked ------------------------------------------
+
+
+def test_asking_by_alias_counts_as_asking(cfg, session_dir):
+    """The hole this check briefly had, and the reason aliases exist.
+
+    When the presets were stripped of their `model:` lines, `second-opinion`
+    asked for nothing -- so it ran the main agent's model *and* this said
+    nothing about it, which is the exact silence the whole check was written to
+    break. An alias is a delegate asking to be elsewhere, so it is checked like
+    one, against whatever the deployment bound it to.
+    """
+    bound = replace(cfg, aliases={"alternate": cfg.default_model})
+    _define(bound, ASKED_BY_ALIAS.format(alias="alternate"))
+
+    assert "same model as the main agent" in _found(bound, session_dir, ("cheap",))["cheap"]
+
+
+def test_an_alias_bound_somewhere_else_is_not_reported(cfg, session_dir):
+    """The negative control: a binding that did what it was for."""
+    routed = replace(_elsewhere(cfg, "https://api.openai.com/v1"), aliases={"alternate": "gpt-5"})
+    _define(routed, ASKED_BY_ALIAS.format(alias="alternate"))
+
+    assert _found(routed, session_dir, ("cheap",)) == {}
+
+
+def test_an_unbound_alias_is_left_to_the_build_to_refuse(cfg, session_dir):
+    """Reporting is not refusing -- the module says so. The build raises with
+    the message worth reading; saying it twice here, worded for a different
+    question, would only get in the way."""
+    _define(cfg, ASKED_BY_ALIAS.format(alias="nobody-bound-this"))
+
+    assert _found(cfg, session_dir, ("cheap",)) == {}
 
 
 def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
