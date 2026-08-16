@@ -140,13 +140,40 @@ Today those files fail too — they send an unknown id to whatever endpoint is
 configured and get a runtime 404 mid-run. Closing the table converts a late,
 confusing failure into an early, legible one.
 
-**Rejected: reserved role names.** A small set of aliases the table may bind
-(`fast: MiniMax-M2.5`) would let a preset name a role and an operator bind it,
-keeping the cheap-model demonstration portable. Declined because it reintroduces
-the indirection layer that real keys were chosen to avoid, and puts two naming
-schemes in one table — a reader would have to know which names are model ids and
-which are roles. Reconsider only if operators turn out to be writing the same
-three bindings by hand.
+**Rejected, then built: named bindings.** The first version of this section
+declined a small set of role names, on the grounds that they reintroduce an
+indirection layer and put two naming schemes in one table — "reconsider only if
+operators turn out to be writing the same three bindings by hand."
+
+They would have been. Shipping the presets silent made that concrete rather than
+hypothetical: `extractor` and `profiler` want a cheap model, `second-opinion`
+wants one unlike the main agent's, and **all three shipped doing nothing
+useful.** Worse for `second-opinion`, which shipped doing nothing useful
+*invisibly* — see below.
+
+So `models.yaml` gains an `aliases:` table and a definition may write `alias:`.
+Both objections are answered rather than overruled. The two naming schemes are
+two *tables* and two *fields*, never one table holding both kinds of key, so a
+reader never has to guess which is which. And it is not called `roles`: that
+word belonged to `KINGFISHER_MODEL_{role}` and `model_for("main")`, deleted for
+being the wrong granularity, and reviving it would revive the vocabulary of the
+thing that was removed.
+
+An unbound alias **refuses the build** rather than falling back to the default.
+Falling back is the whole failure the indirection exists to prevent: it hands
+`second-opinion` the very model it exists not to be, and nothing in the output
+looks wrong. It fires only when a request activates the delegate, so seeding
+presets you have not bound for still costs nothing — the same rule an unrunnable
+`model:` follows.
+
+**What this does *not* do is pick a contrasting model automatically**, and that
+is a limit worth stating rather than a gap to fill later. Kingfisher knows two
+things about a model: its id and its endpoint's host. Neither is evidence of
+what a *family* is. `MiniMax-M3` and `MiniMax-M2.5` differ as strings and share
+every failure mode; and kingfisher targets gateway-shaped endpoints, so one host
+routinely serves several vendors — which makes same-host neither necessary nor
+sufficient. A binding is a judgement someone has to make. What kingfisher checks
+is the crude case, through `indistinct`, which now sees aliases too.
 
 ### `build_model` takes a profile, not a `Config`
 
@@ -450,6 +477,21 @@ closed table makes its vocabulary exact rather than introducing it.
 not two.** A file shipped inside the package leaves the set of styles closed at
 build time, and the `Literal` was the only thing rejecting a typo — that version
 deletes a guard and replaces it with nothing.
+
+**Silent presets made `indistinct` blind to the one delegate it was written
+for.** Stripping the `model:` lines was the right call for portability and had a
+consequence nobody predicted: `indistinct` skips a delegate whose `model` is
+`None`, on the reasoning that "it never asked to be anywhere in particular". So
+`second-opinion` ran the main agent's model *and* the check written to catch
+exactly that said nothing. Inert would have been survivable; inert and quiet was
+not, and it is what forced the alias table one commit later. An `alias:` counts
+as asking, so the check sees it.
+
+**Renaming `Capabilities.providers` became a wire break in between.** The HTTP
+surface landed on main while this branch was in flight, and `server/capabilities.py`
+exposes the axis as a request field. The rename is still right — `provider` is a
+word nothing else in the system has — but it is a breaking API change now rather
+than an internal one.
 
 **The catalogue-wide coherence check was designed, built, and removed.** It is
 the one decision here that a test caught rather than a reader. Wiring it turned
