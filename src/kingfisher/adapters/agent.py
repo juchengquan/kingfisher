@@ -179,10 +179,42 @@ def system_prompt(cfg: Config | None = None) -> str:
     )
 
 
-def _as_subagent(spec: SubagentSpec, cfg: Config) -> dict[str, Any]:
+def _subagent_skills(
+    spec: SubagentSpec, available: tuple[str, ...], activated: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    """Which skills a delegate is told about, or `None` for none.
+
+    Two different refusals, and the difference is the same one `build_agent`
+    already draws for a request. A name nothing defines is a mistake in the
+    definition and raises. A name that exists but this request did not activate
+    is not a mistake -- it is a caller narrower than the definition -- so it is
+    dropped, exactly as `Capabilities.intersect` drops it for the parent. A
+    delegate cannot reach past the request that summoned it.
+    """
+    if spec.skills is None:
+        return None
+    unknown = tuple(name for name in spec.skills if name not in available)
+    if unknown:
+        msg = (
+            f"subagent {spec.name!r} names unknown skill(s): {', '.join(unknown)}; "
+            f"this request offers {available}"
+        )
+        raise CapabilityError(msg)
+    if activated is None:
+        return spec.skills
+    return tuple(name for name in spec.skills if name in activated)
+
+
+def _as_subagent(
+    spec: SubagentSpec,
+    cfg: Config,
+    *,
+    backend: Any = None,
+    skills: tuple[str, ...] | None = None,
+) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
 
-    Every field maps directly except `tools`. deepagents' `SubAgent.tools` is a
+    Every field maps directly except `tools` and `skills`. deepagents' `SubAgent.tools` is a
     sequence of tool *objects* it will register, not a selection from the ones
     the parent already has — handing it names raises inside `ToolNode`. The
     objects are built from the backend deep inside `create_deep_agent` and are
@@ -195,8 +227,18 @@ def _as_subagent(spec: SubagentSpec, cfg: Config) -> dict[str, Any]:
         "description": spec.description,
         "system_prompt": spec.system_prompt,
     }
+    middleware: list[Any] = []
     if spec.tools is not None:
-        subagent["middleware"] = [ToolAllowlist(spec.tools)]
+        middleware.append(ToolAllowlist(spec.tools))
+    # A subagent inherits none of its parent's middleware, so an index it is
+    # not given is an index it has no idea exists. `SubAgent.skills` would take
+    # source *paths*; this selects by name, which is what a definition writes.
+    if skills is not None and backend is not None:
+        middleware.append(
+            ScopedSkills(allowed=skills, backend=backend, sources=SKILLS_SOURCES)
+        )
+    if middleware:
+        subagent["middleware"] = middleware
 
     # A *name* here would be resolved by deepagents' `init_chat_model`, which
     # infers its own provider and reads credentials from the environment --
@@ -317,7 +359,16 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         if unknown:
             msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
             raise CapabilityError(msg)
-        extras["subagents"] = [_as_subagent(defined[n], cfg) for n in capabilities.subagents]
+        offered = _available_skills(cfg, session_dir)
+        extras["subagents"] = [
+            _as_subagent(
+                defined[n],
+                cfg,
+                backend=resolved_backend,
+                skills=_subagent_skills(defined[n], offered, capabilities.skills),
+            )
+            for n in capabilities.subagents
+        ]
 
     if capabilities.tools is not None:
         middleware.append(ToolAllowlist(capabilities.tools))
