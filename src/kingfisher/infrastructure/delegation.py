@@ -22,6 +22,7 @@ from kingfisher.domain.capabilities import (
     CapabilityError,
     Selection,
     approved_middleware,
+    belongs_in,
     narrowed,
 )
 from kingfisher.domain.subagent import resolved_endpoint
@@ -102,7 +103,7 @@ def refuse_unknown_tools(
         if misplaced := tuple(n for n in asked if n in set(other)):
             msg = (
                 f"subagent {spec.name!r} names {', '.join(misplaced)} in {here}, "
-                f"but it is a {there[:-1].replace('_', ' ')} -- name it in {there}"
+                f"but {belongs_in(misplaced, field=there)}"
             )
             raise CapabilityError(msg)
         if unknown := tuple(n for n in asked if n not in set(own)):

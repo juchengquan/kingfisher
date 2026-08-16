@@ -608,3 +608,20 @@ def test_a_builtin_named_under_tools_says_which_list_it_belongs_in(cfg, session_
     with pytest.raises(CapabilityError, match="name it in builtin_tools"):
         _build(cfg, session_dir, definition)
 
+
+def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
+    """Five names and "it is a builtin tool" reads as machine output.
+
+    This is the message every definition written before the two tool lists
+    will hit, so it is the one worth reading like a sentence. Found by running
+    a real migration, not by review.
+    """
+    one = TYPO.replace("builtin_tools: [reed_file]", "tools: [read_file]")
+    many = TYPO.replace("builtin_tools: [reed_file]", "tools: [read_file, ls, glob]")
+
+    with pytest.raises(CapabilityError, match="that is a builtin tool -- name it in"):
+        _build(cfg, session_dir, one)
+
+    with pytest.raises(CapabilityError, match="those are builtin tools -- name them in"):
+        _build(cfg, session_dir, many)
+
