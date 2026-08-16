@@ -130,7 +130,7 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
         adapter = ADAPTERS[endpoint.api]
     except KeyError:
         msg = (
-            f"endpoint {endpoint.name!r} names api {endpoint.api!r}, which kingfisher "
+            f"endpoint {profile.endpoint!r} names api {endpoint.api!r}, which kingfisher "
             f"cannot build; known: {tuple(ADAPTERS)}"
         )
         raise ConfigError(msg) from None

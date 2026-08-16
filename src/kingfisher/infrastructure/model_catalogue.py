@@ -30,7 +30,7 @@ from typing import TYPE_CHECKING, Any
 
 import yaml
 
-from kingfisher.config import ConfigError, Endpoint, ModelProfile
+from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -100,7 +100,6 @@ def _endpoints(
             dropped.append(f"{name} ({entry['key_env']} is not set)")
             continue
         resolved[name] = Endpoint(
-            name=name,
             api=str(entry["api"]),
             base_url=str(entry["base_url"]),
             api_key=key,
@@ -201,10 +200,8 @@ def _aliases(
     return bindings
 
 
-def load(
-    path: Path, environ: Mapping[str, str]
-) -> tuple[dict[str, Endpoint], dict[str, ModelProfile], str, dict[str, str]]:
-    """Read `path` into endpoints, models, and the name of the default model.
+def load(path: Path, environ: Mapping[str, str]) -> Models:
+    """Read `path` into what this deployment can run, where, and under which names.
 
     Required, with no fallback and no shipped default table. `api_style` was
     required and deliberately defaulted to nothing for the same reason: a
@@ -269,4 +266,10 @@ def load(
         else:
             msg = f"{path}: default model {default!r} is not defined here; it defines {known}"
         raise ConfigError(msg)
-    return endpoints, models, default, _aliases(document, models, path)
+    return Models(
+        models=models,
+        endpoints=endpoints,
+        default=default,
+        aliases=_aliases(document, models, path),
+        source=path,
+    )

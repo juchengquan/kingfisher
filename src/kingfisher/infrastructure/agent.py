@@ -763,7 +763,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
 
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
-            model=model if model is not None else build_model(*cfg.resolve_model()),
+            model=model if model is not None else build_model(*cfg.models.resolve()),
             backend=resolved_backend,
             system_prompt=system_prompt(cfg),
             middleware=middleware,
@@ -859,7 +859,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                     _built(
                         helper,
                         default_model=(
-                            model if model is not None else build_model(*cfg.resolve_model())
+                            model if model is not None else build_model(*cfg.models.resolve())
                         ),
                         tool_objects=list(surface.objects.values()),
                     )

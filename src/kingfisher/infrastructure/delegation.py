@@ -250,7 +250,7 @@ def model_for(spec: SubagentSpec, cfg: Config, *, override: RunOn | None = None)
     if wanted.alias is None:
         return None  # it asked for neither: run whatever the deployment runs
     try:
-        return cfg.bound(wanted.alias)
+        return cfg.models.bound(wanted.alias)
     except ConfigError as exc:
         msg = f"subagent {spec.name!r}: {exc}"
         raise ConfigError(msg) from exc
@@ -278,13 +278,13 @@ def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | N
     if spec.model is None and spec.alias is None:
         return None  # it never asked to be anywhere in particular
 
-    if model == cfg.default_model:
+    if model == cfg.models.default:
         return f"runs {model!r}, the same model as the main agent"
-    _, endpoint = cfg.resolve_model(model)
-    default = _host(cfg.resolve_model()[1].base_url)
+    profile, endpoint = cfg.models.resolve(model)
+    default = _host(cfg.models.resolve()[1].base_url)
     if _host(endpoint.base_url) == default:
         return (
-            f"runs {model!r} on endpoint {endpoint.name!r}, which points at the "
+            f"runs {model!r} on endpoint {profile.endpoint!r}, which points at the "
             f"same host as the default ({default})"
         )
     return None
@@ -401,16 +401,16 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # a per-model `max_tokens` would have been dropped without a word. A
         # profile carries every param, and there is nothing here to forget.
         try:
-            profile, endpoint = cfg.resolve_model(model_id)
+            profile, endpoint = cfg.models.resolve(model_id)
         except ConfigError as exc:
-            # `resolve_model` knows the model and the catalogue; only here knows
+            # `resolve` knows the model and the catalogue; only here knows
             # *who asked*. Without the name the reader is told `gpt-5` cannot be
             # run and left to grep the catalogue for whoever wanted it -- and
             # this is the one refusal that fires on a file they may not own.
             msg = f"subagent {spec.name!r}: {exc}"
             raise ConfigError(msg) from exc
         refuse_ungranted_endpoint(
-            endpoint.name, granted=endpoints, subject=f"subagent {spec.name!r}"
+            profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
         )
         subagent["model"] = build_model(profile, endpoint)
     elif default_model is not None:

@@ -14,7 +14,7 @@ import pytest
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.infrastructure.models import ADAPTERS, Adapter, build_model
 
-OPENAI = Endpoint("openai", "openai", "https://api.openai.com/v1", "sk-not-real")
+OPENAI = Endpoint("openai", "https://api.openai.com/v1", "sk-not-real")
 
 
 def test_openai_uses_the_responses_api(cfg):
@@ -26,7 +26,7 @@ def test_openai_uses_the_responses_api(cfg):
     the same on every call, which is what the run log claims when it records
     the endpoint.
     """
-    model = build_model(cfg.models["fake-model"], OPENAI)
+    model = build_model(cfg.models.models["fake-model"], OPENAI)
 
     assert model.use_responses_api is True
 
@@ -42,7 +42,7 @@ def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
     monkeypatch.setitem(ADAPTERS, "openai", colliding)
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
-        build_model(cfg.models["fake-model"], OPENAI)
+        build_model(cfg.models.models["fake-model"], OPENAI)
 
 
 def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
@@ -52,7 +52,7 @@ def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
     file. This is the backstop for a `ModelProfile` built any other way — the
     duplicate keyword still raises rather than one value silently winning.
     """
-    profile = replace(cfg.models["fake-model"], extra={"max_tokens": 1})
+    profile = replace(cfg.models.models["fake-model"], extra={"max_tokens": 1})
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
         build_model(profile, OPENAI)
@@ -66,10 +66,10 @@ def test_the_model_comes_from_the_profile_it_is_handed(cfg):
     delegate would run the deployment's own model while its definition said
     otherwise.
     """
-    profile, endpoint = cfg.resolve_model("cheap-model")
+    profile, endpoint = cfg.models.resolve("cheap-model")
 
     assert build_model(profile, endpoint).model == "cheap-model"
-    assert build_model(*cfg.resolve_model()).model == cfg.default_model
+    assert build_model(*cfg.models.resolve()).model == cfg.models.default
 
 
 def test_an_unset_param_is_not_passed_at_all(cfg):
@@ -79,7 +79,7 @@ def test_an_unset_param_is_not_passed_at_all(cfg):
     nobody wrote a number would silently change what every existing deployment
     does, from the one file whose purpose is to hand that decision over.
     """
-    unset = cfg.models["fake-model"]
+    unset = cfg.models.models["fake-model"]
     assert unset.temperature is None
     assert "temperature" not in unset.kwargs()
 
@@ -111,7 +111,7 @@ LANDING_SITES = {
 @pytest.mark.parametrize("api", sorted(ADAPTERS))
 def test_every_value_reaches_the_client(api):
     """A dropped kwarg is invisible until the endpoint rejects the request."""
-    endpoint = Endpoint("somewhere", api, "https://example.invalid/v1", "sk-not-real")
+    endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real")
     profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
     model = build_model(profile, endpoint)
     sites = LANDING_SITES[api]
@@ -136,10 +136,10 @@ def test_an_unbuildable_api_fails_with_a_readable_error(cfg):
     thing that actually knows, and a bare `KeyError` from a dict lookup is not
     something anyone can act on.
     """
-    endpoint = Endpoint("somewhere", "gemini", "https://example.invalid", "sk-not-real")
+    endpoint = Endpoint("gemini", "https://example.invalid", "sk-not-real")
 
     with pytest.raises(ConfigError, match="names api 'gemini'"):
-        build_model(cfg.models["fake-model"], endpoint)
+        build_model(cfg.models.models["fake-model"], endpoint)
 
 
 def test_describing_an_adapter_does_not_import_its_sdk():

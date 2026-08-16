@@ -97,15 +97,11 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
     # and models cross-reference, and splitting them across files would let half
     # a catalogue load.
     models_file = _optional_path("KINGFISHER_MODELS_FILE") or workspace / "models.yaml"
-    endpoints, models, default_model, aliases = model_catalogue.load(models_file, env)
+    catalogue = model_catalogue.load(models_file, env)
 
     return Config(
         workspace=workspace,
-        models=models,
-        endpoints=endpoints,
-        default_model=default_model,
-        aliases=aliases,
-        models_file=models_file,
+        models=catalogue,
         execution_timeout_s=_int(env, "KINGFISHER_EXECUTION_TIMEOUT_S", 120),
         turn_timeout_s=_int(env, "KINGFISHER_TURN_TIMEOUT_S", 3600),
         session_max_bytes=_optional_int(env, "KINGFISHER_SESSION_MAX_BYTES"),

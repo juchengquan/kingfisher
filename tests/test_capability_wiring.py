@@ -347,7 +347,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     assert subagent["model"].model == "cheap-model"
     # Same gateway as the main agent, not whatever the environment suggests.
     assert str(subagent["model"].anthropic_api_url).startswith(
-        cfg.resolve_model()[1].base_url
+        cfg.models.resolve()[1].base_url
     )
 
 

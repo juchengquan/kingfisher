@@ -68,8 +68,14 @@ def _elsewhere(cfg, url: str):
     """A deployment whose `gpt-5` lives at whatever host `url` names."""
     return replace(
         cfg,
-        endpoints={**cfg.endpoints, "openai": Endpoint("openai", "openai", url, "sk-test")},
-        models={**cfg.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        models=replace(
+            cfg.models,
+            endpoints={
+                **cfg.models.endpoints,
+                "openai": Endpoint("openai", url, "sk-test"),
+            },
+            models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        ),
     )
 
 
@@ -90,7 +96,7 @@ A model id says nothing about which machine serves it, so two catalogue
     else" while being the same gateway. Measured on a real deployment: both
     endpoints resolved to `api.minimaxi.com`.
     """
-    same = _elsewhere(cfg, cfg.resolve_model()[1].base_url.replace("/anthropic", "/v1"))
+    same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
 
     found = _found(same, session_dir, ("second-opinion",))
@@ -114,7 +120,7 @@ def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
 def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
     """Reads as a decision, behaves as a no-op -- and stops being a no-op the
     day someone runs it on a deployment whose default differs."""
-    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.default_model))
+    _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
 
     found = _found(cfg, session_dir, ("cheap",))
 
@@ -153,7 +159,9 @@ def test_asking_by_alias_counts_as_asking(cfg, session_dir):
     break. An alias is a delegate asking to be elsewhere, so it is checked like
     one, against whatever the deployment bound it to.
     """
-    bound = replace(cfg, aliases={"alternate": cfg.default_model})
+    bound = replace(
+        cfg, models=replace(cfg.models, aliases={"alternate": cfg.models.default})
+    )
     _define(bound, ASKED_BY_ALIAS.format(alias="alternate"))
 
     assert "same model as the main agent" in _found(bound, session_dir, ("cheap",))["cheap"]
@@ -161,7 +169,8 @@ def test_asking_by_alias_counts_as_asking(cfg, session_dir):
 
 def test_an_alias_bound_somewhere_else_is_not_reported(cfg, session_dir):
     """The negative control: a binding that did what it was for."""
-    routed = replace(_elsewhere(cfg, "https://api.openai.com/v1"), aliases={"alternate": "gpt-5"})
+    base = _elsewhere(cfg, "https://api.openai.com/v1")
+    routed = replace(base, models=replace(base.models, aliases={"alternate": "gpt-5"}))
     _define(routed, ASKED_BY_ALIAS.format(alias="alternate"))
 
     assert _found(routed, session_dir, ("cheap",)) == {}
@@ -204,7 +213,7 @@ def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir
         cfg,
         session_dir,
         ("cheap",),
-        run_on={"cheap": RunOn(cfg.default_model)},
+        run_on={"cheap": RunOn(cfg.models.default)},
     )
 
     assert "same model as the main agent" in found["cheap"]
@@ -223,7 +232,7 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
     """
     from kingfisher import Kingfisher
 
-    same = _elsewhere(cfg, cfg.resolve_model()[1].base_url.replace("/anthropic", "/v1"))
+    same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
     service = Kingfisher(same)
     service.start_session("s")
