@@ -10,7 +10,7 @@ one makes a domain layer worth having.
 from __future__ import annotations
 
 import shutil
-from collections.abc import Callable, Iterator
+from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -22,6 +22,7 @@ from kingfisher.domain.layout import (
     MARKER,
     SESSION_DIRS,
 )
+from kingfisher.domain.references import within
 
 
 #: What a catalogue is made of, named once so a caller can quote it in an error
@@ -334,7 +335,12 @@ def check_placeable(sources: tuple[Path, ...]) -> None:
     _checked(sources)
 
 
-def place_inputs(sources: tuple[Path, ...], input_dir: Path) -> tuple[str, ...]:
+def place_inputs(
+    sources: tuple[Path, ...],
+    input_dir: Path,
+    *,
+    contents: Mapping[str, bytes] | None = None,
+) -> tuple[str, ...]:
     """Copy a turn's supplied files into its `input/`, and name what landed.
 
     The transient counterpart to `place_data`: these belong to one turn, where
@@ -348,13 +354,18 @@ def place_inputs(sources: tuple[Path, ...], input_dir: Path) -> tuple[str, ...]:
     missed both of `_checked`'s guarantees for as long as it existed.
     """
     checked = _checked(sources)
-    if not checked:
+    if not checked and not contents:
         return ()
 
     input_dir.mkdir(exist_ok=True)
     for name, source in checked.items():
         shutil.copy(source, input_dir / name)
-    return tuple(checked)
+    # Fetched by id rather than read from a path, and written here for the same
+    # reason the copies are: a turn's input directory is ours and was made
+    # moments ago. `within` is what makes a store-supplied key safe to join.
+    for name, content in (contents or {}).items():
+        within(input_dir, name).write_bytes(content)
+    return tuple(checked) + tuple(contents or ())
 
 
 @dataclass(frozen=True)
@@ -365,7 +376,12 @@ class DataPlacement:
     replaced: tuple[str, ...] = ()
 
 
-def place_data(sources: tuple[Path, ...], session_dir: Path) -> DataPlacement:
+def place_data(
+    sources: tuple[Path, ...],
+    session_dir: Path,
+    *,
+    contents: Mapping[str, bytes] | None = None,
+) -> DataPlacement:
     """Copy caller-supplied files into a session's `/data`, and re-harden it.
 
     The durable counterpart to a turn's `input/`: these survive the turn and
@@ -381,16 +397,22 @@ def place_data(sources: tuple[Path, ...], session_dir: Path) -> DataPlacement:
     Everything is checked before anything is copied -- see `_checked`, which
     the turn's input directory now shares.
     """
-    if not sources:
+    if not sources and not contents:
         return DataPlacement()
 
     seen = _checked(sources)
+    arriving = tuple(seen) + tuple(contents or ())
     existing = {p.name for p in (Path(session_dir) / "data").glob("*")}
+    # One `writable_data` block for both, not two. Its `finally` drops the write
+    # bits again, and taking them twice would mean a window between the two
+    # where `/data` is writable for no reason.
     with writable_data(session_dir) as data:
         for name, source in seen.items():
             shutil.copy(source, data / name)
+        for name, content in (contents or {}).items():
+            within(data, name).write_bytes(content)
 
     return DataPlacement(
-        placed=tuple(seen),
-        replaced=tuple(name for name in seen if name in existing),
+        placed=arriving,
+        replaced=tuple(name for name in arriving if name in existing),
     )

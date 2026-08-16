@@ -94,6 +94,7 @@ from kingfisher.infrastructure.checkpointing import (
     release_checkpointer,
     thread_ids,
 )
+from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
@@ -111,7 +112,12 @@ from kingfisher.infrastructure.workspace_fs import (
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
-    from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
+    from kingfisher.domain.ports import (
+        DefinitionStore,
+        FileStore,
+        SessionDirs,
+        ThreadStore,
+    )
 
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
@@ -142,6 +148,12 @@ class _Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
+    #: Content resolved from `input_refs`, held until the turn exists.
+    #:
+    #: Fetched during admission because a ref that will not resolve must refuse
+    #: the request, and written in `_open_turn` because a turn's `input/` is not
+    #: there yet. The bytes wait in between rather than the refusal moving.
+    fetched_inputs: Any = None
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.
     release: Any = None
@@ -362,6 +374,7 @@ class Kingfisher:
         # is written here rather than left for a reader to infer from a branch.
         threads: ThreadStore | Callable[[Path], Any] | None = None,
         definitions: DefinitionStore | None = None,
+        files: FileStore | None = None,
         catalogue_roots: Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
@@ -404,6 +417,10 @@ class Kingfisher:
         # nothing to wire, and a request that supplies ids without one is a
         # configuration error worth saying out loud rather than a silent no-op.
         self.definitions: Any = definitions
+        # Beside `definitions` and for the same reason: a caller with no host
+        # paths names files by id, and only something the deployment wired can
+        # turn a name into content.
+        self.files: Any = files
         # What this deployment permits, before any request asks for anything.
         # Unrestricted by default, so a single-caller deployment is unaffected;
         # a service in front of many callers sets it, and `intersect` can only
@@ -777,10 +794,15 @@ class Kingfisher:
         # budget add to it and only then be refused.
         self._refuse_if_over_budget(session)
 
+        # Both halves of "a request naming something that is not there must
+        # fail before it leaves anything behind": the paths are checked by
+        # `place_data`, the ids by the store, and neither has written yet.
+        fetched = fetch_refs(request, self.files)
+
         # Before the turn exists, and before anything is destroyed: a request
         # naming a file that is not there must fail without having placed the
         # ones that were. `place_data` re-hardens `/data` on its way out.
-        placement = place_data(request.data, session.directory)
+        placement = place_data(request.data, session.directory, contents=fetched.data)
 
         # Before the agent, which discovers definitions by reading the
         # directories this writes.
@@ -817,6 +839,7 @@ class Kingfisher:
             graph=graph,
             unprotected=unprotected,
             placement=placement,
+            fetched_inputs=fetched.inputs,
             release=release,
             # Tools come off the assembled graph rather than a list kept
             # somewhere: the surface includes whatever the workspace defined, so
@@ -848,7 +871,7 @@ class Kingfisher:
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
         turn = session.allocate_turn(dirs, request.turn_id)
 
-        place_inputs(request.inputs, turn.input_dir)
+        place_inputs(request.inputs, turn.input_dir, contents=admitted.fetched_inputs)
 
         logger = JsonlRunLogger(
             log_path(cfg.state_dir, session_id),
@@ -862,7 +885,13 @@ class Kingfisher:
             graph=admitted.graph,
             release=admitted.release,
             message=turn_message(
-                request.task, turn, admitted.placement.placed, has_inputs=bool(request.inputs)
+                request.task,
+                turn,
+                admitted.placement.placed,
+                # Fetched inputs are inputs. The agent is told the directory
+                # exists on the same terms either way -- where a file came from
+                # is the deployment's business, not the agent's.
+                has_inputs=bool(request.inputs or admitted.fetched_inputs),
             ),
             session=session,
             turn=turn,

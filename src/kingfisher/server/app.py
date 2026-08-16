@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, status
 
-from kingfisher import Config, Kingfisher, async_checkpointer, from_env
+from kingfisher import Config, Kingfisher, LocalFileStore, async_checkpointer, from_env
 from kingfisher.server import errors, sessions
 from kingfisher.server.config import ServerConfig
 from kingfisher.server.turns import turn_router
@@ -54,8 +54,9 @@ def create_app(
             yield
             return
         cfg: Config = from_env()
+        files = LocalFileStore(settings.file_store_dir) if settings.file_store_dir else None
         async with async_checkpointer(cfg) as threads:
-            app.state.kingfisher = Kingfisher(cfg, threads=threads)
+            app.state.kingfisher = Kingfisher(cfg, threads=threads, files=files)
             try:
                 yield
             finally:

@@ -287,8 +287,14 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     Dispatching subagents from code needs the *async* path. `task()` inside the
     REPL awaits, so a sync `SqliteSaver` raises `does not support async
     methods` partway through a workflow that has already run. Use `arun` or
-    `astream` with `async_checkpointer(cfg)`; everything else here works on
-    either. Undocumented upstream, and found by running it.
+    `astream`; everything else here works on either. Undocumented upstream, and
+    found by running it.
+
+    Nothing has to be injected for that. This note used to say
+    `async_checkpointer(cfg)`, which was true when a sync saver was the default
+    and `astream` refused it -- and became advice to reach for the one shared
+    database per workspace, which is the contention a database per session
+    exists to avoid. `astream` now opens an async saver for the session itself.
     """
     # Deferred so that shipping the sandbox by default costs nothing to the runs
     # that never enable it. Measured, because the saving is smaller than it

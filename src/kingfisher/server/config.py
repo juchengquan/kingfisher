@@ -14,6 +14,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -50,6 +51,14 @@ class ServerConfig:
     #: Fifteen seconds is well inside the usual sixty-second proxy idle timeout
     #: and coarse enough to be invisible next to a turn.
     heartbeat_s: float = 15.0
+    #: Where `input_refs` and `data_refs` are fetched from, or nowhere.
+    #:
+    #: Unset by default, and a request naming files by id is then a 500 saying
+    #: no store is wired -- which is the honest answer, because it is the
+    #: deployment that has not decided where files come from. Set it and the
+    #: default app serves the shipped local store; wire something else by
+    #: building the `Kingfisher` yourself and handing it to `create_app`.
+    file_store_dir: Path | None = None
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> ServerConfig:
@@ -68,4 +77,7 @@ class ServerConfig:
                 source.get(f"{PREFIX}MAX_BODY_BYTES", defaults.max_body_bytes)
             ),
             heartbeat_s=float(source.get(f"{PREFIX}HEARTBEAT_S", defaults.heartbeat_s)),
+            file_store_dir=(
+                Path(where) if (where := source.get(f"{PREFIX}FILE_STORE_DIR")) else None
+            ),
         )

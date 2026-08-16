@@ -24,6 +24,7 @@ from pydantic import BaseModel
 from kingfisher import Kingfisher
 from kingfisher import Request as TurnRequest
 from kingfisher.server import streaming
+from kingfisher.server.capabilities import CapabilitiesBody
 from kingfisher.server.dependencies import kingfisher_of
 
 if TYPE_CHECKING:
@@ -33,8 +34,7 @@ if TYPE_CHECKING:
 class TurnBody(BaseModel):
     """What a caller sends to start a turn.
 
-    `task` and nothing else, for now. Capabilities and file references follow;
-    each is a decision with a shape of its own and neither is guessed at here.
+    A task, what the request asks to be allowed, and the files it brings.
 
     No `turn_id`. The library takes one and reuses that directory, but then runs
     the turn again in full -- so over HTTP a field of that name would read as an
@@ -48,9 +48,30 @@ class TurnBody(BaseModel):
     #: that rule -- the kind that drifts, because this model is what people edit
     #: when adding a field. The refusal becomes a 422 in `turn_for`.
     task: str
+    #: What this request asks to be allowed. Absent means the deployment's
+    #: defaults, which is not the same as `{}` -- an empty object is a request
+    #: that named no axis and gets the same defaults, while naming an axis as
+    #: `null` asks for nothing on it.
+    #:
+    #: Only ever narrows. `Kingfisher` clamps with
+    #: `grants.intersect(request.capabilities)`, so this states intent and the
+    #: deployment decides what intent is honoured.
+    capabilities: CapabilitiesBody | None = None
+    #: Files, by id, resolved by whatever `FileStore` the deployment wired.
+    #:
+    #: Ids rather than bytes, so kingfisher never receives a payload over its
+    #: own wire -- the same decision `skill_refs` made one phase earlier, for
+    #: the same reason. `inputs` and `data` stay host paths for CLI and library
+    #: callers; these are the remote form of the same two.
+    #:
+    #: The distinction is lifetime and nothing else: `data_refs` land in the
+    #: session's `/data` and are there next turn, `input_refs` land in this
+    #: turn's `input/` and leave with it.
+    input_refs: list[str] = []
+    data_refs: list[str] = []
 
 
-def turn_for(task: str, session_id: str | None = None) -> TurnRequest:
+def turn_for(body: TurnBody, session_id: str | None = None) -> TurnRequest:
     """Build the library's request, letting the library say what is valid.
 
     The narrow catch is the point. `Request` refuses an empty or whitespace-only
@@ -60,8 +81,18 @@ def turn_for(task: str, session_id: str | None = None) -> TurnRequest:
     `ValueError` around a turn, which is what `errors.STATUS` exists to avoid --
     there it would swallow bugs.
     """
+    # An absent capabilities object and one that names no axis are the same
+    # request: both come out of `selected` as `Capabilities()`, which is what
+    # `Request` defaults to anyway. One path rather than two.
+    asked = body.capabilities if body.capabilities is not None else CapabilitiesBody()
     try:
-        return TurnRequest(task, session_id=session_id)
+        return TurnRequest(
+            body.task,
+            session_id=session_id,
+            capabilities=asked.selected(),
+            input_refs=tuple(body.input_refs),
+            data_refs=tuple(body.data_refs),
+        )
     except ValueError as error:
         raise HTTPException(status.HTTP_422_UNPROCESSABLE_CONTENT, str(error)) from error
 
@@ -122,7 +153,7 @@ def turn_router(settings: ServerConfig) -> APIRouter:
         resume but never create; that is what makes the id a credential instead
         of a name anyone can pick.
         """
-        return await stream_turn(kf, turn_for(body.task, session_id), settings)
+        return await stream_turn(kf, turn_for(body, session_id), settings)
 
     @router.post("/turns")
     async def run_one_shot(
@@ -134,6 +165,6 @@ def turn_router(settings: ServerConfig) -> APIRouter:
         A session is still created -- a turn needs somewhere to live -- and its
         id comes back on `finished`, so a caller who decides to continue can.
         """
-        return await stream_turn(kf, turn_for(body.task), settings)
+        return await stream_turn(kf, turn_for(body), settings)
 
     return router

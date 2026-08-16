@@ -33,7 +33,9 @@ from kingfisher import (
     SessionBusyError,
     SkillError,
     SubagentError,
+    UnknownReferenceError,
     UnknownSessionError,
+    UnsafeReferenceError,
     UploadError,
 )
 
@@ -55,6 +57,13 @@ STATUS: dict[type[Exception], tuple[int, str]] = {
     QuotaExceededError: (HTTPStatus.TOO_MANY_REQUESTS, "quota_exceeded"),
     CapabilityError: (HTTPStatus.FORBIDDEN, "not_granted"),
     UploadError: (HTTPStatus.BAD_REQUEST, "bad_reference"),
+    # 400 rather than 404: the session is the resource here, and it exists. What
+    # is missing is something the request body named, which is a bad body.
+    UnknownReferenceError: (HTTPStatus.BAD_REQUEST, "unknown_reference"),
+    # Distinct from `bad_reference`, which is a name that did not resolve. This
+    # one resolved somewhere it was not allowed to go, and a caller seeing it
+    # has sent something that looks like an attempt rather than a typo.
+    UnsafeReferenceError: (HTTPStatus.BAD_REQUEST, "unsafe_reference"),
     SkillError: (HTTPStatus.BAD_REQUEST, "bad_skill"),
     SubagentError: (HTTPStatus.BAD_REQUEST, "bad_subagent"),
 }
