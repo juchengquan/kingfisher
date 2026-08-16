@@ -39,7 +39,7 @@ _EXPORTS = {
     "run": "kingfisher.application.run",
     "shell_env": "kingfisher.infrastructure.backend",
     "stream": "kingfisher.application.run",
-    "system_prompt": "kingfisher.infrastructure.agent",
+    "system_prompt": "kingfisher.infrastructure.prompting",
     "writable_data": "kingfisher.infrastructure.workspace_fs",
 }
 
@@ -82,11 +82,11 @@ if TYPE_CHECKING:
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.result import normalize_answer as normalize_answer
     from kingfisher.infrastructure.agent import build_agent as build_agent
-    from kingfisher.infrastructure.agent import system_prompt as system_prompt
     from kingfisher.infrastructure.backend import build_backend as build_backend
     from kingfisher.infrastructure.backend import shell_env as shell_env
     from kingfisher.infrastructure.checkpointing import build_checkpointer as build_checkpointer
     from kingfisher.infrastructure.models import build_model as build_model
+    from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data
     from kingfisher.infrastructure.workspace_fs import writable_data as writable_data

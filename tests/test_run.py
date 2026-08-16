@@ -215,7 +215,7 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
     """A typo in a capability name must not be destructive. This used to raise
     only after the sweep had already removed old sessions."""
     from kingfisher.domain.capabilities import Capabilities
-    from kingfisher.infrastructure.agent import CapabilityError
+    from kingfisher.infrastructure.scoping import CapabilityError
 
     workspace = cfg.workspace
     old = workspace / "runs" / "ancient"

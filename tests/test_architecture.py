@@ -144,6 +144,68 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
     assert out.stdout.strip() == "False"
 
 
+#: Exports that must stay reachable without loading a provider SDK. Measured,
+#: not guessed: each is 6-9ms and ~90 modules, against 817-1157ms and ~3100 for
+#: the heavy ones.
+LIGHT_EXPORTS = frozenset({
+    "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunResult",
+    "build_checkpointer", "build_model", "ensure_layout", "from_env",
+    "normalize_answer", "protect_data", "system_prompt", "writable_data",
+})
+
+#: The rest, which genuinely need deepagents to do their job.
+HEAVY_EXPORTS = frozenset({
+    "Kingfisher", "build_agent", "build_backend", "run", "shell_env", "stream",
+})
+
+PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")
+
+
+def test_every_export_is_classified_light_or_heavy():
+    """So a new export cannot slip past the rule below by not being listed."""
+    import kingfisher
+
+    assert set(kingfisher._EXPORTS) == LIGHT_EXPORTS | HEAVY_EXPORTS, (
+        "a new export must be added to LIGHT_EXPORTS or HEAVY_EXPORTS — if it "
+        "needs deepagents it is heavy, otherwise keep it light and say so here"
+    )
+
+
+def test_a_light_export_stays_light():
+    """Touching a light name must not load a provider SDK.
+
+    The test above it only covers bare `import kingfisher`, which is a weaker
+    promise than the one `_EXPORTS` makes -- and weak in the place that bit.
+    `system_prompt` needs nothing but `Config` and the standard library, yet
+    reaching it cost **764ms and 3,107 modules**, because it shared a file with
+    `create_deep_agent` and Python cannot import one name from a module without
+    executing all of it. Splitting `prompting` out took it to 7ms and 90.
+
+    Nothing about that is self-sustaining: one `from deepagents import ...`
+    added to `prompting` or `models` brings the whole cost back, everywhere,
+    silently. This is what notices.
+
+    One subprocess for all of them -- they are light, so it costs about 100ms.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys, kingfisher\n"
+        f"for name in {sorted(LIGHT_EXPORTS)!r}:\n"
+        "    getattr(kingfisher, name)\n"
+        f"print(','.join(m for m in {PROVIDER_SDKS!r} if m in sys.modules))"
+    )
+    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+
+    assert out.stdout.strip() == "", (
+        f"a light export pulled in {out.stdout.strip()} — find which name did it "
+        "and either move its module off the foreign import, or reclassify it heavy"
+    )
+
+
 def test_the_package_does_not_depend_on_the_eval_harness():
     """`evals/` is test material and lives outside `src/`, so it is not in the
     wheel. If the package imports it, an installed kingfisher breaks -- and the

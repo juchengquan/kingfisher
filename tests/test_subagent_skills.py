@@ -13,9 +13,9 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.agent import CapabilityError, build_agent
+from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.scoping import CapabilityError, ScopedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, capture_build
 
 
