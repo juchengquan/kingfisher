@@ -34,6 +34,11 @@ from kingfisher.domain import frontmatter, skill, subagent
 if TYPE_CHECKING:
     from pathlib import Path
 
+#: The scalar style that keeps a prompt's line breaks. `|`, `|2`, `|-` and
+#: `|+` are all this one style once parsed -- the suffix never reaches the node.
+LITERAL = "|"
+
+
 
 def decode(header: str) -> dict[str, object] | str:
     """A header's fields, or one line saying why it could not be read.
@@ -100,7 +105,47 @@ def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
             raise subagent.SubagentError(msg)
         msg = f"{source.name}: cannot read definition ({fields})"
         raise subagent.SubagentError(msg)
+    _require_literal_prompt(text, source)
     return subagent.parse(fields, source)
+
+
+def _require_literal_prompt(text: str, source: Path) -> None:
+    """Refuse a `system_prompt` written in a style that reflows it.
+
+    `>` folds consecutive lines into one, so
+
+        1. Recompute the figure.
+        2. Say which definition you applied.
+
+    reaches the delegate as a single run-on line. The document is valid, the
+    definition looks right on screen, and the only symptom is a delegate
+    behaving oddly. A plain or quoted scalar does the same, harder.
+
+    Only the *style* is checked, not the indentation indicator: `|` and `|2`
+    are the same scalar to a parser -- the indicator is consumed by the scanner
+    and never reaches the node -- and the mistake it guards against already
+    refuses to load. Checking it would mean reading the document a second time
+    by hand, to catch something that is not silent.
+
+    Here rather than in `domain.subagent` because a scalar's style is a fact
+    about the document, not about what a subagent means. The domain is handed
+    fields; by then every style looks alike.
+    """
+    node = yaml.compose(text)
+    if not isinstance(node, yaml.MappingNode):  # pragma: no cover -- decode checked
+        return
+    for key, value in node.value:
+        if getattr(key, "value", None) != "system_prompt":
+            continue
+        if isinstance(value, yaml.ScalarNode) and value.style != LITERAL:
+            written = f"{value.style!r}" if value.style else "a plain scalar"
+            msg = (
+                f"{source.name}: system_prompt is written as {written}, which reflows it. "
+                f"Use a literal block -- `system_prompt: {LITERAL}2` -- so the prompt "
+                "reaches the delegate with the line breaks you wrote"
+            )
+            raise subagent.SubagentError(msg)
+        return
 
 
 def skill_name(text: str, source: str = skill.FILENAME) -> str:

@@ -78,9 +78,8 @@ from evals.task import SMOKE_TASK
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
 from kingfisher.config import Config
 from kingfisher.domain.session import Session
-from kingfisher.domain.subagent import SUFFIX as SUBAGENT_SUFFIX
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure import presets, skill_store, subagent_store
+from kingfisher.infrastructure import presets, skill_store
 from kingfisher.infrastructure.runlog import read_usage
 from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.workspace_fs import (
@@ -178,10 +177,6 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         print(f"  {spec.name} — {spec.description}")
     if not specs:
         print("  (none)  — try --seed-presets")
-    # A definition in the old markdown format is not found at all, so without
-    # this the directory looks full and the catalogue reports none.
-    for name in subagent_store.stranded(cfg.subagents_dir):
-        print(f"  ! {name} is the old format — subagents are {SUBAGENT_SUFFIX} now")
     return 0
 
 

@@ -1,13 +1,10 @@
-"""Subagent definitions: `/subagents/<name>.md`.
+"""Subagent definitions: `/subagents/<name>.yaml`.
 
-Deliberately the same shape as a skill — YAML frontmatter and a markdown body —
-so a contributor who has written one does not need to learn a second mechanism.
-`name` and `description` are required, `tools`, `skills`, `middleware` and
-`model` are optional, and the body *is* the system prompt. `tools`, `skills`
-and `middleware` all select by name from what the deployment already offers;
-how each selection is enforced is the adapter's problem, not this format's.
+A YAML document. `name`, `description` and `system_prompt` are required;
+`tools`, `skills`, `middleware`, `provider` and `model` are optional and all
+select by name from what the deployment already offers — how each selection is
+enforced is the adapter's problem, not this format's.
 
-    ---
     name: reviewer
     description: Checks an analysis for arithmetic errors and unsupported claims.
     tools: [read_file, glob, grep]
@@ -15,8 +12,13 @@ how each selection is enforced is the adapter's problem, not this format's.
     middleware: [audit]
     provider: openai
     model: gpt-5
-    ---
-    You review analyses...
+    system_prompt: |2
+      You review analyses...
+
+It was markdown with a YAML header until the header had grown into everything
+but the prompt. A skill still has that shape, because deepagents owns that
+format and kingfisher owns this one — which is also why they disagree about
+what an unrecognised field means.
 
 **Omitting `tools` inherits the parent's; omitting `skills` grants none.** The
 asymmetry is deliberate. Tools are what a delegate needs to *act* and it can do
@@ -79,12 +81,6 @@ from kingfisher.domain import frontmatter
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
 
-#: What definitions used to be called, kept only so a leftover one can be
-#: *reported*. A workspace seeded before the format changed would otherwise
-#: lose its subagents in silence -- the directory still full, the listing
-#: empty -- which is the failure `skill_store.misplaced` exists to prevent
-#: one directory over.
-LEGACY_SUFFIX = ".md"
 
 #: Every field this format defines. A key outside it is refused rather than
 #: ignored, because ignoring one is indistinguishable from honouring it: a

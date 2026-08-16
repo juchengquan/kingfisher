@@ -9,12 +9,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingfisher.domain.subagent import (
-    LEGACY_SUFFIX,
-    SUFFIX,
-    SubagentError,
-    SubagentSpec,
-)
+from kingfisher.domain.subagent import SUFFIX, SubagentError, SubagentSpec
 from kingfisher.infrastructure.definitions import read_subagent
 
 
@@ -40,22 +35,3 @@ def load_all(directory: Path) -> dict[str, SubagentSpec]:
             raise SubagentError(msg)
         specs[spec.name] = spec
     return specs
-
-
-def stranded(directory: Path) -> tuple[str, ...]:
-    """Definitions left in the format this directory no longer reads.
-
-    Subagents were markdown with a YAML header and are now YAML, because the
-    header had grown into the whole document -- every field but the prompt.
-    A workspace seeded before that change keeps its `.md` files, and they simply
-    stop being found: the directory looks full and the catalogue reports none.
-
-    Breaking a layout silently is the thing worth reporting, which is the same
-    reason `skill_store.misplaced` exists. Named rather than converted, because
-    a definition is someone's text and rewriting it unasked is not this
-    function's business.
-    """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return ()
-    return tuple(sorted(p.name for p in directory.glob(f"*{LEGACY_SUFFIX}")))

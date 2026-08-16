@@ -270,3 +270,65 @@ def test_an_unconverted_definition_says_what_to_do(tmp_path):
         read_subagent(old, tmp_path / "reviewer.yaml")
 
     assert "system_prompt" in str(raised.value)
+
+
+# -- how the prompt is written ---------------------------------------------
+
+HEAD = "name: reviewer\ndescription: d\n"
+STEPS = "  1. Recompute the figure.\n  2. Say which definition you applied.\n"
+
+
+@pytest.mark.parametrize("style", ["|", "|2", "|-", "|+"])
+def test_every_literal_block_is_accepted(tmp_path, style):
+    """The indicator and the chomping marker are none of this check's business
+    -- they are all the same style, and all of them keep the line breaks."""
+    spec = read_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+
+    assert "Recompute the figure.\n2. Say" in spec.system_prompt
+
+
+@pytest.mark.parametrize("style", [">", ">-", ">2"])
+def test_a_folded_prompt_is_refused(tmp_path, style):
+    """`>` joins consecutive lines, so two numbered steps reach the delegate as
+    one run-on line -- valid YAML, correct-looking file, odd-behaving agent."""
+    with pytest.raises(SubagentError, match="reflows it") as raised:
+        read_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+
+    assert "system_prompt: |2" in str(raised.value)
+
+
+def test_a_plain_prompt_is_refused(tmp_path):
+    """The same damage, without even a marker to notice."""
+    with pytest.raises(SubagentError, match="a plain scalar"):
+        read_subagent(HEAD + "system_prompt: Recompute the figure.\n", tmp_path / "reviewer.yaml")
+
+
+def test_a_quoted_prompt_is_refused(tmp_path):
+    with pytest.raises(SubagentError, match="reflows it"):
+        read_subagent(HEAD + 'system_prompt: "Recompute the figure."\n', tmp_path / "reviewer.yaml")
+
+
+def test_folding_is_what_the_refusal_is_about(tmp_path):
+    """The negative control, so the rule is justified rather than asserted:
+    this is what a folded prompt would have handed the delegate."""
+    import yaml as _yaml
+
+    folded = _yaml.safe_load(HEAD + "system_prompt: >\n" + STEPS)["system_prompt"]
+
+    assert folded == "1. Recompute the figure. 2. Say which definition you applied.\n"
+
+
+def test_the_description_may_still_be_folded(tmp_path):
+    """Only the prompt is checked. A description is one paragraph, and `>-` is
+    how anyone writes one longer than a line -- the skill spec's own form."""
+    definition = (
+        "name: reviewer\n"
+        "description: >-\n"
+        "  Checks an analysis for arithmetic errors,\n"
+        "  one claim at a time.\n"
+        "system_prompt: |2\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert spec.description == "Checks an analysis for arithmetic errors, one claim at a time."

@@ -165,7 +165,18 @@ system_prompt: |2          # ❌ nothing is indented, so nothing is in the block
 You verify claims.
 
 system_prompt: |2          # ❌ 'system_prompt' is present but empty
+
+system_prompt: >          # ❌ refused: `>` joins consecutive lines, so
+  1. Recompute.           #    "1. Recompute. 2. Say which definition"
+  2. Say which definition. #   reaches the delegate as one line
+
+system_prompt: Recompute. # ❌ refused: same damage, without a marker to notice
 ```
+
+`>` is refused for the prompt and allowed everywhere else — a `description`
+*is* one paragraph, and `>-` is how anyone writes one longer than a line. A
+prompt is structured text, and folding destroys exactly the structure while
+leaving the file valid and the definition looking correct.
 
 `tools`, `skills` and `middleware` take either form:
 
