@@ -648,7 +648,14 @@ class Kingfisher:
         the deployment that made it and outlives every turn; a factory's result
         and the per-session default are ours, and a process serving many sessions
         would otherwise hold a file descriptor for each one it had ever touched.
+
+        `None` for both when the deployment turned conversation off: a graph
+        takes `checkpointer=None` and runs, and each turn simply starts cold.
+        The flag wins over an injected store, because a deployment that said it
+        wants no conversation means it whatever it wired earlier.
         """
+        if not self.cfg.conversation_enabled:
+            return None, None
         if self.threads is None:
             saver = build_session_checkpointer(session_dir)
             return saver, saver
@@ -671,7 +678,11 @@ class Kingfisher:
         has always injected its own, and injecting an *instance* means one
         database shared by every session, which is the contention this avoids.
         A factory returning an async context manager gets one per session.
+
+        `None` when conversation is off, for the same reason as the sync twin.
         """
+        if not self.cfg.conversation_enabled:
+            return None
         if self.threads is None:
             return await stack.enter_async_context(async_session_checkpointer(session_dir))
         if callable(self.threads):
