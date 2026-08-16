@@ -120,6 +120,21 @@ catalogue of tools can be deployed once and shared by every workspace.
 
 A YAML document. Everything the delegate is, in one file.
 
+```yaml
+name: reviewer
+description: Re-checks numeric claims against the files they came from. Use before reporting figures you computed once.
+tools: [read_file, glob, grep]
+system_prompt: |
+  You verify claims. You do not improve prose or add analysis — another
+  agent has already done that work and you are the check on it.
+
+  Recompute each figure yourself, from the file. Report the number you got,
+  the caller's number, and whether they match.
+```
+
+That is a whole definition: three required fields, one optional, nothing else
+needed.
+
 | Field | | |
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |

@@ -274,3 +274,28 @@ def test_every_readme_link_resolves(shipped):
     assert targets, "the README links to its own examples; if it stopped, this test is stale"
     broken = [t for t in targets if not (shipped / t).exists()]
     assert not broken, f"README links to files that do not exist: {broken}"
+
+
+def test_every_complete_definition_in_the_readme_parses(shipped):
+    """The README shows a whole definition before it shows the field table, and
+    a documented example that does not load is worse than none -- it is copied,
+    it fails, and the format gets blamed.
+
+    Only the complete ones: a fenced block starting with `name:` is a
+    definition, while the fragments showing one field are not.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    from kingfisher.infrastructure.definitions import read_subagent
+
+    readme = (shipped / "README.md").read_text(encoding="utf-8")
+    blocks = [
+        body
+        for body in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL)
+        if body.startswith("name:")
+    ]
+
+    assert blocks, "the README opens the section with a whole definition"
+    for block in blocks:
+        read_subagent(block, _Path("readme.yaml"))
