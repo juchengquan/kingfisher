@@ -291,29 +291,69 @@ def _args(**kwargs):
     import argparse
 
     base = dict.fromkeys(
-        ("tools", "skills", "subagents", "without_tools", "without_skills", "without_subagents")
+        (*main.GRANTS, *(f"without_{kind}" for kind in main.GRANTS))
     )
     return argparse.Namespace(**{**base, **kwargs})
 
 
 def test_no_flags_leaves_every_kind_unrestricted(cfg):
-    """`None` per kind, not an enumerated list of everything: an enumeration
-    would go stale the moment the workspace gained a tool."""
-    assert main._grants(cfg, _args()) == {"tools": None, "skills": None, "subagents": None}
+    """Absent, not enumerated and not `None`.
+
+    An enumeration would go stale the moment the workspace gained a tool. But
+    `None` is worse than stale: `Capabilities` starts `builtin_tools`, `tools`
+    and `skills` at `ALL` and reads `None` on those fields as *none*, so
+    handing it a `None` per kind is a request for an agent with no tools and
+    no skills at all.
+
+    Which is what `main.py "task"` was quietly sending. Measured against a real
+    run: every workspace tool and every skill came back as withheld on a
+    command line carrying no capability flags, while this file's own docstring
+    promised that omitting a flag means everything the workspace offers.
+    """
+    # Empty, so `Capabilities(**grants)` is `Capabilities()` and every field
+    # keeps its own default. That is the whole mechanism: this function says
+    # what was *asked for*, and says nothing about what was not.
+    assert main._grants(cfg, _args()) == {}
 
 
 def test_a_subtraction_becomes_the_enumerated_rest(cfg):
+    """And each subtraction is taken from its *own* axis.
+
+    `execute` and `delete` are built-ins, so they are subtracted from the
+    built-in set. Taken from the union -- which is what `_offered` used to
+    return -- the rest included every built-in and was then assigned to the
+    workspace grant, so `--without-tools execute,delete`, the example this
+    driver's own docstring gives, came back as "those are builtin tools".
+    """
     from kingfisher.infrastructure import presets
 
     presets.seed(cfg)
 
-    tools = main._grants(cfg, _args(without_tools="execute,delete"))["tools"]
+    granted = main._grants(cfg, _args(without_builtin_tools="execute,delete"))
+
+    builtin = granted["builtin_tools"]
+    assert builtin is not None
+    assert "execute" not in builtin
+    assert "delete" not in builtin
+    assert "read_file" in builtin
+    # The other axis is untouched: subtracting a built-in says nothing about
+    # what the workspace defines, so it is absent rather than `None`.
+    assert "tools" not in granted
+    assert "http_fetch" not in builtin, "a workspace tool leaked onto the builtin axis"
+
+
+def test_the_two_tool_axes_subtract_independently(cfg):
+    """A workspace tool is subtracted from the workspace set, and only that."""
+    from kingfisher.infrastructure import presets
+
+    presets.seed(cfg)
+
+    tools = main._grants(cfg, _args(without_tools="http_fetch"))["tools"]
 
     assert tools is not None
-    assert "execute" not in tools
-    assert "delete" not in tools
-    assert "http_fetch" in tools  # a workspace tool, so it had to be built to be seen
-    assert main._grants(cfg, _args(without_tools="execute"))["skills"] is None
+    assert "http_fetch" not in tools
+    assert "csv_profile" in tools  # a workspace tool, so it had to be built to be seen
+    assert "read_file" not in tools, "a builtin leaked onto the workspace axis"
 
 
 def test_subtracting_skills_and_subagents_too(cfg):
@@ -339,7 +379,8 @@ def test_subtracting_skills_and_subagents_too(cfg):
 
     assert grants["skills"] == tuple(sorted(seeded_skills - {"tabular-qa"}))
     assert grants["subagents"] == tuple(sorted(seeded_subagents - {"extractor"}))
-    assert grants["tools"] is None
+    assert "tools" not in grants
+    assert "builtin_tools" not in grants
 
 
 def test_naming_both_forms_of_one_kind_is_refused(cfg):
@@ -351,7 +392,7 @@ def test_naming_both_forms_of_one_kind_is_refused(cfg):
 
 def test_a_typo_in_a_subtraction_is_refused(cfg):
     with pytest.raises(CapabilityError, match="cannot exclude unknown name"):
-        main._grants(cfg, _args(without_tools="exec"))
+        main._grants(cfg, _args(without_builtin_tools="exec"))
 
 
 def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
@@ -369,5 +410,5 @@ def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
     main._grants(cfg, _args(tools="ls"))
     assert builds == []
 
-    main._grants(cfg, _args(without_tools="execute"))
+    main._grants(cfg, _args(without_builtin_tools="execute"))
     assert len(builds) == 1
