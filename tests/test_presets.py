@@ -41,7 +41,10 @@ def shipped():
 def test_every_preset_subagent_parses(shipped):
     specs = load_all(shipped / "subagents")
 
-    assert set(specs) == {"reviewer", "extractor", "second-opinion"}
+    # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the
+    # same: a subagent is named by its `name:` field, so a folder cannot reach
+    # it. Its presence in this flat set is the assertion that nesting works.
+    assert set(specs) == {"reviewer", "extractor", "second-opinion", "profiler"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -179,10 +182,19 @@ def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
 
 
 def test_every_preset_tool_loads(shipped):
-    """A tool is code, so "does it parse" means "does it import"."""
+    """A tool is code, so "does it parse" means "does it import".
+
+    `csv_profile` and `csv_columns` come from a *package* -- `tools/csv_profile/`
+    with an `__init__.py` -- and arrive in this flat set under their own names,
+    because a folder cannot reach a name either. That they import at all is the
+    part worth having: the package uses a relative import, which is exactly what
+    a standalone-module loader cannot resolve.
+    """
     tools = load_tools(shipped / "tools")
 
-    assert {tool_name(t) for t in tools} == {"http_fetch", "sql_tables", "sql_query"}
+    assert {tool_name(t) for t in tools} == {
+        "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
+    }
 
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
@@ -235,6 +247,26 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
 
     assert seeding.written
     assert seeding.overwritten == ()
+
+
+def test_seeding_never_carries_bytecode_into_a_workspace(cfg):
+    """The guard that only had to hold one level deep until a preset tool
+    could be a package.
+
+    `tools/` holds Python, so importing a preset once -- a test run is enough --
+    leaves a `__pycache__` beside it. That was skipped at the top level and then
+    the directory copy took everything underneath, which was harmless only while
+    a preset tool was always a single file. `csv_profile/` is a package now, so
+    the bytecode sits one level lower than the check was looking.
+
+    Seeding it would put a `__pycache__` in the operator's workspace and, worse,
+    teach that it belongs there.
+    """
+    debris = cfg.tools_dir.parent  # nothing yet; seed creates the catalogue
+    presets.seed(cfg)
+
+    found = [str(p.relative_to(debris)) for p in cfg.tools_dir.rglob("__pycache__")]
+    assert not found, f"seeding carried bytecode into the workspace: {found}"
 
 
 def test_seeding_twice_unchanged_is_silent(cfg):
@@ -341,10 +373,13 @@ def test_only_the_preset_that_runs_elsewhere_names_an_endpoint(shipped):
     working for anyone whose default differs.
 
     So `second-opinion` names one -- being a different model is its whole
-    purpose -- and the other two do not. `extractor` pins `model` alone, which
-    is the cheap-model decision and says nothing about where it runs.
+    purpose -- and the others do not. `extractor` and `profiler` pin `model`
+    alone, which is the cheap-model decision and says nothing about where it
+    runs: both exist to keep bulk reading off the expensive model.
     """
     specs = load_all(shipped / "subagents")
 
     assert {name for name, s in specs.items() if s.provider} == {"second-opinion"}
-    assert {name for name, s in specs.items() if s.model} == {"second-opinion", "extractor"}
+    assert {name for name, s in specs.items() if s.model} == {
+        "second-opinion", "extractor", "profiler",
+    }

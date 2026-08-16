@@ -79,6 +79,16 @@ class Seeding:
     overwritten: tuple[str, ...] = ()
 
 
+def _is_debris(name: str) -> bool:
+    """Bytecode and dotfiles: present in the source tree, never part of a preset."""
+    return name == "__pycache__" or name.startswith(".")
+
+
+def _debris(_directory: str, names: list[str]) -> set[str]:
+    """`copytree(ignore=...)`, so the rule holds at every depth rather than one."""
+    return {name for name in names if _is_debris(name)}
+
+
 def _overwritten(source: Path, target: Path, label: str) -> list[str]:
     """Files under `target` this copy is about to change, by content.
 
@@ -133,7 +143,7 @@ def seed(cfg: Config) -> Seeding:
                 # run is enough -- leaves bytecode beside it. Seeding that
                 # would put a `__pycache__` in the workspace and, worse, teach
                 # that it belongs there.
-                if item.name == "__pycache__" or item.name.startswith("."):
+                if _is_debris(item.name):
                     continue
                 target = destination / item.name
                 label = f"{kind}/{item.name}"
@@ -141,7 +151,11 @@ def seed(cfg: Config) -> Seeding:
                 overwritten += _overwritten(item, target, label)
                 target.parent.mkdir(parents=True, exist_ok=True)
                 if item.is_dir():
-                    shutil.copytree(item, target, dirs_exist_ok=True)
+                    # `ignore` rather than the check above, because that one
+                    # only ever saw the top level. A preset tool used to be a
+                    # single file, so a directory could not hold bytecode of
+                    # its own; a package can, and `copytree` would take the lot.
+                    shutil.copytree(item, target, dirs_exist_ok=True, ignore=_debris)
                 else:
                     shutil.copy(item, target)
                 written.append(label)

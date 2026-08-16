@@ -42,6 +42,14 @@ def misplaced(directory: Path) -> tuple[str, ...]:
     skills into folders is the obvious thing to try, and it yields nothing: no
     error, no warning, just a catalogue that appears empty. This finds those
     folders so a caller can say so.
+
+    It now has to say *why*, because tools and subagents nest freely and this
+    one does not. That reads as an arbitrary inconsistency unless the reason is
+    stated: those two are read by kingfisher, which can walk as deep as it
+    likes, and a skill is read by the agent itself through a filesystem route.
+    deepagents lists the skills directory once and looks for `SKILL.md`
+    directly inside each entry -- so a nested skill is not tidied away, it is
+    unreachable. See `LAYOUT`, which is the sentence to quote at someone.
     """
     directory = Path(directory)
     if not directory.is_dir():

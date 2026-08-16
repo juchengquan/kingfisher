@@ -92,9 +92,10 @@ from kingfisher.config import Config
 from kingfisher.domain.capabilities import CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure import confinement, presets, skill_store
+from kingfisher.infrastructure import confinement, presets, skill_store, tool_store
 from kingfisher.infrastructure.runlog import read_usage
 from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.subagent_store import sources as subagent_sources
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -180,17 +181,24 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         introspected = registered_tools(
             build_agent(cfg, session_dir=Path(scratch), catalogue=catalogue)
         )
+    # Where a workspace tool is defined, so a folder is navigable rather than
+    # merely tidy. Built-ins are not in here and get no suffix, which is also
+    # how the two kinds tell themselves apart in this listing.
+    defined_in = tool_store.sources(catalogue["tools"])
     for name in introspected or ("(could not introspect)",):
-        print(f"  {name}")
+        print(f"  {name}{_from(defined_in.get(name), f'{name}.py')}")
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
     for name in skill_store.names(catalogue["skills"]) or ("(none)",):
         print(f"  {name}")
     # Grouping skills into folders is the obvious thing to try and yields
     # nothing at all, because discovery is one level deep. Saying so is the
-    # only difference between a catalogue that looks empty and one that is.
+    # only difference between a catalogue that looks empty and one that is --
+    # and it needs the reason now that tools and subagents nest freely.
     for name in skill_store.misplaced(catalogue["skills"]):
         print(f"  ! {name}/ holds a skill too deep to load — they live at {skill_store.LAYOUT}")
+        print("    (the agent reads skills itself and only looks one level down;")
+        print("     tools and subagents are read by kingfisher, so those may nest)")
 
     print("\nsubagents")
     try:
@@ -198,11 +206,25 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     except SubagentError as exc:
         print(f"  cannot load: {exc}")
         return 1
+    where = subagent_sources(catalogue["subagents"])
     for spec in specs.values() or ():
-        print(f"  {spec.name} — {spec.description}")
+        print(f"  {spec.name}{_from(where.get(spec.name), f'{spec.name}.yaml')}"
+              f" — {spec.description}")
     if not specs:
         print("  (none)  — try --seed-presets")
     return 0
+
+
+def _from(source: str | None, expected: str) -> str:
+    """Name the file a definition came from, when it is not the obvious one.
+
+    Silent for anything where the name already tells you the file -- `reviewer`
+    in `reviewer.yaml` is not worth a line of output. Everything else gets said,
+    which is more than "is it in a folder": a package contributes tools under
+    names that are not its own, so `csv_columns` comes from `csv_profile/` with
+    no slash in sight and is exactly the case someone would go looking for.
+    """
+    return "" if source in (None, expected) else f"  ({source})"
 
 
 def warn_if_unconfined(cfg: Config) -> None:
