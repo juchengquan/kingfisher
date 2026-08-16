@@ -212,9 +212,59 @@ for.
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
+| `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `provider` | optional | Which endpoint it runs against, by style. Requires `model` |
 | `model` | optional | Must be a model that endpoint serves. Fine on its own; this is where cost routing goes |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
+
+### A delegate that consults another
+
+A delegate can hit a question of a different kind mid-job — `reviewer` doubting
+one figure, when checking figures is not what it is for. It can ask for help:
+
+One more line in `reviewer.yaml`:
+
+```yaml
+subagents: [second-opinion]
+```
+
+**The caller has to name both.** Asking for `reviewer` does not quietly bring
+`second-opinion` along. That is deliberate: `second-opinion` runs on another
+company's servers, so a caller who declined it usually declined *that*, and a
+helper arriving anyway would make the list they wrote untrue.
+
+**A caller who names only `reviewer` still gets a reviewer.** It runs without
+the helper and the run reports `subagent: second-opinion` as withheld. Refusing
+instead would mean nobody can use `reviewer` without also accepting OpenAI,
+which is how a shared catalogue turns into three private forks.
+
+So write the prompt to work both ways — *"if you can get a second opinion on a
+contested figure, do; if not, flag it"* — because the caller decides, not the
+file.
+
+**One level.** A helper works alone. A file named as somebody's helper may not
+declare helpers of its own, and a catalogue that asks for it is refused when
+the definitions load, naming both files:
+
+```
+'reviewer' names 'second-opinion' as a helper, but 'second-opinion' names
+helpers of its own (extractor); delegation goes one level, so either
+'reviewer' stops naming 'second-opinion' or 'second-opinion' stops naming its own
+```
+
+That bound is what makes a loop impossible: `reviewer` → `second-opinion` →
+`reviewer` needs a helper with helpers, and there is no such thing.
+
+It does mean a file can mean different things depending on who reached it.
+`second-opinion.yaml` may consult `reviewer` while callers name it directly,
+and stops being allowed to the moment `reviewer` names it as a helper — so
+adding one line to one file can invalidate another that nobody touched. The
+error names both, because whoever reads it may own neither.
+
+**What it costs.** Every level is a real conversation with a real model. A
+helper's tokens are on your bill and in the run log, attributed to it by name,
+and its work streams into the terminal under `[second-opinion]` — so this is
+visible rather than merely charged.
 
 Three reasons to reach for one, one example each:
 
