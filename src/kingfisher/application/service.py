@@ -614,6 +614,7 @@ class Kingfisher:
             self.cfg,
             capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
+            run_on=request.run_on,
             middleware_registry=self.middleware,
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,

@@ -27,7 +27,7 @@ from kingfisher.domain.capabilities import (
     belongs_in,
     narrowed,
 )
-from kingfisher.domain.subagent import resolved_endpoint
+from kingfisher.domain.subagent import RunOn, resolved_endpoint
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -226,6 +226,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # otherwise so the top-level path keeps deepagents' own defaults.
     default_model: Any = None,
     tool_objects: list[Any] | None = None,
+    #: Where this request wants this delegate to run, replacing its file's
+    #: answer. `None` is the ordinary case: the file decides.
+    run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
@@ -305,7 +308,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # goes in and the allowlist decides.
         subagent["tools"] = tool_objects
 
-    provider, model_id = resolved_endpoint(spec, granted=providers)
+    provider, model_id = resolved_endpoint(spec, granted=providers, override=run_on)
     if model_id is not None or provider is not None:
         # `replace` rather than a build_model parameter: an endpoint is exactly
         # the three Config fields a model is built from, so swapping them says

@@ -399,3 +399,101 @@ def test_only_the_preset_that_runs_elsewhere_names_an_endpoint(shipped):
     assert {name for name, s in specs.items() if s.model} == {
         "second-opinion", "extractor", "profiler",
     }
+
+
+# -- the one preset that consults another ---------------------------------
+
+
+def test_the_reviewer_preset_consults_the_second_opinion(shipped):
+    """The README describes this pairing, so a preset had better demonstrate it.
+
+    It is also the shape the field exists for: `reviewer` runs out of road in a
+    specific place -- two defensible readings and nothing in the file to choose
+    between them -- which is where a *different model* beats more care from the
+    same one.
+    """
+    specs = load_all(shipped / "subagents")
+
+    assert specs["reviewer"].subagents == ("second-opinion",)
+    assert specs["second-opinion"].subagents is None  # a helper works alone
+
+
+def test_the_shipped_catalogue_obeys_the_one_level_rule(shipped):
+    """Seeding a catalogue that refuses to load would be the worst kind of
+    preset: copied, broken on the first run, and the format blamed."""
+    from kingfisher.domain.subagent import refuse_helpers_with_helpers
+
+    refuse_helpers_with_helpers(load_all(shipped / "subagents"))
+
+
+def _reviewer_of(workspace, session_dir, granted):
+    from langchain_core.messages import AIMessage
+
+    from tests.conftest import FakeToolCallingModel
+    from tests.test_delegation_ceiling import _subagent_graphs
+
+    graph = build_agent(
+        workspace,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=granted),
+    )
+    delegate = _subagent_graphs(graph)["reviewer"]
+    node = getattr(delegate, "nodes", {}).get("tools")
+    return set(getattr(getattr(node, "bound", None), "tools_by_name", {}))
+
+
+def test_the_reviewer_preset_still_works_without_its_helper(
+    workspace_with_presets, session_dir
+):
+    """The path most callers will take, and the reason the prompt says "if you
+    have one". Granting `second-opinion` also grants OpenAI, which plenty of
+    callers will decline -- and declining it must not cost them the reviewer.
+    """
+    assert "task" not in _reviewer_of(workspace_with_presets, session_dir, ("reviewer",))
+
+
+def test_the_reviewer_preset_gets_its_helper_when_granted(
+    workspace_with_presets, session_dir
+):
+    """Needs a second endpoint wired, because `second-opinion` pins one.
+
+    That is not this test being awkward -- it is the preset working as
+    documented. Granting the helper on a deployment with no OpenAI credentials
+    fails at build time and says so, which is the same refusal a caller would
+    get for naming it directly.
+    """
+    from dataclasses import replace
+
+    from kingfisher.config import Endpoint
+
+    routed = replace(
+        workspace_with_presets,
+        endpoints={"openai": Endpoint("openai", "https://api.openai.com/v1", "sk-test")},
+    )
+
+    assert "task" in _reviewer_of(routed, session_dir, ("reviewer", "second-opinion"))
+
+
+def test_the_readme_run_on_example_is_valid(workspace_with_presets, session_dir):
+    """The second call the README shows, built for real.
+
+    A documented example that does not work is worse than none: it is copied,
+    it fails, and the format gets blamed. This one puts the shipped
+    `second-opinion` on a model the deployment can actually reach, which is the
+    situation it exists for.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher import RunOn
+    from tests.conftest import FakeToolCallingModel
+
+    build_agent(
+        workspace_with_presets,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(
+            subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)
+        ),
+        run_on={"second-opinion": RunOn("MiniMax-M2.5", provider="anthropic")},
+    )
