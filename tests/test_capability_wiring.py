@@ -350,11 +350,18 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
 
 def test_role_models_override_a_subagents_declared_model(cfg, monkeypatch, session_dir):
     """Cost routing is an operator decision, so it must not require editing
-    workspace content."""
+    workspace content.
+
+    Keyed by *role*. This test used to pass `{"cheap": ...}` -- the subagent's
+    name -- and passed, while the feature fired for nothing: `from_env` only
+    ever populates `main`, `subagent` and `summarizer`, so a name-keyed entry
+    could not exist outside a test that built one by hand. The test validated a
+    path production cannot reach, which is why the defect survived it.
+    """
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
     captured = capture_build(monkeypatch)
     build_agent(
-        replace(cfg, role_models={"cheap": "operator-choice"}),
+        replace(cfg, role_models={"subagent": "operator-choice"}),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
@@ -442,3 +449,23 @@ def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
 
     assert set(load_all(relocated.subagents_dir)) == {"reviewer"}
     assert load_all(relocated.workspace / "subagents") == {}
+
+
+def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, monkeypatch):
+    """The override wins, but only when there is one."""
+    (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
+    (cfg.workspace / "subagents" / "reviewer.md").write_text(
+        "---\nname: reviewer\ndescription: d\nmodel: FROM-DEFINITION\n---\nYou review.\n",
+        encoding="utf-8",
+    )
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reviewer",)),
+    )
+
+    (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
+    assert spec["model"].model == "FROM-DEFINITION"

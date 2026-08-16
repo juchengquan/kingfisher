@@ -35,6 +35,10 @@ if TYPE_CHECKING:
 
 BASE_PROMPT = "system.md"
 
+#: The role every delegate runs as, for `Config.role_models`. One of `ROLES`,
+#: which is what `from_env` populates -- a delegate's own name is not.
+SUBAGENT_ROLE = "subagent"
+
 #: Where optional capability sections are spliced in. An HTML comment, so
 #: `system.md` stays a plain Markdown document that renders and edits normally.
 CAPABILITY_MARKER = "<!-- capabilities -->"
@@ -299,7 +303,14 @@ def _as_subagent(
     #
     # `role_models` wins over the definition: which model a role runs on is an
     # operator's cost decision, and it should not require editing content.
-    if (model_id := cfg.role_models.get(spec.name, spec.model)) is not None:
+    #
+    # Keyed by *role*, not by this subagent's name. `from_env` populates
+    # `role_models` from `KINGFISHER_MODEL_MAIN`, `_SUBAGENT` and `_SUMMARIZER`,
+    # so a lookup by name only ever matched a delegate literally called one of
+    # those -- the override above was documented, tested nowhere, and fired for
+    # nothing. Per-delegate overrides would need `ROLES` to become unbounded and
+    # its names to come from workspace content, which is a different decision.
+    if (model_id := cfg.role_models.get(SUBAGENT_ROLE, spec.model)) is not None:
         subagent["model"] = build_model(replace(cfg, model=model_id))
     return subagent
 
