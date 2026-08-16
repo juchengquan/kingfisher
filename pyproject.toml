@@ -34,11 +34,18 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
+[project.optional-dependencies]
+# The JavaScript sandbox. Optional because it is a second execution surface a
+# deployment may not want, and because the library is beta -- its own warning
+# says the API is still moving. `KINGFISHER_INTERPRETER` does nothing without it.
+interpreter = ["langchain-quickjs>=0.2.0"]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
 [dependency-groups]
 dev = [
+    "langchain-quickjs>=0.2.0",
     "pytest>=9.1.1",
     "ruff>=0.16.3",
     "ty>=0.0.72",
