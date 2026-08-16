@@ -22,11 +22,11 @@ from deepagents.middleware import SubAgentMiddleware
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import (
     ALL,
-    CapabilityError,
     Selection,
     approved_middleware,
     narrowed,
     refuse_ungranted_endpoint,
+    refuse_unoffered,
 )
 from kingfisher.domain.subagent import RunOn, resolved_model
 from kingfisher.domain.tool import ceiling
@@ -62,13 +62,9 @@ def subagent_skills(
         # `None` is none, `ALL` is whatever the request itself has -- neither
         # names anything, so neither can name something the workspace lacks.
         return narrowed(spec.skills, by=activated)
-    unknown = tuple(name for name in spec.skills if name not in available)
-    if unknown:
-        msg = (
-            f"subagent {spec.name!r} names unknown skill(s): {', '.join(unknown)}; "
-            f"this request offers {available}"
-        )
-        raise CapabilityError(msg)
+    refuse_unoffered(
+        spec.skills, offered=available, kind="skill", subject=f"subagent {spec.name!r}"
+    )
     return narrowed(spec.skills, by=activated)
 
 
@@ -95,12 +91,9 @@ def subagent_helpers(
     if spec.subagents is None:
         return ()
     named = tuple(defined) if spec.subagents == ALL else spec.subagents
-    if unknown := tuple(n for n in named if n not in defined):
-        msg = (
-            f"subagent {spec.name!r} names unknown subagent(s): {', '.join(unknown)}; "
-            f"this request offers {tuple(defined)}"
-        )
-        raise CapabilityError(msg)
+    refuse_unoffered(
+        named, offered=defined, kind="subagent", subject=f"subagent {spec.name!r}"
+    )
     return tuple(narrowed(named, by=activated) or ())
 
 
