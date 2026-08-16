@@ -90,6 +90,7 @@ holds the id learns nothing they could not learn by using it.
 | D12 | **`ServerConfig`, separate from `Config`.** | Bind address, concurrency cap, heartbeat interval and body limit are none of the library's business. Keeping them out of `Config` is the library/service split held in the one place it would otherwise blur first. |
 | D13 | **A shared `within(root, ref)` rule in `domain/references.py`.** | A ref is caller-supplied, so both `FileStore` and `DefinitionStore` adapters need the same traversal guard. It is *lexical* — the domain may not call `resolve` — so an adapter reading from a directory somebody else can write to has a second check to make, and `LocalFileStore` makes it. Called twice on purpose, at the fetch and at the write: one guards the ordering (a hostile `input_refs` key caught only at write time would leave a turn directory behind), the other guards the syscall. |
 | D14 | **The API does not accept `turn_id`.** | The library's `turn_id` reuses the *directory* and then runs the turn again in full. Over HTTP a field of that name reads as an idempotency key, and every convention says a repeat returns the first result rather than doing the work twice and charging for it. Correlation is served by `turn_id` in the `finished` event — the id the work got, not the one the caller hoped for. Additive later, once D3 is revisited. |
+| D15 | **Logging belongs to the server, through the standard library.** | The library emits nothing: every fact it produces already has a home in the per-session JSONL log or in `RunEvent`, and it swallows almost nothing — three `except` blocks in the package, two of which return the failure rather than hide it. So there is no interface to inject and no base class to write; `logging` is the seam, every dependency already writes to it, and a deployment redirects it by configuring handlers. loguru would mean two logging systems in one process and a bridge to carry anthropic, httpx, langchain and uvicorn across — it belongs at the console entry point, as one deployment's choice of sink, not as the package's interface. Kingfisher configures nothing: a library that calls `basicConfig` decides for a program it does not own. |
 
 ### Errors
 
@@ -140,6 +141,7 @@ refusal in the stream.
 | pydantic already installed (transitively, via langchain) | 2.13.4 — weight was not the argument in D5 |
 | `_prepare` already offloaded with `asyncio.to_thread` | the async path is ASGI-safe by construction |
 | a supplied `turn_id` | reuses the directory, re-runs the turn — D14 |
+| a request refused before it becomes a turn | leaves no trace anywhere. `_admit` raises, and the run log is not constructed until `_open_turn` — which is the *documented* ordering, so this is the boundary working as intended rather than a bug. An unknown session, a busy session, a quota, a capability the caller may not use and a missing input file are all invisible on disk. That hole is what phase 7 is for; "servers log requests" is not |
 | event kinds emitted vs documented | wrong in both directions and by more than expected: `swept` and `sweep_failed` never fire, and *five* were missing — `cut_short` plus the four warnings a turn can open with (`protect_failed`, `withheld`, `indistinct`, `data_placed`). Ten kinds, not six. Now `KINDS`, pinned by a test — D8 |
 
 ## Sequenced plans
@@ -154,7 +156,7 @@ Each produces working, testable software on its own.
 | **4** | Errors: the totality test over every error class, and one body shape for every refusal. | 3 |
 | **5** | Capabilities on the wire: sentinel default, all four states per axis tested. | 3 |
 | **6** | Files: `within()` in the domain, the `FileStore` port, `input_refs`/`data_refs` on `Request`, resolution in `_admit`, writers beside `place_inputs`/`place_data`, and the local adapter. | 3 |
-| **7** | Packaging: the console entry point, `kingfisher.server.asgi:app`, and an access log that does not write session ids. | 3 |
+| **7** | Packaging: the console entry point, `kingfisher.server.asgi:app`, and an access log that writes neither session ids nor task text — the first because it is a bearer credential (below), the second because `enforce_local_only_tracing` exists to stop prompts leaving the machine and a shipped log is the same export through another door. The task stays in the session log, on disk, beside the run it describes. | 3 |
 
 Phase 1 is load-bearing and touches only the library. Phases 4, 5 and 6 are
 independent of each other. Phase 6 is the largest and the only one that changes
