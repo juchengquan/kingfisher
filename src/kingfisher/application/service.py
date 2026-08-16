@@ -76,6 +76,7 @@ from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
+    check_placeable,
     collect_artifacts,
     ensure_layout,
     ensure_session_layout,
@@ -89,6 +90,31 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
+
+
+@dataclass(frozen=True)
+class _Admitted:
+    """A request that has passed everything able to reject it.
+
+    The boundary is the whole point of the type. `_admit` may raise -- an
+    unknown session, a quota, a file that is not there, middleware this request
+    may not use -- and it runs before any turn directory exists. `_open_turn`
+    creates one and never refuses.
+
+    That ordering was a claim in a docstring, and it was false: `--data` naming
+    a missing file left nothing behind, while `--input` naming one left `t001`,
+    because the inputs were copied after the turn was allocated. Making the
+    halves separate functions with one type between them is what turns the
+    claim into something a reader can check.
+    """
+
+    request: Request
+    session: Any
+    graph: Any
+    #: Paths `protect_data` could not harden. Reported to the caller rather
+    #: than raised, so they cross the boundary instead of stopping at it.
+    unprotected: tuple[str, ...]
+    placement: Any
 
 
 @dataclass(frozen=True)
@@ -354,9 +380,21 @@ class Kingfisher:
         agent. `astream` runs it on a worker thread rather than pretending
         otherwise.
 
-        Nothing is destroyed here. Ordering still matters: anything that can
-        reject the request happens before the turn directory exists, so a typo
-        does not leave one behind.
+        Two halves, and the seam is the rule: everything able to reject the
+        request runs first, and only then is a turn directory created. That was
+        a sentence in this docstring for a long time and was not true --
+        `--input` named a missing file, was refused, and left `t001` behind.
+        Written as two functions it is checkable, and `_Admitted` is the only
+        way across.
+        """
+        return self._open_turn(self._admit(request))
+
+    def _admit(self, request: str | Request) -> _Admitted:
+        """Everything that can refuse, before anything a refusal would strand.
+
+        Nothing is destroyed here either, and nothing turn-shaped is created.
+        The session directory is, which the rule tolerates: an empty one left
+        by a rejected request is idempotent, and the retry reuses it.
         """
         request = Request.coerce(request)
         cfg, dirs = self.cfg, self.dirs
@@ -401,6 +439,29 @@ class Kingfisher:
         )
         graph = self.agent_for(request, session.directory, capabilities=allowed)
 
+        # The last thing that can refuse, and the reason this half exists. The
+        # files themselves cannot be copied until a turn directory holds them,
+        # but refusing them must not wait that long.
+        check_placeable(request.inputs)
+
+        return _Admitted(
+            request=request,
+            session=session,
+            graph=graph,
+            unprotected=unprotected,
+            placement=placement,
+        )
+
+    def _open_turn(self, admitted: _Admitted) -> _Prepared:
+        """Create the turn and compose what the loop needs.
+
+        Past the point of no refusal. Anything here that raised would leave a
+        turn directory behind, which is what `_admit` exists to prevent -- so
+        this half only ever creates, copies and composes.
+        """
+        cfg, dirs = self.cfg, self.dirs
+        request, session = admitted.request, admitted.session
+        session_id = session.id
 
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
         turn = session.allocate_turn(dirs, request.turn_id)
@@ -416,9 +477,9 @@ class Kingfisher:
         logger.run_start(request.task, turn.virtual_dir)
 
         return _Prepared(
-            graph=graph,
+            graph=admitted.graph,
             message=turn_message(
-                request.task, turn, placement.placed, has_inputs=bool(request.inputs)
+                request.task, turn, admitted.placement.placed, has_inputs=bool(request.inputs)
             ),
             session=session,
             turn=turn,
@@ -428,7 +489,7 @@ class Kingfisher:
                 "callbacks": [logger],
                 "recursion_limit": cfg.recursion_limit,
             },
-            events=opening_events(turn.virtual_dir, unprotected, placement),
+            events=opening_events(turn.virtual_dir, admitted.unprotected, admitted.placement),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
         )

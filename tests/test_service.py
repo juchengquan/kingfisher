@@ -10,6 +10,7 @@ from kingfisher import Kingfisher
 from kingfisher.application.service import opening_events, turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
+from kingfisher.infrastructure.workspace_fs import DataError
 from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
 
@@ -212,3 +213,55 @@ def test_the_turn_message_carries_no_output_convention():
 
     assert "report" not in message.lower()
     assert ".md" not in message
+
+
+# -- a refused request leaves no turn behind ------------------------------
+#
+# `_prepare` promised this and did not keep it. `--data` naming a missing file
+# left nothing; `--input` naming one was refused *after* `allocate_turn` and
+# left `t001` -- a stray turn counting against the session's own budget. The
+# promise is two functions now, `_admit` and `_open_turn`, with `_Admitted`
+# between them, and these are what say it is true.
+
+
+#: Every way a request can be turned down over the files it names. `--input`
+#: is the one that used to strand a turn; the others are the control.
+REFUSALS = [
+    "--data names a missing file",
+    "--input names a missing file",
+    "--data names one file twice",
+    "--input names one file twice",
+]
+
+
+def _refusal(how: str, tmp_path: Path) -> dict:
+    (tmp_path / "a").mkdir(exist_ok=True)
+    (tmp_path / "b").mkdir(exist_ok=True)
+    (tmp_path / "a" / "same.csv").write_text("one")
+    (tmp_path / "b" / "same.csv").write_text("two")
+
+    field = "data" if how.startswith("--data") else "inputs"
+    if "missing" in how:
+        return {field: (tmp_path / "nope.csv",)}
+    return {field: (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv")}
+
+
+@pytest.mark.parametrize("how", REFUSALS, ids=lambda s: s)
+def test_a_refused_request_leaves_no_turn_behind(cfg, tmp_path, how):
+    start(cfg, "s")
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.run(Request("first", session_id="s"))  # t001 is real work
+
+    with pytest.raises(DataError):
+        service.run(Request("go", session_id="s", **_refusal(how, tmp_path)))
+
+    runs = cfg.workspace / "sessions" / "s" / "runs"
+    assert sorted(p.name for p in runs.iterdir()) == ["t001"]
+
+
+def test_the_admitted_request_is_what_opens_the_turn(cfg):
+    """`_admit` returns; `_open_turn` takes only that. Nothing reaches the turn
+    without having passed every refusal first."""
+    import inspect
+
+    assert list(inspect.signature(Kingfisher._open_turn).parameters) == ["self", "admitted"]
