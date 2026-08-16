@@ -79,7 +79,7 @@ from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_e
 from kingfisher.config import Config
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure import presets, skill_store
+from kingfisher.infrastructure import confinement, presets, skill_store
 from kingfisher.infrastructure.runlog import read_usage
 from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.workspace_fs import (
@@ -178,6 +178,24 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     if not specs:
         print("  (none)  — try --seed-presets")
     return 0
+
+
+def warn_if_unconfined(cfg: Config) -> None:
+    """Say once, on every start, when nothing is keeping `execute` off the host.
+
+    Printed rather than logged because the person who can act on it is the one
+    reading this output. Silence means confined -- an unconfined shell that
+    announced nothing would look exactly like a confined one, which is how this
+    went unnoticed until it was measured.
+    """
+    confined = confinement.resolve(
+        cfg.shell_sandbox,
+        workspace=cfg.workspace,
+        state_dir=cfg.state_dir,
+        extra=cfg.shell_path_extra,
+    )
+    if confined.warning:
+        print(f"WARNING   : {confined.warning}", file=sys.stderr)
 
 
 class Progress:
@@ -341,6 +359,7 @@ def main(argv: list[str]) -> int:
 
     print(f"workspace : {workspace}")
     print(f"model     : {cfg.model} via {cfg.api_style}")
+    warn_if_unconfined(cfg)
     if not capabilities.is_unrestricted:
         for kind in ("tools", "skills", "subagents"):
             selected = getattr(capabilities, kind)

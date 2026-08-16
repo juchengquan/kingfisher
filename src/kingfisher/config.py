@@ -96,6 +96,13 @@ class Config:
     # 1,000-row analysis off mid-step at 20 turns.
     recursion_limit: int = 150
     shell_path_extra: tuple[str, ...] = ()
+    # Who keeps `execute` out of the rest of the host. `auto` uses whatever the
+    # platform offers, `external` says a container already does it, `off` opts
+    # out and is warned about on every start. On by default because an exposure
+    # nobody opted into is one nobody knows they have: measured unconfined, the
+    # shell could read this deployment's own API keys, `~/.aws` and the GitHub
+    # CLI's token, and `http_fetch` is one tool call away from sending them.
+    shell_sandbox: str = "auto"
     role_models: Mapping[str, str] = field(default_factory=dict)
     #: Every *other* style this deployment has credentials for. The one named
     #: by `api_style` is not in here -- it is the three fields above, which is
