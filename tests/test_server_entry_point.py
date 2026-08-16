@@ -166,3 +166,36 @@ def test_the_docs_routes_are_logged_as_unmatched_too(client, caplog):
 
     assert response.status_code == 200
     assert "<unmatched>" in "\n".join(r.getMessage() for r in caplog.records)
+
+
+def test_uvicorns_own_access_log_is_off(monkeypatch):
+    """Otherwise the redaction above is decorative.
+
+    uvicorn logs the *concrete* path by default, so a live server wrote
+    `GET /sessions/5df2db83…` directly above our own
+    `GET /sessions/{session_id}` -- the credential this module exists to keep
+    out of logs, put there by the thing serving the app. Found by running it;
+    no in-process test reaches uvicorn's logger.
+    """
+    import uvicorn
+
+    seen = {}
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: seen.update(kw))
+
+    serve(ServerConfig())
+
+    assert seen["access_log"] is False
+
+
+def test_the_entry_point_configures_its_own_logging_not_everyones(monkeypatch):
+    """`basicConfig(level=INFO)` turns on every library at once. httpx then logs
+    a line per outbound model call -- noise in a server, and the kind of default
+    that eventually writes down something nobody meant to keep."""
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: None)
+
+    main()
+
+    assert logging.getLogger("kingfisher.server").level == logging.INFO
+    assert logging.getLogger().level == logging.WARNING
