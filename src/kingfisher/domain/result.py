@@ -32,8 +32,22 @@ class RunResult:
     #: Sequential within the session — `t001`, `t002`. One turn is one request.
     turn_id: str
     answer: str
-    run_dir: Path
-    log_path: Path
+    #: Where the turn's files are, as the agent addresses them -- `/runs/t001`.
+    #: Machine-independent, so this is the one a caller somewhere else can use,
+    #: and it pairs with `artifacts`, which is relative to the same root.
+    virtual_dir: str = ""
+    #: Host paths, and the two fields here that must not leave the machine.
+    #: They name a directory on the server's disk, which a remote caller cannot
+    #: read and should not be told about -- `backend` refuses host paths coming
+    #: the other way for the same reason. They are here because a *local*
+    #: caller is on the host: `main.py` prints `run_dir` to say where your files
+    #: landed, and that is the whole point of it.
+    #:
+    #: A consequence worth knowing before reaching for `json.dumps`: it raises
+    #: on these rather than serialising them, which is deliberate. The fix is to
+    #: send `virtual_dir` and `artifacts`, not to stringify these.
+    run_dir: Path = Path()
+    log_path: Path = Path()
     #: Everything under `/derived` and `/memory` at the end of this turn, as
     #: paths relative to the session root. What is *present*, not what changed:
     #: `execute` writes without any file tool seeing it, so the only sound view
