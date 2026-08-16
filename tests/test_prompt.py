@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
@@ -120,3 +121,53 @@ def test_the_system_prompt_demands_no_artifacts():
             assert "result.json" not in text
 
     assert "Answer the question. That is the deliverable" in render_system_prompt()
+
+
+def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements(
+    cfg, session_dir
+):
+    """The prompt tells the agent a virtual path becomes a shell path by dropping
+    the leading slash. That is a claim about `build_backend`'s mounts, not about
+    prose, so it is checked against the mounts.
+
+    Written after a live run burned four model calls and a `find` over the whole
+    home directory looking for `/runs/t001`, which existed the whole time. The
+    prompt said the run directory was "reachable by relative path" without ever
+    saying what that path was, and the model did not derive it.
+    """
+    from kingfisher.infrastructure.backend import build_backend
+
+    backend = build_backend(cfg, session_dir)
+    cwd = Path(backend.default.cwd).resolve()
+
+    for virtual in ("/runs/t001/input/x.txt", "/derived/x.txt", "/data/x.txt"):
+        backend.write(virtual, "x")
+        landed = (cwd / virtual.lstrip("/")).resolve()
+        assert landed.is_file(), (
+            f"the prompt promises {virtual} is {virtual.lstrip('/')} from the shell, "
+            f"but nothing is at {landed}"
+        )
+
+
+def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
+    """The skills section warns that `/skills` is the one path where dropping the
+    slash silently reads the wrong directory. If the catalogue ever moves under
+    the session that warning becomes a lie, which is worse than no warning.
+    """
+    from kingfisher.infrastructure.backend import build_backend
+
+    backend = build_backend(cfg, session_dir)
+    cwd = Path(backend.default.cwd).resolve()
+    backend.write("/skills/demo/SKILL.md", "hello")
+
+    assert not (cwd / "skills" / "demo").exists(), (
+        "the catalogue now resolves by dropping the slash -- drop the warning"
+    )
+
+    # The escape hatch is checked by running it through the agent's own shell,
+    # since it depends on `shell_env` exporting HOME as the workspace. Spelling
+    # it `$HOME/skills` rather than `../../skills` keeps it true if the session
+    # ever sits at a different depth.
+    result = backend.execute('cat "$HOME/skills/demo/SKILL.md"')
+    assert result.exit_code == 0, f"$HOME/skills does not reach the catalogue: {result}"
+    assert "hello" in result.output
