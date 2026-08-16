@@ -47,6 +47,7 @@ class SessionBusyError(ValueError):
     taken name, for the same reason.
     """
 
+
 class QuotaExceededError(ValueError):
     """A session is already holding more than the deployment allows.
 
@@ -102,7 +103,6 @@ class Turn:
         return f"{self.virtual_dir}/input"
 
 
-
 def sessions_root(workspace: Path | str) -> Path:
     """Where a workspace keeps its sessions.
 
@@ -146,6 +146,24 @@ def known(entries: Sequence[tuple[str, float]]) -> tuple[SessionInfo, ...]:
         SessionInfo(id=name, last_used=modified)
         for name, modified in sorted(entries, key=lambda entry: -entry[1])
     )
+
+def still_held(
+    entries: Sequence[tuple[str, float]], *, stale_after: float, now: float
+) -> tuple[str, ...]:
+    """Which of these claims somebody could still be holding.
+
+    The rule `claim` applies to one claim, said once so retention can apply it
+    to all of them. It could not before: it read claim *names* and treated every
+    one as a turn in progress, so a claim left behind by a process that died
+    exempted its session from retention permanently -- measured at ten years
+    idle, still there, on a workspace whose sessions are supposed to expire.
+
+    `stale_after` is the turn timeout, which already bounds how long a turn may
+    run. Past it the holder is gone or was going to be stopped anyway, which is
+    the same judgement that lets `claim` take a slot over.
+    """
+    return tuple(name for name, taken in entries if now - taken < stale_after)
+
 
 @dataclass(frozen=True)
 class Session:
@@ -199,7 +217,11 @@ class Session:
             return path
 
         held = dict(dirs.listing(claims))
-        if now - held.get(self.id, now) < stale_after:
+        # A claim that vanished between the two calls counts as held: `now`
+        # makes its age zero, so a race resolves toward refusing rather than
+        # toward taking over a slot whose owner may be about to write.
+        mine = ((self.id, held.get(self.id, now)),)
+        if self.id in still_held(mine, stale_after=stale_after, now=now):
             msg = (
                 f"session {self.id} already has a turn running; "
                 f"wait for it to finish or start another session"

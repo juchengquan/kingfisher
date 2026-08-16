@@ -15,6 +15,7 @@ from kingfisher.domain.session import (
     SessionBusyError,
     UnknownSessionError,
     known,
+    still_held,
 )
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
@@ -534,3 +535,115 @@ def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):
 
     assert listed == swept
     assert kf.sessions() == ()
+
+
+# -- a claim outliving its holder -----------------------------------------
+#
+# `claim` always knew a claim could go stale; retention did not. It read claim
+# *names* and spared every session that had one, so the two disagreed about
+# what "busy" meant and a process that died mid-turn won its session permanent
+# exemption from a workspace whose sessions are supposed to expire.
+
+
+def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
+    """Ten years idle and still there, before this. `stale_after` is the turn
+    timeout, so past it the holder is gone or was going to be stopped."""
+    import time
+
+    kf = service(cfg)
+    crashed = kf.start_session()
+    (cfg.state_dir / "claims" / crashed).mkdir(parents=True, exist_ok=True)
+
+    decade = time.time() + 10 * 365 * 24 * 3600
+    result = kf.reap(older_than_seconds=0.0, now=decade)
+
+    assert crashed in result.removed
+    assert kf.session(crashed) is None
+
+
+def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
+    """The half that must not regress -- this is why `busy` exists at all."""
+    import time
+
+    kf = service(cfg)
+    running = kf.start_session()
+    (cfg.state_dir / "claims" / running).mkdir(parents=True, exist_ok=True)
+
+    result = kf.reap(older_than_seconds=0.0, now=time.time())
+
+    assert result.removed == ()
+    assert kf.session(running) is not None
+    assert (cfg.state_dir / "claims" / running).exists()
+
+
+def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
+    """One rule, so they cannot drift. Just inside the window the session is
+    spared; just outside it, both let go."""
+    import time
+
+    kf = service(cfg)
+    held = kf.start_session()
+    (cfg.state_dir / "claims" / held).mkdir(parents=True, exist_ok=True)
+    now = time.time()
+
+    inside = kf.reap(older_than_seconds=0.0, now=now + cfg.turn_timeout_s - 60)
+    assert inside.removed == ()
+
+    outside = kf.reap(older_than_seconds=0.0, now=now + cfg.turn_timeout_s + 60)
+    assert held in outside.removed
+
+
+def test_a_sweep_leaves_no_claim_behind(cfg):
+    """After the session sweep rather than before, so one pass clears a crashed
+    holder: the session goes first, which is what makes the claim residue."""
+    import time
+
+    kf = service(cfg)
+    crashed = kf.start_session()
+    claim = cfg.state_dir / "claims" / crashed
+    claim.mkdir(parents=True, exist_ok=True)
+
+    kf.reap(older_than_seconds=0.0, now=time.time() + 10 * 365 * 24 * 3600)
+
+    assert not claim.exists()
+    assert list((cfg.state_dir / "claims").iterdir()) == []
+
+
+def test_deleting_a_session_takes_its_claim_with_it(cfg):
+    kf = service(cfg)
+    session = kf.start_session()
+    claim = cfg.state_dir / "claims" / session
+    claim.mkdir(parents=True, exist_ok=True)
+
+    kf.delete_session(session)
+
+    assert not claim.exists()
+
+
+def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
+    """Why the leftover mattered rather than merely accumulated. `start_session`
+    takes a caller's id, so a service reusing one inherited a claim nobody held
+    and its first turn was refused until the window ran out."""
+    kf = service(cfg)
+    kf.start_session("reused")
+    (cfg.state_dir / "claims" / "reused").mkdir(parents=True, exist_ok=True)
+    kf.delete_session("reused")
+
+    kf.start_session("reused")
+
+    assert kf.run(Request("go", session_id="reused")).answer == "ok"
+
+
+def test_a_live_claim_is_never_residue_whatever_its_age(cfg):
+    """The domain half, and the line between the two questions. Age decides
+    whether a claim can be taken over -- that stays with `claim`, where
+    `create_exclusive` settles the race. Residue is decided by the session
+    being gone."""
+    assert retention.orphaned(("a", "b"), ("b",)) == ("a",)
+    assert retention.orphaned(("a",), ("a",)) == ()
+
+
+def test_the_staleness_rule_needs_no_filesystem():
+    ordered = still_held((("fresh", 100.0), ("old", 10.0)), stale_after=50.0, now=120.0)
+
+    assert ordered == ("fresh",)

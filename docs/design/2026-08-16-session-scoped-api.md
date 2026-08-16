@@ -257,6 +257,26 @@ These did not come up in the design session and each could change a phase:
   out forever. Two simultaneous requests for one session no longer share a
   checkpointer thread; the second is refused with `SessionBusyError`. Retention
   reads the same directory, so a sweep cannot delete a session mid-turn.
+
+  It read the directory but not the rule, and that was a second bug. Retention
+  took claim *names* and spared every one, while `claim` alone knew a claim
+  could go stale — so a process that died mid-turn exempted its session from
+  retention permanently. Measured at ten years idle, still there, in a
+  workspace whose whole point is that sessions expire. The staleness test now
+  lives in `still_held` and both callers use it.
+
+  Nothing emptied `state/claims/` either: `delete_session` left the claim, and
+  so did a sweep. Growth was the small half. The sharp half is that
+  `start_session` takes a caller's id, so re-opening a deleted one inherited a
+  claim nobody held and had its first turn refused as busy until the window ran
+  out. `delete_session` now releases, and a sweep collects claims whose session
+  is gone — after removing sessions rather than before, so one pass clears a
+  crashed holder completely.
+
+  Residue is decided by the session being gone, never by age. Taking over a
+  *stale* claim on a session that still exists is the other question, and stays
+  in `claim` where only one `create_exclusive` can win the race; a janitor
+  deleting stale claims by age would race a takeover that had just succeeded.
 - **Manifest granularity.** Changed-path detection by mtime, by content hash, or
   by recording writes as they happen. Affects whether phase 4 is cheap.
 - **Migration.** Existing workspaces have `data/`, `memory/` and `runs/` at the
