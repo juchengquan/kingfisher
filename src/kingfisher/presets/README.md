@@ -189,8 +189,7 @@ tools:                     # ✅ the same thing
 
 An unlisted field is refused rather than ignored — `tolls:` is answered with
 *did you mean 'tools'?*, and `permissions:` with the reason this format declines
-it. A definition still written as markdown is told so by name, since renaming
-the file is the obvious thing to try and leaves the `---` fences behind.
+it.
 
 The frontmatter is real YAML, parsed with `yaml.safe_load` — block lists,
 folded scalars and typed values all work, and a skill and a subagent are read

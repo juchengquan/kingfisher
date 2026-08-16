@@ -259,19 +259,6 @@ def test_indentation_inside_a_prompt_is_preserved(tmp_path):
     assert "\n   Do not reuse" in spec.system_prompt
 
 
-def test_an_unconverted_definition_says_what_to_do(tmp_path):
-    """Renaming the file is the obvious response to "subagents are .yaml now",
-    and YAML's own complaint -- "expected a single document in the stream" --
-    names the `---` without saying it is the old fence.
-    """
-    old = "---\nname: reviewer\ndescription: d\n---\nYou review.\n"
-
-    with pytest.raises(SubagentError, match="still the old markdown format") as raised:
-        read_subagent(old, tmp_path / "reviewer.yaml")
-
-    assert "system_prompt" in str(raised.value)
-
-
 # -- how the prompt is written ---------------------------------------------
 
 HEAD = "name: reviewer\ndescription: d\n"
