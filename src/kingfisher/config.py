@@ -134,10 +134,21 @@ class Models:
     makes `.defualt` an error before the code runs rather than a `KeyError`
     while it does.
 
-    Not named by analogy with `Catalogue`, though, because the two are not of a
-    kind: that one holds three paths and deliberately does not read them, and
-    this one holds parsed records that refer to each other and answers questions
-    about them.
+    Still not named by analogy with `Catalogue`, but the difference is no longer
+    the one this used to give. `Catalogue` held three paths and deliberately did
+    not read them; it holds a repository per kind now, and they do the reading.
+    What separates the two is *when* and *how often*: a catalogue is read when
+    the deployment is wired, answers every turn from what it held, and is layered
+    per turn with whatever a session uploaded. This is read once, at config time,
+    and never again -- there is no per-turn half for a model catalogue to have,
+    because nothing a request carries adds a model.
+
+    Which is also why this stayed a record rather than becoming a repository.
+    `model_catalogue` is one public function called once, its helpers are steps
+    in a single parse rather than views over a directory, and the seam a
+    repository would have added is already here: a deployment holding its models
+    somewhere else builds one of these and passes `Config(models=...)`, touching
+    no file and no loader. The test suite runs that way.
 
     It lives here rather than in `infrastructure` for the reason
     `Config.catalogue_roots` does *not* return a `Catalogue`: this file sits
