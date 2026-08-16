@@ -8,7 +8,8 @@ rebuilt. A caller passing the same set every turn keeps its cache hits.
 
 Names, never definitions. A request activates what the workspace already
 offers; it cannot invent a tool or write a subagent's prompt. That keeps
-definitions reviewable in git and means an untrusted caller can widen nothing.
+definitions reviewable wherever the operator keeps them and means an untrusted
+caller can widen nothing.
 
 `"*"` means everything, a list means exactly those, `None` means none. The
 default is `"*"`, and that default is deliberate: authorisation is not the

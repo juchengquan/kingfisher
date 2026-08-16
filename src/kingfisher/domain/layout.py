@@ -1,7 +1,7 @@
 """The workspace layout, as data.
 
-Every name and tier here is policy: which directories exist, which are git's
-responsibility, which are disposable. None of it creates anything -- making the
+Every name and tier here is policy: which directories exist, which hold what a
+person wrote, which are disposable. None of it creates anything -- making the
 layout real is `infrastructure.workspace_fs`, and this is what it is told to make.
 
 The split matters because the tiers are a decision that wants reviewing, and it
@@ -12,15 +12,22 @@ was previously buried among mkdir calls and subprocess invocations.
   per-turn          sessions/<id>/runs/<turn>/
   harness-owned     .kingfisher/
 
-  authored          /skills, /subagents, PROMPT.md   -- version them if you like
+  authored          /skills, /subagents, /tools, PROMPT.md
   harness-owned     /.kingfisher
   disposable        everything under sessions/
 
 A session directory is the backend root, which is why it holds every name the
 agent addresses: `/data` means the same thing in every session while pointing
-somewhere different in each. Git tracks what a person authored; what a session
-produced leaves through the run's result. There is no directory for reports,
-because "a report" is one kind of output among many.
+somewhere different in each. What a session produced leaves through the run's
+result. There is no directory for reports, because "a report" is one kind of
+output among many.
+
+The tiers used to name git as the mechanism for the authored one, and kingfisher
+used to run it: a `pre_run_commit` snapshotted the tracked paths before each
+turn. That went with `adapters/`, and nothing here runs git now. The tiers still
+hold -- they are about durability, not about a tool -- and versioning the
+authored tier is an operator's business, best done wherever
+`KINGFISHER_SKILLS_DIR` points rather than around 200MB of sessions.
 """
 
 from __future__ import annotations
@@ -74,14 +81,3 @@ Durable facts about this project and how to work in it. Add entries below.
 (none recorded yet)
 """
 
-WORKSPACE_GITIGNORE = """\
-# Managed by kingfisher. Durability tiers, not preferences.
-
-# Harness state: thread db, run logs, tmp. Local-only by design.
-.kingfisher/
-
-# Session state: inputs, derived output, memory and run scratch. All of it
-# belongs to one session and none of it is a person's work, so what a session
-# produces and wants kept leaves through the run's result, not through git.
-sessions/
-"""

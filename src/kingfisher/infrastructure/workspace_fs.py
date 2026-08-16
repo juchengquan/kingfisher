@@ -21,7 +21,6 @@ from kingfisher.domain.layout import (
     LAYOUT_DIRS,
     MARKER,
     SESSION_DIRS,
-    WORKSPACE_GITIGNORE,
 )
 
 
@@ -71,19 +70,32 @@ def is_new_workspace(workspace: Path) -> bool:
 
 
 def ensure_layout(workspace: Path) -> Path:
-    """Create the workspace layout and its .gitignore. Idempotent.
+    """Create the workspace layout. Idempotent.
 
     What the workspace still owns is what sessions share — the skill and
     subagent definitions — plus the directory sessions live in. Everything the
     agent addresses belongs to a session and is made by `ensure_session_layout`.
+
+    No `.gitignore` is written. Kingfisher ran git once -- a `pre_run_commit`
+    that snapshotted the tracked tier before each turn -- and that went with
+    `adapters/workspace_git.py`. What was left behind was an ignore file for a
+    repository nothing created, nothing wrote to and nothing read, describing a
+    review workflow the code no longer had.
+
+    Worse than merely unused: it listed two of the five things a workspace
+    holds, so it read as complete while being wrong. `Library/` was outside it,
+    and a `git add -A` in a real workspace offered to commit a 21MB pip cache.
+    An operator who wants their workspace under version control is better served
+    writing the ignore rules they actually want than inheriting stale ones.
+
+    A workspace is runtime state. The 132KB of authored content in it --
+    `skills`, `subagents`, `tools` against 256MB of sessions and harness state --
+    is what `KINGFISHER_SKILLS_DIR` and its two siblings exist to relocate, and
+    versioning belongs there rather than around the sessions.
     """
     workspace = Path(workspace).expanduser().resolve()
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
-
-    gitignore = workspace / ".gitignore"
-    if not gitignore.exists():
-        gitignore.write_text(WORKSPACE_GITIGNORE, encoding="utf-8")
 
     marker = workspace / MARKER
     if not marker.exists():

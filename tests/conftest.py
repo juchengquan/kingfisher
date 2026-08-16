@@ -30,18 +30,6 @@ class StubCheckpointer:
         self.deleted.append(thread_id)
 
 
-@pytest.fixture(autouse=True)
-def _git_identity(monkeypatch):
-    """pre_run_commit needs an identity; CI machines often have none configured."""
-    for var, value in {
-        "GIT_AUTHOR_NAME": "kingfisher-test",
-        "GIT_AUTHOR_EMAIL": "test@example.invalid",
-        "GIT_COMMITTER_NAME": "kingfisher-test",
-        "GIT_COMMITTER_EMAIL": "test@example.invalid",
-    }.items():
-        monkeypatch.setenv(var, value)
-
-
 @pytest.fixture
 def dirs():
     """The real `SessionDirs`. A test that wants to watch or break an
