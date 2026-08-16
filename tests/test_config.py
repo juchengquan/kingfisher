@@ -73,7 +73,7 @@ def test_it_defaults_inside_the_workspace(tmp_path):
 
     cfg = from_env({"KINGFISHER_WORKSPACE": str(workspace), "GATEWAY_API_KEY": "sk-gateway"})
 
-    assert cfg.models_file == workspace / "models.yaml"
+    assert cfg.models.source == workspace / "models.yaml"
 
 
 # -- what it resolves to ---------------------------------------------------
@@ -82,9 +82,9 @@ def test_it_defaults_inside_the_workspace(tmp_path):
 def test_endpoints_and_models_come_from_the_file(env):
     cfg = from_env(env)
 
-    assert set(cfg.endpoints) == {"gateway", "openai"}
-    assert set(cfg.models) == {"MiniMax-M3", "gpt-5"}
-    assert cfg.default_model == "MiniMax-M3"
+    assert set(cfg.models.endpoints) == {"gateway", "openai"}
+    assert set(cfg.models.models) == {"MiniMax-M3", "gpt-5"}
+    assert cfg.models.default == "MiniMax-M3"
 
 
 def test_credentials_come_from_the_variable_each_endpoint_names(env):
@@ -92,8 +92,8 @@ def test_credentials_come_from_the_variable_each_endpoint_names(env):
     which a file holding credentials could not be."""
     cfg = from_env(env)
 
-    assert cfg.endpoints["gateway"].api_key == "sk-gateway"
-    assert cfg.endpoints["openai"].api_key == "sk-openai"
+    assert cfg.models.endpoints["gateway"].api_key == "sk-gateway"
+    assert cfg.models.endpoints["openai"].api_key == "sk-openai"
     assert "sk-gateway" not in CATALOGUE
 
 
@@ -108,8 +108,8 @@ def test_an_endpoint_without_its_key_is_dropped_and_warned_about(env):
     with pytest.warns(UserWarning, match="OPENAI_API_KEY"):
         cfg = from_env(env)
 
-    assert set(cfg.endpoints) == {"gateway"}
-    assert set(cfg.models) == {"MiniMax-M3"}  # its models went with it
+    assert set(cfg.models.endpoints) == {"gateway"}
+    assert set(cfg.models.models) == {"MiniMax-M3"}  # its models went with it
 
 
 def test_a_default_whose_endpoint_has_no_key_is_refused(env):
@@ -238,9 +238,9 @@ def test_the_variables_that_chose_a_model_are_gone(env):
         }
     )
 
-    assert cfg.default_model == "MiniMax-M3"  # the file said so, not the environment
-    assert cfg.resolve_model()[1].name == "gateway"
-    assert cfg.models["MiniMax-M3"].max_tokens == 4096
+    assert cfg.models.default == "MiniMax-M3"  # the file said so, not the environment
+    assert cfg.models.resolve()[1].name == "gateway"
+    assert cfg.models.models["MiniMax-M3"].max_tokens == 4096
     assert not [f for f in fields(cfg) if f.name in {"model", "api_style", "max_tokens"}]
     assert "ignored" not in repr(cfg)
 

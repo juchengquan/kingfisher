@@ -115,7 +115,7 @@ def test_run_logs_usage_shaped_records(cfg):
     # Model and API style ride along so a zero cache_read can be told apart
     # from a gateway that simply does not cache.
     assert all(
-        r["model"] == cfg.default_model and r["endpoint"] == cfg.resolve_model()[1].name
+        r["model"] == cfg.models.default and r["endpoint"] == cfg.models.resolve()[1].name
         for r in records
     )
 

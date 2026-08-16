@@ -4,7 +4,7 @@ import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
-from kingfisher.config import Config, Endpoint, ModelProfile
+from kingfisher.config import Config, Endpoint, ModelProfile, Models
 from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
 
@@ -81,15 +81,20 @@ FAKE_MODELS = {
 #: them unbound would make every preset test a test of that refusal instead.
 FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "cheap-model"}
 
+#: One record where the fixture used to set four fields on `Config`.
+FAKE_CATALOGUE = Models(
+    models=FAKE_MODELS,
+    endpoints={"fake": FAKE_ENDPOINT},
+    default="fake-model",
+    aliases=FAKE_ALIASES,
+)
+
 
 @pytest.fixture
 def cfg(workspace):
     return Config(
         workspace=workspace,
-        models=FAKE_MODELS,
-        endpoints={"fake": FAKE_ENDPOINT},
-        default_model="fake-model",
-        aliases=FAKE_ALIASES,
+        models=FAKE_CATALOGUE,
         turn_timeout_s=3600,
         execution_timeout_s=30,
     )

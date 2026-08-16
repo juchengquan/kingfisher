@@ -875,8 +875,8 @@ class Kingfisher:
 
         logger = JsonlRunLogger(
             log_path(cfg.state_dir, session_id),
-            model=cfg.default_model,
-            endpoint=cfg.resolve_model()[1].name,
+            model=cfg.models.default,
+            endpoint=cfg.models.resolve()[1].name,
             session_id=session_id,
         )
         logger.run_start(request.task, turn.virtual_dir)

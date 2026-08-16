@@ -51,7 +51,8 @@ def loaded(tmp_path, body: str = GOOD, environ=None):
 
 
 def test_it_reads_endpoints_models_and_the_default(tmp_path):
-    endpoints, models, default, _ = loaded(tmp_path)
+    catalogue = loaded(tmp_path)
+    endpoints, models, default = catalogue.endpoints, catalogue.models, catalogue.default
 
     assert set(endpoints) == {"gateway"}
     assert endpoints["gateway"].api == "anthropic"
@@ -61,13 +62,13 @@ def test_it_reads_endpoints_models_and_the_default(tmp_path):
 
 
 def test_a_models_key_is_the_id_sent_on_the_wire(tmp_path):
-    _, models, _, _ = loaded(tmp_path)
+    models = loaded(tmp_path).models
 
     assert models["tuned"].model == "tuned"
 
 
 def test_every_param_is_carried(tmp_path):
-    _, models, _, _ = loaded(tmp_path)
+    models = loaded(tmp_path).models
     tuned = models["tuned"]
 
     assert (tuned.max_tokens, tuned.timeout_s) == (2048, 60)
@@ -78,7 +79,7 @@ def test_every_param_is_carried(tmp_path):
 def test_an_unset_param_stays_unset(tmp_path):
     """Not filled in with a number kingfisher chose. `temperature` is the one
     that matters: a default would silently change every deployment."""
-    _, models, _, _ = loaded(tmp_path)
+    models = loaded(tmp_path).models
     plain = models["main-model"]
 
     assert (plain.temperature, plain.top_p) == (None, None)
@@ -135,7 +136,8 @@ def test_an_endpoint_without_its_key_is_dropped_with_its_models(tmp_path):
     ).replace("  tuned:\n    endpoint: gateway", "  tuned:\n    endpoint: other")
 
     with pytest.warns(UserWarning, match="OTHER_API_KEY"):
-        endpoints, models, _, _ = loaded(tmp_path, body)
+        catalogue = loaded(tmp_path, body)
+        endpoints, models = catalogue.endpoints, catalogue.models
 
     assert set(endpoints) == {"gateway"}
     assert set(models) == {"main-model"}
@@ -188,7 +190,7 @@ aliases:
 
 
 def test_aliases_bind_general_names_to_models(tmp_path):
-    _, _, _, aliases = loaded(tmp_path, WITH_ALIASES)
+    aliases = loaded(tmp_path, WITH_ALIASES).aliases
 
     assert aliases == {"cheap": "tuned", "alternate": "main-model"}
 
@@ -196,7 +198,7 @@ def test_aliases_bind_general_names_to_models(tmp_path):
 def test_a_catalogue_without_aliases_binds_nothing(tmp_path):
     """Optional: a deployment naming its models directly in every definition
     never needs one."""
-    _, _, _, aliases = loaded(tmp_path)
+    aliases = loaded(tmp_path).aliases
 
     assert aliases == {}
 
@@ -238,7 +240,8 @@ def test_an_alias_whose_model_was_dropped_is_kept(tmp_path):
     ).replace("  tuned:\n    endpoint: gateway", "  tuned:\n    endpoint: other")
 
     with pytest.warns(UserWarning, match="OTHER_API_KEY"):
-        _, models, _, aliases = loaded(tmp_path, body)
+        catalogue = loaded(tmp_path, body)
+        models, aliases = catalogue.models, catalogue.aliases
 
     assert "tuned" not in models
     assert aliases["cheap"] == "tuned"

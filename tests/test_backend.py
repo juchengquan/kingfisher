@@ -20,7 +20,7 @@ from kingfisher.infrastructure.runlog import log_path
 def test_shell_env_carries_no_credentials(cfg, session_dir):
     """The allowlist is the security story: the shell can run tools, not read keys."""
     env = shell_env(cfg, session_dir)
-    assert cfg.resolve_model()[1].api_key not in env.values()
+    assert cfg.models.resolve()[1].api_key not in env.values()
     assert not any("KEY" in name or "TOKEN" in name or "SECRET" in name for name in env)
 
 

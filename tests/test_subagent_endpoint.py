@@ -77,11 +77,14 @@ def elsewhere(cfg):
     """`cfg`, plus a model on a second endpoint with params of its own."""
     return replace(
         cfg,
-        endpoints={**cfg.endpoints, "openai": ELSEWHERE},
-        models={
-            **cfg.models,
-            "gpt-5": ModelProfile("gpt-5", "openai", max_tokens=32000, timeout_s=90),
-        },
+        models=replace(
+            cfg.models,
+            endpoints={**cfg.models.endpoints, "openai": ELSEWHERE},
+            models={
+                **cfg.models.models,
+                "gpt-5": ModelProfile("gpt-5", "openai", max_tokens=32000, timeout_s=90),
+            },
+        ),
     )
 
 
@@ -91,10 +94,10 @@ def elsewhere(cfg):
 def test_the_catalogue_is_where_endpoints_and_models_come_from(tmp_path):
     cfg = from_env(written(tmp_path))
 
-    assert set(cfg.endpoints) == {"minimax"}
-    assert set(cfg.models) == {"MiniMax-M3", "MiniMax-M2.5"}
-    assert cfg.default_model == "MiniMax-M3"
-    assert cfg.resolve_model()[1].base_url == "https://api.minimaxi.com/anthropic"
+    assert set(cfg.models.endpoints) == {"minimax"}
+    assert set(cfg.models.models) == {"MiniMax-M3", "MiniMax-M2.5"}
+    assert cfg.models.default == "MiniMax-M3"
+    assert cfg.models.resolve()[1].base_url == "https://api.minimaxi.com/anthropic"
 
 
 def test_several_models_may_share_one_endpoint(tmp_path):
@@ -102,7 +105,7 @@ def test_several_models_may_share_one_endpoint(tmp_path):
     endpoints by wire format, so there was exactly one per format."""
     cfg = from_env(written(tmp_path))
 
-    assert cfg.resolve_model("MiniMax-M3")[1] == cfg.resolve_model("MiniMax-M2.5")[1]
+    assert cfg.models.resolve("MiniMax-M3")[1] == cfg.models.resolve("MiniMax-M2.5")[1]
 
 
 def test_two_endpoints_may_share_one_wire_format(tmp_path):
@@ -115,8 +118,8 @@ def test_two_endpoints_may_share_one_wire_format(tmp_path):
     ).replace("  MiniMax-M2.5:\n    endpoint: minimax\n", "  local:\n    endpoint: vllm\n")
     cfg = from_env({**written(tmp_path, body), "VLLM_API_KEY": "sk-local"})
 
-    assert {e.api for e in cfg.endpoints.values()} == {"anthropic"}
-    assert cfg.resolve_model("local")[1].base_url == "http://localhost:8000"
+    assert {e.api for e in cfg.models.endpoints.values()} == {"anthropic"}
+    assert cfg.models.resolve("local")[1].base_url == "http://localhost:8000"
 
 
 def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
@@ -125,7 +128,7 @@ def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
     cfg = from_env(written(tmp_path))
 
     with pytest.raises(ConfigError, match="no model 'gpt-5'"):
-        cfg.resolve_model("gpt-5")
+        cfg.models.resolve("gpt-5")
 
 
 # -- the delegate actually goes there --------------------------------------
@@ -160,7 +163,7 @@ def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir, mo
 
     spec = build(cfg, session_dir, monkeypatch)
 
-    assert spec["model"].anthropic_api_url == cfg.resolve_model()[1].base_url
+    assert spec["model"].anthropic_api_url == cfg.models.resolve()[1].base_url
 
 
 def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
@@ -182,7 +185,7 @@ def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
 
     assert spec["model"].max_tokens == 321
     assert spec["model"].default_request_timeout == 45
-    assert cfg.models["fake-model"].max_tokens != 321  # the default it must not have taken
+    assert cfg.models.models["fake-model"].max_tokens != 321  # the default it must not have taken
 
 
 def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir, monkeypatch):
@@ -241,7 +244,8 @@ def test_an_alias_reaches_wherever_its_model_lives(cfg, session_dir, monkeypatch
     """Binding is a lookup into the same table, so an alias is not a lesser way
     of naming a model -- it reaches another endpoint exactly as `model:` does."""
     define(cfg, "name: reviewer\ndescription: d\nalias: alternate\nsystem_prompt: |\n  Go.\n")
-    routed = replace(elsewhere(cfg), aliases={"alternate": "gpt-5"})
+    base = elsewhere(cfg)
+    routed = replace(base, models=replace(base.models, aliases={"alternate": "gpt-5"}))
 
     spec = build(routed, session_dir, monkeypatch)
 
@@ -370,4 +374,4 @@ def test_the_environment_cannot_move_a_delegate_to_another_endpoint(
     spec = build(elsewhere(cfg), session_dir, monkeypatch)
 
     assert spec["model"].model == "cheap-model"
-    assert spec["model"].anthropic_api_url == cfg.resolve_model()[1].base_url
+    assert spec["model"].anthropic_api_url == cfg.models.resolve()[1].base_url

@@ -181,8 +181,11 @@ def test_naming_a_model_replaces_the_file_wholesale(cfg, session_dir, monkeypatc
 def test_an_override_reaches_another_endpoint(cfg, session_dir, monkeypatch):
     routed = replace(
         cfg,
-        endpoints={**cfg.endpoints, "openai": ELSEWHERE},
-        models={**cfg.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        models=replace(
+            cfg.models,
+            endpoints={**cfg.models.endpoints, "openai": ELSEWHERE},
+            models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        ),
     )
     _define(routed, PLAIN)
 
@@ -206,8 +209,11 @@ def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir
     about whose credentials pay."""
     routed = replace(
         cfg,
-        endpoints={**cfg.endpoints, "openai": ELSEWHERE},
-        models={**cfg.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        models=replace(
+            cfg.models,
+            endpoints={**cfg.models.endpoints, "openai": ELSEWHERE},
+            models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
+        ),
     )
     _define(routed, PLAIN)
 
