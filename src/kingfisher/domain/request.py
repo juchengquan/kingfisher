@@ -2,10 +2,12 @@
 
 from __future__ import annotations
 
+from collections.abc import Mapping
 from dataclasses import dataclass, field
 from pathlib import Path
 
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.subagent import RunOn
 
 
 @dataclass(frozen=True)
@@ -49,6 +51,14 @@ class Request:
     skill_refs: tuple[str, ...] = ()
     subagent_refs: tuple[str, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
+    #: Delegate name -> where this request wants it to run. Empty by default.
+    #:
+    #: Separate from `capabilities` because the two answer different questions.
+    #: `capabilities.models` is the deployment's answer to "which models may
+    #: this caller name at all", and it narrows like everything else there.
+    #: This is the caller's answer to "which delegate goes on which", and there
+    #: is nothing to narrow -- an assignment is not a permission.
+    run_on: Mapping[str, RunOn] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         if not self.task or not self.task.strip():

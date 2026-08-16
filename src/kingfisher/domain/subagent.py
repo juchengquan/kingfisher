@@ -168,6 +168,26 @@ class SubagentError(ValueError):
 
 
 @dataclass(frozen=True)
+class RunOn:
+    """Where a request wants one delegate to run, instead of what its file says.
+
+    A *replacement*, not an edit. Give a model alone and it runs at the
+    deployment's own endpoint; give both and it runs at the one you name. What
+    it can never be is half of each -- the file's endpoint with your model --
+    because a model name sent somewhere that has never heard of it is a 404 if
+    you are lucky and a wrong-model run if you are not. The format refuses that
+    pairing from the definition's side for the same reason.
+
+    Two fields rather than one `"provider:model"` string: that spelling is
+    `init_chat_model`'s, and resolving a model through *it* is exactly what
+    `infrastructure.models` exists to avoid.
+    """
+
+    model: str
+    provider: str | None = None
+
+
+@dataclass(frozen=True)
 class SubagentSpec:
     """One subagent, as the workspace defines it."""
 
@@ -411,7 +431,9 @@ def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
                 raise SubagentError(msg)
 
 
-def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | None, str | None]:
+def resolved_endpoint(
+    spec: SubagentSpec, *, granted: Selection, override: RunOn | None = None
+) -> tuple[str | None, str | None]:
     """Where a delegate runs, once the request has had its say.
 
     The definition is the only author. There was an operator override here --
@@ -434,6 +456,12 @@ def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | 
     `test_domain_imports_only_the_standard_library_and_itself` holds it to that.
     """
     provider, model = spec.provider, spec.model
+    if override is not None:
+        # Wholesale. Taking the override's model and leaving the file's
+        # endpoint would rebuild the half-pair this format refuses everywhere
+        # else -- and it is the caller who would be surprised, having named one
+        # thing and got it joined to another.
+        provider, model = override.provider, override.model
 
     if provider is not None and granted != ALL and provider not in (granted or ()):
         msg = (
