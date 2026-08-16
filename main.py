@@ -118,19 +118,27 @@ def _usage_summary(log_path: Path) -> str:
     )
 
 
-def seed_examples(workspace: Path) -> list[str]:
-    """Copy the repo's example skills and subagents into the workspace.
+def seed_examples(cfg: Config) -> list[str]:
+    """Copy the repo's example skills and subagents into the catalogues.
 
-    Copied rather than read in place: they are workspace content, and the whole
-    point of the examples directory is that you edit your copy.
+    Into `cfg.skills_dir` and `cfg.subagents_dir`, not the workspace. They are
+    the same directory until a deployment moves them, and it was writing to the
+    workspace unconditionally -- so with a relocated catalogue this seeded four
+    skills into a directory nothing reads, and the `--list` on the next line
+    reported `(none)`.
+
+    Copied rather than read in place: the point of the examples directory is
+    that you edit your copy. That is also what this flag is *for* -- an API
+    deployment provisions a reviewed catalogue rather than copying examples
+    into one, so this is how you populate a catalogue to try things against.
     """
     copied = []
-    for kind in ("skills", SUBAGENT_DIR):
+    for kind, destination in (("skills", cfg.skills_dir), (SUBAGENT_DIR, cfg.subagents_dir)):
         source = EXAMPLES / kind
         if not source.is_dir():
             continue
         for item in sorted(source.iterdir()):
-            target = workspace / kind / item.name
+            target = destination / item.name
             if item.is_dir():
                 shutil.copytree(item, target, dirs_exist_ok=True)
             else:
@@ -297,7 +305,7 @@ def main(argv: list[str]) -> int:
         print(f"created a new workspace at {workspace}")
 
     if args.seed_examples:
-        for name in seed_examples(workspace):
+        for name in seed_examples(cfg):
             print(f"seeded {name}")
 
     if args.list:
