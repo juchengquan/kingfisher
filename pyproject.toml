@@ -22,6 +22,10 @@ dependencies = [
     # through deepagents, but a transitive dep is not a promise.
     "langchain-anthropic>=1.5.4",
     "langchain-openai>=1.5.1",
+    # Imported directly by adapters/checkpointing.py for the async saver. It
+    # arrives transitively through langgraph-checkpoint-sqlite, and a
+    # transitive dep is not a promise.
+    "aiosqlite>=0.22.1",
     # Imported directly by domain/frontmatter.py, which reads the same YAML
     # header deepagents reads. It also arrives transitively through deepagents,
     # but a transitive dep is not a promise.

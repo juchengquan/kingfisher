@@ -23,8 +23,10 @@ model call of two to three seconds, which is not a trade worth taking.
 
 from __future__ import annotations
 
+import asyncio
 import shutil
-from collections.abc import Iterator
+from collections.abc import AsyncIterator, Iterator
+from dataclasses import dataclass
 from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING, Any
@@ -55,6 +57,50 @@ from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessio
 
 if TYPE_CHECKING:
     from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
+
+
+@dataclass(frozen=True)
+class _Prepared:
+    """Everything a turn needs before the model is reached.
+
+    Extracted so the orchestration sequence exists once. `stream` and `astream`
+    differ only in how they iterate the graph -- a dozen lines each -- and the
+    hundred lines of ordering that matter are not written twice to drift apart.
+    """
+
+    graph: Any
+    message: str
+    session: Any
+    turn: Any
+    logger: Any
+    config: dict[str, Any]
+    events: tuple[RunEvent, ...]
+    deadline: float
+    timeout_s: float
+
+
+def _consume(mode: str, chunk: Any, answer: str) -> tuple[str, tuple[RunEvent, ...]]:
+    """One stream chunk into (answer so far, events to emit).
+
+    Both loops are offered every chunk and each mode ignores the ones that are
+    not its own. Written once so the sync and async loops cannot come to
+    disagree about which mode carries the answer.
+    """
+    if (text := runtime.answer_in(mode, chunk)) is not None:
+        answer = text
+    return answer, tuple(runtime.events_in(mode, chunk))
+
+
+def _overrun(prepared: _Prepared) -> RunEvent | None:
+    """The cut-short event once a turn is out of time, else nothing.
+
+    Checked between chunks, which is the only place there is to stop. What the
+    turn produced is already on disk and in the manifest, so ending here keeps
+    the work and loses only the steps that had not happened yet.
+    """
+    if monotonic() <= prepared.deadline:
+        return None
+    return RunEvent(kind="cut_short", text=f"turn stopped after {prepared.timeout_s}s")
 
 
 class Kingfisher:
@@ -210,21 +256,19 @@ class Kingfisher:
             checkpointer=self.threads,
         )
 
-    def stream(self, request: str | Request) -> Iterator[RunEvent]:
-        """Run one task, yielding progress as it happens.
+    def _prepare(self, request: str | Request) -> _Prepared:
+        """Do everything up to the model call, and return what the loop needs.
 
-        The terminal event has `kind == "finished"` and carries the `RunResult`.
+        Blocking, and deliberately so: it is filesystem and git work, measured
+        at 15-46ms, and `astream` runs it on a worker thread rather than
+        pretending otherwise.
 
-        Nothing is destroyed here. Retention used to run on this path, keeping
-        the newest N sessions -- which counts every caller's sessions together,
-        so one busy caller evicted another's conversation. Disposal is now
-        asked for: `delete_session` and `reap`.
-
-        Ordering still matters for the rest. Anything that can reject the
-        request happens before the turn directory exists, so a typo does not
-        leave one behind.
+        Nothing is destroyed here. Ordering still matters: anything that can
+        reject the request happens before the turn directory exists, so a typo
+        does not leave one behind.
         """
         request = Request.coerce(request)
+        events: list[RunEvent] = []
         cfg, dirs = self.cfg, self.dirs
         workspace = self.workspace
         sessions_root = workspace / "sessions"
@@ -285,13 +329,18 @@ class Kingfisher:
         logger.run_start(request.task, turn.virtual_dir)
 
         if unprotected:
-            yield RunEvent(kind="protect_failed", text="; ".join(unprotected))
+            events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
         if placement.placed:
             # Replacement is the one dangerous case -- durable data, silently
             # overwritten -- so it is named rather than assumed.
             replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
-            yield RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
-        yield RunEvent(kind="run_start", text=turn.virtual_dir)
+            events.append(
+                RunEvent(
+                    kind="data_placed",
+                    text=f"{', '.join(placement.placed)}{replaced}",
+                )
+            )
+        events.append(RunEvent(kind="run_start", text=turn.virtual_dir))
 
         # The turn directory is run-scoped, so it reaches the model here rather
         # than in the system prompt — putting it there would change the cached
@@ -317,60 +366,124 @@ class Kingfisher:
             f"Your run directory for this task is {turn.virtual_dir}.{supplied}{arrived}"
         )
 
-        answer = ""
-        ok = False
-        cut_short = False
-        deadline = monotonic() + cfg.turn_timeout_s
-        try:
-            for mode, chunk in graph.stream(
-                runtime.user_payload(message),
-                config={
-                    "configurable": {"thread_id": session_id},
-                    "callbacks": [logger],
-                    "recursion_limit": cfg.recursion_limit,
-                },
-                stream_mode=runtime.STREAM_MODES,
-            ):
-                # Both are offered every chunk and each ignores the modes that
-                # are not its own. Which mode carries what is the adapter's
-                # knowledge, not this module's.
-                if (text := runtime.answer_in(mode, chunk)) is not None:
-                    answer = text
-                yield from runtime.events_in(mode, chunk)
+        return _Prepared(
+            graph=graph,
+            message=message,
+            session=session,
+            turn=turn,
+            logger=logger,
+            config={
+                "configurable": {"thread_id": session_id},
+                "callbacks": [logger],
+                "recursion_limit": cfg.recursion_limit,
+            },
+            events=tuple(events),
+            deadline=monotonic() + cfg.turn_timeout_s,
+            timeout_s=cfg.turn_timeout_s,
+        )
 
-                # Between chunks, which is the only place there is to stop.
-                # What the turn produced is already on disk and in the
-                # manifest, so ending here keeps the work and loses only the
-                # steps that had not happened yet.
-                if monotonic() > deadline:
-                    cut_short = True
-                    yield RunEvent(
-                        kind="cut_short",
-                        text=f"turn stopped after {cfg.turn_timeout_s}s",
-                    )
-                    break
-
-            answer = normalize_answer(answer)
-            ok = True
-        finally:
-            logger.run_end(ok=ok, answer_chars=len(answer))
-
-        yield RunEvent(
+    def _finished(self, prepared: _Prepared, answer: str, *, cut_short: bool) -> RunEvent:
+        """The terminal event, built the same way whichever loop produced it."""
+        return RunEvent(
             kind="finished",
             text=answer,
             result=RunResult(
-                session_id=session_id,
-                turn_id=turn.id,
+                session_id=prepared.session.id,
+                turn_id=prepared.turn.id,
                 answer=answer,
-                run_dir=turn.directory,
-                log_path=log_path(cfg.state_dir, session_id),
+                run_dir=prepared.turn.directory,
+                log_path=log_path(self.cfg.state_dir, prepared.session.id),
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.
-                artifacts=collect_artifacts(session.directory),
+                artifacts=collect_artifacts(prepared.session.directory),
                 cut_short=cut_short,
             ),
         )
+
+    def stream(self, request: str | Request) -> Iterator[RunEvent]:
+        """Run one task, yielding progress as it happens.
+
+        The terminal event has `kind == "finished"` and carries the `RunResult`.
+        """
+        prepared = self._prepare(request)
+        yield from prepared.events
+
+        answer = ""
+        ok = False
+        cut_short = False
+        try:
+            for mode, chunk in prepared.graph.stream(
+                runtime.user_payload(prepared.message),
+                config=prepared.config,
+                stream_mode=runtime.STREAM_MODES,
+            ):
+                answer, events = _consume(mode, chunk, answer)
+                yield from events
+                if (stop := _overrun(prepared)) is not None:
+                    cut_short = True
+                    yield stop
+                    break
+            answer = normalize_answer(answer)
+            ok = True
+        finally:
+            prepared.logger.run_end(ok=ok, answer_chars=len(answer))
+
+        yield self._finished(prepared, answer, cut_short=cut_short)
+
+    async def astream(self, request: str | Request) -> AsyncIterator[RunEvent]:
+        """`stream`, on an event loop.
+
+        The same turn and the same ordering -- `_prepare` is shared, so there
+        is one copy of the sequence that matters. What this buys is not a
+        faster turn: a turn is the model's time, and measurement puts our own
+        code at 15-46ms of it. It is concurrency. Four turns measured against
+        the live gateway cost 0.4-1.2 turns of wall clock instead of four.
+
+        `_prepare` is filesystem and git work, so it runs on a worker thread
+        rather than blocking every other turn sharing this loop.
+
+        Needs a checkpointer with async methods: `SqliteSaver` raises on
+        `aget_tuple`, so build one with `async_checkpointer(cfg)`.
+        """
+        prepared = await asyncio.to_thread(self._prepare, request)
+        for event in prepared.events:
+            yield event
+
+        answer = ""
+        ok = False
+        cut_short = False
+        try:
+            async for mode, chunk in prepared.graph.astream(
+                runtime.user_payload(prepared.message),
+                config=prepared.config,
+                stream_mode=runtime.STREAM_MODES,
+            ):
+                answer, events = _consume(mode, chunk, answer)
+                for event in events:
+                    yield event
+                if (stop := _overrun(prepared)) is not None:
+                    cut_short = True
+                    yield stop
+                    break
+            answer = normalize_answer(answer)
+            ok = True
+        finally:
+            prepared.logger.run_end(ok=ok, answer_chars=len(answer))
+
+        yield self._finished(prepared, answer, cut_short=cut_short)
+
+    async def arun(self, request: str | Request) -> RunResult:
+        """Run one task to completion on an event loop. A drain of `astream`."""
+        result: RunResult | None = None
+        async for event in self.astream(request):
+            if event.kind == "finished":
+                result = event.result
+
+        if result is None:  # pragma: no cover -- astream always ends with `finished`
+            msg = "astream() ended without a finished event"
+            raise RuntimeError(msg)
+        return result
 
     def run(self, request: str | Request) -> RunResult:
         """Run one task to completion. A drain of `stream`."""

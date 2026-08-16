@@ -621,6 +621,7 @@ name = "kingfisher"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
+    { name = "aiosqlite" },
     { name = "deepagents" },
     { name = "langchain-anthropic" },
     { name = "langchain-openai" },
@@ -638,6 +639,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "deepagents", specifier = ">=0.7.6" },
     { name = "langchain-anthropic", specifier = ">=1.5.4" },
     { name = "langchain-openai", specifier = ">=1.5.1" },

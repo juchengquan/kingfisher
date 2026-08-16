@@ -16,7 +16,7 @@ them died in `setup()`, before serving anything.
 from __future__ import annotations
 
 import sqlite3
-from contextlib import suppress
+from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -25,6 +25,8 @@ from langgraph.checkpoint.sqlite import SqliteSaver
 from kingfisher.config import Config
 
 if TYPE_CHECKING:
+    from collections.abc import AsyncIterator
+
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 #: How long to wait for another process to finish writing before giving up.
@@ -72,3 +74,53 @@ def build_checkpointer(cfg: Config) -> BaseCheckpointSaver:
     saver = SqliteSaver(conn)
     saver.setup()
     return saver
+
+
+@asynccontextmanager
+async def async_checkpointer(cfg: Config) -> AsyncIterator[BaseCheckpointSaver]:
+    """The same database, opened for an event loop.
+
+    `SqliteSaver` raises `NotImplementedError` on `aget_tuple`, so `astream`
+    needs this one -- a sync saver does not merely block the loop, it refuses.
+
+    Every setting above applies here for the same reasons and in the same
+    order: `busy_timeout` before WAL, because the pragma that sets journal mode
+    needs an exclusive lock and the busy handler does not retry that particular
+    refusal. Sync and async processes share the file quite happily; WAL is a
+    property of the database, not of who opened it.
+
+    A context manager, unlike its sync counterpart, because this holds an
+    aiosqlite connection *and* the worker thread that serves it. Returning the
+    saver alone left both to be collected whenever -- which in practice was
+    after the loop had closed, and aiosqlite's thread then raised
+    `RuntimeError: Event loop is closed` into an exit nobody could catch.
+
+        async with async_checkpointer(cfg) as threads:
+            service = Kingfisher(cfg, threads=threads)
+
+    One connection serves every turn on the loop, and aiosqlite gives a
+    connection one worker thread -- so checkpoint writes are serialised across
+    concurrent turns. At a checkpoint per graph step and milliseconds per
+    write, that is far below the model's time and does not show up in
+    measurement. A deployment that outgrows it opens a connection per worker,
+    or passes its own saver; `Kingfisher(threads=...)` takes any.
+    """
+    import aiosqlite  # noqa: PLC0415 -- only an async deployment pays for this
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # noqa: PLC0415
+
+    db = checkpoint_db_path(cfg)
+    db.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = await aiosqlite.connect(db, timeout=BUSY_TIMEOUT_MS / 1000)
+    await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+    # Suppressed for the same reason as above: another process is setting it
+    # right now, and journal mode persists on the file, so theirs is ours.
+    with suppress(sqlite3.OperationalError):
+        await conn.execute("PRAGMA journal_mode=WAL")
+
+    saver = AsyncSqliteSaver(conn)
+    await saver.setup()
+    try:
+        yield saver
+    finally:
+        await conn.close()

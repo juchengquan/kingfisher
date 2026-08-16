@@ -10,7 +10,6 @@ from __future__ import annotations
 from dataclasses import replace
 
 import pytest
-from langchain_openai import ChatOpenAI
 
 from kingfisher.adapters.models import PROVIDERS, Provider, build_model
 from kingfisher.config import API_STYLES, ConfigError
@@ -46,7 +45,9 @@ def test_a_provider_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
     keyword raises instead, so the mistake surfaces at construction rather than
     as a request that quietly ignores `KINGFISHER_MAX_TOKENS`.
     """
-    colliding = Provider("OPENAI_BASE_URL", "OPENAI_API_KEY", ChatOpenAI, {"max_tokens": 1})
+    colliding = Provider(
+        "OPENAI_BASE_URL", "OPENAI_API_KEY", "langchain_openai:ChatOpenAI", {"max_tokens": 1}
+    )
     monkeypatch.setitem(PROVIDERS, "openai", colliding)
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
@@ -119,3 +120,39 @@ def test_an_unbuildable_style_fails_with_a_readable_error(cfg):
     """
     with pytest.raises(ConfigError, match="no model builder for api_style 'gemini'"):
         build_model(replace(cfg, api_style="gemini"))
+
+
+def test_describing_a_provider_does_not_import_its_sdk():
+    """A deployment uses one `api_style`, so naming the classes meant importing
+    every provider's SDK to describe an endpoint none of them would build.
+
+    This buys nothing while deepagents imports `langchain_openai` itself
+    wherever it is installed. What it buys is the option of not installing it,
+    which holding the class made impossible.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys;"
+        "import kingfisher.adapters.models as m;"
+        "print('langchain_openai' in sys.modules, 'langchain_anthropic' in sys.modules)"
+    )
+    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+    assert out.stdout.strip() == "False False"
+
+
+def test_a_row_naming_an_absent_class_fails_where_it_is_built():
+    """Deferring the import defers the error too, so it has to still be a clear
+    one -- a typo'd row must not surface as a mysterious attribute failure."""
+    from dataclasses import replace as dc_replace
+
+    row = Provider("OPENAI_BASE_URL", "OPENAI_API_KEY", "langchain_openai:NoSuchModel")
+    with pytest.raises(AttributeError, match="NoSuchModel"):
+        row.resolve()
+
+    missing_module = dc_replace(row, chat_class="no_such_package:Thing")
+    with pytest.raises(ModuleNotFoundError, match="no_such_package"):
+        missing_module.resolve()
