@@ -10,6 +10,8 @@ from kingfisher import Kingfisher
 from kingfisher.application.service import opening_events, turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
 from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
@@ -321,7 +323,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
 def test_every_kind_a_request_can_narrow_is_reported(cfg):
     """Every axis narrows the same way and every one of them went silent the
     same way. One line per kind, and only for kinds that lost something."""
-    from kingfisher.infrastructure import presets, skill_store, subagent_store
+    from kingfisher.infrastructure import presets
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
@@ -348,8 +350,8 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     # so adding a preset failed a test about *reporting* for a reason having
     # nothing to do with reporting. Sortedness is still asserted -- this is a
     # line a person reads -- but the membership comes from the catalogue.
-    seeded_skills = set(skill_store.names(cfg.skills_dir))
-    seeded_subagents = set(subagent_store.load_all(cfg.subagents_dir))
+    seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
+    seeded_subagents = set(LocalSubagentRepository(cfg.subagents_dir).specs)
     # Not vacuous: the granted name has to be one the catalogue offers, or
     # "everything except it" would be the whole catalogue by accident.
     assert {"code-review"} < seeded_skills

@@ -1,12 +1,19 @@
-"""Reading subagent definitions off disk.
+"""Subagent definitions held in a directory on this host.
 
 `domain.subagent` owns the format -- what a definition means and what makes one
 malformed -- and `definitions` turns a document into one. Finding the files is a
 third job, and it is this one: nothing in either of those globs a directory.
+
+A class rather than two functions taking the same `Path`. Beyond holding the
+directory, it fixes something the pair could not: `load_all` and `sources` each
+walked the tree and parsed every file, so a caller wanting both -- which is what
+`--list` is -- parsed the whole catalogue twice. One read now answers both.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 from kingfisher.domain.subagent import SUFFIX, SubagentError, SubagentSpec
@@ -23,6 +30,9 @@ def _definitions_in(directory: Path) -> list[Path]:
     Hidden directories and `__pycache__` are skipped for the same reason the
     tool loader skips them: a one-level scan could never reach whatever a
     person left lying under the catalogue, and a recursive one can.
+
+    A function and not a method: it recurses into subdirectories, so most of its
+    calls are about somewhere that is not the repository's root.
     """
     found: list[Path] = []
     for entry in sorted(directory.iterdir()):
@@ -35,51 +45,65 @@ def _definitions_in(directory: Path) -> list[Path]:
     return found
 
 
-def load_all(directory: Path) -> dict[str, SubagentSpec]:
-    """Every subagent defined in `directory`, keyed by name.
+@dataclass(frozen=True)
+class LocalSubagentRepository:
+    """The subagents defined in one directory.
 
     Given the directory itself rather than a workspace to derive one from: the
     catalogue can be deployed outside any workspace and shared by all of them,
-    so there is no longer a single parent to infer it from.
-
-    The filename is not authoritative — the `name` field is, since that
-    is what a request names and what the `task` tool will use. Which is also
-    why folders are free: a path cannot reach a name, so nesting a definition
-    changes where it is kept and nothing else. The duplicate check below is
-    what stays load-bearing, and it now spans folders rather than one listing.
+    so there is no longer a single parent to infer it from. A session's uploaded
+    subagents are this same class pointed at the session.
     """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return {}
 
-    specs: dict[str, SubagentSpec] = {}
-    seen: dict[str, str] = {}
-    for path in _definitions_in(directory):
-        # Relative to the catalogue: `reviewer.yaml` stops identifying a file
-        # once two folders may each hold one.
-        where = str(path.relative_to(directory))
-        spec = read_subagent(path.read_text(encoding="utf-8"), path)
-        if spec.name in specs:
-            msg = (
-                f"{where}: duplicate subagent name {spec.name!r}, "
-                f"already defined by {seen[spec.name]}"
-            )
-            raise SubagentError(msg)
-        seen[spec.name] = where
-        specs[spec.name] = spec
-    return specs
+    root: Path
 
+    @cached_property
+    def _defined(self) -> dict[str, tuple[SubagentSpec, str]]:
+        """Every definition below `root`, parsed once, with where it came from.
 
-def sources(directory: Path) -> dict[str, str]:
-    """Where each subagent is defined, by name, relative to the catalogue.
+        Both answers from one walk. The filename is not authoritative -- the
+        `name` field is, since that is what a request names and what the `task`
+        tool will use. Which is also why folders are free: a path cannot reach a
+        name, so nesting a definition changes where it is kept and nothing else.
+        The duplicate check is what stays load-bearing, and it spans folders
+        rather than one listing.
+        """
+        directory = Path(self.root)
+        if not directory.is_dir():
+            return {}
 
-    For `--list`, and for the same reason the tool loader has one: a folder
-    exists so a person can find a file, and a bare name does not help them.
-    """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return {}
-    return {
-        read_subagent(p.read_text(encoding="utf-8"), p).name: str(p.relative_to(directory))
-        for p in _definitions_in(directory)
-    }
+        defined: dict[str, tuple[SubagentSpec, str]] = {}
+        for path in _definitions_in(directory):
+            # Relative to the catalogue: `reviewer.yaml` stops identifying a
+            # file once two folders may each hold one.
+            where = str(path.relative_to(directory))
+            spec = read_subagent(path.read_text(encoding="utf-8"), path)
+            if spec.name in defined:
+                msg = (
+                    f"{where}: duplicate subagent name {spec.name!r}, "
+                    f"already defined by {defined[spec.name][1]}"
+                )
+                raise SubagentError(msg)
+            defined[spec.name] = (spec, where)
+        return defined
+
+    @cached_property
+    def specs(self) -> dict[str, SubagentSpec]:
+        """Every subagent defined here, keyed by name."""
+        return {name: spec for name, (spec, _) in self._defined.items()}
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._defined)
+
+    @cached_property
+    def sources(self) -> dict[str, str]:
+        """Where each subagent is defined, by name, relative to the catalogue.
+
+        For `--list`, and for the same reason the tool loader has one: a folder
+        exists so a person can find a file, and a bare name does not help them.
+
+        Not on `SubagentRepository`: a store that is not a directory has no
+        relative path to report, and the one caller is an inventory listing.
+        """
+        return {name: where for name, (_, where) in self._defined.items()}

@@ -20,10 +20,8 @@ from typing import TYPE_CHECKING
 
 from kingfisher.domain import skill
 from kingfisher.domain.subagent import SUFFIX
-from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
-from kingfisher.infrastructure.subagent_store import load_all
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -90,10 +88,10 @@ def provision(
     roots = catalogue or Catalogue.from_config(cfg)
     return Brought(
         skills=materialise_skills(
-            request.skill_refs, store, session_dir, skill_store.names(roots.skills)
+            request.skill_refs, store, session_dir, roots.skill_names
         ),
         subagents=materialise_subagents(
-            request.subagent_refs, store, session_dir, tuple(load_all(roots.subagents))
+            request.subagent_refs, store, session_dir, tuple(roots.subagent_specs)
         ),
     )
 

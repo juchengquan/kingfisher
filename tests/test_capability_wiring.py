@@ -16,7 +16,7 @@ from kingfisher.infrastructure.agent import (
 )
 from kingfisher.infrastructure.backend import build_backend
 from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
-from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build
 
 SUBAGENT = """name: reviewer
@@ -456,8 +456,8 @@ def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
     )
     relocated = replace(cfg, subagents_root=catalogue)
 
-    assert set(load_all(relocated.subagents_dir)) == {"reviewer"}
-    assert load_all(relocated.workspace / "subagents") == {}
+    assert set(LocalSubagentRepository(relocated.subagents_dir).specs) == {"reviewer"}
+    assert LocalSubagentRepository(relocated.workspace / "subagents").specs == {}
 
 
 def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, monkeypatch):

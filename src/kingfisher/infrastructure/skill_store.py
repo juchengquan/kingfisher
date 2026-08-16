@@ -1,13 +1,21 @@
-"""Finding skill definitions on disk.
+"""Skills held in a directory on this host.
 
 The mirror of `subagent_store`, and here for the same reason: `domain.skill`
 knows what a definition means, and this knows where they are. deepagents owns
 the format itself — what is needed here is only which names a directory offers,
 which is a directory listing and nothing more.
+
+A class rather than two functions taking the same `Path`, which is what these
+were. The directory is state, so it belongs to an object; the reading is then
+done once and answered from, rather than repeated per caller. `SkillRepository`
+in `domain.ports` is the shape a deployment may replace, and this is the one
+backed by a filesystem.
 """
 
 from __future__ import annotations
 
+from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 from kingfisher.domain.skill import FILENAME
@@ -17,48 +25,66 @@ from kingfisher.domain.skill import FILENAME
 LAYOUT = f"<skills>/<name>/{FILENAME}"
 
 
-def names(directory: Path) -> tuple[str, ...]:
-    """Skill names in one directory, which are its subdirectory names.
+@dataclass(frozen=True)
+class LocalSkillRepository:
+    """The skills in one directory.
 
     Given the directory rather than a workspace to derive one from: a catalogue
     may be deployed outside any workspace and shared by all of them, and a
-    session's uploads live somewhere else again.
+    session's uploads live somewhere else again. Both are this same class
+    pointed at different roots.
+
+    Frozen, and read at most once per instance. A catalogue's repository is
+    built when the deployment is wired and answers every turn from what it read
+    then; a session's is built for the turn that needs it. Neither notices a
+    directory changing underneath it, which is the trade `warm()` already made
+    deliberately -- a catalogue edited mid-run is a redeployment, not a feature.
     """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return ()
-    return tuple(sorted(p.name for p in directory.iterdir() if (p / FILENAME).is_file()))
 
+    root: Path
 
-def misplaced(directory: Path) -> tuple[str, ...]:
-    """Directories that hold a skill somewhere below, but not where it counts.
+    @cached_property
+    def names(self) -> tuple[str, ...]:
+        """Skill names in this directory, which are its subdirectory names."""
+        directory = Path(self.root)
+        if not directory.is_dir():
+            return ()
+        return tuple(sorted(p.name for p in directory.iterdir() if (p / FILENAME).is_file()))
 
-    Discovery is one level deep -- `<source>/<name>/SKILL.md` -- because
-    deepagents' own listing is, and going deeper here would advertise skills
-    the agent then could not load. So the layout is a contract, not a
-    preference.
+    @cached_property
+    def misplaced(self) -> tuple[str, ...]:
+        """Directories that hold a skill somewhere below, but not where it counts.
 
-    What makes it worth reporting is that breaking it is *silent*. Grouping
-    skills into folders is the obvious thing to try, and it yields nothing: no
-    error, no warning, just a catalogue that appears empty. This finds those
-    folders so a caller can say so.
+        Discovery is one level deep -- `<source>/<name>/SKILL.md` -- because
+        deepagents' own listing is, and going deeper here would advertise skills
+        the agent then could not load. So the layout is a contract, not a
+        preference.
 
-    It now has to say *why*, because tools and subagents nest freely and this
-    one does not. That reads as an arbitrary inconsistency unless the reason is
-    stated: those two are read by kingfisher, which can walk as deep as it
-    likes, and a skill is read by the agent itself through a filesystem route.
-    deepagents lists the skills directory once and looks for `SKILL.md`
-    directly inside each entry -- so a nested skill is not tidied away, it is
-    unreachable. See `LAYOUT`, which is the sentence to quote at someone.
-    """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return ()
+        What makes it worth reporting is that breaking it is *silent*. Grouping
+        skills into folders is the obvious thing to try, and it yields nothing:
+        no error, no warning, just a catalogue that appears empty. This finds
+        those folders so a caller can say so.
 
-    found = []
-    for child in sorted(directory.iterdir()):
-        if not child.is_dir() or (child / FILENAME).is_file():
-            continue  # not a directory, or a perfectly good skill
-        if any(child.rglob(FILENAME)):
-            found.append(child.name)
-    return tuple(found)
+        It now has to say *why*, because tools and subagents nest freely and
+        this one does not. That reads as an arbitrary inconsistency unless the
+        reason is stated: those two are read by kingfisher, which can walk as
+        deep as it likes, and a skill is read by the agent itself through a
+        filesystem route. deepagents lists the skills directory once and looks
+        for `SKILL.md` directly inside each entry -- so a nested skill is not
+        tidied away, it is unreachable. See `LAYOUT`, which is the sentence to
+        quote at someone.
+
+        Not on `SkillRepository`, deliberately. It is a question about
+        directories, and a store that is not one has no answer to give.
+        """
+        directory = Path(self.root)
+        if not directory.is_dir():
+            return ()
+
+        found = []
+        for child in sorted(directory.iterdir()):
+            if not child.is_dir() or (child / FILENAME).is_file():
+                continue  # not a directory, or a perfectly good skill
+            if any(child.rglob(FILENAME)):
+                found.append(child.name)
+        return tuple(found)

@@ -457,9 +457,9 @@ deployment script choosing which definitions to install, an ownership report, a
 check that every delegate names a team:
 
 ```python
-from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 
-for spec in load_all(cfg.subagents_dir).values():
+for spec in LocalSubagentRepository(cfg.subagents_dir).specs.values():
     print(spec.name, spec.metadata.get("owner", "unowned"))
 ```
 

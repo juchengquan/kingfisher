@@ -16,7 +16,7 @@ import yaml
 
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure import presets, skill_store
+from kingfisher.infrastructure import presets
 from kingfisher.infrastructure.agent import (
     CapabilityError,
     available_skills,
@@ -24,8 +24,9 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
 )
 from kingfisher.infrastructure.definitions import skill_name
-from kingfisher.infrastructure.subagent_store import load_all
-from kingfisher.infrastructure.tool_store import load_tools, tool_name
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.tool_store import LocalToolRepository, tool_name
 
 
 @pytest.fixture(scope="session")
@@ -41,7 +42,7 @@ def shipped():
 
 
 def test_every_preset_subagent_parses(shipped):
-    specs = load_all(shipped / "subagents")
+    specs = LocalSubagentRepository(shipped / "subagents").specs
 
     # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the
     # same: a subagent is named by its `name:` field, so a folder cannot reach
@@ -62,12 +63,12 @@ def test_every_preset_skill_parses(shipped):
 
     The header's name is checked against the directory because the two are read
     by different paths: a catalogue skill is found by directory
-    (`skill_store.names`), while an uploaded one is filed under the name in its
+    (`LocalSkillRepository.names`), while an uploaded one is filed under the name in its
     header (`uploads.skill_name`). A preset whose halves disagree is copied,
     uploaded, and lands somewhere its author did not mean.
     """
     root = shipped / "skills"
-    shipped_skills = skill_store.names(root)
+    shipped_skills = LocalSkillRepository(root).names
 
     assert set(shipped_skills) == {"code-review", "release-notes", "tabular-qa"}
     for name in shipped_skills:
@@ -86,7 +87,7 @@ def test_every_preset_skill_parses(shipped):
 def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
     """Both optional fields appear in at least one example, or they are
     documented in the README and shown nowhere."""
-    extractor = load_all(shipped / "subagents")["extractor"]
+    extractor = LocalSubagentRepository(shipped / "subagents").specs["extractor"]
 
     assert extractor.tools is not None
     assert "write_file" not in extractor.tools  # read-only, as its body claims
@@ -160,7 +161,7 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     nothing: no error, no warning, a catalogue that simply looks empty. The
     layout is a contract, so breaking it should say so.
     """
-    from kingfisher.infrastructure import skill_store
+    from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
         target = tmp_path / path
@@ -168,19 +169,19 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
         target.write_text("name: x\ndescription: d\nsystem_prompt: |\n  body\n", encoding="utf-8")
     (tmp_path / "not-a-skill").mkdir()
 
-    assert skill_store.names(tmp_path) == ("flat",)
-    assert skill_store.misplaced(tmp_path) == ("a", "grouped")
+    assert LocalSkillRepository(tmp_path).names == ("flat",)
+    assert LocalSkillRepository(tmp_path).misplaced == ("a", "grouped")
 
 
 def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
     """The negative control: only folders that actually hide one are named, or
     every stray directory in a catalogue becomes a warning."""
-    from kingfisher.infrastructure import skill_store
+    from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
     (tmp_path / "notes").mkdir()
     (tmp_path / "notes" / "readme.txt").write_text("nothing to see", encoding="utf-8")
 
-    assert skill_store.misplaced(tmp_path) == ()
+    assert LocalSkillRepository(tmp_path).misplaced == ()
 
 
 def test_every_preset_tool_loads(shipped):
@@ -192,7 +193,7 @@ def test_every_preset_tool_loads(shipped):
     part worth having: the package uses a relative import, which is exactly what
     a standalone-module loader cannot resolve.
     """
-    tools = load_tools(shipped / "tools")
+    tools = LocalToolRepository(shipped / "tools").tools
 
     assert {tool_name(t) for t in tools} == {
         "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
@@ -202,7 +203,7 @@ def test_every_preset_tool_loads(shipped):
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
     """The docstring is what the model reads when deciding whether to call it.
     An example without a real one teaches the wrong shape."""
-    for tool in load_tools(shipped / "tools"):
+    for tool in LocalToolRepository(shipped / "tools").tools:
         assert len(tool.description.strip()) > 60  # a trigger, not a title
 
 
@@ -426,7 +427,7 @@ def test_no_preset_names_a_model(shipped):
     same reason `KINGFISHER_MODEL_SUBAGENT` was deleted for being the wrong
     granularity. The cost-routing demonstration lives in the README instead.
     """
-    specs = load_all(shipped / "subagents")
+    specs = LocalSubagentRepository(shipped / "subagents").specs
 
     assert {name for name, s in specs.items() if s.model} == set()
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
@@ -443,7 +444,7 @@ def test_the_reviewer_preset_consults_the_second_opinion(shipped):
     between them -- which is where a *different model* beats more care from the
     same one.
     """
-    specs = load_all(shipped / "subagents")
+    specs = LocalSubagentRepository(shipped / "subagents").specs
 
     assert specs["reviewer"].subagents == ("second-opinion",)
     assert specs["second-opinion"].subagents is None  # a helper works alone
@@ -454,7 +455,7 @@ def test_the_shipped_catalogue_obeys_the_one_level_rule(shipped):
     preset: copied, broken on the first run, and the format blamed."""
     from kingfisher.domain.subagent import refuse_helpers_with_helpers
 
-    refuse_helpers_with_helpers(load_all(shipped / "subagents"))
+    refuse_helpers_with_helpers(LocalSubagentRepository(shipped / "subagents").specs)
 
 
 def _reviewer_of(workspace, session_dir, granted):

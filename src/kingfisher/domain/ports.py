@@ -9,6 +9,19 @@ bearing, the domain returns a decision instead and the caller acts on it --
 
 Protocols rather than base classes: an adapter satisfies these by shape, and
 a test satisfies them with a dict.
+
+Two kinds of port live here, and the rule above is only about the first.
+
+* **Primitives**, above -- `SessionDirs`, `ThreadStore` -- exist because a rule
+  depends on what the operation guarantees.
+* **Repositories** -- `AssetRepository` and its three kinds -- exist because a
+  deployment may hold its definitions somewhere kingfisher did not choose. They
+  earn their place by being *swapped*, not by being depended on, and they are
+  narrow for a different reason: the port carries only what a replacement must
+  provide. Everything a local directory can also answer -- where a definition
+  sits on disk, which folders hold one too deep to load -- stays on the local
+  implementation, because a store that is not a directory has no answer to give
+  and should not be made to pretend.
 """
 
 from __future__ import annotations
@@ -16,6 +29,78 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, runtime_checkable
+
+from kingfisher.domain.subagent import SubagentSpec
+from kingfisher.domain.tool import Found
+
+
+@runtime_checkable
+class AssetRepository(Protocol):
+    """Something a deployment's definitions can be read from.
+
+    One member, because one is all three kinds have in common. The capability
+    layer filters skills, subagents and tools by *name* and by nothing else, so
+    `names` is the entire shared vocabulary; what a kind is actually made of --
+    a directory listing, parsed documents, imported Python -- differs so
+    completely that a shared `load` would unify the word and none of the
+    meaning.
+
+    A property rather than a method because reading is what these are for, and
+    because an implementation is expected to read once and answer from that.
+    `cached_property` satisfies this exactly, which is how the local ones do it.
+    """
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        """Every definition held, by the name a request grants it."""
+        ...
+
+
+@runtime_checkable
+class SkillRepository(AssetRepository, Protocol):
+    """Skills, which are names and nothing more.
+
+    Adds nothing, and that is the point rather than an omission: deepagents
+    opens skill files itself, through a backend route, so kingfisher lists and
+    denies but never parses one. There is no payload here for a port to carry.
+
+    Which also makes this the kind with the fewest strings attached. It is read
+    through `BackendProtocol`, not off a host path, so a deployment backing its
+    skills with something that is not a filesystem has nothing to stage.
+    """
+
+
+@runtime_checkable
+class SubagentRepository(AssetRepository, Protocol):
+    """Subagent definitions, parsed.
+
+    Free of the filesystem in the same way, for a different reason: a
+    definition is a document, and `read_subagent` takes text. Where the text
+    came from is the implementation's business.
+    """
+
+    @property
+    def specs(self) -> Mapping[str, SubagentSpec]:
+        """Every subagent defined here, by name."""
+        ...
+
+
+@runtime_checkable
+class ToolRepository(AssetRepository, Protocol):
+    """Workspace tools, imported, each with the file it came from.
+
+    The one kind that cannot escape the host filesystem, and it is worth saying
+    why here rather than leaving it to be rediscovered: a tool is Python that
+    gets *imported*, and `importlib.spec_from_file_location` needs a real file.
+    An implementation backed by anything else has to stage to disk first. That
+    is a constraint on the implementation, not on this port -- what a caller
+    receives is still the loaded objects.
+    """
+
+    @property
+    def found(self) -> tuple[Found, ...]:
+        """Every tool held, paired with where it is defined."""
+        ...
 
 
 @runtime_checkable

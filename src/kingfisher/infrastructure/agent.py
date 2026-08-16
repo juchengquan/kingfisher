@@ -43,7 +43,8 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
-from kingfisher.infrastructure import skill_store, tool_store
+from kingfisher.domain.tool import Found, tool_name
+from kingfisher.infrastructure import tool_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
     SKILLS_SOURCES,
@@ -67,8 +68,9 @@ from kingfisher.infrastructure.scoping import (
     ScopedSkills,
     ToolAllowlist,
 )
-from kingfisher.infrastructure.subagent_store import load_all
-from kingfisher.infrastructure.tool_store import tool_name
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.tool_store import LocalToolRepository
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -118,7 +120,7 @@ def available_skills(
     # the session's half is looked at per turn.
     names = set((catalogue or Catalogue.from_config(cfg)).skill_names)
     if session_dir is not None:
-        names |= set(skill_store.names(_uploaded_skills(session_dir)))
+        names |= set(LocalSkillRepository(_uploaded_skills(session_dir)).names)
     return tuple(sorted(names))
 
 
@@ -139,7 +141,7 @@ def defined_subagents(
     # and shared by every turn, and the next line merges into what it returns.
     defined = dict((catalogue or Catalogue.from_config(cfg)).subagent_specs)
     if session_dir is not None:
-        defined |= load_all(_uploaded_subagents(session_dir))
+        defined |= LocalSubagentRepository(_uploaded_subagents(session_dir)).specs
     return defined
 
 
@@ -615,7 +617,7 @@ def _activated_subagents(
 
 
 def _workspace_catalogue(
-    directory: Path, found: Sequence[tool_store.Found] | None = None
+    directory: Path, found: Sequence[Found] | None = None
 ) -> tuple[tuple[Any, ...], dict[str, str]]:
     """The workspace's tools, and where each one is defined.
 
@@ -629,7 +631,7 @@ def _workspace_catalogue(
     graph to enumerate the built-ins, and building the graph would otherwise
     run every tool module a second time.
     """
-    walked = tool_store.loaded(directory) if found is None else found
+    walked = LocalToolRepository(directory).found if found is None else found
     return (
         tuple(entry.tool for entry in walked),
         {entry.name: entry.source for entry in walked},
@@ -695,7 +697,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     checkpointer: Any | None = None,
     catalogue: Catalogue | None = None,
     run_on: Mapping[str, RunOn] | None = None,
-    workspace_tools: Sequence[tool_store.Found] | None = None,
+    workspace_tools: Sequence[Found] | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
 

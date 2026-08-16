@@ -96,7 +96,7 @@ caller's own keys, carried and never interpreted.
 
 **Nothing in a run reads it, and that is deliberate.** It is for whatever loads
 the catalogue -- a deployment script deciding which definitions to install, an
-ownership report, a linter -- all of which call `subagent_store.load_all` and
+ownership report, a linter -- all of which read a `SubagentRepository` and
 read `spec.metadata` without kingfisher's help. Wiring it into the run would
 mean choosing a consumer, and the obvious candidate (handing it to a middleware
 factory) changes a published constructor argument for a use nobody has yet.

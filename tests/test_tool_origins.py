@@ -22,6 +22,7 @@ from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.infrastructure import tool_store
 from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.delegation import refuse_unknown_tools
+from kingfisher.infrastructure.tool_store import LocalToolRepository
 from tests.conftest import FakeToolCallingModel
 
 TOOL = """from langchain_core.tools import tool
@@ -70,7 +71,7 @@ def test_the_origins_come_off_the_same_walk_that_loaded_the_tools(cfg, capfd):
     cfg.tools_dir.mkdir(parents=True, exist_ok=True)
     (cfg.tools_dir / "noisy.py").write_text(NOISY, encoding="utf-8")
 
-    found = tool_store.loaded(cfg.tools_dir)
+    found = LocalToolRepository(cfg.tools_dir).found
 
     assert [entry.name for entry in found] == ["noisy"]
     assert [entry.source for entry in found] == ["noisy.py"]
@@ -84,7 +85,7 @@ def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
     cfg.tools_dir.mkdir(parents=True, exist_ok=True)
     (cfg.tools_dir / "noisy.py").write_text(NOISY, encoding="utf-8")
 
-    found = tool_store.loaded(cfg.tools_dir)
+    found = LocalToolRepository(cfg.tools_dir).found
     capfd.readouterr()  # discard the walk's own execution
 
     build_agent(

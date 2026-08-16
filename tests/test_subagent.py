@@ -17,7 +17,7 @@ from kingfisher.domain.subagent import (
     resolved_model,
 )
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
-from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 
 MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -78,20 +78,20 @@ def test_malformed_definitions_are_rejected(text, because):
         read_subagent(text, Path("broken.yaml"))
 
 
-def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
-    assert load_all(tmp_path / "subagents") == {}
+def test_specs_are_empty_when_the_directory_is_absent(tmp_path):
+    assert LocalSubagentRepository(tmp_path / "subagents").specs == {}
 
 
-def test_load_all_keys_on_the_declared_name_not_the_filename(tmp_path):
+def test_specs_key_on_the_declared_name_not_the_filename(tmp_path):
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "misnamed.yaml").write_text(MINIMAL, encoding="utf-8")
 
-    specs = load_all(tmp_path / "subagents")
+    specs = LocalSubagentRepository(tmp_path / "subagents").specs
     assert set(specs) == {"reviewer"}
 
 
-def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
+def test_loading_rejects_two_files_claiming_one_name(tmp_path):
     """Otherwise one silently shadows the other depending on sort order."""
     directory = tmp_path / "subagents"
     directory.mkdir()
@@ -99,7 +99,7 @@ def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
     (directory / "b.yaml").write_text(MINIMAL, encoding="utf-8")
 
     with pytest.raises(SubagentError, match="duplicate subagent name"):
-        load_all(tmp_path / "subagents")
+        _ = LocalSubagentRepository(tmp_path / "subagents").specs
 
 
 def test_folded_and_block_list_fields_are_accepted(tmp_path):
@@ -444,7 +444,7 @@ def test_metadata_survives_loading_the_catalogue(tmp_path):
 
     owners = {
         name: spec.metadata.get("owner", "unowned")
-        for name, spec in load_all(directory).items()
+        for name, spec in LocalSubagentRepository(directory).specs.items()
     }
 
     assert owners == {"reviewer": "platform-team", "namer": "unowned"}

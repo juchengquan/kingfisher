@@ -115,7 +115,7 @@ Body.
 
 def test_a_skill_written_to_the_published_spec_can_be_uploaded(cfg, session_dir):
     """The defect this closes: catalogue skills are never parsed by kingfisher
-    -- `skill_store.names` only lists directories -- but uploaded ones are. So
+    -- `LocalSkillRepository.names` only lists directories -- but uploaded ones are. So
     a skill using the Agent Skills spec\'s documented block list for
     `allowed-tools`, or a folded description, loaded fine from the catalogue
     and was refused on upload by a stricter parser of our own.

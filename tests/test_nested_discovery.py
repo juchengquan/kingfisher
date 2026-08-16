@@ -16,8 +16,9 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure import skill_store, subagent_store
-from kingfisher.infrastructure.tool_store import ToolError, load_tools, names, sources, tool_name
+from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError, tool_name
 
 TOOL = """from langchain_core.tools import tool
 
@@ -55,7 +56,7 @@ def test_a_tool_in_a_subfolder_is_found(tmp_path):
     """The ask, at its simplest: `tools/research/find_company.py` loads."""
     _tool(tmp_path / "research", "find_company")
 
-    assert names(tmp_path) == ("find_company",)
+    assert LocalToolRepository(tmp_path).names == ("find_company",)
 
 
 def test_nesting_does_not_reach_the_name(tmp_path):
@@ -67,7 +68,7 @@ def test_nesting_does_not_reach_the_name(tmp_path):
     """
     _tool(tmp_path / "research" / "deep" / "deeper", "find_company")
 
-    assert names(tmp_path) == ("find_company",), "the folders reached the name"
+    assert LocalToolRepository(tmp_path).names == ("find_company",), "the folders reached the name"
 
 
 def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
@@ -93,7 +94,7 @@ def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
         "from .finder import find_company\n\nTOOLS = [find_company]\n", encoding="utf-8"
     )
 
-    tools = load_tools(tmp_path)
+    tools = LocalToolRepository(tmp_path).tools
 
     assert [tool_name(t) for t in tools] == ["find_company"]
     assert tools[0].invoke({"name": "acme"}) == "found:acme", "the relative import did not resolve"
@@ -123,8 +124,8 @@ def test_two_catalogues_may_each_hold_a_package_of_the_same_name(tmp_path):
             "from .probe import probe\n\nTOOLS = [probe]\n", encoding="utf-8"
         )
 
-    a = load_tools(tmp_path / "wsA")[0]
-    b = load_tools(tmp_path / "wsB")[0]
+    a = LocalToolRepository(tmp_path / "wsA").tools[0]
+    b = LocalToolRepository(tmp_path / "wsB").tools[0]
 
     assert a.invoke({"x": ""}) == "wsA"
     assert b.invoke({"x": ""}) == "wsB", "the second package resolved the first one's helper"
@@ -141,7 +142,7 @@ def test_a_package_must_still_declare_its_exports(tmp_path):
     (pkg / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     with pytest.raises(ToolError, match=r"research/__init__\.py: must define TOOLS"):
-        load_tools(tmp_path)
+        _ = LocalToolRepository(tmp_path).tools
 
 
 def test_an_error_names_the_folder_it_came_from(tmp_path):
@@ -150,7 +151,7 @@ def test_an_error_names_the_folder_it_came_from(tmp_path):
     (tmp_path / "research" / "broken.py").write_text("VALUE = 1\n", encoding="utf-8")
 
     with pytest.raises(ToolError, match=r"research/broken\.py"):
-        load_tools(tmp_path)
+        _ = LocalToolRepository(tmp_path).tools
 
 
 def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
@@ -175,7 +176,7 @@ def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
     )
 
     with pytest.raises(ToolError, match=r"a relative import needs a package"):
-        load_tools(tmp_path)
+        _ = LocalToolRepository(tmp_path).tools
 
 
 def test_a_duplicate_name_across_folders_is_refused(tmp_path):
@@ -186,7 +187,7 @@ def test_a_duplicate_name_across_folders_is_refused(tmp_path):
     _tool(tmp_path / "sales", "find_company", filename="lookup.py")
 
     with pytest.raises(ToolError, match="already defined by"):
-        load_tools(tmp_path)
+        _ = LocalToolRepository(tmp_path).tools
 
 
 @pytest.mark.parametrize("debris", ["__pycache__", ".venv", ".hidden"])
@@ -203,7 +204,7 @@ def test_the_walk_refuses_to_descend_into_debris(tmp_path, debris):
                                   encoding="utf-8")
     _tool(tmp_path, "safe")
 
-    assert names(tmp_path) == ("safe",)
+    assert LocalToolRepository(tmp_path).names == ("safe",)
 
 
 def test_sources_say_where_a_nested_tool_lives(tmp_path):
@@ -212,7 +213,10 @@ def test_sources_say_where_a_nested_tool_lives(tmp_path):
     _tool(tmp_path / "research", "find_company")
     _tool(tmp_path, "flat")
 
-    assert sources(tmp_path) == {"find_company": "research/find_company.py", "flat": "flat.py"}
+    assert LocalToolRepository(tmp_path).sources == {
+        "find_company": "research/find_company.py",
+        "flat": "flat.py",
+    }
 
 
 def test_a_package_is_reported_as_a_directory(tmp_path):
@@ -226,7 +230,7 @@ def test_a_package_is_reported_as_a_directory(tmp_path):
         TOOL.format(name="csv_columns") + "\nTOOLS = [csv_columns]\n", encoding="utf-8"
     )
 
-    assert sources(tmp_path) == {"csv_columns": "csv_profile/"}
+    assert LocalToolRepository(tmp_path).sources == {"csv_columns": "csv_profile/"}
 
 
 # -- subagents: folders, no packages --------------------------------------
@@ -236,7 +240,7 @@ def test_a_subagent_in_a_subfolder_is_found(tmp_path):
     """YAML we parse ourselves, so a walk is the whole feature."""
     _subagent(tmp_path / "analysis" / "deep", "profiler")
 
-    assert tuple(subagent_store.load_all(tmp_path)) == ("profiler",)
+    assert tuple(LocalSubagentRepository(tmp_path).specs) == ("profiler",)
 
 
 def test_a_nested_subagent_keeps_its_own_name(tmp_path):
@@ -246,7 +250,7 @@ def test_a_nested_subagent_keeps_its_own_name(tmp_path):
     directory.mkdir(parents=True)
     (directory / "whatever.yaml").write_text(SUBAGENT.format(name="profiler"), encoding="utf-8")
 
-    assert tuple(subagent_store.load_all(tmp_path)) == ("profiler",)
+    assert tuple(LocalSubagentRepository(tmp_path).specs) == ("profiler",)
 
 
 def test_a_duplicate_subagent_across_folders_is_refused(tmp_path):
@@ -255,7 +259,7 @@ def test_a_duplicate_subagent_across_folders_is_refused(tmp_path):
     _subagent(tmp_path / "review", "profiler")
 
     with pytest.raises(SubagentError, match="already defined by"):
-        subagent_store.load_all(tmp_path)
+        _ = LocalSubagentRepository(tmp_path).specs
 
 
 def test_sources_say_where_a_nested_subagent_lives(tmp_path):
@@ -271,7 +275,7 @@ def test_sources_say_where_a_nested_subagent_lives(tmp_path):
     _subagent(tmp_path / "analysis", "profiler")
     _subagent(tmp_path, "flat")
 
-    assert subagent_store.sources(tmp_path) == {
+    assert LocalSubagentRepository(tmp_path).sources == {
         "profiler": "analysis/profiler.yaml",
         "flat": "flat.yaml",
     }
@@ -290,7 +294,7 @@ def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
     directory.mkdir(parents=True)
     (directory / "whatever.yaml").write_text(SUBAGENT.format(name="profiler"), encoding="utf-8")
 
-    assert subagent_store.sources(tmp_path) == {"profiler": "analysis/whatever.yaml"}
+    assert LocalSubagentRepository(tmp_path).sources == {"profiler": "analysis/whatever.yaml"}
 
 
 # -- skills: the kind that cannot ----------------------------------------
@@ -307,5 +311,7 @@ def test_a_nested_skill_is_still_not_discovered(tmp_path):
     nested.mkdir(parents=True)
     (nested / "SKILL.md").write_text("name: company-lookup\ndescription: x\n", encoding="utf-8")
 
-    assert skill_store.names(tmp_path) == ()
-    assert skill_store.misplaced(tmp_path) == ("research",), "the warning has to still fire"
+    assert LocalSkillRepository(tmp_path).names == ()
+    assert LocalSkillRepository(tmp_path).misplaced == (
+        "research",
+    ), "the warning has to still fire"
