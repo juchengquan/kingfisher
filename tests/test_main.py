@@ -152,3 +152,46 @@ def test_skills_stay_shared_across_sessions(cfg):
 
     assert (cfg.workspace / "skills" / "tabular-qa" / "SKILL.md").is_file()
     assert not (cfg.workspace / "sessions" / "smoke3" / "skills").exists()
+
+
+def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys, monkeypatch):
+    """They are the same directory until a deployment moves them, and this
+    wrote to the workspace unconditionally. With a relocated catalogue it
+    seeded four skills where nothing reads, and the `--list` on the next line
+    reported `(none)` -- the third time a path has gone stale this way, after
+    `writable_data` and `promote_report`.
+    """
+    from dataclasses import replace
+
+    import main as driver
+    from kingfisher.adapters import skill_store
+
+    catalogue = tmp_path / "catalogue"
+    relocated = replace(
+        cfg, skills_root=catalogue / "skills", subagents_root=catalogue / "subagents"
+    )
+    monkeypatch.setattr(driver, "from_env", lambda: relocated)
+
+    assert driver.main(["main.py", "--seed-examples", "--list"]) == 0
+
+    assert skill_store.names(relocated.skills_dir)  # the catalogue was filled
+    assert not skill_store.names(relocated.workspace / "skills")  # and not the workspace
+
+    # And the listing that follows reflects it, which is what went wrong before.
+    listed = capsys.readouterr().out
+    for name in skill_store.names(relocated.skills_dir):
+        assert name in listed
+
+
+def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, monkeypatch):
+    """The default, and the case the old code got right -- worth keeping, or
+    the fix above could quietly break the ordinary setup."""
+    import main as driver
+    from kingfisher.adapters import skill_store
+
+    monkeypatch.setattr(driver, "from_env", lambda: cfg)
+
+    # `--list` so it returns after seeding; without it the driver falls
+    # through to running the task, which wants a model.
+    assert driver.main(["main.py", "--seed-examples", "--list"]) == 0
+    assert skill_store.names(cfg.skills_dir)
