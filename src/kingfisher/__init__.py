@@ -22,6 +22,14 @@ __version__ = "0.1.0"
 #: `__getattr__` and `__all__`, so the two cannot drift.
 _EXPORTS = {
     "Capabilities": "kingfisher.domain.capabilities",
+    "CapabilityError": "kingfisher.domain.capabilities",
+    "QuotaExceededError": "kingfisher.domain.session",
+    "SessionBusyError": "kingfisher.domain.session",
+    "SkillError": "kingfisher.domain.skill",
+    "SubagentError": "kingfisher.domain.subagent",
+    "UnknownSessionError": "kingfisher.domain.session",
+    "UploadError": "kingfisher.infrastructure.uploads",
+    "async_checkpointer": "kingfisher.infrastructure.checkpointing",
     "Config": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
@@ -47,14 +55,22 @@ _EXPORTS = {
 
 __all__ = [
     "Capabilities",
+    "CapabilityError",
     "Config",
     "ConfigError",
     "Kingfisher",
+    "QuotaExceededError",
     "Request",
     "RunEvent",
     "RunOn",
     "RunResult",
+    "SessionBusyError",
     "SessionInfo",
+    "SkillError",
+    "SubagentError",
+    "UnknownSessionError",
+    "UploadError",
+    "async_checkpointer",
     "build_agent",
     "build_backend",
     "build_checkpointer",
@@ -81,17 +97,25 @@ if TYPE_CHECKING:
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.domain.capabilities import Capabilities as Capabilities
+    from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.result import normalize_answer as normalize_answer
+    from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
+    from kingfisher.domain.session import SessionBusyError as SessionBusyError
+    from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
+    from kingfisher.domain.skill import SkillError as SkillError
     from kingfisher.domain.subagent import RunOn as RunOn
+    from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.infrastructure.agent import build_agent as build_agent
     from kingfisher.infrastructure.backend import build_backend as build_backend
     from kingfisher.infrastructure.backend import shell_env as shell_env
+    from kingfisher.infrastructure.checkpointing import async_checkpointer as async_checkpointer
     from kingfisher.infrastructure.checkpointing import build_checkpointer as build_checkpointer
     from kingfisher.infrastructure.models import build_model as build_model
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
+    from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data
     from kingfisher.infrastructure.workspace_fs import writable_data as writable_data
