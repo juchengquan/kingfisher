@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher
+from kingfisher.application.service import opening_events, turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from tests.conftest import StubCheckpointer, start
@@ -139,3 +140,75 @@ def test_the_module_level_helpers_are_unchanged(cfg):
 
     result = run("say hello", cfg=cfg, agent=StubAgent("hello"), checkpointer=StubCheckpointer())
     assert result.answer == "hello"
+
+
+# -- what a turn opens with -----------------------------------------------
+#
+# Both of these were inline in `_prepare`, which is 86 lines now and was 123.
+# Neither touches the service, so neither needed to be reached through a full
+# run -- and reaching them that way is why the cases below went uncovered: the
+# only assertion on either was one substring, through a stubbed agent.
+
+
+class FakeTurn:
+    virtual_dir = "/runs/t001"
+    virtual_input_dir = "/runs/t001/input"
+
+
+class FakePlacement:
+    def __init__(self, placed=(), replaced=()):
+        self.placed = placed
+        self.replaced = replaced
+
+
+def test_a_quiet_turn_opens_with_only_run_start():
+    events = opening_events("/runs/t001", (), FakePlacement())
+
+    assert [(e.kind, e.text) for e in events] == [("run_start", "/runs/t001")]
+
+
+def test_replacing_durable_data_is_counted_not_just_listed():
+    """Durable data silently overwritten is the one dangerous case, so the
+    count is named. Nothing asserted this before."""
+    events = opening_events("/runs/t001", (), FakePlacement(("a.csv", "b.csv"), ("a.csv",)))
+
+    (placed,) = [e for e in events if e.kind == "data_placed"]
+    assert placed.text == "a.csv, b.csv (1 replaced)"
+
+
+def test_placing_without_replacing_says_nothing_about_replacement():
+    events = opening_events("/runs/t001", (), FakePlacement(("fresh.csv",)))
+
+    (placed,) = [e for e in events if e.kind == "data_placed"]
+    assert placed.text == "fresh.csv"
+
+
+def test_unhardened_paths_are_reported_before_the_run_starts():
+    """Order matters: the caller should know the guard is weaker before it is
+    told the turn began."""
+    events = opening_events("/runs/t001", ("theirs.pdf: denied",), FakePlacement())
+
+    assert [e.kind for e in events] == ["protect_failed", "run_start"]
+
+
+def test_a_bare_task_is_told_only_its_run_directory():
+    message = turn_message("do a thing", FakeTurn(), (), has_inputs=False)
+
+    assert message == "do a thing\n\nYour run directory for this task is /runs/t001."
+
+
+def test_supplied_files_and_new_data_are_both_named():
+    message = turn_message("analyse", FakeTurn(), ("fresh.csv",), has_inputs=True)
+
+    assert "/runs/t001/input" in message
+    assert "New files in /data: fresh.csv." in message
+
+
+def test_the_turn_message_carries_no_output_convention():
+    """What the task should *produce* is the task's business. Filenames lived in
+    the system prompt once and made every greeting deliberate over two files
+    nobody wanted."""
+    message = turn_message("say hello", FakeTurn(), (), has_inputs=False)
+
+    assert "report" not in message.lower()
+    assert ".md" not in message

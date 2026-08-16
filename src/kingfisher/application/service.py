@@ -111,6 +111,56 @@ class _Prepared:
     timeout_s: float
 
 
+def opening_events(
+    turn_dir: str, unprotected: tuple[str, ...], placement: Any
+) -> tuple[RunEvent, ...]:
+    """What the caller is told before the model is reached.
+
+    A function because it is one: nothing here touches the service, and every
+    input is already decided by the time it runs. `_prepare` was 123 lines and
+    this was the part of it that could be checked on its own.
+    """
+    events: list[RunEvent] = []
+    if unprotected:
+        events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
+    if placement.placed:
+        # Replacement is the one dangerous case -- durable data, silently
+        # overwritten -- so it is named rather than assumed.
+        replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
+        events.append(
+            RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
+        )
+    events.append(RunEvent(kind="run_start", text=turn_dir))
+    return tuple(events)
+
+
+def turn_message(task: str, turn: Any, placed: tuple[str, ...], has_inputs: bool) -> str:
+    """The task, plus this turn's facts and nothing more.
+
+    What the task should *produce* is the task's business: asking for a written
+    report is one kind of request among many, and a general agent should not
+    carry one convention's filenames in its plumbing. They lived in the system
+    prompt once, which made every greeting deliberate over two files nobody
+    wanted.
+
+    These facts reach the model here rather than in the system prompt because
+    they are run-scoped: the prompt is the cached prefix, and putting a turn
+    directory in it would move that prefix on every session.
+    """
+    # Named because `/data` changed under a session the agent may already have
+    # looked at.
+    arrived = f" New files in /data: {', '.join(placed)}." if placed else ""
+    supplied = (
+        f" Files supplied with this request are in {turn.virtual_input_dir}."
+        if has_inputs
+        else ""
+    )
+    return (
+        f"{task}\n\n"
+        f"Your run directory for this task is {turn.virtual_dir}.{supplied}{arrived}"
+    )
+
+
 def _consume(mode: str, chunk: Any, answer: str) -> tuple[str, tuple[RunEvent, ...]]:
     """One stream chunk into (answer so far, events to emit).
 
@@ -309,7 +359,6 @@ class Kingfisher:
         does not leave one behind.
         """
         request = Request.coerce(request)
-        events: list[RunEvent] = []
         cfg, dirs = self.cfg, self.dirs
         workspace = self.workspace
         sessions_root = workspace / "sessions"
@@ -366,47 +415,11 @@ class Kingfisher:
         )
         logger.run_start(request.task, turn.virtual_dir)
 
-        if unprotected:
-            events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
-        if placement.placed:
-            # Replacement is the one dangerous case -- durable data, silently
-            # overwritten -- so it is named rather than assumed.
-            replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
-            events.append(
-                RunEvent(
-                    kind="data_placed",
-                    text=f"{', '.join(placement.placed)}{replaced}",
-                )
-            )
-        events.append(RunEvent(kind="run_start", text=turn.virtual_dir))
-
-        # The turn directory is run-scoped, so it reaches the model here rather
-        # than in the system prompt — putting it there would change the cached
-        # prefix on every session.
-        supplied = (
-            f" Files supplied with this request are in {turn.virtual_input_dir}."
-            if request.inputs
-            else ""
-        )
-        # Named because `/data` changed under a session the agent may already
-        # have looked at. In the turn message, not the prompt, for the same
-        # reason the run directory is: the prompt's cached prefix must not move.
-        arrived = (
-            f" New files in /data: {', '.join(placement.placed)}." if placement.placed else ""
-        )
-        # This turn's facts, and nothing more. What the task should produce is the
-        # task's business: asking for a written report is one kind of request among
-        # many, and a general agent should not carry one convention's filenames in
-        # its plumbing. They lived in the system prompt once, which made every
-        # greeting deliberate over two files nobody wanted.
-        message = (
-            f"{request.task}\n\n"
-            f"Your run directory for this task is {turn.virtual_dir}.{supplied}{arrived}"
-        )
-
         return _Prepared(
             graph=graph,
-            message=message,
+            message=turn_message(
+                request.task, turn, placement.placed, has_inputs=bool(request.inputs)
+            ),
             session=session,
             turn=turn,
             logger=logger,
@@ -415,7 +428,7 @@ class Kingfisher:
                 "callbacks": [logger],
                 "recursion_limit": cfg.recursion_limit,
             },
-            events=tuple(events),
+            events=opening_events(turn.virtual_dir, unprotected, placement),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,
         )
