@@ -46,9 +46,9 @@ class Capabilities:
         Capabilities(tools=("read_file", "glob"))       # read-only
         Capabilities(memory=False)                      # do not read the memory file
 
-    Three of these name things and one is a switch, because memory has no names
+    Four of these name things and one is a switch, because memory has no names
     to choose between -- it is one file, either mounted or not. `None` still
-    means "no opinion" for all four, which is what keeps the default free.
+    means "no opinion" for all five, which is what keeps the default free.
 
     This is the *narrowing* axis. The other one is `Config.memory_enabled` and
     `Config.skills_enabled`: what this deployment wired at all. Those shape the
@@ -60,10 +60,13 @@ class Capabilities:
     tools: Selection = None
     skills: Selection = None
     subagents: Selection = None
+    #: Middleware a definition may name, out of what the deployment registered.
+    #: Unlike the three above it is never widened by `including` -- see there.
+    middleware: Selection = None
     memory: bool | None = None
 
     def __post_init__(self) -> None:
-        for field_name in ("tools", "skills", "subagents"):
+        for field_name in ("tools", "skills", "subagents", "middleware"):
             object.__setattr__(self, field_name, _normalise(getattr(self, field_name)))
 
     @property
@@ -73,6 +76,7 @@ class Capabilities:
             self.tools is None
             and self.skills is None
             and self.subagents is None
+            and self.middleware is None
             and self.memory is None
         )
 
@@ -91,6 +95,13 @@ class Capabilities:
         not touch. A skill's `allowed-tools` is prompt text to deepagents and
         binds nothing.
 
+        **`middleware` is deliberately absent**, and that absence is the rule.
+        A skill or subagent an upload brings is the caller's own text; a
+        middleware *name* is a selector for code the deployment wrote. Widening
+        it here would let anyone who can upload a definition activate anything
+        the deployment registered, which is the escalation the rest of this
+        method exists to avoid.
+
         Unrestricted stays unrestricted: it already includes these.
         """
         return Capabilities(
@@ -99,6 +110,7 @@ class Capabilities:
             subagents=(
                 self.subagents if self.subagents is None else (*self.subagents, *subagents)
             ),
+            middleware=self.middleware,  # never widened; see above
             memory=self.memory,
         )
 
@@ -118,6 +130,7 @@ class Capabilities:
             tools=_narrow(self.tools, other.tools),
             skills=_narrow(self.skills, other.skills),
             subagents=_narrow(self.subagents, other.subagents),
+            middleware=_narrow(self.middleware, other.middleware),
             memory=_narrow_switch(self.memory, other.memory),
         )
 

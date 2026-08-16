@@ -1,6 +1,6 @@
 # Subagent definitions — what the format can and cannot say
 
-**Status:** agreed, partly implemented
+**Status:** implemented
 **Date:** 2026-08-16
 
 The markdown format defines a subagent with `name`, `description`, `tools`,
@@ -92,7 +92,7 @@ scalar, worse to write, review and diff. PyYAML is already installed as a
 transitive dependency of deepagents and gets declared, because this module now
 names it.
 
-## `middleware:` — exposed, and clamped
+## `middleware:` — exposed, and clamped (implemented)
 
 A definition may name middleware from a registry the *deployment* supplies —
 `Kingfisher(middleware=…)`, beside `definitions` and `grants` — because
@@ -114,5 +114,10 @@ an upload self-authorise one would reopen the hole T3 closed, one level down.
    is a mistake in the definition, while one naming a skill the request did not
    activate is *dropped*, because that is a caller narrower than the definition
    — the same distinction `build_agent` already draws for a request.
-3. **The middleware registry.** The only substantial one: a new `Capabilities`
-   axis, a new injectable collaborator, and grant clamping.
+3. ~~**The middleware registry.**~~ Done. Both of its refusals *raise*, unlike
+   the skills case: running with silently less middleware than a definition
+   specified could mean running without the rate limit or audit hook it was
+   written to have, which is not the same kind of miss as a delegate lacking a
+   procedure. The no-self-authorising rule ended up structural rather than
+   checked — `including` has no `middleware` parameter, so there is no widening
+   path to get wrong.

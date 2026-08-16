@@ -29,6 +29,8 @@ from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import SubagentSpec
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from langgraph.graph.state import CompiledStateGraph
 
 BASE_PROMPT = "system.md"
@@ -205,18 +207,64 @@ def _subagent_skills(
     return tuple(name for name in spec.skills if name in activated)
 
 
+
+def _subagent_middleware(
+    spec: SubagentSpec,
+    registry: Mapping[str, Callable[[], Any]],
+    allowed: tuple[str, ...] | None,
+) -> list[Any]:
+    """Build the middleware a definition asked for, or refuse to.
+
+    Two refusals, and both raise -- neither is the "caller was narrower" case
+    that quietly drops a skill. A name nothing registered is a mistake in the
+    definition. A name the deployment registered but did not *grant* is an
+    escalation attempt or a misconfiguration, and running with silently less
+    middleware than the definition specified could mean running without the
+    rate limit or the audit hook it was written to have.
+
+    Checked identically for a catalogue definition and an uploaded one.
+    `Capabilities.including` widens skills and subagents for an upload because
+    those are the caller's own text; a middleware name selects code the
+    deployment wrote, so an upload gets no such exemption.
+    """
+    if not spec.middleware:
+        return []
+
+    unknown = tuple(name for name in spec.middleware if name not in registry)
+    if unknown:
+        msg = (
+            f"subagent {spec.name!r} names unregistered middleware: {', '.join(unknown)}; "
+            f"this deployment registered {tuple(registry)}"
+        )
+        raise CapabilityError(msg)
+
+    if allowed is not None:
+        ungranted = tuple(name for name in spec.middleware if name not in allowed)
+        if ungranted:
+            msg = (
+                f"subagent {spec.name!r} names middleware this request may not use: "
+                f"{', '.join(ungranted)}; permitted {allowed}"
+            )
+            raise CapabilityError(msg)
+
+    return [registry[name]() for name in spec.middleware]
+
+
+
 def _as_subagent(
     spec: SubagentSpec,
     cfg: Config,
     *,
     backend: Any = None,
     skills: tuple[str, ...] | None = None,
+    extra_middleware: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
 
-    Every field maps directly except `tools` and `skills`. deepagents' `SubAgent.tools` is a
-    sequence of tool *objects* it will register, not a selection from the ones
-    the parent already has — handing it names raises inside `ToolNode`. The
+    Every field maps directly except `tools`, `skills` and `middleware`.
+    deepagents' `SubAgent.tools` is a sequence of tool *objects* it will
+    register, not a selection from the ones the parent already has — handing it
+    names raises inside `ToolNode`. The
     objects are built from the backend deep inside `create_deep_agent` and are
     not reachable here, so the restriction is applied the same way a request's
     own tool restriction is: a `ToolAllowlist` on the subagent's middleware,
@@ -237,6 +285,9 @@ def _as_subagent(
         middleware.append(
             ScopedSkills(allowed=skills, backend=backend, sources=SKILLS_SOURCES)
         )
+    # Last, so a deployment's middleware sees the tool and skill scoping
+    # kingfisher applied rather than running ahead of it.
+    middleware.extend(extra_middleware or [])
     if middleware:
         subagent["middleware"] = middleware
 
@@ -294,6 +345,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     *,
     capabilities: Capabilities | None = None,
     session_dir: Path | None = None,
+    middleware_registry: Mapping[str, Callable[[], Any]] | None = None,
     model: Any | None = None,
     backend: Any | None = None,
     checkpointer: Any | None = None,
@@ -360,12 +412,16 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
             raise CapabilityError(msg)
         offered = _available_skills(cfg, session_dir)
+        registry = middleware_registry or {}
         extras["subagents"] = [
             _as_subagent(
                 defined[n],
                 cfg,
                 backend=resolved_backend,
                 skills=_subagent_skills(defined[n], offered, capabilities.skills),
+                extra_middleware=_subagent_middleware(
+                    defined[n], registry, capabilities.middleware
+                ),
             )
             for n in capabilities.subagents
         ]

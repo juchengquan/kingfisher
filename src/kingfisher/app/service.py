@@ -56,6 +56,8 @@ from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
 
 if TYPE_CHECKING:
+    from collections.abc import Callable, Mapping
+
     from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
 
 
@@ -126,6 +128,7 @@ class Kingfisher:
         threads: ThreadStore | None = None,
         definitions: DefinitionStore | None = None,
         grants: Capabilities | None = None,
+        middleware: Mapping[str, Callable[[], Any]] | None = None,
         agent: Any | None = None,
     ) -> None:
         self.cfg = cfg or config_module.from_env()
@@ -146,6 +149,12 @@ class Kingfisher:
         # a service in front of many callers sets it, and `intersect` can only
         # subtract, so no request can widen past it.
         self.grants: Capabilities = grants or Capabilities()
+        # What a definition may name in its `middleware:` field. Empty by
+        # default, so any such line fails loudly until a deployment wires one --
+        # kingfisher cannot define these, only a deployment knows what its
+        # middleware is. Registering is not the same as permitting: `grants`
+        # still clamps which registered names a request may reach.
+        self.middleware: Mapping[str, Any] = middleware or {}
         self._agent = agent
 
     def _session_id_for(self, request: Request, sessions_root: Path) -> str:
@@ -253,6 +262,7 @@ class Kingfisher:
             self.cfg,
             capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
+            middleware_registry=self.middleware,
             checkpointer=self.threads,
         )
 
