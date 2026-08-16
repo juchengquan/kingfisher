@@ -148,6 +148,36 @@ def test_the_inventory_lists_without_a_session(cfg, capsys):
     assert "could not introspect" not in printed
 
 
+def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
+    """`--list` is where someone goes *because* something is wrong.
+
+    A malformed subagent has always been caught and printed; a tool that would
+    not load went out as a traceback over the rest of the inventory. Folders
+    make that more likely rather than less -- two people can now each add a
+    `find_company` without seeing the other's -- so the two loaders report the
+    same way.
+    """
+    for folder in ("research", "sales"):
+        directory = cfg.tools_dir / folder
+        directory.mkdir(parents=True)
+        (directory / "t.py").write_text(
+            "from langchain_core.tools import tool\n"
+            "@tool\ndef find_company(x: str) -> str:\n"
+            '    """Look up."""\n'
+            "    return x\n"
+            "TOOLS = [find_company]\n",
+            encoding="utf-8",
+        )
+
+    assert main.show_inventory(cfg, cfg.workspace) == 1
+
+    printed = capsys.readouterr().out
+    assert "cannot load" in printed
+    # Both files, by the path a reader can open -- `t.py` names neither.
+    assert "sales/t.py" in printed
+    assert "research/t.py" in printed
+
+
 def test_listing_the_inventory_leaves_no_session_behind(cfg):
     """Introspection is a question, not a turn. It must not litter."""
     main.show_inventory(cfg, cfg.workspace)

@@ -96,6 +96,7 @@ from kingfisher.infrastructure import confinement, presets, skill_store, tool_st
 from kingfisher.infrastructure.runlog import read_usage
 from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.subagent_store import sources as subagent_sources
+from kingfisher.infrastructure.tool_store import ToolError
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -177,14 +178,23 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # workspace, and answering it must not leave a session lying around --
     # `keep_runs` would eventually reap a real one to make room for the decoy.
     print("tools")
-    with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-        introspected = registered_tools(
-            build_agent(cfg, session_dir=Path(scratch), catalogue=catalogue)
-        )
-    # Where a workspace tool is defined, so a folder is navigable rather than
-    # merely tidy. Built-ins are not in here and get no suffix, which is also
-    # how the two kinds tell themselves apart in this listing.
-    defined_in = tool_store.sources(catalogue["tools"])
+    # Caught the way a malformed subagent is, below. `--list` is where someone
+    # goes *because* something is wrong, so a loader that raises here should
+    # say what to fix rather than print a traceback over the rest of the
+    # inventory. Folders make the duplicate case more likely, not less: two
+    # people can now add a `find_company` without ever seeing each other's.
+    try:
+        with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
+            introspected = registered_tools(
+                build_agent(cfg, session_dir=Path(scratch), catalogue=catalogue)
+            )
+        # Where a workspace tool is defined, so a folder is navigable rather
+        # than merely tidy. Built-ins are not in here and get no suffix, which
+        # is also how the two kinds tell themselves apart in this listing.
+        defined_in = tool_store.sources(catalogue["tools"])
+    except ToolError as exc:
+        print(f"  cannot load: {exc}")
+        return 1
     for name in introspected or ("(could not introspect)",):
         print(f"  {name}{_from(defined_in.get(name), f'{name}.py')}")
 
