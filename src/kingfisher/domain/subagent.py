@@ -12,7 +12,7 @@ enforced is the adapter's problem, not this format's.
     middleware: [audit]
     provider: openai
     model: gpt-5
-    system_prompt: |2
+    system_prompt: |
       You review analyses...
 
 It was markdown with a YAML header until the header had grown into everything

@@ -126,7 +126,7 @@ pretending to be a format.
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `system_prompt` | required | The delegate's whole instruction, as a `\|2` block scalar. The `2` pins where the block starts: without it YAML infers the column from the first line, so a prompt opening with an indented example fails to load. Indentation inside the prompt is kept; the outer edges are trimmed |
+| `system_prompt` | required | The delegate's whole instruction, written after `\|`. The `\|` keeps your line breaks; indentation inside the prompt is kept, and the two spaces that hold the block in place are not |
 | `tools` | optional | `[read_file, grep]` or a block list. Unset inherits the parent's tools |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
@@ -145,26 +145,22 @@ Two reasons to reach for one, one example each:
 ### What loads, and what does not
 
 ```yaml
-system_prompt: |2          # ✅ the ordinary case
+system_prompt: |           # ✅ the ordinary case
   You verify claims.
   Be terse.
 
-system_prompt: |2          # ✅ indentation inside the prompt is kept
+system_prompt: |           # ✅ indentation inside the prompt is kept
   1. Recompute.
      Do not reuse their script.
 
-system_prompt: |2          # ✅ a prompt opening with an indented example
-      ls -la /data
-  Then report.
+system_prompt: |2          # ✅ the one case for the `2`: a prompt whose
+      ls -la /data         #    *first* line is indented deeper than the rest.
+  Then report.             #    Plain `|` cannot read this and says so.
 
-system_prompt: |           # ❌ without the 2, YAML takes the margin from the
-      ls -la /data         #    first line and the next one is left of it
-  Then report.
-
-system_prompt: |2          # ❌ nothing is indented, so nothing is in the block
+system_prompt: |           # ❌ nothing is indented, so nothing is in the block
 You verify claims.
 
-system_prompt: |2          # ❌ 'system_prompt' is present but empty
+system_prompt: |           # ❌ 'system_prompt' is present but empty
 
 system_prompt: >          # ❌ refused: `>` joins consecutive lines, so
   1. Recompute.           #    "1. Recompute. 2. Say which definition"
@@ -172,6 +168,10 @@ system_prompt: >          # ❌ refused: `>` joins consecutive lines, so
 
 system_prompt: Recompute. # ❌ refused: same damage, without a marker to notice
 ```
+
+Write `|`. The `2` is only for the case marked above, and `|-` and `|+`
+differ from `|` only in the blank line at the very end — all of them keep
+your line breaks, which is the part that matters.
 
 `>` is refused for the prompt and allowed everywhere else — a `description`
 *is* one paragraph, and `>-` is how anyone writes one longer than a line. A

@@ -130,7 +130,7 @@ def _require_literal_prompt(text: str, source: Path) -> None:
             written = f"{value.style!r}" if value.style else "a plain scalar"
             msg = (
                 f"{source.name}: system_prompt is written as {written}, which reflows it. "
-                f"Use a literal block -- `system_prompt: {LITERAL}2` -- so the prompt "
+                f"Use a literal block -- `system_prompt: {LITERAL}` -- so the prompt "
                 "reaches the delegate with the line breaks you wrote"
             )
             raise subagent.SubagentError(msg)

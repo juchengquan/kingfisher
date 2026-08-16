@@ -55,8 +55,8 @@ def test_optional_fields_and_quoting():
         ("name: x\nsystem_prompt: |\n  body\n", "missing required field 'description'"),
         ("name: x\ndescription: y\n", "missing required field 'system_prompt'"),
         # Present but blank is a different mistake, and says so.
-        ("name: x\ndescription: y\nsystem_prompt: |2\n", "'system_prompt' is present but empty"),
-        ("name: \ndescription: y\nsystem_prompt: |2\n  body\n", "'name' is present but empty"),
+        ("name: x\ndescription: y\nsystem_prompt: |\n", "'system_prompt' is present but empty"),
+        ("name: \ndescription: y\nsystem_prompt: |\n  body\n", "'name' is present but empty"),
         # YAML says why; we say which file. Rejected either way.
         ("name x\ndescription: y\nsystem_prompt: |\n  body\n", "cannot read definition"),
         ("- not\n- a mapping\n", "expected a mapping of fields"),
@@ -249,7 +249,7 @@ def test_indentation_inside_a_prompt_is_preserved(tmp_path):
     definition = (
         "name: reviewer\n"
         "description: d\n"
-        "system_prompt: |2\n"
+        "system_prompt: |\n"
         "  1. Recompute the figure.\n"
         "     Do not reuse the caller's script.\n"
     )
@@ -281,7 +281,7 @@ def test_a_folded_prompt_is_refused(tmp_path, style):
     with pytest.raises(SubagentError, match="reflows it") as raised:
         read_subagent(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
 
-    assert "system_prompt: |2" in str(raised.value)
+    assert "system_prompt: |" in str(raised.value)
 
 
 def test_a_plain_prompt_is_refused(tmp_path):
@@ -313,7 +313,7 @@ def test_the_description_may_still_be_folded(tmp_path):
         "description: >-\n"
         "  Checks an analysis for arithmetic errors,\n"
         "  one claim at a time.\n"
-        "system_prompt: |2\n  You review.\n"
+        "system_prompt: |\n  You review.\n"
     )
 
     spec = read_subagent(definition, tmp_path / "reviewer.yaml")

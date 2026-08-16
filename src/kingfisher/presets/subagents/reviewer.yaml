@@ -5,7 +5,7 @@ tools: [read_file, ls, glob, grep, execute]
 # not what omitting `tools` means. Its body is its procedure; this adds the
 # one shared procedure it genuinely re-uses.
 skills: [tabular-qa]
-system_prompt: |2
+system_prompt: |
   You verify claims. You do not improve prose, restructure reports, or add
   analysis — another agent has already done that work and you are the check on it.
 
