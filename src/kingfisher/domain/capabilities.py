@@ -63,10 +63,14 @@ class Capabilities:
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike the three above it is never widened by `including` -- see there.
     middleware: Selection = None
+    #: Endpoints a definition may name. Granted like `middleware` and for a
+    #: stronger reason: this one decides which credentials are used and which
+    #: endpoint receives the run's prompts and files.
+    providers: Selection = None
     memory: bool | None = None
 
     def __post_init__(self) -> None:
-        for field_name in ("tools", "skills", "subagents", "middleware"):
+        for field_name in ("tools", "skills", "subagents", "middleware", "providers"):
             object.__setattr__(self, field_name, _normalise(getattr(self, field_name)))
 
     @property
@@ -77,6 +81,7 @@ class Capabilities:
             and self.skills is None
             and self.subagents is None
             and self.middleware is None
+            and self.providers is None
             and self.memory is None
         )
 
@@ -95,12 +100,15 @@ class Capabilities:
         not touch. A skill's `allowed-tools` is prompt text to deepagents and
         binds nothing.
 
-        **`middleware` is deliberately absent**, and that absence is the rule.
+        **`middleware` and `providers` are deliberately absent**, and that
+        absence is the rule.
         A skill or subagent an upload brings is the caller's own text; a
         middleware *name* is a selector for code the deployment wrote. Widening
         it here would let anyone who can upload a definition activate anything
         the deployment registered, which is the escalation the rest of this
-        method exists to avoid.
+        method exists to avoid. `providers` is the same argument with more at
+        stake: it chooses which endpoint receives the run's prompts and files,
+        and whose credentials pay for them.
 
         Unrestricted stays unrestricted: it already includes these.
         """
@@ -111,6 +119,7 @@ class Capabilities:
                 self.subagents if self.subagents is None else (*self.subagents, *subagents)
             ),
             middleware=self.middleware,  # never widened; see above
+            providers=self.providers,  # nor this: it chooses where prompts go
             memory=self.memory,
         )
 
@@ -131,6 +140,7 @@ class Capabilities:
             skills=_narrow(self.skills, other.skills),
             subagents=_narrow(self.subagents, other.subagents),
             middleware=_narrow(self.middleware, other.middleware),
+            providers=_narrow(self.providers, other.providers),
             memory=_narrow_switch(self.memory, other.memory),
         )
 

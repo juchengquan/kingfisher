@@ -35,6 +35,21 @@ API_STYLES: tuple[ApiStyle, ...] = get_args(ApiStyle)
 ROLES: tuple[str, ...] = ("main", "subagent", "summarizer")
 
 
+@dataclass(frozen=True)
+class Endpoint:
+    """One place to send a model call, and the credentials for it.
+
+    A *style* is an endpoint in this deployment's terms: `anthropic` names the
+    gateway path, `openai` names OpenAI proper on the Responses API. They are
+    not two dialects of one destination -- see `.env.example` -- so naming a
+    style names where the traffic goes.
+    """
+
+    api_style: ApiStyle
+    base_url: str
+    api_key: str
+
+
 class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
@@ -82,6 +97,16 @@ class Config:
     recursion_limit: int = 150
     shell_path_extra: tuple[str, ...] = ()
     role_models: Mapping[str, str] = field(default_factory=dict)
+    #: Every *other* style this deployment has credentials for. The one named
+    #: by `api_style` is not in here -- it is the three fields above, which is
+    #: what everything reads when nothing says otherwise. Populated by
+    #: `from_env` from whichever `*_BASE_URL` / `*_API_KEY` pairs are set, so a
+    #: deployment that filled in both already has two endpoints.
+    endpoints: Mapping[str, Endpoint] = field(default_factory=dict)
+    #: The operator's other half of `role_models`. Which endpoint a role
+    #: runs against is the same kind of decision as which model, and the
+    #: two move together -- see `adapters.agent._subagent_endpoint`.
+    role_providers: Mapping[str, str] = field(default_factory=dict)
     # Overrides for the two host-side roots. `None` means "derive from the
     # workspace", which is what keeps a workspace self-contained and copyable
     # by default. Read them through `state_dir` / `scratch_dir`, never directly.
@@ -147,6 +172,28 @@ class Config:
     def subagents_dir(self) -> Path:
         """The subagent catalogue. Read off disk, never addressed by the agent."""
         return self.subagents_root or self.workspace / "subagents"
+
+    @property
+    def default_endpoint(self) -> Endpoint:
+        """Where a call goes when nothing names somewhere else."""
+        return Endpoint(self.api_style, self.base_url, self.api_key)
+
+    def endpoint_for(self, style: str | None) -> Endpoint:
+        """The endpoint for `style`, or the default when `style` is `None`.
+
+        Raises rather than falling back. A definition naming a style this
+        deployment has no credentials for would otherwise run somewhere the
+        author did not choose, which is the one failure mode worth being loud
+        about here: it decides where the prompt goes.
+        """
+        if style is None or style == self.api_style:
+            return self.default_endpoint
+        endpoint = self.endpoints.get(style)
+        if endpoint is None:
+            configured = (self.api_style, *sorted(self.endpoints))
+            msg = f"no endpoint configured for style {style!r}; this deployment has {configured}"
+            raise ConfigError(msg)
+        return endpoint
 
     def model_for(self, role: str) -> str:
         """Per-role model, falling back to the main model.

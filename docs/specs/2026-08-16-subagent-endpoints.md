@@ -1,6 +1,6 @@
 # A subagent's endpoint and model — spec
 
-**Status:** agreed, partly implemented
+**Status:** implemented
 **Date:** 2026-08-16
 
 The question was whether a subagent definition could carry both a provider and
@@ -58,7 +58,7 @@ it says. Per-subagent overrides by name would need `ROLES` to become unbounded
 and its names to come from workspace content, which is a different decision from
 fixing a broken one.
 
-## `provider:` — a delegate on another endpoint
+## `provider:` — a delegate on another endpoint (implemented)
 
 Blocked by `Config`, which holds one `api_style`, one `base_url`, one `api_key`.
 That is the "vendors simultaneously" case set aside in the session-scoping work,
@@ -114,5 +114,10 @@ model should not be decided by two people who cannot see each other's half.
    `from_env` cannot produce. It validated a path production cannot reach,
    which is why the defect survived it. Corrected in place rather than
    joined by a second test.
-2. **`provider:`** — the field, the multi-endpoint `Config`, the `providers`
-   grant axis, and the atomic-override rule.
+2. ~~**`provider:`**~~ Done. `Config` gained `endpoints` and `role_providers`
+   rather than a new configuration shape: `from_env` reads whichever
+   `*_BASE_URL` / `*_API_KEY` pairs are set, so a deployment that already
+   filled in both has two endpoints and never knew. The delegate is built by
+   `replace`-ing the three endpoint fields on `Config`, because an endpoint
+   is exactly what a model is built from — no new parameter reached
+   `build_model` at all.

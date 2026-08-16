@@ -255,10 +255,50 @@ def _subagent_middleware(
 
 
 
-def _as_subagent(
+def _subagent_endpoint(
+    spec: SubagentSpec, cfg: Config, allowed: tuple[str, ...] | None
+) -> tuple[str | None, str | None]:
+    """The (provider, model) a delegate runs as, or refuse to choose one.
+
+    They move together. Overriding only the model, against a definition that
+    pins `provider: openai`, would send a MiniMax model name to OpenAI -- a 404
+    if you are lucky and a wrong-model run if you are not. Which endpoint runs
+    which model should not be settled by two people who cannot see each other's
+    half, so a half-override against a pinned provider is refused.
+
+    An operator who overrides both has said what they mean and wins, which is
+    the point of the override existing at all.
+    """
+    model_override = cfg.role_models.get(SUBAGENT_ROLE)
+    provider_override = cfg.role_providers.get(SUBAGENT_ROLE)
+
+    if model_override is not None and provider_override is None and spec.provider is not None:
+        msg = (
+            f"subagent {spec.name!r} pins provider {spec.provider!r}, but an operator "
+            f"overrode only its model; set KINGFISHER_PROVIDER_SUBAGENT too, or neither"
+        )
+        raise CapabilityError(msg)
+
+    provider = provider_override if provider_override is not None else spec.provider
+    model = model_override if model_override is not None else spec.model
+
+    if provider is not None and allowed is not None and provider not in allowed:
+        msg = (
+            f"subagent {spec.name!r} names endpoint {provider!r}, which this request "
+            f"may not use; permitted {allowed}"
+        )
+        raise CapabilityError(msg)
+
+    return provider, model
+
+
+def _as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
+    # narrow, each resolved by its own rule above. Bundling them would hide
+    # which of those rules applied to a given delegate.
     spec: SubagentSpec,
     cfg: Config,
     *,
+    providers: tuple[str, ...] | None = None,
     backend: Any = None,
     skills: tuple[str, ...] | None = None,
     extra_middleware: list[Any] | None = None,
@@ -310,8 +350,22 @@ def _as_subagent(
     # those -- the override above was documented, tested nowhere, and fired for
     # nothing. Per-delegate overrides would need `ROLES` to become unbounded and
     # its names to come from workspace content, which is a different decision.
-    if (model_id := cfg.role_models.get(SUBAGENT_ROLE, spec.model)) is not None:
-        subagent["model"] = build_model(replace(cfg, model=model_id))
+    provider, model_id = _subagent_endpoint(spec, cfg, providers)
+    if model_id is not None or provider is not None:
+        # `replace` rather than a build_model parameter: an endpoint is exactly
+        # the three Config fields a model is built from, so swapping them says
+        # "build as if this deployment were pointed there" with nothing else
+        # changed.
+        endpoint = cfg.endpoint_for(provider)
+        subagent["model"] = build_model(
+            replace(
+                cfg,
+                model=model_id if model_id is not None else cfg.model,
+                api_style=endpoint.api_style,
+                base_url=endpoint.base_url,
+                api_key=endpoint.api_key,
+            )
+        )
     return subagent
 
 
@@ -429,6 +483,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 defined[n],
                 cfg,
                 backend=resolved_backend,
+                providers=capabilities.providers,
                 skills=_subagent_skills(defined[n], offered, capabilities.skills),
                 extra_middleware=_subagent_middleware(
                     defined[n], registry, capabilities.middleware
