@@ -150,14 +150,24 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
 
 
 def show_inventory(cfg: Config, workspace: Path) -> int:
-    """What a request may activate here, which is what `--list` is for."""
+    """What a request may activate here, which is what `--list` is for.
+
+    Read through the resolved catalogue rather than off `cfg` three times. The
+    CLI only ever gets the `cfg`-derived roots, so today the two are the same
+    paths -- but `--list` exists to say which names a request may use, and it
+    and `build_agent` agreeing about that should be structural rather than a
+    coincidence of nobody having wired anything else yet.
+    """
     from kingfisher.infrastructure.agent import build_agent, registered_tools  # noqa: PLC0415
+    from kingfisher.infrastructure.workspace_fs import resolve_catalogue  # noqa: PLC0415
+
+    catalogue = resolve_catalogue(cfg)
 
     print(f"workspace : {workspace}")
     # Named rather than assumed: the catalogues may be deployed outside the
     # workspace and shared by every deployment that points at them.
-    print(f"skills    : {cfg.skills_dir}")
-    print(f"subagents : {cfg.subagents_dir}\n")
+    print(f"skills    : {catalogue['skills']}")
+    print(f"subagents : {catalogue['subagents']}\n")
 
     # Built rather than listed: the tool set is a property of the assembled
     # agent, and a hardcoded list here would drift from the real one.
@@ -167,22 +177,24 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # `keep_runs` would eventually reap a real one to make room for the decoy.
     print("tools")
     with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-        introspected = registered_tools(build_agent(cfg, session_dir=Path(scratch)))
+        introspected = registered_tools(
+            build_agent(cfg, session_dir=Path(scratch), catalogue=catalogue)
+        )
     for name in introspected or ("(could not introspect)",):
         print(f"  {name}")
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
-    for name in skill_store.names(cfg.skills_dir) or ("(none)",):
+    for name in skill_store.names(catalogue["skills"]) or ("(none)",):
         print(f"  {name}")
     # Grouping skills into folders is the obvious thing to try and yields
     # nothing at all, because discovery is one level deep. Saying so is the
     # only difference between a catalogue that looks empty and one that is.
-    for name in skill_store.misplaced(cfg.skills_dir):
+    for name in skill_store.misplaced(catalogue["skills"]):
         print(f"  ! {name}/ holds a skill too deep to load — they live at {skill_store.LAYOUT}")
 
     print("\nsubagents")
     try:
-        specs = load_all(cfg.subagents_dir)
+        specs = load_all(catalogue["subagents"])
     except SubagentError as exc:
         print(f"  cannot load: {exc}")
         return 1
