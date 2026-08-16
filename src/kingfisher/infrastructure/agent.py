@@ -41,6 +41,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
     refuse_ungranted_models,
 )
+from kingfisher.domain.ports import ToolRepository
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
 from kingfisher.domain.tool import Found, tool_name
@@ -50,7 +51,7 @@ from kingfisher.infrastructure.backend import (
     SKILLS_SOURCES,
     build_backend,
 )
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Catalogue, source_of
 from kingfisher.infrastructure.delegation import (
     as_subagent,
     indistinct,
@@ -70,7 +71,6 @@ from kingfisher.infrastructure.scoping import (
 )
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -118,7 +118,7 @@ def available_skills(
     """
     # The catalogue's half is read once, when the deployment is wired; only
     # the session's half is looked at per turn.
-    names = set((catalogue or Catalogue.from_config(cfg)).skill_names)
+    names = set((catalogue or Catalogue.from_config(cfg)).skills.names)
     if session_dir is not None:
         names |= set(LocalSkillRepository(_uploaded_skills(session_dir)).names)
     return tuple(sorted(names))
@@ -139,7 +139,7 @@ def defined_subagents(
     """
     # `dict(...)` and not the mapping itself: the catalogue's copy is cached
     # and shared by every turn, and the next line merges into what it returns.
-    defined = dict((catalogue or Catalogue.from_config(cfg)).subagent_specs)
+    defined = dict((catalogue or Catalogue.from_config(cfg)).subagents.specs)
     if session_dir is not None:
         defined |= LocalSubagentRepository(_uploaded_subagents(session_dir)).specs
     return defined
@@ -394,12 +394,12 @@ def workspace_tool_names(
     Knowable off disk, unlike the built-in set. That asymmetry is why the two
     axes resolve differently and why only one of them needs a probe.
     """
-    found = (catalogue or Catalogue.from_config(cfg)).tools_found
+    found = (catalogue or Catalogue.from_config(cfg)).tools.found
     return tuple(sorted(n for entry in found if (n := tool_name(entry.tool))))
 
 
 def _workspace_tool_names(
-    workspace_tools: Sequence[Any], *, builtin: tuple[str, ...], directory: Path
+    workspace_tools: Sequence[Any], *, builtin: tuple[str, ...], where: str
 ) -> tuple[str, ...]:
     """What the workspace defines, refusing anything that shadows a built-in.
 
@@ -409,16 +409,16 @@ def _workspace_tool_names(
     refuse elsewhere. It matters more now that the two are granted separately: a
     shadowed name would be permitted by one axis and enforced as the other.
 
-    Takes the directory rather than the `Config` it used to derive it from: the
-    only use is naming the place to go and rename them, and that place is now
-    whatever the catalogue says it is.
+    Takes where they came from as text rather than the `Config` it used to
+    derive a directory from: the only use is naming the place to go and rename
+    them, and a catalogue that is not a directory can still say where it is.
     """
     names = tuple(sorted(n for tool in workspace_tools if (n := tool_name(tool))))
     shadowed = tuple(n for n in names if n in set(builtin))
     if shadowed:
         msg = (
             f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
-            f"the same name; rename them in {directory}"
+            f"the same name; rename them in {where}"
         )
         raise CapabilityError(msg)
     return names
@@ -617,7 +617,7 @@ def _activated_subagents(
 
 
 def _workspace_catalogue(
-    directory: Path, found: Sequence[Found] | None = None
+    tools: ToolRepository, found: Sequence[Found] | None = None
 ) -> tuple[tuple[Any, ...], dict[str, str]]:
     """The workspace's tools, and where each one is defined.
 
@@ -631,7 +631,7 @@ def _workspace_catalogue(
     graph to enumerate the built-ins, and building the graph would otherwise
     run every tool module a second time.
     """
-    walked = LocalToolRepository(directory).found if found is None else found
+    walked = tools.found if found is None else found
     return (
         tuple(entry.tool for entry in walked),
         {entry.name: entry.source for entry in walked},
@@ -640,7 +640,7 @@ def _workspace_catalogue(
 
 def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
     # answers came from; folding them up would hide what each one is for.
-    tools_dir: Path,
+    where: str,
     capabilities: Capabilities,
     workspace_tools: Sequence[Any],
     assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
@@ -671,7 +671,7 @@ def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
 
     probe = assemble(())
     builtin = registered_tools(probe)
-    workspace = _workspace_tool_names(workspace_tools, builtin=builtin, directory=tools_dir)
+    workspace = _workspace_tool_names(workspace_tools, builtin=builtin, where=where)
     _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace, sources=sources)
     return _ToolSurface(
         granted_builtin=narrowed(capabilities.builtin_tools, by=builtin) or (),
@@ -781,11 +781,11 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
 
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins.
-    tools, tool_sources = _workspace_catalogue(roots.tools, workspace_tools or roots.tools_found)
+    tools, tool_sources = _workspace_catalogue(roots.tools, workspace_tools)
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
-        roots.tools,
+        source_of(roots.tools),
         capabilities,
         tools,
         assemble,

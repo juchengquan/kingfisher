@@ -7,20 +7,19 @@ so several deployments can share one reviewed set, so these three directories
 are as likely to sit somewhere else entirely as inside a workspace. Keeping them
 beside `ensure_layout` read as misfiled rather than as a deliberate exception.
 
-It also needs less: `Config` and a `Path`, where its former neighbours all need
-`domain.layout`.
+What it holds is one repository per kind rather than three paths. A path is what
+a *local* catalogue happens to be; what every caller actually wants is the
+definitions, and two of the three kinds need no filesystem to supply them.
 """
 
 from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
-from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
-from kingfisher.domain.subagent import SubagentSpec
-from kingfisher.domain.tool import Found
+from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository
@@ -30,7 +29,7 @@ CATALOGUE_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
 
 @dataclass(frozen=True)
 class Catalogue:
-    """Where this deployment's definitions are read from: three directories.
+    """This deployment's definitions: one repository per kind.
 
     A type rather than a mapping so the three names are checkable. `.skils` is
     an `unresolved-attribute` before the code runs; `["skils"]` is a `KeyError`
@@ -38,60 +37,43 @@ class Catalogue:
     empty catalogue -- the silent emptiness this module's neighbours keep
     refusing.
 
-    It is not fewer lookups. `catalogue or Catalogue.from_config(cfg)` appears
-    once in each of the four entry points that accept an optional one, exactly
-    as the mapping did, and `build_agent` still resolves once and passes the
-    result down. The count was never the problem; the anonymity was.
+    Repositories rather than paths, which is what changed. A deployment holding
+    its definitions somewhere kingfisher did not choose supplies its own, and
+    nothing downstream knows: `catalogue.subagents.specs` is the same call
+    whether a directory or a service answered it. The three ports are in
+    `domain.ports`, and `Local*` are the ones backed by this host.
 
-    It holds the directories and delegates the reading to one repository per
-    kind. A session's uploads are those same repositories pointed somewhere
-    else, which is why the loading belongs to them and not to this type: two
-    ways to read a subagent that differ only in where they look would be worse
-    than one class built twice.
+    One object rather than three constructor arguments on `Kingfisher`. Swapping
+    a single seam is `replace(catalogue, subagents=...)` -- it is frozen, so
+    that is already free -- where three arguments would have spread one concept
+    across the whole call graph, since `build_agent`, `uploads` and `delegation`
+    each take exactly one of these today.
 
-    `Config.catalogue_roots` still answers with a mapping and is deliberately
-    not this type. `Config` is a record a deployment fills in, and it sits above
-    the layers precisely so it never imports one; making it return a
-    `Catalogue` would have it reach into `infrastructure`.
+    `Config.catalogue_roots` still answers with a mapping of paths and is
+    deliberately not this type. `Config` is a record a deployment fills in, and
+    it sits above the layers precisely so it never imports one; making it return
+    a `Catalogue` would have it reach into `infrastructure`.
     """
 
-    skills: Path
-    subagents: Path
-    tools: Path
-
-    @cached_property
-    def skill_names(self) -> tuple[str, ...]:
-        """Every skill this deployment offers, by name.
-
-        Names and not more: deepagents opens the files itself, so kingfisher
-        lists and denies but never parses one.
-        """
-        return LocalSkillRepository(self.skills).names
-
-    @cached_property
-    def subagent_specs(self) -> Mapping[str, SubagentSpec]:
-        """Every subagent this deployment defines, parsed, by name."""
-        return LocalSubagentRepository(self.subagents).specs
-
-    @cached_property
-    def tools_found(self) -> tuple[Found, ...]:
-        """Every workspace tool, paired with the file it came from.
-
-        The pair rather than the objects alone, because a listing and a refusal
-        both need to say where a tool is defined.
-        """
-        return LocalToolRepository(self.tools).found
+    skills: SkillRepository
+    subagents: SubagentRepository
+    tools: ToolRepository
 
     def warm(self) -> Catalogue:
         """Read all three now, so a broken definition fails here.
 
-        `cached_property` alone is lazy, which is right for the fallback in
-        `build_agent` -- a caller wanting skills should not pay for parsing every
-        tool. It is wrong for a deployment: `resolve_catalogue` already refuses a
+        A repository is lazy, which is right for the fallback in `build_agent`
+        -- a caller wanting skills should not pay for importing every tool. It
+        is wrong for a deployment: `resolve_catalogue` already refuses a
         catalogue that is not a directory because "a catalogue that cannot be
         read is a wiring mistake and this is the last moment it is cheap to say
         so", and a subagent with an unknown field is the same mistake one layer
         in. Touching them here moves that from the first turn to startup.
+
+        It is also what makes the reading happen once. The caching lives in the
+        repositories now rather than here, so this asks each of them for its
+        payload and they hold it -- and a deployment supplying a repository that
+        does not cache gets a read per turn, which is its own choice to make.
 
         Called by `Kingfisher`, not by `resolve_catalogue`, and the difference
         is `--list`. That command exists to be run *because* something is
@@ -102,7 +84,7 @@ class Catalogue:
 
         Returns self, so construction reads as one expression.
         """
-        _ = self.skill_names, self.subagent_specs, self.tools_found
+        _ = self.skills.names, self.subagents.specs, self.tools.found
         return self
 
     @classmethod
@@ -110,11 +92,72 @@ class Catalogue:
         """The deployment's own directories, without staging anything.
 
         The fallback for a caller that was handed no catalogue -- `build_agent`
-        called directly, `--list`, a test. One construction where there used to
-        be a dict lookup per kind per call site.
+        called directly, `--list`, a test.
         """
-        roots = cfg.catalogue_roots
-        return cls(skills=roots["skills"], subagents=roots["subagents"], tools=roots["tools"])
+        return cls.from_roots(cfg.catalogue_roots)
+
+    @classmethod
+    def from_roots(cls, roots: Mapping[str, Path]) -> Catalogue:
+        """Three directories on this host, as three local repositories.
+
+        The shorthand nearly every deployment wants, and the reason
+        `Kingfisher(catalogue=...)` takes a mapping as well as a `Catalogue`:
+        pointing at three directories should not require naming three classes.
+        """
+        return cls(
+            skills=LocalSkillRepository(Path(roots["skills"])),
+            subagents=LocalSubagentRepository(Path(roots["subagents"])),
+            tools=LocalToolRepository(Path(roots["tools"])),
+        )
+
+
+def _root_of(repository: object) -> Path | None:
+    """The directory behind a repository, when there is one.
+
+    Asked rather than required, because `AssetRepository` deliberately does not
+    carry it: only a store backed by a filesystem has a root, and demanding one
+    would make the port unimplementable by the stores it exists to allow. What
+    this buys is that the staging check below still applies to the local case,
+    which is every deployment that hands over directories.
+    """
+    root = getattr(repository, "root", None)
+    return Path(root) if isinstance(root, (str, Path)) else None
+
+
+def source_of(repository: object) -> str:
+    """Where a repository's definitions live, for a message a person reads.
+
+    Only ever interpolated into text -- "rename them in ..." -- so a store with
+    no directory is not a failure here, just something to name differently.
+    """
+    root = _root_of(repository)
+    return str(root) if root is not None else "the catalogue"
+
+
+def local_root(repository: object, kind: str) -> Path:
+    """The directory behind a repository, or a refusal explaining why one is needed.
+
+    Two things genuinely cannot work without a host directory, and both are
+    about the agent rather than about kingfisher reading a definition: the
+    `/skills` route is a `FilesystemBackend` over a real path, and
+    `$KINGFISHER_SKILLS` is that path handed to a skill's own scripts.
+
+    So this is the edge of the abstraction, and it says so rather than mounting
+    an empty directory and letting the agent be told about nothing -- the
+    silent-emptiness failure the rest of this module keeps refusing. A repository
+    backed by something else would need to reach the agent as a `BackendProtocol`
+    instead, which `SkillRepository` cannot supply today: it answers with names,
+    and a route needs file contents.
+    """
+    root = _root_of(repository)
+    if root is None:
+        msg = (
+            f"the {kind} repository is not backed by a directory, and the agent reads "
+            f"{kind} through a filesystem route that needs one. Supply a directory-backed "
+            f"repository for {kind}, or stage its definitions to a directory first"
+        )
+        raise ConfigError(msg)
+    return root
 
 
 def resolve_catalogue(
@@ -152,27 +195,28 @@ def resolve_catalogue(
     # Either shape. A deployment stages directories and hands over a mapping,
     # which is the documented seam; something that already holds a `Catalogue`
     # -- another kingfisher, a test fixture -- should not have to take it apart
-    # to pass it back. Both are validated the same way below.
-    roots = (
-        {"skills": supplied.skills, "subagents": supplied.subagents, "tools": supplied.tools}
-        if isinstance(supplied, Catalogue)
-        else supplied
-    )
+    # to pass it back.
+    if not isinstance(supplied, Catalogue):
+        if missing := tuple(kind for kind in CATALOGUE_KINDS if kind not in supplied):
+            msg = (
+                f"catalogue is missing {', '.join(missing)}; it names all of "
+                f"{', '.join(CATALOGUE_KINDS)}, since a deployment that leaves one out "
+                "means an empty one rather than the configured one"
+            )
+            raise ConfigError(msg)
+        supplied = Catalogue.from_roots(supplied)
 
-    if missing := tuple(kind for kind in CATALOGUE_KINDS if kind not in roots):
+    # Checked however it arrived, and only where there is something to check: a
+    # repository backed by a service has no directory that could be missing, so
+    # what it holds is its own business.
+    roots = {kind: _root_of(getattr(supplied, kind)) for kind in CATALOGUE_KINDS}
+    if absent := tuple(
+        f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()
+    ):
         msg = (
-            f"catalogue_roots is missing {', '.join(missing)}; it names all of "
-            f"{', '.join(CATALOGUE_KINDS)}, since a deployment that leaves one out "
-            "means an empty one rather than the configured one"
-        )
-        raise ConfigError(msg)
-
-    roots = {kind: Path(roots[kind]) for kind in CATALOGUE_KINDS}
-    if absent := tuple(f"{kind} ({path})" for kind, path in roots.items() if not path.is_dir()):
-        msg = (
-            f"catalogue_roots names {', '.join(absent)}, which is not a directory; "
+            f"catalogue names {', '.join(absent)}, which is not a directory; "
             "a supplied catalogue is staged by whoever supplies it, and kingfisher "
             "will not create one in case the staging is what failed"
         )
         raise ConfigError(msg)
-    return Catalogue(**roots)
+    return supplied
