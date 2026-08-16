@@ -49,6 +49,9 @@ if TYPE_CHECKING:
 
 BASE_PROMPT = "system.md"
 
+#: Delegation, wherever it is dispatched from.
+TASK_TOOL = "task"
+
 #: The role every delegate runs as, for `Config.role_models`. One of `ROLES`,
 #: which is what `from_env` populates -- a delegate's own name is not.
 SUBAGENT_ROLE = "subagent"
@@ -224,6 +227,48 @@ def _subagent_skills(
         return spec.skills
     return tuple(name for name in spec.skills if name in activated)
 
+
+
+def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
+    """The JavaScript sandbox, if this deployment wired one.
+
+    `ptc` is the request's own tool grant, unchanged. A caller that withheld
+    `execute` cannot reach it from inside the sandbox either; a caller that
+    granted it is not escalating by using it from code. That is the same rule
+    the parent and its delegates follow -- restrictions attach to narrowing,
+    and a caller who narrowed nothing has nothing to escape from.
+
+    `None` rather than an empty tuple when the request is unrestricted: the
+    library reads `None` as "no allowlist", and an empty tuple would mean the
+    opposite of what an unrestricted request asked for.
+
+    `mode="thread"` because a thread here is a kingfisher session -- the
+    checkpointer already keys on the same id, so REPL state and conversation
+    state expire together rather than one outliving the other.
+
+    Dispatching subagents from code needs the *async* path. `task()` inside the
+    REPL awaits, so a sync `SqliteSaver` raises `does not support async
+    methods` partway through a workflow that has already run. Use `arun` or
+    `astream` with `async_checkpointer(cfg)`; everything else here works on
+    either. Undocumented upstream, and found by running it.
+    """
+    from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
+
+    granted = capabilities.tools
+    return CodeInterpreterMiddleware(
+        # `task` is refused here by the library: it is always the top-level
+        # `task()` global, and routing it through `tools.*` as well would give
+        # two dispatch paths, the second losing `responseSchema`. Delegation is
+        # governed by `subagents=` below instead.
+        ptc=[t for t in granted if t != TASK_TOOL] if granted is not None else None,
+        # Dispatch from code follows the same grant as dispatch from a tool
+        # call. Left at its default this would let a request that withheld
+        # `task` delegate anyway, from inside the sandbox -- a hole of exactly
+        # the shape the delegate ceiling exists to close.
+        subagents=granted is None or TASK_TOOL in granted,
+        mode="thread",
+        timeout=float(cfg.timeout_s),
+    )
 
 
 def _narrow_tools(
@@ -559,6 +604,9 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             )
             for n in capabilities.subagents
         ]
+
+    if cfg.interpreter_enabled:
+        middleware.append(_interpreter(cfg, capabilities))
 
     if capabilities.tools is not None:
         middleware.append(ToolAllowlist(capabilities.tools))

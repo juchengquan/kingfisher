@@ -145,6 +145,7 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
         memory_enabled=_bool(env, "KINGFISHER_MEMORY"),
+        interpreter_enabled=_bool(env, "KINGFISHER_INTERPRETER"),
     )
 
 

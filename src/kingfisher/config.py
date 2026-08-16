@@ -134,6 +134,16 @@ class Config:
     # reproducibility is what the smoke task depends on.
     skills_enabled: bool = False
     memory_enabled: bool = False
+    # A JavaScript sandbox the agent can compute in: no filesystem, no network,
+    # capped memory and time, and reachable tools limited to what the request
+    # granted. It is the one execution surface `execute` can never be, which is
+    # why a deployment may want both.
+    #
+    # Dispatching subagents from inside it needs the async path -- `task()` in
+    # the REPL awaits, and a sync saver raises partway through a workflow.
+    #
+    # Off by default, and needs an optional dependency: `kingfisher[interpreter]`.
+    interpreter_enabled: bool = False
 
     @property
     def state_dir(self) -> Path:
