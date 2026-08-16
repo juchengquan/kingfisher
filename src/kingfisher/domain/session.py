@@ -32,6 +32,20 @@ class UnknownSessionError(ValueError):
     """
 
 
+class SessionBusyError(ValueError):
+    """A turn is already running in this session.
+
+    Two turns on one session share a conversation, and the checkpointer writes
+    it whole: both read the same history, both append, and the last write wins.
+    Measured, a turn simply vanished -- both callers got an answer and a run
+    directory, and the conversation kept no record that one of them happened.
+
+    Refused rather than queued. A queue hides a wait that is as long as whatever
+    the other turn is doing, and a caller who did not know they were racing
+    learns nothing from it. This is the same answer `allocate_turn` gives to a
+    taken name, for the same reason.
+    """
+
 class QuotaExceededError(ValueError):
     """A session is already holding more than the deployment allows.
 
@@ -111,6 +125,50 @@ class Session:
     def runs_dir(self) -> Path:
         """Where this session's turns live, one level inside its root."""
         return self.directory / "runs"
+
+    def claim(
+        self, dirs: SessionDirs, claims: Path, *, stale_after: float, now: float
+    ) -> Path:
+        """Take this session's turn slot, or refuse because someone holds it.
+
+        Atomic for the same reason turn allocation is: `create_exclusive` fails
+        on a name that exists, and that failure *is* the check. Two callers
+        racing cannot both win it.
+
+        Held in the store, not in the object. Any process may serve any request
+        -- verified: a second instance continues a session the first one
+        started -- so a lock in memory would guard one process against itself
+        and nothing else.
+
+        A holder that died leaves its claim behind, so a claim older than a turn
+        could possibly be is taken over. `stale_after` is the turn timeout,
+        which already bounds how long a turn may run: past it, whoever held this
+        is gone or was going to be stopped anyway. The takeover is itself
+        racy -- two callers can both find it stale -- and safe for the same
+        reason as the first attempt, because only one `create_exclusive`
+        succeeds.
+        """
+        path = claims / self.id
+        if dirs.create_exclusive(path):
+            return path
+
+        held = dict(dirs.listing(claims))
+        if now - held.get(self.id, now) < stale_after:
+            msg = (
+                f"session {self.id} already has a turn running; "
+                f"wait for it to finish or start another session"
+            )
+            raise SessionBusyError(msg)
+
+        dirs.remove_tree(path)
+        if dirs.create_exclusive(path):
+            return path
+        msg = f"session {self.id} already has a turn running"
+        raise SessionBusyError(msg)
+
+    def release(self, dirs: SessionDirs, claims: Path) -> None:
+        """Give the slot back. Safe to call when it was never taken."""
+        dirs.remove_tree(claims / self.id)
 
     def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
         """Create the next turn's directory and return it.

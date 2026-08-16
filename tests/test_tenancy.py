@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from kingfisher import Kingfisher
 from kingfisher.domain.capabilities import ALL, UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.domain.session import UnknownSessionError
+from kingfisher.domain.session import Session, SessionBusyError, UnknownSessionError
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -253,3 +255,96 @@ def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
 
     assert result.removed == (idle,)
     assert result.orphans == ()
+
+
+# -- one turn at a time, per session --------------------------------------
+#
+# Two turns on one session share a conversation, and the checkpointer writes it
+# whole: both read the same history, both append, last write wins. Measured
+# before this existed, a turn vanished -- both callers got an answer and a run
+# directory, and the conversation kept no record that one of them happened.
+#
+# Invisible while `stream` was the only path and a CLI served one caller. An API
+# is exactly where two requests arrive for one session: two tabs, a retry, a
+# double-click.
+
+
+def _claims(cfg) -> Path:
+    return cfg.state_dir / "claims"
+
+
+def test_a_second_turn_on_a_busy_session_is_refused(cfg):
+    """Refused, not queued: a queue hides a wait as long as whatever the other
+    turn is doing, and tells a racing caller nothing."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    session = service.start_session("s")
+
+    held = Session(id=session, directory=cfg.workspace / "sessions" / session)
+    held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+
+    with pytest.raises(SessionBusyError, match="already has a turn running"):
+        service.run(Request("go", session_id=session))
+
+
+def test_the_slot_goes_back_when_the_turn_ends(cfg):
+    """Or the first turn would wedge the session for an hour."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.start_session("s")
+
+    service.run(Request("first", session_id="s"))
+    second = service.run(Request("second", session_id="s"))
+
+    assert second.turn_id == "t002"
+    assert not (_claims(cfg) / "s").exists()
+
+
+def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
+    """Every check after the claim can raise, and each one holding the slot on
+    the way out would wedge the session over a typo."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.start_session("s")
+
+    with pytest.raises(ValueError):
+        service.run(Request("go", session_id="s", data=(tmp_path / "gone.csv",)))
+
+    assert not (_claims(cfg) / "s").exists()
+    assert service.run(Request("after", session_id="s")).turn_id == "t001"
+
+
+def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
+    """A process that died leaves its claim behind. `turn_timeout_s` already
+    bounds how long a turn may run, so past it the holder is gone or was going
+    to be stopped anyway."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    session = service.start_session("s")
+    held = Session(id=session, directory=cfg.workspace / "sessions" / session)
+    held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+
+    # The same claim, seen from far enough in the future.
+    taken = held.claim(service.dirs, _claims(cfg), stale_after=1.0, now=1e12)
+
+    assert taken == _claims(cfg) / session
+
+
+def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
+    """The session directory is the backend root, so a claim kept there is
+    something `execute` could delete. `state_dir` is host-side only."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    session = service.start_session("s")
+    held = Session(id=session, directory=cfg.workspace / "sessions" / session)
+    claim = held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+
+    assert cfg.workspace / "sessions" not in claim.parents
+    assert claim.is_relative_to(cfg.state_dir)
+
+
+def test_two_sessions_do_not_block_each_other(cfg):
+    """The slot is per session. One busy conversation must not stop another."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    busy = service.start_session("busy")
+    other = service.start_session("other")
+
+    held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
+    held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+
+    assert service.run(Request("go", session_id=other)).turn_id == "t001"
