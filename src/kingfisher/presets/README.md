@@ -73,7 +73,7 @@ from where a request's prompts may go.
 
 ---
 
-## Tools — `/tools/<module>.py`
+## Tools — `/tools/<module>.py`, at any depth
 
 Two kinds. The **built-in set** comes with the agent and you select from it by
 name. **Workspace tools** are Python you write, imported from the workspace's
@@ -109,10 +109,9 @@ Three things worth knowing before you restrict this list:
 
 ### Workspace tools
 
-One `.py` file per module in `$KINGFISHER_WORKSPACE/tools/`, each defining
-`TOOLS` — the list of tools it contributes. Nothing is inferred: a helper in the
-same file stays a helper. Modules starting with `_` are skipped, so a tool can
-be split across files.
+A `.py` file in `$KINGFISHER_WORKSPACE/tools/` defining `TOOLS` — the list of
+tools it contributes. Nothing is inferred: a helper in the same file stays a
+helper.
 
 - [`http_fetch.py`](tools/http_fetch.py) — **something the built-in set cannot
   do at all.** The clearest reason to write one.
@@ -120,12 +119,51 @@ be split across files.
   narrower.** `execute` could already reach the database, but it could reach
   everything else too. A tool states the reach in code, so a request can
   activate `sql_query` and *not* the shell.
+- [`csv_profile/`](tools/csv_profile/) — **a tool that outgrew one file.** Two
+  tools sharing a notion of what a column is, as a package.
 
 The docstring is not decoration — it is what the model reads when deciding
 whether to call the tool, exactly like a skill's `description`. Write it as a
 trigger condition and say what the arguments mean in a caller's words.
 
-Four things the loader will refuse, all for the same reason: an agent quietly
+#### Folders, when one file stops being enough
+
+`tools/` may be as deep as you like, and `__init__.py` decides what a folder is:
+
+```
+tools/
+├── http_fetch.py                  a module, as always
+├── research/
+│   ├── find_company.py            organisation — each file independent
+│   └── legal/filings/lookup.py    as deep as you want
+└── csv_profile/
+    ├── __init__.py                a package — one unit
+    ├── profile.py                 the tools
+    └── columns.py                 a helper, and an ordinary module
+```
+
+**A folder without `__init__.py` is organisation.** Each file is loaded on its
+own and declares its own `TOOLS`, exactly as a flat one does.
+
+**A folder with `__init__.py` is a package.** It is imported whole, declares
+`TOOLS` once, and nothing inside it is scanned separately — so its modules
+import from each other normally and a helper is a helper because it is not
+exported, not because it is spelled `_columns.py`. Reach for this the moment a
+tool grows a second file.
+
+Two things follow, and both are the point:
+
+- **A folder never reaches a name.** A tool is named by itself, so
+  `research/find_company.py` still offers `find_company`, and a request grants
+  it by that name. Moving a file between folders changes nothing a caller
+  types. `--list` says where each one came from when the name does not.
+- **Skills cannot do this.** See below — the difference is real and worth
+  knowing before you try.
+
+Modules starting with `_` are still skipped, which is now mostly a way to park
+a file you have not finished. Inside a package you do not need it.
+
+Five things the loader will refuse, all for the same reason: an agent quietly
 holding different tools than the workspace defines is worse than a run that
 stops.
 
@@ -133,8 +171,13 @@ stops.
 | --- | --- |
 | A module with no `TOOLS` | Scanning for callables would guess at intent |
 | A module that will not import | Skipping it gives the agent silently fewer tools |
-| Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence |
+| Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence. Checked across folders, so two people cannot each add a `find_company` |
 | A tool named like a built-in | Same, except the thing that vanishes is `read_file` |
+| A relative import in a loose file | It has no parent package and never will. The error says to make the folder a package |
+
+Hidden directories and `__pycache__` are not descended into. A virtualenv left
+under `tools/` would otherwise be imported, and this directory is imported
+rather than read.
 
 **A tool is code, and it runs in the kingfisher process** — not in the agent's
 sandbox, and not under the filesystem permissions. `tools/` is deliberately
@@ -148,9 +191,18 @@ catalogue of tools can be deployed once and shared by every workspace.
 
 ---
 
-## Subagents — `/subagents/<name>.yaml`
+## Subagents — `/subagents/<name>.yaml`, at any depth
 
 A YAML document. Everything the delegate is, in one file.
+
+Folders work here too, and for the same reason they work for tools: kingfisher
+reads these, so nothing outside it has an opinion about the layout.
+[`analysis/profiler.yaml`](subagents/analysis/profiler.yaml) sits in a folder
+and is still activated as `profiler` — the `name:` field is the identity and the
+path is not, which was already true of the filename.
+
+There are no packages here. A definition is a document, not code, so there is
+nothing to import and a folder is only ever organisation.
 
 ```yaml
 name: reviewer
@@ -418,10 +470,20 @@ format, so an unrecognised key there is left alone.
 
 ---
 
-## Skills — `/skills/<name>/SKILL.md`
+## Skills — `/skills/<name>/SKILL.md`, exactly one level
 
 deepagents' format, unchanged. A directory per skill, `SKILL.md` with `name` and
 `description` in frontmatter and the procedure in the body.
+
+**This is the one that cannot be nested**, and the exception is worth a sentence
+because tools and subagents both can. Those are read by kingfisher, which walks
+as deep as you like. A skill is read by the *agent*, through a filesystem route,
+and deepagents lists the directory once and looks for `SKILL.md` directly inside
+each entry. It does not go further.
+
+So `skills/grouped/company-lookup/SKILL.md` is not tidied away — it is
+unreachable, and nothing raises. `--list` reports any folder hiding one, because
+the alternative is a catalogue that simply looks empty.
 
 The mechanism is progressive disclosure: **only the name and description are in
 context by default.** The body is read when the agent decides the skill applies.
