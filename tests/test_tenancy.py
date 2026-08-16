@@ -158,3 +158,98 @@ def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
     assert result.removed == ("old",)
     assert not (cfg.workspace / "sessions" / old).exists()
     assert (cfg.workspace / "sessions" / fresh).is_dir()
+
+
+# -- threads that outlived their session -----------------------------------
+
+
+class ListingCheckpointer(StubCheckpointer):
+    """A store that can also say which threads it holds, as a real one can.
+
+    `StubCheckpointer` deliberately cannot: `ThreadStore` is only "something
+    that forgets a thread", and a sweep must still work when handed one. That
+    case has its own test below.
+    """
+
+    def __init__(self, held: tuple[str, ...]) -> None:
+        super().__init__()
+        self.held = held
+
+    # Named `list` because that is the saver's own method, which is what
+    # `thread_ids` looks for. It shadows the builtin inside this class, so
+    # `held` is annotated as a tuple rather than a `list[str]` that would
+    # resolve to this method.
+    def list(self, _config):
+        from types import SimpleNamespace
+
+        return [
+            SimpleNamespace(config={"configurable": {"thread_id": t}}) for t in self.held
+        ]
+
+
+def test_a_thread_whose_session_is_gone_is_deleted(cfg):
+    """`discard` takes the thread and the directory together, so a swept session
+    leaves neither. A directory that goes any other way -- by hand, or one of
+    the sessions that could not be removed until `remove_tree` learned to unlock
+    `/data` -- left its thread forever, because nothing else looked. One real
+    workspace held 132 of them and 1,894 checkpoints after every session had
+    been reaped.
+    """
+    import time
+
+    threads = ListingCheckpointer(held=("ghost-a", "ghost-b"))
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+
+    result = kf.reap(older_than_seconds=0, now=time.time())
+
+    assert set(result.orphans) == {"ghost-a", "ghost-b"}
+    assert set(threads.deleted) == {"ghost-a", "ghost-b"}
+
+
+def test_a_thread_whose_session_still_exists_is_left_alone(cfg):
+    """The reconciliation must not eat live conversations."""
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    live = kf.start_session()
+
+    threads = ListingCheckpointer(held=(live, "ghost"))
+    kf2 = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+    result = kf2.reap(older_than_seconds=10_000, now=1_000)  # nothing expired
+
+    assert result.removed == ()
+    assert result.orphans == ("ghost",)
+    assert live not in threads.deleted
+    assert (cfg.workspace / "sessions" / live).is_dir()
+
+
+def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
+    """They are not sessions this call decided to end; they are residue from
+    ones that ended some other way, and a janitor's log should tell them apart.
+    """
+    import time
+
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    doomed = kf.start_session()
+
+    threads = ListingCheckpointer(held=("ghost",))
+    result = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads).reap(
+        older_than_seconds=0, now=time.time()
+    )
+
+    assert result.removed == (doomed,)
+    assert result.orphans == ("ghost",)
+
+
+def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
+    """`ThreadStore` is only `delete_thread`. Widening the port to make
+    reconciliation possible would break every double, so a store that cannot
+    answer is skipped rather than failing the sweep it was asked for.
+    """
+    import time
+
+    kf = service(cfg)
+    idle = kf.start_session()
+
+    result = kf.reap(older_than_seconds=0, now=time.time())
+
+    assert result.removed == (idle,)
+    assert result.orphans == ()

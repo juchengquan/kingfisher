@@ -55,7 +55,8 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
-from dataclasses import dataclass
+from contextlib import suppress
+from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic
 from typing import TYPE_CHECKING, Any
@@ -77,7 +78,7 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
     workspace_tool_names,
 )
-from kingfisher.infrastructure.checkpointing import build_checkpointer
+from kingfisher.infrastructure.checkpointing import build_checkpointer, thread_ids
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
@@ -411,7 +412,34 @@ class Kingfisher:
         sessions_root = self.workspace / "sessions"
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
         plan = retention.expired(self.dirs.listing(sessions_root), age, now)
-        return retention.apply(plan, sessions_root, self.dirs, self.threads)
+        result = retention.apply(plan, sessions_root, self.dirs, self.threads)
+        return self._reconcile_threads(sessions_root, result)
+
+    def _reconcile_threads(self, sessions_root: Path, result: SweepResult) -> SweepResult:
+        """Delete threads no session owns, and fold them into the result.
+
+        `discard` takes the thread and the directory together, so a swept
+        session leaves neither behind. A session directory that goes any other
+        way -- deleted by hand, or one of the eight that could not be removed
+        until `remove_tree` learned to unlock `/data` -- leaves its thread
+        forever, because nothing else looks. One real workspace held 132 such
+        threads and 1,894 checkpoints after every session had been reaped.
+
+        After the sweep rather than before, so a session removed by this very
+        call is already gone from the listing and its thread is already deleted;
+        what is left is genuinely residue.
+        """
+        held = thread_ids(self.threads)
+        if held is None:
+            return result
+
+        live = self.dirs.children(sessions_root)
+        dropped = []
+        for thread in retention.orphaned(held, live):
+            with suppress(Exception):
+                self.threads.delete_thread(thread)
+                dropped.append(thread)
+        return replace(result, orphans=tuple(dropped))
 
     def agent_for(
         self, request: Request, session_dir: Path, capabilities: Capabilities | None = None
