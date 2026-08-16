@@ -135,6 +135,7 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         session_ttl_s=_int(env, "KINGFISHER_SESSION_TTL_S", 7 * 24 * 3600),
         recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
+        shell_sandbox=env.get("KINGFISHER_SHELL_SANDBOX", "auto"),
         role_models=role_models,
         role_providers=role_providers,
         endpoints=endpoints,

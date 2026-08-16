@@ -7,8 +7,9 @@ default and supply an explicit allowlist instead of inheriting the parent
 environment, so the agent's shell can run the toolchain but cannot read
 credentials out of the environment.
 
-This is not a sandbox. `execute` still reaches the whole host filesystem and the
-network; the allowlist narrows the blast radius, it does not contain it.
+The environment allowlist is not by itself a boundary, which is what
+`confinement` adds: `execute` otherwise reaches the whole host filesystem
+regardless of `virtual_mode`, and the network is still open either way.
 """
 
 from __future__ import annotations
@@ -22,6 +23,7 @@ from typing import TYPE_CHECKING, Any
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 
 from kingfisher.config import Config, ConfigError
+from kingfisher.infrastructure import confinement
 
 if TYPE_CHECKING:
     from deepagents.backends import BackendProtocol
@@ -32,9 +34,15 @@ _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 def shell_env(cfg: Config) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
-    `HOME` points at the workspace rather than the real home directory, so the
-    usual credential locations (`~/.aws`, `~/.ssh`, `~/.config`) are not where
-    the agent's tooling will look.
+    `HOME` points at the workspace rather than the real home directory, so tools
+    that resolve `~` look in the workspace instead of at `~/.aws`, `~/.ssh` or
+    `~/.config`.
+
+    That is all it does, and it used to be described as more. Redirecting `HOME`
+    moves where a path is *resolved*; the files stay where they are, and an
+    absolute path still reached them. Measured on this machine, the shell could
+    read `~/.aws` and `~/.config/gh` right through it. Keeping those closed is
+    `confinement`'s job, not this function's.
     """
     path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
     return {
@@ -117,6 +125,36 @@ def reject_host_path(key: str, workspace: Path) -> None:
             f"/runs/<session>/<turn>/ for files that belong to this task."
         )
         raise HostPathError(msg)
+
+
+class ConfinedShell(LocalShellBackend):
+    """`LocalShellBackend` with every command run through a confinement.
+
+    Wrapping the command is the whole mechanism, which is why it subclasses
+    rather than composes: `CompositeBackend` delegates execution to its default
+    backend by calling these two methods, so anything that is not a
+    `LocalShellBackend` stops being usable as one.
+
+    Only `execute` is overridden, and that is a decision about upstream rather
+    than an oversight. `LocalShellBackend.aexecute` is `asyncio.to_thread(self.
+    execute, ...)`, so the async path -- which is what the interpreter's
+    code-side dispatch runs on -- arrives here anyway. Overriding it as well
+    wrapped every async command *twice*, nesting one `sandbox-exec` inside
+    another; it still confined, so every test passed, and the only sign was the
+    command string.
+
+    Leaning on that delegation is a coupling, so
+    `test_the_async_path_still_routes_through_execute` pins it. If a deepagents
+    release gives `aexecute` its own implementation, that test fails rather than
+    the boundary quietly going missing on one path.
+    """
+
+    def __init__(self, confined: confinement.Confinement, **kwargs: Any) -> None:
+        self.confinement = confined
+        super().__init__(**kwargs)
+
+    def execute(self, command: str, *, timeout: int | None = None) -> Any:
+        return super().execute(self.confinement.wrap(command), timeout=timeout)
 
 
 class WorkspaceScopedBackend(CompositeBackend):
@@ -253,7 +291,13 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     uploaded.mkdir(parents=True, exist_ok=True)
     cfg.skills_dir.mkdir(parents=True, exist_ok=True)
 
-    shell = LocalShellBackend(
+    shell = ConfinedShell(
+        confinement.resolve(
+            cfg.shell_sandbox,
+            workspace=cfg.workspace,
+            state_dir=cfg.state_dir,
+            extra=cfg.shell_path_extra,
+        ),
         root_dir=str(session_dir),
         env=shell_env(cfg),
         timeout=cfg.timeout_s,
