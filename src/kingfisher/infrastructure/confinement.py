@@ -123,16 +123,32 @@ def _sb(path: Path) -> str:
     return '"' + str(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
 
 
-def readable_roots(workspace: Path, extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
+def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
+                   skills: Path | None = None) -> tuple[Path, ...]:
     """What has to stay readable for the shell to remain useful.
 
     `sys.prefix` is the virtualenv, `sys.base_prefix` the interpreter it was
     built from; they differ exactly when a venv is in use, which is the case
     that breaks. `extra` carries `shell_path_extra`, since a deployment that
     added a directory to the agent's `PATH` meant for it to be runnable.
+
+    `skills` is the catalogue, and it is here because it is the one definition
+    directory the *shell* reads: skills ship scripts, and running one is the
+    point of `KINGFISHER_SKILLS`. It defaults inside the workspace and is
+    already covered there, so this only matters when `KINGFISHER_SKILLS_DIR`
+    moves it out -- which is the whole reason that setting exists, a catalogue
+    shared by several deployments.
+
+    Without it the agent got a split view rather than a refusal: file tools are
+    routed and reached the catalogue, the shell was denied, so reading a skill's
+    definition worked while running the script beside it did not. Subagent and
+    tool directories are deliberately absent -- those are read by this process,
+    never by the shell.
     """
     roots = [Path(workspace), Path(sys.prefix), Path(sys.base_prefix)]
     roots += [Path(e) for e in extra]
+    if skills is not None:
+        roots.append(Path(skills))
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
@@ -158,8 +174,11 @@ def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
     return wrap
 
 
-def resolve(mode: str, *, workspace: Path, state_dir: Path, scratch_dir: Path,
-            extra: tuple[str, ...] = ()) -> Confinement:
+def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
+    # and each is separately relocatable by its own environment variable
+    mode: str, *, workspace: Path, state_dir: Path, scratch_dir: Path,
+    extra: tuple[str, ...] = (), skills: Path | None = None,
+) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs.
 
     The profile is written under the harness's own state directory rather than
@@ -193,7 +212,7 @@ def resolve(mode: str, *, workspace: Path, state_dir: Path, scratch_dir: Path,
     path.write_text(
         profile(
             home=home,
-            readable=readable_roots(workspace, extra),
+            readable=readable_roots(workspace, extra, skills),
             writable=writable_roots(workspace, scratch_dir),
         ),
         encoding="utf-8",

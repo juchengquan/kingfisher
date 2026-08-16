@@ -167,11 +167,13 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     )
 
     # The escape hatch is checked by running it through the agent's own shell,
-    # since it depends on `shell_env` exporting HOME as the workspace. Spelling
-    # it `$HOME/skills` rather than `../../skills` keeps it true if the session
-    # ever sits at a different depth.
-    result = backend.execute('cat "$HOME/skills/demo/SKILL.md"')
-    assert result.exit_code == 0, f"$HOME/skills does not reach the catalogue: {result}"
+    # since it depends on `shell_env` exporting the variable. It used to be
+    # spelled `$HOME/skills`, which held only while HOME was the workspace; HOME
+    # is now per session, and this test is what caught that.
+    result = backend.execute('cat "$KINGFISHER_SKILLS/demo/SKILL.md"')
+    assert result.exit_code == 0, (
+        f"$KINGFISHER_SKILLS does not reach the catalogue: {result}"
+    )
     assert "hello" in result.output
 
 

@@ -31,23 +31,51 @@ if TYPE_CHECKING:
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
 
-def shell_env(cfg: Config) -> dict[str, str]:
+def agent_home(session_dir: Path) -> Path:
+    """`HOME` for the agent's shell: per session, and disposable.
+
+    Not a real home directory but the place tools *believe* is one, so it fills
+    up with whatever they cache -- `~/.cache/uv`, `~/Library/Caches/pip`. It
+    used to be the workspace root, where three things went wrong at once. The
+    caches accumulated beside `skills/` and `subagents/` and nothing ever swept
+    them (59MB in one real workspace); `Library/` was untracked but *not*
+    ignored, so a `git add -A` in a workspace would commit a pip cache; and none
+    of it counted toward `session_max_bytes`, because the quota measures a
+    session and this sat above every session.
+
+    Inside the session fixes all three without a new janitor: `reap` already
+    removes session directories, and `session_bytes` already counts everything
+    in one. A session that caches a gigabyte now says so.
+
+    Dotted, and not in `SESSION_DIRS`, because those are "the names the agent
+    addresses" and this is plumbing. It is reachable at `/.home` -- the shell
+    backend roots at the session -- which is harmless and not worth a route.
+    """
+    return Path(session_dir) / ".home"
+
+
+def shell_env(cfg: Config, session_dir: Path) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
-    `HOME` points at the workspace rather than the real home directory, so tools
-    that resolve `~` look in the workspace instead of at `~/.aws`, `~/.ssh` or
-    `~/.config`.
+    `HOME` is this session's `.home`, so tools that resolve `~` look there
+    instead of at `~/.aws`, `~/.ssh` or `~/.config`.
 
     That is all it does, and it used to be described as more. Redirecting `HOME`
     moves where a path is *resolved*; the files stay where they are, and an
     absolute path still reached them. Measured on this machine, the shell could
     read `~/.aws` and `~/.config/gh` right through it. Keeping those closed is
     `confinement`'s job, not this function's.
+
+    `KINGFISHER_SKILLS` is here because the catalogue is the one virtual path
+    the shell cannot reach by dropping its leading slash: it is shared between
+    sessions, so it lives above them. That used to be spelled `$HOME/skills`,
+    which was only true while `HOME` was the workspace.
     """
     path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
     return {
         "PATH": ":".join(path_parts),
-        "HOME": str(cfg.workspace),
+        "HOME": str(agent_home(session_dir)),
+        "KINGFISHER_SKILLS": str(cfg.skills_dir),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(cfg.scratch_dir),
@@ -287,6 +315,7 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
     prepare_scratch(cfg)
     for routed in ("data", "memory"):
         (session_dir / routed).mkdir(parents=True, exist_ok=True)
+    agent_home(session_dir).mkdir(parents=True, exist_ok=True)
     uploaded = session_dir / "skills" / "uploaded"
     uploaded.mkdir(parents=True, exist_ok=True)
     cfg.skills_dir.mkdir(parents=True, exist_ok=True)
@@ -298,9 +327,10 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
             state_dir=cfg.state_dir,
             scratch_dir=cfg.scratch_dir,
             extra=cfg.shell_path_extra,
+            skills=cfg.skills_dir,
         ),
         root_dir=str(session_dir),
-        env=shell_env(cfg),
+        env=shell_env(cfg, session_dir),
         timeout=cfg.timeout_s,
     )
     return WorkspaceScopedBackend(

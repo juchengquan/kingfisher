@@ -194,6 +194,7 @@ def warn_if_unconfined(cfg: Config) -> None:
         state_dir=cfg.state_dir,
         scratch_dir=cfg.scratch_dir,
         extra=cfg.shell_path_extra,
+        skills=cfg.skills_dir,
     )
     if confined.warning:
         print(f"WARNING   : {confined.warning}", file=sys.stderr)
