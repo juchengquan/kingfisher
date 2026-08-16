@@ -90,7 +90,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import CapabilityError, Selection
+from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -161,17 +161,17 @@ class SubagentSpec:
     name: str
     description: str
     system_prompt: str
-    tools: tuple[str, ...] | None = None
+    tools: Selection = ALL
     #: Skills this delegate is told about. `None` means *none*, which is not
     #: what `tools` means, and the difference is deliberate: tools are what a
     #: delegate needs to act, skills are what it needs to know -- and its body
     #: already is its procedure. Inheriting the caller's index would also put
     #: it in a context whose narrowness is the reason to delegate at all.
-    skills: tuple[str, ...] | None = None
+    skills: Selection = None
     #: Middleware this delegate runs with, by name, from a registry the
     #: deployment supplies. A name here selects *code*, which is why it is the
     #: one field never widened for an uploaded definition.
-    middleware: tuple[str, ...] | None = None
+    middleware: Selection = None
     #: Which endpoint this delegate runs against, by style name. `None` means
     #: the deployment's default. Selecting one decides where the prompt goes
     #: and whose credentials pay, which is why it is granted rather than free.
@@ -285,9 +285,12 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         system_prompt=fields.text(document["system_prompt"]),
         # `[read_file, grep]` and a block list are the same thing to YAML, so
         # both reach here already parsed.
-        tools=fields.names(document.get("tools")),
-        skills=fields.names(document.get("skills")),
-        middleware=fields.names(document.get("middleware")),
+        # Absent means inherit for tools and none for skills -- the
+        # asymmetry the format has always had, now said in the values
+        # rather than in a reader that special-cases one of them.
+        tools=_selected(document.get("tools"), absent=ALL),
+        skills=_selected(document.get("skills"), absent=None),
+        middleware=_selected(document.get("middleware"), absent=None),
         # `or None` rather than a conditional: unset and blank mean the same
         # thing for these two -- run where everything else does.
         provider=fields.text(document.get("provider")) or None,
@@ -295,6 +298,17 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         metadata=_metadata(document, source),
     )
 
+
+
+def _selected(value: object, *, absent: Selection) -> Selection:
+    """One name-list field, or what its absence means for that field.
+
+    `absent` differs per field and that is the point: omitting `tools` inherits
+    the caller's, omitting `skills` grants none. The format has always drawn
+    that distinction; it used to live in a reader that treated `None` two ways.
+    """
+    names = fields.names(value)
+    return absent if names is None else names
 
 def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | None, str | None]:
     """Where a delegate runs, once the request has had its say.
@@ -320,7 +334,7 @@ def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | 
     """
     provider, model = spec.provider, spec.model
 
-    if provider is not None and granted is not None and provider not in granted:
+    if provider is not None and granted != ALL and provider not in (granted or ()):
         msg = (
             f"subagent {spec.name!r} names endpoint {provider!r}, which this request "
             f"may not use; permitted {granted}"
