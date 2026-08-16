@@ -96,6 +96,7 @@ from kingfisher.infrastructure.checkpointing import (
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
+    Catalogue,
     LocalSessionDirs,
     check_placeable,
     collect_artifacts,
@@ -182,7 +183,7 @@ def _withheld_by_kind(
     cfg: Config,
     session_dir: Path,
     graph: Any,
-    catalogue: Mapping[str, Path],
+    catalogue: Catalogue,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
@@ -381,7 +382,7 @@ class Kingfisher:
         # request so a deployment that fetches them pays once, and so a
         # catalogue that cannot be read fails at startup rather than serving an
         # agent that has quietly been told about nothing.
-        self.catalogue: Mapping[str, Path] = resolve_catalogue(self.cfg, catalogue_roots)
+        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue_roots)
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the

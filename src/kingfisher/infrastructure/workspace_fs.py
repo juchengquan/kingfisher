@@ -29,7 +29,53 @@ from kingfisher.domain.layout import (
 CATALOGUE_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
 
 
-def resolve_catalogue(cfg: Config, supplied: Mapping[str, Path] | None = None) -> dict[str, Path]:
+@dataclass(frozen=True)
+class Catalogue:
+    """Where this deployment's definitions are read from: three directories.
+
+    A type rather than a mapping so the three names are checkable. `.skils` is
+    an `unresolved-attribute` before the code runs; `["skils"]` is a `KeyError`
+    while it does, and in this codebase a missing catalogue key surfaces as an
+    empty catalogue -- the silent emptiness this module's neighbours keep
+    refusing.
+
+    It is not fewer lookups. `catalogue or Catalogue.from_config(cfg)` appears
+    once in each of the four entry points that accept an optional one, exactly
+    as the mapping did, and `build_agent` still resolves once and passes the
+    result down. The count was never the problem; the anonymity was.
+
+    Thin on purpose. It holds the directories and does not read them --
+    `skill_store`, `subagent_store` and `tool_store` still take a `Path`, and
+    still do the reading. Making it read as well would leave `load_all` public
+    regardless, because a request's *uploaded* subagents come from the session
+    rather than from here, and two ways to load a subagent that differ only in
+    where they look is worse than one function called twice.
+
+    `Config.catalogue_roots` still answers with a mapping and is deliberately
+    not this type. `Config` is a record a deployment fills in, and it sits above
+    the layers precisely so it never imports one; making it return a
+    `Catalogue` would have it reach into `infrastructure`.
+    """
+
+    skills: Path
+    subagents: Path
+    tools: Path
+
+    @classmethod
+    def from_config(cls, cfg: Config) -> Catalogue:
+        """The deployment's own directories, without staging anything.
+
+        The fallback for a caller that was handed no catalogue -- `build_agent`
+        called directly, `--list`, a test. One construction where there used to
+        be a dict lookup per kind per call site.
+        """
+        roots = cfg.catalogue_roots
+        return cls(skills=roots["skills"], subagents=roots["subagents"], tools=roots["tools"])
+
+
+def resolve_catalogue(
+    cfg: Config, supplied: Catalogue | Mapping[str, Path] | None = None
+) -> Catalogue:
     """Where this deployment's definitions are read from, settled once.
 
     Called at construction and nowhere else, so a deployment that stages its
@@ -57,9 +103,19 @@ def resolve_catalogue(cfg: Config, supplied: Mapping[str, Path] | None = None) -
         derived = cfg.catalogue_roots
         for path in derived.values():
             path.mkdir(parents=True, exist_ok=True)
-        return derived
+        return Catalogue.from_config(cfg)
 
-    if missing := tuple(kind for kind in CATALOGUE_KINDS if kind not in supplied):
+    # Either shape. A deployment stages directories and hands over a mapping,
+    # which is the documented seam; something that already holds a `Catalogue`
+    # -- another kingfisher, a test fixture -- should not have to take it apart
+    # to pass it back. Both are validated the same way below.
+    roots = (
+        {"skills": supplied.skills, "subagents": supplied.subagents, "tools": supplied.tools}
+        if isinstance(supplied, Catalogue)
+        else supplied
+    )
+
+    if missing := tuple(kind for kind in CATALOGUE_KINDS if kind not in roots):
         msg = (
             f"catalogue_roots is missing {', '.join(missing)}; it names all of "
             f"{', '.join(CATALOGUE_KINDS)}, since a deployment that leaves one out "
@@ -67,7 +123,7 @@ def resolve_catalogue(cfg: Config, supplied: Mapping[str, Path] | None = None) -
         )
         raise ConfigError(msg)
 
-    roots = {kind: Path(supplied[kind]) for kind in CATALOGUE_KINDS}
+    roots = {kind: Path(roots[kind]) for kind in CATALOGUE_KINDS}
     if absent := tuple(f"{kind} ({path})" for kind, path in roots.items() if not path.is_dir()):
         msg = (
             f"catalogue_roots names {', '.join(absent)}, which is not a directory; "
@@ -75,7 +131,7 @@ def resolve_catalogue(cfg: Config, supplied: Mapping[str, Path] | None = None) -
             "will not create one in case the staging is what failed"
         )
         raise ConfigError(msg)
-    return roots
+    return Catalogue(**roots)
 
 
 class LocalSessionDirs:
