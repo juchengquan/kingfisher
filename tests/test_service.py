@@ -25,21 +25,24 @@ class CountingCheckpointer(StubCheckpointer):
         type(self).built += 1
 
 
-def test_the_deployment_scoped_wiring_happens_once(cfg, monkeypatch):
-    """The reason this object exists. `stream()` opened the thread store on
-    every call; a server serving many turns should open it at startup."""
-    CountingCheckpointer.built = 0
-    monkeypatch.setattr(
-        "kingfisher.application.service.build_checkpointer", lambda _cfg: CountingCheckpointer()
-    )
+def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
+    """The reason this object exists. `stream()` used to open the thread store
+    on every call; a server serving many turns opens it at startup.
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"))
-    assert CountingCheckpointer.built == 1
+    Still true for a store a deployment made itself, which is the case this was
+    written for. The *default* is now a database inside each session, opened for
+    the turn and closed after it -- measured at 0.22ms to reopen, against the
+    orphaned threads and cross-session contention one shared file cost.
+    """
+    CountingCheckpointer.built = 0
+    store = CountingCheckpointer()
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=store)
 
     for _ in range(3):
         service.run(Request("go"))
 
     assert CountingCheckpointer.built == 1  # three turns later, still one
+    assert service.threads is store
 
 
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):

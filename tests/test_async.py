@@ -92,7 +92,7 @@ def test_a_sync_saver_is_refused_rather_than_blocking(cfg):
 
 
 def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
-    """`_prepare` is filesystem and git work -- 15-46ms measured -- and on an
+    """`_prepare` is filesystem work -- 15-46ms measured -- and on an
     event loop that is 15-46ms during which no other turn can progress.
 
     Run on a worker thread, three turns overlap their setup and the wall clock
@@ -102,9 +102,9 @@ def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
     real_prepare = Kingfisher._prepare
     delay = 0.15
 
-    def slow_prepare(self, request):
+    def slow_prepare(self, *args, **kwargs):
         time.sleep(delay)  # blocking, exactly like the I/O it stands in for
-        return real_prepare(self, request)
+        return real_prepare(self, *args, **kwargs)
 
     monkeypatch.setattr(Kingfisher, "_prepare", slow_prepare)
 

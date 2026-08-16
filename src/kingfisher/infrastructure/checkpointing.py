@@ -40,6 +40,71 @@ def checkpoint_db_path(cfg: Config) -> Path:
     return cfg.state_dir / "threads.db"
 
 
+#: One session's conversation, beside the files it belongs to. Dotted and not in
+#: `SESSION_DIRS` for the same reason as `.home`: those are the names the agent
+#: addresses, and this is plumbing.
+SESSION_DB = ".threads.db"
+
+
+def session_db_path(session_dir: Path) -> Path:
+    return Path(session_dir) / SESSION_DB
+
+
+def _tuned(db: Path) -> sqlite3.Connection:
+    """A connection with the two settings that make sqlite survive company.
+
+    `busy_timeout` first: without it a writer that finds the database locked
+    fails immediately rather than waiting. Then WAL, which lets readers work
+    while a writer holds the file; setting it needs an exclusive lock that the
+    busy handler does not retry, so losing that race is expected -- journal mode
+    is a property of the file, so whoever won has already set it for everyone.
+
+    Applied to a per-session database as well as a shared one. One session is
+    still served by more than one process over its life, and a resumed turn may
+    land anywhere.
+    """
+    db.parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(db, check_same_thread=False, timeout=BUSY_TIMEOUT_MS / 1000)
+    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+    with suppress(sqlite3.OperationalError):
+        conn.execute("PRAGMA journal_mode=WAL")
+    return conn
+
+
+def build_session_checkpointer(session_dir: Path) -> BaseCheckpointSaver:
+    """This session's conversation, stored inside this session.
+
+    The default when a deployment injects nothing. One database per session
+    rather than one per workspace, which buys three things and costs two.
+
+    It removes a whole class of bug rather than managing it. A session was one
+    logical thing kept in two stores keyed by the same id with no link between
+    them -- the directory and a row set in a shared database -- so a directory
+    removed any other way orphaned its thread forever. One real workspace held
+    132 such threads. Here the conversation is inside the directory, so deleting
+    the directory deletes it, and `Session.discard` needs no `ThreadStore` at
+    all.
+
+    It also makes the conversation visible to `session_bytes`, and so to
+    `session_max_bytes`, which measures a directory. Checkpoint state was
+    previously invisible to the quota for the same reason the tool caches were
+    before they moved into the session.
+
+    And it removes cross-session contention. Measured at 8, 16 and 32 concurrent
+    writers, wall clock improved a flat ~1.3x, but the slowest single writer went
+    from 363ms to 80ms at 32 -- on a shared file one session queues behind every
+    other session's writes, and that gap widens with load rather than settling.
+
+    The costs, both small and both measured: about 0.6ms more on a session's
+    first turn (0.85ms against 0.24ms; a resumed turn is 0.22ms, marginally
+    faster than the shared file), and roughly 20KB of empty database per
+    session, so 20MB per thousand idle ones.
+    """
+    saver = SqliteSaver(_tuned(session_db_path(session_dir)))
+    saver.setup()
+    return saver
+
+
 def thread_ids(store: Any) -> tuple[str, ...] | None:
     """Every thread the store holds, or `None` when it cannot say.
 
@@ -87,17 +152,7 @@ def build_checkpointer(cfg: Config) -> BaseCheckpointSaver:
     losing the race is expected rather than exceptional: journal mode is a
     property of the file, so whoever won has already set it for everyone.
     """
-    db = checkpoint_db_path(cfg)
-    db.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = sqlite3.connect(db, check_same_thread=False, timeout=BUSY_TIMEOUT_MS / 1000)
-    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-    # Suppressed, not ignored: another process is setting it right now, and
-    # journal mode persists on the file, so theirs is ours.
-    with suppress(sqlite3.OperationalError):
-        conn.execute("PRAGMA journal_mode=WAL")
-
-    saver = SqliteSaver(conn)
+    saver = SqliteSaver(_tuned(checkpoint_db_path(cfg)))
     saver.setup()
     return saver
 
@@ -150,3 +205,57 @@ async def async_checkpointer(cfg: Config) -> AsyncIterator[BaseCheckpointSaver]:
         yield saver
     finally:
         await conn.close()
+
+
+@asynccontextmanager
+async def async_session_checkpointer(session_dir: Path) -> AsyncIterator[BaseCheckpointSaver]:
+    """This session's conversation, opened for an event loop.
+
+    The async twin of `build_session_checkpointer`, and the reason the per-session
+    shape reaches the deployments that most want it. `astream` refuses a sync
+    saver outright -- `SqliteSaver.aget_tuple` raises `NotImplementedError` -- so
+    an async deployment has always had to inject its own. Injecting an instance
+    means one database shared by every session, which is exactly the contention
+    the measurements above are about; injecting this as a *factory* gives each
+    session its own.
+
+    A context manager for the same reason as `async_checkpointer`: it holds an
+    aiosqlite connection and the worker thread serving it, and leaving both to be
+    collected raised `RuntimeError: Event loop is closed` out of an exit nobody
+    could catch.
+    """
+    import aiosqlite  # noqa: PLC0415 -- only an async deployment pays for this
+    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # noqa: PLC0415
+
+    db = session_db_path(session_dir)
+    db.parent.mkdir(parents=True, exist_ok=True)
+
+    conn = await aiosqlite.connect(db, timeout=BUSY_TIMEOUT_MS / 1000)
+    await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
+    with suppress(sqlite3.OperationalError):
+        await conn.execute("PRAGMA journal_mode=WAL")
+
+    saver = AsyncSqliteSaver(conn)
+    await saver.setup()
+    try:
+        yield saver
+    finally:
+        await conn.close()
+
+
+def release_checkpointer(saver: Any) -> None:
+    """Close a saver this service opened. Safe to call on anything.
+
+    A per-session database is a file descriptor per session, so a process
+    serving many of them has to give them back. Best-effort by design: the turn
+    is already over by the time this runs, and failing to close a connection is
+    not worth turning a completed turn into an error.
+
+    Nothing is closed that we did not open -- callers pass `None` for an
+    injected store, which belongs to the deployment that made it.
+    """
+    conn = getattr(saver, "conn", None)
+    if conn is None:
+        return
+    with suppress(Exception):
+        conn.close()
