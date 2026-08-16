@@ -255,16 +255,23 @@ def turn_message(task: str, turn: Any, placed: tuple[str, ...], has_inputs: bool
     )
 
 
-def _consume(mode: str, chunk: Any, answer: str) -> tuple[str, tuple[RunEvent, ...]]:
+def _consume(
+    namespace: Any,
+    mode: str,
+    chunk: Any,
+    answer: str,
+    delegates: runtime.Delegates,
+) -> tuple[str, tuple[RunEvent, ...]]:
     """One stream chunk into (answer so far, events to emit).
 
     Both loops are offered every chunk and each mode ignores the ones that are
     not its own. Written once so the sync and async loops cannot come to
-    disagree about which mode carries the answer.
+    disagree about which mode carries the answer -- or, now, about which agent
+    a chunk came from, which is a second thing they could have drifted on.
     """
-    if (text := runtime.answer_in(mode, chunk)) is not None:
+    if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
         answer = text
-    return answer, tuple(runtime.events_in(mode, chunk))
+    return answer, tuple(runtime.events_in(namespace, mode, chunk, delegates))
 
 
 def _overrun(prepared: _Prepared) -> RunEvent | None:
@@ -664,13 +671,15 @@ class Kingfisher:
         answer = ""
         ok = False
         cut_short = False
+        delegates = runtime.Delegates()
         try:
-            for mode, chunk in prepared.graph.stream(
+            for namespace, mode, chunk in prepared.graph.stream(
                 runtime.user_payload(prepared.message),
                 config=prepared.config,
                 stream_mode=runtime.STREAM_MODES,
+                subgraphs=True,
             ):
-                answer, events = _consume(mode, chunk, answer)
+                answer, events = _consume(namespace, mode, chunk, answer, delegates)
                 yield from events
                 if (stop := _overrun(prepared)) is not None:
                     cut_short = True
@@ -708,13 +717,15 @@ class Kingfisher:
         answer = ""
         ok = False
         cut_short = False
+        delegates = runtime.Delegates()
         try:
-            async for mode, chunk in prepared.graph.astream(
+            async for namespace, mode, chunk in prepared.graph.astream(
                 runtime.user_payload(prepared.message),
                 config=prepared.config,
                 stream_mode=runtime.STREAM_MODES,
+                subgraphs=True,
             ):
-                answer, events = _consume(mode, chunk, answer)
+                answer, events = _consume(namespace, mode, chunk, answer, delegates)
                 for event in events:
                     yield event
                 if (stop := _overrun(prepared)) is not None:

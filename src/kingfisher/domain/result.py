@@ -91,6 +91,14 @@ class RunEvent:
     #: provider that separates the two. Nothing emits `reasoning` yet — the
     #: field exists so that when one does, it is not a new event kind.
     channel: str = "answer"
+    #: Which delegate produced this, or `None` for the agent the caller asked.
+    #:
+    #: A delegate's work used to be invisible: the stream reports the graph it
+    #: was started on, and a delegate is a separate graph run inside a tool
+    #: call. Streaming into it means the caller's prose and a delegate's arrive
+    #: on the same channel, and the *type* cannot tell them apart -- both are
+    #: `AIMessageChunk`. This is what tells them apart.
+    agent: str | None = None
     result: RunResult | None = None
 
     def __post_init__(self) -> None:
@@ -99,6 +107,15 @@ class RunEvent:
         if self.args and len(self.args) != len(self.tools):
             msg = f"args ({len(self.args)}) must be parallel to tools ({len(self.tools)})"
             raise ValueError(msg)
+
+    def _tag(self, kind: str) -> str:
+        """The bracketed tag, naming the delegate when one produced this.
+
+        `[model]` for the agent the caller asked, `[model:reviewer]` for work a
+        delegate did. Nothing changes for a run without delegates, which is why
+        the name is appended rather than given a column of its own.
+        """
+        return f"{kind}:{self.agent}" if self.agent else kind
 
     def _line(self, limit: int = 800) -> str:
         """One-line rendering. `text` keeps full fidelity for consumers."""
@@ -112,15 +129,23 @@ class RunEvent:
             # A fragment, not a line. A tag would assert a boundary that is not
             # there -- chunks split mid-word -- and `_line` would flatten the
             # markdown the model is in the middle of writing.
+            #
+            # Which is also why a delegate's tokens are not tagged here: there
+            # is nowhere in the middle of a word to put the tag. Whoever
+            # renders a stream decides how to show `agent`; `__str__` is for
+            # the line-oriented kinds below.
             return self.text
         if self.kind == "model_call":
             pairs = zip(self.tools, self.args or ({},) * len(self.tools), strict=True)
             rendered = ", ".join(_render_call(name, args) for name, args in pairs)
             calls = f"→ {rendered}" if rendered else ""
             cached = self.usage.get("cache_read", 0)
-            return f"[model] {calls}  (in={self.usage.get('input_tokens', 0)} cached={cached})"
+            return (
+                f"[{self._tag('model')}] {calls}  "
+                f"(in={self.usage.get('input_tokens', 0)} cached={cached})"
+            )
         if self.kind == "tool_result":
-            return f"[tool ] {self.tool}: {self._line()}"
+            return f"[{self._tag('tool ')}] {self.tool}: {self._line()}"
         if self.kind == "swept":
             return f"[sweep] removed {self.text}"
         if self.kind == "run_start":

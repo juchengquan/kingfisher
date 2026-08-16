@@ -231,10 +231,22 @@ class Progress:
     def __init__(self, out: TextIO) -> None:
         self._out = out
         self._owed = False
+        self._speaker: str | None = None
 
     def write(self, event: RunEvent) -> RunResult | None:
         """Show one event. Returns the `RunResult` if this was the last."""
         if event.kind == "token":
+            # Prose from a delegate arrives on the same stream as the caller's
+            # own, as the same type, with nothing between them -- so without a
+            # marker the two answers read as one. It cannot go on the fragment
+            # itself: chunks split mid-word, and there is no line to tag. So it
+            # goes at the seam, which is the only place a boundary exists.
+            if event.agent != self._speaker:
+                if self._owed:
+                    self._out.write("\n")
+                    self._owed = False
+                self._speaker = event.agent
+                print(f"[{event.agent or 'main'}]", file=self._out, flush=True)
             self._out.write(event.text)
             self._out.flush()
             self._owed = True
