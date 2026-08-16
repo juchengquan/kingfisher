@@ -1,11 +1,12 @@
 """Model construction.
 
 Every model in kingfisher is a pre-built instance, never a `"provider:model"`
-string — for every role, not just the main one. A string would be resolved by
-deepagents through `init_chat_model`, which never sees this workspace's
-`Config`: the endpoint, the key, the token ceiling and the timeout would all be
-silently dropped. `Config.model_for()` returns a string; `build_model` is what
-turns it into an instance, and `agent.py` routes subagent models through it too.
+string — for delegates as much as for the main agent. A string would be
+resolved by deepagents through `init_chat_model`, which never sees this
+workspace's `Config`: the endpoint, the key, the token ceiling and the timeout
+would all be silently dropped. `Config.model` is a *name*; `build_model` is
+what turns it into an instance, and `delegation.py` routes subagent models
+through it too.
 
 A provider is **data**, not a subclass. The classes differ in exactly two ways —
 which one to construct, and any kwargs peculiar to it — while the five values
@@ -99,8 +100,14 @@ PROVIDERS: Mapping[str, Provider] = {
 }
 
 
-def build_model(cfg: Config, role: str = "main") -> BaseChatModel:
-    """Build the chat model for `role`, pointed at the configured endpoint."""
+def build_model(cfg: Config) -> BaseChatModel:
+    """Build a chat model from `cfg`, pointed at the endpoint `cfg` names.
+
+    No role parameter. A delegate that runs somewhere else says so in its own
+    definition, and `delegation.as_subagent` builds it by replacing the three
+    endpoint fields here -- so "which model, where" is one question with one
+    answer, read off whichever `Config` is handed in.
+    """
     try:
         provider = PROVIDERS[cfg.api_style]
     except KeyError:
@@ -108,7 +115,7 @@ def build_model(cfg: Config, role: str = "main") -> BaseChatModel:
         raise ConfigError(msg) from None
 
     return provider.resolve()(
-        model=cfg.model_for(role),
+        model=cfg.model,
         base_url=cfg.base_url,
         api_key=cfg.api_key,
         max_tokens=cfg.max_tokens,

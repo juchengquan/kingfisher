@@ -307,10 +307,10 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
 def test_every_kind_a_request_can_narrow_is_reported(cfg):
     """Tools, skills and subagents all narrow the same way and all went silent
     the same way. One line per kind, and only for kinds that lost something."""
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import presets, skill_store, subagent_store
 
     service = Kingfisher(cfg)
-    presets.seed(cfg)  # 3 tools, 3 skills, 2 subagents
+    presets.seed(cfg)
     service.start_session("s")
 
     admitted = service._admit(
@@ -324,10 +324,23 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     )
     by_kind = dict(admitted.withheld)
 
+    # Asked of what `seed` actually wrote, rather than named here. The literal
+    # tuples this used to assert were arithmetic about the shipped catalogue,
+    # so adding a preset failed a test about *reporting* for a reason having
+    # nothing to do with reporting. Sortedness is still asserted -- this is a
+    # line a person reads -- but the membership comes from the catalogue.
+    seeded_skills = set(skill_store.names(cfg.skills_dir))
+    seeded_subagents = set(subagent_store.load_all(cfg.subagents_dir))
+    # Not vacuous: the granted name has to be one the catalogue offers, or
+    # "everything except it" would be the whole catalogue by accident.
+    assert {"code-review"} < seeded_skills
+    assert {"reviewer"} < seeded_subagents
+
     assert set(by_kind) == {"tool", "skill", "subagent"}
     assert "http_fetch" in by_kind["tool"]
-    assert by_kind["skill"] == ("release-notes", "tabular-qa")
-    assert by_kind["subagent"] == ("extractor",)
+    assert "read_file" not in by_kind["tool"]
+    assert by_kind["skill"] == tuple(sorted(seeded_skills - {"code-review"}))
+    assert by_kind["subagent"] == tuple(sorted(seeded_subagents - {"reviewer"}))
 
 
 def test_a_kind_that_lost_nothing_says_nothing(cfg):

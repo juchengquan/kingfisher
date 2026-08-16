@@ -360,71 +360,127 @@ def _spec(provider: str | None = None, model: str | None = None) -> SubagentSpec
 
 
 def test_a_definition_that_pins_neither_runs_where_everything_else_does():
-    assert resolved_endpoint(
-        _spec(), model_override=None, provider_override=None, granted=None
-    ) == (None, None)
+    assert resolved_endpoint(_spec(), granted=None) == (None, None)
 
 
-def test_the_definition_wins_when_no_operator_spoke():
-    assert resolved_endpoint(
-        _spec("openai", "gpt-5"), model_override=None, provider_override=None, granted=None
-    ) == ("openai", "gpt-5")
-
-
-def test_an_operator_overriding_both_wins():
-    """The point of the override existing at all."""
-    assert resolved_endpoint(
-        _spec("openai", "gpt-5"),
-        model_override="MiniMax-M2.5",
-        provider_override="anthropic",
-        granted=None,
-    ) == ("anthropic", "MiniMax-M2.5")
-
-
-def test_overriding_only_the_model_against_a_pinned_provider_is_refused():
-    """A MiniMax model name sent to OpenAI is a 404 if you are lucky and a
-    wrong-model run if you are not."""
-    with pytest.raises(CapabilityError, match="overrode only its model"):
-        resolved_endpoint(
-            _spec("openai", "gpt-5"),
-            model_override="CHEAP",
-            provider_override=None,
-            granted=None,
-        )
-
-
-def test_overriding_only_the_model_is_fine_when_nothing_is_pinned():
-    """The refusal is about a mismatch, not about overriding."""
-    assert resolved_endpoint(
-        _spec(model="EXPENSIVE"),
-        model_override="CHEAP",
-        provider_override=None,
-        granted=None,
-    ) == (None, "CHEAP")
+def test_the_definition_decides():
+    """The only author. There was an operator override taking precedence here,
+    from `KINGFISHER_MODEL_SUBAGENT` / `KINGFISHER_PROVIDER_SUBAGENT`, and with
+    it a rule refusing half of one -- a model name sent to an endpoint that has
+    never heard of it. Both are gone: the pair could only say "every delegate",
+    and the half-pair mistake is refused at `parse` instead, where the message
+    can name the file. What is left is the grant.
+    """
+    assert resolved_endpoint(_spec("openai", "gpt-5"), granted=None) == ("openai", "gpt-5")
 
 
 def test_an_endpoint_the_request_may_not_use_is_refused():
     with pytest.raises(CapabilityError, match="may not use"):
-        resolved_endpoint(
-            _spec("openai"), model_override=None, provider_override=None, granted=()
-        )
+        resolved_endpoint(_spec("openai"), granted=())
 
 
 def test_a_granted_endpoint_goes_through():
-    assert resolved_endpoint(
-        _spec("openai", "gpt-5"),
-        model_override=None,
-        provider_override=None,
-        granted=("openai",),
-    ) == ("openai", "gpt-5")
+    assert resolved_endpoint(_spec("openai", "gpt-5"), granted=("openai",)) == ("openai", "gpt-5")
 
 
-def test_an_operators_provider_is_clamped_like_the_definitions():
-    """An override is an operator's decision, not an exemption from the grant."""
-    with pytest.raises(CapabilityError, match="may not use"):
-        resolved_endpoint(
-            _spec(),
-            model_override="m",
-            provider_override="openai",
-            granted=("anthropic",),
-        )
+def test_a_model_alone_is_never_clamped():
+    """The grant is about endpoints. A model name says nothing about where it
+    runs, so there is nothing for a request to narrow.
+    """
+    assert resolved_endpoint(_spec(model="cheap-one"), granted=()) == (None, "cheap-one")
+
+
+# -- metadata --------------------------------------------------------------
+
+
+def test_metadata_is_carried_verbatim(tmp_path):
+    """Kingfisher does not interpret it. Whatever YAML made of the mapping is
+    what a middleware factory will be handed."""
+    definition = (
+        "name: reviewer\ndescription: d\n"
+        "metadata:\n  tier: gold\n  retries: 3\n  tags: [a, b]\n"
+        "system_prompt: |\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert spec.metadata == {"tier": "gold", "retries": 3, "tags": ["a", "b"]}
+
+
+def test_metadata_defaults_to_empty(tmp_path):
+    """Absent is the common case, and an empty mapping saves every reader a
+    `None` check for a field that means "nothing extra"."""
+    spec = read_subagent(MINIMAL, tmp_path / "reviewer.yaml")
+
+    assert spec.metadata == {}
+
+
+@pytest.mark.parametrize("written", ["metadata: gold", "metadata: [a, b]", "metadata: 3"])
+def test_metadata_must_be_a_mapping(tmp_path, written):
+    """A bag with no shape cannot be looked up by key, which is the only thing
+    anyone will do with it."""
+    definition = f"name: reviewer\ndescription: d\n{written}\nsystem_prompt: |\n  You review.\n"
+
+    with pytest.raises(SubagentError, match="metadata"):
+        read_subagent(definition, tmp_path / "reviewer.yaml")
+
+
+def test_empty_metadata_is_allowed(tmp_path):
+    """`metadata:` with nothing under it is not the same mistake as a blank
+    required field -- it is a caller who has none, spelled out."""
+    definition = "name: reviewer\ndescription: d\nmetadata:\nsystem_prompt: |\n  You review.\n"
+
+    assert read_subagent(definition, tmp_path / "reviewer.yaml").metadata == {}
+
+
+def test_metadata_survives_loading_the_catalogue(tmp_path):
+    """The only consumer there is. A deployment reads its own keys by loading
+    the directory itself -- no seam into a run, and none needed.
+    """
+    directory = tmp_path / "subagents"
+    directory.mkdir()
+    (directory / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: d\n"
+        "metadata:\n  owner: platform-team\n"
+        "system_prompt: |\n  You review.\n",
+        encoding="utf-8",
+    )
+    (directory / "namer.yaml").write_text(
+        "name: namer\ndescription: d\nsystem_prompt: |\n  One word.\n", encoding="utf-8"
+    )
+
+    owners = {
+        name: spec.metadata.get("owner", "unowned")
+        for name, spec in load_all(directory).items()
+    }
+
+    assert owners == {"reviewer": "platform-team", "namer": "unowned"}
+
+
+def test_an_endpoint_without_a_model_is_refused(tmp_path):
+    """`provider` alone sends the *deployment's* model name to another endpoint
+    -- a 404 if you are lucky and a wrong-model run if you are not.
+
+    Refused here rather than at build time so the message can name the file
+    that got it wrong, which is the only thing anyone can act on.
+    """
+    definition = (
+        "name: reviewer\ndescription: d\nprovider: openai\nsystem_prompt: |\n  You review.\n"
+    )
+
+    with pytest.raises(SubagentError, match="but no model"):
+        read_subagent(definition, tmp_path / "reviewer.yaml")
+
+
+def test_a_model_without_an_endpoint_is_fine(tmp_path):
+    """Not symmetric, and deliberately. A model names something to run and
+    nothing about where, so it runs where the deployment does -- which is what
+    `extractor.yaml` relies on to be both cheap and portable.
+    """
+    definition = (
+        "name: reviewer\ndescription: d\nmodel: cheap-one\nsystem_prompt: |\n  You review.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert (spec.provider, spec.model) == (None, "cheap-one")

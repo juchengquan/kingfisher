@@ -349,27 +349,32 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     assert str(subagent["model"].anthropic_api_url).startswith(cfg.base_url)
 
 
-def test_role_models_override_a_subagents_declared_model(cfg, monkeypatch, session_dir):
-    """Cost routing is an operator decision, so it must not require editing
-    workspace content.
+def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir):
+    """The definition is the only author of where a delegate runs.
 
-    Keyed by *role*. This test used to pass `{"cheap": ...}` -- the subagent's
-    name -- and passed, while the feature fired for nothing: `from_env` only
-    ever populates `main`, `subagent` and `summarizer`, so a name-keyed entry
-    could not exist outside a test that built one by hand. The test validated a
-    path production cannot reach, which is why the defect survived it.
+    `KINGFISHER_MODEL_SUBAGENT` used to win here, on the theory that cost is an
+    operator's call and should not need editing content someone else owns. One
+    variable can only say "every delegate", which is not the granularity the
+    decision has: `second-opinion` exists in order *not* to be the model beside
+    it, and a blanket override defeats it without saying so.
+
+    Set through the environment, the way a deployment would, rather than onto
+    `Config` -- the field it used to land in is what this change removed, so a
+    test that built one by hand would be asserting against its own fixture.
     """
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
+    monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "operator-choice")
+    monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
     captured = capture_build(monkeypatch)
     build_agent(
-        replace(cfg, role_models={"subagent": "operator-choice"}),
+        cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(subagents=("cheap",)),
     )
 
     (subagent,) = captured["subagents"]
-    assert subagent["model"].model == "operator-choice"
+    assert subagent["model"].model == "some-small-model"
 
 
 def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeypatch, session_dir):

@@ -2,7 +2,8 @@
 
 A style is an endpoint here -- `anthropic` is the gateway, `openai` is OpenAI
 proper -- so naming one names where the prompt goes and whose credentials pay.
-That is why it is granted rather than free, and why it cannot be half-overridden.
+That is why it is granted rather than free, why a definition naming one must
+say what to run there, and why nothing outside the definition may move it.
 """
 
 from __future__ import annotations
@@ -98,7 +99,11 @@ def test_omitting_provider_keeps_the_default(cfg, session_dir, monkeypatch):
 
 
 def test_an_endpoint_a_request_may_not_use_is_refused(cfg, session_dir, monkeypatch):
-    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nsystem_prompt: |\n  Go.\n")
+    define(
+        cfg,
+        "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
+        "system_prompt: |\n  Go.\n",
+    )
     routed = replace(cfg, endpoints={"openai": ELSEWHERE})
 
     with pytest.raises(CapabilityError, match="may not use"):
@@ -134,48 +139,28 @@ def test_grants_clamp_endpoints_like_everything_else():
     )
 
 
-# -- the pair is atomic ---------------------------------------------------
+# -- the definition is the only author ------------------------------------
 
 
-def test_overriding_only_the_model_against_a_pinned_provider_is_refused(
+def test_the_environment_cannot_move_a_delegate_to_another_endpoint(
     cfg, session_dir, monkeypatch
 ):
-    """A MiniMax model name sent to OpenAI is a 404 if you are lucky and a
-    wrong-model run if you are not."""
-    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
-        "system_prompt: |\n  Go.\n")
-    half = replace(cfg, endpoints={"openai": ELSEWHERE}, role_models={"subagent": "CHEAP"})
+    """`KINGFISHER_PROVIDER_SUBAGENT` used to reroute every delegate at once,
+    and nothing reads it now.
 
-    with pytest.raises(CapabilityError, match="overrode only its model"):
-        build(half, session_dir, monkeypatch)
+    Which endpoint receives the prompt is the strongest thing this field
+    decides -- it names whose credentials pay -- so a variable that moved all of
+    them together was the least appropriate place to say it. A file says it, or
+    it runs where the deployment does.
+    """
+    define(cfg, "name: reviewer\ndescription: d\nmodel: MiniMax-M2.5\nsystem_prompt: |\n  Go.\n")
+    monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
+    monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "gpt-5")
 
-
-def test_overriding_both_wins(cfg, session_dir, monkeypatch):
-    """An operator who says what they mean is the point of the override."""
-    define(cfg, "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
-        "system_prompt: |\n  Go.\n")
-    both = replace(
-        cfg,
-        endpoints={"openai": ELSEWHERE},
-        role_models={"subagent": "MiniMax-M2.5"},
-        role_providers={"subagent": "anthropic"},
-    )
-
-    spec = build(both, session_dir, monkeypatch)
+    spec = build(replace(cfg, endpoints={"openai": ELSEWHERE}), session_dir, monkeypatch)
 
     assert spec["model"].model == "MiniMax-M2.5"
     assert spec["model"].anthropic_api_url == cfg.base_url
-
-
-def test_overriding_the_model_alone_is_fine_when_nothing_is_pinned(
-    cfg, session_dir, monkeypatch
-):
-    """The refusal is about a mismatch, not about overriding."""
-    define(cfg, "name: reviewer\ndescription: d\nmodel: EXPENSIVE\nsystem_prompt: |\n  Go.\n")
-
-    spec = build(replace(cfg, role_models={"subagent": "CHEAP"}), session_dir, monkeypatch)
-
-    assert spec["model"].model == "CHEAP"
 
 
 # -- the format -----------------------------------------------------------

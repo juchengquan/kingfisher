@@ -32,9 +32,6 @@ ApiStyle = Literal["anthropic", "openai"]
 #: adding a `Provider`; nothing else needs to learn the name.
 API_STYLES: tuple[ApiStyle, ...] = get_args(ApiStyle)
 
-ROLES: tuple[str, ...] = ("main", "subagent", "summarizer")
-
-
 @dataclass(frozen=True)
 class Endpoint:
     """One place to send a model call, and the credentials for it.
@@ -58,9 +55,9 @@ class ConfigError(RuntimeError):
 class Config:
     """Everything kingfisher needs to build an agent for one workspace.
 
-    Frozen but *not* hashable — `role_models` is a real `dict`, so `hash(cfg)`
-    raises. Nothing may key a cache on a `Config`; build per role instead and
-    let the composition root hold the instances.
+    Frozen but *not* hashable — `endpoints` is a real `dict`, so `hash(cfg)`
+    raises. Nothing may key a cache on a `Config`; build the model once and let
+    the composition root hold the instance.
     """
 
     workspace: Path
@@ -103,17 +100,12 @@ class Config:
     # shell could read this deployment's own API keys, `~/.aws` and the GitHub
     # CLI's token, and `http_fetch` is one tool call away from sending them.
     shell_sandbox: str = "auto"
-    role_models: Mapping[str, str] = field(default_factory=dict)
     #: Every *other* style this deployment has credentials for. The one named
     #: by `api_style` is not in here -- it is the three fields above, which is
     #: what everything reads when nothing says otherwise. Populated by
     #: `from_env` from whichever `*_BASE_URL` / `*_API_KEY` pairs are set, so a
     #: deployment that filled in both already has two endpoints.
     endpoints: Mapping[str, Endpoint] = field(default_factory=dict)
-    #: The operator's other half of `role_models`. Which endpoint a role
-    #: runs against is the same kind of decision as which model, and the
-    #: two move together -- see `infrastructure.agent._subagent_endpoint`.
-    role_providers: Mapping[str, str] = field(default_factory=dict)
     # Overrides for the two host-side roots. `None` means "derive from the
     # workspace", which is what keeps a workspace self-contained and copyable
     # by default. Read them through `state_dir` / `scratch_dir`, never directly.
@@ -228,13 +220,3 @@ class Config:
         """
         return self.tools_root or self.workspace / "tools"
 
-    def model_for(self, role: str) -> str:
-        """Per-role model, falling back to the main model.
-
-        The seam exists from day one so per-role cost routing is a config
-        change rather than a refactor through every construction site.
-
-        Returns a *string*. It must reach a model through `build_model`, never
-        through deepagents — see `infrastructure/models.py`.
-        """
-        return self.role_models.get(role, self.model)

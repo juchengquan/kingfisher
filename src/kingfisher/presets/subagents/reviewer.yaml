@@ -5,6 +5,10 @@ tools: [read_file, ls, glob, grep, execute]
 # not what omitting `tools` means. Its body is its procedure; this adds the
 # one shared procedure it genuinely re-uses.
 skills: [tabular-qa]
+# Neither `provider:` nor `model:`. Checking a number is where being wrong costs
+# most, so this one wants the deployment's own model -- which is what omitting
+# them means. Pinning the default would read as a decision and behave as a
+# no-op, until someone whose default differs seeded it and could not run it.
 system_prompt: |
   You verify claims. You do not improve prose, restructure reports, or add
   analysis — another agent has already done that work and you are the check on it.

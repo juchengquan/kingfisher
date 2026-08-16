@@ -58,18 +58,18 @@ def test_the_main_model_is_used_by_default(cfg):
     assert build_model(cfg).model == cfg.model
 
 
-def test_per_role_models_reach_the_constructor(cfg):
-    """`model_for` is only load-bearing if `build_model` honours it.
+def test_the_model_comes_from_the_config_it_is_handed(cfg):
+    """How a delegate runs elsewhere, now that there is no role parameter:
+    `delegation.as_subagent` swaps the endpoint fields and builds from that.
 
-    Without this, per-role cost routing could be configured and silently
-    ignored — the config would look right and every role would run the
-    expensive model.
+    Without this, `build_model` could quietly read some other source and every
+    delegate would run the deployment's own model while its definition said
+    otherwise.
     """
-    routed = replace(cfg, role_models={"subagent": "cheap-model"})
+    elsewhere = replace(cfg, model="cheap-model")
 
-    assert build_model(routed, role="subagent").model == "cheap-model"
-    assert build_model(routed, role="main").model == cfg.model
-    assert build_model(routed, role="summarizer").model == cfg.model
+    assert build_model(elsewhere).model == "cheap-model"
+    assert build_model(cfg).model == cfg.model
 
 
 #: Where each `Config` value lands, per provider. The providers do not agree on

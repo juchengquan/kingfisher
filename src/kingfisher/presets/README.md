@@ -135,6 +135,45 @@ system_prompt: |
 That is a whole definition: three required fields, one optional, nothing else
 needed.
 
+Sending a delegate somewhere cheaper — or somewhere else entirely — is up to
+two more lines:
+
+```yaml
+provider: openai        # a style this deployment has credentials for
+model: gpt-5            # a model that endpoint serves
+```
+
+Omit both and it runs on the deployment's own model, at the deployment's own
+endpoint. That is the usual case, and `reviewer` is the shipped example of it.
+
+`model` alone is fine: it names something to run and nothing about where, so it
+runs where everything else does. `extractor` does this — cheap is the decision,
+and it stays true wherever you point kingfisher.
+
+`provider` alone is refused, by name, when the file is read. A model name means
+nothing without the endpoint that serves it, so naming an endpoint and not what
+to run there sends *your* model's name somewhere that has never heard of it.
+Name both or neither. `second-opinion` is the one preset that names both, and
+says in a comment why.
+
+This is the only place either is said. There is no environment variable for it:
+one could only say "every delegate", which is the wrong size for the decision —
+it would silently defeat `second-opinion`, whose whole job is to be a different
+model from the one beside it.
+
+**`provider` is a requirement, not decoration.** It is checked when the agent
+is built, so activating a preset whose style your deployment has no credentials
+for fails immediately:
+
+```
+no endpoint configured for style 'openai'; this deployment has ('anthropic',)
+```
+
+It fails only for the preset you activated — a subagent is wired only when a
+request names it, so seeding one you cannot reach costs nothing until you ask
+for it. Edit the pair to match your gateway, which is what copying a preset is
+for.
+
 | Field | | |
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
@@ -143,10 +182,11 @@ needed.
 | `tools` | optional | Unset inherits the parent's tools |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
-| `provider` | optional | Which endpoint it runs against, by style. Moves together with `model` |
-| `model` | optional | Must be a model your gateway serves. This is where per-role cost routing goes |
+| `provider` | optional | Which endpoint it runs against, by style. Requires `model` |
+| `model` | optional | Must be a model that endpoint serves. Fine on its own; this is where cost routing goes |
+| `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
-Two reasons to reach for one, one example each:
+Three reasons to reach for one, one example each:
 
 - [`reviewer.yaml`](subagents/reviewer.yaml) — **independence.** A second agent
   that recomputes a claim without seeing how the first one got there catches
@@ -154,6 +194,10 @@ Two reasons to reach for one, one example each:
 - [`extractor.yaml`](subagents/extractor.yaml) — **context isolation.** It reads
   a large pile of files and returns a short answer; the bulk stays in its
   context rather than yours. Note the narrower `tools` and the cheaper `model`.
+- [`second-opinion.yaml`](subagents/second-opinion.yaml) — **a different
+  model.** Two models from one family share failure modes, so this one answers
+  on another endpoint entirely. It is the only one that names a `provider`, and
+  the reason the field exists.
 
 ### Writing the prompt
 
@@ -206,6 +250,37 @@ system_prompt: |2           # ✅ first line indented deeper than the rest
       ls -la /data          #    plain `|` cannot read this, and says so
   Then report.
 ```
+
+### Your own keys
+
+Everything above is a field this format defines. `metadata:` is the one place a
+definition can say something kingfisher has no opinion about:
+
+```yaml
+metadata:
+  tier: gold
+  owner: platform-team
+```
+
+It must be a mapping — a bag with no shape cannot be looked up by key, and
+looking up a key is the only thing anyone does with it. Kingfisher carries it
+and reads nothing.
+
+**Nothing in a run reads it.** It is for whatever loads the catalogue — a
+deployment script choosing which definitions to install, an ownership report, a
+check that every delegate names a team:
+
+```python
+from kingfisher.infrastructure.subagent_store import load_all
+
+for spec in load_all(cfg.subagents_dir).values():
+    print(spec.name, spec.metadata.get("owner", "unowned"))
+```
+
+Handing it to the agent would mean picking a consumer, and the obvious one —
+passing the definition to a middleware factory — changes a published argument
+for a use nobody has yet. The field is easy to add a consumer to later; a
+changed constructor is not easy to take back.
 
 ### Lists, and fields that are not here
 
