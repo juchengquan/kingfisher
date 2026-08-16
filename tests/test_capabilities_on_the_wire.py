@@ -7,7 +7,7 @@ what the request actually carried, so this module exercises all four on every
 axis rather than trusting that reading.
 
 The direction of the mistake is not uniform, which is why it cannot be checked
-by eye: `builtin_tools`, `tools`, `skills`, `middleware` and `providers` default
+by eye: `builtin_tools`, `tools`, `skills`, `middleware` and `endpoints` default
 to `"*"`, so collapsing absent into null fails closed; `subagents`, `models` and
 `memory` default to `None`, so the same collapse hands the default back to a
 caller who explicitly asked for nothing.

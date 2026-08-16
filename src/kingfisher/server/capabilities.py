@@ -14,7 +14,7 @@ holds the two in step.
 
 The direction of that mistake is not uniform, which is why it cannot be reasoned
 about axis by axis in the head. `builtin_tools`, `tools`, `skills`, `middleware`
-and `providers` default to `"*"`, so collapsing absent into null fails closed.
+and `endpoints` default to `"*"`, so collapsing absent into null fails closed.
 `subagents`, `models` and `memory` default to `None`, so the same collapse hands
 back the default to a caller who explicitly asked for nothing.
 
@@ -62,7 +62,7 @@ class CapabilitiesBody(BaseModel):
     skills: Axis = "*"
     subagents: Axis = None
     middleware: Axis = "*"
-    providers: Axis = "*"
+    endpoints: Axis = "*"
     models: Axis = None
     memory: Axis = None
 
