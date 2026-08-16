@@ -184,3 +184,57 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 
     with pytest.raises(CapabilityError, match="read_file"):
         build_agent(cfg, session_dir=cfg.workspace / "s")
+
+
+# -- seeding says what it took away ---------------------------------------
+#
+# `seed` says the entire point is that you edit your copy, and seeding is the
+# one operation that writes over those copies. It used to do so silently: an
+# edited `reviewer.md` came back as the shipped one, reported identically to a
+# file that had never been there. It still overwrites -- refusing would make
+# re-seeding after an upgrade impossible, which is the same trade `place_data`
+# makes -- but it no longer does it quietly.
+
+
+def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
+    seeding = presets.seed(cfg)
+
+    assert seeding.written
+    assert seeding.overwritten == ()
+
+
+def test_seeding_twice_unchanged_is_silent(cfg):
+    """By content, not by presence. A warning that fires on the ordinary path
+    is one people learn to scroll past."""
+    presets.seed(cfg)
+
+    assert presets.seed(cfg).overwritten == ()
+
+
+def test_an_edited_copy_is_reported_and_still_replaced(cfg):
+    presets.seed(cfg)
+    edited = cfg.subagents_dir / "reviewer.md"
+    edited.write_text("---\nname: reviewer\ndescription: mine\n---\nMy prompt.\n", encoding="utf-8")
+
+    seeding = presets.seed(cfg)
+
+    assert "subagents/reviewer.md" in seeding.overwritten
+    assert "description: mine" not in edited.read_text(encoding="utf-8")
+
+
+def test_a_file_added_beside_a_preset_is_not_reported(cfg):
+    """`copytree` merges, so this one survives. Reporting it would be a warning
+    about a loss that did not happen."""
+    presets.seed(cfg)
+    (cfg.skills_dir / "code-review" / "notes.md").write_text("mine", encoding="utf-8")
+
+    assert presets.seed(cfg).overwritten == ()
+    assert (cfg.skills_dir / "code-review" / "notes.md").read_text(encoding="utf-8") == "mine"
+
+
+def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
+    """Entries are what you asked for; files are what you might have lost."""
+    presets.seed(cfg)
+    (cfg.skills_dir / "code-review" / "SKILL.md").write_text("clobber me", encoding="utf-8")
+
+    assert presets.seed(cfg).overwritten == ("skills/code-review/SKILL.md",)

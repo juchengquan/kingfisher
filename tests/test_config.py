@@ -132,8 +132,13 @@ def test_every_variable_read_is_documented():
     import re
     from pathlib import Path as _Path
 
+    from kingfisher.application import config as config_module
+
     root = _Path(__file__).resolve().parent.parent
-    source = (root / "src/kingfisher/app/config.py").read_text()
+    # Asked of the module rather than spelled as a path: this test shipped
+    # naming `src/kingfisher/app/config.py`, one rename after that directory
+    # stopped existing, and went red on main rather than at review.
+    source = _Path(config_module.__file__).read_text()
     read = set(re.findall(r"KINGFISHER_[A-Z_]+", source))
     documented = set(re.findall(r"KINGFISHER_[A-Z_]+", (root / ".env.example").read_text()))
 
