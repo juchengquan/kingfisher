@@ -251,6 +251,35 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
     assert seeding.overwritten == ()
 
 
+def test_seeding_leaves_the_catalogue_example_where_models_yaml_goes(cfg):
+    """Beside the file it is an example *of*, which is where someone looks.
+
+    Not into one of the three catalogues: it is not a definition, and the
+    directory kingfisher reads `models.yaml` from is the workspace root.
+    """
+    seeding = presets.seed(cfg)
+
+    assert presets.EXAMPLE in seeding.written
+    assert (cfg.workspace / presets.EXAMPLE).is_file()
+
+
+def test_seeding_never_writes_the_catalogue_itself(cfg):
+    """The one file seeding must not touch.
+
+    It overwrites by design, which is what makes re-seeding after an upgrade
+    possible. `models.yaml` names every endpoint this deployment reaches and
+    whose credentials pay for them, so a template landing on top of a working
+    one is the worst thing this could do -- and it would look like a successful
+    seed.
+    """
+    catalogue = cfg.workspace / "models.yaml"
+    catalogue.write_text("mine: do not touch\n", encoding="utf-8")
+
+    presets.seed(cfg)
+
+    assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
+
+
 def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypatch):
     """The guard that only had to hold one level deep until a preset tool could
     be a package.

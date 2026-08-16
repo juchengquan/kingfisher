@@ -33,6 +33,14 @@ from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
 PACKAGE = "kingfisher.presets"
 
+#: The worked example of the one file a deployment *must* write. It lived at the
+#: repo root, which meant it existed only in a checkout: `packages =
+#: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
+#: mistake `test_the_package_ships_its_presets` was written about, made again one
+#: directory over -- and made for the file a new deployment needs first, since
+#: `models.yaml` is required and has no fallback.
+EXAMPLE = "models.yaml.example"
+
 
 
 @contextmanager
@@ -160,4 +168,22 @@ def seed(cfg: Config) -> Seeding:
                 else:
                     shutil.copy(item, target)
                 written.append(label)
+
+        # The catalogue file, which is not a catalogue *kind* and so has no
+        # destination among the three above. It goes beside where kingfisher
+        # looks for `models.yaml`, because that is where someone would look for
+        # the thing they are about to write.
+        #
+        # As `.example`, never as `models.yaml` itself. Seeding overwrites by
+        # design -- that is what makes re-seeding after an upgrade possible --
+        # and the one file it must never overwrite is the one naming every
+        # endpoint this deployment reaches and whose credentials pay. A template
+        # landing on top of a working catalogue is the worst thing this could do.
+        example = presets / EXAMPLE
+        if example.is_file():  # absence is a packaging fault, caught by a test
+            target = cfg.workspace / EXAMPLE
+            overwritten += _overwritten(example, target, EXAMPLE)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copy(example, target)
+            written.append(EXAMPLE)
     return Seeding(tuple(written), tuple(overwritten))

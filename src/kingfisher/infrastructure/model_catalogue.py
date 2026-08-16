@@ -31,6 +31,8 @@ from typing import TYPE_CHECKING, Any
 import yaml
 
 from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
+from kingfisher.domain import fields
+from kingfisher.infrastructure.presets import EXAMPLE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -56,11 +58,20 @@ KNOWN_MODEL: frozenset[str] = frozenset(
 
 
 def _refuse_unknown(document: Mapping[str, Any], known: frozenset[str], where: str) -> None:
-    if unknown := tuple(sorted(k for k in document if k not in known)):
-        msg = (
-            f"{where}: unknown key(s) {', '.join(unknown)}; "
-            f"this format defines {tuple(sorted(known))}"
-        )
+    """Refuse every key this format does not define, and guess at the typos.
+
+    The wording is `fields.unrecognised`, shared with the subagent format, which
+    had the careful version of this rule while here it was five lines that
+    listed the valid keys and nothing else. That was the wrong way round: this
+    is the file a deployment writes *first*, and the only one that decides where
+    prompts go, so `defualt:` is exactly the mistake worth naming as a typo.
+
+    What stays here is the raising. A malformed catalogue is a `ConfigError`,
+    not a `SubagentError`, and `where` is a path plus which entry it was in.
+    """
+    complaint = fields.unrecognised(document, known=known, noun="key")
+    if complaint is not None:
+        msg = f"{where}: {complaint}"
         raise ConfigError(msg)
 
 
@@ -224,7 +235,13 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
             f"    default: MiniMax-M3\n\n"
             f"    models:\n"
             f"      MiniMax-M3:\n"
-            f"        endpoint: minimax\n"
+            f"        endpoint: minimax\n\n"
+            # The minimal one above is enough to start; the shipped example is
+            # the one that explains `aliases`, `extra`, and why an omitted
+            # `temperature` is not a defaulted one. `--seed-presets` puts it
+            # beside this path, which is the only place a new deployment would
+            # think to look for it.
+            f"`--seed-presets` writes an annotated {EXAMPLE} next to it.\n"
         )
         raise ConfigError(msg) from exc
 
