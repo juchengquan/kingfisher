@@ -25,7 +25,7 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 # Imported for real, not under `TYPE_CHECKING`: fastapi resolves a handler`s
 # annotations at runtime, and an unresolvable one is read as a body field --
 # which turns every request into a 422 asking for a "kf" object.
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, UnknownSessionError
 from kingfisher.server.dependencies import kingfisher_of
 from kingfisher.server.payloads import session_payload
 
@@ -61,7 +61,11 @@ def read_session(
     """
     info = kf.session(session_id)
     if info is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no session {session_id!r}")
+        # The library's own error rather than a 404 built here. It is what a
+        # turn on a missing session raises, so both paths answer identically --
+        # and the status and the code come from the one table either way.
+        missing = f"no session {session_id!r}"
+        raise UnknownSessionError(missing)
     return session_payload(info)
 
 
@@ -79,7 +83,8 @@ def close_session(
     than the caller's.
     """
     if kf.session(session_id) is None:
-        raise HTTPException(status.HTTP_404_NOT_FOUND, f"no session {session_id!r}")
+        missing = f"no session {session_id!r}"
+        raise UnknownSessionError(missing)
     failure = kf.delete_session(session_id)
     if failure:
         raise HTTPException(status.HTTP_500_INTERNAL_SERVER_ERROR, failure)

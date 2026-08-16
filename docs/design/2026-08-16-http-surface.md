@@ -1,7 +1,6 @@
 # An HTTP surface for kingfisher
 
-**Status:** phases 1–3 shipped. Capabilities, files, the error totality test
-and packaging remain.
+**Status:** phases 1–4 shipped. Capabilities, files and packaging remain.
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
@@ -114,6 +113,16 @@ retrying will not help until they delete something. 507 says the right thing and
 is 5xx, which makes generic clients retry it, which is worse. The body carries
 a stable machine-readable code from the same map, so a client that wants to be
 precise can be.
+
+Every refusal leaves through one function and takes one shape --
+`{"error": <code>, "message": <prose>}`, with anything only one refusal has
+carried as an extra key. There were four shapes before that: the turn path's,
+fastapi's `{"detail": ...}` from `HTTPException`, fastapi's list-of-objects
+from request validation, and a hand-written string in the body-size middleware.
+The routes now *raise* and never build a response, which is what leaves one
+place knowing the shape. A status alone is not enough for a client to branch on
+— `unknown_session` and a mistyped URL are both 404 and need different fixes —
+so no two refusals share a code, and a test says so.
 
 **Status codes only work if the refusal happens before the response starts.**
 `astream`'s first statement is `_prepare`, and nothing is yielded before it, so

@@ -16,7 +16,7 @@ from __future__ import annotations
 from typing import TYPE_CHECKING
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 
 # Imported for real, not under `TYPE_CHECKING`: fastapi resolves a handler`s
@@ -25,7 +25,6 @@ from kingfisher import Kingfisher
 from kingfisher import Request as TurnRequest
 from kingfisher.server import streaming
 from kingfisher.server.dependencies import kingfisher_of
-from kingfisher.server.errors import refusal
 
 if TYPE_CHECKING:
     from kingfisher.server.config import ServerConfig
@@ -78,19 +77,22 @@ async def stream_turn(
     to `StreamingResponse` unopened would put 200 on the wire and bury every
     refusal in the body.
 
-    An unrecognised exception is re-raised rather than becoming a 500 here. It
-    is a bug, and it should be logged as one by the thing whose job that is.
+    Nothing is caught by type here and no body is built. The handlers in
+    `errors` turn a refusal into a status and anything else into a 500, which is
+    what leaves one table deciding which is which and one function deciding what
+    a refusal looks like.
     """
     events = kf.astream(request)
     try:
         first = await streaming.opening(events)
-    except Exception as error:
+    except BaseException:
+        # Let go, then let it out. The close is not what gives the claim back --
+        # `_admit` already released it on the way out -- it is here for the
+        # exception that does not come from the generator body, cancellation
+        # being the one that matters, where the run is left suspended rather
+        # than terminated.
         await streaming.close(events)
-        answer = refusal(error)
-        if answer is None:
-            raise
-        code, payload = answer
-        return JSONResponse(payload, status_code=code)
+        raise
 
     return StreamingResponse(
         streaming.body(events, first, heartbeat_s=settings.heartbeat_s),

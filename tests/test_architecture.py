@@ -587,3 +587,35 @@ def test_the_event_kinds_are_what_the_package_emits():
         "as the SSE event names, so an extra entry is a kind no client sees and a "
         "missing one is a kind nobody handles"
     )
+
+
+def test_every_caller_facing_error_has_a_status():
+    """The half phase 1 could not check yet.
+
+    `CALLER_FACING_ERRORS` says which errors a caller can cause;
+    `errors.STATUS` says what each becomes on the wire. Nothing but this keeps
+    them the same set -- and the failure is quiet in both directions. An error
+    classified caller-facing but absent from the map is a 500 for something the
+    caller could fix; one in the map but not classified is a status nobody
+    decided on.
+    """
+    from kingfisher.server.errors import STATUS
+
+    mapped = {error.__name__ for error in STATUS}
+
+    assert mapped == CALLER_FACING_ERRORS, (
+        "every caller-facing error needs a status and code, and nothing else "
+        "belongs in the map — a deployment error is a 500 on purpose"
+    )
+
+
+def test_no_two_refusals_share_a_code():
+    """The code is what a client branches on, so two refusals answering the
+    same code are two things it cannot tell apart. Statuses may repeat --
+    `bad_reference`, `bad_skill` and `bad_subagent` are all 400 -- which is
+    exactly why the code carries the meaning."""
+    from kingfisher.server.errors import CODE_FOR_STATUS, STATUS
+
+    codes = [code for _, code in STATUS.values()] + list(CODE_FOR_STATUS.values())
+
+    assert len(codes) == len(set(codes)), sorted(codes)
