@@ -1,0 +1,48 @@
+name: checks
+
+# `pull_request` rather than `push` on branches: the event checks out GitHub's
+# merge ref, so what runs is the branch *merged with* the base. That is the
+# combination a branch's own tests never see, and the one that broke `main`
+# when two PRs each passed alone and failed together.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+# A second push to a PR makes the first run irrelevant; let it go rather than
+# paying for an answer about a commit nobody will merge.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+
+jobs:
+  checks:
+    # macOS because the shell confinement is `sandbox-exec`, which exists
+    # nowhere else. On Linux those tests skip themselves and the boundary they
+    # cover -- the one keeping `execute` off the host -- would go unchecked by
+    # CI entirely, which is the half most worth checking.
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      # Three separate steps rather than one `&&` chain, so a red build says
+      # which of the three failed from the job list without opening the log.
+      - name: ruff
+        run: uv run ruff check src/ main.py tests/
+
+      - name: ty
+        run: uv run ty check
+
+      - name: pytest
+        run: uv run pytest -q
