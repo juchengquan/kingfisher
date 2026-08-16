@@ -228,30 +228,6 @@ class Capabilities:
             memory=_narrow_switch(self.memory, other.memory),
         )
 
-    def unknown(
-        self, *, tools: Iterable[str], skills: Iterable[str], subagents: Iterable[str]
-    ) -> tuple[str, ...]:
-        """Names asked for that the workspace does not offer.
-
-        Reported so an unresolvable request fails loudly instead of running
-        with quietly less than the caller asked for — the difference between a
-        clear rejection and an agent that silently could not do the job.
-        """
-        missing: list[str] = []
-        for requested, available, label in (
-            (self.builtin_tools, tools, "tool"),
-            (self.tools, tools, "tool"),
-            (self.skills, skills, "skill"),
-            (self.subagents, subagents, "subagent"),
-        ):
-            # Neither end names anything, so neither can name something wrong.
-            if requested is None or requested == ALL:
-                continue
-            known = set(available)
-            missing.extend(f"{label}:{name}" for name in requested if name not in known)
-        return tuple(missing)
-
-
 
 #: Every axis a request can be narrowed on, derived from the type that owns them.
 #: Named `AXES` rather than `KINDS` because `domain.result.KINDS` already means

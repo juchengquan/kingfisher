@@ -651,3 +651,113 @@ def test_no_two_refusals_share_a_code():
     codes = [code for _, code in STATUS.values()] + list(CODE_FOR_STATUS.values())
 
     assert len(codes) == len(set(codes)), sorted(codes)
+
+
+# -- nothing here is written for tests alone -------------------------------
+#
+# The recurring failure this guards is not any one module's. Something gets
+# written, gets a test, and never acquires a caller -- so the next person who
+# needs it either does not find it, or finds it and gets a wrong answer.
+# `Capabilities.unknown` was the worst case: the domain's own copy of a rule
+# that two adapters had each rewritten, dead, and axis-blind enough that it
+# could not have been right if revived. `Capabilities.intersect` was the same
+# shape, and T1 caught that one by hand.
+
+#: Where a caller may live. Tests deliberately do not count -- a test is what
+#: kept every instance of this alive.
+PRODUCTION = ("src/kingfisher", "main.py", "evals")
+
+#: Names dispatched by something other than a call in this repository. Each is a
+#: framework contract rather than a convenience nobody got round to using, and
+#: each is listed by name so adding one stays a decision.
+DISPATCHED_ELSEWHERE = frozenset({
+    # fastapi calls a route handler through its decorator.
+    "open_session", "read_session", "close_session", "run_turn", "run_one_shot",
+    # langchain's callback protocol and deepagents' middleware hooks.
+    "on_llm_end", "on_llm_error", "on_tool_start", "on_tool_end", "on_tool_error",
+    "awrap_model_call", "awrap_tool_call", "wrap_model_call", "wrap_tool_call",
+})
+
+
+def _production_files() -> list[Path]:
+    root = SRC.parent.parent
+    files: list[Path] = []
+    for name in PRODUCTION:
+        target = root / name
+        # `presets/` is the agent's to import, not ours to call.
+        files += (
+            [target]
+            if target.is_file()
+            else [p for p in target.rglob("*.py") if "presets" not in p.parts]
+        )
+    return files
+
+
+def _referenced_in_code() -> set[str]:
+    """Every name production code *uses*, ignoring prose.
+
+    Prose matters here: `withheld`'s docstring named `Capabilities.unknown`, so
+    a guard counting text would have taken that mention for a caller and left
+    the dead method exactly where it was.
+    """
+    seen: set[str] = set()
+    for path in _production_files():
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Name):
+                seen.add(node.id)
+            elif isinstance(node, ast.Attribute):
+                seen.add(node.attr)
+            elif isinstance(node, ast.alias):
+                seen.add(node.asname or node.name.split(".")[-1])
+    return seen
+
+
+def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
+    """Module-level functions and classes, plus methods of classes that stand alone.
+
+    Two kinds are skipped, for two different reasons. Methods of a *subclass*,
+    because overriding something is a contract with whatever declared it and
+    "nobody here calls it" is the ordinary state of a hook. Methods of an
+    *exported* class, because exporting `Kingfisher` exports `arun` and `reap`
+    with it -- their callers are outside this repository by design, which is
+    what publishing them meant.
+    """
+    found: dict[str, Path] = {}
+    for path in sorted(SRC.rglob("*.py")):
+        if "presets" in path.parts:
+            continue
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
+                if not node.decorator_list and not node.name.startswith("__"):
+                    found[node.name] = path
+            elif isinstance(node, ast.ClassDef):
+                found[node.name] = path
+                if node.bases or node.name in public:
+                    continue
+                for inner in node.body:
+                    if not isinstance(inner, ast.FunctionDef | ast.AsyncFunctionDef):
+                        continue
+                    if inner.name.startswith("_") or inner.decorator_list:
+                        continue
+                    found[inner.name] = path
+    return found
+
+
+def test_nothing_is_defined_for_tests_alone():
+    """A function with no caller outside tests is a fourth copy waiting to be
+    written by somebody who could not find the third."""
+    import kingfisher
+
+    used = _referenced_in_code()
+    public = frozenset(kingfisher.__all__)
+
+    orphans = {
+        name: str(path.relative_to(SRC))
+        for name, path in _defined_in_package(public).items()
+        if name not in used and name not in public and name not in DISPATCHED_ELSEWHERE
+    }
+
+    assert not orphans, (
+        f"defined but never used outside tests: {orphans} -- delete it, export it, "
+        "or add it to DISPATCHED_ELSEWHERE with the contract that calls it"
+    )

@@ -73,18 +73,6 @@ def test_intersect_handles_each_dimension_independently():
     assert narrowed.subagents == ("reviewer",)  # the grant named nothing, so ALL
 
 
-def test_unknown_reports_what_the_workspace_cannot_offer():
-    """So a request fails loudly rather than running with quietly less."""
-    caps = Capabilities(builtin_tools=("read_file",), tools=("teleport",), skills=("nope",))
-
-    missing = caps.unknown(tools=["read_file"], skills=["tabular-qa"], subagents=[])
-    assert set(missing) == {"tool:teleport", "skill:nope"}
-
-
-def test_unknown_ignores_dimensions_with_no_opinion():
-    assert Capabilities().unknown(tools=[], skills=[], subagents=[]) == ()
-
-
 def test_capabilities_are_hashable_and_comparable():
     """Value object semantics: two identical grants are the same grant.
 
