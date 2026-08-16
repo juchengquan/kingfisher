@@ -27,6 +27,9 @@ _EXPORTS = {
     "SessionBusyError": "kingfisher.domain.session",
     "SkillError": "kingfisher.domain.skill",
     "SubagentError": "kingfisher.domain.subagent",
+    "UnknownReferenceError": "kingfisher.domain.references",
+    "UnsafeReferenceError": "kingfisher.domain.references",
+    "LocalFileStore": "kingfisher.infrastructure.files",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.uploads",
     "async_checkpointer": "kingfisher.infrastructure.checkpointing",
@@ -59,6 +62,7 @@ __all__ = [
     "Config",
     "ConfigError",
     "Kingfisher",
+    "LocalFileStore",
     "QuotaExceededError",
     "Request",
     "RunEvent",
@@ -68,7 +72,9 @@ __all__ = [
     "SessionInfo",
     "SkillError",
     "SubagentError",
+    "UnknownReferenceError",
     "UnknownSessionError",
+    "UnsafeReferenceError",
     "UploadError",
     "async_checkpointer",
     "build_agent",
@@ -98,6 +104,10 @@ if TYPE_CHECKING:
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
+    from kingfisher.domain.references import (
+        UnknownReferenceError as UnknownReferenceError,
+    )
+    from kingfisher.domain.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
@@ -113,6 +123,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.backend import shell_env as shell_env
     from kingfisher.infrastructure.checkpointing import async_checkpointer as async_checkpointer
     from kingfisher.infrastructure.checkpointing import build_checkpointer as build_checkpointer
+    from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.models import build_model as build_model
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.uploads import UploadError as UploadError

@@ -80,4 +80,3 @@ Durable facts about this project and how to work in it. Add entries below.
 
 (none recorded yet)
 """
-

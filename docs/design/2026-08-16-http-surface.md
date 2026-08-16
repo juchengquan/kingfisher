@@ -1,6 +1,6 @@
 # An HTTP surface for kingfisher
 
-**Status:** phases 1–5 shipped. Files and packaging remain.
+**Status:** phases 1–6 shipped. Packaging remains.
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
@@ -36,7 +36,7 @@ were found by asking what the server would be allowed to touch:
 |---|---|
 | Four caller-facing errors are private | `UnknownSessionError`, `SessionBusyError`, `QuotaExceededError` and `CapabilityError` are the ones a caller must distinguish, and no consumer could catch them by name. Only `ConfigError` was public. |
 | `async_checkpointer` is private | `astream` requires it — a sync saver "does not merely block the loop, it refuses" — so the async path was unreachable from outside the package. |
-| No way to send a file | `Request.inputs`/`data` are host paths. A remote caller has none. |
+| No way to send a file | `Request.inputs`/`data` are host paths. A remote caller has none. Closed by `input_refs`/`data_refs` and a `FileStore` port, with `UnknownReferenceError` and `UnsafeReferenceError` joining the public surface — the import rule turning up a fourth and fifth gap on its way. |
 
 ## Endpoints
 
@@ -88,7 +88,7 @@ holds the id learns nothing they could not learn by using it.
 | D10 | **Capabilities cross the wire, with absent and `null` kept apart.** | Over HTTP the lattice has four states, not three: `"*"`, an array, `null`, and *absent*. Absent means the deployment's default; `null` means nothing, and on five of the eight axes those are opposite ends. Implemented with `model_fields_set` rather than a sentinel object — same decision, using what pydantic already records, and without a sentinel type leaking into the generated schema. |
 | D11 | **An app factory taking a ready `Kingfisher`.** | It is the substitution point every existing test already uses. A server that constructs its own instance at import time pushes tests back toward patching `create_deep_agent`, which this repo forbids because three live bugs got through that way. |
 | D12 | **`ServerConfig`, separate from `Config`.** | Bind address, concurrency cap, heartbeat interval and body limit are none of the library's business. Keeping them out of `Config` is the library/service split held in the one place it would otherwise blur first. |
-| D13 | **A shared `within(root, ref)` rule in the domain.** | A ref is caller-supplied, so both `FileStore` and `DefinitionStore` adapters need the same traversal guard. Writing it once is cheaper than finding the second copy in the duplication audit. |
+| D13 | **A shared `within(root, ref)` rule in `domain/references.py`.** | A ref is caller-supplied, so both `FileStore` and `DefinitionStore` adapters need the same traversal guard. It is *lexical* — the domain may not call `resolve` — so an adapter reading from a directory somebody else can write to has a second check to make, and `LocalFileStore` makes it. Called twice on purpose, at the fetch and at the write: one guards the ordering (a hostile `input_refs` key caught only at write time would leave a turn directory behind), the other guards the syscall. |
 | D14 | **The API does not accept `turn_id`.** | The library's `turn_id` reuses the *directory* and then runs the turn again in full. Over HTTP a field of that name reads as an idempotency key, and every convention says a repeat returns the first result rather than doing the work twice and charging for it. Correlation is served by `turn_id` in the `finished` event — the id the work got, not the one the caller hoped for. Additive later, once D3 is revisited. |
 
 ### Errors

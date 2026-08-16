@@ -43,6 +43,16 @@ class Request:
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
     data: tuple[Path, ...] = ()
+    # The same two, for a caller with no host paths. Ids resolved by a
+    # `FileStore` the deployment wired, exactly as `skill_refs` are resolved by
+    # a `DefinitionStore` -- so a remote caller can send files without
+    # kingfisher taking bytes over its own wire.
+    #
+    # Kept apart from `inputs` and `data` rather than overloading them: one is
+    # a path this process can already read, the other is a name only a store can
+    # turn into content, and the refusals differ.
+    input_refs: tuple[str, ...] = ()
+    data_refs: tuple[str, ...] = ()
     # Provisioning, not activation. These are catalogue ids: they say which
     # definitions to fetch and unpack for this session, while `capabilities`
     # still selects by name. Keeping them apart is what stops a catalogue's
