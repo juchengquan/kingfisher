@@ -38,6 +38,18 @@ jobs:
 
       # Three separate steps rather than one `&&` chain, so a red build says
       # which of the three failed from the job list without opening the log.
+      - name: what the sandbox will be told about (temporary)
+        run: |
+          uv run python -c "
+          import sys, os
+          from pathlib import Path
+          print('HOME        ', Path.home())
+          print('sys.prefix  ', sys.prefix, '->', Path(sys.prefix).resolve())
+          print('base_prefix ', sys.base_prefix, '->', Path(sys.base_prefix).resolve())
+          print('executable  ', sys.executable, '->', Path(sys.executable).resolve())
+          print('cwd         ', Path.cwd(), '->', Path.cwd().resolve())
+          "
+
       - name: ruff
         run: uv run ruff check src/ main.py tests/
 
