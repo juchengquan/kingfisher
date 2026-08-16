@@ -52,7 +52,14 @@ class AssetRepository(Protocol):
 
     @property
     def names(self) -> tuple[str, ...]:
-        """Every definition held, by the name a request grants it."""
+        """Every definition held, by the name a request grants it, in a stable order.
+
+        Stable because the agent is built from this. Two processes reading the
+        same definitions must offer the model the same list in the same order,
+        or a prompt differs between them for no reason a reader could find.
+        `available_skills` used to sort at the call site, which only worked
+        while there was one implementation to sort.
+        """
         ...
 
 

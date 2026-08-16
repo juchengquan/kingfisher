@@ -31,7 +31,6 @@ from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config, ConfigError
-from kingfisher.domain import skill
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -42,7 +41,6 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.domain.ports import ToolRepository
-from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
 from kingfisher.domain.tool import Found, tool_name
 from kingfisher.infrastructure import tool_store
@@ -61,6 +59,7 @@ from kingfisher.infrastructure.delegation import (
     subagent_middleware,
     subagent_skills,
 )
+from kingfisher.infrastructure.layered import for_session
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.scoping import (
@@ -69,8 +68,6 @@ from kingfisher.infrastructure.scoping import (
     ScopedSkills,
     ToolAllowlist,
 )
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
@@ -93,35 +90,17 @@ MEMORY_IS_DENIED = FilesystemPermission(
 )
 
 
-def _uploaded_skills(session_dir: Path) -> Path:
-    """Where this session's own skills were unpacked."""
-    return Path(session_dir) / skill.DIRECTORY / skill.UPLOADED
-
-
-def _uploaded_subagents(session_dir: Path) -> Path:
-    """Where this session's own subagents were unpacked."""
-    return Path(session_dir) / SUBAGENT_DIRECTORY
-
-
 def available_skills(
     cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
 ) -> tuple[str, ...]:
     """Every skill this request may activate: the catalogue, plus its own.
 
-    One flat set, because `capabilities.skills` names skills and not sources.
-    They cannot collide — `uploads` rejects an upload that shares a catalogue
-    name — so merging loses nothing.
-
     `catalogue` says where the shared half is read from, falling back to `cfg`.
-    The session's own half never varies with it: uploads land under the session
-    by definition, and a deployment relocating its catalogue does not move them.
+    What a session adds, and how the two halves merge, is `layered.for_session`
+    -- the rule lives there because it differs per kind and a reader comparing
+    them should not have to visit two functions to see the difference.
     """
-    # The catalogue's half is read once, when the deployment is wired; only
-    # the session's half is looked at per turn.
-    names = set((catalogue or Catalogue.from_config(cfg)).skills.names)
-    if session_dir is not None:
-        names |= set(LocalSkillRepository(_uploaded_skills(session_dir)).names)
-    return tuple(sorted(names))
+    return for_session(catalogue or Catalogue.from_config(cfg), session_dir).skills.names
 
 
 def defined_subagents(
@@ -129,20 +108,12 @@ def defined_subagents(
 ) -> dict[str, SubagentSpec]:
     """Every subagent this request may activate: the catalogue, plus its own.
 
-    They cannot collide -- `uploads` rejects an upload sharing a catalogue name
-    before it is written -- so the union loses nothing.
-
     A function because two callers need the same answer: `build_agent`, which
     wants the specs, and the service, which wants only the names so it can say
     which of them a request did not grant. Written out at both, the rule about
     what a session adds to the catalogue would exist twice.
     """
-    # `dict(...)` and not the mapping itself: the catalogue's copy is cached
-    # and shared by every turn, and the next line merges into what it returns.
-    defined = dict((catalogue or Catalogue.from_config(cfg)).subagents.specs)
-    if session_dir is not None:
-        defined |= LocalSubagentRepository(_uploaded_subagents(session_dir)).specs
-    return defined
+    return dict(for_session(catalogue or Catalogue.from_config(cfg), session_dir).subagents.specs)
 
 
 def indistinct_delegates(
