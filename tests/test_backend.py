@@ -5,15 +5,15 @@ from dataclasses import replace
 import pytest
 from deepagents.backends import CompositeBackend
 
-from kingfisher.adapters.backend import (
+from kingfisher.config import ConfigError
+from kingfisher.infrastructure.backend import (
     WorkspaceScopedBackend,
     build_backend,
     prepare_scratch,
     shell_env,
 )
-from kingfisher.adapters.checkpointing import checkpoint_db_path
-from kingfisher.adapters.runlog import log_path
-from kingfisher.config import ConfigError
+from kingfisher.infrastructure.checkpointing import checkpoint_db_path
+from kingfisher.infrastructure.runlog import log_path
 
 
 def test_shell_env_carries_no_credentials(cfg):
@@ -197,7 +197,7 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.adapters.agent import build_agent
+    from kingfisher.infrastructure.agent import build_agent
     from tests.conftest import FakeToolCallingModel
 
     host_path = f"{cfg.workspace}/runs/s1/t001/notes.md"

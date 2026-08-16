@@ -28,7 +28,7 @@ def test_the_deployment_scoped_wiring_happens_once(cfg, monkeypatch):
     every call; a server serving many turns should open it at startup."""
     CountingCheckpointer.built = 0
     monkeypatch.setattr(
-        "kingfisher.app.service.build_checkpointer", lambda _cfg: CountingCheckpointer()
+        "kingfisher.application.service.build_checkpointer", lambda _cfg: CountingCheckpointer()
     )
 
     service = Kingfisher(cfg, agent=StubAgent("ok"))
@@ -120,7 +120,8 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     it looks and nobody would know."""
     start(cfg, "s")
     monkeypatch.setattr(
-        "kingfisher.app.service.protect_data", lambda _dir: ("theirs.pdf: Operation not permitted",)
+        "kingfisher.application.service.protect_data",
+        lambda _dir: ("theirs.pdf: Operation not permitted",),
     )
     service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
 

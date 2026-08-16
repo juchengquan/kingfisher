@@ -12,10 +12,10 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.adapters.agent import CapabilityError, build_agent
-from kingfisher.adapters.definitions import read_subagent
-from kingfisher.adapters.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.agent import CapabilityError, build_agent
+from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, capture_build
 
 

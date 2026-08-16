@@ -13,9 +13,9 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
-from kingfisher.adapters.workspace_fs import session_bytes
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import QuotaExceededError
+from kingfisher.infrastructure.workspace_fs import session_bytes
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 

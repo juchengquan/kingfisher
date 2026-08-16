@@ -4,8 +4,8 @@ import os
 
 import pytest
 
-from kingfisher.app import config as config_module
-from kingfisher.app.config import from_env
+from kingfisher.application import config as config_module
+from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError
 
 BASE_ENV = {

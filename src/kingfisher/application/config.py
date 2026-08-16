@@ -10,7 +10,7 @@ OpenAI-compatible endpoints of the same gateway do not behave identically, so a
 default would silently pick the wrong shape the first time kingfisher is pointed
 somewhere new.
 
-Which variables a style reads is not written here. `adapters.models.PROVIDERS`
+Which variables a style reads is not written here. `infrastructure.models.PROVIDERS`
 holds it, alongside the builder that consumes it, so adding a provider is one
 record rather than an edit in two files that must agree.
 """
@@ -21,8 +21,8 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from kingfisher.adapters.models import PROVIDERS
 from kingfisher.config import API_STYLES, ROLES, Config, ConfigError, Endpoint
+from kingfisher.infrastructure.models import PROVIDERS
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `kingfisher.config`

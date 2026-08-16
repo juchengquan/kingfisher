@@ -14,7 +14,7 @@ from collections.abc import Iterator
 from typing import Any
 from uuid import uuid4
 
-from kingfisher.app.service import Kingfisher
+from kingfisher.application.service import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer

@@ -47,8 +47,8 @@ heavy delegation on a cheap model, synthesis on the expensive one.
 
 Parsing lives in the domain because this is kingfisher's format, not a library's
 — nothing here knows deepagents exists, and nothing here reads a disk. Finding
-the files is `adapters.subagent_store`; translating a spec into deepagents'
-`SubAgent` is `adapters.agent`.
+the files is `infrastructure.subagent_store`; translating a spec into deepagents'
+`SubAgent` is `infrastructure.agent`.
 """
 
 from __future__ import annotations
@@ -97,7 +97,7 @@ def parse(fields: Mapping[str, object], body: str, source: Path) -> SubagentSpec
 
     Raises `SubagentError` on anything the format forbids. Whether the document
     carried a header at all, and whether that header decoded, were settled
-    before this — reading YAML needs a library, so `adapters.definitions` does
+    before this — reading YAML needs a library, so `infrastructure.definitions` does
     that half. See `domain.frontmatter` for where the seam falls and why.
     """
     for required in ("name", "description"):

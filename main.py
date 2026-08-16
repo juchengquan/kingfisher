@@ -72,21 +72,21 @@ from evals.checks import check_result
 from evals.seed import seed_sample_data, seed_sample_skill
 from evals.task import SMOKE_TASK
 
-# Only the light end of the package at module scope. `kingfisher.adapters`
+# Only the light end of the package at module scope. `kingfisher.infrastructure`
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
-from kingfisher.adapters import presets, skill_store
-from kingfisher.adapters.runlog import read_usage
-from kingfisher.adapters.subagent_store import load_all
-from kingfisher.adapters.workspace_fs import (
+from kingfisher.config import Config
+from kingfisher.domain.session import Session
+from kingfisher.domain.subagent import SubagentError
+from kingfisher.infrastructure import presets, skill_store
+from kingfisher.infrastructure.runlog import read_usage
+from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     ensure_session_layout,
     is_new_workspace,
 )
-from kingfisher.config import Config
-from kingfisher.domain.session import Session
-from kingfisher.domain.subagent import SubagentError
 
 
 def _selection(value: str | None) -> tuple[str, ...] | None:
@@ -138,7 +138,7 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
 
 def show_inventory(cfg: Config, workspace: Path) -> int:
     """What a request may activate here, which is what `--list` is for."""
-    from kingfisher.adapters.agent import build_agent, registered_tools  # noqa: PLC0415
+    from kingfisher.infrastructure.agent import build_agent, registered_tools  # noqa: PLC0415
 
     print(f"workspace : {workspace}")
     # Named rather than assumed: the catalogues may be deployed outside the
@@ -333,7 +333,7 @@ def main(argv: list[str]) -> int:
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
     from kingfisher import stream  # noqa: PLC0415
-    from kingfisher.adapters.agent import CapabilityError  # noqa: PLC0415
+    from kingfisher.infrastructure.agent import CapabilityError  # noqa: PLC0415
 
     result = None
     try:

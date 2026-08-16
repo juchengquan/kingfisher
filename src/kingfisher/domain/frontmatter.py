@@ -7,7 +7,7 @@ second mechanism. That sameness is only real if one parser serves both.
 What lives here is what the fields *mean*: where the header ends and the body
 begins, how a name-list may be written, how a value becomes the string the
 format meant. What does not live here is the YAML decode, which needs a
-third-party library — `adapters.definitions` owns that, because a domain module
+third-party library — `infrastructure.definitions` owns that, because a domain module
 imports the standard library and `kingfisher.domain`, nothing else.
 
 The seam is the envelope. Whether a document carries a header at all, and

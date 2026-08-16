@@ -33,7 +33,7 @@ def name_of(fields: Mapping[str, object], source: str = FILENAME) -> str:
     """The skill's declared name, which is also its directory name.
 
     Takes decoded fields rather than the document. Reading YAML needs a
-    library, so `adapters.definitions` does that half and hands the result
+    library, so `infrastructure.definitions` does that half and hands the result
     here — see `domain.frontmatter` for where the seam falls and why.
     """
     name = frontmatter.text(fields.get("name"))

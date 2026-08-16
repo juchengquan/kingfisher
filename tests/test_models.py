@@ -11,8 +11,8 @@ from dataclasses import replace
 
 import pytest
 
-from kingfisher.adapters.models import PROVIDERS, Provider, build_model
 from kingfisher.config import API_STYLES, ConfigError
+from kingfisher.infrastructure.models import PROVIDERS, Provider, build_model
 
 
 def test_every_api_style_has_a_provider():
@@ -135,7 +135,7 @@ def test_describing_a_provider_does_not_import_its_sdk():
 
     probe = (
         "import sys;"
-        "import kingfisher.adapters.models as m;"
+        "import kingfisher.infrastructure.models as m;"
         "print('langchain_openai' in sys.modules, 'langchain_anthropic' in sys.modules)"
     )
     out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal

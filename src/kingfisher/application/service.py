@@ -62,12 +62,20 @@ from time import monotonic
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from kingfisher.adapters import runtime
-from kingfisher.adapters.agent import build_agent
-from kingfisher.adapters.checkpointing import build_checkpointer
-from kingfisher.adapters.runlog import JsonlRunLogger, log_path
-from kingfisher.adapters.uploads import provision
-from kingfisher.adapters.workspace_fs import (
+from kingfisher.application import config as config_module
+from kingfisher.config import Config
+from kingfisher.domain import retention
+from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.request import Request
+from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
+from kingfisher.domain.retention import SweepResult
+from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
+from kingfisher.infrastructure import runtime
+from kingfisher.infrastructure.agent import build_agent
+from kingfisher.infrastructure.checkpointing import build_checkpointer
+from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.uploads import provision
+from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     collect_artifacts,
     ensure_layout,
@@ -76,14 +84,6 @@ from kingfisher.adapters.workspace_fs import (
     protect_data,
     session_bytes,
 )
-from kingfisher.app import config as config_module
-from kingfisher.config import Config
-from kingfisher.domain import retention
-from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.request import Request
-from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
-from kingfisher.domain.retention import SweepResult
-from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

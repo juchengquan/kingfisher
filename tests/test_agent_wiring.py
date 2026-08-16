@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from kingfisher.adapters.agent import SKILLS_SOURCES, build_agent, system_prompt
+from kingfisher.infrastructure.agent import SKILLS_SOURCES, build_agent, system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
 
 

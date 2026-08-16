@@ -12,11 +12,11 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.adapters.agent import CapabilityError, build_agent
-from kingfisher.adapters.definitions import read_subagent
-from kingfisher.app.config import from_env
+from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError, Endpoint
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.agent import CapabilityError, build_agent
+from kingfisher.infrastructure.definitions import read_subagent
 from tests.conftest import FakeToolCallingModel, capture_build
 
 ELSEWHERE = Endpoint("openai", "https://api.openai.com/v1", "sk-elsewhere")

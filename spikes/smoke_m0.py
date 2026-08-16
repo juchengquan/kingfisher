@@ -1,6 +1,6 @@
 """Superseded by `main.py`, kept as the original M0 verification entrypoint.
 
-The sample dataset and smoke task now live in `kingfisher.app.smoke` so there is one
+The sample dataset and smoke task now live in `evals/` so there is one
 definition of each rather than two that drift apart.
 
     uv run main.py        # equivalent, and also promotes the report

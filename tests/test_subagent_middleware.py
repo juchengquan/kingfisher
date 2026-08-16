@@ -11,9 +11,9 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
-from kingfisher.adapters.agent import CapabilityError, build_agent
-from kingfisher.adapters.definitions import read_subagent
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.agent import CapabilityError, build_agent
+from kingfisher.infrastructure.definitions import read_subagent
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, capture_build
 
 

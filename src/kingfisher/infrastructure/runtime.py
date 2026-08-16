@@ -149,7 +149,7 @@ def events_in(mode: str, chunk: Any) -> Iterator[RunEvent]:
 
     Which modes exist, and what each carries, is decided here rather than by
     the orchestration above. `updates`, `values` and `messages` are LangGraph's
-    vocabulary, and `app/` should no more compare against them than it should
+    vocabulary, and `application/` should no more compare against them than it should
     reach for `input_token_details` -- which is the duplication this module was
     written to end.
     """

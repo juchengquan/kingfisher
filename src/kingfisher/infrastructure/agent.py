@@ -17,17 +17,17 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission, create_deep_agent
 from langchain.agents.middleware import TodoListMiddleware
 
-from kingfisher.adapters import skill_store
-from kingfisher.adapters.backend import build_backend
-from kingfisher.adapters.models import build_model
-from kingfisher.adapters.scoping import HostPathGuard, ScopedSkills, ToolAllowlist
-from kingfisher.adapters.subagent_store import load_all
-from kingfisher.adapters.tool_store import load_tools, tool_name
 from kingfisher.config import Config
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import SubagentSpec
+from kingfisher.infrastructure import skill_store
+from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.models import build_model
+from kingfisher.infrastructure.scoping import HostPathGuard, ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.tool_store import load_tools, tool_name
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
@@ -340,7 +340,7 @@ def _as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # infers its own provider and reads credentials from the environment --
     # around the provider table, the configured base_url, and the api_style
     # this deployment chose. It also re-enables the profile behaviour that
-    # `adapters.models` exists to avoid. So we build the instance ourselves.
+    # `infrastructure.models` exists to avoid. So we build the instance ourselves.
     #
     # `role_models` wins over the definition: which model a role runs on is an
     # operator's cost decision, and it should not require editing content.

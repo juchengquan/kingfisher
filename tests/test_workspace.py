@@ -3,13 +3,13 @@ from __future__ import annotations
 import os
 import shutil
 
-from kingfisher.adapters.workspace_fs import LocalSessionDirs, ensure_layout
 from kingfisher.domain import retention
 from kingfisher.domain.layout import (
     LAYOUT_DIRS,
     SESSION_DIRS,
     WORKSPACE_GITIGNORE,
 )
+from kingfisher.infrastructure.workspace_fs import LocalSessionDirs, ensure_layout
 from tests.conftest import StubCheckpointer
 
 

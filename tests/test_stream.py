@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
-from kingfisher.app.run import Request, stream
+from kingfisher.application.run import Request, stream
 from tests.conftest import StubCheckpointer, start
 from tests.test_run import StubAgent
 
@@ -267,7 +267,7 @@ def test_a_usage_only_chunk_produces_no_token(cfg):
 
 def test_the_adapter_owns_the_stream_modes(cfg):
     """`values` and `messages` are LangGraph's words, not orchestration's."""
-    from kingfisher.adapters import runtime
+    from kingfisher.infrastructure import runtime
 
     values = {"messages": [AIMessage(content="42")]}
 
@@ -279,7 +279,7 @@ def test_the_adapter_owns_the_stream_modes(cfg):
 def test_run_is_a_drain_of_stream(cfg):
     """One orchestration path: run() must not re-implement the sequence."""
     start(cfg, "drained")
-    from kingfisher.app.run import run
+    from kingfisher.application.run import run
 
     agent = StubAgent("<think>x</think>7")
     result = run(

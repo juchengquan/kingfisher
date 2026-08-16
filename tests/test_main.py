@@ -164,7 +164,7 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
     from dataclasses import replace
 
     import main as driver
-    from kingfisher.adapters import skill_store
+    from kingfisher.infrastructure import skill_store
 
     catalogue = tmp_path / "catalogue"
     relocated = replace(
@@ -187,7 +187,7 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, mo
     """The default, and the case the old code got right -- worth keeping, or
     the fix above could quietly break the ordinary setup."""
     import main as driver
-    from kingfisher.adapters import skill_store
+    from kingfisher.infrastructure import skill_store
 
     monkeypatch.setattr(driver, "from_env", lambda: cfg)
 
@@ -207,7 +207,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     from dataclasses import replace
 
     import main as driver
-    from kingfisher.adapters.tool_store import names
+    from kingfisher.infrastructure.tool_store import names
 
     catalogue = tmp_path / "catalogue"
     relocated = replace(cfg, tools_root=catalogue / "tools")

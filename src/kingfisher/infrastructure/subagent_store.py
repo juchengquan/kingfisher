@@ -9,8 +9,8 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from kingfisher.adapters.definitions import read_subagent
 from kingfisher.domain.subagent import SUFFIX, SubagentError, SubagentSpec
+from kingfisher.infrastructure.definitions import read_subagent
 
 
 def load_all(directory: Path) -> dict[str, SubagentSpec]:
