@@ -12,6 +12,8 @@ unpacked under the name it declares.
 
 from __future__ import annotations
 
+from collections.abc import Mapping
+
 from kingfisher.domain import frontmatter
 
 FILENAME = "SKILL.md"
@@ -27,18 +29,13 @@ class SkillError(ValueError):
     """Raised when a skill definition cannot be read."""
 
 
-def name_of(text: str, source: str = FILENAME) -> str:
-    """The skill's declared name, which is also its directory name."""
-    parts = frontmatter.split(text)
-    if parts is None:
-        msg = f"{source}: expected YAML frontmatter delimited by ---"
-        raise SkillError(msg)
+def name_of(fields: Mapping[str, object], source: str = FILENAME) -> str:
+    """The skill's declared name, which is also its directory name.
 
-    fields = frontmatter.fields(parts[0])
-    if isinstance(fields, str):
-        msg = f"{source}: cannot read frontmatter ({fields})"
-        raise SkillError(msg)
-
+    Takes decoded fields rather than the document. Reading YAML needs a
+    library, so `adapters.definitions` does that half and hands the result
+    here — see `domain.frontmatter` for where the seam falls and why.
+    """
     name = frontmatter.text(fields.get("name"))
     if not name:
         msg = f"{source}: frontmatter is missing required field 'name'"

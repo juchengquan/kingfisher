@@ -19,9 +19,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.adapters import skill_store
+from kingfisher.adapters.definitions import read_subagent, skill_name
 from kingfisher.adapters.subagent_store import load_all
 from kingfisher.domain import skill
-from kingfisher.domain.subagent import SUFFIX, parse
+from kingfisher.domain.subagent import SUFFIX
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -112,7 +113,7 @@ def materialise_skills(
             msg = f"{ref}: a skill must contain {skill.FILENAME}"
             raise UploadError(msg)
 
-        name = skill.name_of(body.decode("utf-8"), source=ref)
+        name = skill_name(body.decode("utf-8"), source=ref)
         if name in catalogue:
             # Silently overriding is what deepagents would do -- later sources
             # win -- which would let a request stand in its own definition for
@@ -151,7 +152,7 @@ def materialise_subagents(
             raise UploadError(msg)
 
         (content,) = files.values()
-        spec = parse(content.decode("utf-8"), Path(ref))
+        spec = read_subagent(content.decode("utf-8"), Path(ref))
         if spec.name in catalogue:
             msg = f"{ref}: subagent {spec.name!r} is already defined by the catalogue"
             raise UploadError(msg)

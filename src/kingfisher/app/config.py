@@ -1,7 +1,8 @@
 """Reading configuration out of the environment.
 
-The `Config` record itself lives in `domain/`. What stays here is the part with
-a foreign system on the other side of it — the process environment — and the
+The `Config` record itself lives at the package root, belonging to no layer,
+for the reasons its own docstring gives. What stays here is the part with a
+foreign system on the other side of it — the process environment — and the
 policy that goes with it.
 
 `api_style` is required and has no default (Q25): the Anthropic-compatible and
@@ -24,8 +25,8 @@ from kingfisher.adapters.models import PROVIDERS
 from kingfisher.config import API_STYLES, ROLES, Config, ConfigError, Endpoint
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
-# not re-exported. One blessed import path for the record — `domain.config` —
-# is the whole point of it living there.
+# not re-exported. One blessed import path for the record — `kingfisher.config`
+# — is the whole point of it sitting where it does.
 __all__ = ["enforce_local_only_tracing", "from_env"]
 
 

@@ -6,8 +6,9 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.adapters.definitions import read_subagent
 from kingfisher.adapters.subagent_store import load_all
-from kingfisher.domain.subagent import SubagentError, parse
+from kingfisher.domain.subagent import SubagentError
 
 MINIMAL = """---
 name: reviewer
@@ -27,7 +28,7 @@ You review analyses.
 
 
 def test_minimal_definition_parses():
-    spec = parse(MINIMAL, Path("reviewer.md"))
+    spec = read_subagent(MINIMAL, Path("reviewer.md"))
 
     assert spec.name == "reviewer"
     assert spec.description == "Checks an analysis for arithmetic errors."
@@ -38,7 +39,7 @@ def test_minimal_definition_parses():
 
 
 def test_optional_fields_and_quoting():
-    spec = parse(FULL, Path("reviewer.md"))
+    spec = read_subagent(FULL, Path("reviewer.md"))
 
     assert spec.tools == ("read_file", "glob", "grep")
     assert spec.model == "MiniMax-M2.5"
@@ -61,7 +62,7 @@ def test_malformed_definitions_are_rejected(text, because):
     """Loudly, at build time — a subagent that silently loses its prompt would
     fail much later and much less legibly."""
     with pytest.raises(SubagentError, match=because):
-        parse(text, Path("broken.md"))
+        read_subagent(text, Path("broken.md"))
 
 
 def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
@@ -109,7 +110,7 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
         "You extract.\n"
     )
 
-    spec = parse(definition, tmp_path / "extractor.md")
+    spec = read_subagent(definition, tmp_path / "extractor.md")
 
     assert spec.name == "extractor"
     assert spec.tools == ("read_file", "grep")

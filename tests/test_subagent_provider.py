@@ -13,10 +13,10 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.adapters.agent import CapabilityError, build_agent
+from kingfisher.adapters.definitions import read_subagent
 from kingfisher.app.config import from_env
 from kingfisher.config import ConfigError, Endpoint
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.subagent import parse
 from tests.conftest import FakeToolCallingModel, capture_build
 
 ELSEWHERE = Endpoint("openai", "https://api.openai.com/v1", "sk-elsewhere")
@@ -178,7 +178,7 @@ def test_overriding_the_model_alone_is_fine_when_nothing_is_pinned(
 
 
 def test_the_field_parses(tmp_path):
-    spec = parse(
+    spec = read_subagent(
         "---\nname: r\ndescription: d\nprovider: openai\nmodel: gpt-5\n---\nBody.\n",
         tmp_path / "r.md",
     )
@@ -187,4 +187,6 @@ def test_the_field_parses(tmp_path):
 
 
 def test_omitting_it_means_the_default(tmp_path):
-    assert parse("---\nname: r\ndescription: d\n---\nBody.\n", tmp_path / "r.md").provider is None
+    spec = read_subagent("---\nname: r\ndescription: d\n---\nBody.\n", tmp_path / "r.md")
+
+    assert spec.provider is None
