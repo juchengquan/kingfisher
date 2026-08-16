@@ -61,7 +61,24 @@ def _import(path: Path) -> Any:
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     try:
-        spec.loader.exec_module(module)
+        # Importing writes `__pycache__` beside the source, which here means
+        # inside the tools catalogue -- a directory holding what a person
+        # authored, and the one an operator is most likely to keep under version
+        # control. Bytecode there is noise in `git status` at best and something
+        # committed at worst.
+        #
+        # Suppressed rather than deleted afterwards, so nothing is created to
+        # clean up. Global for the length of one `exec_module` and restored
+        # either way: a concurrent import elsewhere might skip its own cache
+        # once, which costs a recompile and nothing else. The alternative,
+        # `sys.pycache_prefix`, redirects every module in the process rather
+        # than these few.
+        written = sys.dont_write_bytecode
+        sys.dont_write_bytecode = True
+        try:
+            spec.loader.exec_module(module)
+        finally:
+            sys.dont_write_bytecode = written
     except Exception as exc:
         del sys.modules[module_name]
         # The file name matters more than the traceback here: the reader is
