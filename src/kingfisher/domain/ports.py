@@ -42,6 +42,18 @@ class SessionDirs(Protocol):
         """Create `path`, or return False if something already holds the name."""
         ...
 
+    def mark_used(self, path: Path) -> None:
+        """Record that `path` was used just now.
+
+        A port because the rule depends on it. `retention.expired` names
+        sessions "untouched for longer than X" and reads one timestamp to
+        decide -- and a turn writes *inside* a session, into `runs/` and
+        `derived/`, which on an ordinary filesystem leaves the session's own
+        timestamp alone. Measured: a session was still 10,000s idle by that
+        clock immediately after a turn completed in it.
+        """
+        ...
+
     def children(self, path: Path) -> tuple[str, ...]:
         """Names of the directories directly inside `path`."""
         ...

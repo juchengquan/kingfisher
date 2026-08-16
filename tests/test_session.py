@@ -117,6 +117,9 @@ def test_turn_allocation_stays_atomic_through_the_port(workspace):
         def ensure(self, path):
             path.mkdir(parents=True, exist_ok=True)
 
+        def mark_used(self, path):
+            pass
+
         def create_exclusive(self, path):
             if len(self.refused) < 2:
                 self.refused.append(path.name)

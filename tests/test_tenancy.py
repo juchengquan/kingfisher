@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher
+from kingfisher.domain import retention
 from kingfisher.domain.capabilities import ALL, UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import Session, SessionBusyError, UnknownSessionError
@@ -348,3 +349,81 @@ def test_two_sessions_do_not_block_each_other(cfg):
     held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
 
     assert service.run(Request("go", session_id=other)).turn_id == "t001"
+
+
+# -- a sweep and a session in use -----------------------------------------
+#
+# `expired` names sessions "untouched for longer than X" and reads one
+# timestamp to decide. A turn writes *inside* a session -- `runs/`, `derived/`
+# -- which leaves the session's own timestamp alone, so a conversation in daily
+# use still read as idle. Measured before this: 10,000s idle immediately after
+# a turn completed in it.
+
+
+def test_a_turn_records_that_its_session_was_used(cfg):
+    """Or the idle clock measures something other than idleness."""
+    import os
+    import time
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    session = service.start_session("s")
+    directory = cfg.workspace / "sessions" / session
+
+    stale = time.time() - 10_000
+    os.utime(directory, (stale, stale))
+    service.run(Request("go", session_id=session))
+
+    assert time.time() - directory.stat().st_mtime < 60
+
+
+def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
+    """A turn may outlive the idle bound -- `turn_timeout_s` defaults to an
+    hour and nothing requires a session to be kept that long -- and sweeping
+    one mid-turn deletes the directory out from under an agent still writing
+    to it, leaving the claim pointing at nothing."""
+    import os
+    import time
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    session = service.start_session("s")
+    directory = cfg.workspace / "sessions" / session
+
+    held = Session(id=session, directory=directory)
+    held.claim(service.dirs, cfg.state_dir / "claims", stale_after=3600, now=time.time())
+    stale = time.time() - 10_000
+    os.utime(directory, (stale, stale))
+
+    result = service.reap(older_than_seconds=1.0, now=time.time())
+
+    assert result.removed == ()
+    assert directory.exists()
+
+
+def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
+    """Per session, not a global pause on sweeping."""
+    import os
+    import time
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    busy = service.start_session("busy")
+    idle = service.start_session("idle")
+
+    held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
+    held.claim(service.dirs, cfg.state_dir / "claims", stale_after=3600, now=time.time())
+    stale = time.time() - 10_000
+    for name in (busy, idle):
+        os.utime(cfg.workspace / "sessions" / name, (stale, stale))
+
+    result = service.reap(older_than_seconds=1.0, now=time.time())
+
+    assert result.removed == (idle,)
+    assert (cfg.workspace / "sessions" / busy).exists()
+
+
+def test_the_rule_itself_keeps_what_is_busy():
+    """The domain half, without a filesystem."""
+    entries = (("a", 0.0), ("b", 0.0))
+
+    assert retention.expired(entries, 1.0, now=100.0).doomed == ("a", "b")
+    assert retention.expired(entries, 1.0, now=100.0, busy=("a",)).doomed == ("b",)
+    assert retention.expired(entries, 1.0, now=100.0, busy=("a",)).kept == 1

@@ -416,7 +416,12 @@ class Kingfisher:
         """
         sessions_root = self.workspace / "sessions"
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
-        plan = retention.expired(self.dirs.listing(sessions_root), age, now)
+        plan = retention.expired(
+            self.dirs.listing(sessions_root),
+            age,
+            now,
+            busy=self.dirs.children(self._claims),
+        )
         result = retention.apply(plan, sessions_root, self.dirs, self.threads)
         return self._reconcile_threads(sessions_root, result)
 
@@ -510,6 +515,11 @@ class Kingfisher:
         # retry reuses it.
         session = Session.open(workspace, session_id, dirs)
         ensure_session_layout(session.directory)
+        # A turn writes inside the session, never to the session itself, so the
+        # timestamp `retention.expired` reads would still say "idle" for a
+        # conversation in daily use. Recorded here, at the top of a turn, rather
+        # than at the end: a turn that fails still happened.
+        dirs.mark_used(session.directory)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
         session.claim(dirs, self._claims, stale_after=cfg.turn_timeout_s, now=time())
