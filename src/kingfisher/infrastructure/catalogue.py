@@ -15,9 +15,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
+from kingfisher.domain.subagent import SubagentSpec
+from kingfisher.infrastructure import skill_store
+from kingfisher.infrastructure.subagent_store import load_all
+from kingfisher.infrastructure.tool_store import Found
+from kingfisher.infrastructure.tool_store import loaded as load_tools_with_sources
 
 CATALOGUE_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
 
@@ -53,6 +59,52 @@ class Catalogue:
     skills: Path
     subagents: Path
     tools: Path
+
+    @cached_property
+    def skill_names(self) -> tuple[str, ...]:
+        """Every skill this deployment offers, by name.
+
+        Names and not more: deepagents opens the files itself, so kingfisher
+        lists and denies but never parses one.
+        """
+        return skill_store.names(self.skills)
+
+    @cached_property
+    def subagent_specs(self) -> Mapping[str, SubagentSpec]:
+        """Every subagent this deployment defines, parsed, by name."""
+        return load_all(self.subagents)
+
+    @cached_property
+    def tools_found(self) -> tuple[Found, ...]:
+        """Every workspace tool, paired with the file it came from.
+
+        The pair rather than the objects alone, because a listing and a refusal
+        both need to say where a tool is defined.
+        """
+        return load_tools_with_sources(self.tools)
+
+    def warm(self) -> Catalogue:
+        """Read all three now, so a broken definition fails here.
+
+        `cached_property` alone is lazy, which is right for the fallback in
+        `build_agent` -- a caller wanting skills should not pay for parsing every
+        tool. It is wrong for a deployment: `resolve_catalogue` already refuses a
+        catalogue that is not a directory because "a catalogue that cannot be
+        read is a wiring mistake and this is the last moment it is cheap to say
+        so", and a subagent with an unknown field is the same mistake one layer
+        in. Touching them here moves that from the first turn to startup.
+
+        Called by `Kingfisher`, not by `resolve_catalogue`, and the difference
+        is `--list`. That command exists to be run *because* something is
+        wrong, and it catches a loader error and prints it over the rest of
+        the inventory rather than dying on it. Warming inside resolution
+        raised before it could -- a test caught that. A deployment wants the
+        opposite and gets it by construction.
+
+        Returns self, so construction reads as one expression.
+        """
+        _ = self.skill_names, self.subagent_specs, self.tools_found
+        return self
 
     @classmethod
     def from_config(cls, cfg: Config) -> Catalogue:
