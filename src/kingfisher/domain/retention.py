@@ -67,8 +67,13 @@ def expired(
     return SweepPlan(doomed=doomed, kept=len(entries) - len(doomed))
 
 
-def orphaned(threads: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]:
-    """Threads no session owns any more.
+def orphaned(names: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]:
+    """Names no session owns any more.
+
+    Two kinds of residue, and the same set difference decides both. A thread is
+    a conversation whose session is gone; a claim is a turn slot whose session
+    is gone. Both are unreachable, and both accumulate silently because nothing
+    but this looks for them.
 
     A thread is the conversation; the directory is the session. `discard`
     removes both, so a sweep leaves neither behind -- but a session directory
@@ -81,11 +86,17 @@ def orphaned(threads: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]
     a session exists -- so the conversation behind an orphaned thread can never
     be resumed by anyone. Deleting it loses nothing that could have been read.
 
+    A claim is unreachable for the same reason and safe to remove for a
+    stronger one: with the session gone there is nothing left to run a turn
+    against, so there is nothing a holder could still be doing. Taking over a
+    *stale* claim on a session that still exists is a different question, and
+    stays with `Session.claim`, where only one `create_exclusive` can win it.
+
     A set difference, kept pure and here rather than in the janitor, because
     "what is residue" is the same kind of decision as "what has expired".
     """
     live = set(sessions)
-    return tuple(sorted(t for t in set(threads) if t not in live))
+    return tuple(sorted(n for n in set(names) if n not in live))
 
 
 def apply(
