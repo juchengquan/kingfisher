@@ -1,4 +1,4 @@
-"""Thread persistence.
+"""Thread persistence: the conversation behind a session.
 
 `BaseCheckpointSaver` is already the swappable interface, so this is a factory
 rather than a wrapper — wrapping an existing protocol in a bespoke one can only
@@ -6,11 +6,28 @@ lose fidelity. A deployment that outgrows sqlite passes its own saver to
 `Kingfisher(threads=...)`; nothing else changes, including the thread deletion
 that `delete_session` and `reap` depend on.
 
-Sqlite is configured for more than one process, because more than one is the
-shape this is deployed in: process count follows concurrency, and every process
-serving a workspace opens this same file. Left at its defaults it does not
+Four builders, and which is the default matters:
+
+* `build_session_checkpointer` / `async_session_checkpointer` take a *session*
+  directory and put the database inside it. This is what a deployment gets by
+  passing nothing, and why an orphaned thread is not something a janitor
+  collects but something that cannot happen — deleting the session deletes the
+  conversation.
+* `build_checkpointer` / `async_checkpointer` take a `Config` and open one
+  database per *workspace*. Nothing in this package calls them; they are
+  exported so a deployment can still ask for one shared file on purpose. That
+  asymmetry is deliberate rather than an oversight: the default needs no export
+  because it is what you get for asking for nothing, so what is worth naming
+  publicly is the road not taken.
+
+Sqlite is configured for more than one process either way, because more than one
+is the shape this is deployed in: process count follows concurrency, and a
+session outlives the process that opened it. Left at its defaults it does not
 survive that — measured, six processes against one fresh database and three of
-them died in `setup()`, before serving anything.
+them died in `setup()`, before serving anything. That measurement was taken
+against a shared file, which is where contention is worst; per-session files
+made the slowest writer 363ms → 80ms at 32 concurrent processes, and the tuning
+still earns its place because a resumed turn may land in any process.
 """
 
 from __future__ import annotations
