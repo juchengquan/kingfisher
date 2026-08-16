@@ -87,6 +87,7 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
     workspace_tool_names,
 )
+from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
 from kingfisher.infrastructure.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
@@ -96,7 +97,6 @@ from kingfisher.infrastructure.checkpointing import (
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
-    Catalogue,
     LocalSessionDirs,
     check_placeable,
     collect_artifacts,
@@ -105,7 +105,6 @@ from kingfisher.infrastructure.workspace_fs import (
     place_data,
     place_inputs,
     protect_data,
-    resolve_catalogue,
     session_bytes,
 )
 

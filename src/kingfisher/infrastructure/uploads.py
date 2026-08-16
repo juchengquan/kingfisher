@@ -21,9 +21,9 @@ from typing import TYPE_CHECKING
 from kingfisher.domain import skill
 from kingfisher.domain.subagent import SUFFIX
 from kingfisher.infrastructure import skill_store
+from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 from kingfisher.infrastructure.subagent_store import load_all
-from kingfisher.infrastructure.workspace_fs import Catalogue
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

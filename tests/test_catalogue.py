@@ -26,7 +26,7 @@ from kingfisher.infrastructure.agent import (
     workspace_tool_names,
 )
 from kingfisher.infrastructure.backend import SKILLS_ROUTE, build_backend
-from kingfisher.infrastructure.workspace_fs import Catalogue, resolve_catalogue
+from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
 from tests.conftest import FakeToolCallingModel, capture_build
 
 SUBAGENT = """name: reviewer

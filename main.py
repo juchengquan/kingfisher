@@ -161,7 +161,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     coincidence of nobody having wired anything else yet.
     """
     from kingfisher.infrastructure.agent import build_agent, registered_tools  # noqa: PLC0415
-    from kingfisher.infrastructure.workspace_fs import resolve_catalogue  # noqa: PLC0415
+    from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
 
@@ -404,7 +404,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
         defined_subagents,
         registered_tools,
     )
-    from kingfisher.infrastructure.workspace_fs import resolve_catalogue  # noqa: PLC0415
+    from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:

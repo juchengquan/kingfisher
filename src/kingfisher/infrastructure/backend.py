@@ -24,7 +24,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.workspace_fs import Catalogue
+from kingfisher.infrastructure.catalogue import Catalogue
 
 if TYPE_CHECKING:
 

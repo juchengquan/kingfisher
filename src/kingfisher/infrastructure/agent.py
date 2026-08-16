@@ -49,6 +49,7 @@ from kingfisher.infrastructure.backend import (
     SKILLS_SOURCES,
     build_backend,
 )
+from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.delegation import (
     as_subagent,
     indistinct,
@@ -67,7 +68,6 @@ from kingfisher.infrastructure.scoping import (
 )
 from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.tool_store import load_tools, tool_name
-from kingfisher.infrastructure.workspace_fs import Catalogue
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence
