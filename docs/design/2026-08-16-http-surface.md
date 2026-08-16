@@ -1,6 +1,7 @@
 # An HTTP surface for kingfisher
 
-**Status:** designed, not implemented.
+**Status:** phases 1–2 shipped. Turns, errors, capabilities, files and
+packaging remain.
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
