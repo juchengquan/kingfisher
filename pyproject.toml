@@ -18,6 +18,13 @@ classifiers = [
 ]
 dependencies = [
     "deepagents>=0.7.6",
+    # Imported directly by infrastructure/agent.py, lazily, so that installing it
+    # costs nothing until `KINGFISHER_INTERPRETER` is on. It also arrives through
+    # deepagents' own `quickjs` extra, but an extra is not a promise either -- if
+    # upstream renames it, uv warns and moves on while our import breaks. The
+    # floor is deepagents' (`>=0.3.3` at 0.7.6) rather than the one the docs page
+    # advertises, which is two minors behind what the library actually needs.
+    "langchain-quickjs>=0.3.3",
     # Imported directly by adapters/models.py. It also arrives transitively
     # through deepagents, but a transitive dep is not a promise.
     "langchain-anthropic>=1.5.4",
@@ -34,18 +41,11 @@ dependencies = [
     "python-dotenv>=1.2.2",
 ]
 
-[project.optional-dependencies]
-# The JavaScript sandbox. Optional because it is a second execution surface a
-# deployment may not want, and because the library is beta -- its own warning
-# says the API is still moving. `KINGFISHER_INTERPRETER` does nothing without it.
-interpreter = ["langchain-quickjs>=0.2.0"]
-
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
 [dependency-groups]
 dev = [
-    "langchain-quickjs>=0.2.0",
     "pytest>=9.1.1",
     "ruff>=0.16.3",
     "ty>=0.0.72",

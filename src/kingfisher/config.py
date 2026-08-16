@@ -142,7 +142,11 @@ class Config:
     # Dispatching subagents from inside it needs the async path -- `task()` in
     # the REPL awaits, and a sync saver raises partway through a workflow.
     #
-    # Off by default, and needs an optional dependency: `kingfisher[interpreter]`.
+    # Off by default. The sandbox ships with kingfisher rather than behind an
+    # extra: the flag is already the gate, and a second one bought nothing but a
+    # bare ModuleNotFoundError for anyone who set the flag without it. Importing
+    # it is deferred to the point of use, so an install that never turns this on
+    # pays nothing for carrying it.
     interpreter_enabled: bool = False
 
     @property
