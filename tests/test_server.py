@@ -556,3 +556,106 @@ def test_a_delegate_is_named_so_its_prose_can_be_told_apart(cfg):
         "text": "x",
         "agent": "reviewer",
     }
+
+
+# -- every refusal looks the same ------------------------------------------
+#
+# There were four shapes: the turn path's, fastapi's `{"detail": ...}` from
+# `HTTPException`, fastapi's list-of-objects from request validation, and a
+# hand-written string in the body-size middleware. A client that must recognise
+# four shapes to find out what went wrong will parse one and break on the rest.
+
+
+REFUSALS = [
+    ("unknown session", "GET", "/sessions/" + "0" * 32, None, 404, "unknown_session"),
+    ("delete unknown session", "DELETE", "/sessions/" + "0" * 32, None, 404, "unknown_session"),
+    ("turn on unknown session", "POST", "/sessions/" + "0" * 32 + "/turns",
+     {"task": "go"}, 404, "unknown_session"),
+    ("empty task", "POST", "/turns", {"task": "   "}, 422, "invalid_request"),
+    ("missing task", "POST", "/turns", {}, 422, "invalid_request"),
+    ("no such route", "GET", "/nope", None, 404, "not_found"),
+    ("wrong method", "GET", "/turns", None, 405, "method_not_allowed"),
+]
+
+
+@pytest.mark.parametrize("case", REFUSALS, ids=[row[0] for row in REFUSALS])
+def test_every_refusal_has_the_same_shape(client, case):
+    """One shape, whoever refused: kingfisher, fastapi's router, or validation.
+
+    `error` is the contract and `message` is prose. A client branches on the
+    first and shows the second; parsing the message is how a client breaks when
+    the wording improves.
+    """
+    _, method, path, payload, expected_status, expected_code = case
+
+    response = client.request(method, path, json=payload)
+
+    assert response.status_code == expected_status
+    body = response.json()
+    assert body["error"] == expected_code
+    assert isinstance(body["message"], str)
+    assert body["message"]
+    assert "detail" not in body or isinstance(body["detail"], list)
+
+
+def test_a_busy_session_refuses_in_the_same_shape(client, cfg):
+    """The turn path raises rather than building a response, so it arrives at
+    the same handler as everything else."""
+    session_id = client.post("/sessions").json()["session_id"]
+    (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
+
+    response = client.post(f"/sessions/{session_id}/turns", json={"task": "go"})
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "session_busy"
+    assert response.json()["message"]
+
+
+def test_an_oversize_body_refuses_in_the_same_shape(cfg):
+    """The middleware used to hand-write its JSON, which made it the fourth
+    shape. It carries `limit` as an extra rather than every refusal carrying a
+    field that is usually null."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    app = create_app(service, ServerConfig(max_body_bytes=64))
+
+    with TestClient(app) as http:
+        body = http.post("/sessions", content=b"x" * 128).json()
+
+    assert body["error"] == "body_too_large"
+    assert body["message"]
+    assert body["limit"] == 64
+
+
+def test_two_refusals_with_one_status_still_say_which_is_which(client):
+    """`unknown_session` and a mistyped URL are both 404 and need different
+    fixes. A status alone is not something a client can branch on."""
+    unknown = client.get("/sessions/" + "0" * 32).json()["error"]
+    mistyped = client.get("/nope").json()["error"]
+
+    assert unknown == "unknown_session"
+    assert mistyped == "not_found"
+    assert unknown != mistyped
+
+
+def test_a_bug_is_not_dressed_up_as_a_refusal(cfg, monkeypatch):
+    """An unmapped exception must not acquire an `error` code on the way out.
+    A 500 that looks like a refusal is one a client retries forever.
+
+    Asserted on the response rather than on the raise. Starlette re-raises after
+    a server-error handler runs, so `pytest.raises` passes whether or not the
+    handler dressed the bug up first -- which it did, when this was written that
+    way and a mutation broadening the registration went unnoticed.
+    """
+    boom = "something is wrong here"
+
+    def explode(self, session_id):
+        raise RuntimeError(boom)
+
+    monkeypatch.setattr(Kingfisher, "session", explode)
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+
+    with TestClient(create_app(service), raise_server_exceptions=False) as http:
+        response = http.get("/sessions/anything")
+
+    assert response.status_code == 500
+    assert "error" not in response.text or boom not in response.text

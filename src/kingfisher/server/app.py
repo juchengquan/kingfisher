@@ -17,10 +17,10 @@ from __future__ import annotations
 from contextlib import asynccontextmanager
 from typing import TYPE_CHECKING
 
-from fastapi import FastAPI, Request, Response, status
+from fastapi import FastAPI, Request, status
 
 from kingfisher import Config, Kingfisher, async_checkpointer, from_env
-from kingfisher.server import sessions
+from kingfisher.server import errors, sessions
 from kingfisher.server.config import ServerConfig
 from kingfisher.server.turns import turn_router
 
@@ -81,13 +81,15 @@ def create_app(
         """
         declared = request.headers.get("content-length")
         if declared is not None and int(declared) > settings.max_body_bytes:
-            return Response(
-                status_code=status.HTTP_413_CONTENT_TOO_LARGE,
-                content=f'{{"error":"body_too_large","limit":{settings.max_body_bytes}}}',
-                media_type="application/json",
+            return errors.problem(
+                status.HTTP_413_CONTENT_TOO_LARGE,
+                "body_too_large",
+                f"the request body is larger than {settings.max_body_bytes} bytes",
+                limit=settings.max_body_bytes,
             )
         return await call_next(request)
 
+    errors.install(app)
     app.include_router(sessions.router)
     app.include_router(turn_router(settings))
     return app
