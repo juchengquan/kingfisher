@@ -116,14 +116,17 @@ catalogue of tools can be deployed once and shared by every workspace.
 
 ---
 
-## Subagents — `/subagents/<name>.md`
+## Subagents — `/subagents/<name>.yaml`
 
-YAML frontmatter, then a body that *is* the subagent's system prompt.
+A YAML document. It was markdown with a YAML header until the header had
+grown into everything but the prompt, at which point the body was one field
+pretending to be a format.
 
 | Field | | |
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
+| `system_prompt` | required | The delegate's whole instruction. Write it as a `\|` block scalar — the content is prose and the block keeps every line break |
 | `tools` | optional | `[read_file, grep]` or a block list. Unset inherits the parent's tools |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |

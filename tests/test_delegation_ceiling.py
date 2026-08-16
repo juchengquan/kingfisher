@@ -14,15 +14,15 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.agent import build_agent
 from tests.conftest import FakeToolCallingModel
 
-HELPER = """---
-name: helper
+HELPER = """name: helper
 description: Declares no tools, so it inherits whatever it is given.
----
-You help.
+system_prompt: |
+  You help.
+
 """
 
 
-def _with_helper(cfg, definition: str = HELPER, name: str = "helper.md"):
+def _with_helper(cfg, definition: str = HELPER, name: str = "helper.yaml"):
     directory = cfg.subagents_dir
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(definition, encoding="utf-8")

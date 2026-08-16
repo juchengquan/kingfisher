@@ -77,7 +77,14 @@ from types import MappingProxyType
 from kingfisher.domain import frontmatter
 
 DIRECTORY = "subagents"
-SUFFIX = ".md"
+SUFFIX = ".yaml"
+
+#: What definitions used to be called, kept only so a leftover one can be
+#: *reported*. A workspace seeded before the format changed would otherwise
+#: lose its subagents in silence -- the directory still full, the listing
+#: empty -- which is the failure `skill_store.misplaced` exists to prevent
+#: one directory over.
+LEGACY_SUFFIX = ".md"
 
 #: Every field this format defines. A key outside it is refused rather than
 #: ignored, because ignoring one is indistinguishable from honouring it: a
@@ -88,7 +95,16 @@ SUFFIX = ".md"
 #: deepagents owns the skill format and decides what a skill may say, so
 #: refusing keys there would reject fields valid in a format we do not define.
 KNOWN: frozenset[str] = frozenset(
-    {"name", "description", "tools", "skills", "middleware", "provider", "model"}
+    {
+        "name",
+        "description",
+        "system_prompt",
+        "tools",
+        "skills",
+        "middleware",
+        "provider",
+        "model",
+    }
 )
 
 #: Fields deepagents' `SubAgent` understands that this format deliberately does
@@ -175,30 +191,26 @@ def _refuse_unknown(fields: Mapping[str, object], source: Path) -> None:
         raise SubagentError(msg)
 
 
-def parse(fields: Mapping[str, object], body: str, source: Path) -> SubagentSpec:
-    """One definition, from its decoded fields and its body.
+def parse(fields: Mapping[str, object], source: Path) -> SubagentSpec:
+    """One definition, from its decoded fields.
 
     Raises `SubagentError` on anything the format forbids. Whether the document
-    carried a header at all, and whether that header decoded, were settled
-    before this — reading YAML needs a library, so `infrastructure.definitions` does
-    that half. See `domain.frontmatter` for where the seam falls and why.
+    decoded at all was settled before this — reading YAML needs a library, so
+    `infrastructure.definitions` does that half.
     """
     # Before the required-field check, so `nmae:` is reported as the typo it is
     # rather than as a missing `name` the author plainly tried to write.
     _refuse_unknown(fields, source)
 
-    for required in ("name", "description"):
+    for required in ("name", "description", "system_prompt"):
         if not fields.get(required):
-            msg = f"{source.name}: frontmatter is missing required field {required!r}"
+            msg = f"{source.name}: missing required field {required!r}"
             raise SubagentError(msg)
-    if not body:
-        msg = f"{source.name}: the body is the system prompt and must not be empty"
-        raise SubagentError(msg)
 
     return SubagentSpec(
         name=frontmatter.text(fields["name"]),
         description=frontmatter.text(fields["description"]),
-        system_prompt=body,
+        system_prompt=frontmatter.text(fields["system_prompt"]),
         # `[read_file, grep]` and a block list are the same thing to YAML, so
         # both reach here already parsed.
         tools=frontmatter.names(fields.get("tools")),

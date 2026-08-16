@@ -1,4 +1,4 @@
-"""Parsing `/subagents/<name>.md`."""
+"""Parsing `/subagents/<name>.yaml`."""
 
 from __future__ import annotations
 
@@ -10,25 +10,25 @@ from kingfisher.domain.subagent import KNOWN, REFUSED, SubagentError, SubagentSp
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 from kingfisher.infrastructure.subagent_store import load_all
 
-MINIMAL = """---
-name: reviewer
+MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.
----
-You review analyses. Be specific about what is wrong.
+system_prompt: |
+  You review analyses. Be specific about what is wrong.
+
 """
 
-FULL = """---
-name: reviewer
+FULL = """name: reviewer
 description: "Checks an analysis for arithmetic errors."
 tools: [read_file, glob, grep]
 model: MiniMax-M2.5
----
-You review analyses.
+system_prompt: |
+  You review analyses.
+
 """
 
 
 def test_minimal_definition_parses():
-    spec = read_subagent(MINIMAL, Path("reviewer.md"))
+    spec = read_subagent(MINIMAL, Path("reviewer.yaml"))
 
     assert spec.name == "reviewer"
     assert spec.description == "Checks an analysis for arithmetic errors."
@@ -39,7 +39,7 @@ def test_minimal_definition_parses():
 
 
 def test_optional_fields_and_quoting():
-    spec = read_subagent(FULL, Path("reviewer.md"))
+    spec = read_subagent(FULL, Path("reviewer.yaml"))
 
     assert spec.tools == ("read_file", "glob", "grep")
     assert spec.model == "MiniMax-M2.5"
@@ -49,20 +49,21 @@ def test_optional_fields_and_quoting():
 @pytest.mark.parametrize(
     ("text", "because"),
     [
-        ("no frontmatter at all", "expected YAML frontmatter"),
-        ("---\ndescription: x\n---\nbody\n", "missing required field 'name'"),
-        ("---\nname: x\n---\nbody\n", "missing required field 'description'"),
-        ("---\nname: x\ndescription: y\n---\n\n", "must not be empty"),
+        # A bare scalar is valid YAML and not a definition.
+        ("no fields at all", "expected a mapping of fields"),
+        ("description: x\nsystem_prompt: |\n  body\n", "missing required field 'name'"),
+        ("name: x\nsystem_prompt: |\n  body\n", "missing required field 'description'"),
+        ("name: x\ndescription: y\n", "missing required field 'system_prompt'"),
         # YAML says why; we say which file. Rejected either way.
-        ("---\nname x\ndescription: y\n---\nbody\n", "cannot read frontmatter"),
-        ("---\n- not\n- a mapping\n---\nbody\n", "expected a mapping of fields"),
+        ("name x\ndescription: y\nsystem_prompt: |\n  body\n", "cannot read definition"),
+        ("- not\n- a mapping\n", "expected a mapping of fields"),
     ],
 )
 def test_malformed_definitions_are_rejected(text, because):
     """Loudly, at build time — a subagent that silently loses its prompt would
     fail much later and much less legibly."""
     with pytest.raises(SubagentError, match=because):
-        read_subagent(text, Path("broken.md"))
+        read_subagent(text, Path("broken.yaml"))
 
 
 def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
@@ -72,7 +73,7 @@ def test_load_all_is_empty_when_the_directory_is_absent(tmp_path):
 def test_load_all_keys_on_the_frontmatter_name_not_the_filename(tmp_path):
     directory = tmp_path / "subagents"
     directory.mkdir()
-    (directory / "misnamed.md").write_text(MINIMAL, encoding="utf-8")
+    (directory / "misnamed.yaml").write_text(MINIMAL, encoding="utf-8")
 
     specs = load_all(tmp_path / "subagents")
     assert set(specs) == {"reviewer"}
@@ -82,8 +83,8 @@ def test_load_all_rejects_two_files_claiming_one_name(tmp_path):
     """Otherwise one silently shadows the other depending on sort order."""
     directory = tmp_path / "subagents"
     directory.mkdir()
-    (directory / "a.md").write_text(MINIMAL, encoding="utf-8")
-    (directory / "b.md").write_text(MINIMAL, encoding="utf-8")
+    (directory / "a.yaml").write_text(MINIMAL, encoding="utf-8")
+    (directory / "b.yaml").write_text(MINIMAL, encoding="utf-8")
 
     with pytest.raises(SubagentError, match="duplicate subagent name"):
         load_all(tmp_path / "subagents")
@@ -98,7 +99,6 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
     them made a skill that loads from the catalogue impossible to upload.
     """
     definition = (
-        "---\n"
         "name: extractor\n"
         "description: >-\n"
         "  Pulls fields out of documents,\n"
@@ -106,11 +106,11 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
         "tools:\n"
         "  - read_file\n"
         "  - grep\n"
-        "---\n"
-        "You extract.\n"
+        "system_prompt: |\n"
+        "  You extract.\n"
     )
 
-    spec = read_subagent(definition, tmp_path / "extractor.md")
+    spec = read_subagent(definition, tmp_path / "extractor.yaml")
 
     assert spec.name == "extractor"
     assert spec.tools == ("read_file", "grep")
@@ -122,7 +122,7 @@ def test_frontmatter_accepts_what_the_skill_spec_documents(tmp_path):
 
 def _definition(*frontmatter_lines: str) -> str:
     header = "\n".join(("name: reviewer", "description: d", *frontmatter_lines))
-    return f"---\n{header}\n---\nYou review analyses.\n"
+    return f"{header}\nsystem_prompt: |\n  You review analyses.\n"
 
 
 def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
@@ -131,7 +131,7 @@ def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
     the delegate came out holding every tool its parent had.
     """
     with pytest.raises(SubagentError, match="tolls") as raised:
-        read_subagent(_definition("tolls: [read_file]"), tmp_path / "reviewer.md")
+        read_subagent(_definition("tolls: [read_file]"), tmp_path / "reviewer.yaml")
 
     assert "did you mean 'tools'?" in str(raised.value)
 
@@ -139,10 +139,10 @@ def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
 def test_a_typo_of_a_required_field_names_the_typo(tmp_path):
     """Not "missing required field 'name'", which sends the author looking for
     something they can plainly see they wrote."""
-    body = "---\nnmae: reviewer\ndescription: d\n---\nYou review.\n"
+    body = "nmae: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n"
 
     with pytest.raises(SubagentError, match="nmae") as raised:
-        read_subagent(body, tmp_path / "reviewer.md")
+        read_subagent(body, tmp_path / "reviewer.yaml")
 
     assert "did you mean 'name'?" in str(raised.value)
 
@@ -153,7 +153,7 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
     message does not pretend otherwise.
     """
     with pytest.raises(SubagentError, match="additional_abc") as raised:
-        read_subagent(_definition("additional_abc: 1"), tmp_path / "reviewer.md")
+        read_subagent(_definition("additional_abc: 1"), tmp_path / "reviewer.yaml")
 
     message = str(raised.value)
     assert "did you mean" not in message
@@ -166,7 +166,7 @@ def test_a_deliberately_unexposed_field_says_why(tmp_path, field):
     """These are not "not yet". Honouring them would be wrong, and the generic
     message reads as an omission someone might work around."""
     with pytest.raises(SubagentError, match=field) as raised:
-        read_subagent(_definition(f"{field}: something"), tmp_path / "reviewer.md")
+        read_subagent(_definition(f"{field}: something"), tmp_path / "reviewer.yaml")
 
     message = str(raised.value)
     assert "did you mean" not in message
@@ -178,7 +178,7 @@ def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
     and silently did nothing, so the definition read stricter than the agent it
     produced."""
     with pytest.raises(SubagentError) as raised:
-        read_subagent(_definition("permissions: [deny]"), tmp_path / "reviewer.md")
+        read_subagent(_definition("permissions: [deny]"), tmp_path / "reviewer.yaml")
 
     message = str(raised.value)
     assert "replace" in message
@@ -189,7 +189,6 @@ def test_every_known_field_still_parses(tmp_path):
     """The negative control: strictness that rejected a valid definition would
     be a worse bug than the one it fixes."""
     body = (
-        "---\n"
         "name: reviewer\n"
         "description: d\n"
         "tools: [read_file]\n"
@@ -197,10 +196,9 @@ def test_every_known_field_still_parses(tmp_path):
         "middleware: [audit]\n"
         "provider: openai\n"
         "model: gpt-5\n"
-        "---\n"
-        "You review.\n"
+        "system_prompt: |\n  You review.\n"
     )
-    spec = read_subagent(body, tmp_path / "reviewer.md")
+    spec = read_subagent(body, tmp_path / "reviewer.yaml")
 
     assert spec.tools == ("read_file",)
     assert spec.middleware == ("audit",)
@@ -210,9 +208,7 @@ def test_every_known_field_still_parses(tmp_path):
 def test_the_known_set_matches_the_spec_it_builds():
     """Two lists that must agree: a field added to the dataclass but not to
     KNOWN would be refused as unknown the moment anyone used it."""
-    read = set(SubagentSpec.__dataclass_fields__) - {"system_prompt"}
-
-    assert read == KNOWN
+    assert set(SubagentSpec.__dataclass_fields__) == KNOWN
 
 
 def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):

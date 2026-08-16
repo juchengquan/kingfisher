@@ -126,7 +126,7 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
+        target.write_text("name: x\ndescription: d\nsystem_prompt: |\n  body\n", encoding="utf-8")
     (tmp_path / "not-a-skill").mkdir()
 
     assert skill_store.names(tmp_path) == ("flat",)
@@ -190,7 +190,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 #
 # `seed` says the entire point is that you edit your copy, and seeding is the
 # one operation that writes over those copies. It used to do so silently: an
-# edited `reviewer.md` came back as the shipped one, reported identically to a
+# edited `reviewer.yaml` came back as the shipped one, reported identically to a
 # file that had never been there. It still overwrites -- refusing would make
 # re-seeding after an upgrade impossible, which is the same trade `place_data`
 # makes -- but it no longer does it quietly.
@@ -213,12 +213,13 @@ def test_seeding_twice_unchanged_is_silent(cfg):
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
     presets.seed(cfg)
-    edited = cfg.subagents_dir / "reviewer.md"
-    edited.write_text("---\nname: reviewer\ndescription: mine\n---\nMy prompt.\n", encoding="utf-8")
+    edited = cfg.subagents_dir / "reviewer.yaml"
+    edited.write_text("name: reviewer\ndescription: mine\n"
+        "system_prompt: |\n  My prompt.\n", encoding="utf-8")
 
     seeding = presets.seed(cfg)
 
-    assert "subagents/reviewer.md" in seeding.overwritten
+    assert "subagents/reviewer.yaml" in seeding.overwritten
     assert "description: mine" not in edited.read_text(encoding="utf-8")
 
 

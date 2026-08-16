@@ -19,11 +19,11 @@ from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.subagent_store import load_all
 from tests.conftest import FakeToolCallingModel, capture_build
 
-SUBAGENT = """---
-name: reviewer
+SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
----
-You review analyses.
+system_prompt: |
+  You review analyses.
+
 """
 
 
@@ -43,11 +43,12 @@ def _write_skill(workspace, name):
     directory = workspace / "skills" / name
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "SKILL.md").write_text(
-        f"---\nname: {name}\ndescription: A skill.\n---\nDo the thing.\n", encoding="utf-8"
+        f"name: {name}\ndescription: A skill.\n"
+        "system_prompt: |\n  Do the thing.\n", encoding="utf-8"
     )
 
 
-def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.md"):
+def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.yaml"):
     directory = workspace / "subagents"
     directory.mkdir(exist_ok=True)
     (directory / filename).write_text(text, encoding="utf-8")
@@ -284,12 +285,12 @@ def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
     assert registered_tools(object()) == ()
 
 
-RESTRICTED_SUBAGENT = """---
-name: reader
+RESTRICTED_SUBAGENT = """name: reader
 description: Reads files and reports what they contain.
 tools: [read_file, glob]
----
-You read files.
+system_prompt: |
+  You read files.
+
 """
 
 
@@ -298,7 +299,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
     register, not a selection by name. Passing names raised inside ToolNode.
     The spy-based test below never caught it, and the live run used a subagent
     with no `tools:` field."""
-    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.md")
+    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
 
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -307,7 +308,7 @@ def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
 
 
 def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, session_dir):
-    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.md")
+    _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
     captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -321,12 +322,12 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, ses
     assert allowlist._allowed == {"read_file", "glob"}
 
 
-MODEL_SUBAGENT = """---
-name: cheap
+MODEL_SUBAGENT = """name: cheap
 description: Does the bulk reading on a smaller model.
 model: some-small-model
----
-You read things.
+system_prompt: |
+  You read things.
+
 """
 
 
@@ -334,7 +335,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
     """A bare name would go to deepagents' `init_chat_model`, which infers its
     own provider and reads credentials from the environment -- around the
     configured base_url and api_style entirely."""
-    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
+    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -358,7 +359,7 @@ def test_role_models_override_a_subagents_declared_model(cfg, monkeypatch, sessi
     could not exist outside a test that built one by hand. The test validated a
     path production cannot reach, which is why the defect survived it.
     """
-    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.md")
+    _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, role_models={"subagent": "operator-choice"}),
@@ -422,7 +423,8 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
     catalogue = tmp_path / "catalogue" / "skills"
     (catalogue / "shared").mkdir(parents=True)
     (catalogue / "shared" / "SKILL.md").write_text(
-        "---\nname: shared\ndescription: A procedure every deployment gets.\n---\nBody.\n",
+        "name: shared\ndescription: A procedure every deployment gets.\n"
+        "system_prompt: |\n  Body.\n",
         encoding="utf-8",
     )
     relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
@@ -441,8 +443,8 @@ def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
     delegates, or the reverse -- so they are two roots, not one."""
     catalogue = tmp_path / "catalogue" / "subagents"
     catalogue.mkdir(parents=True)
-    (catalogue / "reviewer.md").write_text(
-        "---\nname: reviewer\ndescription: Checks arithmetic.\n---\nYou review.\n",
+    (catalogue / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: Checks arithmetic.\nsystem_prompt: |\n  You review.\n",
         encoding="utf-8",
     )
     relocated = replace(cfg, subagents_root=catalogue)
@@ -454,8 +456,8 @@ def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
 def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, monkeypatch):
     """The override wins, but only when there is one."""
     (cfg.workspace / "subagents").mkdir(parents=True, exist_ok=True)
-    (cfg.workspace / "subagents" / "reviewer.md").write_text(
-        "---\nname: reviewer\ndescription: d\nmodel: FROM-DEFINITION\n---\nYou review.\n",
+    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(
+        "name: reviewer\ndescription: d\nmodel: FROM-DEFINITION\nsystem_prompt: |\n  You review.\n",
         encoding="utf-8",
     )
     captured = capture_build(monkeypatch)

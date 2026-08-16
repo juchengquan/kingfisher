@@ -9,7 +9,7 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.uploads import UploadError, provision
 
 SKILL = b"---\nname: extractor\ndescription: Pulls fields out of documents.\n---\nBody.\n"
-SUBAGENT = b"---\nname: reviewer\ndescription: Checks arithmetic.\n---\nYou review.\n"
+SUBAGENT = b"name: reviewer\ndescription: Checks arithmetic.\nsystem_prompt: |\n  You review.\n"
 
 
 class FakeStore:
@@ -47,7 +47,7 @@ def test_an_uploaded_subagent_is_unpacked_under_its_declared_name(cfg, session_d
 
     provision(Request("t", subagent_refs=("sub_1",)), store, session_dir, cfg)
 
-    assert (session_dir / "subagents" / "reviewer.md").read_bytes() == SUBAGENT
+    assert (session_dir / "subagents" / "reviewer.yaml").read_bytes() == SUBAGENT
 
 
 def test_an_upload_cannot_shadow_the_catalogue(cfg, session_dir):

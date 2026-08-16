@@ -79,9 +79,17 @@ def _opened(text: str, label: str, error: type[ValueError]) -> tuple[dict[str, o
 
 
 def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
-    """One subagent definition. Raises `SubagentError` on anything malformed."""
-    fields, body = _opened(text, source.name, subagent.SubagentError)
-    return subagent.parse(fields, body, source)
+    """One subagent definition. Raises `SubagentError` on anything malformed.
+
+    The whole document, not a header and a body: a subagent is YAML through
+    and through, so there is no envelope to open. A skill still has one --
+    that format is deepagents', and it is markdown with a header.
+    """
+    fields = decode(text)
+    if isinstance(fields, str):
+        msg = f"{source.name}: cannot read definition ({fields})"
+        raise subagent.SubagentError(msg)
+    return subagent.parse(fields, source)
 
 
 def skill_name(text: str, source: str = skill.FILENAME) -> str:
