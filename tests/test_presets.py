@@ -15,7 +15,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure import presets
 from kingfisher.infrastructure.agent import (
     CapabilityError,
-    _available_skills,
+    available_skills,
     build_agent,
     registered_tools,
 )
@@ -62,7 +62,7 @@ def workspace_with_presets(cfg, shipped):
 
 
 def test_preset_skills_are_discovered(workspace_with_presets):
-    assert set(_available_skills(workspace_with_presets, None)) >= {
+    assert set(available_skills(workspace_with_presets, None)) >= {
         "code-review",
         "release-notes",
     }

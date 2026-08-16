@@ -35,6 +35,15 @@ from langchain_core.messages import ToolMessage
 from kingfisher.infrastructure.backend import HostPathError
 
 
+class CapabilityError(ValueError):
+    """A request named a tool, skill or subagent the workspace does not offer.
+
+    Here rather than in `agent`, where it was, because `agent` and `delegation`
+    both raise it and neither may import the other. This module is the machinery
+    that enforces a request's capabilities, so the refusal belongs with it.
+    """
+
+
 def _tool_name(tool: Any) -> str | None:
     name = getattr(tool, "name", None)
     if isinstance(name, str):

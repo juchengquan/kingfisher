@@ -10,14 +10,17 @@ types.
 Construction stays free of side effects that a test would have to clean up, and
 every dependency is injectable, so wiring can be exercised with a fake model and
 no network, no database, and no sweeping.
+
+Two jobs it used to do live beside it now, because at 657 lines it was doing
+four. `prompting` assembles the system prompt -- moved out because it needs
+nothing foreign, and sharing a file with `create_deep_agent` cost every consumer
+of `system_prompt` 764ms and three provider SDKs. `delegation` resolves what a
+delegate runs with. Neither calls anything here; `build_agent` is the only
+caller of either.
 """
 
 from __future__ import annotations
 
-import re
-from dataclasses import replace
-from functools import lru_cache
-from importlib import resources
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -29,11 +32,21 @@ from kingfisher.config import Config
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
-from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.infrastructure import skill_store
-from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.backend import (
+    MEMORY_SOURCES,
+    SKILLS_SOURCES,
+    build_backend,
+)
+from kingfisher.infrastructure.delegation import (
+    as_subagent,
+    subagent_middleware,
+    subagent_skills,
+)
 from kingfisher.infrastructure.models import build_model
+from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.infrastructure.scoping import (
+    CapabilityError,
     DeclaredDelegatesOnly,
     HostPathGuard,
     ScopedSkills,
@@ -47,34 +60,10 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
-BASE_PROMPT = "system.md"
 
 #: Delegation, wherever it is dispatched from.
 TASK_TOOL = "task"
 
-#: The role every delegate runs as, for `Config.role_models`. One of `ROLES`,
-#: which is what `from_env` populates -- a delegate's own name is not.
-SUBAGENT_ROLE = "subagent"
-
-#: Where optional capability sections are spliced in. An HTML comment, so
-#: `system.md` stays a plain Markdown document that renders and edits normally.
-CAPABILITY_MARKER = "<!-- capabilities -->"
-
-CAPABILITY_FILES = {
-    "skills": "capability_skills.md",
-    "memory": "capability_memory.md",
-}
-
-#: Optional, user-authored, per-workspace prompt additions. Distinct from
-#: `/memory/AGENTS.md`, which the agent writes: this file is yours.
-USER_PROMPT_FILE = "PROMPT.md"
-
-#: The catalogue first, then this session's uploads. deepagents loads sources
-#: in order and lets a later one override an earlier, which is exactly what
-#: `uploads` refuses to allow -- a collision is rejected before it can happen,
-#: so the ordering here never decides anything.
-SKILLS_SOURCES = [("/skills/", "Catalogue"), ("/skills/uploaded/", "Uploaded")]
-MEMORY_SOURCES = ["/memory/AGENTS.md"]
 
 #: For a request that declined memory a deployment did wire. Reads are denied
 #: rather than the prompt rewritten: the prompt is the cached prefix.
@@ -83,10 +72,6 @@ MEMORY_IS_DENIED = FilesystemPermission(
     paths=["/memory/**"],
     mode="deny",
 )
-
-
-class CapabilityError(ValueError):
-    """A request named a tool, skill or subagent the workspace does not offer."""
 
 
 def _uploaded_skills(session_dir: Path) -> Path:
@@ -99,7 +84,7 @@ def _uploaded_subagents(session_dir: Path) -> Path:
     return Path(session_dir) / SUBAGENT_DIRECTORY
 
 
-def _available_skills(cfg: Config, session_dir: Path | None) -> tuple[str, ...]:
+def available_skills(cfg: Config, session_dir: Path | None) -> tuple[str, ...]:
     """Every skill this request may activate: the catalogue, plus its own.
 
     One flat set, because `capabilities.skills` names skills and not sources.
@@ -138,95 +123,6 @@ DATA_IS_READ_ONLY = FilesystemPermission(
     paths=["/data/**"],
     mode="deny",
 )
-
-
-def _prompt_text(name: str) -> str:
-    return resources.files("kingfisher.prompts").joinpath(name).read_text(encoding="utf-8")
-
-
-@lru_cache(maxsize=8)
-def render_system_prompt(
-    *,
-    skills_enabled: bool = False,
-    memory_enabled: bool = False,
-    extra: str = "",
-) -> str:
-    """Assemble the prompt for the capabilities that are actually wired.
-
-    Plain Markdown files concatenated at one marker rather than a template
-    language: the prompt is a document you read and edit, and template syntax
-    fights that. The assembly logic lives here, where it is testable.
-
-    The flags gate prompt sections *and* the corresponding middleware from a
-    single source, so the agent is never told about a `/skills` directory it
-    has no tool to load, or a memory file that was never mounted.
-
-    Nothing task-specific belongs in these files. Domain instructions come from
-    the task, from skills, or from the workspace's own `PROMPT.md` — a general
-    agent's base prompt should read the same whatever the project is about.
-    """
-    base = _prompt_text(BASE_PROMPT)
-    if CAPABILITY_MARKER not in base:  # pragma: no cover -- guards a silent edit
-        msg = f"{BASE_PROMPT} is missing the {CAPABILITY_MARKER} marker"
-        raise ValueError(msg)
-
-    enabled = [
-        name
-        for name, on in (("skills", skills_enabled), ("memory", memory_enabled))
-        if on
-    ]
-    sections = "\n\n".join(_prompt_text(CAPABILITY_FILES[name]).strip() for name in enabled)
-
-    assembled = base.replace(CAPABILITY_MARKER, sections)
-    if extra.strip():
-        assembled = f"{assembled.strip()}\n\n---\n\n{extra.strip()}"
-    # Removing the marker leaves a run of blank lines behind; collapse them so
-    # the prefix sent on every step stays tidy.
-    return re.sub(r"\n{3,}", "\n\n", assembled).strip() + "\n"
-
-
-def user_prompt(workspace: Path | None) -> str:
-    """Read the workspace's optional `PROMPT.md`, if the user wrote one."""
-    if workspace is None:
-        return ""
-    path = Path(workspace) / USER_PROMPT_FILE
-    return path.read_text(encoding="utf-8").strip() if path.is_file() else ""
-
-
-def system_prompt(cfg: Config | None = None) -> str:
-    """The assembled prompt for this workspace."""
-    return render_system_prompt(
-        skills_enabled=bool(cfg and cfg.skills_enabled),
-        memory_enabled=bool(cfg and cfg.memory_enabled),
-        extra=user_prompt(cfg.workspace if cfg else None),
-    )
-
-
-def _subagent_skills(
-    spec: SubagentSpec, available: tuple[str, ...], activated: tuple[str, ...] | None
-) -> tuple[str, ...] | None:
-    """Which skills a delegate is told about, or `None` for none.
-
-    Two different refusals, and the difference is the same one `build_agent`
-    already draws for a request. A name nothing defines is a mistake in the
-    definition and raises. A name that exists but this request did not activate
-    is not a mistake -- it is a caller narrower than the definition -- so it is
-    dropped, exactly as `Capabilities.intersect` drops it for the parent. A
-    delegate cannot reach past the request that summoned it.
-    """
-    if spec.skills is None:
-        return None
-    unknown = tuple(name for name in spec.skills if name not in available)
-    if unknown:
-        msg = (
-            f"subagent {spec.name!r} names unknown skill(s): {', '.join(unknown)}; "
-            f"this request offers {available}"
-        )
-        raise CapabilityError(msg)
-    if activated is None:
-        return spec.skills
-    return tuple(name for name in spec.skills if name in activated)
-
 
 
 def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
@@ -269,187 +165,6 @@ def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
         mode="thread",
         timeout=float(cfg.timeout_s),
     )
-
-
-def _narrow_tools(
-    declared: tuple[str, ...] | None, granted: tuple[str, ...] | None
-) -> tuple[str, ...] | None:
-    """What a delegate may use: its own declaration, capped by its caller's.
-
-    `None` on either side means "no opinion", so the other wins -- the same
-    rule `Capabilities.intersect` uses one level up, and for the same reason:
-    narrowing must only ever subtract.
-    """
-    if declared is None:
-        return granted
-    if granted is None:
-        return declared
-    allowed = set(granted)
-    return tuple(name for name in declared if name in allowed)
-
-
-def _subagent_middleware(
-    spec: SubagentSpec,
-    registry: Mapping[str, Callable[[], Any]],
-    allowed: tuple[str, ...] | None,
-) -> list[Any]:
-    """Build the middleware a definition asked for, or refuse to.
-
-    Two refusals, and both raise -- neither is the "caller was narrower" case
-    that quietly drops a skill. A name nothing registered is a mistake in the
-    definition. A name the deployment registered but did not *grant* is an
-    escalation attempt or a misconfiguration, and running with silently less
-    middleware than the definition specified could mean running without the
-    rate limit or the audit hook it was written to have.
-
-    Checked identically for a catalogue definition and an uploaded one.
-    `Capabilities.including` widens skills and subagents for an upload because
-    those are the caller's own text; a middleware name selects code the
-    deployment wrote, so an upload gets no such exemption.
-    """
-    if not spec.middleware:
-        return []
-
-    unknown = tuple(name for name in spec.middleware if name not in registry)
-    if unknown:
-        msg = (
-            f"subagent {spec.name!r} names unregistered middleware: {', '.join(unknown)}; "
-            f"this deployment registered {tuple(registry)}"
-        )
-        raise CapabilityError(msg)
-
-    if allowed is not None:
-        ungranted = tuple(name for name in spec.middleware if name not in allowed)
-        if ungranted:
-            msg = (
-                f"subagent {spec.name!r} names middleware this request may not use: "
-                f"{', '.join(ungranted)}; permitted {allowed}"
-            )
-            raise CapabilityError(msg)
-
-    return [registry[name]() for name in spec.middleware]
-
-
-
-def _subagent_endpoint(
-    spec: SubagentSpec, cfg: Config, allowed: tuple[str, ...] | None
-) -> tuple[str | None, str | None]:
-    """The (provider, model) a delegate runs as, or refuse to choose one.
-
-    They move together. Overriding only the model, against a definition that
-    pins `provider: openai`, would send a MiniMax model name to OpenAI -- a 404
-    if you are lucky and a wrong-model run if you are not. Which endpoint runs
-    which model should not be settled by two people who cannot see each other's
-    half, so a half-override against a pinned provider is refused.
-
-    An operator who overrides both has said what they mean and wins, which is
-    the point of the override existing at all.
-    """
-    model_override = cfg.role_models.get(SUBAGENT_ROLE)
-    provider_override = cfg.role_providers.get(SUBAGENT_ROLE)
-
-    if model_override is not None and provider_override is None and spec.provider is not None:
-        msg = (
-            f"subagent {spec.name!r} pins provider {spec.provider!r}, but an operator "
-            f"overrode only its model; set KINGFISHER_PROVIDER_SUBAGENT too, or neither"
-        )
-        raise CapabilityError(msg)
-
-    provider = provider_override if provider_override is not None else spec.provider
-    model = model_override if model_override is not None else spec.model
-
-    if provider is not None and allowed is not None and provider not in allowed:
-        msg = (
-            f"subagent {spec.name!r} names endpoint {provider!r}, which this request "
-            f"may not use; permitted {allowed}"
-        )
-        raise CapabilityError(msg)
-
-    return provider, model
-
-
-def _as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
-    # narrow, each resolved by its own rule above. Bundling them would hide
-    # which of those rules applied to a given delegate.
-    spec: SubagentSpec,
-    cfg: Config,
-    *,
-    providers: tuple[str, ...] | None = None,
-    tools: tuple[str, ...] | None = None,
-    backend: Any = None,
-    skills: tuple[str, ...] | None = None,
-    extra_middleware: list[Any] | None = None,
-) -> dict[str, Any]:
-    """Translate kingfisher's definition into deepagents' `SubAgent`.
-
-    Every field maps directly except `tools`, `skills` and `middleware`.
-    deepagents' `SubAgent.tools` is a sequence of tool *objects* it will
-    register, not a selection from the ones the parent already has — handing it
-    names raises inside `ToolNode`. The
-    objects are built from the backend deep inside `create_deep_agent` and are
-    not reachable here, so the restriction is applied the same way a request's
-    own tool restriction is: a `ToolAllowlist` on the subagent's middleware,
-    which selects by name and refuses anything else.
-    """
-    subagent: dict[str, Any] = {
-        "name": spec.name,
-        "description": spec.description,
-        "system_prompt": spec.system_prompt,
-    }
-    middleware: list[Any] = []
-    # The definition's own restriction, narrowed by the request's. A delegate
-    # may never be offered more than whoever reached it: the parent's
-    # `ToolAllowlist` sits on the parent's middleware, and a subagent inherits
-    # none of it, so a request that withheld `execute` handed it straight to
-    # any delegate. The ceiling has to be applied here to exist at all.
-    ceiling = _narrow_tools(spec.tools, tools)
-    if ceiling is not None:
-        middleware.append(ToolAllowlist(ceiling))
-    # A subagent inherits none of its parent's middleware, so an index it is
-    # not given is an index it has no idea exists. `SubAgent.skills` would take
-    # source *paths*; this selects by name, which is what a definition writes.
-    if skills is not None and backend is not None:
-        middleware.append(
-            ScopedSkills(allowed=skills, backend=backend, sources=SKILLS_SOURCES)
-        )
-    # Last, so a deployment's middleware sees the tool and skill scoping
-    # kingfisher applied rather than running ahead of it.
-    middleware.extend(extra_middleware or [])
-    if middleware:
-        subagent["middleware"] = middleware
-
-    # A *name* here would be resolved by deepagents' `init_chat_model`, which
-    # infers its own provider and reads credentials from the environment --
-    # around the provider table, the configured base_url, and the api_style
-    # this deployment chose. It also re-enables the profile behaviour that
-    # `infrastructure.models` exists to avoid. So we build the instance ourselves.
-    #
-    # `role_models` wins over the definition: which model a role runs on is an
-    # operator's cost decision, and it should not require editing content.
-    #
-    # Keyed by *role*, not by this subagent's name. `from_env` populates
-    # `role_models` from `KINGFISHER_MODEL_MAIN`, `_SUBAGENT` and `_SUMMARIZER`,
-    # so a lookup by name only ever matched a delegate literally called one of
-    # those -- the override above was documented, tested nowhere, and fired for
-    # nothing. Per-delegate overrides would need `ROLES` to become unbounded and
-    # its names to come from workspace content, which is a different decision.
-    provider, model_id = _subagent_endpoint(spec, cfg, providers)
-    if model_id is not None or provider is not None:
-        # `replace` rather than a build_model parameter: an endpoint is exactly
-        # the three Config fields a model is built from, so swapping them says
-        # "build as if this deployment were pointed there" with nothing else
-        # changed.
-        endpoint = cfg.endpoint_for(provider)
-        subagent["model"] = build_model(
-            replace(
-                cfg,
-                model=model_id if model_id is not None else cfg.model,
-                api_style=endpoint.api_style,
-                base_url=endpoint.base_url,
-                api_key=endpoint.api_key,
-            )
-        )
-    return subagent
 
 
 def _skill_denials(
@@ -561,7 +276,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         if capabilities.skills is None:
             extras["skills"] = SKILLS_SOURCES
         else:
-            available = _available_skills(cfg, session_dir)
+            available = available_skills(cfg, session_dir)
             unknown = tuple(s for s in capabilities.skills if s not in available)
             if unknown:
                 msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
@@ -588,17 +303,17 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         if unknown:
             msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
             raise CapabilityError(msg)
-        offered = _available_skills(cfg, session_dir)
+        offered = available_skills(cfg, session_dir)
         registry = middleware_registry or {}
         extras["subagents"] = [
-            _as_subagent(
+            as_subagent(
                 defined[n],
                 cfg,
                 backend=resolved_backend,
                 providers=capabilities.providers,
                 tools=capabilities.tools,
-                skills=_subagent_skills(defined[n], offered, capabilities.skills),
-                extra_middleware=_subagent_middleware(
+                skills=subagent_skills(defined[n], offered, capabilities.skills),
+                extra_middleware=subagent_middleware(
                     defined[n], registry, capabilities.middleware
                 ),
             )
