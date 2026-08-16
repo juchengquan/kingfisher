@@ -29,6 +29,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
 )
 from kingfisher.domain.subagent import RunOn, resolved_endpoint
+from kingfisher.infrastructure import tool_store
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -74,9 +75,18 @@ def tool_ceiling(spec: SubagentSpec, *, builtin: Selection, workspace: Selection
 
 
 def refuse_unknown_tools(
-    spec: SubagentSpec, *, builtin: tuple[str, ...], workspace: tuple[str, ...]
+    spec: SubagentSpec,
+    *,
+    builtin: tuple[str, ...],
+    workspace: tuple[str, ...],
+    sources: Mapping[str, str] | None = None,
 ) -> None:
     """Refuse a tool name nothing offers, before narrowing quietly drops it.
+
+    `sources` names the file each workspace tool came from, so the reader of
+    this refusal -- someone editing a YAML, looking at a name they typed by
+    hand -- gets told where the real ones live rather than only what they are
+    called. Folders are why: a bare list leaves them grepping.
 
     The half of this module's rule that `tools` never had. The docstring above
     lists `tools` among the fields where "a name nothing defines is a mistake
@@ -112,7 +122,8 @@ def refuse_unknown_tools(
         if unknown := tuple(n for n in asked if n not in set(own)):
             msg = (
                 f"subagent {spec.name!r} names unknown {here[:-1]}(s): "
-                f"{', '.join(unknown)}; this agent offers {own}"
+                f"{', '.join(unknown)}; this workspace offers\n"
+                f"{tool_store.offered(sources or {}, own)}"
             )
             raise CapabilityError(msg)
 
