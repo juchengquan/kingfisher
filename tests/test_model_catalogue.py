@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
+from kingfisher.config import Config, ConfigError, Endpoint, ModelProfile, Models
 from kingfisher.infrastructure.model_catalogue import load
 
 GOOD = """
@@ -275,3 +275,41 @@ def test_an_alias_whose_model_was_dropped_is_kept(tmp_path):
 
     assert "tuned" not in models
     assert aliases["cheap"] == "tuned"
+
+
+# -- the seam a repository would have added, which is already here ---------
+
+
+def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
+    """Where models.yaml is read from is a `Config` field, and `Models` is a
+    record a deployment may build itself -- so holding the model catalogue in a
+    database, or assembling it in code, needs no file, no path, and no loader.
+
+    Asserted rather than left implicit. It is true today only by accident of the
+    fixtures: `conftest.FAKE_CATALOGUE` is exactly this, so the whole suite
+    already runs on an injected catalogue and no test says so. That made it look
+    like a gap the way skills, subagents and tools each had one -- and unlike
+    those, closing it would have meant adding a port over a seam that works.
+    """
+    from kingfisher import Kingfisher
+    from kingfisher.domain.request import Request
+    from tests.conftest import FAKE_CATALOGUE
+    from tests.test_run import StubAgent
+
+    assert not (tmp_path / "models.yaml").exists()
+    cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE)
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"))
+
+    assert service.run(Request("go")).answer == "ok"
+    assert service.cfg.models.default == "fake-model"
+    assert service.cfg.models.source is None, "nothing was read from disk"
+
+
+def test_the_loader_is_the_only_thing_that_needs_the_file(tmp_path):
+    """The other half of the same point, and what keeps `source` honest: a
+    catalogue that *was* read names where it came from, so a refusal can point
+    at the file that should have defined what it could not find."""
+    catalogue = loaded(tmp_path)
+
+    assert catalogue.source == written(tmp_path)
