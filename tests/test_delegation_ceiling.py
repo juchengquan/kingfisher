@@ -625,3 +625,39 @@ def test_the_wrong_list_message_agrees_in_number(cfg, session_dir):
     with pytest.raises(CapabilityError, match="those are builtin tools -- name them in"):
         _build(cfg, session_dir, many)
 
+
+def test_a_missing_subagent_type_says_so_rather_than_naming_none():
+    """A missing argument is a different mistake from a refused name.
+
+    Found by a live run. The model sent `subagentType`, so the tool saw no
+    `subagent_type` at all, and the refusal read: "None is not a delegate this
+    request may use. Available: general-purpose, reviewer, second-opinion." The
+    model reported the tool as broken -- "despite listing reviewer as
+    available" -- and answered around it instead of retrying with the right
+    key. The name it could not find was its own typo, and nothing said so.
+    """
+    from kingfisher.infrastructure.scoping import DeclaredDelegatesOnly
+
+    class _Call:
+        tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
+
+    refusal = DeclaredDelegatesOnly(("reviewer",))._refuse(_Call())
+
+    assert refusal is not None
+    assert "no subagent_type was given" in refusal.content
+    assert "`subagent_type`" in refusal.content  # the spelling it needs
+    assert "None" not in refusal.content  # never the value it did not send
+
+
+def test_a_delegate_that_does_not_exist_still_names_it():
+    """The other half, unchanged: a real name that is not on the list."""
+    from kingfisher.infrastructure.scoping import DeclaredDelegatesOnly
+
+    class _Call:
+        tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}
+
+    refusal = DeclaredDelegatesOnly(("reviewer",))._refuse(_Call())
+
+    assert refusal is not None
+    assert "'nobody' is not a delegate" in refusal.content
+
