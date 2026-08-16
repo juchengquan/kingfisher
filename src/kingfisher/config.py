@@ -147,6 +147,20 @@ class Config:
     # it is deferred to the point of use, so an install that never turns this on
     # pays nothing for carrying it.
     interpreter_enabled: bool = False
+    # Whether a turn remembers the one before it. On, because a session that
+    # forgets is a surprising default for something that issues session ids.
+    #
+    # Off makes a deployment stateless in the only sense kingfisher can be:
+    # there is no checkpointer, so no database, nothing to contend on, orphan or
+    # vacuum. Files are unaffected -- `/data`, `/derived` and `/memory` are on
+    # disk and a resumed session still finds them. It is the conversation that
+    # goes, so `--session` still names the same files while the agent starts each
+    # turn cold.
+    #
+    # Worth turning off for a request/response API, where a caller sends one task
+    # and reads one answer. Measured: with it on, a two-turn workspace carries a
+    # ~0.4MB database it never reads back.
+    conversation_enabled: bool = True
 
     @property
     def state_dir(self) -> Path:
