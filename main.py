@@ -437,7 +437,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
-    found = tool_store.loaded(catalogue["tools"])
+    found = tool_store.loaded(catalogue.tools)
     workspace = tuple(sorted(entry.name for entry in found))
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
         root = Path(scratch)
