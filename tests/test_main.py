@@ -258,14 +258,28 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
 
 
 def test_subtracting_skills_and_subagents_too(cfg):
-    from kingfisher.infrastructure import presets
+    """The rest is asked of the catalogue, not named here.
+
+    Naming it made this a test about how many presets ship: it asserted
+    `("reviewer",)` and went red on main when a third subagent preset was
+    added, for a reason having nothing to do with subtraction. What is being
+    tested is that the named one is gone and the others are enumerated, which
+    is true at any catalogue size.
+    """
+    from kingfisher.infrastructure import presets, skill_store, subagent_store
 
     presets.seed(cfg)
+    seeded_skills = set(skill_store.names(cfg.skills_dir))
+    seeded_subagents = set(subagent_store.load_all(cfg.subagents_dir))
+    # Not vacuous: subtracting a name the catalogue does not offer would leave
+    # "the rest" equal to the whole of it, and this would still pass.
+    assert {"tabular-qa"} < seeded_skills
+    assert {"extractor"} < seeded_subagents
 
     grants = main._grants(cfg, _args(without_skills="tabular-qa", without_subagents="extractor"))
 
-    assert grants["skills"] == ("code-review", "release-notes")
-    assert grants["subagents"] == ("reviewer",)
+    assert grants["skills"] == tuple(sorted(seeded_skills - {"tabular-qa"}))
+    assert grants["subagents"] == tuple(sorted(seeded_subagents - {"extractor"}))
     assert grants["tools"] is None
 
 
