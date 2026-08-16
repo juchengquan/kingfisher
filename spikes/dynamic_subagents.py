@@ -8,8 +8,7 @@ computed list and dispatches for each item.
 
 Two things it needs, and neither is obvious until it fails:
 
-  * `KINGFISHER_INTERPRETER=true`, plus the optional dependency
-    (`uv sync --extra interpreter`). This script sets the flag itself.
+  * `KINGFISHER_INTERPRETER=true`. This script sets the flag itself.
   * the *async* path. `task()` inside the REPL awaits, so a sync `SqliteSaver`
     raises `does not support async methods` partway through a workflow that has
     already run. Hence `arun` and `async_checkpointer` below.

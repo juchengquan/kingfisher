@@ -148,6 +148,12 @@ def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
     `astream` with `async_checkpointer(cfg)`; everything else here works on
     either. Undocumented upstream, and found by running it.
     """
+    # Deferred so that shipping the sandbox by default costs nothing to the runs
+    # that never enable it. Measured, because the saving is smaller than it
+    # looks: importing this standalone takes ~0.85s, but nearly all of that is
+    # deepagents and langchain, which are loaded already. On top of kingfisher it
+    # is ~15ms and ~6MB of resident memory -- worth deferring, not worth
+    # restructuring anything else around.
     from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
 
     granted = capabilities.tools
