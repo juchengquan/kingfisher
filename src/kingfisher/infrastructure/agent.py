@@ -21,7 +21,7 @@ caller of either.
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -40,6 +40,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
+from kingfisher.domain.subagent import refuse_helpers_with_helpers
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
@@ -49,6 +50,7 @@ from kingfisher.infrastructure.backend import (
 from kingfisher.infrastructure.delegation import (
     as_subagent,
     refuse_unknown_tools,
+    subagent_helpers,
     subagent_middleware,
     subagent_skills,
 )
@@ -389,6 +391,12 @@ class _ToolSurface:
     granted_workspace: Selection = ALL
     offered_builtin: tuple[str, ...] = ()
     offered_workspace: tuple[str, ...] = ()
+    #: The built tool *objects*, by name, taken off the probe graph. Needed
+    #: only for a helper: `SubAgentMiddleware` registers what a spec carries,
+    #: and these are constructed from the backend inside `create_deep_agent`
+    #: where nothing here can reach them -- except off an assembled graph,
+    #: which is what the probe already is.
+    objects: Mapping[str, Any] = field(default_factory=dict)
     #: Whether the *request* narrowed neither axis. Distinct from the grants
     #: being `ALL`: a workspace tool existing forces the probe, and then the
     #: grants are enumerated while the request still narrowed nothing.
@@ -400,6 +408,22 @@ class _ToolSurface:
         if self.unrestricted:
             return None
         return (*(self.granted_builtin or ()), *(self.granted_workspace or ()))
+
+
+def _tool_objects(graph: Any) -> Mapping[str, Any]:
+    """The built tool objects a compiled graph dispatches, by name.
+
+    `registered_tools` reads the same dict for its keys; a helper needs the
+    values. `task` is excluded deliberately and not for tidiness: the harvested
+    one is bound to *this* graph's delegate list, so handing it to a helper
+    would let the helper reach every delegate the parent can. A delegate that
+    may consult one gets a fresh `task` from its own `SubAgentMiddleware`.
+    """
+    node = getattr(graph, "nodes", {}).get("tools")
+    by_name = getattr(getattr(node, "bound", None), "tools_by_name", None)
+    if not isinstance(by_name, dict):
+        return {}
+    return {name: tool for name, tool in by_name.items() if name != TASK_TOOL}
 
 
 def _activated_subagents(
@@ -418,6 +442,11 @@ def _activated_subagents(
     if capabilities.subagents is None:
         return {}, ()
     defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
+    # A property of the definitions, not of this request, so it is asked once
+    # the merged set is known and before anything reads a single spec. An
+    # upload can break it by shadowing a catalogue name, which is why it cannot
+    # be checked at seed time and left at that.
+    refuse_helpers_with_helpers(defined)
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
@@ -456,7 +485,8 @@ def _resolve_tools(
     if not names_needed and not workspace_tools and unrestricted:
         return _ToolSurface()
 
-    builtin = registered_tools(assemble(()))
+    probe = assemble(())
+    builtin = registered_tools(probe)
     workspace = _workspace_tool_names(workspace_tools, builtin=builtin, directory=tools_dir)
     _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
     return _ToolSurface(
@@ -464,6 +494,7 @@ def _resolve_tools(
         granted_workspace=narrowed(capabilities.tools, by=workspace) or (),
         offered_builtin=builtin,
         offered_workspace=workspace,
+        objects=_tool_objects(probe),
         unrestricted=unrestricted,
     )
 
@@ -571,8 +602,13 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         assemble,
         # Either list naming anything is enough: both are checked against their
         # own offered set, and neither set is knowable without the probe.
+        # Either tool list naming anything needs the offered sets. A delegate
+        # naming a helper needs the built tool *objects*, which come off the
+        # same probe -- so wanting one is equally a reason to run it.
         names_needed=any(
-            defined[n].tools not in (ALL, None) or defined[n].builtin_tools not in (ALL, None)
+            defined[n].tools not in (ALL, None)
+            or defined[n].builtin_tools not in (ALL, None)
+            or defined[n].subagents is not None
             for n in activated
         ),
     )
@@ -594,18 +630,54 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 builtin=surface.offered_builtin,
                 workspace=surface.offered_workspace,
             )
-        extras["subagents"] = [
-            as_subagent(
-                defined[n],
+
+        def _built(
+            name: str,
+            *,
+            helpers: list[Any] | None = None,
+            default_model: Any = None,
+            tool_objects: list[Any] | None = None,
+        ) -> dict[str, Any]:
+            """One delegate, with the request's ceiling on every axis.
+
+            `helpers` is passed for a delegate and omitted for a helper, and
+            that omission is the entire depth bound -- there is no counter and
+            no cycle check, because the call that would build a second level is
+            simply not made. A test asserts the recursion stays absent.
+
+            A helper is otherwise built exactly like any other delegate: its own
+            tools, its own skills, its own endpoint, each clamped by what the
+            *request* granted rather than by the delegate that reached it. The
+            caller had to name it too, so the caller has already seen it.
+            """
+            return as_subagent(
+                defined[name],
                 cfg,
                 backend=resolved_backend,
                 providers=capabilities.providers,
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,
-                skills=subagent_skills(defined[n], offered, capabilities.skills),
+                skills=subagent_skills(defined[name], offered, capabilities.skills),
+                helpers=helpers,
+                default_model=default_model,
+                tool_objects=tool_objects,
                 extra_middleware=subagent_middleware(
-                    defined[n], registry, capabilities.middleware
+                    defined[name], registry, capabilities.middleware
                 ),
+            )
+
+        extras["subagents"] = [
+            _built(
+                n,
+                helpers=[
+                    _built(
+                        helper,
+                        default_model=model if model is not None else build_model(cfg),
+                        tool_objects=list(surface.objects.values()),
+                    )
+                    for helper in subagent_helpers(defined[n], defined, capabilities.subagents)
+                ]
+                or None,
             )
             for n in activated
         ]

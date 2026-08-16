@@ -17,6 +17,8 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from deepagents.middleware import SubAgentMiddleware
+
 from kingfisher.domain.capabilities import (
     ALL,
     CapabilityError,
@@ -145,6 +147,38 @@ def subagent_skills(
     return narrowed(spec.skills, by=activated)
 
 
+def subagent_helpers(
+    spec: SubagentSpec, defined: Mapping[str, Any], activated: Selection
+) -> tuple[str, ...]:
+    """Which delegates this one may consult, of the ones it names.
+
+    The same two refusals as `subagent_skills`, for the same reasons. A name
+    nothing defines is a mistake in the definition and raises. A name that
+    exists but this request did not activate is a caller being narrower than
+    the definition -- so it is dropped, and reported as withheld rather than
+    refused.
+
+    That second half matters more here than anywhere else. `second-opinion`
+    runs on another company's servers, so a caller declining it is often
+    declining *that*, and refusing the whole request would mean they cannot use
+    `reviewer` at all without also accepting OpenAI. The delegate runs alone
+    and the report says so.
+
+    Which is why a definition naming a helper should say what to do without
+    one: the prompt has to work both ways, because the caller decides.
+    """
+    if spec.subagents is None:
+        return ()
+    named = tuple(defined) if spec.subagents == ALL else spec.subagents
+    if unknown := tuple(n for n in named if n not in defined):
+        msg = (
+            f"subagent {spec.name!r} names unknown subagent(s): {', '.join(unknown)}; "
+            f"this request offers {tuple(defined)}"
+        )
+        raise CapabilityError(msg)
+    return tuple(narrowed(named, by=activated) or ())
+
+
 def subagent_middleware(
     spec: SubagentSpec,
     registry: Mapping[str, Callable[[], Any]],
@@ -182,6 +216,16 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     tools: Selection = ALL,
     backend: Any = None,
     skills: Selection = None,
+    # `Any` at the seam: `as_subagent` returns a plain dict and deepagents
+    # declares a `SubAgent` TypedDict, which nothing here can satisfy
+    # structurally without restating their schema.
+    helpers: list[Any] | None = None,
+    # What `create_deep_agent` supplies to a delegate it builds, and
+    # `SubAgentMiddleware` does not: `create_sub_agent` refuses a spec that
+    # names neither. Passed when this delegate is itself a helper, and omitted
+    # otherwise so the top-level path keeps deepagents' own defaults.
+    default_model: Any = None,
+    tool_objects: list[Any] | None = None,
     extra_middleware: list[Any] | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
@@ -222,6 +266,19 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         middleware.append(
             ScopedSkills(allowed=skills, backend=backend, sources=SKILLS_SOURCES)
         )
+    # What lets this delegate delegate. deepagents gives a subagent no `task`
+    # tool of its own -- `create_sub_agent` calls `create_agent` with the
+    # spec's tools and nothing else -- so the only way in is the one field a
+    # spec has that carries code, and `SubAgentMiddleware` is exactly what
+    # supplies `task` to the main agent.
+    #
+    # `helpers` are already built, by a caller that did *not* pass them helpers
+    # of their own. That is the whole of the depth bound: not a check, but a
+    # call that is never made. `SubAgentMiddleware` refuses an empty list, so
+    # an unhelped delegate gets no middleware and no `task` tool -- which is
+    # also what a caller who withheld the helper should see.
+    if helpers:
+        middleware.append(SubAgentMiddleware(backend=backend, subagents=helpers))
     # Last, so a deployment's middleware sees the tool and skill scoping
     # kingfisher applied rather than running ahead of it.
     middleware.extend(extra_middleware or [])
@@ -241,6 +298,13 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # which made it useless for the one thing a per-delegate model is for:
     # `second-opinion` exists in order *not* to be the model beside it, and a
     # blanket override silently defeats it. The file says where it runs.
+    if tool_objects is not None:
+        # Objects, not names -- `SubAgent.tools` is what deepagents registers,
+        # and handing it names raises inside `ToolNode`. Narrowing still
+        # happens through `ToolAllowlist` above, which is why the whole set
+        # goes in and the allowlist decides.
+        subagent["tools"] = tool_objects
+
     provider, model_id = resolved_endpoint(spec, granted=providers)
     if model_id is not None or provider is not None:
         # `replace` rather than a build_model parameter: an endpoint is exactly
@@ -257,4 +321,6 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
                 api_key=endpoint.api_key,
             )
         )
+    elif default_model is not None:
+        subagent["model"] = default_model
     return subagent

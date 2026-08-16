@@ -34,6 +34,21 @@ wires one, and a name must be both registered and granted — including for a
 definition a caller uploaded, which gets none of the leeway an uploaded skill
 does. An uploaded skill is the caller's own text; a middleware name is not.
 
+`subagents` names delegates this one may consult mid-job, from the same
+catalogue. Absent means none, like `skills`. It was refused until it was
+measured: the refusal said "deepagents gives it no `task` tool, so nesting is
+not something this format can express", and the first half is true --
+`create_sub_agent` calls `create_agent` with the spec's tools and no `task`.
+The second half was not. A spec carries `middleware`, and `SubAgentMiddleware`
+is exactly what supplies `task`, so the format could always express it through
+a field it already had.
+
+One level. A helper is built by a call that is not passed helpers of its own,
+so a cycle cannot form -- not because one is detected, but because the code
+that would build the second level never runs. `refuse_helpers_with_helpers`
+refuses a *catalogue* that asks for one, so nobody writes a `subagents:` line
+that is silently ignored.
+
 `provider` names which endpoint this delegate runs against, by style, out of
 those the deployment has credentials for. Omitted, it runs where everything
 else does. It is granted like `middleware` and for a stronger reason: it
@@ -113,6 +128,7 @@ KNOWN: frozenset[str] = frozenset(
         "tools",
         "skills",
         "middleware",
+        "subagents",
         "provider",
         "model",
         "metadata",
@@ -129,10 +145,6 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "deepagents' permissions *replace* the parent's rather than narrowing "
             "them, so writing this to tighten a delegate would drop the rules it "
             "already inherits -- including the one making /data read-only"
-        ),
-        "subagents": (
-            "a subagent cannot delegate: deepagents gives it no `task` tool, so "
-            "nesting is not something this format can express"
         ),
         "interrupt_on": (
             "needs a checkpointer and a human to answer the interrupt, neither of "
@@ -179,6 +191,16 @@ class SubagentSpec:
     #: deployment supplies. A name here selects *code*, which is why it is the
     #: one field never widened for an uploaded definition.
     middleware: Selection = None
+    #: Delegates this one may consult, by name, from the same catalogue. Absent
+    #: means none -- like `skills`, and for the same reason: a delegate that
+    #: needed the whole catalogue would not have been worth defining.
+    #:
+    #: One level. A delegate named here is built without helpers of its own, so
+    #: a cycle cannot form -- not because one is detected, but because the code
+    #: that would build it never runs. `refuse_helpers_with_helpers` refuses the
+    #: *catalogue* that would ask for one, so nobody writes a file whose
+    #: `subagents:` is silently ignored.
+    subagents: Selection = None
     #: Which endpoint this delegate runs against, by style name. `None` means
     #: the deployment's default. Selecting one decides where the prompt goes
     #: and whose credentials pay, which is why it is granted rather than free.
@@ -303,6 +325,9 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         middleware=_selected(
             document.get("middleware"), absent=None, key="middleware", source=source
         ),
+        subagents=_selected(
+            document.get("subagents"), absent=None, key="subagents", source=source
+        ),
         # `or None` rather than a conditional: unset and blank mean the same
         # thing for these two -- run where everything else does.
         provider=fields.text(document.get("provider")) or None,
@@ -351,6 +376,40 @@ def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Se
         )
         raise SubagentError(msg)
     return ALL
+
+def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
+    """Refuse a catalogue where a delegate's helper has helpers of its own.
+
+    Delegation goes one level: a delegate may consult a helper, and the helper
+    works alone. That bound is what makes a cycle impossible -- `reviewer`
+    naming `second-opinion` naming `reviewer` needs a helper with helpers, and
+    there is no such thing.
+
+    Enforced on the *catalogue* rather than per request, so it does not depend
+    on which delegates a caller happened to activate: a set of definitions is
+    either coherent or it is not. And enforced rather than ignored, because a
+    file whose `subagents:` silently did nothing is the failure this format
+    refuses unknown keys to avoid, arriving through a key it does define.
+
+    The consequence belongs in the message, and in the README: the same file
+    means different things depending on who reached it. `second-opinion.yaml`
+    may consult `reviewer` when a caller names it directly, and may not once
+    `reviewer` names it as a helper. So one file's contents constrain another's,
+    and both names have to appear or the error cannot be acted on -- whoever
+    reads it may own neither file.
+    """
+    for name, spec in sorted(specs.items()):
+        for helper in spec.subagents or ():
+            nested = specs.get(helper)
+            if nested is not None and nested.subagents:
+                msg = (
+                    f"{name!r} names {helper!r} as a helper, but {helper!r} names "
+                    f"helpers of its own ({', '.join(nested.subagents)}); delegation "
+                    f"goes one level, so either {name!r} stops naming {helper!r} or "
+                    f"{helper!r} stops naming its own"
+                )
+                raise SubagentError(msg)
+
 
 def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | None, str | None]:
     """Where a delegate runs, once the request has had its say.
