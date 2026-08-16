@@ -47,8 +47,13 @@ def subagent_skills(
     already draws for a request. A name nothing defines is a mistake in the
     definition and raises. A name that exists but this request did not activate
     is not a mistake -- it is a caller narrower than the definition -- so it is
-    dropped, exactly as `Capabilities.intersect` drops it for the parent. A
-    delegate cannot reach past the request that summoned it.
+    dropped, by the same `narrowed` that drops it for the parent. A delegate
+    cannot reach past the request that summoned it.
+
+    That last sentence used to describe a resemblance: the dropping was two
+    lines here, equal to `narrowed` across every input pair, which is a third
+    copy of one rule. Only the refusal is this function's own -- `narrowed` has
+    no opinion about what exists, and should not.
     """
     if spec.skills is None:
         return None
@@ -59,9 +64,7 @@ def subagent_skills(
             f"this request offers {available}"
         )
         raise CapabilityError(msg)
-    if activated is None:
-        return spec.skills
-    return tuple(name for name in spec.skills if name in activated)
+    return narrowed(spec.skills, by=activated)
 
 
 def subagent_middleware(

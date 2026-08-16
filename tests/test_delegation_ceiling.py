@@ -17,7 +17,7 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import Capabilities, narrowed
 from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.delegation import as_subagent
+from kingfisher.infrastructure.delegation import as_subagent, subagent_skills
 from kingfisher.infrastructure.scoping import ToolAllowlist
 from tests.conftest import FakeToolCallingModel
 
@@ -242,11 +242,17 @@ def test_an_unrestricted_request_delegates_as_before(cfg, session_dir):
 # caller was granted. A second copy that drifted would fail one and not the
 # other.
 #
-# What this cannot catch at the delegate level is a copy that changes only the
-# *order*, because the ceiling reaches nothing but `ToolAllowlist`, which keeps
-# a set. Verified rather than assumed: reintroducing the old swapped-argument
-# copy fails nothing, and there is nothing for it to fail -- same names, same
-# set, same behaviour. Two copies differing in which names survive do fail.
+# Two things it cannot catch, both verified rather than assumed:
+#
+# A copy that changes only the *order* passes at the delegate level, because
+# the ceiling reaches nothing but `ToolAllowlist`, which keeps a set. The old
+# swapped-argument copy fails nothing here, and there is nothing for it to fail
+# -- same names, same set, same behaviour.
+#
+# A copy that is *verbatim* passes everywhere, which is what a behaviour test
+# is: `subagent_skills` carried one for months, equal on every input, and only
+# a structural search found it. These tests catch a copy that drifts; finding
+# one that has not drifted yet is an audit, not a test.
 
 NARROWING = [
     (None, None, None),          # neither has an opinion
@@ -254,6 +260,7 @@ NARROWING = [
     (("a",), None, ("a",)),      # only the selection does
     (("a", "b"), ("b",), ("b",)),  # both do, and the overlap survives
     (("a",), ("b",), ()),        # both do, and nothing overlaps
+    (("a",), (), ()),            # the cap permits nothing, which is not None
     (("b", "a"), ("a", "b"), ("b", "a")),  # the selection's order is kept
 ]
 CASES = pytest.mark.parametrize(("selection", "cap", "expected"), NARROWING)
@@ -289,3 +296,32 @@ def test_a_delegate_is_narrowed_by_it(cfg, selection, cap, expected):
         # It keeps a set, so order is not observable here; the rule test above
         # is where that case is pinned.
         assert allowlists[0]._allowed == set(expected)
+
+
+#: The rows where the definition declared something. `skills` cannot use the
+#: other two: an undeclared `skills` means *none* rather than no opinion, which
+#: is the one place this rule is deliberately not the one that applies.
+DECLARED = [case for case in NARROWING if case[0] is not None]
+
+
+@pytest.mark.parametrize(("selection", "cap", "expected"), DECLARED)
+def test_a_delegates_skills_are_narrowed_by_it(selection, cap, expected):
+    """The fourth place, and the one the whole-function hash could not see.
+
+    The dropping was two lines inlined here, equal to `narrowed` across every
+    input pair. Only the refusal above it -- a name nothing offers at all -- is
+    this function's own.
+    """
+    spec = replace(read_subagent(HELPER, Path("helper.yaml")), skills=selection)
+
+    assert subagent_skills(spec, ("a", "b", "c"), cap) == expected
+
+
+def test_undeclared_skills_mean_none_rather_than_no_opinion():
+    """Where `tools` inherits, `skills` does not, and that asymmetry is older
+    than the shared rule. `narrowed` would hand back the caller's whole index;
+    the early return is what stops it."""
+    spec = replace(read_subagent(HELPER, Path("helper.yaml")), skills=None)
+
+    assert subagent_skills(spec, ("a", "b"), ("a", "b")) is None
+    assert narrowed(None, by=("a", "b")) == ("a", "b")  # what it would have done
