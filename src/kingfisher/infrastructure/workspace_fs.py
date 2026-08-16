@@ -10,7 +10,7 @@ one makes a domain layer worth having.
 from __future__ import annotations
 
 import shutil
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
 from pathlib import Path
@@ -54,7 +54,8 @@ class LocalSessionDirs:
 
     def remove_tree(self, path: Path) -> str | None:
         try:
-            shutil.rmtree(path)  # not ignore_errors: partials must surface
+            # not ignore_errors: partials must surface
+            shutil.rmtree(path, onexc=_unlock_and_retry)
         except OSError as exc:
             return f"directory not removed ({exc.strerror})"
         return None
@@ -161,6 +162,35 @@ def _drop_write_bits(path: Path) -> None:
 
 def _add_write_bits(path: Path) -> None:
     path.chmod(path.stat().st_mode | 0o200)
+
+
+def _unlock_and_retry(func: Callable[[str], object], path: str, exc: BaseException) -> None:
+    """Undo `protect_data` for one path so a sweep can finish, then retry it.
+
+    `protect_data` drops the write bit off `data/` and everything under it, and
+    deletion is governed by the *directory's* write bit rather than the file's.
+    So a session that was ever given `--data` could not be removed at all: every
+    reap failed on it with `Permission denied`, reported the failure, and left
+    it on disk to fail again on the next sweep. Sessions that never received
+    data swept fine, which is why this stayed invisible.
+
+    Chmod belongs to this module -- `place_data` says so, and the reason is that
+    reaching for `sudo` when a directory refused is what once put root-owned
+    files in a workspace. This is the same unlock `writable_data` does, for the
+    one other operation that needs it.
+
+    Only `PermissionError` is handled, and only by retrying once. Anything else,
+    including a path we do not own and therefore cannot chmod, is re-raised for
+    `remove_tree` to report -- degrading the same way `protect_data` does, since
+    a file owned by someone else was never ours to delete.
+    """
+    if not isinstance(exc, PermissionError):
+        raise exc
+    try:
+        _add_write_bits(Path(path).parent)
+    except OSError:
+        raise exc from None
+    func(path)
 
 
 def _unreachable(path: Path, error: OSError) -> str:

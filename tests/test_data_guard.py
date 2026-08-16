@@ -7,6 +7,7 @@ import pytest
 
 from kingfisher.infrastructure.workspace_fs import (
     DataError,
+    LocalSessionDirs,
     place_data,
     place_inputs,
     protect_data,
@@ -262,3 +263,85 @@ def test_supplying_nothing_touches_nothing(session_dir):
 
     assert placement.placed == ()
     assert placement.replaced == ()
+
+
+# -- removal has to undo the hardening ------------------------------------
+
+
+def test_a_session_that_was_given_data_can_still_be_removed(session_dir, tmp_path):
+    """`protect_data` drops the write bit off `data/`, and deletion is governed
+    by the directory's write bit -- so hardening made the session undeletable.
+
+    Every reap of a session that had ever been given `--data` failed with
+    `Permission denied`, reported it, and left the directory to fail again on
+    the next sweep. Sessions that never received data swept fine, which is why
+    it stayed invisible.
+    """
+    source = tmp_path / "orders.csv"
+    source.write_text("a,b\n1,2\n")
+    place_data((source,), session_dir)
+    assert not os.access(session_dir / "data", os.W_OK), "not hardened; test proves nothing"
+
+    failure = LocalSessionDirs().remove_tree(session_dir)
+
+    assert failure is None, f"still not removable: {failure}"
+    assert not session_dir.exists()
+
+
+def test_removal_reaches_through_nested_hardened_directories(session_dir):
+    """`protect_data` hardens every directory under `data/`, not just the top,
+    so unlocking one level would strand anything deeper."""
+    with writable_data(session_dir) as data:
+        (data / "a" / "b").mkdir(parents=True)
+        (data / "a" / "b" / "deep.csv").write_text("x")
+    protect_data(session_dir)
+
+    assert LocalSessionDirs().remove_tree(session_dir) is None
+    assert not session_dir.exists()
+
+
+def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkeypatch):
+    """The same degradation `protect_data` chose. A path owned by someone else
+    is one we could not have deleted anyway, and a sweep of many sessions must
+    not abort on one of them.
+    """
+    with writable_data(session_dir) as data:
+        (data / "theirs.pdf").write_text("x")
+    protect_data(session_dir)
+    _refuse("data", monkeypatch)
+
+    failure = LocalSessionDirs().remove_tree(session_dir)
+
+    assert failure is not None, "reported success without deleting"
+    assert "directory not removed" in failure
+    assert session_dir.exists()
+
+
+def test_an_unrelated_failure_leaves_data_hardened(session_dir, monkeypatch):
+    """Unlocking is for the one error it can fix. A sweep that fails for some
+    other reason leaves the session on disk, and that session's `/data` must
+    still be read-only -- unlocking it on the way past would strip the guard
+    off a session that then survives.
+    """
+    import errno
+
+    with writable_data(session_dir) as data:
+        (data / "kept.csv").write_text("x")
+    protect_data(session_dir)
+
+    real = os.unlink
+
+    def busy(path, **kwargs):
+        if str(path).endswith("kept.csv"):
+            raise OSError(errno.EBUSY, "Device or resource busy", str(path))
+        return real(path, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", busy)
+    failure = LocalSessionDirs().remove_tree(session_dir)
+    monkeypatch.undo()
+
+    assert failure is not None, "reported success despite a failed unlink"
+    assert session_dir.exists()
+    assert not os.access(session_dir / "data", os.W_OK), (
+        "/data was left writable on a session that survived the sweep"
+    )
