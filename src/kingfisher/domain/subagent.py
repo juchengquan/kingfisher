@@ -118,7 +118,8 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
+from kingfisher.domain.tool import reference, split_reference
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -208,6 +209,21 @@ class SubagentSpec:
     #: the same trade `_permitted_tools` split for a request.
     builtin_tools: Selection = ALL
     tools: Selection = ALL
+    #: Where each `tools:` entry claimed its tool lives, by name, for the
+    #: entries written `where::what`. Beside `tools` rather than inside it,
+    #: because a path is a claim to be checked and a name is what everything
+    #: downstream keys on -- folding them together would make every consumer
+    #: learn a spelling that only the checker cares about.
+    #:
+    #: Empty when every entry used the short form, which stays valid: the long
+    #: one buys a check, and a definition that did not ask for one is not wrong.
+    #:
+    #: `derived`, so it is not in `KNOWN`. A definition cannot write this: it is
+    #: read out of `tools`, and a `tool_sources:` key in a YAML file is refused
+    #: like any other name this format does not define.
+    tool_sources: Mapping[str, str] = field(
+        default_factory=dict, metadata={"derived": True}
+    )
     #: Skills this delegate is told about. `None` means *none*, which is not
     #: what `tools` means, and the difference is deliberate: tools are what a
     #: delegate needs to act, skills are what it needs to know -- and its body
@@ -290,6 +306,40 @@ def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
         raise SubagentError(msg)
 
 
+def refuse_moved_tools(spec: SubagentSpec, *, sources: Mapping[str, str]) -> None:
+    """Refuse a definition whose `where::what` no longer describes where.
+
+    Only entries that made a claim are checked, so a definition written the
+    short way is untouched -- the long form buys this, and asking for it is
+    what opts in.
+
+    The claim can only ever be wrong about *location*. It cannot be wrong about
+    which tool is meant, because two tools of one name never both load; the
+    loader refuses the pair. So this says "it moved", never "you meant the
+    other one", and the message is worded to match.
+
+    A name the workspace does not offer at all is left alone here.
+    `refuse_unknown_tools` says that better, with the full listing, and saying
+    it twice in two voices helps nobody.
+    """
+    moved = [
+        (name, claimed, sources[name].rstrip("/"))
+        for name, claimed in spec.tool_sources.items()
+        if name in sources and sources[name].rstrip("/") != claimed
+    ]
+    if not moved:
+        return
+    lines = "\n".join(
+        f"  {reference(claimed, name)}  ->  {reference(actual, name)}"
+        for name, claimed, actual in sorted(moved)
+    )
+    msg = (
+        f"subagent {spec.name!r} says where its tools live, and "
+        f"{'one has' if len(moved) == 1 else 'some have'} moved:\n{lines}\n"
+        f"Update the definition, or drop the path and write the name alone."
+    )
+    raise CapabilityError(msg)
+
 def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields.
 
@@ -324,6 +374,14 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
+    # Read once, then split. A `tools:` entry may be written `where::what`, and
+    # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
+    # the dictionary the agent dispatches through all key on the plain name.
+    # Where it claims to live travels beside it, for whoever checks the claim.
+    written_tools = _selected(
+        document.get("tools"), absent=ALL, key="tools", source=source
+    )
+
     return SubagentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
@@ -336,7 +394,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         builtin_tools=_selected(
             document.get("builtin_tools"), absent=ALL, key="builtin_tools", source=source
         ),
-        tools=_selected(document.get("tools"), absent=ALL, key="tools", source=source),
+        tools=_names_only(written_tools),
+        tool_sources=_claimed_sources(written_tools),
         skills=_selected(document.get("skills"), absent=None, key="skills", source=source),
         middleware=_selected(
             document.get("middleware"), absent=None, key="middleware", source=source
@@ -351,6 +410,37 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         metadata=_metadata(document, source),
     )
 
+
+
+def _names_only(written: Selection) -> Selection:
+    """A `tools:` selection with any `where::` stripped off each entry.
+
+    This is what the rest of kingfisher sees, and it has to be, because a name
+    is the only thing a grant, an allowlist or the agent's dispatch dictionary
+    keys on. `ALL` and `None` pass through: neither names anything, so neither
+    can carry a path.
+    """
+    if written in (ALL, None):
+        return written
+    return tuple(split_reference(entry)[1] for entry in written)
+
+
+def _claimed_sources(written: Selection) -> Mapping[str, str]:
+    """Where each entry said its tool lives, for the entries that said.
+
+    Keyed by name rather than kept as a list, because that is how it is asked:
+    the checker holds the real sources by name and wants to know what this
+    definition claimed for that one. Entries written the short way are absent,
+    which is how "made no claim" is told from "claimed and was right".
+    """
+    if written in (ALL, None):
+        return MappingProxyType({})
+    claimed = {}
+    for entry in written:
+        where, name = split_reference(entry)
+        if where is not None:
+            claimed[name] = where
+    return MappingProxyType(claimed)
 
 
 def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Selection:

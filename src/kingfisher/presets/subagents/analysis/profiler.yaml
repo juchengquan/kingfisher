@@ -13,7 +13,15 @@ builtin_tools: [read_file, ls, glob]
 # The package preset, which is the point of pairing these two examples: a
 # delegate whose whole job is reading a file cheaply should use the tool that
 # reads it cheaply, not `read_file` on a million rows.
-tools: [csv_profile, csv_columns]
+#
+# Written `where::what`, which is optional and says where each tool lives. The
+# short form -- `[csv_profile, csv_columns]` -- means the same thing and still
+# works. The long one buys a check: if either tool moves out of `csv_profile/`,
+# this definition says so at startup instead of being quietly wrong about a
+# file nobody can find. `--list` prints the left-hand side, so it can be pasted.
+tools:
+  - csv_profile::csv_profile
+  - csv_profile::csv_columns
 # Profiling is cheap-model work too -- see extractor.yaml for why this is an
 # alias your models.yaml binds rather than a model id written here.
 alias: cheap

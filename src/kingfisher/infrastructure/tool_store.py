@@ -312,11 +312,18 @@ def offered(sources_by_name: Mapping[str, str], names: Sequence[str]) -> str:
     Names with no known source -- a built-in, or a tool supplied directly to
     `build_agent` rather than found on disk -- are listed bare. There is no file
     to name, and a blank column against `read_file` would be noise.
+
+    The source is printed the way a definition writes it, without a package's
+    trailing slash, so what a reader sees here is what they can paste into a
+    `tools:` line. It used to keep the slash, which said "folder" at the cost of
+    being a near-miss for the one thing anybody does with it.
     """
     if not names:
         return "  (none)"
     width = max(len(name) for name in names)
     return "\n".join(
-        f"  {name.ljust(width)}  ({where})" if (where := sources_by_name.get(name)) else f"  {name}"
+        f"  {name.ljust(width)}  ({where.rstrip('/')})"
+        if (where := sources_by_name.get(name))
+        else f"  {name}"
         for name in sorted(names)
     )

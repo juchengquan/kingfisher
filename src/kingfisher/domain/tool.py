@@ -20,6 +20,41 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+#: What separates a tool's file from its name in a definition. Two colons
+#: rather than one because a Windows path can carry a single one, and because
+#: pytest already taught everyone that `file::thing` means "that thing, in that
+#: file".
+SEPARATOR = "::"
+
+
+def reference(source: str, name: str) -> str:
+    """How a definition writes one tool: where it lives, then what it is called.
+
+    The trailing slash a package's `source` carries is dropped. It earns its
+    place in a *listing*, where it says `csv_profile` is a folder rather than a
+    file that is not there -- but a reference already says that with `.py`, or
+    with its absence, and `csv_profile/::csv_columns` is only noisier for it.
+    """
+    return f"{source.rstrip('/')}{SEPARATOR}{name}"
+
+
+def split_reference(text: str) -> tuple[str | None, str]:
+    """A written reference into the file it claims and the name it means.
+
+    The name is what everything downstream uses -- a grant, an allowlist, the
+    dictionary the agent dispatches through -- so it comes back plain whichever
+    form was written. The claim comes back beside it, for whoever checks it, and
+    is `None` when the short form was used.
+
+    A trailing slash is accepted and dropped. `--list` prints a package as
+    `csv_profile/`, and pasting that in should not be a near-miss that someone
+    has to notice.
+    """
+    claimed, found, name = text.rpartition(SEPARATOR)
+    if not found:
+        return None, text.strip()
+    return claimed.strip().rstrip("/") or None, name.strip()
+
 
 def tool_name(tool: Any) -> str:
     """What a request names this tool by.
@@ -47,3 +82,8 @@ class Found:
     @property
     def name(self) -> str:
         return tool_name(self.tool)
+
+    @property
+    def reference(self) -> str:
+        """How a definition would name this one, saying where it lives."""
+        return reference(self.source, self.name)

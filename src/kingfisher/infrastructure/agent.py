@@ -41,7 +41,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.domain.ports import ToolRepository
-from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
+from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, refuse_moved_tools
 from kingfisher.domain.tool import Found, tool_name
 from kingfisher.infrastructure import tool_store
 from kingfisher.infrastructure.backend import (
@@ -655,6 +655,30 @@ def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
     )
 
 
+def _refuse_bad_tool_lists(
+    activated: tuple[str, ...], defined: Mapping[str, SubagentSpec], surface: _ToolSurface
+) -> None:
+    """Everything wrong a delegate's `tools:` can be, in the order worth hearing.
+
+    The unknown-name check first: a definition naming `csv_column` should be
+    told the name is wrong, not that `csv_column` has moved. Only once the name
+    is real is a claim about where it lives worth testing.
+
+    The catalogue's own definitions had their paths checked at construction, by
+    `Catalogue.warm`. This runs for all of them again anyway, because the set
+    here includes what a *request* uploaded, and a checked path is exactly the
+    kind of thing an uploaded definition can get wrong.
+    """
+    for name in activated:
+        refuse_unknown_tools(
+            defined[name],
+            builtin=surface.offered_builtin,
+            workspace=surface.offered_workspace,
+            sources=surface.sources,
+        )
+        refuse_moved_tools(defined[name], sources=surface.sources)
+
+
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # injectable collaborator, and folding them into a parameter object would
     # hide exactly what a test is allowed to substitute.
@@ -785,13 +809,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     if capabilities.subagents is not None:
         offered = available_skills(cfg, session_dir, catalogue=roots)
         registry = middleware_registry or {}
-        for name in activated:
-            refuse_unknown_tools(
-                defined[name],
-                builtin=surface.offered_builtin,
-                workspace=surface.offered_workspace,
-                sources=surface.sources,
-            )
+        _refuse_bad_tool_lists(activated, defined, surface)
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 
