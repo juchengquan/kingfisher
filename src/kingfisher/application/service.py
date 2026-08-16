@@ -650,6 +650,7 @@ class Kingfisher:
                 session_id=prepared.session.id,
                 turn_id=prepared.turn.id,
                 answer=answer,
+                virtual_dir=prepared.turn.virtual_dir,
                 run_dir=prepared.turn.directory,
                 log_path=log_path(self.cfg.state_dir, prepared.session.id),
                 # Collected after the graph has finished, so it reflects what

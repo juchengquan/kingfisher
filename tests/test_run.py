@@ -6,6 +6,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.application.run import Request, RunResult, normalize_answer, run
+from kingfisher.application.service import Kingfisher
 from tests.conftest import StubCheckpointer, start
 
 
@@ -341,3 +342,66 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
     )
 
     assert "New files in /data: fresh.csv." in agent.state["messages"][0]["content"]
+
+
+# -- what a caller can be told, and what stays on the host ----------------
+#
+# `RunResult` serves two audiences at once. A local caller is on the host and
+# wants `run_dir`; a remote one cannot read it and should not be told the
+# server's layout. Both live in one record, and which is which is the part that
+# has to be legible -- the alternative is every API author deciding it again.
+
+
+def test_the_result_names_the_turn_the_way_the_agent_does(cfg):
+    """Machine-independent, and the same string the agent was given, so a
+    caller reading the answer and a caller reading the files agree."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.start_session("s")
+
+    result = service.run(Request("go", session_id="s"))
+
+    assert result.virtual_dir == f"/runs/{result.turn_id}"
+
+
+def test_everything_but_the_host_paths_is_json(cfg):
+    """The half a server sends. If this stopped being true, an API would grow
+    a bespoke converter and they would each pick something different."""
+    import dataclasses
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.start_session("s")
+    result = service.run(Request("go", session_id="s"))
+
+    sendable = {
+        k: v for k, v in dataclasses.asdict(result).items()
+        if k not in ("run_dir", "log_path")
+    }
+
+    assert json.loads(json.dumps(sendable))["virtual_dir"] == result.virtual_dir
+
+
+def test_the_host_paths_refuse_to_serialise(cfg):
+    """Deliberate, and the reason they are named in the docstring. A server
+    reaching for `default=str` would put the server's filesystem layout in
+    every response; raising is what sends them looking."""
+    import dataclasses
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.start_session("s")
+    result = service.run(Request("go", session_id="s"))
+
+    with pytest.raises(TypeError, match="not JSON serializable"):
+        json.dumps(dataclasses.asdict(result))
+
+
+def test_the_virtual_directory_and_the_artifacts_share_a_root(cfg):
+    """Both are rooted at the session, so they read together. A caller that
+    joins them gets a path the agent would recognise."""
+    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service.start_session("s")
+
+    result = service.run(Request("go", session_id="s"))
+
+    assert result.virtual_dir.startswith("/")
+    assert all(not a.startswith("/") for a in result.artifacts)
+    assert result.virtual_dir.lstrip("/").startswith("runs/")
