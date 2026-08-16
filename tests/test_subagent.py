@@ -217,3 +217,40 @@ def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
     body = "---\nname: code-review\nallowed-tools: [read_file]\nlicense: MIT\n---\nBody.\n"
 
     assert skill_name(body) == "code-review"
+
+
+def test_a_prompt_that_begins_indented_still_loads(tmp_path):
+    """`system_prompt: |` takes its indentation from the first line, so a prompt
+    opening with a code example *fails to parse*. The `2` pins the block to a
+    fixed column, which is why the presets and the docs use it.
+
+    The prompt's outer whitespace is still stripped, as the markdown body always
+    was -- what the indicator buys is that the document loads at all.
+    """
+    lines = "      ls -la /data\n  Then report what you found.\n"
+    header = "name: reviewer\ndescription: d\nsystem_prompt: "
+
+    spec = read_subagent(header + "|2\n" + lines, tmp_path / "reviewer.yaml")
+    assert "ls -la /data" in spec.system_prompt
+    assert "Then report what you found." in spec.system_prompt
+
+    # The same document without the indicator does not load at all.
+    with pytest.raises(SubagentError, match="cannot read definition"):
+        read_subagent(header + "|\n" + lines, tmp_path / "reviewer.yaml")
+
+
+def test_indentation_inside_a_prompt_is_preserved(tmp_path):
+    """Only the outer edges are stripped. A numbered list's continuation lines
+    carry their indent into the delegate's prompt, which is how the shipped
+    presets are written."""
+    definition = (
+        "name: reviewer\n"
+        "description: d\n"
+        "system_prompt: |2\n"
+        "  1. Recompute the figure.\n"
+        "     Do not reuse the caller's script.\n"
+    )
+
+    spec = read_subagent(definition, tmp_path / "reviewer.yaml")
+
+    assert "\n   Do not reuse" in spec.system_prompt

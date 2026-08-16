@@ -126,7 +126,7 @@ pretending to be a format.
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
 | `description` | required | Single line. This is what the parent agent sees when deciding whether to delegate, so write it as a trigger, not a title |
-| `system_prompt` | required | The delegate's whole instruction. Write it as a `\|` block scalar — the content is prose and the block keeps every line break |
+| `system_prompt` | required | The delegate's whole instruction, as a `\|2` block scalar. The `2` pins where the block starts: without it YAML infers the column from the first line, so a prompt opening with an indented example fails to load. Indentation inside the prompt is kept; the outer edges are trimmed |
 | `tools` | optional | `[read_file, grep]` or a block list. Unset inherits the parent's tools |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
