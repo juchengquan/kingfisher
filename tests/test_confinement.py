@@ -31,7 +31,7 @@ macos = pytest.mark.skipif(
 def test_off_is_warned_about_on_every_start(cfg, tmp_path):
     """An exposure nobody is reminded of is one nobody fixes."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path
+        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
 
     assert not chosen.confined
@@ -43,7 +43,7 @@ def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
     """A container that mounts only the workspace has provided the boundary.
     Warning there would train operators to ignore the warning."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path
+        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
 
     assert chosen.warning == ""
@@ -53,13 +53,15 @@ def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
 def test_an_unknown_mode_is_refused_rather_than_treated_as_off(cfg, tmp_path):
     """A typo in a deployment's env must not silently unconfine it."""
     with pytest.raises(ValueError, match="unknown shell sandbox mode"):
-        confinement.resolve("sandbox", workspace=cfg.workspace, state_dir=tmp_path)
+        confinement.resolve(
+            "sandbox", workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        )
 
 
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
     chosen = confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path
+        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
 
     assert chosen.confined
@@ -71,7 +73,9 @@ def test_the_profile_lives_in_harness_state_not_the_workspace(cfg, tmp_path):
     """A boundary the agent can edit is not a boundary. `/runs` and `/derived`
     are writable through the file tools; the state directory is not addressable
     at all."""
-    confinement.resolve(confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path)
+    confinement.resolve(
+        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+    )
 
     assert not list(Path(cfg.workspace).rglob("shell.sb"))
 
@@ -216,3 +220,102 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
         assert "token" in str(backend.execute(f"cat {secret}").output)
     finally:
         secret.unlink(missing_ok=True)
+
+
+# -- writes: the rules system.md only asked for ---------------------------
+
+
+@macos
+def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
+    """`system.md` says to stop and report rather than reach outside the
+    workspace. In an observed run the agent did it anyway, so the rule is the
+    kernel's now."""
+    target = Path.home() / ".kingfisher-write-probe"
+    backend = build_backend(cfg, session_dir)
+    try:
+        result = backend.execute(f"echo pwned > {target}")
+
+        assert not target.exists(), "the shell wrote into the operator's home"
+        assert "not permitted" in str(result.output).lower()
+    finally:
+        target.unlink(missing_ok=True)
+
+
+@macos
+def test_a_literal_tmp_write_is_refused(cfg, session_dir):
+    """The prompt says to write scratch under `$TMPDIR`, never a literal
+    `/tmp`. The observed run wrote `/tmp/preview.pdf` regardless. `/tmp` is
+    world-writable, which is the reason the rule exists."""
+    target = Path("/tmp/kingfisher-write-probe")
+    backend = build_backend(cfg, session_dir)
+    try:
+        backend.execute(f"echo pwned > {target}")
+
+        assert not target.exists(), "the shell wrote to a literal /tmp"
+    finally:
+        target.unlink(missing_ok=True)
+
+
+@macos
+def test_installing_into_the_environment_is_refused(cfg, session_dir):
+    """Two `pip install` attempts in one observed run. They failed only because
+    this venv has no `pip` -- which is luck, not a boundary. The venv stays
+    readable so Python runs, and unwritable so nothing can be added to it."""
+    import sys
+
+    backend = build_backend(cfg, session_dir)
+    probe = Path(sys.prefix) / "kingfisher-write-probe"
+    # Cleaned in `finally` because the interesting runs are the ones where the
+    # write *succeeds*: without this, a failing assertion leaves a file in the
+    # venv and every later run of this test fails on the leftover rather than
+    # on the boundary. Observed while mutation-testing it.
+    try:
+        result = backend.execute(f"touch {probe}")
+
+        assert not probe.exists(), "the shell wrote into the environment"
+        assert "not permitted" in str(result.output).lower()
+    finally:
+        probe.unlink(missing_ok=True)
+
+
+@macos
+def test_tmpdir_stays_writable_wherever_it_is_pointed(cfg, session_dir, tmp_path):
+    """`$TMPDIR` is where the prompt sends scratch, and
+    `KINGFISHER_SCRATCH_DIR` can move it out of the workspace. Denying it would
+    close the one place the agent is told to use."""
+    outside = tmp_path / "scratch-elsewhere"
+    relocated = replace(cfg, scratch_root=outside)
+    backend = build_backend(relocated, session_dir)
+
+    result = backend.execute('echo hi > "$TMPDIR/note.txt" && cat "$TMPDIR/note.txt"')
+
+    assert result.exit_code == 0, f"$TMPDIR is not writable: {result.output}"
+    assert "hi" in str(result.output)
+
+
+@macos
+def test_redirecting_to_dev_null_still_works(cfg, session_dir):
+    """It appears in about half the commands an agent writes."""
+    backend = build_backend(cfg, session_dir)
+
+    result = backend.execute("echo noise 2>/dev/null && echo ok")
+
+    assert result.exit_code == 0
+    assert "ok" in str(result.output)
+
+
+@macos
+def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
+    """Confinement that broke the deliverable would be reverted, so this is the
+    other half of the bargain: `/derived` survives the turn, the run directory
+    holds scratch, and both are the agent's to write."""
+    backend = build_backend(cfg, session_dir)
+
+    for command in (
+        "echo kept > derived/report.md",
+        "mkdir -p runs/t001 && echo scratch > runs/t001/notes.txt",
+    ):
+        result = backend.execute(command)
+        assert result.exit_code == 0, f"{command!r} was refused: {result.output}"
+
+    assert (session_dir / "derived" / "report.md").read_text().strip() == "kept"

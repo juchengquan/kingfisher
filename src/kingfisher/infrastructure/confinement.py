@@ -67,7 +67,7 @@ def _unwrapped(command: str) -> str:
     return command
 
 
-def profile(*, home: Path, readable: tuple[Path, ...]) -> str:
+def profile(*, home: Path, readable: tuple[Path, ...], writable: tuple[Path, ...]) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
     Deny-the-home rather than allow-only-the-workspace, deliberately. An
@@ -82,6 +82,27 @@ def profile(*, home: Path, readable: tuple[Path, ...]) -> str:
     it in `~/.local/share/uv/python/...` -- so denying the home without
     re-allowing `sys.base_prefix` leaves the agent unable to run Python at all.
     That was found by doing it.
+
+    Writes are the other direction and take the opposite shape: an allow-list,
+    denied from `/` down. `system.md` already tells the agent to stop rather
+    than reach outside the workspace, and to write scratch under `$TMPDIR`
+    rather than a literal `/tmp`. Both were ignored inside a single observed
+    run -- it wrote `/tmp/preview.pdf` and twice tried `pip install`, which
+    failed only because this venv happens to have no `pip`. Prose that the
+    model overrides is not a boundary; this is the same rules with the kernel
+    behind them.
+
+    An allow-list is affordable here where it was not for reads, because what a
+    shell legitimately writes to is short and known: the workspace, `$TMPDIR`,
+    and the character devices that make `2>/dev/null` work.
+
+    The known cost, stated rather than discovered later: a program that insists
+    on writing outside the workspace stops working. Headless Chrome is the case
+    to expect -- an observed run used it to render HTML, and it wants socket and
+    profile directories of its own. Pointing such a tool at `$TMPDIR` or a
+    directory inside the workspace is usually enough. This was not proven either
+    way here, because Chrome hung on this machine unsandboxed too, and a
+    baseline that does not run is not a comparison.
     """
     lines = [
         "(version 1)",
@@ -89,6 +110,11 @@ def profile(*, home: Path, readable: tuple[Path, ...]) -> str:
         f"(deny file-read* (subpath {_sb(home)}))",
     ]
     lines += [f"(allow file-read* (subpath {_sb(p)}))" for p in readable]
+    lines.append('(deny file-write* (subpath "/"))')
+    lines += [f"(allow file-write* (subpath {_sb(p)}))" for p in writable]
+    # `2>/dev/null` is in half the commands an agent writes, and stdout and
+    # stderr are themselves entries here.
+    lines.append('(allow file-write* (subpath "/dev"))')
     return "\n".join(lines) + "\n"
 
 
@@ -110,6 +136,18 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = ()) -> tuple[Path, 
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
+def writable_roots(workspace: Path, scratch: Path) -> tuple[Path, ...]:
+    """Everywhere the shell is allowed to write.
+
+    `scratch` is named separately rather than assumed to sit inside the
+    workspace, because `KINGFISHER_SCRATCH_DIR` and `KINGFISHER_STATE_DIR` can
+    move it out. It is the directory handed to the shell as `TMPDIR`, so leaving
+    it off would deny the one place the prompt tells the agent to put scratch.
+    """
+    roots = (Path(workspace), Path(scratch))
+    return tuple(dict.fromkeys(p.resolve() for p in roots))
+
+
 def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
     def wrap(command: str) -> str:
         # The inner `/bin/sh -c` is what deepagents would have run anyway; the
@@ -120,7 +158,7 @@ def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
     return wrap
 
 
-def resolve(mode: str, *, workspace: Path, state_dir: Path,
+def resolve(mode: str, *, workspace: Path, state_dir: Path, scratch_dir: Path,
             extra: tuple[str, ...] = ()) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs.
 
@@ -152,5 +190,12 @@ def resolve(mode: str, *, workspace: Path, state_dir: Path,
     home = Path.home().resolve()
     path = Path(state_dir) / "shell.sb"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(profile(home=home, readable=readable_roots(workspace, extra)), encoding="utf-8")
+    path.write_text(
+        profile(
+            home=home,
+            readable=readable_roots(workspace, extra),
+            writable=writable_roots(workspace, scratch_dir),
+        ),
+        encoding="utf-8",
+    )
     return Confinement(wrap=_sandbox_exec(path))

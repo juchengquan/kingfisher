@@ -296,6 +296,7 @@ def build_backend(cfg: Config, session_dir: Path) -> BackendProtocol:
             cfg.shell_sandbox,
             workspace=cfg.workspace,
             state_dir=cfg.state_dir,
+            scratch_dir=cfg.scratch_dir,
             extra=cfg.shell_path_extra,
         ),
         root_dir=str(session_dir),
