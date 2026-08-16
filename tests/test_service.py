@@ -74,7 +74,7 @@ def test_an_injected_agent_is_reused_and_refuses_narrowing(cfg, session_dir):
 
     with pytest.raises(ValueError, match="pre-built agent"):
         service.agent_for(
-            Request("go", capabilities=Capabilities(tools=("read_file",))), session_dir
+            Request("go", capabilities=Capabilities(builtin_tools=("read_file",))), session_dir
         )
 
 
@@ -299,18 +299,24 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
     service.start_session("s")
 
     admitted = service._admit(
-        Request("go", session_id="s", capabilities=Capabilities(tools=("read_file",)))
+        Request(
+            "go",
+            session_id="s",
+            capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
+        )
     )
 
-    tools = dict(admitted.withheld)["tool"]
+    by_kind = dict(admitted.withheld)
 
-    assert "http_fetch" in tools  # a workspace tool, not a built-in
-    assert "read_file" not in tools
+    # The two kinds are reported apart, which is the whole point of the split.
+    assert "http_fetch" in by_kind["tool"]  # a workspace tool
+    assert "execute" in by_kind["builtin tool"]  # and a built-in
+    assert "read_file" not in by_kind["builtin tool"]  # granted, so not withheld
 
 
 def test_every_kind_a_request_can_narrow_is_reported(cfg):
-    """Tools, skills and subagents all narrow the same way and all went silent
-    the same way. One line per kind, and only for kinds that lost something."""
+    """Every axis narrows the same way and every one of them went silent the
+    same way. One line per kind, and only for kinds that lost something."""
     from kingfisher.infrastructure import presets, skill_store, subagent_store
 
     service = Kingfisher(cfg)
@@ -322,7 +328,10 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
             "go",
             session_id="s",
             capabilities=Capabilities(
-                tools=("read_file",), skills=("code-review",), subagents=("reviewer",)
+                builtin_tools=("read_file",),
+                tools=("sql_query",),
+                skills=("code-review",),
+                subagents=("reviewer",),
             ),
         )
     )
@@ -340,9 +349,10 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     assert {"code-review"} < seeded_skills
     assert {"reviewer"} < seeded_subagents
 
-    assert set(by_kind) == {"tool", "skill", "subagent"}
-    assert "http_fetch" in by_kind["tool"]
-    assert "read_file" not in by_kind["tool"]
+    assert set(by_kind) == {"builtin tool", "tool", "skill", "subagent"}
+    assert "execute" in by_kind["builtin tool"]  # granted read_file only
+    assert "read_file" not in by_kind["builtin tool"]  # and it was granted
+    assert "http_fetch" in by_kind["tool"]  # a workspace tool, reported apart
     assert by_kind["skill"] == tuple(sorted(seeded_skills - {"code-review"}))
     assert by_kind["subagent"] == tuple(sorted(seeded_subagents - {"reviewer"}))
 
@@ -356,10 +366,10 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg):
     service.start_session("s")
 
     admitted = service._admit(
-        Request("go", session_id="s", capabilities=Capabilities(tools=("read_file",)))
+        Request("go", session_id="s", capabilities=Capabilities(builtin_tools=("read_file",)))
     )
 
-    assert [kind for kind, _ in admitted.withheld] == ["tool"]
+    assert [kind for kind, _ in admitted.withheld] == ["builtin tool"]
 
 
 def test_each_kind_gets_its_own_line(cfg):

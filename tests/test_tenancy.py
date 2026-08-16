@@ -75,11 +75,13 @@ def test_the_service_may_name_a_session_even_though_a_request_may_not(cfg):
 
 def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_dir):
     """`intersect` was implemented, tested and called by nothing. Now it runs."""
-    kf = Kingfisher(cfg, threads=StubCheckpointer(), grants=Capabilities(tools=("read_file",)))
+    kf = Kingfisher(
+        cfg, threads=StubCheckpointer(), grants=Capabilities(builtin_tools=("read_file",))
+    )
 
-    allowed = kf.grants.intersect(Capabilities(tools=("read_file", "execute")))
+    allowed = kf.grants.intersect(Capabilities(builtin_tools=("read_file", "execute")))
 
-    assert allowed.tools == ("read_file",)
+    assert allowed.builtin_tools == ("read_file",)
 
 
 def test_grants_are_unrestricted_by_default(cfg):
@@ -97,13 +99,13 @@ def test_an_uploaded_definition_is_added_back_after_clamping(cfg):
     unknowable then, so clamping against it would strip every upload rather
     than authorise it. The caller supplied the content; the tool clamp, which
     `including` does not touch, is what actually bounds it."""
-    granted = Capabilities(skills=("tabular-qa",), tools=("read_file",))
+    granted = Capabilities(skills=("tabular-qa",), builtin_tools=("read_file",))
 
     allowed = granted.intersect(Capabilities()).including(skills=("theirs",))
 
     assert allowed.skills is not None
     assert set(allowed.skills) == {"tabular-qa", "theirs"}
-    assert allowed.tools == ("read_file",)  # untouched
+    assert allowed.builtin_tools == ("read_file",)  # untouched
 
 
 def test_including_cannot_widen_an_unrestricted_set(cfg):

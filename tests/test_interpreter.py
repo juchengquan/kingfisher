@@ -46,7 +46,7 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
         wired,
         session_dir=session_dir,
         model=_model(),
-        capabilities=Capabilities(tools=("read_file",)),
+        capabilities=Capabilities(builtin_tools=("read_file",)),
     )
     # Registered either way -- the allowlist refuses at call time, it does not
     # unregister. What matters is that the name is known to the validator.
@@ -62,7 +62,7 @@ def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, sessio
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
-        capabilities=Capabilities(tools=("read_file", "eval")),
+        capabilities=Capabilities(builtin_tools=("read_file", "eval")),
     )
 
     interpreter = _interpreter_in(captured)
@@ -112,7 +112,7 @@ def test_withholding_task_also_stops_dispatch_from_code(cfg, session_dir, monkey
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
-        capabilities=Capabilities(tools=("eval", "read_file")),  # no task
+        capabilities=Capabilities(builtin_tools=("eval", "read_file")),  # no task
     )
 
     interpreter = _interpreter_in(captured)
@@ -127,7 +127,7 @@ def test_granting_task_allows_dispatch_from_code(cfg, session_dir, monkeypatch):
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
-        capabilities=Capabilities(tools=("eval", "task")),
+        capabilities=Capabilities(builtin_tools=("eval", "task")),
     )
 
     assert _dispatch_enabled(_interpreter_in(captured)) is True
@@ -142,7 +142,7 @@ def test_task_is_never_offered_through_the_tool_namespace(cfg, session_dir, monk
         replace(cfg, interpreter_enabled=True),
         session_dir=session_dir,
         model=_model(),
-        capabilities=Capabilities(tools=("eval", "task", "read_file")),
+        capabilities=Capabilities(builtin_tools=("eval", "task", "read_file")),
     )
 
     assert "task" not in _ptc(_interpreter_in(captured))

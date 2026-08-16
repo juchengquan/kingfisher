@@ -140,7 +140,7 @@ def test_the_readme_call_is_valid(workspace_with_presets, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
-            tools=("read_file", "ls", "glob", "grep", "execute", "task"),
+            builtin_tools=("read_file", "ls", "glob", "grep", "execute", "task"),
             skills=("code-review",),
             subagents=("reviewer",),
         ),
