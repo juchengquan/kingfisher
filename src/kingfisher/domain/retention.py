@@ -38,7 +38,11 @@ class SweepPlan:
 
 
 def expired(
-    entries: Sequence[tuple[str, float]], older_than_seconds: float, now: float
+    entries: Sequence[tuple[str, float]],
+    older_than_seconds: float,
+    now: float,
+    *,
+    busy: Sequence[str] = (),
 ) -> SweepPlan:
     """Name every session untouched for longer than `older_than_seconds`.
 
@@ -46,8 +50,20 @@ def expired(
     together, so a busy caller evicts a quiet one -- fine when one person owned
     the workspace, a tenancy bug once many callers share it. Age asks only how
     long a session has been idle, which is a property of that session alone.
+
+    `busy` names sessions with a turn running, and they are kept whatever their
+    age says. A turn may outlive the idle bound -- `turn_timeout_s` defaults to
+    an hour and nothing requires a session to be kept longer than that -- and
+    sweeping one mid-turn deletes the directory out from under an agent still
+    writing to it. Measured before this existed: the sweep removed it and left
+    the claim behind, pointing at nothing.
     """
-    doomed = tuple(name for name, modified in entries if now - modified > older_than_seconds)
+    running = set(busy)
+    doomed = tuple(
+        name
+        for name, modified in entries
+        if name not in running and now - modified > older_than_seconds
+    )
     return SweepPlan(doomed=doomed, kept=len(entries) - len(doomed))
 
 

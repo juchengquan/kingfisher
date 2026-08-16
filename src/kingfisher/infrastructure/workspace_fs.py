@@ -41,6 +41,13 @@ class LocalSessionDirs:
             return False
         return True
 
+    def mark_used(self, path: Path) -> None:
+        # `exist_ok` because this records use of something that already exists;
+        # a session that has gone is not an error here, it is the sweep winning
+        # a race, and the turn will fail on its own next read.
+        with suppress(OSError):
+            path.touch(exist_ok=True)
+
     def children(self, path: Path) -> tuple[str, ...]:
         if not path.is_dir():
             return ()

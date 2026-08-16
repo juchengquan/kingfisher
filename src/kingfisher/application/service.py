@@ -58,7 +58,7 @@ from collections.abc import AsyncIterator, Iterator
 from contextlib import suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
-from time import monotonic
+from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
@@ -313,6 +313,11 @@ class Kingfisher:
         self.workspace: Path = ensure_layout(self.cfg.workspace)
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
+        # Host-side, beside the run logs, because the session directory is the
+        # agent's own root -- a claim kept there would be something `execute`
+        # could delete. `state_dir` is the one place the agent never addresses.
+        self._claims: Path = self.cfg.state_dir / "claims"
+        self.dirs.ensure(self._claims)
         self.threads: Any = threads if threads is not None else build_checkpointer(self.cfg)
         # No default. A deployment that never serves uploaded definitions has
         # nothing to wire, and a request that supplies ids without one is a
@@ -411,7 +416,12 @@ class Kingfisher:
         """
         sessions_root = self.workspace / "sessions"
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
-        plan = retention.expired(self.dirs.listing(sessions_root), age, now)
+        plan = retention.expired(
+            self.dirs.listing(sessions_root),
+            age,
+            now,
+            busy=self.dirs.children(self._claims),
+        )
         result = retention.apply(plan, sessions_root, self.dirs, self.threads)
         return self._reconcile_threads(sessions_root, result)
 
@@ -505,6 +515,29 @@ class Kingfisher:
         # retry reuses it.
         session = Session.open(workspace, session_id, dirs)
         ensure_session_layout(session.directory)
+        # A turn writes inside the session, never to the session itself, so the
+        # timestamp `retention.expired` reads would still say "idle" for a
+        # conversation in daily use. Recorded here, at the top of a turn, rather
+        # than at the end: a turn that fails still happened.
+        dirs.mark_used(session.directory)
+        # Before the other refusals rather than after: those read the session,
+        # and a turn arriving halfway through would be reading it as it moved.
+        session.claim(dirs, self._claims, stale_after=cfg.turn_timeout_s, now=time())
+        try:
+            return self._admitted(request, session, cfg)
+        except BaseException:
+            session.release(dirs, self._claims)
+            raise
+
+    def _admitted(
+        self, request: Request, session: Session, cfg: Config
+    ) -> _Admitted:
+        """The rest of admission, once the session is claimed.
+
+        Split so the claim has exactly one release path for a refusal. Every
+        check below can raise, and each one leaving the slot held would wedge
+        the session until the claim aged out.
+        """
         # Kernel-level guard; the deny rule covers only the file tools. Paths
         # it could not harden are reported below rather than raised: they used
         # to abort the run, and since this runs before anything else, one file
@@ -647,6 +680,9 @@ class Kingfisher:
             ok = True
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
+            # The slot goes back however the turn ended -- answered, refused
+            # mid-stream, or cut short by its deadline.
+            prepared.session.release(self.dirs, self._claims)
 
         yield self._finished(prepared, answer, cut_short=cut_short)
 
@@ -689,6 +725,9 @@ class Kingfisher:
             ok = True
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
+            # The slot goes back however the turn ended -- answered, refused
+            # mid-stream, or cut short by its deadline.
+            prepared.session.release(self.dirs, self._claims)
 
         yield self._finished(prepared, answer, cut_short=cut_short)
 
