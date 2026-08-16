@@ -33,12 +33,6 @@ from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
 PACKAGE = "kingfisher.presets"
 
-#: The kinds a preset can be, which are the directories inside it. Each is
-#: copied to the workspace directory of the same name -- so they are the
-#: catalogue's kinds by construction, not by coincidence, and taking them from
-#: there is what keeps a preset that seeds a fourth kind from being silently
-#: ignored.
-KINDS: tuple[str, ...] = CATALOGUE_KINDS
 
 
 @contextmanager
@@ -63,12 +57,14 @@ def destinations(cfg: Config) -> tuple[tuple[str, Path], ...]:
     The catalogues, not the workspace. They are the same directory until a
     deployment moves one, and seeding the workspace unconditionally is how
     `--seed-examples` used to fill a directory nothing reads.
+
+    Derived from `CATALOGUE_KINDS` rather than listed again. This was the
+    fourth place the three kinds were written out, and the one where getting it
+    wrong is quietest: a kind missing here is a preset that ships and is never
+    copied.
     """
-    return (
-        ("skills", cfg.skills_dir),
-        ("subagents", cfg.subagents_dir),
-        ("tools", cfg.tools_dir),
-    )
+    roots = cfg.catalogue_roots
+    return tuple((kind, roots[kind]) for kind in CATALOGUE_KINDS)
 
 
 @dataclass(frozen=True)

@@ -19,6 +19,8 @@ import pytest
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.request import Request
+from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.agent import (
     available_skills,
     build_agent,
@@ -304,3 +306,79 @@ def test_a_resolved_one_is_still_checked(tmp_path, cfg):
 
     with pytest.raises(ConfigError, match="not a directory"):
         resolve_catalogue(cfg, handed)
+
+
+# -- the catalogue reads once ---------------------------------------------
+
+
+def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
+    """A deployment's definitions are static, so reading them per turn was work
+    every turn paid for nothing. Measured before building: 4ms per turn at five
+    of each kind, 81ms at a hundred.
+
+    Counted through the module `agent` actually binds, not just the store's --
+    `agent.py` imports `load_all` by name, so patching only the store measured
+    nothing and reported a clean zero. That is why this patches both.
+    """
+    from kingfisher.infrastructure import agent as agent_module
+    from kingfisher.infrastructure import catalogue as catalogue_module
+    from tests.test_run import StubAgent
+
+    for kind in ("skills", "subagents", "tools"):
+        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
+    (cfg.subagents_dir / "a.yaml").write_text(
+        "name: alpha\ndescription: A.\nsystem_prompt: |\n  x\n", encoding="utf-8"
+    )
+
+    reads = []
+    real = catalogue_module.load_all
+
+    def counting(directory):
+        reads.append(directory)
+        return real(directory)
+
+    monkeypatch.setattr(catalogue_module, "load_all", counting)
+    monkeypatch.setattr(agent_module, "load_all", counting)
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"))
+    at_construction = len(reads)
+    for _ in range(3):
+        service.run(Request("go"))
+
+    assert at_construction == 1, "the catalogue was not read when the service was wired"
+    # One per turn remains, and it is the session's own uploads -- those arrive
+    # per request and cannot be read in advance.
+    assert len(reads) - at_construction == 3
+    assert all("sessions" in str(d) for d in reads[at_construction:])
+
+
+def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
+    """The cost of reading once, stated as behaviour rather than left to be
+    discovered. A dev loop gets the old behaviour by building a new service,
+    which is what `--seed-presets` then running already does."""
+    from tests.test_run import StubAgent
+
+    for kind in ("skills", "subagents", "tools"):
+        (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
+    service = Kingfisher(cfg, agent=StubAgent("ok"))
+
+    (cfg.subagents_dir / "late.yaml").write_text(
+        "name: late\ndescription: Written afterwards.\nsystem_prompt: |\n  x\n", encoding="utf-8"
+    )
+
+    assert "late" not in service.catalogue.subagent_specs
+    assert "late" in Kingfisher(cfg, agent=StubAgent("ok")).catalogue.subagent_specs
+
+
+def test_listing_still_survives_a_definition_that_will_not_load(cfg):
+    """`--list` is run *because* something is wrong, so it must not be the thing
+    that dies. Warming belongs to `Kingfisher`, not to `resolve_catalogue`, and
+    a test caught the first version doing it in the wrong place.
+    """
+    (cfg.subagents_dir).mkdir(parents=True, exist_ok=True)
+    (cfg.subagents_dir / "broken.yaml").write_text("name: x\nnonsense: 1\n", encoding="utf-8")
+
+    catalogue = resolve_catalogue(cfg)  # must not raise
+
+    with pytest.raises(SubagentError):
+        _ = catalogue.subagent_specs
