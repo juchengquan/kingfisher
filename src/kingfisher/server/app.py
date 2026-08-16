@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, Request, status
 
 from kingfisher import Config, Kingfisher, LocalFileStore, async_checkpointer, from_env
-from kingfisher.server import errors, sessions
+from kingfisher.server import access, errors, sessions
 from kingfisher.server.config import ServerConfig
 from kingfisher.server.turns import turn_router
 
@@ -90,6 +90,7 @@ def create_app(
             )
         return await call_next(request)
 
+    access.install(app)
     errors.install(app)
     app.include_router(sessions.router)
     app.include_router(turn_router(settings))
