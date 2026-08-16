@@ -6,12 +6,14 @@ from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.prompting import system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
+from tests.test_confinement import needs_a_real_toolchain
 
 
 def _all_text(messages) -> str:
     return "\n".join(str(getattr(m, "content", "")) for m in messages)
 
 
+@needs_a_real_toolchain
 def test_agent_runs_shell_and_writes_files(cfg, session_dir):
     """The wiring test that matters: a scripted tool sequence, no network.
 
