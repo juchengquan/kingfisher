@@ -8,6 +8,7 @@ definitions the way an installed kingfisher would.
 from __future__ import annotations
 
 import shutil
+from contextlib import contextmanager
 
 import pytest
 import yaml
@@ -41,7 +42,10 @@ def shipped():
 def test_every_preset_subagent_parses(shipped):
     specs = load_all(shipped / "subagents")
 
-    assert set(specs) == {"reviewer", "extractor", "second-opinion"}
+    # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the
+    # same: a subagent is named by its `name:` field, so a folder cannot reach
+    # it. Its presence in this flat set is the assertion that nesting works.
+    assert set(specs) == {"reviewer", "extractor", "second-opinion", "profiler"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -179,10 +183,19 @@ def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
 
 
 def test_every_preset_tool_loads(shipped):
-    """A tool is code, so "does it parse" means "does it import"."""
+    """A tool is code, so "does it parse" means "does it import".
+
+    `csv_profile` and `csv_columns` come from a *package* -- `tools/csv_profile/`
+    with an `__init__.py` -- and arrive in this flat set under their own names,
+    because a folder cannot reach a name either. That they import at all is the
+    part worth having: the package uses a relative import, which is exactly what
+    a standalone-module loader cannot resolve.
+    """
     tools = load_tools(shipped / "tools")
 
-    assert {tool_name(t) for t in tools} == {"http_fetch", "sql_tables", "sql_query"}
+    assert {tool_name(t) for t in tools} == {
+        "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
+    }
 
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
@@ -235,6 +248,41 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
 
     assert seeding.written
     assert seeding.overwritten == ()
+
+
+def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypatch):
+    """The guard that only had to hold one level deep until a preset tool could
+    be a package.
+
+    It skipped `__pycache__` among the top-level entries and then copied any
+    directory wholesale, which was safe only while a preset tool was always a
+    single file. A package puts bytecode one level below where the check looked.
+
+    The debris is planted here rather than waited for. `_import` now suppresses
+    bytecode when it loads a workspace tool, so a test run no longer leaves any
+    in the preset tree -- which would make this pass whether the filter existed
+    or not. Something else can still put it there: a developer importing a
+    preset directly, or a wheel built with it. The seeder must not carry it
+    either way, and a test of that has to create the condition it is about.
+    """
+    source = tmp_path / "presets"
+    package = source / "tools" / "csv_profile"
+    (package / "__pycache__").mkdir(parents=True)
+    (package / "__init__.py").write_text("TOOLS = []\n", encoding="utf-8")
+    (package / "__pycache__" / "stale.pyc").write_bytes(b"\x00")
+    (source / "tools" / "__pycache__").mkdir(parents=True)
+    (source / "tools" / "__pycache__" / "flat.pyc").write_bytes(b"\x00")
+
+    @contextmanager
+    def _fixture():
+        yield source
+
+    monkeypatch.setattr(presets, "opened", _fixture)
+    presets.seed(cfg)
+
+    carried = [str(p.relative_to(cfg.tools_dir)) for p in cfg.tools_dir.rglob("__pycache__")]
+    assert not carried, f"seeding carried bytecode into the workspace: {carried}"
+    assert (cfg.tools_dir / "csv_profile" / "__init__.py").is_file(), "and the package itself"
 
 
 def test_seeding_twice_unchanged_is_silent(cfg):
@@ -341,13 +389,16 @@ def test_only_the_preset_that_runs_elsewhere_names_an_endpoint(shipped):
     working for anyone whose default differs.
 
     So `second-opinion` names one -- being a different model is its whole
-    purpose -- and the other two do not. `extractor` pins `model` alone, which
-    is the cheap-model decision and says nothing about where it runs.
+    purpose -- and the others do not. `extractor` and `profiler` pin `model`
+    alone, which is the cheap-model decision and says nothing about where it
+    runs: both exist to keep bulk reading off the expensive model.
     """
     specs = load_all(shipped / "subagents")
 
     assert {name for name, s in specs.items() if s.provider} == {"second-opinion"}
-    assert {name for name, s in specs.items() if s.model} == {"second-opinion", "extractor"}
+    assert {name for name, s in specs.items() if s.model} == {
+        "second-opinion", "extractor", "profiler",
+    }
 
 
 # -- the one preset that consults another ---------------------------------
