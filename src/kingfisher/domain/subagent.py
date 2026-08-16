@@ -2,16 +2,17 @@
 
 Deliberately the same shape as a skill — YAML frontmatter and a markdown body —
 so a contributor who has written one does not need to learn a second mechanism.
-`name` and `description` are required, `tools`, `skills` and `model` are
-optional, and the body *is* the system prompt. Both `tools` and `skills` select
-by name from what the parent agent already has; how that selection is enforced
-is the adapter's problem, not this format's.
+`name` and `description` are required, `tools`, `skills`, `middleware` and
+`model` are optional, and the body *is* the system prompt. `tools`, `skills`
+and `middleware` all select by name from what the deployment already offers;
+how each selection is enforced is the adapter's problem, not this format's.
 
     ---
     name: reviewer
     description: Checks an analysis for arithmetic errors and unsupported claims.
     tools: [read_file, glob, grep]
     skills: [tabular-qa]
+    middleware: [audit]
     model: MiniMax-M2.5
     ---
     You review analyses...
@@ -23,6 +24,12 @@ needs to *know*, and the body below is already its procedure — a delegate that
 needed the whole index would not have been worth defining. Handing it over also
 costs: the listing is injected into the delegate's prompt, measured at ~464
 tokens for three skills and growing with the catalogue.
+
+`middleware` names entries from a registry the *deployment* supplies, so it is
+the one field that selects code rather than content. It is empty until someone
+wires one, and a name must be both registered and granted — including for a
+definition a caller uploaded, which gets none of the leeway an uploaded skill
+does. An uploaded skill is the caller's own text; a middleware name is not.
 
 The optional `model` is where per-role cost routing lands naturally: reading
 heavy delegation on a cheap model, synthesis on the expensive one.
@@ -62,6 +69,10 @@ class SubagentSpec:
     #: already is its procedure. Inheriting the caller's index would also put
     #: it in a context whose narrowness is the reason to delegate at all.
     skills: tuple[str, ...] | None = None
+    #: Middleware this delegate runs with, by name, from a registry the
+    #: deployment supplies. A name here selects *code*, which is why it is the
+    #: one field never widened for an uploaded definition.
+    middleware: tuple[str, ...] | None = None
     model: str | None = None
 
 
@@ -99,5 +110,7 @@ def parse(text: str, source: Path) -> SubagentSpec:
         # both reach here already parsed.
         tools=frontmatter.names(fields.get("tools")),
         skills=frontmatter.names(fields.get("skills")),
+
+        middleware=frontmatter.names(fields.get("middleware")),
         model=frontmatter.text(fields["model"]) if fields.get("model") else None,
     )
