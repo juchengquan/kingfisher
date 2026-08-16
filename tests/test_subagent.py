@@ -54,6 +54,9 @@ def test_optional_fields_and_quoting():
         ("description: x\nsystem_prompt: |\n  body\n", "missing required field 'name'"),
         ("name: x\nsystem_prompt: |\n  body\n", "missing required field 'description'"),
         ("name: x\ndescription: y\n", "missing required field 'system_prompt'"),
+        # Present but blank is a different mistake, and says so.
+        ("name: x\ndescription: y\nsystem_prompt: |2\n", "'system_prompt' is present but empty"),
+        ("name: \ndescription: y\nsystem_prompt: |2\n  body\n", "'name' is present but empty"),
         # YAML says why; we say which file. Rejected either way.
         ("name x\ndescription: y\nsystem_prompt: |\n  body\n", "cannot read definition"),
         ("- not\n- a mapping\n", "expected a mapping of fields"),
@@ -254,3 +257,16 @@ def test_indentation_inside_a_prompt_is_preserved(tmp_path):
     spec = read_subagent(definition, tmp_path / "reviewer.yaml")
 
     assert "\n   Do not reuse" in spec.system_prompt
+
+
+def test_an_unconverted_definition_says_what_to_do(tmp_path):
+    """Renaming the file is the obvious response to "subagents are .yaml now",
+    and YAML's own complaint -- "expected a single document in the stream" --
+    names the `---` without saying it is the old fence.
+    """
+    old = "---\nname: reviewer\ndescription: d\n---\nYou review.\n"
+
+    with pytest.raises(SubagentError, match="still the old markdown format") as raised:
+        read_subagent(old, tmp_path / "reviewer.yaml")
+
+    assert "system_prompt" in str(raised.value)

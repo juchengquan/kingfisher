@@ -87,6 +87,17 @@ def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
     """
     fields = decode(text)
     if isinstance(fields, str):
+        # Renaming the file is the obvious response to "subagents are .yaml
+        # now", and it produces a YAML error about document separators that
+        # says nothing about the actual mistake. `---` is the giveaway: it
+        # fenced the frontmatter in the old format and starts a second document
+        # in this one.
+        if text.lstrip().startswith("---"):
+            msg = (
+                f"{source.name}: this is still the old markdown format. "
+                "Drop the --- fences and move the body into a `system_prompt: |2` field"
+            )
+            raise subagent.SubagentError(msg)
         msg = f"{source.name}: cannot read definition ({fields})"
         raise subagent.SubagentError(msg)
     return subagent.parse(fields, source)

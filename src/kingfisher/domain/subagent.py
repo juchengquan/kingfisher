@@ -203,8 +203,14 @@ def parse(fields: Mapping[str, object], source: Path) -> SubagentSpec:
     _refuse_unknown(fields, source)
 
     for required in ("name", "description", "system_prompt"):
-        if not fields.get(required):
+        # Absent and blank are different mistakes and read differently in a
+        # traceback: "missing" sends someone looking for a line they can see
+        # they wrote, which is the wrong hunt.
+        if required not in fields:
             msg = f"{source.name}: missing required field {required!r}"
+            raise SubagentError(msg)
+        if not frontmatter.text(fields[required]):
+            msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
     return SubagentSpec(

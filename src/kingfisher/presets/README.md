@@ -142,6 +142,45 @@ Two reasons to reach for one, one example each:
   large pile of files and returns a short answer; the bulk stays in its context
   rather than yours. Note the narrower `tools` and the cheaper `model`.
 
+### What loads, and what does not
+
+```yaml
+system_prompt: |2          # ✅ the ordinary case
+  You verify claims.
+  Be terse.
+
+system_prompt: |2          # ✅ indentation inside the prompt is kept
+  1. Recompute.
+     Do not reuse their script.
+
+system_prompt: |2          # ✅ a prompt opening with an indented example
+      ls -la /data
+  Then report.
+
+system_prompt: |           # ❌ without the 2, YAML takes the margin from the
+      ls -la /data         #    first line and the next one is left of it
+  Then report.
+
+system_prompt: |2          # ❌ nothing is indented, so nothing is in the block
+You verify claims.
+
+system_prompt: |2          # ❌ 'system_prompt' is present but empty
+```
+
+`tools`, `skills` and `middleware` take either form:
+
+```yaml
+tools: [read_file, grep]   # ✅
+tools:                     # ✅ the same thing
+  - read_file
+  - grep
+```
+
+An unlisted field is refused rather than ignored — `tolls:` is answered with
+*did you mean 'tools'?*, and `permissions:` with the reason this format declines
+it. A definition still written as markdown is told so by name, since renaming
+the file is the obvious thing to try and leaves the `---` fences behind.
+
 The frontmatter is real YAML, parsed with `yaml.safe_load` — block lists,
 folded scalars and typed values all work, and a skill and a subagent are read
 by the same parser so the two formats cannot drift.
