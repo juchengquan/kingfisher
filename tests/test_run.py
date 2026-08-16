@@ -214,8 +214,7 @@ def test_coerce_is_idempotent():
 def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
     """A typo in a capability name must not be destructive. This used to raise
     only after the sweep had already removed old sessions."""
-    from kingfisher.domain.capabilities import Capabilities
-    from kingfisher.infrastructure.scoping import CapabilityError
+    from kingfisher.domain.capabilities import Capabilities, CapabilityError
 
     workspace = cfg.workspace
     old = workspace / "runs" / "ancient"

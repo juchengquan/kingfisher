@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
+import pytest
+
+from kingfisher.domain.capabilities import (
+    UNRESTRICTED,
+    Capabilities,
+    CapabilityError,
+    approved_middleware,
+)
 
 
 def test_unset_means_everything_and_empty_means_none():
@@ -99,3 +106,69 @@ def test_a_refusal_of_memory_wins_from_either_side():
     assert Capabilities().intersect(Capabilities(memory=True)).memory is True
     assert Capabilities(memory=True).intersect(Capabilities()).memory is True
     assert Capabilities().intersect(Capabilities()).memory is None
+
+
+# -- middleware a definition may have -------------------------------------
+#
+# The rule used to live in `infrastructure.delegation`, mixed in with the code
+# that instantiates the objects. Only the instantiation needed to be there:
+# `Capabilities.middleware` and `SubagentSpec.middleware` are both name lists,
+# so deciding *which names* is expressible here, and these tests reach it
+# without a config, an agent, or deepagents.
+
+
+def test_declaring_no_middleware_approves_nothing():
+    assert approved_middleware(None, registered=(), granted=None, subject="x") == ()
+    assert approved_middleware((), registered=("audit",), granted=None, subject="x") == ()
+
+
+def test_registered_and_granted_names_go_through():
+    approved = approved_middleware(
+        ("audit",), registered=("audit", "ratelimit"), granted=("audit",), subject="x"
+    )
+
+    assert approved == ("audit",)
+
+
+def test_a_name_nothing_registered_is_a_mistake_in_the_definition():
+    """It names something that does not exist, so it cannot be honoured and
+    must not be ignored."""
+    with pytest.raises(CapabilityError, match="unregistered middleware: ghost"):
+        approved_middleware(("ghost",), registered=("audit",), granted=None, subject="subagent 'r'")
+
+
+def test_a_registered_name_that_was_not_granted_is_refused():
+    """Not the "caller was narrower" case that quietly drops a skill: running
+    with silently less middleware than the definition asked for could mean
+    running without the audit hook it was written to have."""
+    with pytest.raises(CapabilityError, match="may not use: ratelimit"):
+        approved_middleware(
+            ("ratelimit",),
+            registered=("audit", "ratelimit"),
+            granted=("audit",),
+            subject="subagent 'r'",
+        )
+
+
+def test_no_grant_at_all_means_no_opinion():
+    """`None` is unrestricted, exactly as everywhere else in this module."""
+    approved = approved_middleware(
+        ("audit",), registered=("audit",), granted=None, subject="x"
+    )
+
+    assert approved == ("audit",)
+
+
+def test_an_empty_grant_permits_nothing():
+    """And is the opposite of `None`, which is the distinction the whole
+    default rests on."""
+    with pytest.raises(CapabilityError, match="may not use: audit"):
+        approved_middleware(("audit",), registered=("audit",), granted=(), subject="x")
+
+
+def test_the_refusal_names_the_subject_it_was_asked_about():
+    """The message reaches an operator who has to find the definition."""
+    with pytest.raises(CapabilityError, match=r"subagent 'reviewer' names unregistered"):
+        approved_middleware(
+            ("ghost",), registered=(), granted=None, subject="subagent 'reviewer'"
+        )
