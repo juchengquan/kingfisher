@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import replace
+from pathlib import Path
 
 import pytest
 from deepagents.backends import CompositeBackend
@@ -16,23 +17,29 @@ from kingfisher.infrastructure.checkpointing import checkpoint_db_path
 from kingfisher.infrastructure.runlog import log_path
 
 
-def test_shell_env_carries_no_credentials(cfg):
+def test_shell_env_carries_no_credentials(cfg, session_dir):
     """The allowlist is the security story: the shell can run tools, not read keys."""
-    env = shell_env(cfg)
+    env = shell_env(cfg, session_dir)
     assert cfg.api_key not in env.values()
     assert not any("KEY" in name or "TOKEN" in name or "SECRET" in name for name in env)
 
 
-def test_shell_env_supplies_a_usable_toolchain(cfg):
+def test_shell_env_supplies_a_usable_toolchain(cfg, session_dir):
     """LocalShellBackend defaults to an EMPTY env -- without PATH nothing resolves."""
-    env = shell_env(cfg)
+    env = shell_env(cfg, session_dir)
     assert env["PATH"]
     assert "/usr/bin" in env["PATH"]
 
 
-def test_home_points_at_the_workspace_not_the_real_home(cfg):
-    """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks."""
-    assert shell_env(cfg)["HOME"] == str(cfg.workspace)
+def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
+    """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks.
+
+    Per session rather than the workspace, so what tools cache under `~` is
+    disposed of by `reap` and counted by `session_max_bytes` -- neither of which
+    reached it while it sat at the workspace root.
+    """
+    assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / ".home")
+    assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
 
 def test_backend_is_rooted_at_the_session(cfg, session_dir):
@@ -118,18 +125,18 @@ def test_every_read_and_write_path_resolves_through_the_guarded_hook():
     assert WorkspaceScopedBackend._get_backend_and_key is not CompositeBackend._get_backend_and_key
 
 
-def test_scratch_defaults_inside_the_workspace(cfg):
+def test_scratch_defaults_inside_the_workspace(cfg, session_dir):
     """Unset means self-contained: scratch is disposed of with the workspace."""
     assert cfg.scratch_dir == cfg.workspace / ".kingfisher" / "tmp"
-    assert shell_env(cfg)["TMPDIR"] == str(cfg.scratch_dir)
+    assert shell_env(cfg, session_dir)["TMPDIR"] == str(cfg.scratch_dir)
 
 
-def test_scratch_can_be_relocated(cfg, tmp_path):
+def test_scratch_can_be_relocated(cfg, tmp_path, session_dir):
     """One fixed location per machine, e.g. /tmp, is a config change."""
     relocated = replace(cfg, scratch_root=tmp_path / "kingfisher-scratch")
 
     assert relocated.scratch_dir == tmp_path / "kingfisher-scratch"
-    assert shell_env(relocated)["TMPDIR"] == str(relocated.scratch_dir)
+    assert shell_env(relocated, session_dir)["TMPDIR"] == str(relocated.scratch_dir)
 
 
 def test_prepare_scratch_creates_a_private_directory(cfg, tmp_path):
@@ -223,3 +230,69 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     assert "is a host path" in transcript  # the correction reached the model
     assert "/runs/s1/t001/notes.md" in transcript  # including what to use instead
     assert out["messages"][-1].content == "retried and finished"  # the run survived
+
+
+# -- the agent's HOME ------------------------------------------------------
+
+
+def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, session_dir):
+    """`reap` removes session directories and nothing else. With `HOME` at the
+    workspace root, `~/.cache/uv` and `~/Library/Caches/pip` accumulated beside
+    `skills/` and were never swept -- 59MB in one real workspace.
+    """
+    from kingfisher.infrastructure.workspace_fs import LocalSessionDirs
+
+    home = Path(shell_env(cfg, session_dir)["HOME"])
+    home.mkdir(parents=True, exist_ok=True)
+    (home / ".cache").mkdir()
+    (home / ".cache" / "big.bin").write_bytes(b"x" * 1000)
+
+    assert LocalSessionDirs().remove_tree(session_dir) is None
+    assert not home.exists(), "the cache outlived the session it belonged to"
+
+
+def test_what_tools_cache_counts_against_the_session_quota(cfg, session_dir):
+    """`session_max_bytes` measures a session. A cache above every session was
+    invisible to it, so a session could hold a gigabyte of wheels and report
+    nothing."""
+    from kingfisher.infrastructure.workspace_fs import session_bytes
+
+    before = session_bytes(session_dir)
+    home = Path(shell_env(cfg, session_dir)["HOME"])
+    home.mkdir(parents=True, exist_ok=True)
+    (home / "cached.bin").write_bytes(b"x" * 5000)
+
+    assert session_bytes(session_dir) >= before + 5000
+
+
+def test_home_is_not_shared_between_two_sessions(cfg, workspace):
+    """One session's cached tokens or tool config must not be another's."""
+    from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+
+    first = ensure_session_layout(workspace / "sessions" / "one")
+    second = ensure_session_layout(workspace / "sessions" / "two")
+
+    assert shell_env(cfg, first)["HOME"] != shell_env(cfg, second)["HOME"]
+
+
+def test_the_catalogue_is_named_because_the_shell_cannot_derive_it(cfg, session_dir):
+    """Every other virtual path becomes a shell path by dropping the slash.
+    `/skills` is the exception -- it is shared, so it lives above the session --
+    and it used to be reachable as `$HOME/skills` only because `HOME` was the
+    workspace. Moving `HOME` into the session broke that, so the catalogue is
+    named outright.
+    """
+    env = shell_env(cfg, session_dir)
+
+    assert env["KINGFISHER_SKILLS"] == str(cfg.skills_dir)
+    assert not Path(env["KINGFISHER_SKILLS"]).is_relative_to(session_dir)
+
+
+def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
+    """A `HOME` that does not exist is worse than none: tools fall back to
+    somewhere unpredictable rather than failing."""
+    from kingfisher.infrastructure.backend import agent_home, build_backend
+
+    build_backend(cfg, session_dir)
+
+    assert agent_home(session_dir).is_dir()

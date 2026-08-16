@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import asyncio
 import platform
+import shutil
 from dataclasses import replace
 from pathlib import Path
 
@@ -319,3 +320,29 @@ def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
         assert result.exit_code == 0, f"{command!r} was refused: {result.output}"
 
     assert (session_dir / "derived" / "report.md").read_text().strip() == "kept"
+
+
+@macos
+def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_dir, tmp_path):
+    """`KINGFISHER_SKILLS_DIR` exists so several deployments can share one
+    reviewed catalogue, which means it commonly sits outside the workspace --
+    and a shared directory lives in somebody's home as often as not.
+
+    Denying the home without re-allowing it gave the agent a split view rather
+    than a refusal: file tools are routed and reached the catalogue, the shell
+    was denied, so reading a `SKILL.md` worked while running the script beside
+    it did not.
+    """
+    catalogue = Path.home() / "kingfisher-catalogue-probe" / "skills"
+    (catalogue / "demo").mkdir(parents=True, exist_ok=True)
+    (catalogue / "demo" / "run.sh").write_text("echo from-the-catalogue\n")
+    try:
+        relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
+        backend = build_backend(relocated, session_dir)
+
+        result = backend.execute('sh "$KINGFISHER_SKILLS/demo/run.sh"')
+
+        assert result.exit_code == 0, f"the shell cannot reach the catalogue: {result.output}"
+        assert "from-the-catalogue" in str(result.output)
+    finally:
+        shutil.rmtree(Path.home() / "kingfisher-catalogue-probe", ignore_errors=True)
