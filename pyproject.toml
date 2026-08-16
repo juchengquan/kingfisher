@@ -82,6 +82,14 @@ server = [
 # "install the extra" is a better answer than one that is silently absent.
 kingfisher-server = "kingfisher.server.__main__:main"
 
+# The presets register as an asset pack like anyone else's, through the same
+# group a third-party pack uses. Kingfisher names no pack in its source -- it
+# asks which are installed -- so this is the line that makes the default
+# arrangement one pack that happens to ship inside the wheel, and the reason
+# the discovery path is exercised by every existing seeding test.
+[project.entry-points."kingfisher.assets"]
+presets = "kingfisher.presets"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 

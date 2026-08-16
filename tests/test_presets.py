@@ -305,7 +305,10 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
     (source / "tools" / "__pycache__" / "flat.pyc").write_bytes(b"\x00")
 
     @contextmanager
-    def _fixture():
+    def _fixture(_package=None):
+        # Takes the argument `opened` now takes: the seeder asks each installed
+        # pack for its own tree, so the source is a parameter rather than a
+        # constant. This stand-in ignores it and yields the planted one.
         yield source
 
     monkeypatch.setattr(presets, "opened", _fixture)
