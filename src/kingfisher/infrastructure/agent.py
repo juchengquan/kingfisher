@@ -21,6 +21,7 @@ caller of either.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -201,6 +202,49 @@ DATA_IS_READ_ONLY = FilesystemPermission(
 )
 
 
+#: The one warning kingfisher asks for and does not want to hear. Matched on
+#: the message rather than silenced by level, because the same logger carries
+#: warnings that matter -- a snapshot that failed to restore, and a workspace
+#: tool skipped for having a name JavaScript cannot spell.
+_EXPECTED_DROP = "Dropping QuickJS snapshot"
+
+
+class _ExpectedSnapshotDrop(logging.Filter):
+    """Drop the warning `max_snapshot_bytes=1` makes inevitable.
+
+    The cap is deliberate -- it is what makes the sandbox affordable to leave
+    on -- and the library warns every time it drops an image, which is every
+    turn. So the warning reports a setting we chose, on a schedule nothing can
+    reduce, into the middle of the agent's streamed prose. It reaches the
+    terminal at all only because a library that configures no logging leaves
+    Python's last-resort handler to print WARNING and above to stderr.
+
+    A filter on that one logger, not a level and not a handler: kingfisher is a
+    library, and a library that calls `basicConfig` decides for a program it
+    does not own. This suppresses one record and leaves every other decision to
+    whoever is hosting us.
+
+    If upstream rewords the message the filter stops matching and the noise
+    comes back. That is the safe direction: the failure is visible rather than
+    a real warning silently swallowed.
+    """
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        return not str(record.msg).startswith(_EXPECTED_DROP)
+
+
+def quieten_expected_snapshot_drop() -> None:
+    """Install the filter once, on the logger that emits it.
+
+    Idempotent because `_interpreter` runs per request: an agent is built for
+    every turn, and a filter added each time would be a list that grows for the
+    life of the process.
+    """
+    logger = logging.getLogger("langchain_quickjs.middleware")
+    if not any(isinstance(f, _ExpectedSnapshotDrop) for f in logger.filters):
+        logger.addFilter(_ExpectedSnapshotDrop())
+
+
 def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     """The JavaScript sandbox, if this deployment wired one.
 
@@ -252,6 +296,10 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     # is ~15ms and ~6MB of resident memory -- worth deferring, not worth
     # restructuring anything else around.
     from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
+
+    # Here rather than at import: the cap below is what makes the warning
+    # inevitable, so the remedy belongs beside the cause.
+    quieten_expected_snapshot_drop()
 
     # `None` here is the library's "no allowlist", which is what an
     # unrestricted request resolves to. A request that granted no tools gets an
