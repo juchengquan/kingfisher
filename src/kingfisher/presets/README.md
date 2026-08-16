@@ -135,18 +135,31 @@ system_prompt: |
 That is a whole definition: three required fields, one optional, nothing else
 needed.
 
-Sending a delegate somewhere cheaper is two more lines, and they move together:
+Sending a delegate somewhere cheaper — or somewhere else entirely — is two more
+lines, and they move together:
 
 ```yaml
-provider: openai        # a style this deployment has credentials for
-model: gpt-5            # a model that endpoint serves
+provider: anthropic     # a style this deployment has credentials for
+model: MiniMax-M2.5     # a model that endpoint serves
 ```
 
-`provider` is checked when the agent is built, so naming one this deployment
-has no credentials for fails immediately — `no endpoint configured for style
-'openai'`. That is why neither shipped preset pins one: a preset is copied into
-every workspace, and a single-endpoint deployment could not activate it.
-`model` alone is safe to pin, which is what `extractor.yaml` does.
+A model name means nothing without the endpoint that serves it, so overriding
+one against a definition that pins the other is refused rather than resolved.
+Every shipped preset names both, and says in a comment why it runs where it
+does.
+
+**That is a requirement, not decoration.** `provider` is checked when the agent
+is built, so activating a preset whose style your deployment has no credentials
+for fails immediately:
+
+```
+no endpoint configured for style 'openai'; this deployment has ('anthropic',)
+```
+
+It fails only for the preset you activated — a subagent is wired only when a
+request names it, so seeding one you cannot reach costs nothing until you ask
+for it. Edit the pair to match your gateway, which is what copying a preset is
+for.
 
 | Field | | |
 | --- | --- | --- |
@@ -169,10 +182,9 @@ Three reasons to reach for one, one example each:
   a large pile of files and returns a short answer; the bulk stays in its
   context rather than yours. Note the narrower `tools` and the cheaper `model`.
 - [`second-opinion.yaml`](subagents/second-opinion.yaml) — **a different
-  model.** Two models from one family share failure modes, so this one pins
-  `provider` and `model` to answer somewhere else entirely. **It needs a second
-  endpoint configured**, and is the only preset that does — activate it without
-  one and it refuses at build time, naming the missing style.
+  model.** Two models from one family share failure modes, so this one answers
+  on another endpoint entirely. It is the one whose `provider` differs from the
+  rest, and the reason the field exists.
 
 ### Writing the prompt
 

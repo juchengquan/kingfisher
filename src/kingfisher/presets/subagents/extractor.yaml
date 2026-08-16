@@ -2,9 +2,10 @@ name: extractor
 description: Reads a large or numerous set of files and returns only the facts asked for. Use to keep bulk reading out of the main context.
 tools: [read_file, ls, glob, grep]
 # Reading is the cheap half of delegation, so it runs on the cheap model.
-# `provider:` would go here too, to send it to a different endpoint entirely --
-# left out because this file is seeded into every workspace, and a deployment
-# without those credentials could not then activate it.
+# The pair moves together: a model name means nothing without the endpoint that
+# serves it, and overriding one against a definition that pins the other is
+# refused rather than resolved.
+provider: anthropic
 model: MiniMax-M2.5
 system_prompt: |
   You read a lot and return a little.

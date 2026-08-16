@@ -301,18 +301,18 @@ def test_every_complete_definition_in_the_readme_parses(shipped):
         read_subagent(block, _Path("readme.yaml"))
 
 
-def test_only_one_preset_pins_an_endpoint(shipped):
-    """`provider` is checked when the agent is built, so a preset naming one
-    this deployment lacks cannot be activated -- `no endpoint configured for
-    style 'openai'`.
+def test_every_preset_pins_both_halves_of_where_it_runs(shipped):
+    """`provider` and `model` move together -- a model name means nothing
+    without the endpoint that serves it, and overriding one against a
+    definition that pins the other is refused rather than resolved.
 
-    Exactly one preset pays that price, and it is the one whose entire purpose
-    is to run somewhere else. If a second ever does, it is worth arguing about.
+    Every preset names both, so each one says where it runs rather than
+    inheriting it. The cost is that seeding them requires those endpoints:
+    `provider` is checked when the agent is built, so activating a preset
+    whose style this deployment lacks fails with `no endpoint configured`.
     """
-    pinned = {
-        spec.name: spec.provider
-        for spec in load_all(shipped / "subagents").values()
-        if spec.provider is not None
-    }
+    specs = load_all(shipped / "subagents").values()
 
-    assert pinned == {"second-opinion": "openai"}
+    half_pinned = {s.name for s in specs if (s.provider is None) != (s.model is None)}
+    assert not half_pinned, f"these name one half of the pair: {sorted(half_pinned)}"
+    assert all(s.provider for s in specs)

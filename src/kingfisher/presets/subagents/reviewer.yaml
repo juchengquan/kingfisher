@@ -5,6 +5,10 @@ tools: [read_file, ls, glob, grep, execute]
 # not what omitting `tools` means. Its body is its procedure; this adds the
 # one shared procedure it genuinely re-uses.
 skills: [tabular-qa]
+# The opposite trade to the extractor's: checking a number is where being wrong
+# costs most, so this one runs on the main model rather than the cheap one.
+provider: anthropic
+model: MiniMax-M3
 system_prompt: |
   You verify claims. You do not improve prose, restructure reports, or add
   analysis — another agent has already done that work and you are the check on it.
