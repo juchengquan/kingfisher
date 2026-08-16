@@ -49,6 +49,7 @@ from kingfisher.infrastructure.backend import (
     SKILLS_SOURCES,
     build_backend,
 )
+from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.delegation import (
     as_subagent,
     indistinct,
@@ -100,7 +101,7 @@ def _uploaded_subagents(session_dir: Path) -> Path:
 
 
 def available_skills(
-    cfg: Config, session_dir: Path | None, *, catalogue: Mapping[str, Path] | None = None
+    cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
 ) -> tuple[str, ...]:
     """Every skill this request may activate: the catalogue, plus its own.
 
@@ -112,14 +113,14 @@ def available_skills(
     The session's own half never varies with it: uploads land under the session
     by definition, and a deployment relocating its catalogue does not move them.
     """
-    names = set(skill_store.names((catalogue or cfg.catalogue_roots)["skills"]))
+    names = set(skill_store.names((catalogue or Catalogue.from_config(cfg)).skills))
     if session_dir is not None:
         names |= set(skill_store.names(_uploaded_skills(session_dir)))
     return tuple(sorted(names))
 
 
 def defined_subagents(
-    cfg: Config, session_dir: Path | None, *, catalogue: Mapping[str, Path] | None = None
+    cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
 ) -> dict[str, SubagentSpec]:
     """Every subagent this request may activate: the catalogue, plus its own.
 
@@ -131,7 +132,7 @@ def defined_subagents(
     which of them a request did not grant. Written out at both, the rule about
     what a session adds to the catalogue would exist twice.
     """
-    defined = dict(load_all((catalogue or cfg.catalogue_roots)["subagents"]))
+    defined = dict(load_all((catalogue or Catalogue.from_config(cfg)).subagents))
     if session_dir is not None:
         defined |= load_all(_uploaded_subagents(session_dir))
     return defined
@@ -142,7 +143,7 @@ def indistinct_delegates(
     capabilities: Capabilities,
     session_dir: Path | None,
     *,
-    catalogue: Mapping[str, Path] | None = None,
+    catalogue: Catalogue | None = None,
     run_on: Mapping[str, RunOn] | None = None,
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each activated delegate that asked to run elsewhere and
@@ -345,7 +346,7 @@ def _skill_denials(
 
 
 def _backend_for(
-    cfg: Config, session_dir: Path | None, backend: Any | None, catalogue: Mapping[str, Path]
+    cfg: Config, session_dir: Path | None, backend: Any | None, catalogue: Catalogue
 ) -> Any:
     """The filesystem an agent sees: rooted at a session, or supplied ready-made.
 
@@ -367,14 +368,14 @@ def _backend_for(
 
 
 def workspace_tool_names(
-    cfg: Config, *, catalogue: Mapping[str, Path] | None = None
+    cfg: Config, *, catalogue: Catalogue | None = None
 ) -> tuple[str, ...]:
     """The tools this workspace defines, by name, without assembling anything.
 
     Knowable off disk, unlike the built-in set. That asymmetry is why the two
     axes resolve differently and why only one of them needs a probe.
     """
-    directory = (catalogue or cfg.catalogue_roots)["tools"]
+    directory = (catalogue or Catalogue.from_config(cfg)).tools
     return tuple(sorted(n for tool in load_tools(directory) if (n := tool_name(tool))))
 
 
@@ -559,7 +560,7 @@ def _activated_subagents(
     capabilities: Capabilities,
     session_dir: Path | None,
     *,
-    catalogue: Mapping[str, Path] | None = None,
+    catalogue: Catalogue | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which delegates this request wired, and every definition available.
 
@@ -663,7 +664,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     model: Any | None = None,
     backend: Any | None = None,
     checkpointer: Any | None = None,
-    catalogue: Mapping[str, Path] | None = None,
+    catalogue: Catalogue | None = None,
     run_on: Mapping[str, RunOn] | None = None,
     workspace_tools: Sequence[tool_store.Found] | None = None,
 ) -> CompiledStateGraph:
@@ -685,7 +686,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     only be rewritten worse.
     """
     capabilities = capabilities or Capabilities()
-    roots = catalogue or cfg.catalogue_roots
+    roots = catalogue or Catalogue.from_config(cfg)
     resolved_backend = _backend_for(cfg, session_dir, backend, roots)
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
@@ -747,11 +748,11 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             **extras,
         )
 
-    tools, tool_sources = _workspace_catalogue(roots["tools"], workspace_tools)
+    tools, tool_sources = _workspace_catalogue(roots.tools, workspace_tools)
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
-        roots["tools"],
+        roots.tools,
         capabilities,
         tools,
         assemble,

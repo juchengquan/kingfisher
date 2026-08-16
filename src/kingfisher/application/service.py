@@ -87,6 +87,7 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
     workspace_tool_names,
 )
+from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
 from kingfisher.infrastructure.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
@@ -104,7 +105,6 @@ from kingfisher.infrastructure.workspace_fs import (
     place_data,
     place_inputs,
     protect_data,
-    resolve_catalogue,
     session_bytes,
 )
 
@@ -182,7 +182,7 @@ def _withheld_by_kind(
     cfg: Config,
     session_dir: Path,
     graph: Any,
-    catalogue: Mapping[str, Path],
+    catalogue: Catalogue,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
@@ -381,7 +381,7 @@ class Kingfisher:
         # request so a deployment that fetches them pays once, and so a
         # catalogue that cannot be read fails at startup rather than serving an
         # agent that has quietly been told about nothing.
-        self.catalogue: Mapping[str, Path] = resolve_catalogue(self.cfg, catalogue_roots)
+        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue_roots)
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the

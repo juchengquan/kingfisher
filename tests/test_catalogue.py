@@ -26,7 +26,7 @@ from kingfisher.infrastructure.agent import (
     workspace_tool_names,
 )
 from kingfisher.infrastructure.backend import SKILLS_ROUTE, build_backend
-from kingfisher.infrastructure.workspace_fs import resolve_catalogue
+from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
 from tests.conftest import FakeToolCallingModel, capture_build
 
 SUBAGENT = """name: reviewer
@@ -55,19 +55,19 @@ macos = pytest.mark.skipif(
 
 def _staged(root, *, skill=None, subagent=None, tool=None):
     """A catalogue laid out somewhere that is not a workspace."""
-    roots = {kind: root / kind for kind in ("skills", "subagents", "tools")}
-    for path in roots.values():
+    roots = Catalogue(**{kind: root / kind for kind in ("skills", "subagents", "tools")})
+    for path in (roots.skills, roots.subagents, roots.tools):
         path.mkdir(parents=True, exist_ok=True)
     if skill is not None:
-        (roots["skills"] / skill).mkdir()
-        (roots["skills"] / skill / "SKILL.md").write_text(
+        (roots.skills / skill).mkdir()
+        (roots.skills / skill / "SKILL.md").write_text(
             f"name: {skill}\ndescription: A skill.\n"
             "system_prompt: |\n  Do the thing.\n", encoding="utf-8"
         )
     if subagent is not None:
-        (roots["subagents"] / "reviewer.yaml").write_text(subagent, encoding="utf-8")
+        (roots.subagents / "reviewer.yaml").write_text(subagent, encoding="utf-8")
     if tool is not None:
-        (roots["tools"] / "extra.py").write_text(tool, encoding="utf-8")
+        (roots.tools / "extra.py").write_text(tool, encoding="utf-8")
     return roots
 
 
@@ -78,11 +78,11 @@ def test_omitted_it_is_the_three_directories_config_names(cfg):
     rule `model=` already followed. Catalogue roots have a `cfg`-derived answer,
     so this is that rule and not an exception to it.
     """
-    assert resolve_catalogue(cfg) == {
-        "skills": cfg.skills_dir,
-        "subagents": cfg.subagents_dir,
-        "tools": cfg.tools_dir,
-    }
+    assert resolve_catalogue(cfg) == Catalogue(
+        skills=cfg.skills_dir,
+        subagents=cfg.subagents_dir,
+        tools=cfg.tools_dir,
+    )
 
 
 def test_relocated_directories_are_created_rather_than_silently_empty(tmp_path, cfg):
@@ -106,7 +106,7 @@ def test_relocated_directories_are_created_rather_than_silently_empty(tmp_path, 
 
     roots = resolve_catalogue(relocated)
 
-    assert all(path.is_dir() for path in roots.values())
+    assert all(path.is_dir() for path in (roots.skills, roots.subagents, roots.tools))
 
 
 def test_a_supplied_catalogue_must_already_exist(tmp_path, cfg):
@@ -130,7 +130,7 @@ def test_a_supplied_catalogue_names_all_three(tmp_path, cfg):
     """Leaving one out would mean an empty one, which is never what was meant."""
     roots = _staged(tmp_path / "staged")
     with pytest.raises(ConfigError, match="missing tools"):
-        resolve_catalogue(cfg, {"skills": roots["skills"], "subagents": roots["subagents"]})
+        resolve_catalogue(cfg, {"skills": roots.skills, "subagents": roots.subagents})
 
 
 def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, cfg):
@@ -167,7 +167,7 @@ def test_the_skills_route_follows_the_catalogue(tmp_path, cfg, session_dir):
 
     routed = backend.routes[SKILLS_ROUTE]
 
-    assert str(routed.cwd) == str(roots["skills"].resolve())
+    assert str(routed.cwd) == str(roots.skills.resolve())
     assert backend.read(f"{SKILLS_ROUTE}staged-only/SKILL.md")
 
 
@@ -189,8 +189,8 @@ def test_the_shell_reaches_a_supplied_catalogue(cfg, session_dir):
     """
     probe = Path.home() / "kingfisher-supplied-catalogue-probe"
     roots = _staged(probe)
-    (roots["skills"] / "demo").mkdir()
-    (roots["skills"] / "demo" / "run.sh").write_text("echo from-the-supplied-catalogue\n")
+    (roots.skills / "demo").mkdir()
+    (roots.skills / "demo" / "run.sh").write_text("echo from-the-supplied-catalogue\n")
     try:
         backend = build_backend(cfg, session_dir, catalogue=roots)
 
@@ -264,3 +264,43 @@ def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, sessio
 
     assert graph is not None
     assert available_skills(enabled, session_dir, catalogue=roots) == ("staged-only",)
+
+
+# -- the type itself ------------------------------------------------------
+
+
+def test_the_three_directories_are_attributes_not_keys(cfg):
+    """A string key that is wrong is a `KeyError` at runtime, and in this
+    codebase that surfaces as an empty catalogue -- the silent emptiness these
+    modules keep refusing. An attribute that is wrong is a type error before it
+    runs.
+    """
+    catalogue = Catalogue.from_config(cfg)
+
+    assert catalogue.skills == cfg.skills_dir
+    assert catalogue.subagents == cfg.subagents_dir
+    assert catalogue.tools == cfg.tools_dir
+    assert not hasattr(catalogue, "__getitem__"), "indexing would let both idioms survive"
+
+
+def test_resolving_accepts_one_that_is_already_resolved(tmp_path, cfg):
+    """A deployment stages directories and hands over a mapping, which is the
+    documented seam. Something already holding a `Catalogue` -- another
+    kingfisher, a test fixture -- should not have to take it apart to pass it
+    back. The fixture in this file hit exactly that.
+    """
+    staged = _staged(tmp_path / "staged")
+
+    assert resolve_catalogue(cfg, staged) == staged
+
+
+def test_a_resolved_one_is_still_checked(tmp_path, cfg):
+    """Accepting the type is not accepting it unread. A supplied catalogue is
+    staged by whoever supplies it, so a directory that is not there is a staging
+    failure and has to say so however it arrived.
+    """
+    missing = tmp_path / "never-staged"
+    handed = Catalogue(skills=missing, subagents=missing, tools=missing)
+
+    with pytest.raises(ConfigError, match="not a directory"):
+        resolve_catalogue(cfg, handed)

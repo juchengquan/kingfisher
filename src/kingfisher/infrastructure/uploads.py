@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING
 from kingfisher.domain import skill
 from kingfisher.domain.subagent import SUFFIX
 from kingfisher.infrastructure import skill_store
+from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 from kingfisher.infrastructure.subagent_store import load_all
 
@@ -65,7 +66,7 @@ def provision(
     session_dir: Path,
     cfg: Config,
     *,
-    catalogue: Mapping[str, Path] | None = None,
+    catalogue: Catalogue | None = None,
 ) -> Brought:
     """Unpack everything this request brought with it, or refuse to.
 
@@ -86,13 +87,13 @@ def provision(
         msg = "request supplies definitions by id, but no DefinitionStore is wired"
         raise UploadError(msg)
 
-    roots = catalogue or cfg.catalogue_roots
+    roots = catalogue or Catalogue.from_config(cfg)
     return Brought(
         skills=materialise_skills(
-            request.skill_refs, store, session_dir, skill_store.names(roots["skills"])
+            request.skill_refs, store, session_dir, skill_store.names(roots.skills)
         ),
         subagents=materialise_subagents(
-            request.subagent_refs, store, session_dir, tuple(load_all(roots["subagents"]))
+            request.subagent_refs, store, session_dir, tuple(load_all(roots.subagents))
         ),
     )
 
