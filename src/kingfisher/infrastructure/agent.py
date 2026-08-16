@@ -41,7 +41,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
-from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
+from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, resolved_endpoint
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
@@ -50,6 +50,7 @@ from kingfisher.infrastructure.backend import (
 )
 from kingfisher.infrastructure.delegation import (
     as_subagent,
+    indistinct,
     refuse_unknown_tools,
     subagent_helpers,
     subagent_middleware,
@@ -133,6 +134,42 @@ def defined_subagents(
     if session_dir is not None:
         defined |= load_all(_uploaded_subagents(session_dir))
     return defined
+
+
+def indistinct_delegates(
+    cfg: Config,
+    capabilities: Capabilities,
+    session_dir: Path | None,
+    *,
+    catalogue: Mapping[str, Path] | None = None,
+    run_on: Mapping[str, RunOn] | None = None,
+) -> tuple[tuple[str, str], ...]:
+    """`(name, why)` for each activated delegate that asked to run elsewhere and
+    did not.
+
+    Asked after the build rather than during it, the way `_withheld_by_kind`
+    is: `build_agent` returns a graph, and a fact about the run is not one of
+    the things a graph can carry. It re-resolves through `resolved_endpoint`,
+    the same call the build makes, so the two cannot come to disagree about
+    where a delegate ended up.
+    """
+    if capabilities.subagents is None:
+        return ()
+    defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
+    activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
+    wanted = run_on or {}
+
+    found = []
+    for name in activated:
+        spec = defined.get(name)
+        if spec is None:
+            continue  # `build_agent` refuses this; reporting is not its job
+        provider, model = resolved_endpoint(
+            spec, granted=capabilities.providers, override=wanted.get(name)
+        )
+        if why := indistinct(spec, cfg, provider=provider, model=model):
+            found.append((name, why))
+    return tuple(found)
 
 
 def registered_tools(graph: Any) -> tuple[str, ...]:
