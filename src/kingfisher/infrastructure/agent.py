@@ -42,7 +42,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, resolved_endpoint
-from kingfisher.infrastructure import skill_store
+from kingfisher.infrastructure import skill_store, tool_store
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
     SKILLS_SOURCES,
@@ -357,13 +357,22 @@ def _workspace_tool_names(
 
 
 def _refuse_unknown_tools(
-    capabilities: Capabilities, *, builtin: tuple[str, ...], workspace: tuple[str, ...]
+    capabilities: Capabilities,
+    *,
+    builtin: tuple[str, ...],
+    workspace: tuple[str, ...],
+    sources: Mapping[str, str] | None = None,
 ) -> None:
     """A name on the wrong axis, or on neither.
 
     Naming a built-in in `tools` is the mistake the split creates, so it is
     worth its own sentence: the name exists, and saying "unknown tool" about a
     tool that plainly exists would send someone looking in the wrong place.
+
+    `sources` says where each workspace tool is defined, so the list of what
+    *is* offered names files rather than only names. Once tools may sit in
+    folders, "this workspace offers csv_columns" leaves a reader grepping for
+    a file that could be anywhere under `tools/`.
     """
     for asked, own, other, here, there in (
         (capabilities.tools, workspace, builtin, "tools", "builtin_tools"),
@@ -380,7 +389,10 @@ def _refuse_unknown_tools(
             )
             raise CapabilityError(msg)
         if unknown := tuple(n for n in asked if n not in set(own)):
-            msg = f"unknown {here[:-1]}(s): {', '.join(unknown)}; this agent offers {own}"
+            msg = (
+                f"unknown {here[:-1]}(s): {', '.join(unknown)}; this workspace offers\n"
+                f"{tool_store.offered(sources or {}, own)}"
+            )
             raise CapabilityError(msg)
 
 
@@ -439,6 +451,11 @@ class _ToolSurface:
     #: being `ALL`: a workspace tool existing forces the probe, and then the
     #: grants are enumerated while the request still narrowed nothing.
     unrestricted: bool = True
+    #: Where each workspace tool was defined, relative to the catalogue. Carried
+    #: so a refusal can name a file rather than only a name -- and carried on
+    #: *this* rather than looked up again, because reading it means executing
+    #: every tool module.
+    sources: Mapping[str, str] = field(default_factory=dict)
 
     @property
     def permitted(self) -> tuple[str, ...] | None:
@@ -519,13 +536,37 @@ def _activated_subagents(
     return defined, activated
 
 
-def _resolve_tools(
+def _workspace_catalogue(
+    directory: Path, found: Sequence[tool_store.Found] | None = None
+) -> tuple[tuple[Any, ...], dict[str, str]]:
+    """The workspace's tools, and where each one is defined.
+
+    One walk returning both halves. The objects go to the graph; the origins go
+    to anything that has to *say* something about a tool, which is a refusal
+    and a listing. Read apart, this executed every workspace module twice --
+    these are Python files, so reading them means running them.
+
+    A caller that has already walked hands the result in. `--list` is the one
+    that has: it needs the origins to annotate its listing *and* a compiled
+    graph to enumerate the built-ins, and building the graph would otherwise
+    run every tool module a second time.
+    """
+    walked = tool_store.loaded(directory) if found is None else found
+    return (
+        tuple(entry.tool for entry in walked),
+        {entry.name: entry.source for entry in walked},
+    )
+
+
+def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
+    # answers came from; folding them up would hide what each one is for.
     tools_dir: Path,
     capabilities: Capabilities,
     workspace_tools: Sequence[Any],
     assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
     *,
     names_needed: bool = False,
+    sources: Mapping[str, str] | None = None,
 ) -> _ToolSurface:
     """What this request may call, and what this agent offers at all.
 
@@ -551,7 +592,7 @@ def _resolve_tools(
     probe = assemble(())
     builtin = registered_tools(probe)
     workspace = _workspace_tool_names(workspace_tools, builtin=builtin, directory=tools_dir)
-    _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
+    _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace, sources=sources)
     return _ToolSurface(
         granted_builtin=narrowed(capabilities.builtin_tools, by=builtin) or (),
         granted_workspace=narrowed(capabilities.tools, by=workspace) or (),
@@ -559,6 +600,7 @@ def _resolve_tools(
         offered_workspace=workspace,
         objects=_tool_objects(probe),
         unrestricted=unrestricted,
+        sources=dict(sources or {}),
     )
 
 
@@ -575,6 +617,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     checkpointer: Any | None = None,
     catalogue: Mapping[str, Path] | None = None,
     run_on: Mapping[str, RunOn] | None = None,
+    workspace_tools: Sequence[tool_store.Found] | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
 
@@ -656,14 +699,15 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             **extras,
         )
 
-    workspace_tools = load_tools(roots["tools"])
+    tools, tool_sources = _workspace_catalogue(roots["tools"], workspace_tools)
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
         roots["tools"],
         capabilities,
-        workspace_tools,
+        tools,
         assemble,
+        sources=tool_sources,
         # Either list naming anything is enough: both are checked against their
         # own offered set, and neither set is knowable without the probe.
         # Either tool list naming anything needs the offered sets. A delegate
@@ -693,6 +737,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 defined[name],
                 builtin=surface.offered_builtin,
                 workspace=surface.offered_workspace,
+                sources=surface.sources,
             )
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
@@ -769,4 +814,4 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         reachable = tuple(spec["name"] for spec in supplied)
         middleware.append(DeclaredDelegatesOnly(reachable))
 
-    return assemble(tuple(workspace_tools))
+    return assemble(tools)

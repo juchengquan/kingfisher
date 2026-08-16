@@ -184,17 +184,28 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # inventory. Folders make the duplicate case more likely, not less: two
     # people can now add a `find_company` without ever seeing each other's.
     try:
+        # Walked once and handed to the build. This listing needs two things
+        # that used to be fetched apart -- where each workspace tool is defined,
+        # and the built-in set, which is only knowable from an assembled graph
+        # -- and a tool module is Python, so fetching them apart ran every one
+        # of them twice per `--list`.
+        found = tool_store.loaded(catalogue["tools"])
         with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
             introspected = registered_tools(
-                build_agent(cfg, session_dir=Path(scratch), catalogue=catalogue)
+                build_agent(
+                    cfg,
+                    session_dir=Path(scratch),
+                    catalogue=catalogue,
+                    workspace_tools=found,
+                )
             )
-        # Where a workspace tool is defined, so a folder is navigable rather
-        # than merely tidy. Built-ins are not in here and get no suffix, which
-        # is also how the two kinds tell themselves apart in this listing.
-        defined_in = tool_store.sources(catalogue["tools"])
     except ToolError as exc:
         print(f"  cannot load: {exc}")
         return 1
+    # Where a workspace tool is defined, so a folder is navigable rather than
+    # merely tidy. Built-ins are not in here and get no suffix, which is also
+    # how the two kinds tell themselves apart in this listing.
+    defined_in = {entry.name: entry.source for entry in found}
     for name in introspected or ("(could not introspect)",):
         print(f"  {name}{_from(defined_in.get(name), f'{name}.py')}")
 
@@ -532,7 +543,12 @@ def main(argv: list[str]) -> int:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
         print(f"capability error: {exc}", file=sys.stderr)
-        print("run --list to see what this workspace offers", file=sys.stderr)
+        # Only when the refusal did not already list them. The tool refusals now
+        # print what is on offer and where each one lives, and telling someone
+        # to go and look at the thing directly above their cursor is the kind of
+        # hint that teaches people to stop reading hints.
+        if "this workspace offers" not in str(exc):
+            print("run --list to see what this workspace offers", file=sys.stderr)
         return 2
 
     if result is None:  # pragma: no cover

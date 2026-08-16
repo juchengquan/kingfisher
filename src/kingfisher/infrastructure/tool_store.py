@@ -48,8 +48,12 @@ from __future__ import annotations
 
 import importlib.util
 import sys
+from dataclasses import dataclass
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping, Sequence
 
 #: What a module must define: the tools it contributes, as a sequence.
 EXPORT = "TOOLS"
@@ -199,8 +203,26 @@ def _modules_in(directory: Path) -> list[Path]:
     return found
 
 
-def load_tools(directory: Path) -> tuple[Any, ...]:
-    """Every tool the directory defines, in a stable order.
+@dataclass(frozen=True)
+class Found:
+    """One tool and the file it came from, relative to the catalogue.
+
+    The pair rather than either alone, because every caller that wants one
+    eventually wants the other: the agent needs the object, and anything that
+    has to *say* something about a tool -- a listing, a refusal -- needs
+    somewhere a reader can go and open.
+    """
+
+    tool: Any
+    source: str
+
+    @property
+    def name(self) -> str:
+        return tool_name(self.tool)
+
+
+def loaded(directory: Path) -> tuple[Found, ...]:
+    """Every tool the directory defines, with its origin, in a stable order.
 
     Given the directory rather than a workspace to derive one from, for the
     same reason `skill_store.names` is: a catalogue may be deployed outside any
@@ -212,23 +234,29 @@ def load_tools(directory: Path) -> tuple[Any, ...]:
     permits it, and to the model. What it is not invisible to is a second tool
     claiming a name already taken, which is refused across folders exactly as it
     is within one.
+
+    One walk, returning both halves, because these modules are *executed* to be
+    read. `load_tools` and `sources` were separate passes and `--list` called
+    each once, so every workspace tool module ran twice per invocation -- twice
+    the import cost, and any module-level side effect twice over.
     """
     directory = Path(directory)
     if not directory.is_dir():
         return ()
 
-    tools: list[Any] = []
+    found: list[Found] = []
     claimed: dict[str, str] = {}
     for path in _modules_in(directory):
         # Relative to the catalogue, so an error names something a reader can
         # go and open. `find_company.py` is ambiguous once three folders may
-        # hold one; `research/find_company.py` is not.
-        where = path.relative_to(directory)
+        # hold one; `research/find_company.py` is not. A package keeps its
+        # trailing slash so it does not read as a file that is not there.
+        where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
 
         module = _import(path)
         exported = getattr(module, EXPORT, None)
         if exported is None:
-            declared_in = f"{where}/{PACKAGE_MARKER}" if path.is_dir() else str(where)
+            declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
             msg = f"{declared_in}: must define {EXPORT}, the tools it contributes"
             raise ToolError(msg)
         # A list or a tuple, and nothing looser. `BaseTool` is a pydantic model
@@ -248,10 +276,19 @@ def load_tools(directory: Path) -> tuple[Any, ...]:
                 # name in silence and the earlier tool would simply never run.
                 msg = f"{where}: tool {name!r} is already defined by {claimed[name]}"
                 raise ToolError(msg)
-            claimed[name] = str(where)
-            tools.append(tool)
+            claimed[name] = where
+            found.append(Found(tool=tool, source=where))
 
-    return tuple(tools)
+    return tuple(found)
+
+
+def load_tools(directory: Path) -> tuple[Any, ...]:
+    """Every tool the directory defines, in a stable order.
+
+    A view of `loaded` for the callers that only want the objects -- which is
+    `build_agent`, and which is most of them.
+    """
+    return tuple(found.tool for found in loaded(directory))
 
 
 def names(directory: Path) -> tuple[str, ...]:
@@ -262,19 +299,27 @@ def names(directory: Path) -> tuple[str, ...]:
 def sources(directory: Path) -> dict[str, str]:
     """Where each tool is defined, by name, relative to the catalogue.
 
-    For `--list`. Nesting exists so a person can find a file again, and a bare
-    list of names is exactly what sends them grepping for it.
+    For `--list` and for a refusal. Nesting exists so a person can find a file
+    again, and a bare list of names is exactly what sends them grepping for it.
     """
-    directory = Path(directory)
-    if not directory.is_dir():
-        return {}
+    return {found.name: found.source for found in loaded(directory)}
 
-    found: dict[str, str] = {}
-    for path in _modules_in(directory):
-        # A package keeps its trailing slash, so a reader can tell "the folder
-        # csv_profile" from "a file that would have been csv_profile.py".
-        where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
-        module = _import(path)
-        for tool in getattr(module, EXPORT, None) or ():
-            found[tool_name(tool)] = where
-    return found
+
+def offered(sources_by_name: Mapping[str, str], names: Sequence[str]) -> str:
+    """What a workspace offers, one per line, with where each one lives.
+
+    A block rather than the tuple this used to print. The reader is someone who
+    just mistyped a name and needs to scan for the one they meant, and a
+    parenthesised tuple of fifteen is the shape nobody finishes reading.
+
+    Names with no known source -- a built-in, or a tool supplied directly to
+    `build_agent` rather than found on disk -- are listed bare. There is no file
+    to name, and a blank column against `read_file` would be noise.
+    """
+    if not names:
+        return "  (none)"
+    width = max(len(name) for name in names)
+    return "\n".join(
+        f"  {name.ljust(width)}  ({where})" if (where := sources_by_name.get(name)) else f"  {name}"
+        for name in sorted(names)
+    )
