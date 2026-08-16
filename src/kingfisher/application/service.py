@@ -70,7 +70,12 @@ from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import QuotaExceededError, Session, UnknownSessionError
 from kingfisher.infrastructure import runtime
-from kingfisher.infrastructure.agent import build_agent, registered_tools
+from kingfisher.infrastructure.agent import (
+    available_skills,
+    build_agent,
+    defined_subagents,
+    registered_tools,
+)
 from kingfisher.infrastructure.checkpointing import build_checkpointer
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
@@ -115,9 +120,10 @@ class _Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
-    #: Tools this workspace offers that the request did not grant. Also crosses
-    #: rather than stopping: it is a fact about the run, not a refusal.
-    withheld_tools: tuple[str, ...] = ()
+    #: `(what, names)` for each thing this workspace offers that the request did
+    #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
+    #: withheld name is a fact about the run, not a refusal.
+    withheld: tuple[tuple[str, tuple[str, ...]], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -140,11 +146,29 @@ class _Prepared:
     timeout_s: float
 
 
+def _withheld_by_kind(
+    allowed: Capabilities, cfg: Config, session_dir: Path, graph: Any
+) -> tuple[tuple[str, tuple[str, ...]], ...]:
+    """What this request left out, per kind, skipping the kinds it left nothing.
+
+    Three axes, one rule. Each differs only in where "what the workspace offers"
+    comes from, and none of the three is knowable without asking the thing that
+    assembled the agent -- which is why a grant goes stale in the first place.
+    """
+    offered = (
+        ("tool", registered_tools(graph), allowed.tools),
+        ("skill", available_skills(cfg, session_dir), allowed.skills),
+        ("subagent", tuple(defined_subagents(cfg, session_dir)), allowed.subagents),
+    )
+    found = ((what, withheld(granted, offered=names)) for what, names, granted in offered)
+    return tuple((what, names) for what, names in found if names)
+
+
 def opening_events(
     turn_dir: str,
     unprotected: tuple[str, ...],
     placement: Any,
-    withheld_tools: tuple[str, ...] = (),
+    withheld: tuple[tuple[str, tuple[str, ...]], ...] = (),
 ) -> tuple[RunEvent, ...]:
     """What the caller is told before the model is reached.
 
@@ -155,14 +179,15 @@ def opening_events(
     events: list[RunEvent] = []
     if unprotected:
         events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
-    if withheld_tools:
-        # A grant is a whitelist, so it means less than the workspace holds and
-        # says so nowhere. Told here rather than discovered when the model
-        # reaches for one and is refused halfway through a turn.
+    # A grant is a whitelist, so it means less than the workspace holds and says
+    # so nowhere. Told here rather than discovered when the model reaches for
+    # one and is refused halfway through a turn. One line per kind, because a
+    # single line naming three kinds is the one nobody finishes reading.
+    for what, names in withheld:
         events.append(
             RunEvent(
                 kind="withheld",
-                text=f"{len(withheld_tools)} tool(s) not granted: {', '.join(withheld_tools)}",
+                text=f"{len(names)} {what}(s) not granted: {', '.join(names)}",
             )
         )
     if placement.placed:
@@ -466,10 +491,13 @@ class Kingfisher:
             graph=graph,
             unprotected=unprotected,
             placement=placement,
-            # Off the assembled graph rather than a list kept somewhere: the
-            # tool surface includes whatever the workspace defined, so the only
-            # honest answer to "what was offered" is what was actually wired.
-            withheld_tools=withheld(allowed.tools, offered=registered_tools(graph)),
+            # Tools come off the assembled graph rather than a list kept
+            # somewhere: the surface includes whatever the workspace defined, so
+            # the only honest answer to "what was offered" is what was wired.
+            # Skills and subagents are not on the graph, so they are asked of
+            # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
+            # an admit already measured at 15-46ms.
+            withheld=_withheld_by_kind(allowed, cfg, session.directory, graph),
         )
 
     def _open_turn(self, admitted: _Admitted) -> _Prepared:
@@ -513,7 +541,7 @@ class Kingfisher:
                 turn.virtual_dir,
                 admitted.unprotected,
                 admitted.placement,
-                admitted.withheld_tools,
+                admitted.withheld,
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,

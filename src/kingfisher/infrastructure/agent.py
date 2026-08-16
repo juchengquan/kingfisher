@@ -59,6 +59,8 @@ if TYPE_CHECKING:
 
     from langgraph.graph.state import CompiledStateGraph
 
+    from kingfisher.domain.subagent import SubagentSpec
+
 
 #: Delegation, wherever it is dispatched from.
 TASK_TOOL = "task"
@@ -94,6 +96,23 @@ def available_skills(cfg: Config, session_dir: Path | None) -> tuple[str, ...]:
     if session_dir is not None:
         names |= set(skill_store.names(_uploaded_skills(session_dir)))
     return tuple(sorted(names))
+
+
+def defined_subagents(cfg: Config, session_dir: Path | None) -> dict[str, SubagentSpec]:
+    """Every subagent this request may activate: the catalogue, plus its own.
+
+    They cannot collide -- `uploads` rejects an upload sharing a catalogue name
+    before it is written -- so the union loses nothing.
+
+    A function because two callers need the same answer: `build_agent`, which
+    wants the specs, and the service, which wants only the names so it can say
+    which of them a request did not grant. Written out at both, the rule about
+    what a session adds to the catalogue would exist twice.
+    """
+    defined = dict(load_all(cfg.subagents_dir))
+    if session_dir is not None:
+        defined |= load_all(_uploaded_subagents(session_dir))
+    return defined
 
 
 def registered_tools(graph: Any) -> tuple[str, ...]:
@@ -299,11 +318,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             permissions.extend(_skill_denials(capabilities.skills, available))
 
     if capabilities.subagents is not None:
-        # The catalogue plus this session's own. They cannot collide: `uploads`
-        # rejects an upload sharing a catalogue name before it is written.
-        defined = dict(load_all(cfg.subagents_dir))
-        if session_dir is not None:
-            defined |= load_all(_uploaded_subagents(session_dir))
+        defined = defined_subagents(cfg, session_dir)
         unknown = tuple(n for n in capabilities.subagents if n not in defined)
         if unknown:
             msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
