@@ -258,6 +258,41 @@ def test_a_duplicate_subagent_across_folders_is_refused(tmp_path):
         subagent_store.load_all(tmp_path)
 
 
+def test_sources_say_where_a_nested_subagent_lives(tmp_path):
+    """The mirror of `test_sources_say_where_a_nested_tool_lives`, and the half
+    of the pair that was missing. `--list` is the only caller: a folder exists so
+    a person can find a file, and a bare name sends them grepping instead.
+
+    Exercised by the `--list` tests already, in the sense that they run it and do
+    not crash. Nothing asserted on what it returned, so the one thing it is for
+    -- naming a file that is not `<name>.yaml` -- was unverified for subagents
+    while being verified for tools.
+    """
+    _subagent(tmp_path / "analysis", "profiler")
+    _subagent(tmp_path, "flat")
+
+    assert subagent_store.sources(tmp_path) == {
+        "profiler": "analysis/profiler.yaml",
+        "flat": "flat.yaml",
+    }
+
+
+def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
+    """The case that makes this worth having at all. A subagent's name comes from
+    inside the document, so `profiler` may be defined in `whatever.yaml` -- and
+    then the name alone tells you nothing about what to open.
+
+    `test_a_nested_subagent_keeps_its_own_name` already writes exactly this file
+    to prove the name wins over the filename. This asserts the other half: that
+    the filename is still recoverable afterwards.
+    """
+    directory = tmp_path / "analysis"
+    directory.mkdir(parents=True)
+    (directory / "whatever.yaml").write_text(SUBAGENT.format(name="profiler"), encoding="utf-8")
+
+    assert subagent_store.sources(tmp_path) == {"profiler": "analysis/whatever.yaml"}
+
+
 # -- skills: the kind that cannot ----------------------------------------
 
 
