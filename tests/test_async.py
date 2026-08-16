@@ -21,7 +21,7 @@ from tests.test_run import StubAgent
 class AsyncStubAgent(StubAgent):
     """A stub graph that answers on `astream` as the real one does."""
 
-    async def astream(self, state, config, stream_mode=None):
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
         for chunk in self.stream(state, config, stream_mode):
             await asyncio.sleep(0)  # yield the loop, as a real call would
             yield chunk
@@ -60,7 +60,7 @@ def test_turns_on_one_service_genuinely_overlap(cfg):
     barrier = asyncio.Barrier(3)
 
     class Barred(AsyncStubAgent):
-        async def astream(self, state, config, stream_mode=None):
+        async def astream(self, state, config, stream_mode=None, subgraphs=False):
             await barrier.wait()  # nobody proceeds until everyone is here
             for chunk in self.stream(state, config, stream_mode):
                 yield chunk
@@ -136,7 +136,7 @@ def test_the_turn_bound_holds_on_the_async_path_too(cfg):
     from tests.test_quotas import SlowAgent
 
     class SlowAsyncAgent(SlowAgent):
-        async def astream(self, state, config, stream_mode=None):
+        async def astream(self, state, config, stream_mode=None, subgraphs=False):
             for chunk in self.stream(state, config, stream_mode):
                 await asyncio.sleep(0)
                 yield chunk

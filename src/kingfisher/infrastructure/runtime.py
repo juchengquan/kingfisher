@@ -23,6 +23,7 @@ vocabulary, not wherever a foreign name appears.
 from __future__ import annotations
 
 from collections.abc import Iterator, Mapping
+from dataclasses import replace
 from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
@@ -123,6 +124,34 @@ def messages_in(update: Any) -> list[Any]:
     return list(messages) if isinstance(messages, (list, tuple)) else [messages]
 
 
+class Delegates:
+    """Which delegate produced a chunk, learned from the stream as it arrives.
+
+    With `subgraphs=True` every chunk carries a namespace: `()` for the agent
+    the caller asked, and an opaque `("tools:<uuid>",)` for a delegate running
+    inside a `task` call. That distinguishes them but does not name them.
+
+    Only `messages` chunks carry a name, in `lc_agent_name`. `updates` carry no
+    metadata at all -- which would leave `model_call` and `tool_result` unnamed
+    if the two were read independently. They are not: a delegate's first model
+    call is *streamed* before the node update that reports it, so the name is
+    always known by the time an event needs it. Measured, not assumed; a test
+    drives a real two-level run and asserts every delegate event is named.
+    """
+
+    def __init__(self) -> None:
+        self._names: dict[tuple[str, ...], str] = {}
+
+    def name(self, namespace: Any, metadata: Any = None) -> str | None:
+        """The delegate a chunk belongs to, or `None` for the main agent."""
+        key = tuple(namespace or ())
+        if not key:
+            return None
+        if isinstance(metadata, Mapping) and (found := metadata.get("lc_agent_name")):
+            self._names[key] = str(found)
+        return self._names.get(key)
+
+
 def _token_event(chunk: Any) -> RunEvent | None:
     """One `messages` chunk into a token event, or nothing.
 
@@ -144,7 +173,9 @@ def _token_event(chunk: Any) -> RunEvent | None:
     return RunEvent(kind="token", text=text) if text else None
 
 
-def events_in(mode: str, chunk: Any) -> Iterator[RunEvent]:
+def events_in(
+    namespace: Any, mode: str, chunk: Any, delegates: Delegates | None = None
+) -> Iterator[RunEvent]:
     """Translate one stream chunk into domain events.
 
     Which modes exist, and what each carries, is decided here rather than by
@@ -152,25 +183,46 @@ def events_in(mode: str, chunk: Any) -> Iterator[RunEvent]:
     vocabulary, and `application/` should no more compare against them than it should
     reach for `input_token_details` -- which is the duplication this module was
     written to end.
+
+    `namespace` says which agent produced the chunk, and `delegates` turns it
+    into a name. Both flow through every event so that a delegate's work is
+    distinguishable at the far end: the caller's prose and a delegate's arrive
+    as the same type on the same channel, so nothing else could tell them apart.
     """
+    named = delegates.name(namespace) if delegates is not None else None
     if mode == "messages":
+        if delegates is not None and isinstance(chunk, tuple) and len(chunk) == TOKEN_CHUNK_PARTS:
+            # A `messages` chunk is the only one carrying `lc_agent_name`, so
+            # this is where the map learns; ask again once it has.
+            named = delegates.name(namespace, chunk[1])
         if (event := _token_event(chunk)) is not None:
-            yield event
+            yield replace(event, agent=named)
         return
     if mode != "updates":
         return
     for update in (chunk or {}).values():
         for message in messages_in(update):
             if (event := _event_for(message)) is not None:
-                yield event
+                yield replace(event, agent=named)
 
 
-def answer_in(mode: str, chunk: Any) -> str | None:
+def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     """The assistant's last message from a `values` chunk, if it has one.
 
     `None` for any other mode, so a caller can offer every chunk and keep the
     last answer it is given: the final emission is the authoritative one.
+
+    And `None` for any chunk from a delegate, which is not a refinement -- it
+    is the whole reason this takes a namespace. Streaming into delegates makes
+    their `values` chunks arrive here too, and "the last one wins" then means
+    the last *anyone* emitted. A turn that ends normally is unharmed, because
+    the caller's agent always speaks last. A turn cut short by
+    `turn_timeout_s` is not: it stops between chunks, and if it stopped just
+    after a delegate finished, the run reported the delegate's answer as its
+    own. Measured on a real two-level run before this line existed.
     """
+    if namespace:
+        return None
     if mode != "values":
         return None
     messages = messages_in(chunk)

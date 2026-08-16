@@ -271,9 +271,9 @@ def test_the_adapter_owns_the_stream_modes(cfg):
 
     values = {"messages": [AIMessage(content="42")]}
 
-    assert runtime.answer_in("values", values) == "42"
-    assert runtime.answer_in("updates", values) is None
-    assert list(runtime.events_in("values", values)) == []
+    assert runtime.answer_in((), "values", values) == "42"
+    assert runtime.answer_in((), "updates", values) is None
+    assert list(runtime.events_in((), "values", values)) == []
 
 
 def test_run_is_a_drain_of_stream(cfg):
