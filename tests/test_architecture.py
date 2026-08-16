@@ -149,6 +149,7 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
 #: the heavy ones.
 LIGHT_EXPORTS = frozenset({
     "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunResult",
+    "SessionInfo",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
 })

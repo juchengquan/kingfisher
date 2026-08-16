@@ -14,6 +14,7 @@ and asks each to discard itself.
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -101,6 +102,51 @@ class Turn:
         return f"{self.virtual_dir}/input"
 
 
+
+def sessions_root(workspace: Path | str) -> Path:
+    """Where a workspace keeps its sessions.
+
+    A one-line function for a one-line rule, because the rule had six copies --
+    `Session.open` and five in the service -- and a layout the domain owns
+    should not be re-spelled by every caller that needs to look inside it.
+    """
+    return Path(workspace) / "sessions"
+
+
+@dataclass(frozen=True)
+class SessionInfo:
+    """One session, as something outside kingfisher asks about it.
+
+    Two fields, and the absence of a third is the point: there is no directory
+    here. A service that could read one would start reading files out of it,
+    and the layout would become a contract nobody wrote down. What a caller
+    gets back is kingfisher's own vocabulary -- a name it can pass to `run`,
+    and when it was last used.
+    """
+
+    id: str
+    #: When a turn last ran here, as a unix timestamp.
+    #:
+    #: True only since a turn began recording it. A turn writes *inside* a
+    #: session, so the timestamp this reads was not moved by use, and a
+    #: conversation in daily use looked untouched -- which is what made
+    #: retention sweep live sessions. Ordering by it was meaningless before
+    #: that and is meaningful now.
+    last_used: float
+
+
+def known(entries: Sequence[tuple[str, float]]) -> tuple[SessionInfo, ...]:
+    """Every session there is, most recently used first.
+
+    Takes what `SessionDirs.listing` returns, so the read path and the sweep
+    read the same thing -- a session that retention can see is one a caller can
+    ask about, and the two cannot come to disagree about which exist.
+    """
+    return tuple(
+        SessionInfo(id=name, last_used=modified)
+        for name, modified in sorted(entries, key=lambda entry: -entry[1])
+    )
+
 @dataclass(frozen=True)
 class Session:
     """A conversation. Owns its turns and its own disposal."""
@@ -117,7 +163,7 @@ class Session:
         — `data`, `derived`, `memory` and `runs` — rather than only that
         session's turns.
         """
-        directory = Path(workspace) / "sessions" / session_id
+        directory = sessions_root(workspace) / session_id
         dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
 
