@@ -1,0 +1,259 @@
+"""A conversation lives inside the session it belongs to.
+
+One session used to be one logical thing kept in two stores keyed by the same
+id with nothing linking them: a directory, and a row set in a database shared by
+every session. Everything that went wrong with retention came from that seam --
+`discard` had to delete both in the right order, sessions that could not be
+removed left their threads behind, and a directory deleted any other way
+orphaned its thread forever, 132 of them in one real workspace.
+
+Here the database is a file in the session directory, so the seam is gone
+rather than swept.
+"""
+
+from __future__ import annotations
+
+import asyncio
+import sqlite3
+from typing import Any
+
+import pytest
+
+from kingfisher import Kingfisher
+from kingfisher.config import Config
+from kingfisher.domain.request import Request
+from kingfisher.infrastructure.checkpointing import session_db_path
+from kingfisher.infrastructure.workspace_fs import session_bytes
+from tests.conftest import StubCheckpointer
+from tests.test_async import AsyncStubAgent
+from tests.test_run import StubAgent
+
+
+def _session_dir(cfg: Config, session_id: str):
+    return cfg.workspace / "sessions" / session_id
+
+
+# -- where it lives -------------------------------------------------------
+
+
+def test_the_conversation_is_a_file_inside_the_session(cfg):
+    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+
+    result = kf.run(Request("go"))
+
+    assert session_db_path(_session_dir(cfg, result.session_id)).is_file()
+
+
+def test_nothing_is_written_to_a_workspace_wide_database(cfg):
+    """The shared file is what orphans came from. If one is still being opened,
+    this whole change bought nothing."""
+    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+
+    kf.run(Request("go"))
+
+    assert not (cfg.state_dir / "threads.db").exists()
+
+
+def test_the_conversation_counts_against_the_session_quota(cfg):
+    """`session_max_bytes` measures a directory, so checkpoint state was
+    invisible to it while it sat above every session -- the same blind spot the
+    tool caches had before `HOME` moved into the session."""
+    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    result = kf.run(Request("go"))
+
+    directory = _session_dir(cfg, result.session_id)
+    counted = session_bytes(directory)
+
+    assert counted >= session_db_path(directory).stat().st_size > 0
+
+
+# -- what it has to keep doing -------------------------------------------
+
+
+def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
+    """The whole reason a checkpointer exists. Moving where it lives must not
+    change what it does.
+
+    Driven through a real graph rather than `StubAgent`, which replaces the
+    graph outright and so never reaches a checkpointer at all -- the first
+    version of this test asserted against a database nothing had written to.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.infrastructure.agent import build_agent
+    from kingfisher.infrastructure.checkpointing import build_session_checkpointer
+    from tests.conftest import FakeToolCallingModel
+
+    saver = build_session_checkpointer(session_dir)
+    graph = build_agent(
+        cfg,
+        session_dir=session_dir,
+        checkpointer=saver,
+        model=FakeToolCallingModel(responses=[AIMessage(content="one"), AIMessage(content="two")]),
+    )
+    config: Any = {"configurable": {"thread_id": session_dir.name}, "recursion_limit": 10}
+
+    graph.invoke({"messages": [("user", "remember this")]}, config=config)
+    second = graph.invoke({"messages": [("user", "and now?")]}, config=config)
+
+    # The second turn saw the first: continuity is what the store buys.
+    assert len(second["messages"]) > 2, "the conversation did not carry"
+
+    db = session_db_path(session_dir)
+    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
+    rows = conn.execute("select count(*) from checkpoints").fetchone()[0]
+    conn.close()
+    assert rows > 0, "nothing was written to the session's own database"
+
+
+def test_two_sessions_keep_separate_conversations(cfg):
+    """Structural, not enforced: they are different files."""
+    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+
+    one, two = kf.run(Request("a")), kf.run(Request("b"))
+
+    assert one.session_id != two.session_id
+    assert session_db_path(_session_dir(cfg, one.session_id)) != session_db_path(
+        _session_dir(cfg, two.session_id)
+    )
+
+
+def test_deleting_a_session_takes_its_conversation_with_it(cfg):
+    """No `ThreadStore` involved, which is the point. An orphaned thread is not
+    something the janitor cleans up here -- it is something that cannot happen.
+    """
+    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    result = kf.run(Request("go"))
+    directory = _session_dir(cfg, result.session_id)
+    assert session_db_path(directory).is_file()
+
+    assert kf.delete_session(result.session_id) is None
+
+    assert not directory.exists()
+
+
+# -- the async path, which is the reason this reaches an API --------------
+
+
+def test_astream_works_with_nothing_injected(cfg):
+    """It did not before. `SqliteSaver.aget_tuple` raises `NotImplementedError`,
+    so an async deployment had to pass its own saver -- and passing an instance
+    means one database shared by every session, which is the contention this
+    exists to avoid.
+    """
+    kf = Kingfisher(cfg, agent=AsyncStubAgent("ok"))
+
+    async def go() -> str | None:
+        session_id = None
+        async for event in kf.astream(Request("go")):
+            if event.kind == "finished":
+                session_id = event.result.session_id
+        return session_id
+
+    session_id = asyncio.run(go())
+
+    assert session_id is not None
+    assert session_db_path(_session_dir(cfg, session_id)).is_file()
+
+
+def test_the_async_saver_actually_supports_async(cfg, session_dir):
+    """The test above drives `AsyncStubAgent`, which replaces the graph -- so it
+    never touches the saver, and it passed even with the async resolver swapped
+    for the sync one. Mutation testing found that; this is the assertion that
+    catches it.
+
+    `SqliteSaver.aget_tuple` raises `NotImplementedError`, so calling it is the
+    difference between a saver an event loop can use and one it cannot.
+    """
+    from contextlib import AsyncExitStack
+
+    service = Kingfisher(cfg, agent=StubAgent("ok"))
+
+    async def resolve_and_use() -> object:
+        async with AsyncExitStack() as stack:
+            saver = await service._async_checkpointer_for(stack, session_dir)
+            return await saver.aget_tuple(
+                {"configurable": {"thread_id": session_dir.name, "checkpoint_ns": ""}}
+            )
+        return None
+
+    # No exception is the assertion: a sync saver refuses this outright.
+    assert asyncio.run(resolve_and_use()) is None
+
+
+# -- who owns the connection ---------------------------------------------
+
+
+def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
+    """A deployment's own store outlives every turn. Closing it after one would
+    break the next."""
+    store = StubCheckpointer()
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=store)
+
+    kf.run(Request("go"))
+    kf.run(Request("go"))
+
+    assert kf.threads is store
+    assert not any(session_db_path(p).exists() for p in (cfg.workspace / "sessions").iterdir())
+
+
+def test_a_factory_is_asked_once_per_session(cfg):
+    """The seam an async deployment uses: given a session, hand back a saver."""
+    seen: list[str] = []
+
+    def factory(session_dir):
+        seen.append(session_dir.name)
+        return StubCheckpointer()
+
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=factory)
+    first = kf.run(Request("a"))
+    kf.run(Request("b", session_id=first.session_id))
+
+    assert seen == [first.session_id, first.session_id]
+
+
+def test_the_connection_does_not_outlive_the_turn(cfg):
+    """A database per session is a file descriptor per session. A process
+    serving many would otherwise hold every one it had ever touched."""
+    closed: list[object] = []
+
+    class Recorder(StubCheckpointer):
+        def __init__(self) -> None:
+            super().__init__()
+            self.conn = self
+
+        def close(self) -> None:
+            closed.append(self)
+
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=lambda _dir: Recorder())
+    kf.run(Request("go"))
+
+    assert len(closed) == 1, "the saver this service opened was not released"
+
+
+def test_a_sweep_needs_no_thread_store_at_all(cfg):
+    """`reap` deleted threads because they lived elsewhere. They do not any
+    more, so the sweep is one `rmtree` and the reconciliation finds nothing."""
+    import time
+
+    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    result = kf.run(Request("go"))
+
+    swept = kf.reap(older_than_seconds=0, now=time.time())
+
+    assert result.session_id in swept.removed
+    assert swept.orphans == ()
+    assert swept.failures == ()
+
+
+@pytest.mark.parametrize("injected", [None, "factory"])
+def test_the_default_and_a_factory_both_survive_two_turns(cfg, injected):
+    """The two shapes this service opens for itself, driven rather than
+    inspected."""
+    threads = None if injected is None else (lambda _dir: StubCheckpointer())
+    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+
+    first = kf.run(Request("one"))
+    second = kf.run(Request("two", session_id=first.session_id))
+
+    assert second.answer == "ok"

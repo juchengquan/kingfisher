@@ -55,7 +55,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
-from contextlib import suppress
+from contextlib import AsyncExitStack, suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic, time
@@ -86,7 +86,12 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
     workspace_tool_names,
 )
-from kingfisher.infrastructure.checkpointing import build_checkpointer, thread_ids
+from kingfisher.infrastructure.checkpointing import (
+    async_session_checkpointer,
+    build_session_checkpointer,
+    release_checkpointer,
+    thread_ids,
+)
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
@@ -106,6 +111,11 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from kingfisher.domain.ports import DefinitionStore, SessionDirs, ThreadStore
+
+
+#: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
+#: run without a checkpointer at all.
+_UNSET: Any = object()
 
 
 @dataclass(frozen=True)
@@ -131,6 +141,9 @@ class _Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
+    #: The saver this service opened for the turn, or None when it opened
+    #: nothing -- an injected instance is the deployment's to close.
+    release: Any = None
     #: `(what, names)` for each thing this workspace offers that the request did
     #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
     #: withheld name is a fact about the run, not a refusal.
@@ -155,6 +168,8 @@ class _Prepared:
     events: tuple[RunEvent, ...]
     deadline: float
     timeout_s: float
+    #: Closed when the turn ends. See `_checkpointer_for`.
+    release: Any = None
 
 
 def _withheld_by_kind(
@@ -331,7 +346,10 @@ class Kingfisher:
         cfg: Config | None = None,
         *,
         dirs: SessionDirs | None = None,
-        threads: ThreadStore | None = None,
+        # A store, or a factory given a session directory, or nothing for the
+        # default -- see `_checkpointer_for`. The union is the contract, so it
+        # is written here rather than left for a reader to infer from a branch.
+        threads: ThreadStore | Callable[[Path], Any] | None = None,
         definitions: DefinitionStore | None = None,
         catalogue_roots: Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
@@ -360,7 +378,17 @@ class Kingfisher:
         # could delete. `state_dir` is the one place the agent never addresses.
         self._claims: Path = self.cfg.state_dir / "claims"
         self.dirs.ensure(self._claims)
-        self.threads: Any = threads if threads is not None else build_checkpointer(self.cfg)
+        # Three shapes, and the difference is who owns the connection. An
+        # instance is a shared store the deployment made and manages; a callable
+        # is a factory this service calls per session and closes after the turn;
+        # `None` means the default, which is a database inside each session.
+        #
+        # `_shared` is the instance case only. `Session.discard` and `reap` use
+        # it to forget a thread, and both correctly do nothing when it is absent:
+        # a per-session database is deleted by removing the directory it sits in,
+        # which is the whole reason orphaned threads stop being possible.
+        self.threads: Any = threads
+        self._shared: Any = threads if (threads is not None and not callable(threads)) else None
         # No default. A deployment that never serves uploaded definitions has
         # nothing to wire, and a request that supplies ids without one is a
         # configuration error worth saying out loud rather than a silent no-op.
@@ -478,7 +506,7 @@ class Kingfisher:
         if session_id not in self.dirs.children(root):
             return None
         session = Session(id=session_id, directory=root / session_id)
-        failure = session.discard(self.dirs, self.threads)
+        failure = session.discard(self.dirs, self._shared)
         session.release(self.dirs, self._claims)
         return failure
 
@@ -510,7 +538,7 @@ class Kingfisher:
                 now=now,
             ),
         )
-        result = retention.apply(plan, root, self.dirs, self.threads)
+        result = retention.apply(plan, root, self.dirs, self._shared)
         result = self._reconcile_threads(root, result)
         self._discard_dead_claims(root)
         return result
@@ -548,7 +576,7 @@ class Kingfisher:
         call is already gone from the listing and its thread is already deleted;
         what is left is genuinely residue.
         """
-        held = thread_ids(self.threads)
+        held = thread_ids(self._shared)
         if held is None:
             return result
 
@@ -556,12 +584,16 @@ class Kingfisher:
         dropped = []
         for thread in retention.orphaned(held, live):
             with suppress(Exception):
-                self.threads.delete_thread(thread)
+                self._shared.delete_thread(thread)
                 dropped.append(thread)
         return replace(result, orphans=tuple(dropped))
 
     def agent_for(
-        self, request: Request, session_dir: Path, capabilities: Capabilities | None = None
+        self,
+        request: Request,
+        session_dir: Path,
+        capabilities: Capabilities | None = None,
+        checkpointer: Any = _UNSET,
     ) -> Any:
         """The graph that serves one request, rooted at its session.
 
@@ -583,11 +615,16 @@ class Kingfisher:
             capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
             middleware_registry=self.middleware,
-            checkpointer=self.threads,
+            checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,
         )
 
-    def _prepare(self, request: str | Request) -> _Prepared:
+    def _prepare(
+        self,
+        request: str | Request,
+        session: Session | None = None,
+        checkpointer: Any = _UNSET,
+    ) -> _Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
         Blocking, and deliberately so: filesystem work plus building
@@ -602,9 +639,78 @@ class Kingfisher:
         Written as two functions it is checkable, and `_Admitted` is the only
         way across.
         """
-        return self._open_turn(self._admit(request))
+        return self._open_turn(self._admit(request, session, checkpointer))
 
-    def _admit(self, request: str | Request) -> _Admitted:
+    def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
+        """The saver this turn runs on, and how to release it when the turn ends.
+
+        Only what this service opened is closed. An injected instance belongs to
+        the deployment that made it and outlives every turn; a factory's result
+        and the per-session default are ours, and a process serving many sessions
+        would otherwise hold a file descriptor for each one it had ever touched.
+        """
+        if self.threads is None:
+            saver = build_session_checkpointer(session_dir)
+            return saver, saver
+        if callable(self.threads):
+            saver = self.threads(session_dir)
+            return saver, saver
+        return self.threads, None
+
+    async def _async_checkpointer_for(self, stack: AsyncExitStack, session_dir: Path) -> Any:
+        """The saver an async turn runs on, entered into the turn's exit stack.
+
+        Separate from `_checkpointer_for` because an aiosqlite connection
+        belongs to the event loop that made it: it cannot be opened inside the
+        worker thread `_prepare` runs on, which is why `astream` resolves the
+        session first and hands the saver down.
+
+        This is what carries the per-session shape to the deployments that most
+        want it. `astream` refuses a sync saver outright -- `SqliteSaver`
+        raises `NotImplementedError` on `aget_tuple` -- so an async deployment
+        has always injected its own, and injecting an *instance* means one
+        database shared by every session, which is the contention this avoids.
+        A factory returning an async context manager gets one per session.
+        """
+        if self.threads is None:
+            return await stack.enter_async_context(async_session_checkpointer(session_dir))
+        if callable(self.threads):
+            made = self.threads(session_dir)
+            if hasattr(made, "__aenter__"):
+                return await stack.enter_async_context(made)
+            return made
+        return self.threads
+
+    def open_session_for(self, request: Request) -> Session:
+        """Name this request's session and make sure its directory exists.
+
+        Split out of `_admit` because the async path needs the directory before
+        it can open anything: an aiosqlite connection belongs to the event loop,
+        so it cannot be made inside the worker thread `_admit` runs on, and the
+        per-session database lives inside this directory.
+
+        Issuing the id is not idempotent -- an absent one mints a fresh uuid --
+        so this runs once and the session is handed onward rather than derived
+        twice.
+        """
+        root = sessions_root(self.workspace)
+        session_id = self._session_id_for(request, root)
+        # The session directory has to exist before the agent, because the
+        # agent's backend is rooted at it. Creating it before the refusals does
+        # not weaken the ordering rule: that rule is about not *destroying*
+        # anything before the request is known to be valid, and an empty session
+        # directory left by a rejected request is idempotent -- the retry reuses
+        # it.
+        session = Session.open(self.workspace, session_id, self.dirs)
+        ensure_session_layout(session.directory)
+        return session
+
+    def _admit(
+        self,
+        request: str | Request,
+        session: Session | None = None,
+        checkpointer: Any = _UNSET,
+    ) -> _Admitted:
         """Everything that can refuse, before anything a refusal would strand.
 
         Nothing is destroyed here either, and nothing turn-shaped is created.
@@ -613,18 +719,7 @@ class Kingfisher:
         """
         request = Request.coerce(request)
         cfg, dirs = self.cfg, self.dirs
-        workspace = self.workspace
-        root = sessions_root(workspace)
-        session_id = self._session_id_for(request, root)
-
-        # The session directory has to exist before the agent, because the
-        # agent's backend is rooted at it. Creating it first does not weaken
-        # the ordering rule below: that rule is about not *destroying*
-        # anything before the request is known to be valid, and an empty
-        # session directory left by a rejected request is idempotent -- the
-        # retry reuses it.
-        session = Session.open(workspace, session_id, dirs)
-        ensure_session_layout(session.directory)
+        session = session if session is not None else self.open_session_for(request)
         # A turn writes inside the session, never to the session itself, so the
         # timestamp `retention.expired` reads would still say "idle" for a
         # conversation in daily use. Recorded here, at the top of a turn, rather
@@ -634,13 +729,13 @@ class Kingfisher:
         # and a turn arriving halfway through would be reading it as it moved.
         session.claim(dirs, self._claims, stale_after=cfg.turn_timeout_s, now=time())
         try:
-            return self._admitted(request, session, cfg)
+            return self._admitted(request, session, cfg, checkpointer)
         except BaseException:
             session.release(dirs, self._claims)
             raise
 
     def _admitted(
-        self, request: Request, session: Session, cfg: Config
+        self, request: Request, session: Session, cfg: Config, checkpointer: Any = _UNSET
     ) -> _Admitted:
         """The rest of admission, once the session is claimed.
 
@@ -677,7 +772,16 @@ class Kingfisher:
         allowed = self.grants.intersect(request.capabilities).including(
             skills=brought.skills, subagents=brought.subagents
         )
-        graph = self.agent_for(request, session.directory, capabilities=allowed)
+        # Resolved here rather than in `__init__`, because the default is a
+        # database inside this session and there is no session until now. The
+        # async path opens its own on the event loop and hands it down, which is
+        # what `checkpointer` carries.
+        release: Any = None
+        if checkpointer is _UNSET:
+            checkpointer, release = self._checkpointer_for(session.directory)
+        graph = self.agent_for(
+            request, session.directory, capabilities=allowed, checkpointer=checkpointer
+        )
 
         # The last thing that can refuse, and the reason this half exists. The
         # files themselves cannot be copied until a turn directory holds them,
@@ -690,6 +794,7 @@ class Kingfisher:
             graph=graph,
             unprotected=unprotected,
             placement=placement,
+            release=release,
             # Tools come off the assembled graph rather than a list kept
             # somewhere: the surface includes whatever the workspace defined, so
             # the only honest answer to "what was offered" is what was wired.
@@ -725,6 +830,7 @@ class Kingfisher:
 
         return _Prepared(
             graph=admitted.graph,
+            release=admitted.release,
             message=turn_message(
                 request.task, turn, admitted.placement.placed, has_inputs=bool(request.inputs)
             ),
@@ -798,6 +904,10 @@ class Kingfisher:
             # The slot goes back however the turn ended -- answered, refused
             # mid-stream, or cut short by its deadline.
             prepared.session.release(self.dirs, self._claims)
+            # And so does the connection, when this service opened one. A
+            # per-session database is a file descriptor per session, so a
+            # process serving many would otherwise hold every one it touched.
+            release_checkpointer(prepared.release)
 
         yield self._finished(prepared, answer, cut_short=cut_short)
 
@@ -814,9 +924,28 @@ class Kingfisher:
         rather than blocking every other turn sharing this loop.
 
         Needs a checkpointer with async methods: `SqliteSaver` raises on
-        `aget_tuple`, so build one with `async_checkpointer(cfg)`.
+        `aget_tuple` rather than merely blocking the loop. Nothing injected now
+        means one per session, opened here because an aiosqlite connection
+        belongs to the loop that made it and cannot be built inside the worker
+        thread `_prepare` runs on. That is why the session is opened first and
+        handed down: naming a session is not idempotent, so it happens once.
         """
-        prepared = await asyncio.to_thread(self._prepare, request)
+        request = Request.coerce(request)
+        async with AsyncExitStack() as stack:
+            session = await asyncio.to_thread(self.open_session_for, request)
+            saver = await self._async_checkpointer_for(stack, session.directory)
+            async for event in self._astream_turn(request, session, saver):
+                yield event
+
+    async def _astream_turn(
+        self, request: Request, session: Session, saver: Any
+    ) -> AsyncIterator[RunEvent]:
+        """One async turn, with its session and saver already resolved.
+
+        Split from `astream` only so the exit stack holding the saver wraps the
+        whole turn without indenting the loop that matters.
+        """
+        prepared = await asyncio.to_thread(self._prepare, request, session, saver)
         for event in prepared.events:
             yield event
 
@@ -845,6 +974,10 @@ class Kingfisher:
             # The slot goes back however the turn ended -- answered, refused
             # mid-stream, or cut short by its deadline.
             prepared.session.release(self.dirs, self._claims)
+            # And so does the connection, when this service opened one. A
+            # per-session database is a file descriptor per session, so a
+            # process serving many would otherwise hold every one it touched.
+            release_checkpointer(prepared.release)
 
         yield self._finished(prepared, answer, cut_short=cut_short)
 
