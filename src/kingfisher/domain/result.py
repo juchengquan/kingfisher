@@ -79,12 +79,44 @@ def _render_call(name: str, args: Mapping[str, Any]) -> str:
     return f"{name}({inner})"
 
 
+#: Every kind a run can emit, and the whole of it.
+#:
+#: A tuple rather than prose, because this is the closest thing to a wire
+#: contract the package has and as prose it was wrong in both directions. It
+#: named `swept` and `sweep_failed`, which have not fired since retention moved
+#: off the request path, and it was missing five: the four warnings a turn can
+#: open with, and `cut_short`, which is how a caller learns its answer is
+#: incomplete. An API author would have published that list verbatim.
+#:
+#: A consumer switching on `kind` should ignore one it does not recognise
+#: rather than fail: this tuple grows.
+KINDS: tuple[str, ...] = (
+    # Warnings, emitted before the model is reached and only when they apply.
+    # Each says something that would otherwise be discovered too late: a path
+    # that could not be hardened, a grant that means less than the workspace
+    # holds, a delegate that meant to run elsewhere and did not, and durable
+    # data that was overwritten.
+    "protect_failed",
+    "withheld",
+    "indistinct",
+    "data_placed",
+    # The run itself.
+    "run_start",
+    "model_call",
+    "tool_result",
+    "token",
+    # Terminal. `cut_short` precedes `finished` rather than replacing it.
+    "cut_short",
+    "finished",
+)
+
+
 @dataclass(frozen=True)
 class RunEvent:
     """A normalised step in a run.
 
-    kinds: `run_start`, `swept`, `sweep_failed`, `model_call`, `tool_result`,
-    `token`, `finished`.
+    The kinds are `KINDS` above, which is checked against what the package
+    actually emits rather than kept in step by hand.
 
     There is no `message` kind. A completed assistant turn is a `model_call`
     whatever it produced, and its prose is not carried there: prose arrives as

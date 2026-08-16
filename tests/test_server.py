@@ -8,10 +8,13 @@ already uses, so nothing here needs to patch construction.
 
 from __future__ import annotations
 
+import asyncio
+from typing import Any
+
 import pytest
 from fastapi.testclient import TestClient
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, Request
 from kingfisher.server import ServerConfig, create_app
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
@@ -200,3 +203,356 @@ def test_a_filesystem_endpoint_does_not_stall_every_other_request(cfg, monkeypat
 
     assert all(reply.status_code == 200 for reply in replies)
     assert elapsed < delay * 3, f"{elapsed:.2f}s for three — serialised, not overlapped"
+
+
+# -- turns -----------------------------------------------------------------
+
+
+class AsyncStub(StubAgent):
+    """A graph that answers on `astream`, optionally slowly."""
+
+    def __init__(self, answer, *, tokens=None, pause=0.0):
+        super().__init__(answer, tokens=tokens)
+        self.pause = pause
+
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
+        import asyncio
+
+        for chunk in self.stream(state, config, stream_mode):
+            await asyncio.sleep(self.pause)
+            yield chunk
+
+
+def tokens(count):
+    from langchain_core.messages import AIMessageChunk
+
+    return [(AIMessageChunk(content=f"t{n}"), {}) for n in range(count)]
+
+
+def frames(text):
+    """Parse an SSE body into (event, data) pairs, ignoring comments."""
+    import json
+
+    out = []
+    for block in text.split("\n\n"):
+        if not block.strip() or block.startswith(":"):
+            continue
+        name = data = None
+        for line in block.splitlines():
+            if line.startswith("event: "):
+                name = line.removeprefix("event: ")
+            elif line.startswith("data: "):
+                data = json.loads(line.removeprefix("data: "))
+        out.append((name, data))
+    return out
+
+
+def serving(cfg, agent, **settings):
+    service = Kingfisher(cfg, agent=agent, threads=StubCheckpointer())
+    return service, create_app(service, ServerConfig(**settings))
+
+
+def test_a_turn_streams_its_events_as_named_sse(cfg):
+    """The kind is the event name, so a consumer subscribes to what it wants
+    rather than parsing every body to find out what it got."""
+    service, app = serving(cfg, AsyncStub("done", tokens=tokens(3)))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    names = [name for name, _ in frames(body)]
+    assert names[0] == "run_start"
+    assert names[-1] == "finished"
+    assert names.count("token") == 3
+
+
+def test_every_event_name_is_one_the_package_declares(cfg):
+    """The wire contract and the package's vocabulary are the same list."""
+    from kingfisher.domain.result import KINDS
+
+    service, app = serving(cfg, AsyncStub("done", tokens=tokens(2)))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    assert {name for name, _ in frames(body)} <= set(KINDS)
+
+
+def test_the_finished_event_carries_the_answer_and_no_host_path(cfg):
+    """`run_dir` and `log_path` are the host's filesystem layout. A remote
+    caller cannot read them and should not be told them; `virtual_dir` is the
+    machine-independent name for the same directory."""
+    service, app = serving(cfg, AsyncStub("the answer"))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    result = dict(frames(body))["finished"]["result"]
+    assert result["answer"] == "the answer"
+    assert result["session_id"] == session_id
+    assert result["virtual_dir"] == f"/runs/{result['turn_id']}"
+    assert "run_dir" not in result
+    assert "log_path" not in result
+
+
+def test_a_token_frame_carries_text_and_nothing_else(cfg):
+    """Defaults are omitted rather than sent as nulls. Tokens are the bulk of a
+    turn's bytes, and seven null fields each is a cost paid thousands of times
+    for a uniformity nobody consumes."""
+    service, app = serving(cfg, AsyncStub("done", tokens=tokens(1)))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    token = next(data for name, data in frames(body) if name == "token")
+    assert set(token) == {"text"}
+
+
+# -- refusals happen before the response starts ----------------------------
+
+
+def test_an_unknown_session_is_a_404_and_not_a_stream(cfg):
+    """The rule the whole endpoint is arranged around. `astream` runs `_prepare`
+    before yielding, so a refusal is still a status code at that moment -- and
+    handing the generator to `StreamingResponse` unopened would put 200 on the
+    wire and bury it in the body."""
+    _, app = serving(cfg, AsyncStub("done"))
+
+    with TestClient(app) as http:
+        response = http.post("/sessions/" + "0" * 32 + "/turns", json={"task": "go"})
+
+    assert response.status_code == 404
+    assert response.json()["error"] == "unknown_session"
+    assert "text/event-stream" not in response.headers.get("content-type", "")
+
+
+def test_a_second_turn_on_a_busy_session_is_a_409(cfg):
+    """Refused rather than queued: a queue hides a wait as long as whatever the
+    other turn is doing, and a caller who did not know they were racing learns
+    nothing from it."""
+    service, app = serving(cfg, AsyncStub("done"))
+    session_id = service.start_session()
+    (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
+
+    with TestClient(app) as http:
+        response = http.post(f"/sessions/{session_id}/turns", json={"task": "go"})
+
+    assert response.status_code == 409
+    assert response.json()["error"] == "session_busy"
+
+
+def test_an_empty_task_is_refused_by_validation(cfg):
+    """422 from the model rather than 500 from `Request.__post_init__`, which
+    raises a bare `ValueError` that no error map should be catching."""
+    _, app = serving(cfg, AsyncStub("done"))
+
+    with TestClient(app) as http:
+        assert http.post("/turns", json={"task": "  "}).status_code in (400, 422)
+
+
+def test_a_refused_turn_leaves_no_claim_behind(cfg):
+    """The stream is closed on the refusal path too. A claim taken and not
+    given back would make the session look busy to retention as well as to the
+    next caller."""
+    service, app = serving(cfg, AsyncStub("done"))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        http.post(f"/sessions/{session_id}/turns", json={"task": "go"})
+
+    assert not (cfg.state_dir / "claims" / session_id).exists()
+
+
+# -- the one-shot ----------------------------------------------------------
+
+
+def test_a_one_shot_turn_mints_a_session_and_names_it(cfg):
+    """Omitting the session is something the library can do and the path form
+    cannot express. The id comes back on `finished`, so a caller who decides to
+    continue can."""
+    service, app = serving(cfg, AsyncStub("done"))
+
+    with TestClient(app) as http:
+        body = http.post("/turns", json={"task": "go"}).text
+
+    result = dict(frames(body))["finished"]["result"]
+    assert service.session(result["session_id"]) is not None
+
+
+def test_a_one_shot_turn_does_not_take_a_session_id(cfg):
+    """A supplied id may resume but never create. If the body could name one,
+    a service forwarding its caller's input would let that caller pick -- or
+    guess -- somebody else's session."""
+    service, app = serving(cfg, AsyncStub("done"))
+
+    with TestClient(app) as http:
+        body = http.post("/turns", json={"task": "go", "session_id": "chosen"}).text
+
+    result = dict(frames(body))["finished"]["result"]
+    assert result["session_id"] != "chosen"
+    assert service.session("chosen") is None
+
+
+def test_the_api_does_not_accept_a_turn_id(cfg):
+    """It would read as an idempotency key. The library's `turn_id` reuses the
+    directory and then runs the turn again in full, so a client retrying a
+    dropped request would double both the conversation and the bill."""
+    _, app = serving(cfg, AsyncStub("done"))
+
+    with TestClient(app) as http:
+        body = http.post("/turns", json={"task": "go", "turn_id": "mine"}).text
+
+    assert dict(frames(body))["finished"]["result"]["turn_id"] != "mine"
+
+
+# -- hanging up ------------------------------------------------------------
+
+
+def test_a_quiet_stream_sends_a_heartbeat(cfg):
+    """Two jobs, and the second is the one that matters. Proxies drop idle
+    connections -- that is the obvious one. But a hangup is only noticed when
+    the server next tries to send, so this is what bounds how long a departed
+    client keeps paying for model calls during a quiet tool call.
+
+    An SSE comment, so every client ignores it by spec and it never becomes a
+    kind consumers have to know about.
+    """
+    service, app = serving(
+        cfg, AsyncStub("done", tokens=tokens(2), pause=0.05), heartbeat_s=0.01
+    )
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    assert ": ping" in body
+    assert [name for name, _ in frames(body)][-1] == "finished"
+
+
+def test_a_heartbeat_does_not_restart_the_work_it_is_waiting_on(cfg):
+    """The pending `__anext__` is kept across pings rather than re-issued.
+    Restarting it would abandon a model call in flight every interval, which is
+    the opposite of what a keepalive is for -- and would show up as tokens
+    going missing."""
+    service, app = serving(
+        cfg, AsyncStub("done", tokens=tokens(5), pause=0.03), heartbeat_s=0.01
+    )
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    assert [name for name, _ in frames(body)].count("token") == 5
+
+
+async def hang_up_after(app, path, payload, chunks, when):
+    """Drive the ASGI app directly and disconnect mid-stream.
+
+    Not through a client, because httpx's `ASGITransport` buffers the whole
+    response before yielding a line -- measured at 2.3s to the first line of a
+    2s stream -- so no HTTP-level test can observe a turn while it is running.
+    Speaking ASGI is also the honest level: this is exactly the `http.disconnect`
+    a real server delivers.
+    """
+    import json
+
+    body = json.dumps(payload).encode()
+    scope = {
+        "type": "http",
+        "asgi": {"version": "3.0", "spec_version": "2.3"},
+        "http_version": "1.1",
+        "method": "POST",
+        "path": path,
+        "raw_path": path.encode(),
+        "query_string": b"",
+        "root_path": "",
+        "scheme": "http",
+        "client": ("127.0.0.1", 1234),
+        "server": ("server", 80),
+        "headers": [
+            (b"host", b"server"),
+            (b"content-type", b"application/json"),
+            (b"content-length", str(len(body)).encode()),
+        ],
+    }
+    gone = asyncio.Event()
+    state: dict[str, Any] = {"asked": False, "seen": 0, "observed": None}
+
+    async def receive():
+        if not state["asked"]:
+            state["asked"] = True
+            return {"type": "http.request", "body": body, "more_body": False}
+        await gone.wait()
+        return {"type": "http.disconnect"}
+
+    async def send(message):
+        if message["type"] == "http.response.body" and message.get("body"):
+            state["seen"] += 1
+            if state["seen"] == chunks:
+                state["observed"] = when()
+                gone.set()
+
+    await app(scope, receive, send)
+    return state
+
+
+def test_hanging_up_stops_the_turn_and_gives_the_claim_back(cfg):
+    """The decision the whole design rests on, and it needs no library change.
+
+    A client that walks away stops the work rather than leaving the session
+    locked until the staleness window expires. It is also why there is no cancel
+    endpoint: disconnect already is one.
+
+    Getting here found a real defect. The generator's `finally` called `aclose()`
+    while a `__anext__` was still in flight, which raises "asynchronous generator
+    is already running" -- so the claim was never given back. Cancelling the
+    pending task is the way in, and awaiting that cancellation is what makes the
+    stop have happened rather than be scheduled.
+    """
+    service, app = serving(cfg, AsyncStub("done", tokens=tokens(200), pause=0.01))
+    session_id = service.start_session()
+    claim = cfg.state_dir / "claims" / session_id
+
+    state = asyncio.run(
+        hang_up_after(
+            app, f"/sessions/{session_id}/turns", {"task": "go"}, 3, claim.exists
+        )
+    )
+
+    assert state["observed"], "the claim should be held while the turn is running"
+    assert state["seen"] < 200, "the turn should have stopped, not run to the end"
+    assert not claim.exists(), "hanging up should give the claim back"
+    assert service.run(Request("again", session_id=session_id)).turn_id
+
+
+def test_an_event_with_nothing_to_say_sends_an_empty_body(cfg):
+    """Defaults are omitted rather than sent as nulls. Tokens are the bulk of a
+    turn's bytes, and seven null fields each is a cost paid thousands of times
+    per turn for a uniformity nobody consumes.
+
+    Tested on the function rather than through a stream, because every kind a
+    real run emits happens to carry `text` -- so a stream cannot tell "omitted"
+    from "present and non-empty".
+    """
+    from kingfisher import RunEvent
+    from kingfisher.server.payloads import event_payload
+
+    assert event_payload(RunEvent(kind="run_start")) == {}
+    assert event_payload(RunEvent(kind="token", text="hi")) == {"text": "hi"}
+    assert event_payload(RunEvent(kind="token", text="hi", channel="answer")) == {"text": "hi"}
+
+
+def test_a_delegate_is_named_so_its_prose_can_be_told_apart(cfg):
+    """Without it a delegate's tokens and the caller's arrive on one channel and
+    the type cannot separate them -- both are chunks."""
+    from kingfisher import RunEvent
+    from kingfisher.server.payloads import event_payload
+
+    assert event_payload(RunEvent(kind="token", text="x", agent="reviewer")) == {
+        "text": "x",
+        "agent": "reviewer",
+    }

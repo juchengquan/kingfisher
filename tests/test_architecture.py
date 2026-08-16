@@ -557,3 +557,33 @@ def test_the_server_calls_the_async_turn_methods(path):
         f"server/{path.name} calls {offenders} — use arun/astream; the sync pair "
         "blocks every other turn on this loop, not just this one"
     )
+
+
+def test_the_event_kinds_are_what_the_package_emits():
+    """`KINDS` is the closest thing to a wire contract here, and as prose it had
+    drifted both ways -- naming `swept` and `sweep_failed`, which have not fired
+    since retention moved off the request path, and omitting `cut_short`, which
+    is how a caller learns its answer is incomplete.
+
+    The server publishes these as SSE event names, so a wrong entry is a kind no
+    client will ever see and a missing one is a kind nobody knows to handle.
+    """
+    from kingfisher.domain.result import KINDS
+
+    emitted = set()
+    for path in sorted(SRC.rglob("*.py")):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
+                continue
+            if node.func.id != "RunEvent":
+                continue
+            for word in node.keywords:
+                if word.arg == "kind" and isinstance(word.value, ast.Constant):
+                    emitted.add(word.value.value)
+
+    assert emitted == set(KINDS), (
+        "KINDS and the kinds actually constructed have diverged — it is published "
+        "as the SSE event names, so an extra entry is a kind no client sees and a "
+        "missing one is a kind nobody handles"
+    )
