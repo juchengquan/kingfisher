@@ -1,11 +1,23 @@
-# Examples
+# Presets
 
-Copyable definitions for the three things a request can activate. Nothing here
-is loaded by kingfisher — the package ships no domain content on purpose, so
-these live in the repo and you copy what you want into your workspace:
+One working definition of each thing a request can activate — a skill, a
+subagent, a tool — for you to copy and edit. Nothing here is loaded
+automatically: a preset does nothing until it is in a workspace.
 
-    cp -r examples/subagents/reviewer.md   "$KINGFISHER_WORKSPACE/subagents/"
-    cp -r examples/skills/code-review      "$KINGFISHER_WORKSPACE/skills/"
+    uv run main.py --seed-presets     # all of them, into $KINGFISHER_WORKSPACE
+
+They ship *inside* the package, so that works from an installed kingfisher and
+not only from a checkout. This is not the package growing domain content: a
+preset demonstrates a **format** and is rewritten on first contact with a real
+task, where domain content would presume what your project is about. Kingfisher
+ships no skills of its own for the same reason its base prompt carries no
+domain instructions — a general agent should read the same whatever the project
+is.
+
+To take one rather than all of them, copy it:
+
+    cp -r "$(python -c 'import kingfisher.presets as p; print(p.__path__[0])')/skills/code-review" \
+          "$KINGFISHER_WORKSPACE/skills/"
 
 A request then names them:
 

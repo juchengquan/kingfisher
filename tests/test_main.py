@@ -172,7 +172,7 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
     )
     monkeypatch.setattr(driver, "from_env", lambda: relocated)
 
-    assert driver.main(["main.py", "--seed-examples", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
 
     assert skill_store.names(relocated.skills_dir)  # the catalogue was filled
     assert not skill_store.names(relocated.workspace / "skills")  # and not the workspace
@@ -193,5 +193,29 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, mo
 
     # `--list` so it returns after seeding; without it the driver falls
     # through to running the task, which wants a model.
-    assert driver.main(["main.py", "--seed-examples", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
     assert skill_store.names(cfg.skills_dir)
+
+
+def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
+    """The third catalogue, and the third chance to seed where nothing reads.
+
+    `KINGFISHER_TOOLS_DIR` relocates it the way the other two relocate, so a
+    preset tool written to `workspace/tools` would be invisible to the agent
+    for exactly the reason #40 fixed for skills.
+    """
+    from dataclasses import replace
+
+    import main as driver
+    from kingfisher.adapters.tool_store import names
+
+    catalogue = tmp_path / "catalogue"
+    relocated = replace(cfg, tools_root=catalogue / "tools")
+    monkeypatch.setattr(driver, "from_env", lambda: relocated)
+
+    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+
+    assert "http_fetch" in names(relocated.tools_dir)
+    # `ensure_layout` still makes the workspace directory, so the place to put
+    # one is obvious. What must not happen is a preset landing in it.
+    assert names(relocated.workspace / "tools") == ()

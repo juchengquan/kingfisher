@@ -11,7 +11,7 @@ was reachable from here.
     uv run main.py "Summarise /data/x.csv"      # anything else
 
     uv run main.py --list                       # what this workspace offers
-    uv run main.py --seed-examples              # copy examples/ into it
+    uv run main.py --seed-presets               # copy the shipped ones in
 
     uv run main.py "Review it" --skills code-review --subagents reviewer
     uv run main.py "Count the rows" --tools read_file,write_file
@@ -53,7 +53,6 @@ the same gateway do not behave identically.
 from __future__ import annotations
 
 import argparse
-import shutil
 import sys
 import tempfile
 from pathlib import Path
@@ -77,7 +76,7 @@ from evals.task import SMOKE_TASK
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
-from kingfisher.adapters import skill_store
+from kingfisher.adapters import presets, skill_store
 from kingfisher.adapters.runlog import read_usage
 from kingfisher.adapters.subagent_store import load_all
 from kingfisher.adapters.workspace_fs import (
@@ -87,10 +86,7 @@ from kingfisher.adapters.workspace_fs import (
 )
 from kingfisher.config import Config
 from kingfisher.domain.session import Session
-from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIR
 from kingfisher.domain.subagent import SubagentError
-
-EXAMPLES = Path(__file__).resolve().parent / "examples"
 
 
 def _selection(value: str | None) -> tuple[str, ...] | None:
@@ -116,46 +112,6 @@ def _usage_summary(log_path: Path) -> str:
         f"{usage.calls} model calls · in={usage.input_tokens} "
         f"out={usage.output_tokens} · cached={share}"
     )
-
-
-def seed_examples(cfg: Config) -> list[str]:
-    """Copy the repo's example skills, subagents and tools into the catalogues.
-
-    Into `cfg.skills_dir` and `cfg.subagents_dir`, not the workspace. They are
-    the same directory until a deployment moves them, and it was writing to the
-    workspace unconditionally -- so with a relocated catalogue this seeded four
-    skills into a directory nothing reads, and the `--list` on the next line
-    reported `(none)`.
-
-    Copied rather than read in place: the point of the examples directory is
-    that you edit your copy. That is also what this flag is *for* -- an API
-    deployment provisions a reviewed catalogue rather than copying examples
-    into one, so this is how you populate a catalogue to try things against.
-    """
-    copied = []
-    for kind, destination in (
-        ("skills", cfg.skills_dir),
-        (SUBAGENT_DIR, cfg.subagents_dir),
-        ("tools", cfg.tools_dir),
-    ):
-        source = EXAMPLES / kind
-        if not source.is_dir():
-            continue
-        for item in sorted(source.iterdir()):
-            # `tools/` holds Python, so importing the examples once -- a test
-            # run is enough -- leaves bytecode beside them. Seeding that would
-            # put a `__pycache__` in the catalogue and, worse, teach that it
-            # belongs there.
-            if item.name == "__pycache__" or item.name.startswith("."):
-                continue
-            target = destination / item.name
-            if item.is_dir():
-                shutil.copytree(item, target, dirs_exist_ok=True)
-            else:
-                target.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copy(item, target)
-            copied.append(f"{kind}/{item.name}")
-    return copied
 
 
 def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
@@ -220,7 +176,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     for spec in specs.values() or ():
         print(f"  {spec.name} — {spec.description}")
     if not specs:
-        print("  (none)  — try --seed-examples")
+        print("  (none)  — try --seed-presets")
     return 0
 
 
@@ -293,7 +249,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--list", action="store_true", help="show what the workspace offers")
     parser.add_argument(
-        "--seed-examples", action="store_true", help="copy examples/ into the workspace"
+        "--seed-presets",
+        action="store_true",
+        help="copy the definitions kingfisher ships into the workspace",
     )
     return parser
 
@@ -314,8 +272,8 @@ def main(argv: list[str]) -> int:
     if fresh:
         print(f"created a new workspace at {workspace}")
 
-    if args.seed_examples:
-        for name in seed_examples(cfg):
+    if args.seed_presets:
+        for name in presets.seed(cfg):
             print(f"seeded {name}")
 
     if args.list:
