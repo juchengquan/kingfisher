@@ -1,9 +1,13 @@
 """Putting the smoke's fixtures into a workspace.
 
-The sample skill is copied from `examples/skills/tabular-qa/`, not held here as
-a string. It used to be both -- a constant in `smoke.py` *and* files under
-`examples/` -- which meant two homes for sample content and no way to tell
-which one a run had actually used.
+The sample skill is copied from the shipped preset `tabular-qa`, not held here
+as a string. It used to be both -- a constant in `smoke.py` *and* files under
+the presets directory -- which meant two homes for sample content and no way to
+tell which one a run had actually used.
+
+Reached through `presets.opened()` rather than a path relative to this file:
+the definitions ship inside the package now, so an installed kingfisher finds
+them and a checkout finds the same ones.
 """
 
 from __future__ import annotations
@@ -12,25 +16,26 @@ import shutil
 from pathlib import Path
 
 from evals.dataset import seed_sample_data
+from kingfisher.adapters import presets
 from kingfisher.domain.skill import FILENAME
 
 SKILL_NAME = "tabular-qa"
-EXAMPLES = Path(__file__).resolve().parent.parent / "examples"
 
 
 def seed_sample_skill(workspace: Path) -> bool:
     """Copy the sample skill into the workspace. True if anything changed."""
-    source = EXAMPLES / "skills" / SKILL_NAME
     target = Path(workspace) / "skills" / SKILL_NAME
-    if not source.is_dir():  # pragma: no cover -- the repo ships it
-        msg = f"missing example skill: {source}"
-        raise FileNotFoundError(msg)
+    with presets.opened() as root:
+        source = root / "skills" / SKILL_NAME
+        if not source.is_dir():  # pragma: no cover -- the package ships it
+            msg = f"missing preset skill: {source}"
+            raise FileNotFoundError(msg)
 
-    installed = target / FILENAME
-    existing = installed.read_text(encoding="utf-8") if installed.is_file() else None
-    if existing == (source / FILENAME).read_text(encoding="utf-8"):
-        return False
-    shutil.copytree(source, target, dirs_exist_ok=True)
+        installed = target / FILENAME
+        existing = installed.read_text(encoding="utf-8") if installed.is_file() else None
+        if existing == (source / FILENAME).read_text(encoding="utf-8"):
+            return False
+        shutil.copytree(source, target, dirs_exist_ok=True)
     return True
 
 
