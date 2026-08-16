@@ -260,3 +260,21 @@ def test_only_one_module_decides_what_a_skill_is():
         f"{offenders} decide what a skill is; use domain.skill.FILENAME and "
         "skill_store.names so the inventory and the validator cannot disagree"
     )
+
+
+def test_the_package_ships_its_presets():
+    """`--seed-presets` has to work for an installed kingfisher.
+
+    That means the definitions live *inside* the wheel rather than beside it in
+    the repo: `packages = ["src/kingfisher"]`, so anything one level up is not
+    shipped and a pip-installed kingfisher would have nothing to copy. Moving
+    them back out would break seeding for every user who is not in a checkout,
+    and nothing else would notice.
+    """
+    from kingfisher.adapters import presets
+
+    assert (SRC / "presets" / "skills").is_dir()
+    # And reachable the way an installed one reaches them, not by path.
+    with presets.opened() as root:
+        for kind in presets.KINDS:
+            assert (root / kind).is_dir(), kind
