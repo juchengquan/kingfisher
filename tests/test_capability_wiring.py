@@ -77,7 +77,7 @@ def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, sessi
 
     agent = build_agent(cfg, session_dir=session_dir,
         model=model,
-        capabilities=Capabilities(tools=("read_file", "write_file")),
+        capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
     )
     agent.invoke({"messages": [{"role": "user", "content": "go"}]})
 
@@ -215,7 +215,7 @@ def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
 
     with pytest.raises(ValueError, match="pre-built agent"):
         run(
-            Request(task="go", capabilities=Capabilities(tools=("read_file",))),
+            Request(task="go", capabilities=Capabilities(builtin_tools=("read_file",))),
             cfg=cfg,
             agent=prebuilt,
         )
@@ -239,7 +239,7 @@ def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, s
 
     agent = build_agent(cfg, session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
-        capabilities=Capabilities(tools=("read_file", "write_file")),
+        capabilities=Capabilities(builtin_tools=("read_file", "write_file")),
     )
     out = agent.invoke(
         {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
@@ -258,7 +258,7 @@ def test_a_typo_in_a_tool_name_is_caught(cfg, session_dir):
     with pytest.raises(CapabilityError, match="unknown tool"):
         build_agent(cfg, session_dir=session_dir,
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            capabilities=Capabilities(tools=("read_file", "read_fil")),
+            capabilities=Capabilities(builtin_tools=("read_file",), tools=("read_fil",)),
         )
 
 

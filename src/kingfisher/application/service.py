@@ -75,6 +75,7 @@ from kingfisher.infrastructure.agent import (
     build_agent,
     defined_subagents,
     registered_tools,
+    workspace_tool_names,
 )
 from kingfisher.infrastructure.checkpointing import build_checkpointer
 from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
@@ -156,8 +157,15 @@ def _withheld_by_kind(
     assembled the agent -- which is why a grant goes stale in the first place.
     """
     default = Capabilities()
+    workspace = tuple(workspace_tool_names(cfg))
     offered = (
-        ("tool", "tools", registered_tools(graph)),
+        # Built-ins and workspace tools are granted apart, so they are reported
+        # apart: "3 tool(s) not granted" meant nothing when it could have been
+        # either kind.
+        ("builtin tool", "builtin_tools", tuple(
+            n for n in registered_tools(graph) if n not in set(workspace)
+        )),
+        ("tool", "tools", workspace),
         ("skill", "skills", available_skills(cfg, session_dir)),
         ("subagent", "subagents", tuple(defined_subagents(cfg, session_dir))),
     )

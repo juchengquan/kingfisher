@@ -91,6 +91,14 @@ class Capabilities:
     memory a deployment never wired does not conjure it.
     """
 
+    #: The tools deepagents brings -- read_file, execute, task and the rest.
+    #: Separate from `tools` because the two sets change for different reasons:
+    #: this one moves when the dependency is upgraded, which is deliberate and
+    #: visible, while a workspace gains a tool whenever someone adds a file.
+    #: Granting one used to cost the other, so naming a workspace tool took
+    #: `read_file` away with it.
+    builtin_tools: Selection = ALL
+    #: The tools this workspace defines, loaded from `tools/`.
     tools: Selection = ALL
     skills: Selection = ALL
     #: `None`, alone among these, and it is not an inconsistency in the model --
@@ -110,7 +118,14 @@ class Capabilities:
     memory: bool | None = None
 
     def __post_init__(self) -> None:
-        for field_name in ("tools", "skills", "subagents", "middleware", "providers"):
+        for field_name in (
+            "builtin_tools",
+            "tools",
+            "skills",
+            "subagents",
+            "middleware",
+            "providers",
+        ):
             object.__setattr__(self, field_name, _normalise(getattr(self, field_name)))
 
     @property
@@ -155,6 +170,7 @@ class Capabilities:
         and an upload is not a way to reopen a door the caller shut.
         """
         return Capabilities(
+            builtin_tools=self.builtin_tools,
             tools=self.tools,
             skills=_widened(self.skills, skills),
             subagents=_widened(self.subagents, subagents),
@@ -177,6 +193,7 @@ class Capabilities:
         for more.
         """
         return Capabilities(
+            builtin_tools=narrowed(other.builtin_tools, by=self.builtin_tools),
             tools=narrowed(other.tools, by=self.tools),
             skills=narrowed(other.skills, by=self.skills),
             subagents=narrowed(other.subagents, by=self.subagents),
@@ -196,6 +213,7 @@ class Capabilities:
         """
         missing: list[str] = []
         for requested, available, label in (
+            (self.builtin_tools, tools, "tool"),
             (self.tools, tools, "tool"),
             (self.skills, skills, "skill"),
             (self.subagents, subagents, "subagent"),

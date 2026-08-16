@@ -31,16 +31,16 @@ def test_the_two_ends_are_all_and_none():
 
 
 def test_names_are_de_duplicated_but_keep_their_order():
-    caps = Capabilities(tools=("read_file", "glob", "read_file"))
-    assert caps.tools == ("read_file", "glob")
+    caps = Capabilities(builtin_tools=("read_file", "glob", "read_file"))
+    assert caps.builtin_tools == ("read_file", "glob")
 
 
 def test_intersect_never_widens():
     """A caller cannot escalate by asking for more than it was granted."""
-    granted = Capabilities(tools=("read_file", "glob"))
-    asked = Capabilities(tools=("read_file", "execute"))
+    granted = Capabilities(builtin_tools=("read_file", "glob"))
+    asked = Capabilities(builtin_tools=("read_file", "execute"))
 
-    narrowed = granted.intersect(asked).tools
+    narrowed = granted.intersect(asked).builtin_tools
     assert narrowed == ("read_file",)
     # execute was requested and is simply absent, rather than an error
     assert narrowed is not None and "execute" not in narrowed
@@ -48,31 +48,34 @@ def test_intersect_never_widens():
 
 def test_unrestricted_on_either_side_defers_to_the_other():
     """`ALL` is the identity of narrowing, so the other side wins."""
-    granted = Capabilities(tools=("read_file",))
+    granted = Capabilities(builtin_tools=("read_file",))
 
-    assert UNRESTRICTED.intersect(granted).tools == ("read_file",)
-    assert granted.intersect(UNRESTRICTED).tools == ("read_file",)
-    assert UNRESTRICTED.intersect(UNRESTRICTED).tools == ALL
+    assert UNRESTRICTED.intersect(granted).builtin_tools == ("read_file",)
+    assert granted.intersect(UNRESTRICTED).builtin_tools == ("read_file",)
+    assert UNRESTRICTED.intersect(UNRESTRICTED).builtin_tools == ALL
 
 
 def test_intersect_of_an_empty_grant_yields_nothing():
     """A caller granted no tools gets none, whatever it asks for."""
-    assert Capabilities(tools=()).intersect(Capabilities(tools=("execute",))).tools == ()
+    narrowed_to_none = Capabilities(builtin_tools=()).intersect(
+        Capabilities(builtin_tools=("execute",))
+    )
+    assert narrowed_to_none.builtin_tools == ()
 
 
 def test_intersect_handles_each_dimension_independently():
-    granted = Capabilities(tools=("read_file",), skills=("tabular-qa",), subagents=ALL)
-    asked = Capabilities(tools=("read_file", "execute"), subagents=("reviewer",))
+    granted = Capabilities(builtin_tools=("read_file",), skills=("tabular-qa",), subagents=ALL)
+    asked = Capabilities(builtin_tools=("read_file", "execute"), subagents=("reviewer",))
 
     narrowed = granted.intersect(asked)
-    assert narrowed.tools == ("read_file",)
+    assert narrowed.builtin_tools == ("read_file",)
     assert narrowed.skills == ("tabular-qa",)  # the request named nothing, so ALL
     assert narrowed.subagents == ("reviewer",)  # the grant named nothing, so ALL
 
 
 def test_unknown_reports_what_the_workspace_cannot_offer():
     """So a request fails loudly rather than running with quietly less."""
-    caps = Capabilities(tools=("read_file", "teleport"), skills=("nope",))
+    caps = Capabilities(builtin_tools=("read_file",), tools=("teleport",), skills=("nope",))
 
     missing = caps.unknown(tools=["read_file"], skills=["tabular-qa"], subagents=[])
     assert set(missing) == {"tool:teleport", "skill:nope"}
@@ -279,6 +282,6 @@ def test_the_result_is_an_ordinary_grant_that_narrowing_still_clamps():
     """What it produces is a whitelist like any other, so a deployment's grant
     still caps it -- subtraction is a way to write one, not a way past one."""
     asked = Capabilities(tools=all_but(("execute",), offered=("execute", "ls", "read_file")))
-    granted = Capabilities(tools=("ls",))
+    granted = Capabilities(builtin_tools=("ls",))
 
-    assert granted.intersect(asked).tools == ("ls",)
+    assert granted.intersect(asked).builtin_tools == ("ls",)

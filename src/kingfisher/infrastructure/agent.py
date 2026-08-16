@@ -30,7 +30,7 @@ from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import (
@@ -55,7 +55,7 @@ from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.tool_store import load_tools, tool_name
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Callable, Mapping, Sequence
 
     from langgraph.graph.state import CompiledStateGraph
 
@@ -144,7 +144,7 @@ DATA_IS_READ_ONLY = FilesystemPermission(
 )
 
 
-def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
+def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     """The JavaScript sandbox, if this deployment wired one.
 
     `ptc` is the request's own tool grant, unchanged. A caller that withheld
@@ -175,12 +175,11 @@ def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
     # restructuring anything else around.
     from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
 
-    granted = capabilities.tools
-    # `None` here is the library's "no allowlist", which is our `ALL`. A request
-    # that granted no tools gets an empty list, which is the opposite and has to
-    # stay distinguishable from it.
+    # `None` here is the library's "no allowlist", which is what an
+    # unrestricted request resolves to. A request that granted no tools gets an
+    # empty list, which is the opposite and has to stay distinguishable.
     ptc: list[Any] | None = (
-        None if granted == ALL else [t for t in (granted or ()) if t != TASK_TOOL]
+        None if permitted is None else [t for t in permitted if t != TASK_TOOL]
     )
     return CodeInterpreterMiddleware(
         # `task` is refused here by the library: it is always the top-level
@@ -192,7 +191,7 @@ def _interpreter(cfg: Config, capabilities: Capabilities) -> Any:
         # call. Left at its default this would let a request that withheld
         # `task` delegate anyway, from inside the sandbox -- a hole of exactly
         # the shape the delegate ceiling exists to close.
-        subagents=granted == ALL or TASK_TOOL in (granted or ()),
+        subagents=permitted is None or TASK_TOOL in permitted,
         mode="thread",
         timeout=float(cfg.timeout_s),
     )
@@ -232,6 +231,87 @@ def _backend_for(cfg: Config, session_dir: Path | None, backend: Any | None) -> 
     raise ValueError(msg)
 
 
+
+
+
+def workspace_tool_names(cfg: Config) -> tuple[str, ...]:
+    """The tools this workspace defines, by name, without assembling anything.
+
+    Knowable off disk, unlike the built-in set. That asymmetry is why the two
+    axes resolve differently and why only one of them needs a probe.
+    """
+    return tuple(sorted(n for tool in load_tools(cfg.tools_dir) if (n := tool_name(tool))))
+
+def _workspace_tool_names(
+    workspace_tools: Sequence[Any], *, builtin: tuple[str, ...], cfg: Config
+) -> tuple[str, ...]:
+    """What the workspace defines, refusing anything that shadows a built-in.
+
+    `tools_by_name` is a dict, so a workspace tool called `read_file` would take
+    the name in silence and the real one would simply stop existing -- the same
+    "quietly different from what you asked for" failure the capability checks
+    refuse elsewhere. It matters more now that the two are granted separately: a
+    shadowed name would be permitted by one axis and enforced as the other.
+    """
+    names = tuple(sorted(n for tool in workspace_tools if (n := tool_name(tool))))
+    shadowed = tuple(n for n in names if n in set(builtin))
+    if shadowed:
+        msg = (
+            f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
+            f"the same name; rename them in {cfg.tools_dir}"
+        )
+        raise CapabilityError(msg)
+    return names
+
+
+def _refuse_unknown_tools(
+    capabilities: Capabilities, *, builtin: tuple[str, ...], workspace: tuple[str, ...]
+) -> None:
+    """A name on the wrong axis, or on neither.
+
+    Naming a built-in in `tools` is the mistake the split creates, so it is
+    worth its own sentence: the name exists, and saying "unknown tool" about a
+    tool that plainly exists would send someone looking in the wrong place.
+    """
+    for asked, own, other, here, there in (
+        (capabilities.tools, workspace, builtin, "tools", "builtin_tools"),
+        (capabilities.builtin_tools, builtin, workspace, "builtin_tools", "tools"),
+    ):
+        if asked in (ALL, None):
+            continue
+        if misplaced := tuple(n for n in asked if n in set(other)):
+            msg = (
+                f"{', '.join(misplaced)} is not a {here[:-1]} of this workspace; "
+                f"it is a {there[:-1].replace('_', ' ')} -- name it in {there}"
+            )
+            raise CapabilityError(msg)
+        if unknown := tuple(n for n in asked if n not in set(own)):
+            msg = f"unknown {here[:-1]}(s): {', '.join(unknown)}; this agent offers {own}"
+            raise CapabilityError(msg)
+
+def _permitted_tools(
+    capabilities: Capabilities,
+    *,
+    builtin: tuple[str, ...],
+    workspace: tuple[str, ...],
+) -> tuple[str, ...] | None:
+    """Every tool name this request may call, or `None` for no restriction.
+
+    Two axes, one allowlist. The middleware filters a single flat tool list by
+    name, so the two grants meet here as a union -- but they are resolved apart,
+    against their own offered set, which is the whole point of splitting them.
+    `tools=("http_fetch",)` no longer costs a caller `read_file`.
+
+    `None` back means the request narrowed neither, so no allowlist is added at
+    all -- which is not the same as an empty one, and the difference is what
+    `ToolAllowlist` would enforce.
+    """
+    if capabilities.builtin_tools == ALL and capabilities.tools == ALL:
+        return None
+    granted_builtin = narrowed(capabilities.builtin_tools, by=builtin) or ()
+    granted_workspace = narrowed(capabilities.tools, by=workspace) or ()
+    return (*granted_builtin, *granted_workspace)
+
 def _with_workspace_tools(
     cfg: Config, assemble: Callable[[tuple[Any, ...]], CompiledStateGraph]
 ) -> CompiledStateGraph:
@@ -260,6 +340,31 @@ def _with_workspace_tools(
         raise CapabilityError(msg)
     return assemble(workspace_tools)
 
+
+
+def _resolve_tools(
+    cfg: Config,
+    capabilities: Capabilities,
+    workspace_tools: Sequence[Any],
+    assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
+) -> tuple[str, ...] | None:
+    """Every tool name this request may call, or `None` for no restriction.
+
+    Costs a throwaway assembly, and only when it has to. Both offered sets must
+    be known to resolve `ALL` on either axis, and only one can be read off disk:
+    the built-in set is a property of an assembled graph. A request that narrows
+    neither axis, in a workspace that defines no tools, skips it entirely.
+
+    The same probe the shadow check has always needed, doing three jobs now
+    rather than one.
+    """
+    if not workspace_tools and capabilities.builtin_tools == ALL and capabilities.tools == ALL:
+        return None
+
+    builtin = registered_tools(assemble(()))
+    workspace = _workspace_tool_names(workspace_tools, builtin=builtin, cfg=cfg)
+    _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace)
+    return _permitted_tools(capabilities, builtin=builtin, workspace=workspace)
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # injectable collaborator, and folding them into a parameter object would
@@ -326,6 +431,35 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             )
             permissions.extend(_skill_denials(capabilities.skills, available))
 
+    interpreter_at: int | None = None
+    if cfg.interpreter_enabled:
+        # Unrestricted for now: the probe below has to see `eval` to count it
+        # among the built-ins, and the grant is not resolved until after it.
+        interpreter_at = len(middleware)
+        middleware.append(_interpreter(cfg, None))
+
+    def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
+        return create_deep_agent(
+            model=model if model is not None else build_model(cfg),
+            backend=resolved_backend,
+            system_prompt=system_prompt(cfg),
+            middleware=middleware,
+            permissions=permissions,
+            checkpointer=checkpointer,
+            tools=list(extra_tools) or None,
+            **extras,
+        )
+
+    workspace_tools = load_tools(cfg.tools_dir)
+    permitted = _resolve_tools(cfg, capabilities, workspace_tools, assemble)
+
+    if interpreter_at is not None and permitted is not None:
+        # Re-wired now that the union is known. It had to be in place for the
+        # probe -- `eval` is a tool, so a request naming it needs it in the
+        # enumerated set -- but unrestricted, since the grant was not resolved
+        # yet. A caller that withheld the shell must not reach it from code.
+        middleware[interpreter_at] = _interpreter(cfg, permitted)
+
     if capabilities.subagents is not None:
         defined = defined_subagents(cfg, session_dir)
         # `ALL` is every subagent the workspace defines, resolved here because
@@ -343,7 +477,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 cfg,
                 backend=resolved_backend,
                 providers=capabilities.providers,
-                tools=capabilities.tools,
+                tools=permitted if permitted is not None else ALL,
                 skills=subagent_skills(defined[n], offered, capabilities.skills),
                 extra_middleware=subagent_middleware(
                     defined[n], registry, capabilities.middleware
@@ -352,12 +486,8 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             for n in activated
         ]
 
-    if cfg.interpreter_enabled:
-        middleware.append(_interpreter(cfg, capabilities))
-
-    if capabilities.tools != ALL:
-        granted_tools = capabilities.tools or ()
-        middleware.append(ToolAllowlist(granted_tools))
+    if permitted is not None:
+        middleware.append(ToolAllowlist(permitted))
         # deepagents supplies a `general-purpose` delegate with "the same
         # capabilities as the main agent" and none of our middleware, present
         # whenever `task` is. Supplying one by the same name *replaces* it --
@@ -368,7 +498,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         # there is no reason to reinvent either.
         supplied = list(extras.get("subagents", ()))
         supplied.append(
-            {**GENERAL_PURPOSE_SUBAGENT, "middleware": [ToolAllowlist(granted_tools)]}
+            {**GENERAL_PURPOSE_SUBAGENT, "middleware": [ToolAllowlist(permitted)]}
         )
         extras["subagents"] = supplied
         # Backstop. Only these names are reachable, so a delegate deepagents
@@ -376,30 +506,4 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         reachable = tuple(spec["name"] for spec in supplied)
         middleware.append(DeclaredDelegatesOnly(reachable))
 
-    def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
-        return create_deep_agent(
-            model=model if model is not None else build_model(cfg),
-            backend=resolved_backend,
-            system_prompt=system_prompt(cfg),
-            middleware=middleware,
-            permissions=permissions,
-            checkpointer=checkpointer,
-            tools=list(extra_tools) or None,
-            **extras,
-        )
-
-    graph = _with_workspace_tools(cfg, assemble)
-
-    # Tool names are checked here rather than before construction, because the
-    # registered set is a property of the assembled graph. A typo would
-    # otherwise narrow the allowlist in silence -- the same "quietly less than
-    # you asked for" failure that skills and subagents already refuse.
-    if (
-        capabilities.tools not in (ALL, None)
-        and (known := registered_tools(graph))
-        and (unknown := tuple(t for t in capabilities.tools if t not in known))
-    ):
-        msg = f"unknown tool(s): {', '.join(unknown)}; this agent offers {known}"
-        raise CapabilityError(msg)
-
-    return graph
+    return assemble(tuple(workspace_tools))

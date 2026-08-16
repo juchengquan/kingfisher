@@ -91,7 +91,7 @@ def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
         _with_helper(cfg),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
-        capabilities=Capabilities(tools=("read_file", "task"), subagents=("helper",)),
+        capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     )
 
     delegate = _subagent_graphs(graph).get("helper")
@@ -129,7 +129,7 @@ def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
         _with_helper(cfg),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
-        capabilities=Capabilities(tools=("read_file", "task"), subagents=("helper",)),
+        capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     )
 
     delegate = _subagent_graphs(graph).get("general-purpose")
@@ -152,7 +152,7 @@ def test_the_builtin_survives_when_no_delegates_are_named(cfg, session_dir):
         _with_helper(cfg),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        capabilities=Capabilities(tools=("read_file", "task")),
+        capabilities=Capabilities(builtin_tools=("read_file", "task")),
     )
 
     delegate = _subagent_graphs(graph).get("general-purpose")
@@ -188,7 +188,7 @@ def test_an_unnamed_delegate_is_still_refused(cfg, session_dir):
         _with_helper(cfg),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
-        capabilities=Capabilities(tools=("read_file", "task"), subagents=("helper",)),
+        capabilities=Capabilities(builtin_tools=("read_file", "task"), subagents=("helper",)),
     )
 
     out = graph.invoke(
