@@ -24,7 +24,18 @@ dependencies = [
     # upstream renames it, uv warns and moves on while our import breaks. The
     # floor is deepagents' (`>=0.3.3` at 0.7.6) rather than the one the docs page
     # advertises, which is two minors behind what the library actually needs.
-    "langchain-quickjs>=0.3.3",
+    # Verified rather than copied: the interpreter tests pass against 0.3.3 in a
+    # venv pinned to it.
+    #
+    # Ceilinged because it is beta and says so at every construction. Under 0.x
+    # the minor is where breaks land, and this one has moved through 0.1, 0.2 and
+    # 0.3 in under two months -- deepagents raising its own floor to 0.3.3 is that
+    # churn showing. `<0.4` takes the patches and stops at the next minor.
+    #
+    # If deepagents later needs `>=0.4`, uv fails to resolve rather than
+    # installing something untested. That is the intended outcome: a build that
+    # stops is a decision to make, where a silent upgrade is one already made.
+    "langchain-quickjs>=0.3.3,<0.4",
     # Imported directly by adapters/models.py. It also arrives transitively
     # through deepagents, but a transitive dep is not a promise.
     "langchain-anthropic>=1.5.4",
