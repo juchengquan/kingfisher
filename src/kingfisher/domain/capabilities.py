@@ -136,11 +136,11 @@ class Capabilities:
         remove, a caller cannot escalate by asking for more.
         """
         return Capabilities(
-            tools=_narrow(self.tools, other.tools),
-            skills=_narrow(self.skills, other.skills),
-            subagents=_narrow(self.subagents, other.subagents),
-            middleware=_narrow(self.middleware, other.middleware),
-            providers=_narrow(self.providers, other.providers),
+            tools=narrowed(other.tools, by=self.tools),
+            skills=narrowed(other.skills, by=self.skills),
+            subagents=narrowed(other.subagents, by=self.subagents),
+            middleware=narrowed(other.middleware, by=self.middleware),
+            providers=narrowed(other.providers, by=self.providers),
             memory=_narrow_switch(self.memory, other.memory),
         )
 
@@ -180,13 +180,27 @@ def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
     return None
 
 
-def _narrow(left: Selection, right: Selection) -> Selection:
-    if left is None:
-        return right
-    if right is None:
-        return left
-    allowed = set(left)
-    return tuple(name for name in right if name in allowed)
+def narrowed(selection: Selection, *, by: Selection) -> Selection:
+    """`selection`, keeping only what `by` also allows. Never widens.
+
+    `None` on either side means "no opinion", so the other side wins; where both
+    name things only the overlap survives, in `selection`'s order.
+
+    Public, and `by` is keyword-only, because this rule is applied at two levels
+    and used to be written twice to do it. `Capabilities.intersect` clamps a
+    request against what the deployment granted; `delegation.as_subagent` clamps
+    a definition's declared tools against what its caller was granted. The
+    second was a private copy in `infrastructure`, identical to this across
+    every input pair, with the arguments in the other order and nothing
+    comparing them -- one convention away from a delegate quietly getting more
+    than the request that summoned it.
+    """
+    if selection is None:
+        return by
+    if by is None:
+        return selection
+    allowed = set(by)
+    return tuple(name for name in selection if name in allowed)
 
 
 #: No restriction at all — the default a bare `run("do a thing")` gets.

@@ -17,6 +17,7 @@ from __future__ import annotations
 from dataclasses import replace
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.domain.capabilities import narrowed
 from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.scoping import CapabilityError, ScopedSkills, ToolAllowlist
@@ -56,23 +57,6 @@ def subagent_skills(
     if activated is None:
         return spec.skills
     return tuple(name for name in spec.skills if name in activated)
-
-
-def _narrow_tools(
-    declared: tuple[str, ...] | None, granted: tuple[str, ...] | None
-) -> tuple[str, ...] | None:
-    """What a delegate may use: its own declaration, capped by its caller's.
-
-    `None` on either side means "no opinion", so the other wins -- the same
-    rule `Capabilities.intersect` uses one level up, and for the same reason:
-    narrowing must only ever subtract.
-    """
-    if declared is None:
-        return granted
-    if granted is None:
-        return declared
-    allowed = set(granted)
-    return tuple(name for name in declared if name in allowed)
 
 
 def subagent_middleware(
@@ -183,12 +167,13 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         "system_prompt": spec.system_prompt,
     }
     middleware: list[Any] = []
-    # The definition's own restriction, narrowed by the request's. A delegate
-    # may never be offered more than whoever reached it: the parent's
-    # `ToolAllowlist` sits on the parent's middleware, and a subagent inherits
-    # none of it, so a request that withheld `execute` handed it straight to
-    # any delegate. The ceiling has to be applied here to exist at all.
-    ceiling = _narrow_tools(spec.tools, tools)
+    # The definition's own restriction, narrowed by the request's -- by the
+    # domain's rule, not a copy of it. A delegate may never be offered more than
+    # whoever reached it: the parent's `ToolAllowlist` sits on the parent's
+    # middleware, and a subagent inherits none of it, so a request that withheld
+    # `execute` handed it straight to any delegate. The ceiling has to be
+    # applied here to exist at all; deciding what it *is* does not belong here.
+    ceiling = narrowed(spec.tools, by=tools)
     if ceiling is not None:
         middleware.append(ToolAllowlist(ceiling))
     # A subagent inherits none of its parent's middleware, so an index it is
