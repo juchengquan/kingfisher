@@ -266,6 +266,23 @@ def _checked(sources: tuple[Path, ...]) -> dict[str, Path]:
     return seen
 
 
+def check_placeable(sources: tuple[Path, ...]) -> None:
+    """Raise if these files could not be placed, without placing them.
+
+    The copying half of `place_inputs` has to happen after a turn directory
+    exists, because that is where the files go. The *refusing* half must happen
+    before, or a typo leaves a turn behind -- which it did: `--data` named a
+    missing file and left nothing, `--input` named one and left `t001`, against
+    a docstring promising neither would.
+
+    So the check is callable on its own and the service runs it while it is
+    still allowed to reject. `place_inputs` repeats it rather than trusting a
+    caller to have asked, which costs three `is_file` calls and keeps the
+    function safe to call directly.
+    """
+    _checked(sources)
+
+
 def place_inputs(sources: tuple[Path, ...], input_dir: Path) -> tuple[str, ...]:
     """Copy a turn's supplied files into its `input/`, and name what landed.
 
