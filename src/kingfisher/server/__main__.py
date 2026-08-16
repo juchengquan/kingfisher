@@ -34,12 +34,24 @@ def serve(settings: ServerConfig) -> None:
         create_app(),
         host=settings.host,
         port=settings.port,
+        # Off, because `access` already logs every request -- and because
+        # uvicorn's writes the *concrete* path. Measured against a live server:
+        # `GET /sessions/5df2db83…` on the line above our own
+        # `GET /sessions/{session_id}`, which is the credential this deployment
+        # took care not to write, written anyway by the thing that serves it.
+        access_log=False,
     )
 
 
 def main() -> int:
     """The console entry point. Returns an exit code rather than calling `exit`."""
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(name)s %(message)s")
+    # WARNING at the root, INFO for the two that have something to say. Setting
+    # the root to INFO turns on every library at once -- httpx then logs a line
+    # per outbound model call, which is noise in a server and the sort of
+    # default that later logs something nobody meant to keep.
+    logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(message)s")
+    logging.getLogger("kingfisher.server").setLevel(logging.INFO)
+    logging.getLogger("uvicorn.error").setLevel(logging.INFO)
     settings = ServerConfig.from_env()
     try:
         serve(settings)
