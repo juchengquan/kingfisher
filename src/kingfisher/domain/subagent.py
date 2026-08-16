@@ -164,27 +164,37 @@ class SubagentSpec:
     model: str | None = None
 
 
+def _explain(key: str) -> str:
+    """Why this one field is not accepted, in the terms that fit it."""
+    if (reason := REFUSED.get(key)) is not None:
+        return f"{key!r} is not a field of this format -- {reason}"
+    near = get_close_matches(key, KNOWN, n=1, cutoff=_SIMILARITY)
+    # Parenthesised, not `; `-joined: that separates one field's explanation
+    # from the next, and a hint using it too would blur where each ends.
+    hint = f" (did you mean {near[0]!r}?)" if near else ""
+    return f"unknown field {key!r}{hint}"
+
+
 def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
-    """Refuse any field this format does not define, saying why for the ones we
-    know about.
+    """Refuse every field this format does not define, saying why for the ones
+    we know about.
 
     A key we ignore is a key the author believes took effect. That is merely
     annoying for `tolls:`, and worse than annoying for `permissions:`, which
     someone writes *to restrict a delegate* and which currently does nothing at
     all -- the definition reads tighter than the agent it produces.
-    """
-    for key in document:
-        if key in KNOWN:
-            continue
-        if (reason := REFUSED.get(key)) is not None:
-            msg = f"{source.name}: {key!r} is not a field of this format -- {reason}"
-            raise SubagentError(msg)
 
-        near = get_close_matches(key, KNOWN, n=1, cutoff=_SIMILARITY)
-        hint = f"; did you mean {near[0]!r}?" if near else ""
-        known = ", ".join(sorted(KNOWN))
-        msg = f"{source.name}: unknown field {key!r}{hint} (this format defines: {known})"
-        raise SubagentError(msg)
+    All of them at once, not the first. Two typos in a definition used to take
+    two runs to find, and the second only after fixing the first -- the same
+    reason `place_data` checks every source before it copies any.
+    """
+    problems = [_explain(key) for key in document if key not in KNOWN]
+    if not problems:
+        return
+
+    known = ", ".join(sorted(KNOWN))
+    msg = f"{source.name}: {'; '.join(problems)} (this format defines: {known})"
+    raise SubagentError(msg)
 
 
 def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
@@ -218,6 +228,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         tools=fields.names(document.get("tools")),
         skills=fields.names(document.get("skills")),
         middleware=fields.names(document.get("middleware")),
-        provider=fields.text(document["provider"]) if document.get("provider") else None,
-        model=fields.text(document["model"]) if document.get("model") else None,
+        # `or None` rather than a conditional: unset and blank mean the same
+        # thing for these two -- run where everything else does.
+        provider=fields.text(document.get("provider")) or None,
+        model=fields.text(document.get("model")) or None,
     )

@@ -164,6 +164,22 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
         assert field in message
 
 
+def test_every_unaccepted_field_is_reported_at_once(tmp_path):
+    """Not just the first. Two typos used to take two runs to find, and the
+    second only after fixing the first."""
+    with pytest.raises(SubagentError) as raised:
+        read_subagent(
+            _definition("tolls: [read_file]", "temperature: 0.2", "permissions: [deny]"),
+            tmp_path / "reviewer.yaml",
+        )
+
+    message = str(raised.value)
+    assert "tolls" in message
+    assert "temperature" in message
+    assert "permissions" in message
+    assert "did you mean 'tools'?" in message  # and each is explained in its own terms
+
+
 @pytest.mark.parametrize("field", sorted(REFUSED))
 def test_a_deliberately_unexposed_field_says_why(tmp_path, field):
     """These are not "not yet". Honouring them would be wrong, and the generic
