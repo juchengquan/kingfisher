@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+from dataclasses import fields
 
 import pytest
 
@@ -47,19 +48,6 @@ def test_missing_credentials_for_the_chosen_style_fail_loudly():
     env = {k: v for k, v in BASE_ENV.items() if k != "OPENAI_API_KEY"}
     with pytest.raises(ConfigError, match="OPENAI_API_KEY"):
         from_env({**env, "KINGFISHER_API_STYLE": "openai"})
-
-
-def test_role_models_fall_back_to_the_main_model():
-    cfg = from_env(
-        {
-            **BASE_ENV,
-            "KINGFISHER_API_STYLE": "anthropic",
-            "KINGFISHER_MODEL_SUBAGENT": "MiniMax-M2.5",
-        }
-    )
-    assert cfg.model_for("subagent") == "MiniMax-M2.5"
-    assert cfg.model_for("main") == "MiniMax-M3"
-    assert cfg.model_for("summarizer") == "MiniMax-M3"
 
 
 def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
@@ -142,38 +130,47 @@ def test_every_variable_read_is_documented():
     read = set(re.findall(r"KINGFISHER_[A-Z_]+", source))
     documented = set(re.findall(r"KINGFISHER_[A-Z_]+", (root / ".env.example").read_text()))
 
-    missing = {
-        name
-        for name in read
-        # A trailing underscore is an f-string prefix -- KINGFISHER_MODEL_{role}
-        # -- so any documented variable starting with it counts.
-        if not (name in documented or any(d.startswith(name) for d in documented))
-    }
+    # An exact match, now that nothing builds a variable name at runtime. The
+    # prefix allowance this used to make existed for `KINGFISHER_MODEL_{role}`,
+    # and it let documenting `KINGFISHER_MODEL_SUBAGENT` satisfy a read of
+    # `KINGFISHER_MODEL` -- which is not what the check is for.
+    missing = read - documented
 
     assert not missing, f"read by config.py but absent from .env.example: {sorted(missing)}"
 
 
-def test_every_role_has_a_reader():
-    """`from_env` accepts `KINGFISHER_MODEL_<ROLE>` and `KINGFISHER_PROVIDER_<ROLE>`
-    for every entry here, so an entry nothing looks up is a variable that reads
-    as configuration and is not.
+def test_the_per_role_variables_are_gone():
+    """`KINGFISHER_MODEL_SUBAGENT` and `KINGFISHER_PROVIDER_SUBAGENT` used to
+    override every delegate at once, and nothing reads them now.
 
-    Three were: `PROVIDER_MAIN` and both `_SUMMARIZER` forms were parsed and
-    never read -- nothing builds a summarizer at all. This holds the tuple to
-    the one role that has a reader, so adding another means adding its lookup in
-    the same change.
+    A blanket override is the wrong shape for the decision: `second-opinion`
+    exists in order *not* to be the model beside it, so one variable saying
+    "all delegates" silently defeats the one delegate that most needs its own.
+    A definition says where it runs; see `presets/README.md`.
+
+    Asserted as absence, because the failure mode is a variable that reads as
+    configuration and is not -- someone sets it, sees no error, and believes it.
     """
-    from kingfisher.config import ROLES
-    from kingfisher.infrastructure.delegation import SUBAGENT_ROLE
+    environ = {
+        "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
+        "KINGFISHER_API_STYLE": "anthropic",
+        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9/a",
+        "ANTHROPIC_API_KEY": "k",
+        "KINGFISHER_MODEL": "the-one-that-counts",
+        "KINGFISHER_MODEL_SUBAGENT": "cheap-model",
+        "KINGFISHER_PROVIDER_SUBAGENT": "openai",
+    }
 
-    assert set(ROLES) == {SUBAGENT_ROLE}
+    cfg = from_env(environ)
+
+    assert cfg.model == "the-one-that-counts"
+    assert not [f for f in fields(cfg) if "role" in f.name]
+    assert "cheap-model" not in repr(cfg)
 
 
 def test_the_main_model_has_one_name():
-    """`KINGFISHER_MODEL_MAIN` used to shadow `KINGFISHER_MODEL`: `model_for`
-    consults `role_models` first, so the undocumented variable beat the
-    documented, required one and `build_model` used it.
-    """
+    """`KINGFISHER_MODEL_MAIN` was read too, and beat the documented, required
+    `KINGFISHER_MODEL` -- `model_for("main")` consulted the role map first."""
     environ = {
         "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
         "KINGFISHER_API_STYLE": "anthropic",
@@ -183,26 +180,4 @@ def test_the_main_model_has_one_name():
         "KINGFISHER_MODEL_MAIN": "the-one-that-used-to-win",
     }
 
-    cfg = from_env(environ)
-
-    assert cfg.model == "the-one-that-counts"
-    assert cfg.model_for("main") == "the-one-that-counts"
-
-
-def test_the_subagent_override_still_works():
-    """The one role that survives, and the reason the mechanism exists: an
-    operator routes a delegate without editing a definition they may not own."""
-    environ = {
-        "KINGFISHER_WORKSPACE": "/tmp/kf-role-probe",
-        "KINGFISHER_API_STYLE": "anthropic",
-        "ANTHROPIC_BASE_URL": "http://127.0.0.1:9/a",
-        "ANTHROPIC_API_KEY": "k",
-        "KINGFISHER_MODEL": "main-model",
-        "KINGFISHER_MODEL_SUBAGENT": "cheap-model",
-        "KINGFISHER_PROVIDER_SUBAGENT": "anthropic",
-    }
-
-    cfg = from_env(environ)
-
-    assert cfg.model_for("subagent") == "cheap-model"
-    assert cfg.role_providers["subagent"] == "anthropic"
+    assert from_env(environ).model == "the-one-that-counts"

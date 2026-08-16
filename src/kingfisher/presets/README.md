@@ -135,20 +135,33 @@ system_prompt: |
 That is a whole definition: three required fields, one optional, nothing else
 needed.
 
-Sending a delegate somewhere cheaper — or somewhere else entirely — is two more
-lines, and they move together:
+Sending a delegate somewhere cheaper — or somewhere else entirely — is up to
+two more lines:
 
 ```yaml
-provider: anthropic     # a style this deployment has credentials for
-model: MiniMax-M2.5     # a model that endpoint serves
+provider: openai        # a style this deployment has credentials for
+model: gpt-5            # a model that endpoint serves
 ```
 
-A model name means nothing without the endpoint that serves it, so overriding
-one against a definition that pins the other is refused rather than resolved.
-Every shipped preset names both, and says in a comment why it runs where it
-does.
+Omit both and it runs on the deployment's own model, at the deployment's own
+endpoint. That is the usual case, and `reviewer` is the shipped example of it.
 
-**That is a requirement, not decoration.** `provider` is checked when the agent
+`model` alone is fine: it names something to run and nothing about where, so it
+runs where everything else does. `extractor` does this — cheap is the decision,
+and it stays true wherever you point kingfisher.
+
+`provider` alone is refused, by name, when the file is read. A model name means
+nothing without the endpoint that serves it, so naming an endpoint and not what
+to run there sends *your* model's name somewhere that has never heard of it.
+Name both or neither. `second-opinion` is the one preset that names both, and
+says in a comment why.
+
+This is the only place either is said. There is no environment variable for it:
+one could only say "every delegate", which is the wrong size for the decision —
+it would silently defeat `second-opinion`, whose whole job is to be a different
+model from the one beside it.
+
+**`provider` is a requirement, not decoration.** It is checked when the agent
 is built, so activating a preset whose style your deployment has no credentials
 for fails immediately:
 
@@ -169,8 +182,8 @@ for.
 | `tools` | optional | Unset inherits the parent's tools |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
-| `provider` | optional | Which endpoint it runs against, by style. Moves together with `model` |
-| `model` | optional | Must be a model your gateway serves. This is where per-role cost routing goes |
+| `provider` | optional | Which endpoint it runs against, by style. Requires `model` |
+| `model` | optional | Must be a model that endpoint serves. Fine on its own; this is where cost routing goes |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 Three reasons to reach for one, one example each:
@@ -183,8 +196,8 @@ Three reasons to reach for one, one example each:
   context rather than yours. Note the narrower `tools` and the cheaper `model`.
 - [`second-opinion.yaml`](subagents/second-opinion.yaml) — **a different
   model.** Two models from one family share failure modes, so this one answers
-  on another endpoint entirely. It is the one whose `provider` differs from the
-  rest, and the reason the field exists.
+  on another endpoint entirely. It is the only one that names a `provider`, and
+  the reason the field exists.
 
 ### Writing the prompt
 

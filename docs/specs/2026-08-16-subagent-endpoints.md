@@ -107,6 +107,16 @@ endpoint, and an override that sets only the model against a definition that
 pins a provider is **refused** rather than resolved. Which endpoint runs which
 model should not be decided by two people who cannot see each other's half.
 
+> **Superseded.** The override is gone — `KINGFISHER_MODEL_SUBAGENT` and
+> `KINGFISHER_PROVIDER_SUBAGENT` with it, along with `ROLES`, `role_models`,
+> `role_providers` and `Config.model_for`. One variable pair can only say
+> "every delegate", which is the wrong size for the decision it was making:
+> `second-opinion` exists in order *not* to be the model beside it, so a
+> blanket override silently defeats the delegate that most needs its own. The
+> definition is now the only author, and the half-pair mistake is refused at
+> `parse` instead — from the definition's side, where the message can name the
+> file that made it.
+
 ## Sequence
 
 1. ~~**The `role_models` fix.**~~ Done. A test for it already existed and

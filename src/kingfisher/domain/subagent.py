@@ -44,11 +44,14 @@ credentials pay for them.
 endpoint must say what to run there, or the deployment's own model name is sent
 somewhere that has never heard of it. `model` alone is fine -- it names
 something to run and nothing about where, so it runs where everything else
-does. An operator overriding only the model against a definition that pins a
-provider is the same mistake from the other side, and refused too.
+does.
 
-The optional `model` is where per-role cost routing lands naturally: reading
-heavy delegation on a cheap model, synthesis on the expensive one.
+The definition is the only place either is said. There was an environment
+override too, and it is gone: `KINGFISHER_MODEL_SUBAGENT` could only say "every
+delegate", which is a sentence about cost that nobody wants to be true of a
+delegate chosen for being a *different* model. Per-delegate is what this file
+already is, so this is where cost routing lands -- reading-heavy delegation on
+a cheap model, the second opinion somewhere else entirely.
 
 **A field this format does not define is refused, not ignored.** Ignoring one
 is indistinguishable from honouring it, and the difference matters most where
@@ -263,8 +266,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
     # `provider` without `model` sends the *deployment's* model name to another
     # endpoint -- a 404 if you are lucky and a wrong-model run if you are not.
-    # `resolved_endpoint` already refuses the operator's half of this; a
-    # definition naming half the pair is the same mistake from the other side.
+    # Caught here rather than at build time so the message can name the file
+    # that got it wrong.
     #
     # Not symmetric: `model` alone is fine. It names something to run and says
     # nothing about where, so it runs wherever the deployment does.
@@ -293,40 +296,29 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     )
 
 
-def resolved_endpoint(
-    spec: SubagentSpec,
-    *,
-    model_override: str | None,
-    provider_override: str | None,
-    granted: Selection,
-) -> tuple[str | None, str | None]:
-    """Which endpoint and model a delegate runs as, or refuse to choose.
+def resolved_endpoint(spec: SubagentSpec, *, granted: Selection) -> tuple[str | None, str | None]:
+    """Where a delegate runs, once the request has had its say.
 
-    They move together. Overriding only the model, against a definition that
-    pins `provider: openai`, would send a MiniMax model name to OpenAI -- a 404
-    if you are lucky and a wrong-model run if you are not. Which endpoint runs
-    which model should not be settled by two people who cannot see each other's
-    half, so a half-override against a pinned provider is refused.
+    The definition is the only author. There was an operator override here --
+    `KINGFISHER_MODEL_SUBAGENT` and `KINGFISHER_PROVIDER_SUBAGENT` -- and with
+    it a rule about half-overrides, because a model name arriving at an
+    endpoint that has never heard of it is a 404 if you are lucky and a
+    wrong-model run if you are not. Both are gone: one variable pair could only
+    ever say "all delegates", which is not a decision anyone wanted to make,
+    and saying it per delegate is what the file already does. The half-pair
+    mistake is still refused, at `parse` -- from the definition's side, where
+    it can name the file that made it.
 
-    An operator who overrides both has said what they mean and wins, which is
-    the point of the override existing at all.
+    What is left is the grant. `provider` chooses which endpoint receives the
+    prompt and whose credentials pay, so a request may narrow it like anything
+    else, and a definition naming one it may not use is refused rather than
+    quietly run elsewhere.
 
-    A rule, and it takes the two values it needs rather than the `Config` they
-    came from. `Config` holds base_url, api_key and timeout_s, none of which
-    this decides anything about, and the domain does not read deployment
-    configuration -- `test_domain_imports_only_the_standard_library_and_itself`
-    holds it to that. Reading `role_models[SUBAGENT_ROLE]` is the caller's job;
-    knowing that the pair is atomic is this one's.
+    A rule, and it takes the spec rather than the `Config` beside it: the
+    domain does not read deployment configuration, and
+    `test_domain_imports_only_the_standard_library_and_itself` holds it to that.
     """
-    if model_override is not None and provider_override is None and spec.provider is not None:
-        msg = (
-            f"subagent {spec.name!r} pins provider {spec.provider!r}, but an operator "
-            f"overrode only its model; set KINGFISHER_PROVIDER_SUBAGENT too, or neither"
-        )
-        raise CapabilityError(msg)
-
-    provider = provider_override if provider_override is not None else spec.provider
-    model = model_override if model_override is not None else spec.model
+    provider, model = spec.provider, spec.model
 
     if provider is not None and granted is not None and provider not in granted:
         msg = (

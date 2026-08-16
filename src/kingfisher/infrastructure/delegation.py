@@ -34,11 +34,6 @@ if TYPE_CHECKING:
     from kingfisher.config import Config
     from kingfisher.domain.subagent import SubagentSpec
 
-#: The role every delegate runs as, for `Config.role_models`. One of `ROLES`,
-#: which is what `from_env` populates -- a delegate's own name is not.
-SUBAGENT_ROLE = "subagent"
-
-
 def subagent_skills(
     spec: SubagentSpec, available: tuple[str, ...], activated: tuple[str, ...] | None
 ) -> tuple[str, ...] | None:
@@ -92,25 +87,6 @@ def subagent_middleware(
         subject=f"subagent {spec.name!r}",
     )
     return [registry[name]() for name in approved]
-
-
-def _subagent_endpoint(
-    spec: SubagentSpec, cfg: Config, allowed: tuple[str, ...] | None
-) -> tuple[str | None, str | None]:
-    """Read the operator's overrides out of `Config`, and let the domain decide.
-
-    The whole of this layer's part is knowing that a role's overrides live at
-    `role_models[SUBAGENT_ROLE]` and `role_providers[SUBAGENT_ROLE]`. That the
-    pair is atomic, and that a pinned provider must be one the request may use,
-    is `subagent.resolved_endpoint` -- a rule about kingfisher's own vocabulary,
-    which happens to need two values a deployment supplies.
-    """
-    return resolved_endpoint(
-        spec,
-        model_override=cfg.role_models.get(SUBAGENT_ROLE),
-        provider_override=cfg.role_providers.get(SUBAGENT_ROLE),
-        granted=allowed,
-    )
 
 
 def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
@@ -173,16 +149,14 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # this deployment chose. It also re-enables the profile behaviour that
     # `infrastructure.models` exists to avoid. So we build the instance ourselves.
     #
-    # `role_models` wins over the definition: which model a role runs on is an
-    # operator's cost decision, and it should not require editing content.
-    #
-    # Keyed by *role*, not by this subagent's name. `from_env` populates
-    # `role_models` from `KINGFISHER_MODEL_SUBAGENT`, so a lookup by name only
-    # ever matched a delegate literally called that -- the override above was
-    # documented, tested nowhere, and fired for nothing. Per-delegate overrides
-    # would need `ROLES` to become unbounded and its names to come from
-    # workspace content, which is a different decision.
-    provider, model_id = _subagent_endpoint(spec, cfg, providers)
+    # The definition decides, and nothing here second-guesses it. An operator
+    # pair -- `KINGFISHER_MODEL_SUBAGENT` / `KINGFISHER_PROVIDER_SUBAGENT` --
+    # used to win over this, on the theory that cost is an operator's call and
+    # should not need editing content. It said "every delegate" or nothing,
+    # which made it useless for the one thing a per-delegate model is for:
+    # `second-opinion` exists in order *not* to be the model beside it, and a
+    # blanket override silently defeats it. The file says where it runs.
+    provider, model_id = resolved_endpoint(spec, granted=providers)
     if model_id is not None or provider is not None:
         # `replace` rather than a build_model parameter: an endpoint is exactly
         # the three Config fields a model is built from, so swapping them says

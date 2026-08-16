@@ -21,7 +21,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from kingfisher.config import API_STYLES, ROLES, Config, ConfigError, Endpoint
+from kingfisher.config import API_STYLES, Config, ConfigError, Endpoint
 from kingfisher.infrastructure.models import PROVIDERS
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
@@ -90,18 +90,6 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         msg = f"no provider registered for api_style {style!r}"
         raise ConfigError(msg)
 
-    role_models = {
-        role: value
-        for role in ROLES
-        if (value := (env.get(f"KINGFISHER_MODEL_{role.upper()}") or "").strip())
-    }
-
-    role_providers = {
-        role: value
-        for role in ROLES
-        if (value := (env.get(f"KINGFISHER_PROVIDER_{role.upper()}") or "").strip())
-    }
-
     path_extra = tuple(
         part for part in (env.get("KINGFISHER_SHELL_PATH_EXTRA") or "").split(":") if part
     )
@@ -136,8 +124,6 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         recursion_limit=_int(env, "KINGFISHER_RECURSION_LIMIT", 150),
         shell_path_extra=path_extra,
         shell_sandbox=env.get("KINGFISHER_SHELL_SANDBOX", "auto"),
-        role_models=role_models,
-        role_providers=role_providers,
         endpoints=endpoints,
         state_root=_optional_path("KINGFISHER_STATE_DIR"),
         scratch_root=_optional_path("KINGFISHER_SCRATCH_DIR"),
