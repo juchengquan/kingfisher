@@ -659,3 +659,62 @@ def test_a_bug_is_not_dressed_up_as_a_refusal(cfg, monkeypatch):
 
     assert response.status_code == 500
     assert "error" not in response.text or boom not in response.text
+
+
+# -- capabilities over the wire --------------------------------------------
+
+
+def test_a_capabilities_object_travels_with_the_turn(cfg):
+    """That the nested object parses and reaches the library. Which axes end up
+    where is exercised in `test_capabilities_on_the_wire`, against `turn_for`,
+    because a *narrowing* request cannot complete here -- see below."""
+    service, app = serving(cfg, AsyncStub("done"))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        response = http.post(
+            f"/sessions/{session_id}/turns",
+            json={"task": "go", "capabilities": {"builtin_tools": "*", "skills": "*"}},
+        )
+
+    assert response.status_code == 200
+    assert dict(frames(response.text))["finished"]["result"]["session_id"] == session_id
+
+
+def test_narrowing_against_an_injected_agent_is_a_deployment_error(cfg):
+    """Not a caller-facing refusal, and deliberately not in the error map.
+
+    `Kingfisher(agent=...)` returns that graph as-is, so restrictions the
+    request asks for were never applied to it -- the library refuses rather than
+    pretending. A deployment that wants per-request capabilities must let
+    kingfisher build the agent. It is a 500 because it is the deployment that is
+    wrong, not the caller, and the caller can do nothing about it.
+    """
+    service, app = serving(cfg, AsyncStub("done"))
+    session_id = service.start_session()
+
+    with TestClient(app, raise_server_exceptions=False) as http:
+        response = http.post(
+            f"/sessions/{session_id}/turns",
+            json={"task": "go", "capabilities": {"tools": ["http_fetch"]}},
+        )
+
+    assert response.status_code == 500
+    assert "error" not in response.text
+
+
+def test_an_unknown_capability_axis_is_a_422_in_the_usual_shape(cfg):
+    """Misspelling an axis must not be a 200. Answering success to a request to
+    restrict something is the worst way to learn the field was ignored."""
+    service, app = serving(cfg, AsyncStub("done"))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        response = http.post(
+            f"/sessions/{session_id}/turns",
+            json={"task": "go", "capabilities": {"tolls": ["http_fetch"]}},
+        )
+
+    assert response.status_code == 422
+    assert response.json()["error"] == "invalid_request"
+    assert "tolls" in str(response.json()["detail"])

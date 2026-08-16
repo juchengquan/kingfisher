@@ -1,6 +1,6 @@
 # An HTTP surface for kingfisher
 
-**Status:** phases 1–4 shipped. Capabilities, files and packaging remain.
+**Status:** phases 1–5 shipped. Files and packaging remain.
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
@@ -85,7 +85,7 @@ holds the id learns nothing they could not learn by using it.
 | D7 | **An explicit error→status map, with a test that it is total.** | Ten of eleven error types are `ValueError`, so catching `ValueError` would also catch `Request`'s empty-task check and any incidental one from a dependency, turning a bug into a 400. The totality test is the `LIGHT_EXPORTS \| HEAVY_EXPORTS` idiom, which has already caught an omission in this codebase. |
 | D8 | **Named SSE events, with the kind set pinned by a test.** | The kind list in `RunEvent`'s docstring — the closest thing to a wire contract — was wrong in both directions. An API author would have published it verbatim. |
 | D9 | **A heartbeat during silence.** | Proxies kill idle connections, and a tool call runs for minutes. The better reason: disconnect is only noticed when the server next tries to send, so the heartbeat is what bounds model spend after a client hangs up. |
-| D10 | **Capabilities cross the wire with a sentinel default.** | Over HTTP the lattice has four states, not three: `"*"`, an array, `null`, and *absent*. Absent means the deployment's default; `null` means nothing. Pydantic collapses them unless the default is a sentinel. |
+| D10 | **Capabilities cross the wire, with absent and `null` kept apart.** | Over HTTP the lattice has four states, not three: `"*"`, an array, `null`, and *absent*. Absent means the deployment's default; `null` means nothing, and on five of the eight axes those are opposite ends. Implemented with `model_fields_set` rather than a sentinel object — same decision, using what pydantic already records, and without a sentinel type leaking into the generated schema. |
 | D11 | **An app factory taking a ready `Kingfisher`.** | It is the substitution point every existing test already uses. A server that constructs its own instance at import time pushes tests back toward patching `create_deep_agent`, which this repo forbids because three live bugs got through that way. |
 | D12 | **`ServerConfig`, separate from `Config`.** | Bind address, concurrency cap, heartbeat interval and body limit are none of the library's business. Keeping them out of `Config` is the library/service split held in the one place it would otherwise blur first. |
 | D13 | **A shared `within(root, ref)` rule in the domain.** | A ref is caller-supplied, so both `FileStore` and `DefinitionStore` adapters need the same traversal guard. Writing it once is cheaper than finding the second copy in the duplication audit. |
