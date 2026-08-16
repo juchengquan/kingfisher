@@ -119,3 +119,30 @@ def test_the_catalogue_can_be_shared_between_workspaces(tmp_path):
 
     assert cfg.skills_dir == tmp_path / "catalogue" / "skills"
     assert cfg.subagents_dir == tmp_path / "catalogue" / "subagents"
+
+
+def test_every_variable_read_is_documented():
+    """`.env.example` is the only place a deployment learns a knob exists.
+
+    Both KINGFISHER_TOOLS_DIR and KINGFISHER_SHELL_PATH_EXTRA shipped without a
+    line here, and the second one is why an agent could not find `pdftotext`:
+    the shell PATH is an allowlist, so an unnamed directory looks like the tool
+    not existing rather than like configuration.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    root = _Path(__file__).resolve().parent.parent
+    source = (root / "src/kingfisher/app/config.py").read_text()
+    read = set(re.findall(r"KINGFISHER_[A-Z_]+", source))
+    documented = set(re.findall(r"KINGFISHER_[A-Z_]+", (root / ".env.example").read_text()))
+
+    missing = {
+        name
+        for name in read
+        # A trailing underscore is an f-string prefix -- KINGFISHER_MODEL_{role}
+        # -- so any documented variable starting with it counts.
+        if not (name in documented or any(d.startswith(name) for d in documented))
+    }
+
+    assert not missing, f"read by config.py but absent from .env.example: {sorted(missing)}"
