@@ -162,3 +162,59 @@ class HostPathGuard(AgentMiddleware):
             return await handler(request)
         except HostPathError as exc:
             return self._as_tool_error(request, exc)
+
+
+class DeclaredDelegatesOnly(AgentMiddleware):
+    """Refuse `task` to a delegate this request did not declare.
+
+    deepagents adds a `general-purpose` subagent of its own, with "the same
+    capabilities as the main agent" and none of kingfisher's middleware. It is
+    there whenever `task` is, so applying the caller's tool ceiling to declared
+    delegates closes only half the door: a request that withheld `execute`
+    could still ask `general-purpose` for it.
+
+    It cannot be narrowed. Declaring one by the same name *duplicates* it
+    rather than replacing it, and the switch that disables it resolves by the
+    model's *provider* through a beta registry -- so a model deepagents does
+    not recognise silently restores the unrestricted delegate. A boundary that
+    depends on provider-name inference is not a boundary.
+
+    Refusing the call is. This is the same `wrap_tool_call` seam `ToolAllowlist`
+    uses, it holds whatever model is in play, and it fails closed: a delegate
+    has to be named here to be reachable.
+
+    The built-in is still *advertised* in the task tool's description, so a
+    model may try it once and be told no. Wasteful, and much preferable to the
+    alternative of trusting it.
+    """
+
+    def __init__(self, declared: tuple[str, ...]) -> None:
+        self._declared = set(declared)
+        super().__init__()
+
+    def _refuse(self, request: Any) -> ToolMessage | None:
+        call = request.tool_call
+        if call.get("name") != "task":
+            return None
+        wanted = (call.get("args") or {}).get("subagent_type")
+        if wanted in self._declared:
+            return None
+        offered = ", ".join(sorted(self._declared)) or "none"
+        return ToolMessage(
+            content=(
+                f"Error: {wanted!r} is not a delegate this request may use. "
+                f"Available: {offered}."
+            ),
+            tool_call_id=call.get("id", ""),
+            name=call.get("name"),
+            status="error",
+        )
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        return self._refuse(request) or handler(request)
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        refusal = self._refuse(request)
+        return refusal if refusal is not None else await handler(request)

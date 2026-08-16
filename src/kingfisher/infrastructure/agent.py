@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission, create_deep_agent
+from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config
@@ -32,7 +33,12 @@ from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.infrastructure import skill_store
 from kingfisher.infrastructure.backend import build_backend
 from kingfisher.infrastructure.models import build_model
-from kingfisher.infrastructure.scoping import HostPathGuard, ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.scoping import (
+    DeclaredDelegatesOnly,
+    HostPathGuard,
+    ScopedSkills,
+    ToolAllowlist,
+)
 from kingfisher.infrastructure.subagent_store import load_all
 from kingfisher.infrastructure.tool_store import load_tools, tool_name
 
@@ -220,6 +226,23 @@ def _subagent_skills(
 
 
 
+def _narrow_tools(
+    declared: tuple[str, ...] | None, granted: tuple[str, ...] | None
+) -> tuple[str, ...] | None:
+    """What a delegate may use: its own declaration, capped by its caller's.
+
+    `None` on either side means "no opinion", so the other wins -- the same
+    rule `Capabilities.intersect` uses one level up, and for the same reason:
+    narrowing must only ever subtract.
+    """
+    if declared is None:
+        return granted
+    if granted is None:
+        return declared
+    allowed = set(granted)
+    return tuple(name for name in declared if name in allowed)
+
+
 def _subagent_middleware(
     spec: SubagentSpec,
     registry: Mapping[str, Callable[[], Any]],
@@ -307,6 +330,7 @@ def _as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     cfg: Config,
     *,
     providers: tuple[str, ...] | None = None,
+    tools: tuple[str, ...] | None = None,
     backend: Any = None,
     skills: tuple[str, ...] | None = None,
     extra_middleware: list[Any] | None = None,
@@ -328,8 +352,14 @@ def _as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         "system_prompt": spec.system_prompt,
     }
     middleware: list[Any] = []
-    if spec.tools is not None:
-        middleware.append(ToolAllowlist(spec.tools))
+    # The definition's own restriction, narrowed by the request's. A delegate
+    # may never be offered more than whoever reached it: the parent's
+    # `ToolAllowlist` sits on the parent's middleware, and a subagent inherits
+    # none of it, so a request that withheld `execute` handed it straight to
+    # any delegate. The ceiling has to be applied here to exist at all.
+    ceiling = _narrow_tools(spec.tools, tools)
+    if ceiling is not None:
+        middleware.append(ToolAllowlist(ceiling))
     # A subagent inherits none of its parent's middleware, so an index it is
     # not given is an index it has no idea exists. `SubAgent.skills` would take
     # source *paths*; this selects by name, which is what a definition writes.
@@ -521,6 +551,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 cfg,
                 backend=resolved_backend,
                 providers=capabilities.providers,
+                tools=capabilities.tools,
                 skills=_subagent_skills(defined[n], offered, capabilities.skills),
                 extra_middleware=_subagent_middleware(
                     defined[n], registry, capabilities.middleware
@@ -531,6 +562,23 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
 
     if capabilities.tools is not None:
         middleware.append(ToolAllowlist(capabilities.tools))
+        # deepagents supplies a `general-purpose` delegate with "the same
+        # capabilities as the main agent" and none of our middleware, present
+        # whenever `task` is. Supplying one by the same name *replaces* it --
+        # the specs are keyed by name -- so it keeps working and arrives with
+        # the caller's ceiling on it, rather than being withheld.
+        #
+        # Their spec, our middleware: the description and prompt are tuned and
+        # there is no reason to reinvent either.
+        supplied = list(extras.get("subagents", ()))
+        supplied.append(
+            {**GENERAL_PURPOSE_SUBAGENT, "middleware": [ToolAllowlist(capabilities.tools)]}
+        )
+        extras["subagents"] = supplied
+        # Backstop. Only these names are reachable, so a delegate deepagents
+        # adds in some future version does not silently arrive unrestricted.
+        reachable = tuple(spec["name"] for spec in supplied)
+        middleware.append(DeclaredDelegatesOnly(reachable))
 
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
