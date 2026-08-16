@@ -187,6 +187,11 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
     for name in skill_store.names(cfg.skills_dir) or ("(none)",):
         print(f"  {name}")
+    # Grouping skills into folders is the obvious thing to try and yields
+    # nothing at all, because discovery is one level deep. Saying so is the
+    # only difference between a catalogue that looks empty and one that is.
+    for name in skill_store.misplaced(cfg.skills_dir):
+        print(f"  ! {name}/ holds a skill too deep to load — they live at {skill_store.LAYOUT}")
 
     print("\nsubagents")
     try:

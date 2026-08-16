@@ -94,3 +94,34 @@ def test_the_readme_example_call_is_valid(workspace_with_examples, session_dir):
             subagents=("reviewer",),
         ),
     )
+
+
+def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
+    """Discovery is one level deep, because deepagents' own listing is -- going
+    deeper here would advertise skills the agent could not then load.
+
+    Grouping skills into folders is the obvious thing to try, and it yields
+    nothing: no error, no warning, a catalogue that simply looks empty. The
+    layout is a contract, so breaking it should say so.
+    """
+    from kingfisher.adapters import skill_store
+
+    for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
+        target = tmp_path / path
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
+    (tmp_path / "not-a-skill").mkdir()
+
+    assert skill_store.names(tmp_path) == ("flat",)
+    assert skill_store.misplaced(tmp_path) == ("a", "grouped")
+
+
+def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
+    """The negative control: only folders that actually hide one are named, or
+    every stray directory in a catalogue becomes a warning."""
+    from kingfisher.adapters import skill_store
+
+    (tmp_path / "notes").mkdir()
+    (tmp_path / "notes" / "readme.txt").write_text("nothing to see", encoding="utf-8")
+
+    assert skill_store.misplaced(tmp_path) == ()
