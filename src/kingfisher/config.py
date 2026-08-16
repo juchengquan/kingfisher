@@ -119,6 +119,7 @@ class Config:
     # copy nobody can audit centrally.
     skills_root: Path | None = None
     subagents_root: Path | None = None
+    tools_root: Path | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix
@@ -194,6 +195,17 @@ class Config:
             msg = f"no endpoint configured for style {style!r}; this deployment has {configured}"
             raise ConfigError(msg)
         return endpoint
+
+    @property
+    def tools_dir(self) -> Path:
+        """The tool catalogue: Python modules imported into this process.
+
+        Deliberately not a backend route. A skill is data the agent reads and a
+        tool is code this process runs, so the agent is given no path that
+        reaches here — the only agent that could write a tool is one already
+        holding `execute`, which can run anything on the host regardless.
+        """
+        return self.tools_root or self.workspace / "tools"
 
     def model_for(self, role: str) -> str:
         """Per-role model, falling back to the main model.

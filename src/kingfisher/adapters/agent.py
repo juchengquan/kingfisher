@@ -22,6 +22,7 @@ from kingfisher.adapters.backend import build_backend
 from kingfisher.adapters.models import build_model
 from kingfisher.adapters.scoping import HostPathGuard, ScopedSkills, ToolAllowlist
 from kingfisher.adapters.subagent_store import load_all
+from kingfisher.adapters.tool_store import load_tools, tool_name
 from kingfisher.config import Config
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
@@ -403,6 +404,35 @@ def _backend_for(cfg: Config, session_dir: Path | None, backend: Any | None) -> 
     raise ValueError(msg)
 
 
+def _with_workspace_tools(
+    cfg: Config, assemble: Callable[[tuple[Any, ...]], CompiledStateGraph]
+) -> CompiledStateGraph:
+    """Assemble the agent, adding whatever tools the workspace defines.
+
+    Assembled twice when there are any, and only then. `tools_by_name` is a
+    dict, so a workspace tool called `read_file` would take the name in silence
+    and the real one would simply stop existing -- the same "quietly different
+    from what you asked for" failure the capability checks refuse elsewhere.
+    The built-in set is a property of an assembled graph and cannot be listed
+    without building one, and ~30ms against a model call of seconds is a cheap
+    price for not guessing at it.
+    """
+    graph = assemble(())
+    workspace_tools = load_tools(cfg.tools_dir)
+    if not workspace_tools:
+        return graph
+
+    builtin = set(registered_tools(graph))
+    shadowed = tuple(sorted(n for t in workspace_tools if (n := tool_name(t)) in builtin))
+    if shadowed:
+        msg = (
+            f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
+            f"the same name; rename them in {cfg.tools_dir}"
+        )
+        raise CapabilityError(msg)
+    return assemble(workspace_tools)
+
+
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # injectable collaborator, and folding them into a parameter object would
     # hide exactly what a test is allowed to substitute.
@@ -495,15 +525,19 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     if capabilities.tools is not None:
         middleware.append(ToolAllowlist(capabilities.tools))
 
-    graph = create_deep_agent(
-        model=model if model is not None else build_model(cfg),
-        backend=resolved_backend,
-        system_prompt=system_prompt(cfg),
-        middleware=middleware,
-        permissions=permissions,
-        checkpointer=checkpointer,
-        **extras,
-    )
+    def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
+        return create_deep_agent(
+            model=model if model is not None else build_model(cfg),
+            backend=resolved_backend,
+            system_prompt=system_prompt(cfg),
+            middleware=middleware,
+            permissions=permissions,
+            checkpointer=checkpointer,
+            tools=list(extra_tools) or None,
+            **extras,
+        )
+
+    graph = _with_workspace_tools(cfg, assemble)
 
     # Tool names are checked here rather than before construction, because the
     # registered set is a property of the assembled graph. A typo would

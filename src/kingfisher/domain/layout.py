@@ -30,6 +30,9 @@ from __future__ import annotations
 LAYOUT_DIRS: tuple[str, ...] = (
     "skills",
     "subagents",
+    # Python this process imports, not content the agent reads. It is created
+    # here so the place to put one is obvious, and routed nowhere.
+    "tools",
     # Sessions are the unit of isolation; each one is a backend root.
     "sessions",
     # `.kingfisher` holds the marker. Its `runs/` and `tmp/` subdirectories are
