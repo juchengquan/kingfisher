@@ -1,7 +1,7 @@
 # An HTTP surface for kingfisher
 
-**Status:** phases 1–2 shipped. Turns, errors, capabilities, files and
-packaging remain.
+**Status:** phases 1–3 shipped. Capabilities, files, the error totality test
+and packaging remain.
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
@@ -131,7 +131,7 @@ refusal in the stream.
 | pydantic already installed (transitively, via langchain) | 2.13.4 — weight was not the argument in D5 |
 | `_prepare` already offloaded with `asyncio.to_thread` | the async path is ASGI-safe by construction |
 | a supplied `turn_id` | reuses the directory, re-runs the turn — D14 |
-| event kinds emitted vs documented | `swept` and `sweep_failed` never fire; `cut_short` is undocumented — D8 |
+| event kinds emitted vs documented | wrong in both directions and by more than expected: `swept` and `sweep_failed` never fire, and *five* were missing — `cut_short` plus the four warnings a turn can open with (`protect_failed`, `withheld`, `indistinct`, `data_placed`). Ten kinds, not six. Now `KINDS`, pinned by a test — D8 |
 
 ## Sequenced plans
 
@@ -141,8 +141,8 @@ Each produces working, testable software on its own.
 |---|---|---|
 | **1** | Public surface: export the seven caller-facing errors and `async_checkpointer`; classify every error by who caused it, and every export as light or heavy. No server code. | — |
 | **2** | `kingfisher/server/` with the import rule and the sync-method rule in `test_architecture.py`; `create_app`; `ServerConfig`; the session endpoints (`POST`, `GET /{id}`, `DELETE`). | 1 |
-| **3** | Turns: `POST /sessions/{id}/turns` and `POST /turns` as SSE, named events, the heartbeat, first-event-before-response, and the kind-pinning test. | 2 |
-| **4** | Errors: the explicit map, the totality test, the body shape. | 2 |
+| **3** | Turns: `POST /sessions/{id}/turns` and `POST /turns` as SSE, named events, the heartbeat, first-event-before-response, and the kind-pinning test. Carries the error map too — a turn endpoint cannot be correct without one, and writing a partial map now and a total one later would be writing it twice. | 2 |
+| **4** | Errors: the totality test over every error class, and one body shape for every refusal. | 3 |
 | **5** | Capabilities on the wire: sentinel default, all four states per axis tested. | 3 |
 | **6** | Files: `within()` in the domain, the `FileStore` port, `input_refs`/`data_refs` on `Request`, resolution in `_admit`, writers beside `place_inputs`/`place_data`, and the local adapter. | 3 |
 | **7** | Packaging: the `[server]` extra, the console entry point, request logging. | 3 |

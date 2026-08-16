@@ -41,6 +41,15 @@ class ServerConfig:
     #: Read from `Content-Length`, so a chunked body without one is not caught
     #: here. Deliberate: reading a body to measure it is the cost this avoids.
     max_body_bytes: int = 1 << 20
+    #: How often a quiet stream sends an SSE comment.
+    #:
+    #: Two jobs, and the second is the one that matters. Proxies drop idle
+    #: connections -- that is the obvious one. But a disconnect is only noticed
+    #: when the server next tries to send, so this is also what bounds how long
+    #: a hung-up client keeps paying for model calls during a quiet tool call.
+    #: Fifteen seconds is well inside the usual sixty-second proxy idle timeout
+    #: and coarse enough to be invisible next to a turn.
+    heartbeat_s: float = 15.0
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> ServerConfig:
@@ -58,4 +67,5 @@ class ServerConfig:
             max_body_bytes=int(
                 source.get(f"{PREFIX}MAX_BODY_BYTES", defaults.max_body_bytes)
             ),
+            heartbeat_s=float(source.get(f"{PREFIX}HEARTBEAT_S", defaults.heartbeat_s)),
         )
