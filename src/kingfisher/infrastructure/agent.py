@@ -1,4 +1,11 @@
-"""Agent assembly — the composition root.
+"""Agent assembly: kingfisher's configuration and grants into a deepagents graph.
+
+Not the composition root, though it said so for a while — `Kingfisher.__init__`
+is, and says so too. That one chooses a deployment's collaborators: which
+config, which session directories, which thread store, which middleware
+registry. This one is the deepagents adapter, and the only reason it cannot
+live a layer up is that assembling the graph means naming deepagents' own
+types.
 
 Construction stays free of side effects that a test would have to clean up, and
 every dependency is injectable, so wiring can be exercised with a fake model and

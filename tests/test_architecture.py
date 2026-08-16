@@ -215,6 +215,52 @@ def test_domain_touches_nothing_outside_the_process(path):
     assert not contact, f"domain/{path.name} reaches the world: {contact}"
 
 
+#: Calls that *change* the filesystem, as opposed to reading it or the
+#: environment. Deliberately narrower than `WORLD_CALLS`: `open` and `replace`
+#: are left out because `Session.open` and `dataclasses.replace` are named the
+#: same and this rule runs over a layer where both are legitimate.
+MUTATING_CALLS = frozenset({
+    "mkdir", "rmdir", "rmtree", "copytree", "copyfile", "copy", "move",
+    "write_text", "write_bytes", "unlink", "touch", "chmod", "rename",
+})
+
+
+def test_the_application_layer_does_not_write_to_disk_itself():
+    """Orchestration decides what happens; an adapter is what makes it happen.
+
+    This was not true when it was written. `service.py` copied a request's
+    input files itself -- a `mkdir` and a bare `shutil.copy`, the one place in
+    this layer doing its own I/O -- while the same files bound for `/data` went
+    through `place_data`, which refuses a duplicate basename or a missing file
+    before copying anything.
+
+    So the two sets of caller-supplied files had different guarantees, and the
+    difference was invisible: measured against the real service, two inputs
+    sharing a basename were accepted and one silently lost, and a missing one
+    left the earlier files behind in the turn. Both now go through `_checked`.
+
+    Reading is not the target. `application/config.py` reads the environment,
+    which is its job.
+    """
+    offenders = []
+    for path in _modules_in("application"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
+                offenders.append(f"application/{path.name}:{node.lineno} imports shutil")
+            elif (
+                isinstance(node, ast.Call)
+                and isinstance(node.func, ast.Attribute)
+                and node.func.attr in MUTATING_CALLS
+            ):
+                offenders.append(f"application/{path.name}:{node.lineno} .{node.func.attr}()")
+
+    assert not offenders, (
+        f"{offenders} write to disk from the application layer — put it in "
+        "infrastructure/workspace_fs.py, where the guards already are"
+    )
+
+
 def test_infrastructure_is_the_layer_doing_the_touching():
     """The other half: if nothing in infrastructure/ touches the world either, the
     I/O did not move out, it moved somewhere less visible."""

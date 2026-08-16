@@ -54,7 +54,6 @@ by not caching at all.
 from __future__ import annotations
 
 import asyncio
-import shutil
 from collections.abc import AsyncIterator, Iterator
 from dataclasses import dataclass
 from pathlib import Path
@@ -81,6 +80,7 @@ from kingfisher.infrastructure.workspace_fs import (
     ensure_layout,
     ensure_session_layout,
     place_data,
+    place_inputs,
     protect_data,
     session_bytes,
 )
@@ -356,10 +356,7 @@ class Kingfisher:
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
         turn = session.allocate_turn(dirs, request.turn_id)
 
-        if request.inputs:
-            turn.input_dir.mkdir(exist_ok=True)
-            for source in request.inputs:
-                shutil.copy(source, turn.input_dir / Path(source).name)
+        place_inputs(request.inputs, turn.input_dir)
 
         logger = JsonlRunLogger(
             log_path(cfg.state_dir, session_id),
