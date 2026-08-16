@@ -25,11 +25,19 @@ these instructions stay the same.
 The file tools (`ls`, `read_file`, `write_file`, `edit_file`, `delete`, `glob`, `grep`)
 take virtual paths rooted at the workspace, so an input file is `/data/<name>`.
 
-The shell (`execute`) runs on the host, starting in the workspace root. Every
-directory above is reachable from there by relative path — `data/<name>`,
-`derived/<name>`, your run directory — so relative paths are the simplest thing that
-works for anything inside the workspace, and nothing in the workspace is out of the
-shell's reach.
+The shell (`execute`) runs on the host, starting in the session root — the same
+directory virtual `/` names. So a virtual path becomes a shell path by dropping the
+leading slash, and nothing in the workspace is out of the shell's reach:
+
+| virtual | from the shell |
+| --- | --- |
+| `/data/<name>` | `data/<name>` |
+| `/derived/<name>` | `derived/<name>` |
+| `/runs/t001/input` | `runs/t001/input` |
+
+Your run directory is named in the task as `/runs/<turn>`; in the shell it is
+`runs/<turn>`. It already exists when the turn starts, so do not go searching for it —
+`find` will not locate it any faster than dropping the slash will.
 
 The two views do not mix, in either direction:
 
