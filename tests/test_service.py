@@ -153,6 +153,7 @@ def test_the_module_level_helpers_are_unchanged(cfg):
 
 class FakeTurn:
     virtual_dir = "/runs/t001"
+    shell_dir = "runs/t001"
     virtual_input_dir = "/runs/t001/input"
 
 
@@ -195,7 +196,10 @@ def test_unhardened_paths_are_reported_before_the_run_starts():
 def test_a_bare_task_is_told_only_its_run_directory():
     message = turn_message("do a thing", FakeTurn(), (), has_inputs=False)
 
-    assert message == "do a thing\n\nYour run directory for this task is /runs/t001."
+    assert message == (
+        "do a thing\n\nYour run directory for this task is /runs/t001 "
+        "(from the shell, runs/t001)."
+    )
 
 
 def test_supplied_files_and_new_data_are_both_named():
