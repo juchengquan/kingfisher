@@ -89,6 +89,7 @@ holds the id learns nothing they could not learn by using it.
 | D11 | **An app factory taking a ready `Kingfisher`.** | It is the substitution point every existing test already uses. A server that constructs its own instance at import time pushes tests back toward patching `create_deep_agent`, which this repo forbids because three live bugs got through that way. |
 | D12 | **`ServerConfig`, separate from `Config`.** | Bind address, concurrency cap, heartbeat interval and body limit are none of the library's business. Keeping them out of `Config` is the library/service split held in the one place it would otherwise blur first. |
 | D13 | **A shared `within(root, ref)` rule in `domain/references.py`.** | A ref is caller-supplied, so both `FileStore` and `DefinitionStore` adapters need the same traversal guard. It is *lexical* — the domain may not call `resolve` — so an adapter reading from a directory somebody else can write to has a second check to make, and `LocalFileStore` makes it. Called twice on purpose, at the fetch and at the write: one guards the ordering (a hostile `input_refs` key caught only at write time would leave a turn directory behind), the other guards the syscall. |
+| D15 | **An audit log, written by the server, as a log rather than a store.** | It records what `JsonlRunLogger` cannot: that logger is built inside a turn, so everything refused before one exists — an unknown session, a busy one, a bad reference — left no trace anywhere. Measured. Session ids *are* recorded, which is the difference from the access log, so it is a separate logger with no handler by default: attaching one is a deployment deciding where those ids may be written. Task and answer are off unless asked for, because what may be kept is a question about a deployment's obligations rather than about kingfisher. |
 | D14 | **The API does not accept `turn_id`.** | The library's `turn_id` reuses the *directory* and then runs the turn again in full. Over HTTP a field of that name reads as an idempotency key, and every convention says a repeat returns the first result rather than doing the work twice and charging for it. Correlation is served by `turn_id` in the `finished` event — the id the work got, not the one the caller hoped for. Additive later, once D3 is revisited. |
 | D15 | **Logging belongs to the server, through the standard library.** | The library emits nothing: every fact it produces already has a home in the per-session JSONL log or in `RunEvent`, and it swallows almost nothing — three `except` blocks in the package, two of which return the failure rather than hide it. So there is no interface to inject and no base class to write; `logging` is the seam, every dependency already writes to it, and a deployment redirects it by configuring handlers. loguru would mean two logging systems in one process and a bridge to carry anthropic, httpx, langchain and uvicorn across — it belongs at the console entry point, as one deployment's choice of sink, not as the package's interface. Kingfisher configures nothing: a library that calls `basicConfig` decides for a program it does not own. |
 
@@ -165,14 +166,22 @@ ship against a deployment that sends no files.
 
 ## Still undecided
 
-- **Result persistence.** Deferred in D3. Writing a turn's result into its
-  directory would make a dropped answer recoverable by a plain GET from any
-  replica — shared storage, not process state — and would make `turn_id` a real
-  idempotency key, closing D14. The objection is that it adds durable state to a
-  library whose direction is to have less. The shape most likely to survive
-  that objection is the Service recording what it streamed, since durability
-  then sits where identity already is. Worth revisiting once there is a Service
-  to put it in.
+- ~~**Result persistence.**~~ Revisited, and the premise did not survive
+  measurement. It was for recovering a dropped answer — but a hangup produces no
+  `finished` event and an empty turn directory, because D6 stops the turn. There
+  is nothing to store. Persistence and stop-on-disconnect only coexist if the
+  turn keeps running after the client leaves, which D6 refused so that a caller
+  cannot start work, walk away, and keep spending the deployment's model budget.
+
+  What replaced it is an **audit log** (D15), which was the honest remaining
+  motivation. A log rather than a store, so retention belongs to a handler and
+  there is no fourth kind of residue for a janitor that does not exist to sweep.
+  A keyed store of results would have been that fourth kind, after sessions,
+  threads and claims — two of which leaked until they were fixed.
+
+  Retry idempotency remains genuinely open, and is a different feature: it needs
+  `turn_id` back on the API (removed by D14 for promising exactly this) and a
+  decision about what a replayed turn returns.
 - **Authentication and per-caller quotas.** Outside, by D1 and T1. Nothing here
   knows who is calling, so nothing here can stop one caller opening unbounded
   sessions and starving the others.

@@ -59,6 +59,14 @@ class ServerConfig:
     #: default app serves the shipped local store; wire something else by
     #: building the `Kingfisher` yourself and handing it to `create_app`.
     file_store_dir: Path | None = None
+    #: Whether the audit log carries the task and the answer, or only what
+    #: happened. Off, because what may be kept and for how long is a question
+    #: about a deployment's obligations rather than about kingfisher -- so it is
+    #: a switch somebody sets, not a judgement made here.
+    #:
+    #: Either way the audit logger has no handler until one is attached, so
+    #: nothing is written by default at all.
+    audit_content: bool = False
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> ServerConfig:
@@ -80,4 +88,5 @@ class ServerConfig:
             file_store_dir=(
                 Path(where) if (where := source.get(f"{PREFIX}FILE_STORE_DIR")) else None
             ),
+            audit_content=source.get(f"{PREFIX}AUDIT_CONTENT", "").lower() == "true",
         )
