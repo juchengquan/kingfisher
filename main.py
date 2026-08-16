@@ -273,8 +273,14 @@ def main(argv: list[str]) -> int:
         print(f"created a new workspace at {workspace}")
 
     if args.seed_presets:
-        for name in presets.seed(cfg):
+        seeding = presets.seed(cfg)
+        for name in seeding.written:
             print(f"seeded {name}")
+        for name in seeding.overwritten:
+            # After the list, not beside each entry: the point is that you edit
+            # your copy, so losing one is the line that has to survive being
+            # skimmed.
+            print(f"warning: overwrote your edited {name}")
 
     if args.list:
         return show_inventory(cfg, workspace)
