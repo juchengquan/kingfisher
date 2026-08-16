@@ -412,6 +412,23 @@ def test_the_package_ships_its_presets():
             assert (root / kind).is_dir(), kind
 
 
+def test_the_package_ships_the_catalogue_example():
+    """The same rule as above, for the file a deployment needs *first*.
+
+    `models.yaml` is required and has no fallback, so the worked example is the
+    one document a new deployment cannot start without reading. It lived at the
+    repo root -- outside `packages = ["src/kingfisher"]` -- which meant a
+    pip-installed kingfisher shipped a required format with no example of it,
+    and nothing noticed. Exactly the mistake the test above was written about,
+    one directory over.
+    """
+    from kingfisher.infrastructure import presets
+
+    assert (SRC / "presets" / presets.EXAMPLE).is_file()
+    with presets.opened() as root:
+        assert (root / presets.EXAMPLE).is_file()
+
+
 # -- who caused it ---------------------------------------------------------
 #
 # A consumer that cannot name an error can only catch `ValueError`. Ten of the
