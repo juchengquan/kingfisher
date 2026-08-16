@@ -32,15 +32,22 @@ Nothing is written unless the task asks for it. Wanting a report on disk is one
 kind of request among many, so there is no flag for it -- say what you want in
 the task, and name the files if you care what they are called.
 
-`--tools`, `--skills` and `--subagents` are per-request capability grants.
-Omitting one means "everything this workspace offers"; passing it with an empty
-value means none. Naming something that does not exist is an error, not a
-silently narrower run -- `--list` shows the valid names.
+`--builtin-tools`, `--tools`, `--skills` and `--subagents` are per-request
+capability grants. Omitting one means "everything this workspace offers";
+passing it with an empty value means none. Naming something that does not exist
+is an error, not a silently narrower run -- `--list` shows the valid names.
 
-    uv run main.py "Review it" --without-tools execute,delete
+Tools come in two kinds and are granted apart. `--builtin-tools` names what the
+agent ships with (`read_file`, `execute`); `--tools` names what this workspace
+defines in `tools/`. Naming one under the other is refused rather than resolved,
+and `--list` prints them under separate headings for exactly that reason.
 
-`--without-tools` and its two siblings say the same thing by subtraction, which
-is usually what you mean: "not the shell" rather than the other eleven names.
+    uv run main.py "Review it" --without-builtin-tools execute,delete
+
+`--without-builtin-tools` and its three siblings say the same thing by
+subtraction, which is usually what you mean: "not the shell" rather than the
+other eleven names.
+
 It resolves against what the workspace offers *now* and stores the result, so a
 grant written this way is an ordinary list and behaves like one -- including
 going stale if the workspace later gains a tool. That is deliberate: a grant
@@ -89,7 +96,7 @@ from evals.task import SMOKE_TASK
 # should not pay for a model it will never build.
 from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
 from kingfisher.config import Config
-from kingfisher.domain.capabilities import CapabilityError, all_but
+from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement, presets, skill_store, tool_store
@@ -102,6 +109,12 @@ from kingfisher.infrastructure.workspace_fs import (
     ensure_session_layout,
     is_new_workspace,
 )
+
+#: The grants this driver exposes, in the order they are listed and reported.
+#: `builtin_tools` and `tools` are two axes rather than one because they are
+#: granted, refused and withheld apart everywhere else -- `--list` and this
+#: driver were the last places treating them as one pile.
+GRANTS: tuple[str, ...] = ("builtin_tools", "tools", "skills", "subagents")
 
 
 def _selection(value: str | None) -> tuple[str, ...] | None:
@@ -177,7 +190,6 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # backend at, but what a workspace *offers* is a question about the
     # workspace, and answering it must not leave a session lying around --
     # `keep_runs` would eventually reap a real one to make room for the decoy.
-    print("tools")
     # Caught the way a malformed subagent is, below. `--list` is where someone
     # goes *because* something is wrong, so a loader that raises here should
     # say what to fix rather than print a traceback over the rest of the
@@ -200,14 +212,29 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
                 )
             )
     except ToolError as exc:
+        print("tools")
         print(f"  cannot load: {exc}")
         return 1
-    # Where a workspace tool is defined, so a folder is navigable rather than
-    # merely tidy. Built-ins are not in here and get no suffix, which is also
-    # how the two kinds tell themselves apart in this listing.
+
+    # Two headings, because they are two grants. Printed as one pile, this
+    # listing advertised `read_file` beside `csv_profile` and left a reader to
+    # guess which flag took which -- and guessing wrong is the "that is a
+    # builtin tool" refusal. Where each workspace tool is defined goes here too,
+    # so a folder is navigable rather than merely tidy.
     defined_in = {entry.name: entry.source for entry in found}
-    for name in introspected or ("(could not introspect)",):
-        print(f"  {name}{_from(defined_in.get(name), f'{name}.py')}")
+    own = tuple(sorted(defined_in))
+    builtin = tuple(n for n in introspected if n not in set(defined_in))
+
+    print("builtin tools — grant with --builtin-tools")
+    for name in builtin or ("(could not introspect)",):
+        print(f"  {name}")
+
+    # The same block a refusal prints, so the two agree by construction rather
+    # than by both being edited. Every entry here has a file -- the section is
+    # workspace tools -- so the column is uniform, where suppressing it for
+    # `http_fetch.py` and printing it for `csv_profile/` left it ragged.
+    print("\nworkspace tools — grant with --tools")
+    print(tool_store.offered(defined_in, own))
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
     for name in skill_store.names(catalogue["skills"]) or ("(none)",):
@@ -357,16 +384,19 @@ def build_parser() -> argparse.ArgumentParser:
         default=[],
         help="a file kept for the whole session, in /data (read-only); repeatable",
     )
-    for name in ("tools", "skills", "subagents"):
+    for name in GRANTS:
+        spoken = name.replace("_", " ")
         parser.add_argument(
-            f"--{name}",
+            f"--{name.replace('_', '-')}",
+            dest=name,
             metavar="A,B",
-            help=f"activate only these {name} (empty string for none)",
+            help=f"activate only these {spoken} (empty string for none)",
         )
         parser.add_argument(
-            f"--without-{name}",
+            f"--without-{name.replace('_', '-')}",
+            dest=f"without_{name}",
             metavar="A,B",
-            help=f"activate every {name[:-1]} except these",
+            help=f"activate every {spoken[:-1]} except these",
         )
     parser.add_argument(
         "--no-memory",
@@ -407,12 +437,21 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     from kingfisher.infrastructure.workspace_fs import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
+    found = tool_store.loaded(catalogue["tools"])
+    workspace = tuple(sorted(entry.name for entry in found))
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
         root = Path(scratch)
+        registered = registered_tools(
+            build_agent(cfg, session_dir=root, catalogue=catalogue, workspace_tools=found)
+        )
         return {
-            "tools": registered_tools(
-                build_agent(cfg, session_dir=root, catalogue=catalogue)
-            ),
+            # The two axes, apart. They are granted apart and refused apart, and
+            # a subtraction taken from the union produced a grant of built-in
+            # names on the workspace axis -- which is how `--without-tools
+            # execute,delete`, the example this file's own docstring gives, came
+            # back as "those are builtin tools".
+            "builtin_tools": tuple(n for n in registered if n not in set(workspace)),
+            "tools": workspace,
             "skills": available_skills(cfg, root, catalogue=catalogue),
             "subagents": tuple(defined_subagents(cfg, root, catalogue=catalogue)),
         }
@@ -424,23 +463,35 @@ def _grants(cfg: Config, args: argparse.Namespace) -> dict[str, tuple[str, ...] 
     `--tools` and `--without-tools` are two ways to say the same thing, so
     passing both is refused rather than resolved: whichever precedence we chose,
     the other reading is the one somebody meant.
+
+    Four kinds, not three. `builtin_tools` is its own grant because the library
+    has always had it and this driver simply never offered it -- so `--tools`
+    narrowed the workspace half while every built-in stayed granted, and there
+    was no way from a command line to withhold `execute` at all.
     """
     chosen: dict[str, tuple[str, ...] | None] = {}
-    excluded = {
-        kind: _selection(getattr(args, f"without_{kind}"))
-        for kind in ("tools", "skills", "subagents")
-    }
+    excluded = {kind: _selection(getattr(args, f"without_{kind}")) for kind in GRANTS}
     both = [k for k in excluded if getattr(args, k) is not None and excluded[k] is not None]
     if both:
-        names = ", ".join(f"--{k} and --without-{k}" for k in both)
+        names = ", ".join(f"--{k.replace('_', '-')} and --without-{k.replace('_', '-')}"
+                          for k in both)
         msg = f"pass one or the other, not both: {names}"
         raise ValueError(msg)
 
     offered = _offered(cfg) if any(v is not None for v in excluded.values()) else {}
-    for kind in ("tools", "skills", "subagents"):
+    for kind in GRANTS:
         leave_out = excluded[kind]
+        named = getattr(args, kind)
+        # A kind nobody mentioned is *absent* from the result, not `None` in it.
+        # The two are opposite: `Capabilities` starts `tools`, `skills` and
+        # `builtin_tools` at `ALL`, and `None` on those fields means *none*. So
+        # passing `None` for a flag that was never typed asked for an agent with
+        # no tools and no skills -- which is what `main.py "task"` had been
+        # quietly requesting, against a docstring promising the opposite.
+        if leave_out is None and named is None:
+            continue
         chosen[kind] = (
-            _selection(getattr(args, kind))
+            _selection(named)
             if leave_out is None
             else all_but(leave_out, offered=offered[kind])
         )
@@ -517,10 +568,13 @@ def main(argv: list[str]) -> int:
     print(f"model     : {cfg.model} via {cfg.api_style}")
     warn_if_unconfined(cfg)
     if not capabilities.is_unrestricted:
-        for kind in ("tools", "skills", "subagents"):
+        for kind in GRANTS:
             selected = getattr(capabilities, kind)
-            if selected is not None:
-                print(f"{kind:<10}: {', '.join(selected) or '(none)'}")
+            # `ALL` is not a narrowing and has no list to print. Only reachable
+            # for `builtin_tools`, which defaults to it -- the other three
+            # default to `None` or a tuple.
+            if selected is not None and selected != ALL:
+                print(f"{kind.replace('_', ' '):<14}: {', '.join(selected) or '(none)'}")
         if capabilities.memory is not None:
             print(f"{'memory':<10}: {'on' if capabilities.memory else 'off'}")
     if request.inputs:
