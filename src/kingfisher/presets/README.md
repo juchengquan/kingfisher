@@ -135,6 +135,19 @@ system_prompt: |
 That is a whole definition: three required fields, one optional, nothing else
 needed.
 
+Sending a delegate somewhere cheaper is two more lines, and they move together:
+
+```yaml
+provider: openai        # a style this deployment has credentials for
+model: gpt-5            # a model that endpoint serves
+```
+
+`provider` is checked when the agent is built, so naming one this deployment
+has no credentials for fails immediately — `no endpoint configured for style
+'openai'`. That is why neither shipped preset pins one: a preset is copied into
+every workspace, and a single-endpoint deployment could not activate it.
+`model` alone is safe to pin, which is what `extractor.yaml` does.
+
 | Field | | |
 | --- | --- | --- |
 | `name` | required | What a request activates it by. Authoritative — the filename is not |
