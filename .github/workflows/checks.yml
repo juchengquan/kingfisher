@@ -33,23 +33,21 @@ jobs:
         with:
           enable-cache: true
 
+      # A uv-managed interpreter, pinned rather than inherited. The runner
+      # ships a *framework* Python, and under it the shell confinement refuses
+      # to start `python3` at all -- `realpath: .../.venv/bin/: Operation not
+      # permitted` -- while a uv-managed one is fine. That is a real gap and it
+      # has an issue; it is not what this workflow is for, and testing against
+      # an interpreter no contributor has would make every run about the
+      # runner. `uv python install` is what everyone here already develops on.
+      - name: Pin a uv-managed Python
+        run: uv python install 3.12
+
       - name: Install the project
         run: uv sync --all-extras --dev
 
       # Three separate steps rather than one `&&` chain, so a red build says
       # which of the three failed from the job list without opening the log.
-      - name: what the sandbox will be told about (temporary)
-        run: |
-          uv run python -c "
-          import sys, os
-          from pathlib import Path
-          print('HOME        ', Path.home())
-          print('sys.prefix  ', sys.prefix, '->', Path(sys.prefix).resolve())
-          print('base_prefix ', sys.base_prefix, '->', Path(sys.base_prefix).resolve())
-          print('executable  ', sys.executable, '->', Path(sys.executable).resolve())
-          print('cwd         ', Path.cwd(), '->', Path.cwd().resolve())
-          "
-
       - name: ruff
         run: uv run ruff check src/ main.py tests/
 
