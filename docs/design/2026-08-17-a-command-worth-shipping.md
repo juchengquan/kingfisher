@@ -1,6 +1,6 @@
 # A command worth shipping, and the exports that make it one
 
-**Status:** designed, not implemented.
+**Status:** implemented, B1-B8. Three more verbs designed below, not implemented.
 **Date:** 2026-08-17
 
 The assets work left one thing unfinished, and it is written into that
@@ -48,6 +48,10 @@ its flags, and its smoke.
 | B5 | **Subcommands, and bare `kingfisher` prints help.** | A shipped command needs a safe do-nothing default, and this repository has already paid to learn what a wrong one costs: bare `main.py` spends money. Flags force a default to be invented — `kingfisher` alone would mean nothing, or an error, both worse-behaved than help. Verbs also grow without competing: a later `doctor` is a new word, not a fifth flag arguing about what bare invocation means. |
 | B6 | **`main.py` keeps `--seed-assets` and `--list`.** | Drift comes from two implementations, not two doors. Both call the same exported functions and print through the same formatter, so there is one implementation reachable two ways. Removing them costs 23 edits across 8 files to buy nothing, and leaves the daily driver unable to seed. |
 | B7 | **The catalogue error names `kingfisher seed`.** | It currently names `--seed-assets`, which is a flag on a file a pip user does not have. A console script is on `PATH` in a checkout too — measured — so `kingfisher seed` is the one instruction that is true for whoever is reading it. |
+| B9 | **`list` grows `--json`.** | The first thing anyone scripting against it asks for, and it costs almost nothing: `Inventory` is already the shape to serialise and its fields are already public, so this promises nothing new. The human form stays the default -- a listing whose default output is JSON is a listing nobody reads. |
+| B10 | **`doctor` answers "why will this not start?", and nothing else.** | A name is not a job. Without a stated one it becomes a second `list` that prints the same things in a different order. Its job is every check that stands between an install and a run: the catalogue loads, every endpoint it names has a credential, the default model is one this machine can reach, every alias is bound, all three catalogues parse, a pack is installed, and the shell confinement this host will actually use. Those checks exist today -- scattered across error paths, a warning in `model_catalogue.load`, and `warn_if_unconfined` in a driver that is not in the wheel. Collecting them is the whole value: they are the things you want to know *before* a run costs money. |
+| B11 | **`serve` is added as an alias; `kingfisher-server` stays.** | Two names for one thing is a real cost, and it is smaller than breaking every script, unit file and container that already calls `kingfisher-server`. Nothing is published, so nothing external breaks -- but "external" is the wrong test for a command a deployment already runs. One implementation, two ways in, which is the arrangement B6 already chose for the listing. |
+
 | B8 | **This makes kingfisher publishable. It does not publish it.** | Publishing means owing a version floor and a deprecation cycle, and the formats are still moving — `--seed-presets` was renamed, `provider:` removed, `where::what` landed days ago. B1–B7 remove the reason a pip install would be useless; whether to take that step is a separate decision, still open, and the asset pack's missing `kingfisher` floor waits on it. |
 
 ## Measurements
@@ -99,12 +103,31 @@ Phase 1 is invisible from outside and reversible. Phase 3 is the one that adds a
 promise, and it is deliberately after the exports exist, so the rule is checked
 against a real consumer rather than against an empty package.
 
+The three verbs above are additive and independent of each other:
+
+| Phase | Deliverable | Depends on |
+|---|---|---|
+| **5** | B9: `list --json`, from the record that already exists. | 4 |
+| **6** | B10: `doctor`, and the one export it needs -- a confinement check a consumer can call, since `confinement.resolve` takes six arguments and `main.py` is the only thing assembling them. | 4 |
+| **7** | B11: `serve`, sharing an implementation with `kingfisher-server`. | 4 |
+
+No `help` verb. `-h`, `--help`, bare `kingfisher`, and `kingfisher <verb> --help`
+already print it; a fifth way to reach the same text is not discoverability, it
+is another thing to keep consistent.
+
 ## Still undecided
 
-- **Whether `list` grows a machine-readable form.** `--json` is the obvious ask
-  the first time somebody scripts against it, and B4's record is already the
-  right shape to serialise. Nothing here decides it, and adding it later breaks
-  nobody.
+- ~~**Whether `list` grows a machine-readable form.**~~ Decided as B9.
+- **What `doctor` does about a check it cannot answer.** A credential can be
+  present and wrong, and the only way to find out is to spend money on a call
+  nobody asked for. The likely answer is that it reports what it *can* see and
+  says plainly that a reachable endpoint is not a working one, but nothing here
+  settles whether a `--probe` that makes one real call is worth having.
+- **Whether `doctor` and the smoke overlap.** `main.py` with no arguments runs a
+  real task and checks the result, which is the strongest possible answer to
+  "will this work". `doctor` is the cheap version that never calls a model.
+  Whether the expensive one belongs in the shipped command at all is not decided
+  here -- B1 says the shipped command does not run tasks, and a smoke is a task.
 - **What `list` prints for a tool's source.** Today: `csv_columns
   (csv_profile)`, which reads well and cannot be pasted into a definition —
   `profiler.yaml`'s comment was corrected to stop implying otherwise. The
@@ -112,8 +135,12 @@ against a real consumer rather than against an empty package.
   `csv_profile::csv_columns`. Making the record public does not settle it,
   because the record carries the source and the *printer* chooses. That is the
   right place for the question to live, and it is still open.
-- **Whether `kingfisher-server` and `kingfisher` should be one command.**
-  `kingfisher serve` is the shape most tools converge on, and two scripts from
-  one distribution invites it. Against: the server is behind an extra, so
-  `kingfisher serve` would be a subcommand that is missing on a plain install,
-  which is worse than a script that is absent. Not decided here.
+- ~~**Whether `kingfisher-server` and `kingfisher` should be one command.**~~
+  Decided as B11, and the argument recorded against it was simply wrong.
+  *"`kingfisher serve` would be a subcommand that is missing on a plain
+  install"* -- it would not. `kingfisher-server` is already present whether or
+  not the extra is installed: it imports uvicorn inside the function and prints
+  *"needs the server extra: pip install 'kingfisher[server]'"* when it is not
+  there. A subcommand does exactly the same, so the objection described a
+  problem the existing script had already solved. Checked in
+  `presentation/__main__.py` rather than remembered.
