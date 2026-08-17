@@ -22,6 +22,7 @@ from kingfisher.domain.ports import (
     SubagentRepository,
     ToolRepository,
 )
+from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure import subagent_store
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
@@ -105,7 +106,7 @@ def test_a_tool_repository_imports_each_module_once_for_every_view_of_it(catalog
     tools = LocalToolRepository(catalogue / "tools")
 
     assert tools.names == ("noisy",)
-    assert tools.sources == {"noisy": "noisy.py"}
+    assert Offering.of(tools.found).sources == {"noisy": "noisy.py"}
     assert [entry.name for entry in tools.found] == ["noisy"]
     assert len(tools.tools) == 1
 

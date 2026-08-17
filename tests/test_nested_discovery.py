@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.subagent import SubagentError
+from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError, tool_name
@@ -213,7 +214,7 @@ def test_sources_say_where_a_nested_tool_lives(tmp_path):
     _tool(tmp_path / "research", "find_company")
     _tool(tmp_path, "flat")
 
-    assert LocalToolRepository(tmp_path).sources == {
+    assert Offering.of(LocalToolRepository(tmp_path).found).sources == {
         "find_company": "research/find_company.py",
         "flat": "flat.py",
     }
@@ -230,7 +231,9 @@ def test_a_package_is_reported_as_a_directory(tmp_path):
         TOOL.format(name="csv_columns") + "\nTOOLS = [csv_columns]\n", encoding="utf-8"
     )
 
-    assert LocalToolRepository(tmp_path).sources == {"csv_columns": "csv_profile/"}
+    assert Offering.of(LocalToolRepository(tmp_path).found).sources == {
+        "csv_columns": "csv_profile/"
+    }
 
 
 # -- subagents: folders, no packages --------------------------------------
