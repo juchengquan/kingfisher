@@ -132,6 +132,13 @@ Phases 1 to 3 remain additive and reversible.
   a pip user does not have, which is the kind of gap that reads as a lie. The
   ordinary answer is a `[project.scripts]` console entry, and it is a decision
   about what kingfisher's CLI *is* rather than a rename, so it is not in phase 5.
+
+  **Answered by *2026-08-17-a-command-worth-shipping*,** which designs a small
+  `kingfisher seed` / `kingfisher list` held to the server's public-API rule —
+  and, in doing so, makes `seed` and `installed_packs` public, so the snippet in
+  `assets/README.md` stops reaching past the front door. Whether to publish
+  afterwards stays open; that document removes the reason a pip install would be
+  useless and decides nothing beyond it.
 - ~~**The catalogue error is a dead end.**~~ Fixed in phase 6, which had to:
   A7 could not fire at all while the config was built first, because a first run
   has no `models.yaml` and never reached the seeding line. The driver now reads
