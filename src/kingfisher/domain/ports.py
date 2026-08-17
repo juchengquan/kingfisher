@@ -65,16 +65,31 @@ class AssetRepository(Protocol):
 
 @runtime_checkable
 class SkillRepository(AssetRepository, Protocol):
-    """Skills, which are names and nothing more.
+    """Skills: their names, and the files each one is made of.
 
-    Adds nothing, and that is the point rather than an omission: deepagents
-    opens skill files itself, through a backend route, so kingfisher lists and
-    denies but never parses one. There is no payload here for a port to carry.
+    kingfisher never *parses* a skill -- deepagents opens them itself, through a
+    backend route -- so for a long time `names` was the whole port and the files
+    were assumed to be a directory somewhere. That assumption was the one thing
+    stopping a deployment from holding its skills anywhere else, because a route
+    needs file contents and a name cannot supply them.
 
-    Which also makes this the kind with the fewest strings attached. It is read
-    through `BackendProtocol`, not off a host path, so a deployment backing its
-    skills with something that is not a filesystem has nothing to stage.
+    `files` is what closes that. A repository that can hand over bytes can be
+    mounted for the agent to read, whatever it is backed by.
+
+    The mapping shape is `DefinitionStore.fetch`'s, deliberately: a skill is
+    several files and both answer "the files making up one definition, keyed by
+    path relative to it". A deployment already writing one of those has written
+    most of this.
     """
+
+    def files(self, name: str) -> Mapping[str, bytes]:
+        """The files making up one skill, keyed by path relative to the skill.
+
+        `skill.FILENAME` is always among them -- it is what makes a directory a
+        skill -- and anything else the skill ships travels with it: scripts,
+        data, templates. Raises `KeyError` for a name this does not hold.
+        """
+        ...
 
 
 @runtime_checkable

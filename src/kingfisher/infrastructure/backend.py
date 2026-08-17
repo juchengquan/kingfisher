@@ -24,7 +24,8 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.catalogue import Catalogue, local_root
+from kingfisher.infrastructure.catalogue import Catalogue, catalogue_root
+from kingfisher.infrastructure.skills_backend import skills_backend
 
 if TYPE_CHECKING:
 
@@ -81,16 +82,24 @@ def shell_env(
     from -- and `$KINGFISHER_SKILLS` is exactly how a skill addresses them.
     """
     path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
-    return {
+    env = {
         "PATH": ":".join(path_parts),
         "HOME": str(agent_home(session_dir)),
-        "KINGFISHER_SKILLS": str(
-            local_root((catalogue or Catalogue.from_config(cfg)).skills, "skills")
-        ),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(cfg.scratch_dir),
     }
+    # Only when there is a directory to name. A catalogue held in a store is
+    # readable by the file tools -- `skills_backend` mounts it -- but a skill's
+    # *scripts* are run by the shell, and a store has no path for the shell to
+    # reach. Setting this to something that is not there would turn "this
+    # deployment cannot run skill scripts" into `no such file or directory` on
+    # a path the operator never configured. Absent, `sh "$KINGFISHER_SKILLS/x"`
+    # fails immediately and says the variable is unset, which is the truth.
+    root = catalogue_root((catalogue or Catalogue.from_config(cfg)).skills)
+    if root is not None:
+        env["KINGFISHER_SKILLS"] = str(root)
+    return env
 
 
 #: Absolute prefixes that can never name a workspace directory, so a file-tool
@@ -332,7 +341,13 @@ def build_backend(
     `execute` still works, because CompositeBackend delegates execution to its
     default backend.
     """
-    skills_dir = local_root((catalogue or Catalogue.from_config(cfg)).skills, "skills")
+    skills = (catalogue or Catalogue.from_config(cfg)).skills
+    # A directory on this host stays a directory: cheaper than copying every
+    # skill into a store, and the only shape whose skills can also be *run*,
+    # since a skill's scripts are executed by the shell against
+    # `$KINGFISHER_SKILLS` and a store has no path for the shell to reach.
+    # Anything else is mounted from what the repository can hand over.
+    skills_dir = catalogue_root(skills)
 
     prepare_scratch(cfg)
     for routed in ("data", "memory"):
@@ -344,7 +359,8 @@ def build_backend(
     # already refused by `resolve_catalogue` if it did not, so this only ever
     # creates a derived one -- and stays here for the callers that build a
     # backend directly, without a service to have resolved anything for them.
-    skills_dir.mkdir(parents=True, exist_ok=True)
+    if skills_dir is not None:
+        skills_dir.mkdir(parents=True, exist_ok=True)
 
     shell = ConfinedShell(
         confinement.resolve(
@@ -363,7 +379,11 @@ def build_backend(
         default=shell,
         routes={
             DATA_ROUTE: FilesystemBackend(root_dir=str(session_dir / "data")),
-            SKILLS_ROUTE: FilesystemBackend(root_dir=str(skills_dir)),
+            SKILLS_ROUTE: (
+                FilesystemBackend(root_dir=str(skills_dir))
+                if skills_dir is not None
+                else skills_backend(skills)
+            ),
             MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
             UPLOADED_SKILLS_ROUTE: FilesystemBackend(root_dir=str(uploaded)),
         },
