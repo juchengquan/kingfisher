@@ -212,7 +212,7 @@ class Models:
 
         So an unbound alias stops the build and says what to write. Loud is
         cheap here: it fires only when a request activates the delegate, so
-        seeding a preset you have not bound for costs nothing until you use it.
+        seeding a definition you have not bound for costs nothing until you use it.
         """
         model = self.aliases.get(alias)
         if model is None:

@@ -11,7 +11,7 @@ was reachable from here.
     uv run main.py "Summarise /data/x.csv"      # anything else
 
     uv run main.py --list                       # what this workspace offers
-    uv run main.py --seed-presets               # copy the shipped ones in
+    uv run main.py --seed-assets                # copy in what a pack ships
 
     uv run main.py "Review it" --skills code-review --subagents reviewer
     uv run main.py "Count the rows" --tools read_file,write_file
@@ -100,7 +100,7 @@ from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import offered as tool_offered
-from kingfisher.infrastructure import confinement, presets, skill_store
+from kingfisher.infrastructure import confinement, seeding, skill_store
 from kingfisher.infrastructure.runlog import read_usage
 from kingfisher.infrastructure.tool_store import ToolError
 from kingfisher.infrastructure.workspace_fs import (
@@ -268,7 +268,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         print(f"  {spec.name}{_from(where.get(spec.name), f'{spec.name}.yaml')}"
               f" — {spec.description}")
     if not specs:
-        print("  (none)  — try --seed-presets")
+        print("  (none)  — try --seed-assets")
     return 0
 
 
@@ -414,9 +414,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     parser.add_argument("--list", action="store_true", help="show what the workspace offers")
     parser.add_argument(
-        "--seed-presets",
+        "--seed-assets",
         action="store_true",
-        help="copy the definitions kingfisher ships into the workspace",
+        help="copy the definitions from installed asset packs into the workspace",
     )
     return parser
 
@@ -558,11 +558,11 @@ def main(argv: list[str]) -> int:
     if fresh:
         print(f"created a new workspace at {workspace}")
 
-    if args.seed_presets:
-        seeding = presets.seed(cfg)
-        for name in seeding.written:
+    if args.seed_assets:
+        result = seeding.seed(cfg)
+        for name in result.written:
             print(f"seeded {name}")
-        for name in seeding.overwritten:
+        for name in result.overwritten:
             # After the list, not beside each entry: the point is that you edit
             # your copy, so losing one is the line that has to survive being
             # skimmed.

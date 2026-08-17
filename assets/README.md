@@ -4,11 +4,23 @@ One working definition of each thing a kingfisher request can activate — a
 skill, a subagent, a tool.
 
     pip install kingfisher-assets
-    kingfisher --seed-presets          # copies them into $KINGFISHER_WORKSPACE
+    uv run main.py --seed-assets       # copies them into $KINGFISHER_WORKSPACE
 
 Nothing here is loaded automatically, and nothing here is imported. The files
 are copied into a workspace and read from there; a tool is imported *from the
 workspace*, never from this distribution.
+
+> **Seeding needs a kingfisher checkout today.** `main.py` is the driver and it
+> is not in the framework's wheel, so there is no `kingfisher --seed-assets` for
+> someone who only pip-installed. Installing this pack is still what makes the
+> definitions *available* — discovery is an entry point, not a path — and any
+> caller can seed from it in three lines:
+>
+> ```python
+> from kingfisher.infrastructure import seeding
+> for name in seeding.seed(cfg).written:
+>     print(f"seeded {name}")
+> ```
 
 ## Why it is a separate package
 

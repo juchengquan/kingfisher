@@ -1,13 +1,14 @@
 """Where the seeder gets its files from.
 
-The source used to be a constant — `kingfisher.presets`, the tree inside the
-wheel. It is now whatever registered under the `kingfisher.assets` entry-point
-group, and kingfisher names no pack anywhere: it asks which are installed and
-copies from each.
+The source used to be a constant — a tree inside the wheel. It is now whatever
+registered under the `kingfisher.assets` entry-point group, and kingfisher names
+no pack anywhere: it asks which are installed and copies from each.
 
-Kingfisher's own presets register through that group like anyone else's, so the
-default arrangement is one pack that happens to ship inside the wheel — and
-every existing seeding test now exercises the discovery path without knowing it.
+For one phase kingfisher registered its own presets through that group, so the
+mechanism could be proved before any file moved. It ships none now. What remains
+of `PACKAGE` is its own package data — the catalogue example and the format
+documentation — which is seeded outside the loop over packs and is the one thing
+here a deployment gets whether or not it installed anything.
 """
 
 from __future__ import annotations
@@ -17,8 +18,8 @@ from contextlib import contextmanager
 import pytest
 
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure import presets
-from kingfisher.infrastructure.presets import Pack
+from kingfisher.infrastructure import seeding
+from kingfisher.infrastructure.seeding import Pack
 
 
 def _pack_of(tmp_path, name: str, *entries: str) -> tuple[Pack, object]:
@@ -39,7 +40,7 @@ def test_kingfisher_registers_no_pack_of_its_own():
     moved. It ships no assets now, so it registers nothing -- a framework that
     announced itself as a source of content would be the thing this change
     exists to stop."""
-    found = {pack.package for pack in presets.installed_packs()}
+    found = {pack.package for pack in seeding.installed_packs()}
 
     assert not any(package.startswith("kingfisher.") for package in found)
 
@@ -47,7 +48,7 @@ def test_kingfisher_registers_no_pack_of_its_own():
 def test_the_asset_pack_in_this_repository_is_discovered():
     """The real arrangement, end to end: a second distribution, found through
     the entry point, with no name written down in kingfisher's source."""
-    found = {pack.name: pack.package for pack in presets.installed_packs()}
+    found = {pack.name: pack.package for pack in seeding.installed_packs()}
 
     assert found.get("kingfisher-assets") == "kingfisher_assets"
 
@@ -55,22 +56,31 @@ def test_the_asset_pack_in_this_repository_is_discovered():
 def test_packs_come_back_in_a_stable_order():
     """Two environments holding the same packs seed in the same order, and a
     collision message reads the same way twice."""
-    names = [pack.name for pack in presets.installed_packs()]
+    names = [pack.name for pack in seeding.installed_packs()]
 
     assert names == sorted(names)
 
 
-def test_the_seeder_names_no_package_of_its_own(cfg):
-    """The coupling this phase exists to create. Kingfisher asks who is
-    installed; it does not reach for a name. The only mention of
-    `kingfisher.presets` in the module is the default handed to `opened`, which
-    the entry point supplies in every real call.
+def test_the_seeder_copies_pack_content_without_naming_a_package(cfg):
+    """The coupling this whole change exists to create: kingfisher asks who is
+    installed, it does not reach for a name.
+
+    Asserted against the module's own constant rather than a string literal.
+    The literal version said `"kingfisher.presets" not in source`, which stopped
+    meaning anything the moment that directory was renamed -- it passed for the
+    reason a test must never pass, because the thing it names no longer exists.
+
+    `PACKAGE` is exempt in `_copy_example` alone. That file is kingfisher's, not
+    a pack's, so naming it there is the point rather than the leak.
     """
     import inspect
 
-    source = inspect.getsource(presets.seed) + inspect.getsource(presets._copy)
+    source = inspect.getsource(seeding.seed) + inspect.getsource(seeding._copy)
 
-    assert "kingfisher.presets" not in source
+    assert seeding.PACKAGE not in source
+    assert "kingfisher." not in source
+    # And the exemption is real, so this cannot pass by the constant being unused.
+    assert "PACKAGE" in inspect.getsource(seeding._copy_example)
 
 
 # -- two packs, one file ---------------------------------------------------
@@ -92,10 +102,10 @@ def test_two_packs_claiming_one_entry_are_refused(cfg, tmp_path, monkeypatch):
         # the stand-in has to answer that too -- it is not a pack.
         yield roots.get(package, tmp_path)
 
-    monkeypatch.setattr(presets, "opened", _opened)
+    monkeypatch.setattr(seeding, "opened", _opened)
 
     with pytest.raises(ConfigError, match="disagree about what to seed"):
-        presets.seed(cfg, packs=[first, second])
+        seeding.seed(cfg, packs=[first, second])
 
 
 def test_the_refusal_names_both_packs(cfg, tmp_path, monkeypatch):
@@ -111,10 +121,10 @@ def test_the_refusal_names_both_packs(cfg, tmp_path, monkeypatch):
         # the stand-in has to answer that too -- it is not a pack.
         yield roots.get(package, tmp_path)
 
-    monkeypatch.setattr(presets, "opened", _opened)
+    monkeypatch.setattr(seeding, "opened", _opened)
 
     with pytest.raises(ConfigError) as raised:
-        presets.seed(cfg, packs=[first, second])
+        seeding.seed(cfg, packs=[first, second])
 
     assert "alpha" in str(raised.value)
     assert "beta" in str(raised.value)
@@ -137,10 +147,10 @@ def test_nothing_is_written_before_the_refusal(cfg, tmp_path, monkeypatch):
         # the stand-in has to answer that too -- it is not a pack.
         yield roots.get(package, tmp_path)
 
-    monkeypatch.setattr(presets, "opened", _opened)
+    monkeypatch.setattr(seeding, "opened", _opened)
 
     with pytest.raises(ConfigError):
-        presets.seed(cfg, packs=[first, second])
+        seeding.seed(cfg, packs=[first, second])
 
     # `skills/a` belongs only to alpha and would have been copied first.
     assert not (cfg.skills_dir / "a").exists()
@@ -159,11 +169,11 @@ def test_two_packs_that_do_not_collide_both_seed(cfg, tmp_path, monkeypatch):
         # the stand-in has to answer that too -- it is not a pack.
         yield roots.get(package, tmp_path)
 
-    monkeypatch.setattr(presets, "opened", _opened)
+    monkeypatch.setattr(seeding, "opened", _opened)
 
-    seeding = presets.seed(cfg, packs=[first, second])
+    result = seeding.seed(cfg, packs=[first, second])
 
-    assert set(seeding.written) == {"subagents/one.yaml", "subagents/two.yaml"}
+    assert set(result.written) == {"subagents/one.yaml", "subagents/two.yaml"}
     assert (cfg.subagents_dir / "one.yaml").is_file()
     assert (cfg.subagents_dir / "two.yaml").is_file()
 
@@ -176,7 +186,7 @@ def test_seeding_from_no_packs_still_writes_the_catalogue_example(cfg):
     file rather than a pack's, so it does not depend on having installed any.
     No definitions are written, because there are none to write.
     """
-    seeding = presets.seed(cfg, packs=[])
+    result = seeding.seed(cfg, packs=[])
 
-    assert seeding.written == (presets.EXAMPLE,)
-    assert (cfg.workspace / presets.EXAMPLE).is_file()
+    assert result.written == (seeding.EXAMPLE,)
+    assert (cfg.workspace / seeding.EXAMPLE).is_file()

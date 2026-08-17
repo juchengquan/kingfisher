@@ -112,17 +112,28 @@ def test_the_wire_form_names_every_axis():
     assert set(CapabilitiesBody.model_fields) == set(AXES)
 
 
-def test_presets_seed_only_kinds_the_catalogue_reads():
-    """A preset kind the catalogue does not read would be copied where nothing
-    looks. There is no second name for the list -- `presets` uses the
-    catalogue's directly, so this asserts the seeding matches what ships.
+def test_packs_ship_only_kinds_the_catalogue_reads():
+    """A kind the catalogue does not read would be copied where nothing looks.
+
+    Asserted against every *installed pack*, which is where definitions come
+    from. It used to open kingfisher's own tree, and after that tree stopped
+    holding definitions it compared an empty set against the catalogue's -- true
+    for the reason a test must never be true.
+
+    There is still no second name for the list: the seeder uses the catalogue's
+    directly. This checks the other side of that, which the seeder cannot -- a
+    pack is written elsewhere and can put anything in its tree.
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
     from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-    with presets.opened() as root:
-        shipped = {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")}
+    packs = seeding.installed_packs()
+    assert packs, "no pack installed -- this asserts nothing without one"
 
-    assert shipped <= set(CATALOGUE_KINDS), (
-        f"{sorted(shipped - set(CATALOGUE_KINDS))} ships as a preset but is not a catalogue kind"
-    )
+    for pack in packs:
+        with seeding.opened(pack.package) as root:
+            found = {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")}
+        assert found <= set(CATALOGUE_KINDS), (
+            f"{pack.name} ships {sorted(found - set(CATALOGUE_KINDS))}, "
+            "which is not a catalogue kind and would be copied where nothing looks"
+        )

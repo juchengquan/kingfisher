@@ -405,7 +405,7 @@ def test_the_package_ships_no_assets():
     from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
     for kind in CATALOGUE_KINDS:
-        assert not (SRC / "presets" / kind).exists(), kind
+        assert not (SRC / "reference" / kind).exists(), kind
 
 
 def test_the_package_ships_the_catalogue_example():
@@ -423,11 +423,11 @@ def test_the_package_ships_the_catalogue_example():
     fail separately: the first catches it moving back out of the package, the
     second catches it not being reachable the way an install reaches it.
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    assert (SRC / "presets" / presets.EXAMPLE).is_file()
-    with presets.opened() as root:
-        assert (root / presets.EXAMPLE).is_file()
+    assert (SRC / "reference" / seeding.EXAMPLE).is_file()
+    with seeding.opened(seeding.PACKAGE) as root:
+        assert (root / seeding.EXAMPLE).is_file()
 
 
 # -- who caused it ---------------------------------------------------------
@@ -685,12 +685,11 @@ def _production_files() -> list[Path]:
     files: list[Path] = []
     for name in PRODUCTION:
         target = root / name
-        # `presets/` is the agent's to import, not ours to call.
-        files += (
-            [target]
-            if target.is_file()
-            else [p for p in target.rglob("*.py") if "presets" not in p.parts]
-        )
+        # No exclusion here any more. `presets/` was skipped because it held
+        # tools the agent imports and this repository never calls; those are a
+        # separate distribution now, so `src/kingfisher` is all production code
+        # and the walk covers it whole.
+        files += [target] if target.is_file() else list(target.rglob("*.py"))
     return files
 
 
@@ -725,8 +724,6 @@ def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
     """
     found: dict[str, Path] = {}
     for path in sorted(SRC.rglob("*.py")):
-        if "presets" in path.parts:
-            continue
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 if not node.decorator_list and not node.name.startswith("__"):
