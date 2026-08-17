@@ -71,11 +71,16 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
     middleware_names = {type(m).__name__ for m in captured["middleware"]}
     assert "TodoListMiddleware" in middleware_names
 
-    (rule,) = captured["permissions"]
-    assert rule.mode == "deny"
-    assert rule.paths == ["/data/**"]
+    # Two routes are read-only for every request, whatever it was granted:
+    # `/data` is the caller's input, and `/skills` is instructions the agent
+    # follows. Named rather than counted, so adding a third rule does not fail
+    # this and a *removed* one still does.
     # `delete` maps to the `write` operation, so one rule covers write/edit/delete.
-    assert "write" in rule.operations
+    read_only = {
+        rule.paths[0] for rule in captured["permissions"]
+        if rule.mode == "deny" and "write" in rule.operations
+    }
+    assert read_only == {"/data/**", "/skills/**"}
 
     assert captured["system_prompt"] == system_prompt(cfg)
     # M2 capabilities are off by default, so neither is passed through.

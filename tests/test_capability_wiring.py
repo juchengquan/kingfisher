@@ -135,7 +135,9 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, sessi
 
     assert captured["skills"] == SKILLS_SOURCES
     assert not any(isinstance(m, ScopedSkills) for m in captured["middleware"])
-    assert len(captured["permissions"]) == 1  # just the /data rule
+    # The two unconditional read-only routes and nothing skill-specific: a
+    # request that granted no skills adds no per-skill denials.
+    assert {r.paths[0] for r in captured["permissions"]} == {"/data/**", "/skills/**"}
 
 
 def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, session_dir):
