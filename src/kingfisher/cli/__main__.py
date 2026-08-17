@@ -59,6 +59,21 @@ def build_parser() -> argparse.ArgumentParser:
             "seeds itself on its first run without this."
         ),
     )
+    explain = sub.add_parser(
+        "help",
+        help="show this, or what one verb does",
+        description=(
+            "The same text `--help` prints. It exists because a reader looking "
+            "for it types the word, and finding it listed beside the verbs it "
+            "describes costs less than knowing that a bare invocation would "
+            "have done."
+        ),
+    )
+    explain.add_argument(
+        "verb",
+        nargs="?",
+        help="a verb to explain; omit for the whole command",
+    )
     sub.add_parser(
         "serve",
         help="run the HTTP surface (needs the server extra)",
@@ -148,6 +163,40 @@ def _list(*, as_document: bool = False) -> int:
     return 1 if failed(found) else 0
 
 
+def _verbs(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
+    """Every subcommand, from the parser rather than from a list beside it.
+
+    A second list of verb names is one that goes stale the first time somebody
+    adds a verb and does not think about `help` -- and `help` is precisely the
+    thing nobody thinks about.
+    """
+    return {
+        name: subparser
+        for action in parser._actions
+        for name, subparser in (getattr(action, "choices", None) or {}).items()
+    }
+
+
+def _help(parser: argparse.ArgumentParser, verb: str | None) -> int:
+    """Print the whole thing, or one verb's part of it.
+
+    An unknown verb is the one case this does better than `--help`: argparse
+    would refuse it with a usage line, and this says which words exist.
+    """
+    if verb is None:
+        parser.print_help()
+        return 0
+
+    verbs = _verbs(parser)
+    if verb not in verbs:
+        known = ", ".join(sorted(verbs))
+        print(f"no such command: {verb}. kingfisher knows {known}", file=sys.stderr)
+        return 2
+
+    verbs[verb].print_help()
+    return 0
+
+
 def _serve() -> int:
     """Hand off to the server's own entry point, which decides everything.
 
@@ -192,6 +241,21 @@ def _doctor(*, as_document: bool = False) -> int:
     return 1 if worst(checks) == "fail" else 0
 
 
+#: Verb -> what runs it. A table rather than a chain of `if`s, which four verbs
+#: made worth it twice over. The chain needed one branch per verb *in the right
+#: order*, because only two of them take `--json` and the fallthrough read
+#: `args.json` -- so `serve` reaching that line was an `AttributeError` waiting
+#: on somebody reordering two blocks that looked interchangeable. Here each verb
+#: names the arguments it has, and the order of this table means nothing.
+HANDLERS = {
+    "seed": lambda args, parser: _seed(),  # noqa: ARG005
+    "serve": lambda args, parser: _serve(),  # noqa: ARG005
+    "doctor": lambda args, parser: _doctor(as_document=args.json),  # noqa: ARG005
+    "list": lambda args, parser: _list(as_document=args.json),  # noqa: ARG005
+    "help": lambda args, parser: _help(parser, args.verb),
+}
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -201,15 +265,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        if args.command == "seed":
-            return _seed()
-        # `serve` before `_list`, and not only for tidiness: it has no
-        # `--json`, so reaching `args.json` on that path is an AttributeError.
-        if args.command == "serve":
-            return _serve()
-        if args.command == "doctor":
-            return _doctor(as_document=args.json)
-        return _list(as_document=args.json)
+        return HANDLERS[args.command](args, parser)
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.
