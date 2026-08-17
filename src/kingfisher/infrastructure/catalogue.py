@@ -20,7 +20,7 @@ from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
-from kingfisher.domain.subagent import refuse_moved_tools
+from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository
@@ -90,9 +90,9 @@ class Catalogue:
         # reason the reading happens here: it is a claim about this catalogue,
         # both halves are now in hand, and a stale path found on the first turn
         # that activates one delegate is a deployment that started while broken.
-        sources = {found.name: found.source for found in self.tools.found}
+        offers = Offering.of(self.tools.found)
         for spec in self.subagents.specs.values():
-            refuse_moved_tools(spec, sources=sources)
+            offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
         return self
 
     @classmethod

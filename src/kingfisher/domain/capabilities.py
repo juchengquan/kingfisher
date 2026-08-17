@@ -228,30 +228,6 @@ class Capabilities:
             memory=_narrow_switch(self.memory, other.memory),
         )
 
-    def unknown(
-        self, *, tools: Iterable[str], skills: Iterable[str], subagents: Iterable[str]
-    ) -> tuple[str, ...]:
-        """Names asked for that the workspace does not offer.
-
-        Reported so an unresolvable request fails loudly instead of running
-        with quietly less than the caller asked for — the difference between a
-        clear rejection and an agent that silently could not do the job.
-        """
-        missing: list[str] = []
-        for requested, available, label in (
-            (self.builtin_tools, tools, "tool"),
-            (self.tools, tools, "tool"),
-            (self.skills, skills, "skill"),
-            (self.subagents, subagents, "subagent"),
-        ):
-            # Neither end names anything, so neither can name something wrong.
-            if requested is None or requested == ALL:
-                continue
-            known = set(available)
-            missing.extend(f"{label}:{name}" for name in requested if name not in known)
-        return tuple(missing)
-
-
 
 #: Every axis a request can be narrowed on, derived from the type that owns them.
 #: Named `AXES` rather than `KINDS` because `domain.result.KINDS` already means
@@ -419,6 +395,44 @@ def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subjec
             f"{subject} names model(s) this request may not use: "
             f"{', '.join(sorted(refused))}; permitted {granted}"
         )
+        raise CapabilityError(msg)
+
+
+def refuse_unoffered(
+    asked: Iterable[str],
+    *,
+    offered: Iterable[str],
+    kind: str,
+    subject: str,
+    listing: str | None = None,
+) -> None:
+    """Refuse a name nothing offers, whoever named it.
+
+    The sibling of `refuse_ungranted_models`, and the rule that had four copies
+    before it existed: skills and subagents were each checked once in `agent`
+    for a request and once in `delegation` for a definition, in three lines that
+    differed only in how the subject was spelled. The subagent pair was the same
+    three lines outright.
+
+    Raised rather than dropped, for the reason `subagent_skills` gives about the
+    difference between the two: a name that exists and was not activated is a
+    caller being narrower than a definition, which is ordinary; a name nothing
+    defines is a mistake, and narrowing it away leaves no trace of the typo.
+
+    `listing` is for the caller that can say more than a tuple. Tools know which
+    file each one came from, and a bare list of names is what sends a reader
+    grepping; skills and subagents have nowhere to point yet, so they pass
+    nothing and get the names.
+    """
+    known = set(offered)
+    if unknown := tuple(name for name in asked if name not in known):
+        shown = listing if listing is not None else f"{tuple(sorted(known))}"
+        # `offered:` rather than "this workspace offers" or "this request
+        # offers": who owns the set differs by kind -- a workspace offers tools
+        # and skills, a request offers the subagents it activated -- and one
+        # message serving five callers cannot claim an owner without being wrong
+        # for some of them. It also stopped the sentence repeating its subject.
+        msg = f"{subject} names unknown {kind}(s): {', '.join(unknown)}; offered: {shown}"
         raise CapabilityError(msg)
 
 

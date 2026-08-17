@@ -36,14 +36,13 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
     Selection,
-    belongs_in,
     narrowed,
     refuse_ungranted_models,
+    refuse_unoffered,
 )
 from kingfisher.domain.ports import ToolRepository
-from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers, refuse_moved_tools
-from kingfisher.domain.tool import Found, tool_name
-from kingfisher.infrastructure import tool_store
+from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
+from kingfisher.domain.tool import Found, Offering, tool_name
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
     SKILLS_SOURCES,
@@ -54,7 +53,6 @@ from kingfisher.infrastructure.delegation import (
     as_subagent,
     indistinct,
     model_for,
-    refuse_unknown_tools,
     subagent_helpers,
     subagent_middleware,
     subagent_skills,
@@ -395,70 +393,6 @@ def _workspace_tool_names(
     return names
 
 
-def _refuse_unknown_tools(
-    capabilities: Capabilities,
-    *,
-    builtin: tuple[str, ...],
-    workspace: tuple[str, ...],
-    sources: Mapping[str, str] | None = None,
-) -> None:
-    """A name on the wrong axis, or on neither.
-
-    Naming a built-in in `tools` is the mistake the split creates, so it is
-    worth its own sentence: the name exists, and saying "unknown tool" about a
-    tool that plainly exists would send someone looking in the wrong place.
-
-    `sources` says where each workspace tool is defined, so the list of what
-    *is* offered names files rather than only names. Once tools may sit in
-    folders, "this workspace offers csv_columns" leaves a reader grepping for
-    a file that could be anywhere under `tools/`.
-    """
-    for asked, own, other, here, there in (
-        (capabilities.tools, workspace, builtin, "tools", "builtin_tools"),
-        (capabilities.builtin_tools, builtin, workspace, "builtin_tools", "tools"),
-    ):
-        if asked in (ALL, None):
-            continue
-        if misplaced := tuple(n for n in asked if n in set(other)):
-            was = "is not a" if len(misplaced) == 1 else "are not"
-            msg = (
-                f"{', '.join(misplaced)} {was} {here[:-1]}"
-                f"{'' if len(misplaced) == 1 else 's'} of this workspace; "
-                f"{belongs_in(misplaced, field=there)}"
-            )
-            raise CapabilityError(msg)
-        if unknown := tuple(n for n in asked if n not in set(own)):
-            msg = (
-                f"unknown {here[:-1]}(s): {', '.join(unknown)}; this workspace offers\n"
-                f"{tool_store.offered(sources or {}, own)}"
-            )
-            raise CapabilityError(msg)
-
-
-def _permitted_tools(
-    capabilities: Capabilities,
-    *,
-    builtin: tuple[str, ...],
-    workspace: tuple[str, ...],
-) -> tuple[str, ...] | None:
-    """Every tool name this request may call, or `None` for no restriction.
-
-    Two axes, one allowlist. The middleware filters a single flat tool list by
-    name, so the two grants meet here as a union -- but they are resolved apart,
-    against their own offered set, which is the whole point of splitting them.
-    `tools=("http_fetch",)` no longer costs a caller `read_file`.
-
-    `None` back means the request narrowed neither, so no allowlist is added at
-    all -- which is not the same as an empty one, and the difference is what
-    `ToolAllowlist` would enforce.
-    """
-    if capabilities.builtin_tools == ALL and capabilities.tools == ALL:
-        return None
-    granted_builtin = narrowed(capabilities.builtin_tools, by=builtin) or ()
-    granted_workspace = narrowed(capabilities.tools, by=workspace) or ()
-    return (*granted_builtin, *granted_workspace)
-
-
 @dataclass(frozen=True)
 class _ToolSurface:
     """The tool picture one build works from, resolved once.
@@ -476,32 +410,52 @@ class _ToolSurface:
     are never asked to enumerate anything.
     """
 
-    granted_builtin: Selection = ALL
-    granted_workspace: Selection = ALL
-    offered_builtin: tuple[str, ...] = ()
-    offered_workspace: tuple[str, ...] = ()
+    #: What this build has to offer, or `None` when the probe was skipped.
+    #:
+    #: `None` rather than an empty `Offering`, because the two mean opposite
+    #: things: nothing offered would narrow every grant to nothing, while a
+    #: skipped probe means nothing was ever narrowed. The probe is only skipped
+    #: when no definition names a tool either, so nothing below is ever asked to
+    #: enumerate what it does not know.
+    offering: Offering | None = None
+    #: What the request asked for. Held so the grants can be *derived* rather
+    #: than stored beside what they came from -- which is what this dataclass
+    #: used to do, and it needed an `unrestricted` flag to compensate, because a
+    #: stored `ALL` could no longer say whether everything was granted or
+    #: nothing was narrowed. `permitted` answers that from the request directly.
+    asked: Capabilities = field(default_factory=Capabilities)
     #: The built tool *objects*, by name, taken off the probe graph. Needed
     #: only for a helper: `SubAgentMiddleware` registers what a spec carries,
     #: and these are constructed from the backend inside `create_deep_agent`
     #: where nothing here can reach them -- except off an assembled graph,
     #: which is what the probe already is.
     objects: Mapping[str, Any] = field(default_factory=dict)
-    #: Whether the *request* narrowed neither axis. Distinct from the grants
-    #: being `ALL`: a workspace tool existing forces the probe, and then the
-    #: grants are enumerated while the request still narrowed nothing.
-    unrestricted: bool = True
-    #: Where each workspace tool was defined, relative to the catalogue. Carried
-    #: so a refusal can name a file rather than only a name -- and carried on
-    #: *this* rather than looked up again, because reading it means executing
-    #: every tool module.
-    sources: Mapping[str, str] = field(default_factory=dict)
+
+    @property
+    def offers(self) -> Offering:
+        """The offering, or an empty one for the callers that only read names."""
+        return self.offering or Offering()
 
     @property
     def permitted(self) -> tuple[str, ...] | None:
         """The parent's allowlist, or `None` for no restriction at all."""
-        if self.unrestricted:
+        if self.offering is None:
             return None
-        return (*(self.granted_builtin or ()), *(self.granted_workspace or ()))
+        return self.offering.permitted(self.asked.builtin_tools, self.asked.tools)
+
+    @property
+    def granted_builtin(self) -> Selection:
+        """The request's built-in grant, resolved against what was offered."""
+        if self.offering is None:
+            return ALL
+        return narrowed(self.asked.builtin_tools, by=self.offering.builtin) or ()
+
+    @property
+    def granted_workspace(self) -> Selection:
+        """The request's workspace grant, resolved against what was offered."""
+        if self.offering is None:
+            return ALL
+        return narrowed(self.asked.tools, by=self.offering.workspace) or ()
 
 
 def _tool_objects(graph: Any) -> Mapping[str, Any]:
@@ -581,9 +535,7 @@ def _activated_subagents(
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
-    if unknown := tuple(n for n in activated if n not in defined):
-        msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
-        raise CapabilityError(msg)
+    refuse_unoffered(activated, offered=defined, kind="subagent", subject="this request")
     return defined, activated
 
 
@@ -643,40 +595,11 @@ def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
     probe = assemble(())
     builtin = registered_tools(probe)
     workspace = _workspace_tool_names(workspace_tools, builtin=builtin, where=where)
-    _refuse_unknown_tools(capabilities, builtin=builtin, workspace=workspace, sources=sources)
-    return _ToolSurface(
-        granted_builtin=narrowed(capabilities.builtin_tools, by=builtin) or (),
-        granted_workspace=narrowed(capabilities.tools, by=workspace) or (),
-        offered_builtin=builtin,
-        offered_workspace=workspace,
-        objects=_tool_objects(probe),
-        unrestricted=unrestricted,
-        sources=dict(sources or {}),
+    offering = Offering(builtin=builtin, workspace=workspace, sources=dict(sources or {}))
+    offering.refuse_unknown(
+        capabilities.builtin_tools, capabilities.tools, subject="this request"
     )
-
-
-def _refuse_bad_tool_lists(
-    activated: tuple[str, ...], defined: Mapping[str, SubagentSpec], surface: _ToolSurface
-) -> None:
-    """Everything wrong a delegate's `tools:` can be, in the order worth hearing.
-
-    The unknown-name check first: a definition naming `csv_column` should be
-    told the name is wrong, not that `csv_column` has moved. Only once the name
-    is real is a claim about where it lives worth testing.
-
-    The catalogue's own definitions had their paths checked at construction, by
-    `Catalogue.warm`. This runs for all of them again anyway, because the set
-    here includes what a *request* uploaded, and a checked path is exactly the
-    kind of thing an uploaded definition can get wrong.
-    """
-    for name in activated:
-        refuse_unknown_tools(
-            defined[name],
-            builtin=surface.offered_builtin,
-            workspace=surface.offered_workspace,
-            sources=surface.sources,
-        )
-        refuse_moved_tools(defined[name], sources=surface.sources)
+    return _ToolSurface(offering=offering, asked=capabilities, objects=_tool_objects(probe))
 
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
@@ -739,10 +662,9 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             pass  # none: no index, and no deny rules to write for one
         else:
             available = available_skills(cfg, session_dir, catalogue=roots)
-            unknown = tuple(s for s in capabilities.skills if s not in available)
-            if unknown:
-                msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
-                raise CapabilityError(msg)
+            refuse_unoffered(
+                capabilities.skills, offered=available, kind="skill", subject="this request"
+            )
             # Supplied as middleware rather than via `skills=`: passing that
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.
@@ -809,7 +731,16 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     if capabilities.subagents is not None:
         offered = available_skills(cfg, session_dir, catalogue=roots)
         registry = middleware_registry or {}
-        _refuse_bad_tool_lists(activated, defined, surface)
+        for name in activated:
+            subject = f"subagent {name!r}"
+            surface.offers.refuse_unknown(
+                defined[name].builtin_tools, defined[name].tools, subject=subject
+            )
+            # After the unknown-name check, so a definition naming `csv_column`
+            # hears that the name is wrong rather than that it has moved. The
+            # catalogue's own definitions had their paths checked at
+            # construction; this is what covers one a request uploaded.
+            surface.offers.refuse_moved(defined[name].tool_sources, subject=subject)
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 

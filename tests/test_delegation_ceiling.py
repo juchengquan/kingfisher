@@ -16,9 +16,10 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
 from kingfisher.domain.subagent import SubagentError
+from kingfisher.domain.tool import ceiling
 from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.delegation import as_subagent, subagent_skills, tool_ceiling
+from kingfisher.infrastructure.delegation import as_subagent, subagent_skills
 from kingfisher.infrastructure.scoping import ToolAllowlist
 from tests.conftest import FakeToolCallingModel
 
@@ -70,6 +71,24 @@ def _subagent_graphs(graph):
 
 def _model():
     return FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+
+
+def tool_ceiling(spec, *, builtin, workspace):
+    """The rule as `as_subagent` calls it, with the spec's two axes unpacked.
+
+    An adapter rather than four rewritten call sites: what these tests are about
+    is the narrowing, and threading five keyword arguments through each one would
+    bury it. `ceiling` takes the axes rather than the spec because it narrows by
+    the *request's grants*, which a spec knows nothing about.
+    """
+    return ceiling(
+        spec.builtin_tools,
+        spec.tools,
+        granted_builtin=builtin,
+        granted_tools=workspace,
+        subject=f"subagent {spec.name!r}",
+    )
 
 
 def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):

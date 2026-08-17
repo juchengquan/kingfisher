@@ -16,8 +16,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.subagent import refuse_moved_tools
-from kingfisher.domain.tool import Found, reference, split_reference
+from kingfisher.domain.tool import Found, Offering, reference, split_reference
 from kingfisher.infrastructure import presets
 from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.definitions import read_subagent
@@ -41,6 +40,13 @@ tools: [{tools}]
 system_prompt: |
   {body}
 """
+
+
+SUBJECT = "subagent 'd'"
+
+
+def _offering(sources):
+    return Offering(workspace=tuple(sources), sources=sources)
 
 
 def _spec(name="d", tools="csv_columns"):
@@ -120,16 +126,18 @@ def test_the_derived_field_cannot_be_written_by_hand():
 
 
 def test_a_path_that_still_describes_where_the_tool_is_passes():
-    refuse_moved_tools(_spec(tools="csv_profile::csv_columns"),
-                       sources={"csv_columns": "csv_profile/"})
+    _offering({"csv_columns": "csv_profile/"}).refuse_moved(
+        _spec(tools="csv_profile::csv_columns").tool_sources, subject=SUBJECT
+    )
 
 
 def test_a_path_that_no_longer_describes_it_is_refused():
     """Old and new, both in the form a definition writes, so the right-hand
     side is what you paste in to fix it."""
     with pytest.raises(CapabilityError) as raised:
-        refuse_moved_tools(_spec(tools="csv_profile::csv_columns"),
-                           sources={"csv_columns": "analysis/"})
+        _offering({"csv_columns": "analysis/"}).refuse_moved(
+            _spec(tools="csv_profile::csv_columns").tool_sources, subject=SUBJECT
+        )
 
     message = str(raised.value)
     assert "csv_profile::csv_columns" in message
@@ -138,13 +146,17 @@ def test_a_path_that_no_longer_describes_it_is_refused():
 
 def test_the_short_form_is_never_refused():
     """It asked for nothing, so it cannot be wrong about anything."""
-    refuse_moved_tools(_spec(tools="csv_columns"), sources={"csv_columns": "anywhere/"})
+    _offering({"csv_columns": "anywhere/"}).refuse_moved(
+        _spec(tools="csv_columns").tool_sources, subject=SUBJECT
+    )
 
 
 def test_a_name_nothing_offers_is_left_to_the_other_refusal():
     """`refuse_unknown_tools` says that better, with the full listing. Saying it
     twice in two voices helps nobody."""
-    refuse_moved_tools(_spec(tools="csv_profile::gone"), sources={"csv_columns": "csv_profile/"})
+    _offering({"csv_columns": "csv_profile/"}).refuse_moved(
+        _spec(tools="csv_profile::gone").tool_sources, subject=SUBJECT
+    )
 
 
 # -- where it fires --------------------------------------------------------

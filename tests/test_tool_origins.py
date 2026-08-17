@@ -19,9 +19,8 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.subagent import SubagentSpec
-from kingfisher.infrastructure import tool_store
+from kingfisher.domain.tool import Offering, offered
 from kingfisher.infrastructure.agent import build_agent
-from kingfisher.infrastructure.delegation import refuse_unknown_tools
 from kingfisher.infrastructure.tool_store import LocalToolRepository
 from tests.conftest import FakeToolCallingModel
 
@@ -139,11 +138,12 @@ def test_a_subagent_naming_an_unknown_tool_is_told_the_same_thing(cfg):
     )
 
     with pytest.raises(CapabilityError) as raised:
-        refuse_unknown_tools(
-            spec,
+        Offering(
             builtin=("read_file",),
             workspace=("find_company",),
             sources={"find_company": "research/find_company.py"},
+        ).refuse_unknown(
+            spec.builtin_tools, spec.tools, subject=f"subagent {spec.name!r}"
         )
 
     message = str(raised.value)
@@ -157,7 +157,7 @@ def test_a_builtin_is_listed_without_a_file(cfg):
     The two axes are reported apart already -- that separation exists because
     "3 tools not granted" meant nothing when it could have been either kind.
     """
-    listing = tool_store.offered({"find_company": "research/find_company.py"},
+    listing = offered({"find_company": "research/find_company.py"},
                                  ["find_company", "read_file"])
 
     assert "find_company  (research/find_company.py)" in listing
@@ -167,4 +167,4 @@ def test_a_builtin_is_listed_without_a_file(cfg):
 def test_an_empty_workspace_says_so_rather_than_printing_nothing(cfg):
     """A refusal that trails off after "this workspace offers" reads as a bug
     in kingfisher rather than an empty catalogue."""
-    assert tool_store.offered({}, []) == "  (none)"
+    assert offered({}, []) == "  (none)"

@@ -24,9 +24,27 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
 )
 from kingfisher.infrastructure.definitions import skill_name
+from kingfisher.infrastructure.presets import Pack
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository, tool_name
+
+#: The pack the seeding tests below use. A real one, reached the way a shipped
+#: pack is reached -- `opened()` through `importlib.resources` -- so those tests
+#: exercise the real path without depending on what kingfisher happens to ship.
+#:
+#: They used to seed the presets. That made them fail for reasons unrelated to
+#: seeding: adding a third subagent preset broke a test about reporting withheld
+#: capabilities, and a preset count broke another about grants. A test of the
+#: seeder should break when the seeder breaks.
+FIXTURE = Pack("fixture", "tests.assets")
+
+
+@pytest.fixture
+def fixture_pack():
+    """The fixture pack's files, opened the way a shipped pack's are."""
+    with presets.opened(FIXTURE.package) as root:
+        yield root
 
 
 @pytest.fixture(scope="session")
@@ -101,11 +119,13 @@ def workspace_with_presets(cfg, shipped):
     return cfg
 
 
-def test_preset_skills_are_discovered(workspace_with_presets):
-    assert set(available_skills(workspace_with_presets, None)) >= {
-        "code-review",
-        "release-notes",
-    }
+def test_a_seeded_skill_is_discovered(cfg):
+    """Seeding puts a skill where discovery looks. Asserted against the fixture
+    pack: the claim is about the two halves meeting, not about which skills
+    kingfisher ships."""
+    presets.seed(cfg, packs=[FIXTURE])
+
+    assert "probe-skill" in available_skills(cfg, None)
 
 
 def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, shipped):
@@ -207,13 +227,18 @@ def test_every_preset_tool_describes_itself_to_the_model(shipped):
         assert len(tool.description.strip()) > 60  # a trigger, not a title
 
 
-def test_a_workspace_tool_reaches_the_assembled_agent(cfg, shipped):
-    """The whole point: a file in the workspace becomes a tool the agent has."""
-    shutil.copytree(shipped / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
+def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
+    """The whole point: a file in the workspace becomes a tool the agent has.
+
+    Against the fixture pack, because the claim is about *any* workspace tool
+    reaching the agent. Naming `http_fetch` tied a test of the loading path to
+    which tools kingfisher happens to ship.
+    """
+    shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
 
     tools = registered_tools(build_agent(cfg, session_dir=cfg.workspace / "s"))
 
-    assert "http_fetch" in tools
+    assert "probe" in tools
     assert "read_file" in tools  # and the built-ins are still there
 
 
@@ -246,7 +271,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 
 
 def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
-    seeding = presets.seed(cfg)
+    seeding = presets.seed(cfg, packs=[FIXTURE])
 
     assert seeding.written
     assert seeding.overwritten == ()
@@ -258,7 +283,7 @@ def test_seeding_leaves_the_catalogue_example_where_models_yaml_goes(cfg):
     Not into one of the three catalogues: it is not a definition, and the
     directory kingfisher reads `models.yaml` from is the workspace root.
     """
-    seeding = presets.seed(cfg)
+    seeding = presets.seed(cfg, packs=[FIXTURE])
 
     assert presets.EXAMPLE in seeding.written
     assert (cfg.workspace / presets.EXAMPLE).is_file()
@@ -276,7 +301,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     catalogue = cfg.workspace / "models.yaml"
     catalogue.write_text("mine: do not touch\n", encoding="utf-8")
 
-    presets.seed(cfg)
+    presets.seed(cfg, packs=[FIXTURE])
 
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
@@ -305,7 +330,10 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
     (source / "tools" / "__pycache__" / "flat.pyc").write_bytes(b"\x00")
 
     @contextmanager
-    def _fixture():
+    def _fixture(_package=None):
+        # Takes the argument `opened` now takes: the seeder asks each installed
+        # pack for its own tree, so the source is a parameter rather than a
+        # constant. This stand-in ignores it and yields the planted one.
         yield source
 
     monkeypatch.setattr(presets, "opened", _fixture)
@@ -319,39 +347,39 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
 def test_seeding_twice_unchanged_is_silent(cfg):
     """By content, not by presence. A warning that fires on the ordinary path
     is one people learn to scroll past."""
-    presets.seed(cfg)
+    presets.seed(cfg, packs=[FIXTURE])
 
-    assert presets.seed(cfg).overwritten == ()
+    assert presets.seed(cfg, packs=[FIXTURE]).overwritten == ()
 
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
-    presets.seed(cfg)
-    edited = cfg.subagents_dir / "reviewer.yaml"
-    edited.write_text("name: reviewer\ndescription: mine\n"
+    presets.seed(cfg, packs=[FIXTURE])
+    edited = cfg.subagents_dir / "probe-agent.yaml"
+    edited.write_text("name: probe-agent\ndescription: mine\n"
         "system_prompt: |\n  My prompt.\n", encoding="utf-8")
 
-    seeding = presets.seed(cfg)
+    seeding = presets.seed(cfg, packs=[FIXTURE])
 
-    assert "subagents/reviewer.yaml" in seeding.overwritten
+    assert "subagents/probe-agent.yaml" in seeding.overwritten
     assert "description: mine" not in edited.read_text(encoding="utf-8")
 
 
 def test_a_file_added_beside_a_preset_is_not_reported(cfg):
     """`copytree` merges, so this one survives. Reporting it would be a warning
     about a loss that did not happen."""
-    presets.seed(cfg)
-    (cfg.skills_dir / "code-review" / "notes.md").write_text("mine", encoding="utf-8")
+    presets.seed(cfg, packs=[FIXTURE])
+    (cfg.skills_dir / "probe-skill" / "notes.md").write_text("mine", encoding="utf-8")
 
-    assert presets.seed(cfg).overwritten == ()
-    assert (cfg.skills_dir / "code-review" / "notes.md").read_text(encoding="utf-8") == "mine"
+    assert presets.seed(cfg, packs=[FIXTURE]).overwritten == ()
+    assert (cfg.skills_dir / "probe-skill" / "notes.md").read_text(encoding="utf-8") == "mine"
 
 
 def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
     """Entries are what you asked for; files are what you might have lost."""
-    presets.seed(cfg)
-    (cfg.skills_dir / "code-review" / "SKILL.md").write_text("clobber me", encoding="utf-8")
+    presets.seed(cfg, packs=[FIXTURE])
+    (cfg.skills_dir / "probe-skill" / "SKILL.md").write_text("clobber me", encoding="utf-8")
 
-    assert presets.seed(cfg).overwritten == ("skills/code-review/SKILL.md",)
+    assert presets.seed(cfg, packs=[FIXTURE]).overwritten == ("skills/probe-skill/SKILL.md",)
 
 
 def test_the_readme_subagent_table_matches_the_real_field_set(shipped):

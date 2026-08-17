@@ -118,8 +118,8 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
-from kingfisher.domain.tool import reference, split_reference
+from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.tool import split_reference
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -305,40 +305,6 @@ def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
         msg = f"{source.name}: {complaint}"
         raise SubagentError(msg)
 
-
-def refuse_moved_tools(spec: SubagentSpec, *, sources: Mapping[str, str]) -> None:
-    """Refuse a definition whose `where::what` no longer describes where.
-
-    Only entries that made a claim are checked, so a definition written the
-    short way is untouched -- the long form buys this, and asking for it is
-    what opts in.
-
-    The claim can only ever be wrong about *location*. It cannot be wrong about
-    which tool is meant, because two tools of one name never both load; the
-    loader refuses the pair. So this says "it moved", never "you meant the
-    other one", and the message is worded to match.
-
-    A name the workspace does not offer at all is left alone here.
-    `refuse_unknown_tools` says that better, with the full listing, and saying
-    it twice in two voices helps nobody.
-    """
-    moved = [
-        (name, claimed, sources[name].rstrip("/"))
-        for name, claimed in spec.tool_sources.items()
-        if name in sources and sources[name].rstrip("/") != claimed
-    ]
-    if not moved:
-        return
-    lines = "\n".join(
-        f"  {reference(claimed, name)}  ->  {reference(actual, name)}"
-        for name, claimed, actual in sorted(moved)
-    )
-    msg = (
-        f"subagent {spec.name!r} says where its tools live, and "
-        f"{'one has' if len(moved) == 1 else 'some have'} moved:\n{lines}\n"
-        f"Update the definition, or drop the path and write the name alone."
-    )
-    raise CapabilityError(msg)
 
 def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     """One definition, from its decoded fields.

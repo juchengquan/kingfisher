@@ -99,7 +99,8 @@ from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure import confinement, presets, skill_store, tool_store
+from kingfisher.domain.tool import offered as tool_offered
+from kingfisher.infrastructure import confinement, presets, skill_store
 from kingfisher.infrastructure.runlog import read_usage
 from kingfisher.infrastructure.tool_store import ToolError
 from kingfisher.infrastructure.workspace_fs import (
@@ -235,7 +236,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # workspace tools -- so the column is uniform, where suppressing it for
     # `http_fetch.py` and printing it for `csv_profile/` left it ragged.
     print("\nworkspace tools — grant with --tools")
-    print(tool_store.offered(defined_in, own))
+    print(tool_offered(defined_in, own))
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
     skills = catalogue.skills

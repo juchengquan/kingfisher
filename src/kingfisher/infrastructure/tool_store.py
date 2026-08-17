@@ -56,7 +56,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain.tool import Found, tool_name
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping, Sequence
+    pass
 
 __all__ = [
     "EXPORT",
@@ -64,7 +64,6 @@ __all__ = [
     "Found",
     "LocalToolRepository",
     "ToolError",
-    "offered",
     "tool_name",
 ]
 
@@ -300,30 +299,3 @@ class LocalToolRepository:
         carries every derivable view is a port nobody can implement.
         """
         return {found.name: found.source for found in self.found}
-
-
-def offered(sources_by_name: Mapping[str, str], names: Sequence[str]) -> str:
-    """What a workspace offers, one per line, with where each one lives.
-
-    A block rather than the tuple this used to print. The reader is someone who
-    just mistyped a name and needs to scan for the one they meant, and a
-    parenthesised tuple of fifteen is the shape nobody finishes reading.
-
-    Names with no known source -- a built-in, or a tool supplied directly to
-    `build_agent` rather than found on disk -- are listed bare. There is no file
-    to name, and a blank column against `read_file` would be noise.
-
-    The source is printed the way a definition writes it, without a package's
-    trailing slash, so what a reader sees here is what they can paste into a
-    `tools:` line. It used to keep the slash, which said "folder" at the cost of
-    being a near-miss for the one thing anybody does with it.
-    """
-    if not names:
-        return "  (none)"
-    width = max(len(name) for name in names)
-    return "\n".join(
-        f"  {name.ljust(width)}  ({where.rstrip('/')})"
-        if (where := sources_by_name.get(name))
-        else f"  {name}"
-        for name in sorted(names)
-    )

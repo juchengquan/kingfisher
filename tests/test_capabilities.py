@@ -11,6 +11,7 @@ from kingfisher.domain.capabilities import (
     CapabilityError,
     all_but,
     approved_middleware,
+    refuse_unoffered,
     withheld,
 )
 
@@ -71,18 +72,6 @@ def test_intersect_handles_each_dimension_independently():
     assert narrowed.builtin_tools == ("read_file",)
     assert narrowed.skills == ("tabular-qa",)  # the request named nothing, so ALL
     assert narrowed.subagents == ("reviewer",)  # the grant named nothing, so ALL
-
-
-def test_unknown_reports_what_the_workspace_cannot_offer():
-    """So a request fails loudly rather than running with quietly less."""
-    caps = Capabilities(builtin_tools=("read_file",), tools=("teleport",), skills=("nope",))
-
-    missing = caps.unknown(tools=["read_file"], skills=["tabular-qa"], subagents=[])
-    assert set(missing) == {"tool:teleport", "skill:nope"}
-
-
-def test_unknown_ignores_dimensions_with_no_opinion():
-    assert Capabilities().unknown(tools=[], skills=[], subagents=[]) == ()
 
 
 def test_capabilities_are_hashable_and_comparable():
@@ -285,3 +274,85 @@ def test_the_result_is_an_ordinary_grant_that_narrowing_still_clamps():
     granted = Capabilities(builtin_tools=("ls",))
 
     assert granted.intersect(asked).builtin_tools == ("ls",)
+
+
+# -- one refusal for every kind of name ------------------------------------
+#
+# Skills and subagents were each checked twice -- once in `agent` for a request,
+# once in `delegation` for a definition -- in three lines that differed only in
+# how the subject was spelled. The subagent pair was the same three lines
+# outright, expansion of `ALL` included. Tools made a fifth copy inside
+# `Offering`. None of the four messages was asserted by any test, which is how
+# they were free to drift apart in the first place.
+
+
+@pytest.mark.parametrize("kind", ["skill", "subagent", "tool"])
+@pytest.mark.parametrize(
+    "subject", ["this request", "subagent 'reviewer'"], ids=["request", "definition"]
+)
+def test_a_name_nothing_offers_is_refused_whoever_named_it(kind, subject):
+    with pytest.raises(CapabilityError) as raised:
+        refuse_unoffered(("nope",), offered=("real",), kind=kind, subject=subject)
+
+    message = str(raised.value)
+    assert subject in message
+    assert f"unknown {kind}(s): nope" in message
+    assert "real" in message
+
+
+def test_the_refusal_says_all_four_things_a_reader_needs():
+    """Who named it, what kind it was, which name was wrong, and what the real
+    ones are. A message missing any of the four sends someone to the wrong file."""
+    with pytest.raises(CapabilityError) as raised:
+        refuse_unoffered(
+            ("tabluar-qa",),
+            offered=("tabular-qa", "code-review"),
+            kind="skill",
+            subject="subagent 'analyst'",
+        )
+
+    assert str(raised.value) == (
+        "subagent 'analyst' names unknown skill(s): tabluar-qa; "
+        "offered: ('code-review', 'tabular-qa')"
+    )
+
+
+def test_the_offered_set_is_not_claimed_to_belong_to_anyone():
+    """`offered:` rather than "this workspace offers" or "this request offers".
+    Who owns the set differs by kind -- a workspace offers tools and skills, a
+    request offers the subagents it activated -- so one message serving five
+    callers cannot name an owner without being wrong for some of them."""
+    with pytest.raises(CapabilityError) as raised:
+        refuse_unoffered(("nope",), offered=("real",), kind="tool", subject="this request")
+
+    message = str(raised.value)
+    assert "offered:" in message
+    assert "this request offers" not in message
+    assert "workspace offers" not in message
+
+
+def test_a_caller_that_can_say_more_than_names_says_it():
+    """Tools know which file each one came from. Skills and subagents have
+    nowhere to point yet, so they pass nothing and get the names."""
+    with pytest.raises(CapabilityError) as raised:
+        refuse_unoffered(
+            ("nope",),
+            offered=("http_fetch",),
+            kind="tool",
+            subject="this request",
+            listing="\n  http_fetch  (net/http_fetch.py)",
+        )
+
+    assert "net/http_fetch.py" in str(raised.value)
+
+
+def test_names_that_are_all_offered_say_nothing():
+    refuse_unoffered(("real",), offered=("real", "other"), kind="skill", subject="x")
+    refuse_unoffered((), offered=(), kind="skill", subject="x")
+
+
+def test_every_unknown_name_is_listed_not_just_the_first():
+    """Someone fixing a definition wants the whole list, not one round trip per
+    typo."""
+    with pytest.raises(CapabilityError, match="a, b"):
+        refuse_unoffered(("a", "b"), offered=("c",), kind="subagent", subject="x")
