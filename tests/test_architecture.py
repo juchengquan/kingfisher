@@ -17,7 +17,59 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).resolve().parent.parent / "src" / "kingfisher"
+
+def _repository_root(start: Path | None = None) -> Path:
+    """The checkout this file is in, found rather than counted.
+
+    `start` is for the tests below, and it is a parameter rather than a second
+    copy of the walk for a reason found by mutation: the first version of those
+    tests restated this function so it could be driven from a fake tree, and
+    then every one of them tested the restatement. Three mutations of the real
+    walk survived, including one that let it climb out of the checkout -- the
+    exact failure this rewrite exists to prevent.
+
+    Every rule below reads from a path, and all four ways of arriving at one
+    have now been wrong at least once:
+
+    - **Counting levels** (`Path(__file__).parent.parent`) is correct until the
+      tree moves. It broke twice this month, and neither time did it *fail* --
+      the rules pointed at a directory that no longer held what they were
+      about and went on passing.
+    - **Matching a marker** upward broke worse. The marker was a directory
+      holding `pyproject.toml` *and* `packages/`; when `packages/` went, nothing
+      in the checkout matched, so the walk climbed out of it entirely and found
+      the parent clone -- which still had one. Every rule then read a different
+      repository and passed. Only CI, with no parent clone, went red.
+
+    So this searches upward for a marker that is *this* project, and stops with
+    a real message rather than climbing past the checkout. `src/kingfisher`
+    beside a `pyproject.toml` is the definition of this repository; the nearest
+    match going up is this one, and if there is no match at all that is a broken
+    checkout worth saying so about.
+    """
+    here = (start or Path(__file__)).resolve()
+    for candidate in here.parents:
+        if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "kingfisher").is_dir():
+            return candidate
+    msg = (
+        f"no repository root above {here}: expected a directory holding both "
+        f"pyproject.toml and src/kingfisher. These rules read files by path and "
+        f"would otherwise scan the wrong tree, or nothing, and report success."
+    )
+    raise AssertionError(msg)
+
+
+#: The checkout, and the library inside it. Everything path-shaped here starts
+#: from one of these two, so a move is one line rather than four -- which is how
+#: three of the four came to disagree the last time this tree changed shape.
+#:
+#: Deriving `SRC` from `REPO` rather than counting to it again is unobservable
+#: today and left that way deliberately: in this layout the two expressions
+#: name the same directory, so a mutation swapping them survives and no test can
+#: separate them. They part company exactly when the tree moves, which is the
+#: case this whole finder exists for and the one a test cannot stage.
+REPO = _repository_root()
+SRC = REPO / "src" / "kingfisher"
 
 
 def _imported_modules(path: Path) -> set[str]:
@@ -135,19 +187,7 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
 #: on this one, so they are the first place a move here breaks and the last place
 #: anyone thinks to look.
 #:
-#: The library sits at the root again, so this is two levels up and counted.
-#:
-#: It was found by marker for one change -- the directory holding both
-#: `pyproject.toml` and `packages/` -- and that is worth a warning rather than
-#: just deleting. Once `packages/` went, no directory in this tree matched, so
-#: the walk climbed out of the checkout entirely and found the *parent* clone,
-#: which still had one. The rules then read a different repository and passed.
-#: CI, which has no parent clone, raised `StopIteration` instead.
-#:
-#: A marker only works if it cannot match somewhere else. `src/` beside a
-#: `pyproject.toml` describes half the Python repositories on this disk, so
-#: counting is the honest option here.
-REPO = SRC.parent.parent
+
 
 
 def _everything_that_imports_kingfisher() -> list[Path]:
@@ -777,17 +817,14 @@ def test_only_one_module_decides_what_a_skill_is():
     listing. Asserting they *agree* with a caller is tautological once the
     caller imports them; what is worth asserting is that nothing else decides.
     """
-    root = Path(__file__).resolve().parent.parent
-    # This package; `main.py` and `evals/` live two levels up, at the
-    # repository root, and are searched from there.
     repo = REPO
     owners = {
-        root / "src" / "kingfisher" / "domain" / "skill.py",
-        root / "src" / "kingfisher" / "infrastructure" / "skill_store.py",
+        SRC / "domain" / "skill.py",
+        SRC / "infrastructure" / "skill_store.py",
     }
 
     searched = [
-        *(root / "src").rglob("*.py"),
+        *SRC.rglob("*.py"),
         repo / "main.py",
         *(repo / "evals").glob("*.py"),
     ]
@@ -1172,7 +1209,7 @@ def test_every_console_script_points_at_something_that_exists():
     import tomllib
     from importlib import import_module
 
-    manifest = tomllib.loads((SRC.parent.parent / "pyproject.toml").read_text(encoding="utf-8"))
+    manifest = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
     scripts = manifest["project"]["scripts"]
     assert scripts, "the scripts table emptied out"
 
@@ -1220,3 +1257,70 @@ def test_only_the_confinement_module_calls_resolve_directly():
         f"{sorted(set(offenders))} call `confinement.resolve` directly — use "
         "`shell_confinement(cfg)`, so one place decides what a Config means"
     )
+
+
+# -- the path every other rule starts from ---------------------------------
+
+
+def _fake_checkout(root: Path) -> Path:
+    """A directory that looks like this repository to `_repository_root`."""
+    (root / "src" / "kingfisher").mkdir(parents=True)
+    (root / "pyproject.toml").write_text("", encoding="utf-8")
+    return root
+
+
+def test_the_root_holds_this_file():
+    """The property that makes every other rule here mean anything.
+
+    Not a tautology: the previous version found a directory holding
+    `pyproject.toml` and `packages/`, and when `packages/` went it climbed out
+    of the checkout and returned the *parent clone* -- which does not contain
+    this file. Every rule then read a different repository and passed.
+    """
+    assert Path(__file__).resolve().is_relative_to(REPO)
+
+
+def test_the_root_is_the_nearest_one_not_an_outer_one(tmp_path):
+    """A checkout inside another checkout picks the inner one.
+
+    Exactly the shape that broke it: this repository is developed in git
+    worktrees under `.claude/worktrees/`, so there is nearly always an outer
+    clone that also looks like a repository.
+    """
+    outer = _fake_checkout(tmp_path / "outer")
+    inner = _fake_checkout(outer / "nested" / "inner")
+    deep = inner / "tests"
+    deep.mkdir()
+
+    assert _repository_root(deep / "a_test.py") == inner
+
+
+def test_no_root_at_all_is_an_error_rather_than_a_climb(tmp_path):
+    """It raised `StopIteration` from a generator, which reads as a collection
+    error nobody can act on. And the alternative to raising is worse: walking
+    to `/` and taking whatever matches there is how the wrong tree got read."""
+    lonely = tmp_path / "nowhere" / "tests"
+    lonely.mkdir(parents=True)
+
+    with pytest.raises(AssertionError, match="no repository root"):
+        _repository_root(lonely / "a_test.py")
+
+
+def test_a_directory_that_only_half_matches_is_not_the_root(tmp_path):
+    """Both halves of the marker are load-bearing. A `pyproject.toml` alone
+    describes most Python directories on a disk -- including the ones this
+    repository is developed inside."""
+    outer = _fake_checkout(tmp_path / "outer")
+    half = outer / "nested"
+    (half / "tests").mkdir(parents=True)
+    (half / "pyproject.toml").write_text("", encoding="utf-8")  # no src/kingfisher
+
+    assert _repository_root(half / "tests" / "a_test.py") == outer
+
+
+def test_every_path_rule_starts_from_the_same_two_names():
+    """Four separate computations of "the repository" is how three of them came
+    to disagree. `REPO` and `SRC` are the only two, and `SRC` is derived."""
+    assert SRC == REPO / "src" / "kingfisher"
+    assert SRC.is_dir()
+    assert (REPO / "pyproject.toml").is_file()
