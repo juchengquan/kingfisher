@@ -54,9 +54,24 @@ NAMESPACE = ("skills",)
 class ReadOnlyStoreBackend(StoreBackend):
     """A `StoreBackend` that refuses every operation that would change it.
 
-    Four overridden, plus their async twins, and no more -- everything that
-    *reads* is upstream's and stays upstream's. `delete` is included because a
-    route the agent can empty is a route the agent can silence.
+    Four sync operations overridden, and three of their async twins -- not
+    four. Everything that *reads* is upstream's and stays upstream's. `delete`
+    is included because a route the agent can empty is a route the agent can
+    silence.
+
+    The missing fourth is `aupload_files`, and its absence is deliberate rather
+    than an oversight: upstream implements it as
+    `await asyncio.to_thread(self.upload_files, files)`, so the sync refusal
+    below already catches it. `awrite`, `aedit` and `adelete` do *not* delegate
+    -- they have their own async implementations, 16, 25 and 10 lines of them --
+    so those three are load-bearing, which mutation testing confirms by failing
+    when any one is removed.
+
+    Overriding a method upstream only delegates is how the `aexecute` bug
+    happened one module over: `ConfinedShell` wrapped both halves and nested the
+    sandbox twice, and thirteen tests still passed. The lesson taken there was to
+    override the sync half and *pin the delegation with a test* so an upstream
+    change fails loudly rather than silently. Same lesson, same shape, here.
 
     Refusing by return value rather than by raising, because that is how this
     protocol reports a refused operation: the agent sees the message and can act
@@ -101,9 +116,6 @@ class ReadOnlyStoreBackend(StoreBackend):
 
     async def adelete(self, file_path: str) -> Any:
         return DeleteResult(error=self._why(file_path), path=None)
-
-    async def aupload_files(self, files: list[tuple[str, bytes]]) -> Any:
-        return [FileUploadResponse(path=path, error=self._why(path)) for path, _ in files]
 
 
 def skills_backend(repository: SkillRepository) -> ReadOnlyStoreBackend:
