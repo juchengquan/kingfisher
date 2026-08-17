@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from kingfisher import RunEvent
-    from kingfisher.server.config import ServerConfig
+    from kingfisher.presentation.config import ServerConfig
 
 #: Its own logger, unconfigured. Nothing is written until a deployment attaches
 #: a handler, which is how "may session ids be written here" stays a decision

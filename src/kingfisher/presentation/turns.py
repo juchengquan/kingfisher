@@ -24,13 +24,13 @@ from pydantic import BaseModel
 # annotations at runtime, and an unresolvable one is read as a body field.
 from kingfisher import Kingfisher
 from kingfisher import Request as TurnRequest
-from kingfisher.server import audit, streaming
-from kingfisher.server.capabilities import CapabilitiesBody
-from kingfisher.server.dependencies import kingfisher_of
-from kingfisher.server.errors import outcome
+from kingfisher.presentation import audit, streaming
+from kingfisher.presentation.capabilities import CapabilitiesBody
+from kingfisher.presentation.dependencies import kingfisher_of
+from kingfisher.presentation.errors import outcome
 
 if TYPE_CHECKING:
-    from kingfisher.server.config import ServerConfig
+    from kingfisher.presentation.config import ServerConfig
 
 
 class TurnBody(BaseModel):

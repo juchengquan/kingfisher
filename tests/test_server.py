@@ -15,7 +15,7 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kingfisher import Kingfisher, Request
-from kingfisher.server import ServerConfig, create_app
+from kingfisher.presentation import ServerConfig, create_app
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -539,7 +539,7 @@ def test_an_event_with_nothing_to_say_sends_an_empty_body(cfg):
     from "present and non-empty".
     """
     from kingfisher import RunEvent
-    from kingfisher.server.payloads import event_payload
+    from kingfisher.presentation.payloads import event_payload
 
     assert event_payload(RunEvent(kind="run_start")) == {}
     assert event_payload(RunEvent(kind="token", text="hi")) == {"text": "hi"}
@@ -550,7 +550,7 @@ def test_a_delegate_is_named_so_its_prose_can_be_told_apart(cfg):
     """Without it a delegate's tokens and the caller's arrive on one channel and
     the type cannot separate them -- both are chunks."""
     from kingfisher import RunEvent
-    from kingfisher.server.payloads import event_payload
+    from kingfisher.presentation.payloads import event_payload
 
     assert event_payload(RunEvent(kind="token", text="x", agent="reviewer")) == {
         "text": "x",

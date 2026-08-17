@@ -27,7 +27,7 @@ import asyncio
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.server.payloads import frame
+from kingfisher.presentation.payloads import frame
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator

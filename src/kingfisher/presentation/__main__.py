@@ -1,4 +1,4 @@
-"""`kingfisher-server`, and `python -m kingfisher.server`.
+"""`kingfisher-server`, and `python -m kingfisher.presentation`.
 
 Nothing here decides anything. It reads `ServerConfig` from the environment,
 builds the app the factory builds, and hands both to uvicorn -- so running the
@@ -11,8 +11,8 @@ from __future__ import annotations
 import logging
 import sys
 
-from kingfisher.server.app import create_app
-from kingfisher.server.config import ServerConfig
+from kingfisher.presentation.app import create_app
+from kingfisher.presentation.config import ServerConfig
 
 MISSING = (
     "kingfisher-server needs the server extra: pip install 'kingfisher[server]'"
@@ -22,7 +22,7 @@ MISSING = (
 def serve(settings: ServerConfig) -> None:
     """Run the app until stopped.
 
-    Imported inside the function so `kingfisher.server` stays importable without
+    Imported inside the function so `kingfisher.presentation` stays importable without
     uvicorn -- an app served by something else (gunicorn, a hosted ASGI runner)
     needs the module, not this.
     """
@@ -50,7 +50,7 @@ def main() -> int:
     # per outbound model call, which is noise in a server and the sort of
     # default that later logs something nobody meant to keep.
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(message)s")
-    logging.getLogger("kingfisher.server").setLevel(logging.INFO)
+    logging.getLogger("kingfisher.presentation").setLevel(logging.INFO)
     logging.getLogger("uvicorn.error").setLevel(logging.INFO)
     settings = ServerConfig.from_env()
     try:

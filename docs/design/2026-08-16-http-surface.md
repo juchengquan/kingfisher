@@ -4,7 +4,7 @@
 **Date:** 2026-08-16
 
 The tenancy work of the previous rounds existed to make the package safe to put
-a server in front of. This is that server: `kingfisher.server`, an ASGI
+a server in front of. This is that server: `kingfisher.presentation`, an ASGI
 application that maps HTTP onto the methods `Kingfisher` already has, and knows
 nothing about who is calling.
 
@@ -23,7 +23,7 @@ by good intentions:
 > **The server may import `kingfisher` and nothing deeper.** Not
 > `kingfisher.domain.*`, not `kingfisher.application.*`, not
 > `kingfisher.infrastructure.*`. And nothing in those three may import
-> `kingfisher.server`.
+> `kingfisher.presentation`.
 
 That makes the server the first real consumer of the public API, on the same
 footing as anyone outside it. When the server needs something the package does
@@ -77,7 +77,7 @@ holds the id learns nothing they could not learn by using it.
 | # | Decision | Why |
 |---|---|---|
 | D1 | **Transport only. The server never interprets identity.** | T1 put the tenancy boundary outside kingfisher. A server that authenticates is the thing T1 said should live outside, and building it here reopens that decision. Auth, caller→session mapping and per-caller quotas stay with whatever sits in front. |
-| D2 | **`kingfisher/server/`, split from the library by an import rule.** | A directory is a convention; an AST test is a boundary. The rule makes the server a consumer of the public API rather than a privileged insider, and it found three missing exports before implementation began. |
+| D2 | **`kingfisher/presentation/`, split from the library by an import rule.** | A directory is a convention; an AST test is a boundary. The rule makes the server a consumer of the public API rather than a privileged insider, and it found three missing exports before implementation began. |
 | D3 | **One request per turn, streamed. No result persistence.** | Persisting a turn's result would make dropped answers recoverable and `turn_id` genuinely idempotent, but it adds durable state to a library whose direction is to have less. Deferred, not rejected — see *Still undecided*. |
 | D4 | **Files arrive as ids resolved by a `FileStore` port.** | The same decision `DefinitionStore` made one phase earlier for the same reason. It is also the only option that keeps the library out of receiving and holding payloads. A local adapter ships so a deployment is not blocked on writing one. |
 | D5 | **FastAPI, with responses hand-built from the dataclasses.** | FastAPI for inbound validation and OpenAPI. Responses are *not* mirrored as pydantic models: `RunResult` deliberately keeps `run_dir` and `log_path` as `Path` so `json.dumps` raises, and a mirror is a second home for that rule — one where adding a `Path` serialiser makes the error go away and ships exactly the leak the original refuses. |
@@ -152,12 +152,12 @@ Each produces working, testable software on its own.
 | Phase | Deliverable | Depends on |
 |---|---|---|
 | **1** | Public surface: export the seven caller-facing errors and `async_checkpointer`; classify every error by who caused it, and every export as light or heavy. No server code. | — |
-| **2** | `kingfisher/server/` with the import rule and the sync-method rule in `test_architecture.py`; `create_app`; `ServerConfig`; the session endpoints (`POST`, `GET /{id}`, `DELETE`). | 1 |
+| **2** | `kingfisher/presentation/` with the import rule and the sync-method rule in `test_architecture.py`; `create_app`; `ServerConfig`; the session endpoints (`POST`, `GET /{id}`, `DELETE`). | 1 |
 | **3** | Turns: `POST /sessions/{id}/turns` and `POST /turns` as SSE, named events, the heartbeat, first-event-before-response, and the kind-pinning test. Carries the error map too — a turn endpoint cannot be correct without one, and writing a partial map now and a total one later would be writing it twice. | 2 |
 | **4** | Errors: the totality test over every error class, and one body shape for every refusal. | 3 |
 | **5** | Capabilities on the wire: sentinel default, all four states per axis tested. | 3 |
 | **6** | Files: `within()` in the domain, the `FileStore` port, `input_refs`/`data_refs` on `Request`, resolution in `_admit`, writers beside `place_inputs`/`place_data`, and the local adapter. | 3 |
-| **7** | Packaging: the console entry point, `kingfisher.server.asgi:app`, and an access log that writes neither session ids nor task text — the first because it is a bearer credential (below), the second because `enforce_local_only_tracing` exists to stop prompts leaving the machine and a shipped log is the same export through another door. The task stays in the session log, on disk, beside the run it describes. | 3 |
+| **7** | Packaging: the console entry point, `kingfisher.presentation.asgi:app`, and an access log that writes neither session ids nor task text — the first because it is a bearer credential (below), the second because `enforce_local_only_tracing` exists to stop prompts leaving the machine and a shipped log is the same export through another door. The task stays in the session log, on disk, beside the run it describes. | 3 |
 
 Phase 1 is load-bearing and touches only the library. Phases 4, 5 and 6 are
 independent of each other. Phase 6 is the largest and the only one that changes
