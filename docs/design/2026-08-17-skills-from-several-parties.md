@@ -1,6 +1,6 @@
 # Two skills called `lookup`, from two people who never met
 
-**Status:** planned.
+**Status:** implemented.
 **Date:** 2026-08-17
 
 Skills arrive from different parties -- a vendor pack, a shared catalogue, a
@@ -53,6 +53,23 @@ not write, and chooses between them on description. That is better than being
 shown one of two and told nothing, which is today, and it is worse than two
 skills with distinct names. **Renaming remains the best answer available to
 anyone who controls both files** -- this exists for when nobody does.
+
+## Found while building
+
+**`misplaced` still meant the old depth.** It reported any folder holding a
+skill below it, which is exactly what a source now is — so `--list` printed
+`research::lookup` as available and warned that `research/` was too deep to
+load, two lines apart. It now reports the skill's own path, and only below
+`DEEPEST`. Nothing in the suite caught this; the live listing did.
+
+**`unloadable` read `repository.names`.** That lists the root and stops, so a
+nested skill with no `description` was dropped by deepagents, absent from
+`names`, and reported by nobody — the silence the registry exists to end,
+reopened one directory down. It now walks the reachable depths instead.
+
+**Overriding the hooks added a warning per agent built.** langchain inspects
+each hook's signature and warns when `config` is not a `RunnableConfig`; the
+suite went from 2 warnings to 14. Annotating it is the whole fix.
 
 ## Checked before planning
 

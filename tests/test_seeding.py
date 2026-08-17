@@ -146,13 +146,17 @@ def test_the_readme_call_is_valid(cfg, session_dir, shipped):
     )
 
 
-def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
-    """Discovery is one level deep, because deepagents' own listing is -- going
-    deeper here would advertise skills the agent could not then load.
+def test_a_skill_hidden_below_the_deepest_source_is_reported_not_ignored(tmp_path):
+    """Reach is two levels: a skill at the root, or one inside a folder that
+    becomes its own source. A third level is where deepagents stops looking.
 
-    Grouping skills into folders is the obvious thing to try, and it yields
-    nothing: no error, no warning, a catalogue that simply looks empty. The
+    Grouping one level further is the obvious next thing to try, and it yields
+    nothing: no error, no warning, a skill that simply never appears. The
     layout is a contract, so breaking it should say so.
+
+    It reports the skill's own path, not the folder above it. Naming the folder
+    was right when any folder was too deep; now that one level loads, it would
+    indict `grouped/` for what `grouped/deeper/` did.
     """
 
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
@@ -162,7 +166,20 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     (tmp_path / "not-a-skill").mkdir()
 
     assert LocalSkillRepository(tmp_path).names == ("flat",)
-    assert LocalSkillRepository(tmp_path).misplaced == ("a", "grouped")
+    assert LocalSkillRepository(tmp_path).misplaced == ("a/b/deep",)
+
+
+def test_one_folder_of_grouping_is_not_misplaced(tmp_path):
+    """The negative control for the level that now works. Reported here, this
+    warning would contradict `--list`'s own skills listing one line above it --
+    which is exactly what it did before this was fixed."""
+    from kingfisher.infrastructure.skill_store import LocalSkillRepository
+
+    target = tmp_path / "research" / "lookup" / "SKILL.md"
+    target.parent.mkdir(parents=True)
+    target.write_text("---\nname: lookup\ndescription: d\n---\nbody\n", encoding="utf-8")
+
+    assert LocalSkillRepository(tmp_path).misplaced == ()
 
 
 def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):

@@ -45,8 +45,9 @@ from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
 from kingfisher.domain.tool import Found, Offering, tool_name
 from kingfisher.infrastructure.backend import (
     MEMORY_SOURCES,
-    SKILLS_SOURCES,
+    SKILLS_ROUTE,
     build_backend,
+    skills_sources,
 )
 from kingfisher.infrastructure.catalogue import Catalogue, source_of
 from kingfisher.infrastructure.delegation import (
@@ -357,21 +358,42 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     )
 
 
-def _skill_denials(
-    activated: tuple[str, ...], available: tuple[str, ...]
-) -> list[FilesystemPermission]:
+def _denied_path(read_at: str) -> str:
+    """One skill's own directory, as a rule the agent's routes can carry.
+
+    The registry reads a catalogue through a backend rooted at the catalogue
+    itself, so a skill's `path` is `/research/lookup/<file>` -- where the
+    agent addresses that same file under `/skills/`. Two
+    roots, two spellings, and a rule written in the wrong one is not merely
+    wrong: `FilesystemMiddleware` refuses *every* permission when the backend
+    can execute unless each rule is scoped to a route, so one unrouted path
+    takes the whole deny list down with it. Found by a test doing exactly that.
+    """
+    return f"{SKILLS_ROUTE}{read_at.lstrip('/').rsplit('/', 1)[0]}/**"
+
+
+def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[FilesystemPermission]:
     """Deny reads of skills this request did not activate.
 
     The listing filter only stops the agent being *told*; this stops the file
     tools reading it anyway. Neither stops `execute`, which bypasses tool-level
     permissions entirely — so this is a real boundary only for a request that
     did not activate the shell.
+
+    Built from each skill's own path rather than from its name, and that is the
+    fix rather than a tidy-up. This wrote `/skills/{name}/**`, which is where a
+    skill sits only while every skill sits at the top level. A skill in a folder
+    lives at `/skills/research/lookup/`, so the rule denied a path that does not
+    exist and the file tools could still read it -- a boundary failing open,
+    silently, the moment folders were possible.
     """
     allowed = set(activated)
     return [
-        FilesystemPermission(operations=["read"], paths=[f"/skills/{name}/**"], mode="deny")
-        for name in available
-        if name not in allowed
+        FilesystemPermission(
+            operations=["read"], paths=[_denied_path(one["path"])], mode="deny"
+        )
+        for key, one in registry.offered.items()
+        if key not in allowed
     ]
 
 
@@ -698,26 +720,31 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         permissions.append(MEMORY_IS_DENIED)
 
     if cfg.skills_enabled:
+        registry = roots.registry
+        # One source per folder, so a skill below the top level is visible at
+        # all -- and labelled the way the registry labelled it, because a label
+        # is the first half of what a request grants.
+        sources = skills_sources(registry.folders)
         if capabilities.skills == ALL:
-            extras["skills"] = SKILLS_SOURCES
+            extras["skills"] = sources
         elif capabilities.skills is None:
             pass  # none: no index, and no deny rules to write for one
         else:
-            available = available_skills(cfg, session_dir, catalogue=roots)
-            refuse_unoffered(
-                capabilities.skills, offered=available, kind="skill", subject="this request"
-            )
+            # Each grant to the one skill it means. A bare name that two sources
+            # both offer is refused here rather than resolved, because resolving
+            # it is exactly the silent pick this exists to stop.
+            activated = tuple(registry.resolve(one) for one in capabilities.skills)
             # Supplied as middleware rather than via `skills=`: passing that
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.
             middleware.append(
                 ScopedSkills(
-                    allowed=capabilities.skills,
+                    allowed=activated,
                     backend=resolved_backend,
-                    sources=SKILLS_SOURCES,
+                    sources=sources,
                 )
             )
-            permissions.extend(_skill_denials(capabilities.skills, available))
+            permissions.extend(_skill_denials(activated, registry))
 
     interpreter_at: int | None = None
     if cfg.interpreter_enabled:
@@ -813,6 +840,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 builtin_tools=surface.granted_builtin,
                 tools=surface.granted_workspace,
                 skills=subagent_skills(defined[name], offered, capabilities.skills),
+                skill_sources=skills_sources(roots.registry.folders),
                 helpers=helpers,
                 default_model=default_model,
                 tool_objects=tool_objects,

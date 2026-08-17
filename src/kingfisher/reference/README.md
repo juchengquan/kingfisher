@@ -181,8 +181,8 @@ Two things follow, and both are the point:
   `research/find_company.py` still offers `find_company`, and a request grants
   it by that name. Moving a file between folders changes nothing a caller
   types. `--list` says where each one came from when the name does not.
-- **Skills cannot do this.** See below — the difference is real and worth
-  knowing before you try.
+- **Skills go one folder deep, not many.** See below — the difference is real
+  and worth knowing before you try.
 
 Modules starting with `_` are still skipped, which is now mostly a way to park
 a file you have not finished. Inside a package you do not need it.
@@ -570,20 +570,51 @@ format, so an unrecognised key there is left alone.
 
 ---
 
-## Skills — `/skills/<name>/SKILL.md`, exactly one level
+## Skills — `/skills/<name>/SKILL.md`, or one folder deep
 
 deepagents' format, unchanged. A directory per skill, `SKILL.md` with `name` and
 `description` in frontmatter and the procedure in the body.
 
-**This is the one that cannot be nested**, and the exception is worth a sentence
-because tools and subagents both can. Those are read by kingfisher, which walks
-as deep as you like. A skill is read by the *agent*, through a filesystem route,
-and deepagents lists the directory once and looks for `SKILL.md` directly inside
-each entry. It does not go further.
+**One folder of grouping, and no more** — where tools and subagents nest as deep
+as you like. The difference is who reads them: those are walked by kingfisher, a
+skill is read by the *agent* through a filesystem route, and deepagents lists a
+source one level deep and looks for `SKILL.md` directly inside each entry. It
+does not go further. So each folder is registered as its own source, which buys
+exactly one level:
 
-So `skills/grouped/company-lookup/SKILL.md` is not tidied away — it is
-unreachable, and nothing raises. `--list` reports any folder hiding one, because
-the alternative is a catalogue that simply looks empty.
+```
+skills/code-review/SKILL.md            -> code-review
+skills/research/lookup/SKILL.md        -> research::lookup
+skills/research/deep/lookup/SKILL.md   -> unreachable
+```
+
+`--list` reports anything hiding below that, because the alternative is a
+catalogue that simply looks empty.
+
+### Two skills with the same name
+
+A folder is a *source*, and a skill's full identity is `source::name` — the same
+spelling a subagent's `tools:` uses for a tool in a package. This is what lets a
+vendor pack and a team's own folder both ship a `lookup` without one replacing
+the other, which is what a catalogue assembled from several parties looks like
+after long enough.
+
+**A bare name stays legal wherever it is unique**, which today is everywhere.
+The qualifier is only required once two sources offer the same name, and then it
+is *required* rather than guessed:
+
+```
+capability error: 'lookup' is offered by more than one source, so naming it
+alone would silently pick one: write legal::lookup, research::lookup
+```
+
+That refusal is the point. Adding a colliding skill turns a working grant into a
+loud error instead of silently changing which skill the caller gets.
+
+Renaming is still the better answer for anyone who controls both files — the
+model chooses between two entries on description alone, and two distinct names
+tell it more than one name and a qualifier. This exists for when nobody controls
+both.
 
 The mechanism is progressive disclosure: **only the name and description are in
 context by default.** The body is read when the agent decides the skill applies.
