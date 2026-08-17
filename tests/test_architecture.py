@@ -112,6 +112,94 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     )
 
 
+#: Everything in this repository that may import kingfisher. `assets/` is the
+#: second distribution in the workspace and is included deliberately: it is a
+#: separate wheel that depends on this one, so it is the first place a move here
+#: breaks and the last place anyone thinks to look.
+REPO = SRC.parent.parent
+
+
+def _everything_that_imports_kingfisher() -> list[Path]:
+    areas = ("src", "tests", "assets", "evals", "spikes")
+    found = [
+        p
+        for area in areas
+        if (REPO / area).is_dir()
+        for p in (REPO / area).rglob("*.py")
+        if "__pycache__" not in p.parts
+    ]
+    if (REPO / "main.py").exists():
+        found.append(REPO / "main.py")
+    return sorted(found)
+
+
+def _names_a_real_module(module: str) -> bool:
+    """Resolved on disk rather than imported.
+
+    `importlib.util.find_spec` would answer the same question by executing
+    every parent package on the way, which for `kingfisher.presentation` means
+    fastapi and for the harness means three provider SDKs. This rule should
+    cost nothing and have no way to fail for a reason other than the one it is
+    about.
+    """
+    base = SRC.parent.joinpath(*module.split("."))
+    return base.with_suffix(".py").exists() or (base / "__init__.py").exists()
+
+
+def test_every_kingfisher_import_in_this_repository_names_a_module_that_exists():
+    """The rule that was missing when `infrastructure/harness/` landed.
+
+    `assets/tests/test_shipped_assets.py` imported
+    `kingfisher.infrastructure.agent`, the move renamed it, and nothing here
+    noticed -- every rule in this file reads `src/`, and the suite was run as
+    `pytest tests/` where `assets/` is not collected at all. CI runs bare
+    `pytest`, so it found it, one merge too late.
+
+    Checking the *path* rather than the symbol is deliberate. A dangling module
+    path is the failure a move causes, it is mechanical to detect, and it costs
+    nothing; a dangling name inside a module is what the type checker is for.
+    """
+    dangling = sorted({
+        f"{path.relative_to(REPO).as_posix()} -> {module}"
+        for path in _everything_that_imports_kingfisher()
+        for module in _imported_modules(path)
+        if module.split(".")[0] == "kingfisher" and not _names_a_real_module(module)
+    })
+    assert not dangling, (
+        f"{dangling} import kingfisher modules that do not exist — something moved "
+        "and left these behind"
+    )
+
+
+def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
+    """Everything in the repository resolves, so the rule above passes whether
+    it discriminates or answers `True`. These are the two answers the tree
+    cannot supply -- and the negatives are the paths this series actually
+    removed, so they keep being asserted gone rather than merely absent.
+    """
+    assert _names_a_real_module("kingfisher")
+    assert _names_a_real_module("kingfisher.domain.tool")
+    assert _names_a_real_module("kingfisher.infrastructure.harness")
+    assert _names_a_real_module("kingfisher.infrastructure.harness.agent")
+
+    assert not _names_a_real_module("kingfisher.infrastructure.agent")
+    assert not _names_a_real_module("kingfisher.server")
+    assert not _names_a_real_module("kingfisher.server.asgi")
+
+
+def test_the_second_distribution_is_in_scope():
+    """`assets/` is where the move actually broke, and the rule is worth nothing
+    if it stops looking there. It is a separate wheel depending on this one, so
+    it is the first thing a move here breaks and the last place anyone checks --
+    which is precisely what happened.
+    """
+    scanned = {p.relative_to(REPO).parts[0] for p in _everything_that_imports_kingfisher()}
+    assert "assets" in scanned, (
+        "the dangling-import rule is not reading assets/ — the second distribution "
+        "is where a move in src/ lands first"
+    )
+
+
 def test_no_rule_here_is_parametrized_over_nothing():
     """A directory that stops existing takes its rule down with it, silently.
 
