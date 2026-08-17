@@ -1,6 +1,6 @@
 # Saying where a tool lives, in the file that names it
 
-**Status:** designed, not implemented.
+**Status:** implemented. One row of *What changes* landed differently — see *Corrections*.
 **Date:** 2026-08-17
 
 A subagent definition names its tools by name and nothing else:
@@ -112,12 +112,17 @@ qualified `read_file` would mean.
 | File | Change |
 |---|---|
 | `domain/subagent.py` | parse `source::name`, keep the pair on the spec |
-| `infrastructure/delegation.py` | check the claimed source against the real one |
+| `infrastructure/catalogue.py`, `infrastructure/agent.py` | check the claimed source against the real one |
 | `infrastructure/catalogue.py` | `warm()` checks every catalogue definition's paths |
+| `domain/tool.py` | `split_reference`, `reference`, and `Offering.refuse_moved` |
 | `infrastructure/tool_store.py` | reference form for a `Found` (no trailing slash) |
-| `main.py` | `--list` prints the reference form |
-| `presets/subagents/analysis/profiler.yaml` | the long form, demonstrated |
-| `presets/README.md` | the long form, and why a request does not use it |
+| `main.py` | `--list` names the source each tool came from |
+| `kingfisher_assets/subagents/analysis/profiler.yaml` | the long form, demonstrated |
+| `reference/README.md` | the long form, and why a request does not use it |
+
+The last two moved while this shipped: the definitions are a separate
+distribution now and `presets/` is `reference/`. See
+*2026-08-17-assets-as-packages*.
 
 A catalogue whose definitions all use plain names behaves exactly as it does
 today, which is every catalogue that exists right now.
@@ -132,3 +137,19 @@ today, which is every catalogue that exists right now.
   short form is not wrong, so it should not warn -- but a listing that showed
   which definitions carry a checked path would say how much the feature is
   actually used. Not built; worth knowing before deciding the point above.
+
+## Corrections
+
+**`--list` names the source; it does not print the reference form.** The plan
+said it would, and what shipped is `csv_columns  (csv_profile)` rather than
+`csv_profile::csv_columns`. The column is readable and tells you what to put on
+the left, but it is not a line you can copy into a definition, which is what
+"prints the reference form" promised. Worth knowing before reading
+`profiler.yaml`, whose comment says `--list` prints the left-hand side *"so it
+can be pasted"* — true of the source, not of the whole reference.
+
+**The check landed in `catalogue.py` and `agent.py`, not `delegation.py`.**
+`Offering.refuse_moved` is the rule and it lives in the domain; the two callers
+are `warm()`, which checks every definition a catalogue holds, and the build
+path, which checks the ones a request activated. Splitting it that way is why a
+moved tool is caught both at startup and at the moment it would be used.
