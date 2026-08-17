@@ -302,7 +302,39 @@ UPLOADED_SKILLS_ROUTE = "/skills/uploaded/"
 #: as literals in `agent.py` while living here as constants, which is two copies
 #: of the same string kept in step by nobody -- and both `agent` and `delegation`
 #: need them, so they belong with the routes they name.
-SKILLS_SOURCES = [(SKILLS_ROUTE, "Catalogue"), (UPLOADED_SKILLS_ROUTE, "Uploaded")]
+SKILLS_SOURCES = [(SKILLS_ROUTE, "catalogue"), (UPLOADED_SKILLS_ROUTE, "uploaded")]
+
+
+def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
+    """Every place the agent should look for skills, labelled.
+
+    The catalogue root, then each folder under it that holds skills, then the
+    session's own. A folder has to be its own source or its skills are
+    invisible: deepagents lists a source exactly one level deep, so a skill in
+    `skills/research/` is found by a source at `/skills/research/` and by
+    nothing else.
+
+    The labels are not decoration. They are the first half of a skill's
+    `source::name`, which is what a request grants when two parties both ship a
+    `lookup` -- so what is written here is what a caller types, and it has to
+    match what `skill_registry` computed from the same folders.
+
+    `uploaded` is last, and that is the one place deepagents' own precedence
+    still shows: it merges later sources over earlier ones. Nothing relies on
+    it, because `uploads` refuses a name a catalogue already offers -- a request
+    may not stand its own text in for a reviewed skill.
+    """
+    catalogue = [(SKILLS_ROUTE, "catalogue")]
+    catalogue += [
+        (f"{SKILLS_ROUTE}{name}/", name)
+        for name in folders
+        # `/skills/uploaded/` is already a route of its own, and a catalogue
+        # folder of that name would mount over it. Skipped rather than renamed:
+        # a folder called `uploaded` in a shared catalogue is confusing enough
+        # without it also silently becoming the session's.
+        if f"{SKILLS_ROUTE}{name}/" != UPLOADED_SKILLS_ROUTE
+    ]
+    return [*catalogue, (UPLOADED_SKILLS_ROUTE, "uploaded")]
 
 #: The one memory file the agent is told to read. `/memory/` is a route so a
 #: request that declined memory can be given a deny rule for it.

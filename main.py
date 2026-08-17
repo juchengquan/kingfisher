@@ -255,14 +255,15 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # above reads this same registry.
     for name in registry.unloadable:
         print(f"  ! {name}/ is not loadable — the agent will not be told about it")
-    # Grouping skills into folders is the obvious thing to try and yields
-    # nothing at all, because discovery is one level deep. Saying so is the
-    # only difference between a catalogue that looks empty and one that is --
-    # and it needs the reason now that tools and subagents nest freely.
+    # One folder of grouping works and a second does not, so the obvious next
+    # thing to try yields nothing at all. Saying so is the only difference
+    # between a catalogue that looks empty and one that is -- and it needs the
+    # reason, because tools and subagents nest as deep as anyone likes.
     for name in getattr(skills, "misplaced", ()):
-        print(f"  ! {name}/ holds a skill too deep to load — they live at {skill_store.LAYOUT}")
-        print("    (the agent reads skills itself and only looks one level down;")
-        print("     tools and subagents are read by kingfisher, so those may nest)")
+        print(f"  ! {name}/ sits too deep to load — skills live at {skill_store.LAYOUT}")
+        print("    (a folder under the root is its own source, and a source is read")
+        print("     one level down; tools and subagents are read by kingfisher, so")
+        print("     those may nest as deep as you like)")
 
     print("\nsubagents")
     # One repository, so the definitions are parsed once. Read as two calls --
