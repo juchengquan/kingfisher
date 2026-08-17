@@ -22,6 +22,7 @@ from kingfisher.domain.ports import (
     SubagentRepository,
     ToolRepository,
 )
+from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure import subagent_store
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
@@ -179,11 +180,14 @@ def test_a_broken_definition_raises_on_the_read_and_not_on_construction(catalogu
     """Which is what lets `--list` build one and still report the failure over
     the rest of the inventory, and what lets `Catalogue.warm` choose when a
     deployment pays for it."""
+    # A malformed definition, where this used to use two files claiming one
+    # name -- that pair is legal now and told apart by file, so it no longer
+    # says anything about *when* a repository reads.
     (catalogue / "subagents" / "bad.yaml").write_text(
-        DEFINITION.format(name="alpha"), encoding="utf-8"
+        "name: [not, a, string]\n", encoding="utf-8"
     )
 
     subagents = LocalSubagentRepository(catalogue / "subagents")  # no raise
 
-    with pytest.raises(subagent_store.SubagentError, match="duplicate subagent name"):
+    with pytest.raises(SubagentError):
         _ = subagents.specs

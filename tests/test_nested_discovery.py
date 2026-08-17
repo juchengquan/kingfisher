@@ -15,7 +15,6 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
@@ -264,13 +263,21 @@ def test_a_nested_subagent_keeps_its_own_name(tmp_path):
     assert tuple(LocalSubagentRepository(tmp_path).specs) == ("profiler",)
 
 
-def test_a_duplicate_subagent_across_folders_is_refused(tmp_path):
-    """Same reason as tools, and the message names both files."""
+def test_two_folders_may_each_define_one_subagent_name(tmp_path):
+    """Same as tools, and for the same reason: refusing the pair on sight
+    stopped the whole catalogue loading over a clash no single agent had yet
+    asked for, and nobody who owned neither file could fix it.
+
+    Both are kept, under the reference a grant writes. The refusal moved to the
+    agent, where the roster actually collapses.
+    """
     _subagent(tmp_path / "analysis", "profiler")
     _subagent(tmp_path / "review", "profiler")
 
-    with pytest.raises(SubagentError, match="already defined by"):
-        _ = LocalSubagentRepository(tmp_path).specs
+    assert sorted(LocalSubagentRepository(tmp_path).specs) == [
+        "analysis/profiler.yaml::profiler",
+        "review/profiler.yaml::profiler",
+    ]
 
 
 def test_sources_say_where_a_nested_subagent_lives(tmp_path):

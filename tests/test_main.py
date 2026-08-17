@@ -184,6 +184,30 @@ def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
     assert "research/t.py" in printed
 
 
+def test_two_folders_may_each_define_one_subagent_name(cfg, capsys):
+    """The subagent half, and it failed harder than the tool one did: a
+    duplicate name took the whole inventory down rather than one section.
+
+    Listed under the reference a grant would write, with no trailing `(file)` --
+    the reference already says where it lives, and printing it twice in a
+    listing whose job is to be scannable is noise.
+    """
+    spec = (
+        "name: surveyor\ndescription: Surveys, the {who} way.\n"
+        "system_prompt: |\n  Do the thing.\n"
+    )
+    for who in ("vendor", "team"):
+        directory = cfg.subagents_dir / who
+        directory.mkdir(parents=True, exist_ok=True)
+        (directory / "surveyor.yaml").write_text(spec.format(who=who), encoding="utf-8")
+
+    assert main.show_inventory(cfg, cfg.workspace) == 0
+
+    printed = capsys.readouterr().out
+    assert "vendor/surveyor.yaml::surveyor — Surveys, the vendor way." in printed
+    assert "team/surveyor.yaml::surveyor — Surveys, the team way." in printed
+
+
 def test_two_folders_may_each_define_one_name(cfg, capsys):
     """The case that used to stop `--list` dead, and stop a deployment with it.
 
