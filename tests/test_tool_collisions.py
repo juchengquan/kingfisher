@@ -19,7 +19,7 @@ import pytest
 from langchain_core.messages import AIMessage
 from langgraph.prebuilt.tool_node import ToolNode
 
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.domain.capabilities import Capabilities, CapabilityError, all_but
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.tool_store import LocalToolRepository
 from tests.conftest import FakeToolCallingModel
@@ -359,3 +359,53 @@ def test_a_workspace_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir)
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(builtin_tools=(), tools=()),
         )
+
+
+# -- subtraction, which is a grant written the other way round -------------
+
+
+def _subtractable(cfg):
+    """What `--without-tools` measures a name against, as the driver builds it."""
+    import main
+
+    return main._offered(cfg)["tools"]
+
+
+def test_subtracting_an_ambiguous_bare_name_is_refused(cfg):
+    """The grant side refused this from the start; the subtraction side matched
+    the bare name against a workspace holding two and removed *both* without a
+    word. Silent over-removal is the hardest kind to notice -- the tool is
+    simply not there, and nothing said so.
+    """
+    _two_vendors(cfg)
+
+    with pytest.raises(CapabilityError, match="more than one source offers it"):
+        all_but(("fetch",), offered=_subtractable(cfg))
+
+
+def test_subtracting_a_reference_leaves_the_other_one(cfg):
+    """And the only spelling that says *which* came back as an unknown name, so
+    there was no way to subtract one of the pair at all."""
+    _two_vendors(cfg)
+
+    kept = all_but(("vendor_a/fetch.py::fetch",), offered=_subtractable(cfg))
+
+    assert "vendor_b/fetch.py::fetch" in kept
+    assert "vendor_a/fetch.py::fetch" not in kept
+
+
+def test_a_genuine_typo_still_reads_as_unknown(cfg):
+    """The distinction only exists if the other branch survives."""
+    _two_vendors(cfg)
+
+    with pytest.raises(CapabilityError, match="unknown name"):
+        all_but(("nosuchthing",), offered=_subtractable(cfg))
+
+
+def test_the_subtraction_axis_offers_what_a_grant_could_name(cfg):
+    """The two were built from different lists, which is how they disagreed.
+    One `Offering` feeds both now."""
+    _two_vendors(cfg)
+
+    assert "vendor_a/fetch.py::fetch" in _subtractable(cfg)
+    assert "fetch" not in _subtractable(cfg)
