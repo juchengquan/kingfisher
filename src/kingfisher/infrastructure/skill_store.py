@@ -29,7 +29,7 @@ from kingfisher.domain.skill import FILENAME
 #: folder directly under the root is registered as its own source and a source
 #: is listed one level deep -- so one level of grouping works and a second does
 #: not.
-LAYOUT = f"<skills>/<name>/{FILENAME} or <skills>/<source>/<name>/{FILENAME}"
+SKILL_LAYOUT = f"<skills>/<name>/{FILENAME} or <skills>/<source>/<name>/{FILENAME}"
 
 #: How many path parts a reachable `SKILL.md` has, relative to the root:
 #: `<name>/SKILL.md` is two, `<source>/<name>/SKILL.md` is three. Anything
@@ -130,7 +130,7 @@ class LocalSkillRepository:
         does not. That reads as an arbitrary inconsistency unless the reason is
         stated: those two are read by kingfisher, which can walk as deep as it
         likes, and a skill is read by the agent through a filesystem route. See
-        `LAYOUT`, which is the sentence to quote at someone.
+        `SKILL_LAYOUT`, which is the sentence to quote at someone.
 
         Not on `SkillRepository`, deliberately. It is a question about
         directories, and a store that is not one has no answer to give.
