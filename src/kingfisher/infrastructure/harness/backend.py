@@ -395,14 +395,7 @@ def build_backend(
         skills_dir.mkdir(parents=True, exist_ok=True)
 
     shell = ConfinedShell(
-        confinement.resolve(
-            cfg.shell_sandbox,
-            workspace=cfg.workspace,
-            state_dir=cfg.state_dir,
-            scratch_dir=cfg.scratch_dir,
-            extra=cfg.shell_path_extra,
-            skills=skills_dir,
-        ),
+        confinement.shell_confinement(cfg, skills=skills_dir),
         root_dir=str(session_dir),
         env=shell_env(cfg, session_dir, catalogue=catalogue),
         timeout=cfg.execution_timeout_s,

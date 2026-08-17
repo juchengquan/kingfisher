@@ -33,6 +33,7 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
+from kingfisher.cli.health import examine, worst
 from kingfisher.cli.listing import as_json, failed, render
 
 
@@ -68,6 +69,22 @@ def build_parser() -> argparse.ArgumentParser:
             "them. Needs `pip install 'kingfisher[server]'`, and says so if it "
             "is missing rather than being absent from this list."
         ),
+    )
+    checkup = sub.add_parser(
+        "doctor",
+        help="check everything that stands between this install and a run",
+        description=(
+            "The configuration, the asset packs, the three catalogues and the "
+            "shell confinement. Nothing here calls a model, so it costs nothing "
+            "to run before a deployment rather than after its first failure -- "
+            "which also means a credential it reports as present may still be "
+            "wrong. Exits non-zero only on something that will stop a run."
+        ),
+    )
+    checkup.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the same checks as JSON, for a script rather than a person",
     )
     listing = sub.add_parser(
         "list",
@@ -155,6 +172,26 @@ def _serve() -> int:
     return serve_forever()
 
 
+def _doctor(*, as_document: bool = False) -> int:
+    """Say what would stop a run, and what would merely surprise.
+
+    Non-zero on a failure and zero on a warning. An unconfined shell is a
+    deployment's choice, and a command that failed on one would go unrun in
+    exactly the deployments most worth checking.
+    """
+    checks = examine(from_env())
+    if as_document:
+        print(json.dumps([vars(check) for check in checks], indent=2))
+    else:
+        width = max(len(check.name) for check in checks)
+        for check in checks:
+            mark = {"ok": "ok  ", "warn": "warn", "fail": "FAIL"}[check.verdict]
+            print(f"{mark}  {check.name.ljust(width)}  {check.detail}")
+            if check.remedy:
+                print(f"      {' ' * width}  -> {check.remedy}")
+    return 1 if worst(checks) == "fail" else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -166,10 +203,12 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "seed":
             return _seed()
-        # Before `_list`, and not only for tidiness: `serve` has no `--json`, so
-        # reaching `args.json` on that path would be an AttributeError.
+        # `serve` before `_list`, and not only for tidiness: it has no
+        # `--json`, so reaching `args.json` on that path is an AttributeError.
         if args.command == "serve":
             return _serve()
+        if args.command == "doctor":
+            return _doctor(as_document=args.json)
         return _list(as_document=args.json)
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather

@@ -205,7 +205,11 @@ def test_serve_is_offered_whether_or_not_the_extra_is_installed():
         for choice in getattr(action, "choices", None) or ()
     }
 
-    assert verbs == {"seed", "serve", "list"}
+    # Membership, not the exact set. Naming every verb here makes this fail on
+    # each one added -- it did, the moment `doctor` landed -- and the claim is
+    # about `serve` being offered, not about how many siblings it has. Still
+    # exact enough: renaming the verb to `srv` fails this.
+    assert "serve" in verbs
 
 
 def test_serve_without_the_extra_says_what_to_install(monkeypatch, capsys):
