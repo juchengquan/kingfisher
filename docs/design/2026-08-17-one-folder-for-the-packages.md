@@ -76,6 +76,19 @@ Both are now found by a marker rather than a count: the repository is the
 directory holding `pyproject.toml` *and* `packages/`. A count would go on
 quietly working after the next move, pointed at the wrong tree.
 
+## The check that was checking nothing
+
+The `base-install` job installed the library and then ran it with `uv run`,
+which **re-syncs the workspace first** — so it installed the two packages it
+exists to prove are absent, started a real server, and failed on missing
+configuration rather than on the service being there. It had been passing on the
+previous layout for the same wrong reason, and only went red here because the
+install path moved.
+
+It now builds a wheel, installs it into a venv outside the workspace, and drives
+that venv's own binaries. It also asserts the two siblings are unimportable,
+which it never did.
+
 ## Verified
 
 All three wheels built and read: each contains exactly its own package and
