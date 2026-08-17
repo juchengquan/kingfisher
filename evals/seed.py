@@ -18,11 +18,10 @@ no honest source for it.
 from __future__ import annotations
 
 import shutil
+from importlib import resources
 from pathlib import Path
 
 from evals.dataset import seed_sample_data
-from importlib import resources
-
 from kingfisher.domain.skill import FILENAME
 
 SKILL_NAME = "tabular-qa"
