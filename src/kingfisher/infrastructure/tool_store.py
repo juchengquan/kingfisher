@@ -278,24 +278,23 @@ class LocalToolRepository:
 
     @property
     def tools(self) -> tuple[Any, ...]:
-        """The objects alone, for the callers that only want those -- which is
-        `build_agent`, and which is most of them."""
+        """The objects alone: what a directory offers, said the short way.
+
+        Two derived views survive here and a third did not, so the line is worth
+        drawing. This one is the question the loader exists to answer -- "what
+        does this directory define" -- and it is how every test of import
+        failure, duplicate names and package handling says what it is checking.
+        """
         return tuple(found.tool for found in self.found)
 
     @property
     def names(self) -> tuple[str, ...]:
-        """Tool names offered here. A listing, for `--list` and errors."""
-        return tuple(found.name for found in self.found)
+        """Tool names offered here.
 
-    @property
-    def sources(self) -> dict[str, str]:
-        """Where each tool is defined, by name, relative to the catalogue.
-
-        For `--list` and for a refusal. Nesting exists so a person can find a
-        file again, and a bare list of names is exactly what sends them
-        grepping for it.
-
-        Not on `ToolRepository`: it is derivable from `found`, and a port that
-        carries every derivable view is a port nobody can implement.
+        `AssetRepository.names` requires it of every kind, which is the reason
+        it is here: nothing in this package reads it off a *tool* repository,
+        because names reach the capability layer through `Found.name` and
+        `Offering`. A substituted repository still has to be able to list
+        itself.
         """
-        return {found.name: found.source for found in self.found}
+        return tuple(found.name for found in self.found)
