@@ -48,11 +48,11 @@ jobs:
 
       # Three separate steps rather than one `&&` chain, so a red build says
       # which of the three failed from the job list without opening the log.
-      # `assets/` is the second distribution in this workspace, held to the same
-      # bar as the first: it is code that ships, and a tool nobody lints is a
-      # tool whose example teaches whatever slipped through.
+      # `packages/` is all three distributions, held to one bar: they are all
+      # code that ships, and a tool nobody lints is a tool whose example teaches
+      # whatever slipped through.
       - name: ruff
-        run: uv run ruff check src/ main.py tests/ assets/ service/
+        run: uv run ruff check packages/ main.py
 
       - name: ty
         run: uv run ty check
@@ -78,19 +78,34 @@ jobs:
       - name: Pin a uv-managed Python
         run: uv python install 3.12
 
-      - name: Install only the library
-        run: uv venv && uv pip install .
+      # Built and installed as a wheel, into a venv outside the workspace, and
+      # driven through that venv's own binaries. Every shortcut here was tried
+      # and defeats the job: `uv run` re-syncs the workspace before running, so
+      # it installs the very packages this is checking are absent -- the first
+      # version of this step started a real server and failed on missing
+      # configuration rather than on the service being present.
+      - name: Build and install only the library
+        run: |
+          uv build --wheel --out-dir /tmp/wheels packages/kingfisher
+          uv venv /tmp/alone
+          VIRTUAL_ENV=/tmp/alone uv pip install /tmp/wheels/kingfisher-*.whl
 
       # Every public name, not just an import of the package: the package
       # imports lazily, so `import kingfisher` succeeding proves nothing about
       # whether the names behind it can be reached.
       - name: Every public name resolves
         run: |
-          uv run python -c "
+          /tmp/alone/bin/python -c "
           import kingfisher
           for name in kingfisher._EXPORTS:
               getattr(kingfisher, name)
           print(f'{len(kingfisher._EXPORTS)} public names, no service installed')
+          for absent in ('kingfisher_service', 'kingfisher_assets'):
+              try:
+                  __import__(absent)
+              except ModuleNotFoundError:
+                  continue
+              raise SystemExit(f'{absent} is installed and should not be')
           "
 
       # The verb that exists to say the service is missing. Exits 1 and says how
@@ -99,7 +114,7 @@ jobs:
       - name: The service is absent and says so
         run: |
           set +e
-          said=$(uv run kingfisher serve 2>&1); code=$?
+          said=$(/tmp/alone/bin/kingfisher serve 2>&1); code=$?
           set -e
           echo "$said"
           test "$code" = "1" || { echo "expected exit 1, got $code"; exit 1; }
