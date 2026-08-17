@@ -1,6 +1,6 @@
 # One answer to "which skills does this agent have"
 
-**Status:** planned, not implemented.
+**Status:** implemented.
 **Date:** 2026-08-17
 
 Two things read the skills catalogue today and they do not agree. Kingfisher
@@ -41,18 +41,23 @@ Ask deepagents what the skills are, once, and keep the answer.
 `(backend, sources, system_prompt)` — a backend and a list of paths. There is no
 seam for pre-loaded `SkillMetadata`. It loads in `before_agent`, per run.
 
-**Skills are re-read every turn**, once per source:
+**Skills are read once per session, not per turn.** `before_agent` skips the
+load when `skills_metadata` is already in state, and that state is
+checkpointed:
 
 ```
-after build      : 0 skill listings
-after one turn   : 2   ['/skills/', '/skills/uploaded/']
-after two turns  : 4
+no checkpointer     after turn 1: 2   turn 2: 4   turn 3: 6
+with checkpointer   after turn 1: 2   turn 2: 2   turn 3: 2
 ```
 
-**And that costs about 1% of a turn.** One listing of 53 skills on disk measures
-**8.2 ms**; two sources is ~16 ms against a turn of 1.5-1.9 s. With the three
-shipped presets it is under a millisecond. So the re-reading is real and is not
-the reason to do this.
+The first row is what a probe without a checkpointer measures, and an earlier
+draft of this document reported it as the real cost. Every real run has one, so
+the load is two listings per *session* -- 8.2 ms each at 53 skills, once. There
+is no per-turn cost to remove.
+
+It has a consequence worth knowing that is not about cost: because that listing
+is checkpointed, **a session started before a skill was added never sees it**.
+Skills are fixed for the life of a conversation.
 
 **The lister is private.** `SkillMetadata`, `SkillSource` and `SkillsMiddleware`
 are public; `_list_skills` and `_list_skills_with_errors` are not.
@@ -68,7 +73,7 @@ are public; `_list_skills` and `_list_skills_with_errors` are not.
 | S5 | **Validation asks the registry.** `available_skills` stops returning directory names. | This is the half that closes the silent failure: `capabilities.skills=("nodesc",)` becomes an ordinary unknown-skill refusal, with the listing already built for it. |
 | S6 | **A directory the agent will not load is reported, not refused** -- the same shape as `misplaced`. | Refusing would stop a deployment starting over one malformed skill, which is harsher than this codebase is about a definition it can simply not offer. The dangerous half is fixed by S5 regardless: loud where a caller named it, informative where nobody did. The cost, stated: a deployment can start with a broken skill and only find out from `--list`. |
 | S7 | **The registry is read through the backend the catalogue already implies** -- a `FilesystemBackend` when the repository has a real root, the store mount otherwise. | `build_backend` already picks on exactly that basis, and `skills_backend` says why: a store "holds every skill's contents for the life of the deployment", so a directory already on disk should stay a filesystem read. Extracting that choice rather than restating it keeps one rule. |
-| S8 | **The middleware is not handed the registry.** Deferred, deliberately. | It would mean overriding `before_agent` and owning what it writes into state and how it reports load errors, to save ~1% of a turn. This codebase has a scar from that exact shape: overriding `execute` *and* `aexecute` on the shell backend nested the sandbox inside itself and thirteen tests still passed. Both copies come from the same loader over the same backend, so they agree -- which is all the correctness needs. |
+| S8 | **The middleware is not handed the registry.** Not deferred pending evidence -- there is no case for it. | It would mean overriding `before_agent` and owning what it writes into state and how it reports load errors, to save two listings *per session*. This codebase has a scar from that exact shape: overriding `execute` *and* `aexecute` on the shell backend nested the sandbox inside itself and thirteen tests still passed. Both copies come from the same loader over the same backend, so they agree, which is all the correctness needs. |
 
 ## What changes
 
@@ -86,9 +91,24 @@ skills, oddly, never did.
 
 ## Still undecided
 
-- **Whether the middleware should eventually take the registry.** S8 defers it
-  on evidence, not on principle. The evidence to gather is a catalogue large
-  enough that 8 ms a listing matters, which is not three presets.
+- **Nested skills, on top of this.** `sources` takes several paths, and one per
+  folder loads nested skills that a single root source cannot see -- measured:
+  `['lookup', 'only-here']` where the root source found nothing. No extra
+  backend route is needed, because the sources are paths inside the one
+  `/skills/` mount.
+
+  This was ruled out during the folders work on the grounds that deepagents
+  merges sources last-wins and a name clash would go silent. That objection does
+  not survive: kingfisher already refuses duplicate tool and subagent names
+  across folders, and the same check makes the merge safe. Two folders each
+  holding a `lookup` currently resolve to whichever source came last, silently.
+
+  It needs this registry first -- there is nothing to refuse a duplicate with
+  otherwise, and `_skill_denials` needs the real path of a nested skill, which
+  `SkillMetadata.path` carries.
+
+  A tuple source is *not* what makes this work. It sets the label a section is
+  printed under, nothing more.
 - **What to do about `mismatch`.** A folder whose header names something else
   loads under the header name, so it is neither missing nor wrong -- it is
   *present under a name nobody typed*. S6 reports what the agent will not load;

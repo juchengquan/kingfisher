@@ -43,8 +43,7 @@ def _write_skill(workspace, name):
     directory = workspace / "skills" / name
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "SKILL.md").write_text(
-        f"name: {name}\ndescription: A skill.\n"
-        "system_prompt: |\n  Do the thing.\n", encoding="utf-8"
+        f"---\nname: {name}\ndescription: A skill.\n---\nDo the thing.\n", encoding="utf-8"
     )
 
 
@@ -432,8 +431,7 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
     catalogue = tmp_path / "catalogue" / "skills"
     (catalogue / "shared").mkdir(parents=True)
     (catalogue / "shared" / "SKILL.md").write_text(
-        "name: shared\ndescription: A procedure every deployment gets.\n"
-        "system_prompt: |\n  Body.\n",
+        "---\nname: shared\ndescription: A procedure every deployment gets.\n---\nBody.\n",
         encoding="utf-8",
     )
     relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)

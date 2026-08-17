@@ -16,11 +16,14 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
 from kingfisher.domain.tool import Offering
+from kingfisher.infrastructure import skill_registry
+from kingfisher.infrastructure.skill_registry import SkillRegistry
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository
@@ -60,6 +63,22 @@ class Catalogue:
     subagents: SubagentRepository
     tools: ToolRepository
 
+    @cached_property
+    def registry(self) -> SkillRegistry:
+        """What the agent will actually be told about, asked of deepagents.
+
+        Beside `skills` rather than replacing it, because they answer different
+        questions and running them together is what let a skill be advertised
+        and never loaded. The repository says what files exist to mount; this
+        says which of them deepagents kept.
+
+        Cached, and warmed with the rest: listing costs 8 ms at fifty skills and
+        the answer cannot change while a deployment runs -- deepagents itself
+        loads once per session and checkpoints the result, so a catalogue read
+        again per turn would be answering a question nobody re-asks.
+        """
+        return skill_registry.read(self.skills, root=catalogue_root(self.skills))
+
     def warm(self) -> Catalogue:
         """Read all three now, so a broken definition fails here.
 
@@ -86,6 +105,7 @@ class Catalogue:
         Returns self, so construction reads as one expression.
         """
         _ = self.skills.names, self.subagents.specs, self.tools.found
+        _ = self.registry
         # A definition saying where its tools live is checked here for the same
         # reason the reading happens here: it is a claim about this catalogue,
         # both halves are now in hand, and a stale path found on the first turn

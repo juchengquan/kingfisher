@@ -68,8 +68,7 @@ def _staged(root, *, skill=None, subagent=None, tool=None):
     if skill is not None:
         (roots["skills"] / skill).mkdir()
         (roots["skills"] / skill / "SKILL.md").write_text(
-            f"name: {skill}\ndescription: A skill.\n"
-            "system_prompt: |\n  Do the thing.\n", encoding="utf-8"
+            f"---\nname: {skill}\ndescription: A skill.\n---\nDo the thing.\n", encoding="utf-8"
         )
     if subagent is not None:
         (roots["subagents"] / "reviewer.yaml").write_text(subagent, encoding="utf-8")
@@ -153,8 +152,8 @@ def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, 
     """
     (cfg.skills_dir / "in-the-workspace").mkdir(parents=True)
     (cfg.skills_dir / "in-the-workspace" / "SKILL.md").write_text(
-        "name: in-the-workspace\ndescription: A skill.\n"
-        "system_prompt: |\n  Do the thing.\n", encoding="utf-8"
+        "---\nname: in-the-workspace\ndescription: A skill.\n---\nDo the thing.\n",
+        encoding="utf-8",
     )
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT, tool=TOOL)
 

@@ -309,7 +309,9 @@ def test_a_nested_skill_is_still_not_discovered(tmp_path):
     """
     nested = tmp_path / "research" / "company-lookup"
     nested.mkdir(parents=True)
-    (nested / "SKILL.md").write_text("name: company-lookup\ndescription: x\n", encoding="utf-8")
+    (nested / "SKILL.md").write_text(
+        "---\nname: company-lookup\ndescription: x\n---\nBody.\n", encoding="utf-8"
+    )
 
     assert LocalSkillRepository(tmp_path).names == ()
     assert LocalSkillRepository(tmp_path).misplaced == (
