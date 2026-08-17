@@ -149,6 +149,42 @@ def test_a_store_mount_is_read_only_by_construction(cfg, session_dir):
     assert "body of remote" in str(backend.read(f"{SKILLS_ROUTE}remote/SKILL.md"))
 
 
+@pytest.mark.parametrize("operation", ["write", "edit", "delete", "upload"])
+def test_the_async_half_refuses_too(cfg, session_dir, operation):
+    """The half that gets forgotten, and the reason this file exists at all.
+
+    `astream` is the async entry point, so an API deployment reaches `awrite`
+    and never `write` -- and the four async overrides are four more chances to
+    typo a refusal into a no-op. Untested, they were working; the point is that
+    nothing would have said so.
+
+    This codebase has the scar: overriding both `execute` and `aexecute` on
+    `LocalShellBackend` nested the sandbox twice and thirteen tests still
+    passed, because none of them drove the async path. That story is quoted in
+    `skills_backend`'s own docstring as the reason it is built on upstream
+    rather than hand-written, and then the async half went untested anyway.
+    """
+    import asyncio
+
+    catalogue = replace(Catalogue.from_config(cfg), skills=_held("remote"))
+    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    path = f"{SKILLS_ROUTE}remote/SKILL.md"
+
+    async def attempt():
+        if operation == "write":
+            return await backend.awrite(f"{SKILLS_ROUTE}remote/PWNED.md", "tampered")
+        if operation == "edit":
+            return await backend.aedit(path, "body", "tampered")
+        if operation == "delete":
+            return await backend.adelete(path)
+        return await backend.aupload_files([(f"{SKILLS_ROUTE}remote/up.md", b"y")])
+
+    refused = asyncio.run(attempt())
+
+    assert "read-only" in str(refused)
+    assert "body of remote" in str(backend.read(path))
+
+
 @pytest.mark.parametrize("operation", ["edit", "delete"])
 def test_every_mutating_operation_is_refused(cfg, session_dir, operation):
     """`delete` included: a route the agent can empty is a route it can
@@ -225,3 +261,28 @@ def test_a_skill_shipping_something_binary_does_not_break_the_catalogue(tmp_path
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
 
     assert "body of demo" in str(backend.read(f"{SKILLS_ROUTE}demo/SKILL.md"))
+
+
+def test_upstream_still_routes_async_uploads_through_the_sync_one():
+    """Pinning the delegation this backend relies on instead of overriding it.
+
+    `ReadOnlyStoreBackend` refuses `upload_files` and deliberately does *not*
+    refuse `aupload_files`, because upstream implements the async half as
+    `await asyncio.to_thread(self.upload_files, files)`. That is a fact about
+    somebody else's beta code, so it is asserted rather than assumed: if a
+    release gives `aupload_files` its own implementation, this fails and names
+    the reason, where the alternative is a skills route that quietly accepts
+    async uploads.
+
+    The same check exists one module over for `LocalShellBackend.aexecute`, and
+    for the same reason -- overriding both halves there nested the sandbox twice
+    while thirteen tests passed.
+    """
+    import inspect
+
+    from deepagents.backends.store import StoreBackend
+
+    source = inspect.getsource(StoreBackend.aupload_files)
+
+    assert "to_thread" in source, "upstream no longer delegates; override aupload_files"
+    assert "self.upload_files" in source, "upstream delegates somewhere else now"
