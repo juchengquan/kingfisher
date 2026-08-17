@@ -15,9 +15,12 @@ from pathlib import Path
 import pytest
 
 import main
+from kingfisher.config import ConfigError
+from kingfisher.domain import skill
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure import agent as main_agent_module
+from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 
@@ -235,8 +238,11 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
         cfg, skills_root=catalogue / "skills", subagents_root=catalogue / "subagents"
     )
     monkeypatch.setattr(driver, "from_env", lambda: relocated)
+    # And the paths seam, which is what seeding runs on now -- a `Config`
+    # satisfies `Destination` by shape, so the same record answers both.
+    monkeypatch.setattr(driver, "paths_from_env", lambda: relocated)
 
-    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
 
     assert LocalSkillRepository(relocated.skills_dir).names  # the catalogue was filled
     assert not LocalSkillRepository(relocated.workspace / "skills").names  # and not the workspace
@@ -253,10 +259,13 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, mo
     import main as driver
 
     monkeypatch.setattr(driver, "from_env", lambda: cfg)
+    # And the paths seam, which is what seeding runs on now -- a `Config`
+    # satisfies `Destination` by shape, so the same record answers both.
+    monkeypatch.setattr(driver, "paths_from_env", lambda: cfg)
 
     # `--list` so it returns after seeding; without it the driver falls
     # through to running the task, which wants a model.
-    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
     assert LocalSkillRepository(cfg.skills_dir).names
 
 
@@ -275,13 +284,155 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     catalogue = tmp_path / "catalogue"
     relocated = replace(cfg, tools_root=catalogue / "tools")
     monkeypatch.setattr(driver, "from_env", lambda: relocated)
+    # And the paths seam, which is what seeding runs on now -- a `Config`
+    # satisfies `Destination` by shape, so the same record answers both.
+    monkeypatch.setattr(driver, "paths_from_env", lambda: relocated)
 
-    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
 
     assert "http_fetch" in LocalToolRepository(relocated.tools_dir).names
     # `ensure_layout` still makes the workspace directory, so the place to put
     # one is obvious. What must not happen is a preset landing in it.
     assert LocalToolRepository(relocated.workspace / "tools").names == ()
+
+
+# -- a fresh workspace seeds itself ---------------------------------------
+
+
+def _unused(cfg, tmp_path):
+    """A `Config` whose workspace does not exist yet.
+
+    The `cfg` fixture runs `ensure_layout`, which writes the marker -- so its
+    workspace is not new and nothing below would fire. What A7 is about is the
+    directory that has never been used.
+    """
+    from dataclasses import replace
+
+    return replace(cfg, workspace=tmp_path / "brand-new")
+
+
+def _driver_on(monkeypatch, target):
+    """Point the driver at one record for both seams.
+
+    `from_env` serves the run and `paths_from_env` decides where seeding goes.
+    A `Config` satisfies `Destination` by shape, so one record answers both --
+    which is the point of the protocol and not a shortcut for the test.
+    """
+    import main as driver
+
+    monkeypatch.setattr(driver, "from_env", lambda: target)
+    monkeypatch.setattr(driver, "paths_from_env", lambda: target)
+    return driver
+
+
+def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
+    """A7, and the reason the flag is not the only way in. Nothing is copied
+    unless a pack was installed, which is somebody's explicit choice; a new
+    workspace is empty by definition, so nothing can be lost."""
+    fresh = _unused(cfg, tmp_path)
+    driver = _driver_on(monkeypatch, fresh)
+
+    assert driver.main(["main.py", "--list"]) == 0
+
+    assert LocalSkillRepository(fresh.skills_dir).names
+
+
+def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
+    """`is_new_workspace` also fires on a *misconfigured* workspace -- an
+    unstable `~`, a changed variable -- and a wrong path holding ten files
+    reads more like success than an empty one does. The list is how someone
+    notices they seeded somewhere they did not mean."""
+    fresh = _unused(cfg, tmp_path)
+    driver = _driver_on(monkeypatch, fresh)
+
+    driver.main(["main.py", "--list"])
+
+    printed = capsys.readouterr().out
+    assert "created a new workspace" in printed
+    for name in LocalSkillRepository(fresh.skills_dir).names:
+        assert f"seeded skills/{name}" in printed
+
+
+def test_a_workspace_that_already_exists_does_not_reseed(cfg, tmp_path, capsys, monkeypatch):
+    """The half that makes the other half safe.
+
+    Seeding overwrites by design -- that is what makes re-seeding after an
+    upgrade possible -- so firing it on every run would quietly replace the
+    edits the whole arrangement exists to invite. `--seed-assets` stays the way
+    to ask for that, and asking is the point.
+    """
+    fresh = _unused(cfg, tmp_path)
+    driver = _driver_on(monkeypatch, fresh)
+    driver.main(["main.py", "--list"])  # the first run, which seeds
+    edited = fresh.skills_dir / "code-review" / skill.FILENAME
+    edited.write_text("---\nname: code-review\ndescription: mine\n---\nmine\n", encoding="utf-8")
+    capsys.readouterr()
+
+    driver.main(["main.py", "--list"])
+
+    assert "seeded" not in capsys.readouterr().out
+    assert edited.read_text(encoding="utf-8").endswith("mine\n")
+
+
+def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, monkeypatch):
+    """The ordering, which is the whole reason any of this can work.
+
+    `models.yaml` lives *inside* the workspace, so a first run cannot load one:
+    `from_env` used to raise before the directory it needed had been created,
+    and the error it printed said to run `--seed-assets`, which failed the same
+    way. A first run could not reach seeding at all -- precisely the run seeding
+    is for. Measured on a workspace with no catalogue: it still seeds, and still
+    exits 2 for the missing file.
+    """
+    import main as driver
+
+    workspace = tmp_path / "brand-new"
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
+    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
+
+    assert driver.main(["main.py", "--list"]) == 2  # no catalogue, as expected
+
+    assert LocalSkillRepository(workspace / "skills").names
+    assert (workspace / seeding.EXAMPLE).is_file()
+
+
+def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
+    """The dead end, closed.
+
+    The message said "`--seed-assets` writes an annotated models.yaml.example
+    next to it" whether or not one was there -- and running `--seed-assets` hit
+    this same error. Now a first run seeds first, so the file is usually already
+    beside the reader, and being told to run a command that has just run is how
+    a message stops being read.
+    """
+    from kingfisher.infrastructure import model_catalogue
+
+    absent = tmp_path / "models.yaml"
+
+    with pytest.raises(ConfigError) as without:
+        model_catalogue.load(absent, {})
+    (tmp_path / seeding.EXAMPLE).write_text("# annotated\n", encoding="utf-8")
+    with pytest.raises(ConfigError) as with_example:
+        model_catalogue.load(absent, {})
+
+    assert "`--seed-assets` writes" in str(without.value)
+    assert "is next to it" in str(with_example.value)
+    assert "`--seed-assets` writes" not in str(with_example.value)
+
+
+def test_a_new_workspace_with_no_pack_installed_is_quiet(cfg, tmp_path, capsys, monkeypatch):
+    """Kingfisher ships no definitions, so this is what an install without a
+    pack does on its first run. Not an error, and not silence either: the
+    catalogue example is the one thing it always needs."""
+    fresh = _unused(cfg, tmp_path)
+    driver = _driver_on(monkeypatch, fresh)
+    monkeypatch.setattr(driver.seeding, "installed_packs", tuple)
+
+    driver.main(["main.py", "--list"])
+
+    printed = capsys.readouterr().out
+    assert f"seeded {seeding.EXAMPLE}" in printed
+    assert "seeded skills/" not in printed
 
 
 # -- --without-tools and friends ------------------------------------------
@@ -325,9 +476,9 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
     workspace grant, so `--without-tools execute,delete`, the example this
     driver's own docstring gives, came back as "those are builtin tools".
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
 
     granted = main._grants(cfg, _args(without_builtin_tools="execute,delete"))
 
@@ -344,9 +495,9 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
 
 def test_the_two_tool_axes_subtract_independently(cfg):
     """A workspace tool is subtracted from the workspace set, and only that."""
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
 
     tools = main._grants(cfg, _args(without_tools="http_fetch"))["tools"]
 
@@ -365,9 +516,9 @@ def test_subtracting_skills_and_subagents_too(cfg):
     tested is that the named one is gone and the others are enumerated, which
     is true at any catalogue size.
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
     seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
     seeded_subagents = set(LocalSubagentRepository(cfg.subagents_dir).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
@@ -391,9 +542,9 @@ def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg):
     unknown name(s): execute" beside a list not containing it -- true, and no
     help at all if you do not know a second flag exists.
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
 
     with pytest.raises(CapabilityError, match=r"subtract it with --without-builtin-tools"):
         main._grants(cfg, _args(without_tools="execute"))

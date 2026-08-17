@@ -111,6 +111,50 @@ class ModelProfile:
         return params
 
 
+def catalogue_roots_for(
+    workspace: Path,
+    skills_root: Path | None = None,
+    subagents_root: Path | None = None,
+    tools_root: Path | None = None,
+) -> dict[str, Path]:
+    """The three definition directories: an override, or a name in the workspace.
+
+    A free function because two records answer this question and the answer has
+    to be the same one. `Config` is the whole configuration and needs a model
+    catalogue to exist; `WorkspacePaths` is the part you can know before reading
+    one, which is what seeding a brand-new workspace runs on. A second copy of
+    `skills_root or workspace / "skills"` is how a deployment that relocated its
+    catalogue gets seeded into the directory it stopped reading.
+    """
+    return {
+        "skills": skills_root or workspace / "skills",
+        "subagents": subagents_root or workspace / "subagents",
+        "tools": tools_root or workspace / "tools",
+    }
+
+
+@dataclass(frozen=True)
+class WorkspacePaths:
+    """Where a deployment keeps things, before anything has been read.
+
+    Everything else in a `Config` needs the model catalogue, and the catalogue
+    is a file *inside* the workspace — so a first run has to be able to answer
+    "which directories?" before it can answer "which models?". This is that
+    answer, and `Config` is built on top of it rather than beside it.
+    """
+
+    workspace: Path
+    skills_root: Path | None = None
+    subagents_root: Path | None = None
+    tools_root: Path | None = None
+
+    @property
+    def catalogue_roots(self) -> dict[str, Path]:
+        return catalogue_roots_for(
+            self.workspace, self.skills_root, self.subagents_root, self.tools_root
+        )
+
+
 class ConfigError(RuntimeError):
     """Raised when required configuration is missing or invalid."""
 
@@ -212,7 +256,7 @@ class Models:
 
         So an unbound alias stops the build and says what to write. Loud is
         cheap here: it fires only when a request activates the delegate, so
-        seeding a preset you have not bound for costs nothing until you use it.
+        seeding a definition you have not bound for costs nothing until you use it.
         """
         model = self.aliases.get(alias)
         if model is None:
@@ -440,10 +484,12 @@ class Config:
         A `Kingfisher` may be handed a different mapping, which is the whole
         seam: this is the fallback, not the only source. See
         `workspace_fs.resolve_catalogue`.
+
+        Delegated to `catalogue_roots_for` because `WorkspacePaths` answers the
+        same question before a catalogue has been read, and the two must not be
+        able to disagree.
         """
-        return {
-            "skills": self.skills_dir,
-            "subagents": self.subagents_dir,
-            "tools": self.tools_dir,
-        }
+        return catalogue_roots_for(
+            self.workspace, self.skills_root, self.subagents_root, self.tools_root
+        )
 

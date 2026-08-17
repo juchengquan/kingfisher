@@ -34,6 +34,7 @@ _EXPORTS = {
     "UploadError": "kingfisher.infrastructure.uploads",
     "async_checkpointer": "kingfisher.infrastructure.checkpointing",
     "Config": "kingfisher.config",
+    "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
@@ -47,6 +48,7 @@ _EXPORTS = {
     "build_model": "kingfisher.infrastructure.models",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
     "from_env": "kingfisher.application.config",
+    "paths_from_env": "kingfisher.application.config",
     "normalize_answer": "kingfisher.domain.result",
     "protect_data": "kingfisher.infrastructure.workspace_fs",
     "run": "kingfisher.application.run",
@@ -76,6 +78,7 @@ __all__ = [
     "UnknownSessionError",
     "UnsafeReferenceError",
     "UploadError",
+    "WorkspacePaths",
     "async_checkpointer",
     "build_agent",
     "build_backend",
@@ -84,6 +87,7 @@ __all__ = [
     "ensure_layout",
     "from_env",
     "normalize_answer",
+    "paths_from_env",
     "protect_data",
     "run",
     "shell_env",
@@ -97,11 +101,13 @@ if TYPE_CHECKING:
     # Redundant aliases mark these as re-exports; `__all__` is computed, so a
     # checker cannot otherwise tell they are public.
     from kingfisher.application.config import from_env as from_env
+    from kingfisher.application.config import paths_from_env as paths_from_env
     from kingfisher.application.run import run as run
     from kingfisher.application.run import stream as stream
     from kingfisher.application.service import Kingfisher as Kingfisher
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
+    from kingfisher.config import WorkspacePaths as WorkspacePaths
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.references import (

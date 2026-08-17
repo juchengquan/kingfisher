@@ -1,6 +1,6 @@
 # Assets as packages, not as cargo
 
-**Status:** designed, not implemented.
+**Status:** implemented, phases 1-6.
 **Date:** 2026-08-17
 
 Kingfisher ships fifteen asset files inside the wheel: three skills, four
@@ -73,14 +73,37 @@ Each step leaves the tree working.
 | **1** | The seeder takes its source as a parameter instead of a constant, and discovers packs through entry points. Kingfisher's own presets become the first pack it finds, registered from inside the package. Nothing moves yet; nothing breaks. | — |
 | **2** | The fixture tree under `tests/`, and the 13 framework tests moved onto it. They stop depending on shipped content — which is how a preset count broke an unrelated reporting test earlier. | 1 |
 | **3** | The documentation's examples go inline; the four link-dependent tests are rewritten against them. | — |
-| **4** | The asset repository: the fifteen files, the ten tests that describe them, and its own `pyproject.toml` declaring the entry point and depending on kingfisher. | 1 |
-| **5** | Kingfisher drops the assets and the entry point registration. `presets/` becomes `reference/`, holding `models.yaml.example` and the docs. `--seed-presets` is renamed, and `model_catalogue`'s error message follows it. | 2, 3, 4 |
+| **4** | `assets/`: the fifteen files, the ten tests that describe them, and its own `pyproject.toml` declaring the entry point and depending on kingfisher. Kingfisher drops the assets and its own entry point registration in the same step. | 1 |
+| **5** | The framing goes with them: `presets/` becomes `reference/`, holding `models.yaml.example` and the docs. `--seed-presets` is renamed, and `model_catalogue`'s error message follows it. | 2, 3, 4 |
 | **6** | A7: a fresh workspace seeds from whatever packs are installed, and says what it wrote. | 5 |
 
-Phases 1 to 4 are additive and reversible. Phase 5 is the one that removes
-something, and it is deliberately last: until it lands, both arrangements work,
-and the asset repository can be proven against a real kingfisher before the
-files stop shipping.
+A7 turned out to need one thing it did not anticipate. *"It is the first moment
+the destination exists"* was wrong about the ordering: `models.yaml` lives inside
+the workspace, so `from_env` raised before the destination had been created and
+a first run could not reach seeding at all — the one run seeding is for. So the
+configuration splits. `WorkspacePaths` is the part a first run can know, built by
+`paths_from_env`; `Config` is built on top of it; and `seed` asks for a
+`Destination` protocol that both satisfy by shape, rather than for a whole
+`Config` it never needed. `catalogue_roots_for` is the single home for
+*"an override, or a name in the workspace"*, because a second copy of that rule
+is how a deployment that relocated its catalogue gets seeded into the directory
+it stopped reading.
+
+Phase 4 was written as a *separate repository*, with phase 5 removing the files
+afterwards so both arrangements would work in between. It became a second
+distribution in this repository instead — `assets/`, a uv workspace member —
+which collapses that ordering: A4 refuses two packs claiming the same file, so
+there is no window in which both ship. The files move rather than being copied,
+and the framework's registration goes in the same commit. What phase 5 keeps is
+only the renaming.
+
+That is the cost of the change and it is worth naming: the arrangement cannot
+be proven against an *unmodified* kingfisher first. It is proven instead by
+building both wheels and installing them into a clean environment, which is
+what the phase-4 commit records — and by installing the framework alone, where
+seeding writes the catalogue example and nothing else.
+
+Phases 1 to 3 remain additive and reversible.
 
 ## Still undecided
 
@@ -89,6 +112,21 @@ files stop shipping.
   the official assets ship as one distribution or as `-analysis`, `-web` and so
   on. That is a packaging question best answered once there is more than
   fifteen files to divide.
+- **How a pip-installed deployment seeds.** `--seed-assets` lives in `main.py`,
+  which is the driver and is not in the wheel — `packages = ["src/kingfisher"]`.
+  So the flag, and A7's auto-seeding with it, are reachable from a checkout and
+  nowhere else. Nothing is broken by this: discovery is an entry point rather
+  than a path, so an installed pack *is* found, and `seeding.seed(cfg)` is three
+  lines from any caller. But the framework's own error message names a flag that
+  a pip user does not have, which is the kind of gap that reads as a lie. The
+  ordinary answer is a `[project.scripts]` console entry, and it is a decision
+  about what kingfisher's CLI *is* rather than a rename, so it is not in phase 5.
+- ~~**The catalogue error is a dead end.**~~ Fixed in phase 6, which had to:
+  A7 could not fire at all while the config was built first, because a first run
+  has no `models.yaml` and never reached the seeding line. The driver now reads
+  the *paths* half of the configuration, seeds, and loads the catalogue after —
+  and the message says "an annotated `models.yaml.example` is next to it" when
+  one is, rather than naming a command that has just run.
 - **What a pack declares about the format it was written for.** A definition
   using a field an older kingfisher does not know is refused by name, which is
   a loud and adequate failure. A tool is Python and fails differently. The

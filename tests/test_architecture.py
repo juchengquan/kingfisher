@@ -158,6 +158,11 @@ LIGHT_EXPORTS = frozenset({
     "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
+    # The directory half of a configuration, and the record it returns. Light
+    # because seeding a fresh workspace runs on them before anything is loaded
+    # -- paying for three provider SDKs to find out where `skills/` goes would
+    # be the wrong shape entirely.
+    "paths_from_env", "WorkspacePaths",
 })
 
 #: The rest, which genuinely need deepagents to do their job.
@@ -393,40 +398,41 @@ def test_only_one_module_decides_what_a_skill_is():
     )
 
 
-def test_the_package_ships_its_presets():
-    """`--seed-presets` has to work for an installed kingfisher.
+def test_the_package_ships_no_assets():
+    """The framework loads and composes definitions; it does not supply any.
 
-    That means the definitions live *inside* the wheel rather than beside it in
-    the repo: `packages = ["src/kingfisher"]`, so anything one level up is not
-    shipped and a pip-installed kingfisher would have nothing to copy. Moving
-    them back out would break seeding for every user who is not in a checkout,
-    and nothing else would notice.
+    This asserted the opposite, and was right to: `packages = ["src/kingfisher"]`
+    means anything one level up is not shipped, so seeding from an installed
+    kingfisher needed the definitions inside the wheel. They are a distribution
+    of their own now, found through the `kingfisher.assets` entry point, and
+    this holds the framework to shipping none of them.
     """
-    from kingfisher.infrastructure import presets
     from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-    assert (SRC / "presets" / "skills").is_dir()
-    # And reachable the way an installed one reaches them, not by path.
-    with presets.opened() as root:
-        for kind in CATALOGUE_KINDS:
-            assert (root / kind).is_dir(), kind
+    for kind in CATALOGUE_KINDS:
+        assert not (SRC / "reference" / kind).exists(), kind
 
 
 def test_the_package_ships_the_catalogue_example():
-    """The same rule as above, for the file a deployment needs *first*.
+    """The one file that is not an asset and has to stay.
 
     `models.yaml` is required and has no fallback, so the worked example is the
-    one document a new deployment cannot start without reading. It lived at the
-    repo root -- outside `packages = ["src/kingfisher"]` -- which meant a
-    pip-installed kingfisher shipped a required format with no example of it,
-    and nothing noticed. Exactly the mistake the test above was written about,
-    one directory over.
-    """
-    from kingfisher.infrastructure import presets
+    one document a new deployment cannot start without reading, and the error it
+    hits without one names this file as the place to look. It must arrive with
+    the framework rather than with a pack somebody may not have installed --
+    which is the whole reason the test above can assert what it does.
 
-    assert (SRC / "presets" / presets.EXAMPLE).is_file()
-    with presets.opened() as root:
-        assert (root / presets.EXAMPLE).is_file()
+    It lived at the repo root once -- outside `packages = ["src/kingfisher"]` --
+    which meant a pip-installed kingfisher shipped a required format with no
+    example of it, and nothing noticed. Both paths are asserted because they
+    fail separately: the first catches it moving back out of the package, the
+    second catches it not being reachable the way an install reaches it.
+    """
+    from kingfisher.infrastructure import seeding
+
+    assert (SRC / "reference" / seeding.EXAMPLE).is_file()
+    with seeding.opened(seeding.PACKAGE) as root:
+        assert (root / seeding.EXAMPLE).is_file()
 
 
 # -- who caused it ---------------------------------------------------------
@@ -684,12 +690,11 @@ def _production_files() -> list[Path]:
     files: list[Path] = []
     for name in PRODUCTION:
         target = root / name
-        # `presets/` is the agent's to import, not ours to call.
-        files += (
-            [target]
-            if target.is_file()
-            else [p for p in target.rglob("*.py") if "presets" not in p.parts]
-        )
+        # No exclusion here any more. `presets/` was skipped because it held
+        # tools the agent imports and this repository never calls; those are a
+        # separate distribution now, so `src/kingfisher` is all production code
+        # and the walk covers it whole.
+        files += [target] if target.is_file() else list(target.rglob("*.py"))
     return files
 
 
@@ -724,8 +729,6 @@ def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
     """
     found: dict[str, Path] = {}
     for path in sorted(SRC.rglob("*.py")):
-        if "presets" in path.parts:
-            continue
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 if not node.decorator_list and not node.name.startswith("__"):

@@ -171,7 +171,7 @@ def _skipped(name: str) -> bool:
     New because the exposure is new. A one-level scan could never reach a
     virtualenv or a build directory left under `tools/`; a recursive one can,
     and this module *imports what it finds*. `__pycache__` is the one that
-    turns up by accident -- importing a preset once leaves it behind.
+    turns up by accident -- importing a workspace tool once leaves it behind.
     """
     return name.startswith(".") or name == "__pycache__"
 

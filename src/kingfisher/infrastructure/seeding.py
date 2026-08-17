@@ -1,19 +1,24 @@
-"""The definitions kingfisher ships, and putting them in a workspace.
+"""Finding installed asset packs, and putting what they hold in a workspace.
 
-`presets/` holds one working example of each thing a request can activate — a
-skill, a subagent, a tool — for you to copy and edit. They are shipped *inside*
-the package rather than kept beside it in the repo, and that is the whole point
-of this module: a `pip install`ed kingfisher has no repo to copy from, so
-seeding used to work only from a checkout.
+Kingfisher ships no skills, no subagents and no tools. Its job is to find,
+validate and compose definitions held as static files, and it can do all three
+against files it did not write — every asset is content a workspace rewrites on
+first contact with a real task, which is a different kind of thing from the code
+that reads it.
 
-They are read through `importlib.resources`, the way `kingfisher.prompts` is,
-so the same code finds them in a source tree and in an installed wheel.
+So the definitions come from *packs*: ordinary distributions that announce
+themselves through an entry point. This module asks who is installed and gets an
+answer, which is why kingfisher names no pack anywhere in its source. A pack
+published by a team internally is no less first-class than any other.
 
-This does not put domain content in the package. A preset demonstrates a
-*format* — it is copied and rewritten on first contact with a real task — where
-domain content would presume what your project is about. The distinction is
-worth keeping: the reason kingfisher ships no skills of its own is that a
-general agent's base behaviour should read the same whatever the project is.
+The one thing that does ship here is `models.yaml.example`. That is not content:
+`models.yaml` is required and has no fallback, and the error a deployment
+without one hits names that file as the place to look, so it has to arrive with
+the thing that demands it rather than with a pack somebody may not have
+installed. `_copy_example` is why it is seeded outside the loop over packs.
+
+Everything is read through `importlib.resources`, the way `kingfisher.prompts`
+is, so the same code finds a source tree and an installed wheel.
 """
 
 from __future__ import annotations
@@ -25,14 +30,17 @@ from dataclasses import dataclass
 from importlib import resources
 from importlib.metadata import entry_points
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
-from kingfisher.config import Config, ConfigError
-
-#: Where the shipped definitions live, as an import path rather than a
-#: filesystem one -- an installed package is not in this repo's directory tree.
+from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-PACKAGE = "kingfisher.presets"
+#: Kingfisher's own package data, as an import path rather than a filesystem one
+#: -- an installed package is not in this repo's directory tree. Not called
+#: `presets`: leaving the two files that stayed in a directory named for the
+#: thing that left is how the next reader concludes assets still ship. It holds
+#: the catalogue example and the format documentation, and no definitions.
+PACKAGE = "kingfisher.reference"
 
 #: Where an asset pack says it exists. A pack is an ordinary distribution that
 #: registers one line of metadata:
@@ -45,17 +53,18 @@ PACKAGE = "kingfisher.presets"
 #: first-class than one shipped alongside the framework -- which is the whole
 #: difference between a library with a blessed bundle and an ecosystem.
 #:
-#: Kingfisher's own presets register under this group like anyone else's. That
-#: is what makes the mechanism testable before anything moves out: the default
-#: arrangement is one pack that happens to live inside the wheel.
+#: Kingfisher registered its own definitions under this group for one phase, so
+#: the mechanism could be proved before any file moved. It registers nothing
+#: now: a framework announcing itself as a source of content is the thing this
+#: arrangement exists to stop.
 GROUP = "kingfisher.assets"
 
 #: The worked example of the one file a deployment *must* write. It lived at the
 #: repo root, which meant it existed only in a checkout: `packages =
 #: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
-#: mistake `test_the_package_ships_its_presets` was written about, made again one
-#: directory over -- and made for the file a new deployment needs first, since
-#: `models.yaml` is required and has no fallback.
+#: mistake `test_the_package_ships_the_catalogue_example` now guards against,
+#: made for the file a new deployment needs first: `models.yaml` is required and
+#: has no fallback.
 EXAMPLE = "models.yaml.example"
 
 
@@ -83,32 +92,60 @@ def installed_packs() -> tuple[Pack, ...]:
 
 
 @contextmanager
-def opened(package: str = PACKAGE) -> Iterator[Path]:
-    """The preset directory as real files, wherever the package was installed.
+def opened(package: str) -> Iterator[Path]:
+    """A package's files as real files, wherever it was installed.
 
-        with opened() as presets:
-            shutil.copytree(presets / "skills" / "tabular-qa", target)
+        with opened(pack.package) as root:
+            shutil.copytree(root / "skills" / "tabular-qa", target)
 
     A context manager because `importlib.resources` does not promise the files
     exist on disk — a zip-imported package materialises them for the duration
     and cleans up afterwards. In a source tree and an ordinary wheel this hands
     back the real directory and costs nothing.
+
+    `package` is required, though `PACKAGE` was its default until the assets
+    left. A default meaning *kingfisher's own tree* is the wrong shape once the
+    usual argument is a pack's: code written `opened()` while meaning a pack
+    would silently read the framework's two files and copy nothing, which is a
+    failure with no error in it. Every caller says which package it wants.
     """
     with resources.as_file(resources.files(package)) as root:
         yield Path(root)
 
 
-def destinations(cfg: Config) -> tuple[tuple[str, Path], ...]:
-    """Each kind of preset, and the catalogue it belongs in.
+@runtime_checkable
+class Destination(Protocol):
+    """Where seeding puts things: a workspace, and the three catalogues.
+
+    A Protocol rather than `Config` because seeding a *fresh* workspace has to
+    run before a model catalogue can be read -- the catalogue is a file inside
+    the workspace, so `from_env` raises before the directory exists. `Config`
+    satisfies this by shape, and so does `WorkspacePaths`, which is the part of
+    a configuration a first run can actually know.
+
+    Nothing here needs an endpoint, a credential or a timeout. Asking for a
+    whole `Config` to copy files was always more than the job required; it only
+    became a problem when the job had to happen earlier.
+    """
+
+    @property
+    def workspace(self) -> Path: ...
+
+    @property
+    def catalogue_roots(self) -> dict[str, Path]: ...
+
+
+def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
+    """Each kind of definition, and the catalogue it belongs in.
 
     The catalogues, not the workspace. They are the same directory until a
     deployment moves one, and seeding the workspace unconditionally is how
-    `--seed-examples` used to fill a directory nothing reads.
+    `--seed-assets` used to fill a directory nothing reads.
 
     Derived from `CATALOGUE_KINDS` rather than listed again. This was the
     fourth place the three kinds were written out, and the one where getting it
-    wrong is quietest: a kind missing here is a preset that ships and is never
-    copied.
+    wrong is quietest: a kind missing here is one a pack ships and nothing ever
+    copies.
     """
     roots = cfg.catalogue_roots
     return tuple((kind, roots[kind]) for kind in CATALOGUE_KINDS)
@@ -128,7 +165,7 @@ class Seeding:
 
 
 def _is_debris(name: str) -> bool:
-    """Bytecode and dotfiles: present in the source tree, never part of a preset."""
+    """Bytecode and dotfiles: present in a source tree, never part of a definition."""
     return name == "__pycache__" or name.startswith(".")
 
 
@@ -146,7 +183,7 @@ def _overwritten(source: Path, target: Path, label: str) -> list[str]:
     on the path that matters.
 
     `copytree(dirs_exist_ok=True)` merges, so a file the catalogue has and the
-    preset does not survives and is not reported. Only a collision loses work.
+    pack does not survives and is not reported. Only a collision loses work.
     """
     if source.is_file():
         changed = target.is_file() and target.read_bytes() != source.read_bytes()
@@ -201,11 +238,12 @@ def _refuse_collisions(claimed: Mapping[str, list[str]]) -> None:
     raise ConfigError(msg)
 
 
-def seed(cfg: Config, packs: Sequence[Pack] | None = None) -> Seeding:
-    """Copy every preset into this deployment's catalogues, and say what it changed.
+def seed(cfg: Destination, packs: Sequence[Pack] | None = None) -> Seeding:
+    """Copy every pack's definitions into this deployment's catalogues, and say
+    what it changed.
 
     Copied rather than read in place: they are the deployment's content once
-    seeded, and the entire point is that you edit your copy. A preset that
+    seeded, and the entire point is that you edit your copy. A definition that
     changed under a catalogue because kingfisher was upgraded would be a
     different thing altogether.
 
@@ -231,23 +269,29 @@ def seed(cfg: Config, packs: Sequence[Pack] | None = None) -> Seeding:
                 claimed.setdefault(entry, []).append(pack.name)
         _refuse_collisions(claimed)
 
-        for _pack, presets in roots:
-            written_here, overwritten_here = _copy(cfg, presets)
+        for _pack, tree in roots:
+            written_here, overwritten_here = _copy(cfg, tree)
             written += written_here
             overwritten += overwritten_here
+
+    # Outside the pack loop and outside the `ExitStack`: the example is
+    # kingfisher's own, so it is written whether or not any pack is installed.
+    example_written, example_overwritten = _copy_example(cfg)
+    written += example_written
+    overwritten += example_overwritten
     return Seeding(tuple(written), tuple(overwritten))
 
 
-def _copy(cfg: Config, presets: Path) -> tuple[list[str], list[str]]:
+def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
     """Copy one opened pack into this deployment's catalogues."""
     written: list[str] = []
     overwritten: list[str] = []
     for kind, destination in destinations(cfg):
-        source = presets / kind
+        source = tree / kind
         if not source.is_dir():  # pragma: no cover -- all three ship
             continue
         for item in sorted(source.iterdir()):
-            # `tools/` holds Python, so importing a preset once -- a test
+            # `tools/` holds Python, so importing one of them once -- a test
             # run is enough -- leaves bytecode beside it. Seeding that
             # would put a `__pycache__` in the workspace and, worse, teach
             # that it belongs there.
@@ -260,7 +304,7 @@ def _copy(cfg: Config, presets: Path) -> tuple[list[str], list[str]]:
             target.parent.mkdir(parents=True, exist_ok=True)
             if item.is_dir():
                 # `ignore` rather than the check above, because that one
-                # only ever saw the top level. A preset tool used to be a
+                # only ever saw the top level. A packaged tool used to be a
                 # single file, so a directory could not hold bytecode of
                 # its own; a package can, and `copytree` would take the lot.
                 shutil.copytree(item, target, dirs_exist_ok=True, ignore=_debris)
@@ -268,21 +312,32 @@ def _copy(cfg: Config, presets: Path) -> tuple[list[str], list[str]]:
                 shutil.copy(item, target)
             written.append(label)
 
-    # The catalogue file, which is not a catalogue *kind* and so has no
-    # destination among the three above. It goes beside where kingfisher
-    # looks for `models.yaml`, because that is where someone would look for
-    # the thing they are about to write.
-    #
-    # As `.example`, never as `models.yaml` itself. Seeding overwrites by
-    # design -- that is what makes re-seeding after an upgrade possible --
-    # and the one file it must never overwrite is the one naming every
-    # endpoint this deployment reaches and whose credentials pay. A template
-    # landing on top of a working catalogue is the worst thing this could do.
-    example = presets / EXAMPLE
-    if example.is_file():  # absence is a packaging fault, caught by a test
+    return written, overwritten
+
+
+def _copy_example(cfg: Destination) -> tuple[list[str], list[str]]:
+    """Put the catalogue example beside where `models.yaml` is read from.
+
+    Which is where someone would look for the thing they are about to write.
+    Not into one of the three catalogues: it is not a definition.
+
+    Not from a pack, either, and not conditional on one being installed.
+    `models.yaml` is required and has no fallback, and the error a deployment
+    without one hits names this file as the place to look -- so it is the
+    worked example of a mandatory *configuration* file rather than content, and
+    it arrives with the thing that demands it.
+
+    As `.example`, never as `models.yaml` itself. Seeding overwrites by design
+    -- that is what makes re-seeding after an upgrade possible -- and the one
+    file it must never overwrite is the one naming every endpoint this
+    deployment reaches and whose credentials pay.
+    """
+    with opened(PACKAGE) as reference:
+        example = reference / EXAMPLE
+        if not example.is_file():  # a packaging fault, caught by a test
+            return [], []
         target = cfg.workspace / EXAMPLE
-        overwritten += _overwritten(example, target, EXAMPLE)
+        overwritten = _overwritten(example, target, EXAMPLE)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(example, target)
-        written.append(EXAMPLE)
-    return written, overwritten
+        return [EXAMPLE], overwritten

@@ -1,25 +1,31 @@
-# Presets
+# Writing definitions
 
-One working definition of each thing a request can activate — a skill, a
-subagent, a tool — for you to copy and edit. Nothing here is loaded
-automatically: a preset does nothing until it is in a workspace.
+The three formats a workspace can hold — a skill, a subagent, a tool — with
+every field, what it means, and worked examples you can paste. This page is the
+reference for the formats themselves; the pages below are ordered the way you
+are likely to need them.
 
-    uv run main.py --seed-presets     # all of them, into $KINGFISHER_WORKSPACE
+Kingfisher ships none of these files. Its job is to find, validate and compose
+definitions, and it does all three against files it did not write — every
+definition is content a workspace rewrites on first contact with a real task,
+where the framework has no business having an opinion. It ships no skills of its
+own for the same reason its base prompt carries no domain instructions: a
+general agent should read the same whatever the project is.
 
-They ship *inside* the package, so that works from an installed kingfisher and
-not only from a checkout. This is not the package growing domain content: a
-preset demonstrates a **format** and is rewritten on first contact with a real
-task, where domain content would presume what your project is about. Kingfisher
-ships no skills of its own for the same reason its base prompt carries no
-domain instructions — a general agent should read the same whatever the project
-is.
+Definitions come from **asset packs**: ordinary pip packages that announce
+themselves, which kingfisher discovers rather than names. One exists, with a
+working example of each format:
 
-To take one rather than all of them, copy it:
+    pip install kingfisher-assets
+    uv run main.py --seed-assets      # copies what it holds into $KINGFISHER_WORKSPACE
 
-    cp -r "$(python -c 'import kingfisher.presets as p; print(p.__path__[0])')/skills/code-review" \
-          "$KINGFISHER_WORKSPACE/skills/"
+Nothing is loaded automatically — a definition does nothing until it is in a
+workspace catalogue. Writing your own pack takes one line of metadata:
 
-A request then names them:
+    [project.entry-points."kingfisher.assets"]
+    my-pack = "my_assets"
+
+A request then names what it wants:
 
 ```python
 from kingfisher import Capabilities, Request, run
@@ -286,7 +292,8 @@ tools: [http_fetch]                # and this one, costing no built-in
 ```
 
 **Omitting a list means all of it. An empty list means none.** That difference
-does real work: every shipped preset writes `tools: []`, because "read-only"
+does real work: `extractor` in `kingfisher-assets` writes `tools: []`, because
+"read-only"
 has to keep meaning read-only rather than quietly growing whatever the
 workspace adds later.
 
@@ -329,15 +336,16 @@ built, rather than reaching an endpoint that has never heard of it:
 subagent 'second-opinion': no model 'gpt-5'; this deployment can run ('MiniMax-M3',)
 ```
 
-It fails only for the preset you *activated* — a subagent is wired only when a
+It fails only for the delegate you *activated* — a subagent is wired only when a
 request names it, so seeding one you cannot run costs nothing until you ask for
 it. And `run_on` can rescue it without editing the file, which is why this is
 not checked across the whole catalogue up front: the refusal would fire before
 the override could apply.
 
-Which is why **no preset ships with a `model:` line.** A file inside the wheel
-cannot portably name a vendor's model id: `extractor` said `MiniMax-M2.5` and
-would refuse to start for anyone without a MiniMax entry.
+Which is why **a definition somebody else wrote should not carry a `model:`
+line.** A file you install cannot portably name a vendor's model id: `extractor`
+said `MiniMax-M2.5` and would refuse to start for anyone without a MiniMax
+entry. Say `alias:` instead and let each deployment bind it.
 
 They name an `alias:` instead — a general name your catalogue binds:
 
@@ -357,8 +365,8 @@ That is the whole reason the indirection is worth having. `second-opinion` exist
 in order not to be the model beside it; handing it that very model because
 nobody bound `alternate` is the answer nobody asked for, and it is invisible —
 the delegate builds, answers, and the answer is worth nothing. Refusing fires
-only when a request *activates* the delegate, so seeding presets you have not
-bound for still costs nothing until you use them.
+only when a request *activates* the delegate, so seeding definitions you have
+not bound for still costs nothing until you use them.
 
 | Field | | |
 | --- | --- | --- |

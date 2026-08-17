@@ -379,7 +379,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
 def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
     """The cost of reading once, stated as behaviour rather than left to be
     discovered. A dev loop gets the old behaviour by building a new service,
-    which is what `--seed-presets` then running already does."""
+    which is what `--seed-assets` then running already does."""
     from tests.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):
@@ -498,7 +498,7 @@ def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, ses
         def files(self, name):
             if name != "imaginary":
                 raise KeyError(name)
-            return {"SKILL.md": b"---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
+            return {"SKILL.md": "---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
 
     catalogue = replace(Catalogue.from_config(cfg), skills=Nowhere())
 

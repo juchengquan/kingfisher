@@ -47,7 +47,7 @@ class InMemory:
         `Files`, which carries real bytes; this only has to exist."""
         if name not in self.held:
             raise KeyError(name)
-        return {"SKILL.md": b""}
+        return {"SKILL.md": ""}
 
 
 def _spec(name, prompt="from the catalogue"):
@@ -275,12 +275,12 @@ def test_a_layered_skill_prefers_the_sessions_copy_of_the_files(tmp_path):
             return self.held[name]
 
     layered = LayeredSkills(
-        base=Files({"shared": {"SKILL.md": b"reviewed"}}),
-        overlay=Files({"shared": {"SKILL.md": b"uploaded"}, "own": {"SKILL.md": b"mine"}}),
+        base=Files({"shared": {"SKILL.md": "reviewed"}}),
+        overlay=Files({"shared": {"SKILL.md": "uploaded"}, "own": {"SKILL.md": "mine"}}),
     )
 
-    assert layered.files("shared")["SKILL.md"] == b"uploaded"
-    assert layered.files("own")["SKILL.md"] == b"mine"
+    assert layered.files("shared")["SKILL.md"] == "uploaded"
+    assert layered.files("own")["SKILL.md"] == "mine"
 
 
 def test_a_layered_skill_falls_back_to_the_catalogue(tmp_path):
@@ -298,7 +298,7 @@ def test_a_layered_skill_falls_back_to_the_catalogue(tmp_path):
             return self.held[name]
 
     layered = LayeredSkills(
-        base=Files({"reviewed": {"SKILL.md": b"from the catalogue"}}), overlay=Files({})
+        base=Files({"reviewed": {"SKILL.md": "from the catalogue"}}), overlay=Files({})
     )
 
-    assert layered.files("reviewed")["SKILL.md"] == b"from the catalogue"
+    assert layered.files("reviewed")["SKILL.md"] == "from the catalogue"
