@@ -55,7 +55,7 @@ class LocalSkillRepository:
             return ()
         return tuple(sorted(p.name for p in directory.iterdir() if (p / FILENAME).is_file()))
 
-    def files(self, name: str) -> Mapping[str, bytes]:
+    def files(self, name: str) -> Mapping[str, str]:
         """Every file this skill ships, keyed by path relative to the skill.
 
         Read on demand rather than cached with the listing. A catalogue's names
@@ -72,8 +72,10 @@ class LocalSkillRepository:
         if not (directory / FILENAME).is_file():
             msg = f"no skill named {name!r} in {self.root}"
             raise KeyError(msg)
+        # `replace` rather than strict: see the port. Decoded here, once, so
+        # the mount does not have to know what a skill is made of.
         return {
-            str(path.relative_to(directory)): path.read_bytes()
+            str(path.relative_to(directory)): path.read_text(encoding="utf-8", errors="replace")
             for path in sorted(directory.rglob("*"))
             if path.is_file()
         }
