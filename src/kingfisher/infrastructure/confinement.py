@@ -35,6 +35,8 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
+from kingfisher.config import Config
+
 #: Pick whatever the platform offers, and say so when it offers nothing.
 AUTO = "auto"
 #: The runtime already confines this process -- a container mounting only the
@@ -65,6 +67,29 @@ class Confinement:
 
 def _unwrapped(command: str) -> str:
     return command
+
+
+def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement:
+    """The confinement this deployment will actually use, from its `Config`.
+
+    `resolve` takes one argument per root the profile has to name, and two
+    callers were assembling those six from the same `Config` -- the backend that
+    runs commands, and a driver that warns when nothing is confining them. Two
+    assemblies of one fact is how they come to disagree, and disagreeing here
+    means warning about a confinement other than the one in force.
+
+    `skills` overrides `cfg.skills_dir` because the backend has a derived one: a
+    session's skills directory is not always the workspace's. Nothing else
+    varies, so nothing else is a parameter.
+    """
+    return resolve(
+        cfg.shell_sandbox,
+        workspace=cfg.workspace,
+        state_dir=cfg.state_dir,
+        scratch_dir=cfg.scratch_dir,
+        extra=cfg.shell_path_extra,
+        skills=cfg.skills_dir if skills is None else skills,
+    )
 
 
 def profile(

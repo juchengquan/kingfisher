@@ -513,6 +513,9 @@ LIGHT_EXPORTS = frozenset({
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "split_reference",
+    # Reaching it costs nothing; calling it may write a sandbox profile,
+    # which is the same light-to-reach / heavy-to-call split `inventory` has.
+    "shell_confinement", "Confinement",
 })
 
 #: The rest, which genuinely need deepagents to do their job.
@@ -1146,3 +1149,43 @@ def test_every_console_script_points_at_something_that_exists():
         module_name, _, attribute = target.partition(":")
         module = import_module(module_name)
         assert callable(getattr(module, attribute, None)), f"{command} -> {target}"
+
+
+def test_only_the_confinement_module_calls_resolve_directly():
+    """`shell_confinement` is the one place a `Config` becomes a confinement.
+
+    `resolve` takes one argument per root the profile has to name, and two
+    callers were assembling those six from the same `Config` -- the backend that
+    runs commands, and the driver that warns when nothing is confining them. Two
+    assemblies of one fact is how they come to disagree, and disagreeing here
+    means warning about a confinement other than the one in force.
+
+    Nothing caught that: replacing the helper call in `main.py` with a
+    hand-assembled `resolve` left the whole suite green, which is the shape of a
+    rule that exists only in a docstring.
+    """
+    # Production only. A test of `resolve` calls `resolve`, and exempting the
+    # test tree is what lets that one keep testing the thing it is about.
+    offenders: list[str] = []
+    for path in _production_files():
+        if path.name == "confinement.py":
+            continue
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            reached = (
+                isinstance(node, ast.Attribute)
+                and node.attr == "resolve"
+                and isinstance(node.value, ast.Name)
+                and node.value.id == "confinement"
+            ) or (
+                isinstance(node, ast.ImportFrom)
+                and (node.module or "").endswith("confinement")
+                and any(alias.name == "resolve" for alias in node.names)
+            )
+            if reached:
+                offenders.append(path.name)
+
+    assert not offenders, (
+        f"{sorted(set(offenders))} call `confinement.resolve` directly — use "
+        "`shell_confinement(cfg)`, so one place decides what a Config means"
+    )
