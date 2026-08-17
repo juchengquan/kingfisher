@@ -91,6 +91,21 @@ name can never coexist in an agent the way two tools can in two delegates. A
 reference would let a request *choose* which `profiler` to activate, which is
 worth doing and is a smaller, separate change.
 
+**Skills subtraction calls an ambiguous name unknown, on main today.**
+`--without-skills lookup` against two of them refuses — so it is safe, and it
+does not quietly drop both — but with the same sentence a genuinely absent name
+gets:
+
+```
+cannot exclude unknown name(s): lookup; this workspace offers (…)
+```
+
+`SkillRegistry.resolve` distinguishes those two deliberately, because "no such
+skill" and "which one did you mean" send a reader to different places. The
+subtraction path does not, and the qualified forms are only visible because the
+listing beside the message happens to contain them. T8 is the same fix on the
+tools axis; this is the skills one, already shipped and worth folding in.
+
 **An upload can take a foldered skill's name, on main today.** `provision`
 measures "already defined" against `roots.skills.names`, and that lists the root
 and stops — it returns `()` for a catalogue whose skills all live in folders. So
