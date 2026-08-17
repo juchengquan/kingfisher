@@ -119,6 +119,7 @@ def materialise_skills(
 
     root = session_dir / skill.DIRECTORY / skill.UPLOADED
     names: list[str] = []
+    wrote: dict[str, str] = {}
     for ref in refs:
         files = store.fetch(ref)
         body = files.get(skill.FILENAME)
@@ -138,7 +139,31 @@ def materialise_skills(
             raise UploadError(msg)
 
         _write(root / name, files)
+        wrote[name] = ref
         names.append(name)
+
+    # Asked of deepagents, once, now that they are all on disk. The registry
+    # would catch an unloadable one anyway -- it reads these too -- and the
+    # difference is only *when* the caller hears about it: here, against the ref
+    # they sent, rather than at activation against a name they may not have
+    # chosen. A skill with no `description` is the easy case and the common one.
+    #
+    # The other checks in this loop are the same shape: a collision and a
+    # duplicate are both refused when the request arrives rather than left for
+    # something downstream to notice.
+    from kingfisher.infrastructure.harness.skill_registry import (  # noqa: PLC0415
+        read_uploaded,
+        split_qualified,
+    )
+
+    loads = read_uploaded(root)
+    if dropped := tuple(sorted(set(wrote) - {split_qualified(k)[1] for k in loads.offered})):
+        refs_named = ", ".join(f"{wrote[name]} ({name})" for name in dropped)
+        msg = (
+            f"{refs_named}: the agent cannot load this skill -- deepagents needs a "
+            f"name and a description in the frontmatter, and refuses one it cannot parse"
+        )
+        raise UploadError(msg)
     return tuple(names)
 
 

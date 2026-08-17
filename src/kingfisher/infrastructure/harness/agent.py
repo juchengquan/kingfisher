@@ -31,6 +31,7 @@ from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config, ConfigError
+from kingfisher.domain import skill
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -47,6 +48,7 @@ from kingfisher.domain.subagent import (
 )
 from kingfisher.domain.tool import Found, Offering
 from kingfisher.infrastructure.catalogue import Catalogue, source_of
+from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
     SKILLS_ROUTE,
@@ -68,6 +70,7 @@ from kingfisher.infrastructure.harness.scoping import (
     ScopedSkills,
     ToolAllowlist,
 )
+from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
 from kingfisher.infrastructure.layered import for_session
 from kingfisher.infrastructure.prompting import system_prompt
 
@@ -113,9 +116,28 @@ def available_skills(
     disagree the way a catalogue's could -- and a request's uploads are checked
     when they are provisioned rather than here.
     """
+    return activatable_skills(cfg, session_dir, catalogue=catalogue).names
+
+
+def activatable_skills(
+    cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
+) -> SkillRegistry:
+    """One registry for both halves: the catalogue, plus this request's own.
+
+    The single answer to "what may this request activate", and it is a single
+    answer because the last time there were two they disagreed. `available_skills`
+    merged the session's directory listing over the catalogue registry while
+    `build_agent` resolved against the catalogue registry alone, so every
+    uploaded skill was advertised and then refused as unknown -- the whole
+    feature, not an edge of it.
+
+    The catalogue half is cached for the life of the deployment; the session
+    half is read per turn, because that is when it arrives. One listing of a
+    directory holding at most a handful of skills.
+    """
     resolved = catalogue or Catalogue.from_config(cfg)
-    session = for_session(resolved, session_dir).skills.names
-    return tuple(sorted(set(resolved.registry.names) | set(session) - set(resolved.skills.names)))
+    uploaded = None if session_dir is None else session_dir / skill.DIRECTORY / skill.UPLOADED
+    return resolved.registry.merged(skill_registry.read_uploaded(uploaded))
 
 
 def defined_subagents(
@@ -738,7 +760,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         permissions.append(MEMORY_IS_DENIED)
 
     if cfg.skills_enabled:
-        registry = roots.registry
+        registry = activatable_skills(cfg, session_dir, catalogue=roots)
         # One source per folder, so a skill below the top level is visible at
         # all -- and labelled the way the registry labelled it, because a label
         # is the first half of what a request grants.

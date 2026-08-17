@@ -56,6 +56,11 @@ KEY = "kingfisher_id"
 #: told apart from a folder's. Not a folder name, because they are not in one.
 CATALOGUE = "catalogue"
 
+#: The label a skill that arrived with the request is offered under. The same
+#: string the backend mounts them at, so what a grant writes and where the
+#: agent reads from cannot drift apart.
+UPLOADED = "uploaded"
+
 
 def qualified(source: str, name: str) -> str:
     """How a grant names one skill when the bare name is not enough."""
@@ -142,6 +147,25 @@ class SkillRegistry:
     #: the agent loads under come from one walk.
     folders: tuple[str, ...] = ()
 
+    def merged(self, other: SkillRegistry) -> SkillRegistry:
+        """This registry and one more, as the single answer a caller needs.
+
+        The catalogue is read once when a deployment is wired; a request's own
+        skills arrive per turn. Two registries because they are read at
+        different times -- one answer because "what may this request activate"
+        has to have exactly one, and the last time it had two they disagreed:
+        validation offered an uploaded skill and the build refused it as
+        unknown, so no upload could be activated at all.
+
+        `folders` comes from this side alone. It says which folders under the
+        *catalogue* root are their own source, and uploads have none.
+        """
+        return SkillRegistry(
+            offered={**self.offered, **other.offered},
+            unloadable=tuple(sorted({*self.unloadable, *other.unloadable})),
+            folders=self.folders,
+        )
+
     @property
     def names(self) -> tuple[str, ...]:
         """What a request may write, sorted: bare where unique, qualified where not.
@@ -222,6 +246,46 @@ class SkillRegistry:
             found = self._sources_of(written)
             key = qualified(found[0], written) if len(found) == 1 else None
         return str(self.offered.get(key, {}).get("description", "")) if key else ""
+
+
+def read_uploaded(root: Path | None) -> SkillRegistry:
+    """The skills this request brought with it, asked of the same reader.
+
+    Their own function rather than a flag on `read`, because they answer a
+    different question about a different directory: the catalogue is read once
+    when a deployment is wired and cached for its life, and these arrive per
+    request and are gone when the session is.
+
+    Asked of deepagents for the same reason the catalogue is. A request may
+    upload a skill deepagents will not load -- one with no `description` is the
+    easy case -- and until this existed such a skill was written to disk,
+    advertised by a directory listing, accepted by the build, and then absent
+    from an agent that reported nothing wrong. That is the exact failure this
+    module was created to remove, still live in the half it did not cover.
+
+    Flat, with no folder sources, and that is a property of how uploads are
+    written rather than a limitation: `materialise_skills` files each one under
+    the name in its own header, directly under the uploads directory. There is
+    nowhere for a folder to come from.
+    """
+    if root is None or not root.is_dir():
+        return SkillRegistry(offered={})
+
+    from deepagents.backends import FilesystemBackend  # noqa: PLC0415
+    from deepagents.middleware.skills import _list_skills_with_errors  # noqa: PLC0415
+
+    loaded, _error = _list_skills_with_errors(FilesystemBackend(root_dir=str(root)), ROOT)
+    kept = {one["path"] for one in loaded}
+    return SkillRegistry(
+        offered={qualified(UPLOADED, one["name"]): one for one in loaded},
+        unloadable=tuple(
+            sorted(
+                directory.name
+                for directory in reachable(root)
+                if not any(f"/{directory.name}/" in path for path in kept)
+            )
+        ),
+    )
 
 
 def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegistry:

@@ -100,7 +100,38 @@ skills, oddly, never did.
   *present under a name nobody typed*. S6 reports what the agent will not load;
   this one it will load, as something else. Worth a line in the same warning,
   and not designed here.
-- **Uploaded skills.** They arrive per request and are mounted at their own
-  source. The registry as planned covers the catalogue; whether a request's own
-  skills join it, or get the same check at provisioning time, follows the shape
-  `uploads` already uses and has not been decided.
+- **Uploaded skills.** Decided, and it was not a preference in the end -- see
+  below. They join the registry, *and* get the check at provisioning time.
+
+
+## What leaving uploads out actually cost
+
+Not a missing feature. `available_skills` merged the session's directory
+listing over the catalogue registry while `build_agent` resolved against the
+catalogue registry alone, so an uploaded skill was advertised and then refused:
+
+```
+available_skills says :  ('code-review', 'mine', 'release-notes', 'tabular-qa')
+activating it         :  REFUSED -- unknown skill: 'mine';
+                         this workspace offers ('code-review', 'release-notes', 'tabular-qa')
+```
+
+Every upload, not a broken one. Two readers disagreeing about what a request
+may activate is the exact failure S1-S5 removed, reintroduced by the fix for it
+in the half it did not cover -- and nothing tested that half.
+
+Both parts of the original bug were there. An upload with no `description` was
+written, listed, accepted by the build, and absent from an agent that reported
+nothing wrong.
+
+**One registry answers for both halves now.** `activatable_skills` merges the
+cached catalogue registry with a per-session read of the uploads, and both
+`available_skills` and `build_agent` call it -- which is the property, rather
+than the symptom, and is what a test pins.
+
+**And `materialise_skills` refuses an upload deepagents will not load**, beside
+the checks it already makes for a name collision and an escaping path. That is
+about *when*: the registry catches it regardless, but the caller hears about it
+against the ref they sent rather than later against a name they may not have
+chosen. A test writes an unloadable skill straight to disk, past that check, and
+asserts the registry still never offers it -- so the two cannot drift.
