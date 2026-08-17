@@ -75,9 +75,11 @@ FAKE_MODELS = {
 }
 
 
-#: What the shipped presets name. Bound here because an unbound alias refuses
-#: the build, which is the behaviour under test elsewhere -- a fixture that left
-#: them unbound would make every preset test a test of that refusal instead.
+#: Bound here because an unbound alias refuses the build, which is the behaviour
+#: under test elsewhere -- a fixture that left them unbound would make every test
+#: naming one a test of that refusal instead. They used to be here because the
+#: shipped presets named them; the presets are a separate distribution now and
+#: bind their own, and these are kingfisher's own fixtures.
 FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "cheap-model"}
 
 #: One record where the fixture used to set four fields on `Config`.

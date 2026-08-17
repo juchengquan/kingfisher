@@ -393,34 +393,35 @@ def test_only_one_module_decides_what_a_skill_is():
     )
 
 
-def test_the_package_ships_its_presets():
-    """`--seed-presets` has to work for an installed kingfisher.
+def test_the_package_ships_no_assets():
+    """The framework loads and composes definitions; it does not supply any.
 
-    That means the definitions live *inside* the wheel rather than beside it in
-    the repo: `packages = ["src/kingfisher"]`, so anything one level up is not
-    shipped and a pip-installed kingfisher would have nothing to copy. Moving
-    them back out would break seeding for every user who is not in a checkout,
-    and nothing else would notice.
+    This asserted the opposite, and was right to: `packages = ["src/kingfisher"]`
+    means anything one level up is not shipped, so seeding from an installed
+    kingfisher needed the definitions inside the wheel. They are a distribution
+    of their own now, found through the `kingfisher.assets` entry point, and
+    this holds the framework to shipping none of them.
     """
-    from kingfisher.infrastructure import presets
     from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-    assert (SRC / "presets" / "skills").is_dir()
-    # And reachable the way an installed one reaches them, not by path.
-    with presets.opened() as root:
-        for kind in CATALOGUE_KINDS:
-            assert (root / kind).is_dir(), kind
+    for kind in CATALOGUE_KINDS:
+        assert not (SRC / "presets" / kind).exists(), kind
 
 
 def test_the_package_ships_the_catalogue_example():
-    """The same rule as above, for the file a deployment needs *first*.
+    """The one file that is not an asset and has to stay.
 
     `models.yaml` is required and has no fallback, so the worked example is the
-    one document a new deployment cannot start without reading. It lived at the
-    repo root -- outside `packages = ["src/kingfisher"]` -- which meant a
-    pip-installed kingfisher shipped a required format with no example of it,
-    and nothing noticed. Exactly the mistake the test above was written about,
-    one directory over.
+    one document a new deployment cannot start without reading, and the error it
+    hits without one names this file as the place to look. It must arrive with
+    the framework rather than with a pack somebody may not have installed --
+    which is the whole reason the test above can assert what it does.
+
+    It lived at the repo root once -- outside `packages = ["src/kingfisher"]` --
+    which meant a pip-installed kingfisher shipped a required format with no
+    example of it, and nothing noticed. Both paths are asserted because they
+    fail separately: the first catches it moving back out of the package, the
+    second catches it not being reachable the way an install reaches it.
     """
     from kingfisher.infrastructure import presets
 

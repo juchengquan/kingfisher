@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kingfisher-assets"
+version = "0.1.0"
+description = "One working definition of each thing a kingfisher request can activate."
+readme = "README.md"
+requires-python = ">=3.12"
+# The arrow points assets -> framework and never back. Kingfisher does not
+# depend on this distribution, list it as an extra, or name it in its source;
+# it asks which packs are installed. Depending on kingfisher here is what makes
+# `pip install kingfisher-assets` one command for someone who wants both.
+#
+# No floor on `kingfisher` yet. A definition using a field an older kingfisher
+# does not know is refused by name, which is a loud and adequate failure; a tool
+# is Python and fails differently. `>=` here is the ordinary answer and probably
+# the right one, but the design doc lists it as untested rather than decided, so
+# it is left off until a release exists to floor against.
+#
+# `langchain-core` is direct: the tools import `@tool` from it. It also arrives
+# through kingfisher, and a transitive dependency is not a promise -- the same
+# rule the framework's own pyproject applies to every line it has.
+dependencies = [
+    "kingfisher",
+    "langchain-core>=1.0.0",
+]
+
+# Development only: resolve the sibling from this checkout rather than an
+# index. The published dependency above is an ordinary `kingfisher`, so a wheel
+# built from here installs the released framework like anyone else's.
+[tool.uv.sources]
+kingfisher = { workspace = true }
+
+# How kingfisher finds this. The name on the left is what a collision message
+# says, so it is the pack's name rather than the module's.
+[project.entry-points."kingfisher.assets"]
+kingfisher-assets = "kingfisher_assets"
+
+# Everything under here, not just the `.py` files: hatchling ships a package
+# directory whole, so the `.yaml` and `.md` that are the point of this
+# distribution arrive without a `force-include` table. Measured -- the built
+# wheel carries 4 skill files, 4 subagent definitions and 5 tool files. Naming
+# those three directories in a `force-include` is not belt-and-braces here, it
+# is a build error: hatchling refuses a second file at a path already written.
+[tool.hatch.build.targets.wheel]
+packages = ["src/kingfisher_assets"]

@@ -73,14 +73,25 @@ Each step leaves the tree working.
 | **1** | The seeder takes its source as a parameter instead of a constant, and discovers packs through entry points. Kingfisher's own presets become the first pack it finds, registered from inside the package. Nothing moves yet; nothing breaks. | — |
 | **2** | The fixture tree under `tests/`, and the 13 framework tests moved onto it. They stop depending on shipped content — which is how a preset count broke an unrelated reporting test earlier. | 1 |
 | **3** | The documentation's examples go inline; the four link-dependent tests are rewritten against them. | — |
-| **4** | The asset repository: the fifteen files, the ten tests that describe them, and its own `pyproject.toml` declaring the entry point and depending on kingfisher. | 1 |
-| **5** | Kingfisher drops the assets and the entry point registration. `presets/` becomes `reference/`, holding `models.yaml.example` and the docs. `--seed-presets` is renamed, and `model_catalogue`'s error message follows it. | 2, 3, 4 |
+| **4** | `assets/`: the fifteen files, the ten tests that describe them, and its own `pyproject.toml` declaring the entry point and depending on kingfisher. Kingfisher drops the assets and its own entry point registration in the same step. | 1 |
+| **5** | The framing goes with them: `presets/` becomes `reference/`, holding `models.yaml.example` and the docs. `--seed-presets` is renamed, and `model_catalogue`'s error message follows it. | 2, 3, 4 |
 | **6** | A7: a fresh workspace seeds from whatever packs are installed, and says what it wrote. | 5 |
 
-Phases 1 to 4 are additive and reversible. Phase 5 is the one that removes
-something, and it is deliberately last: until it lands, both arrangements work,
-and the asset repository can be proven against a real kingfisher before the
-files stop shipping.
+Phase 4 was written as a *separate repository*, with phase 5 removing the files
+afterwards so both arrangements would work in between. It became a second
+distribution in this repository instead — `assets/`, a uv workspace member —
+which collapses that ordering: A4 refuses two packs claiming the same file, so
+there is no window in which both ship. The files move rather than being copied,
+and the framework's registration goes in the same commit. What phase 5 keeps is
+only the renaming.
+
+That is the cost of the change and it is worth naming: the arrangement cannot
+be proven against an *unmodified* kingfisher first. It is proven instead by
+building both wheels and installing them into a clean environment, which is
+what the phase-4 commit records — and by installing the framework alone, where
+seeding writes the catalogue example and nothing else.
+
+Phases 1 to 3 remain additive and reversible.
 
 ## Still undecided
 

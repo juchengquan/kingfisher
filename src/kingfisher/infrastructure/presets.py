@@ -235,6 +235,12 @@ def seed(cfg: Config, packs: Sequence[Pack] | None = None) -> Seeding:
             written_here, overwritten_here = _copy(cfg, presets)
             written += written_here
             overwritten += overwritten_here
+
+    # Outside the pack loop and outside the `ExitStack`: the example is
+    # kingfisher's own, so it is written whether or not any pack is installed.
+    example_written, example_overwritten = _copy_example(cfg)
+    written += example_written
+    overwritten += example_overwritten
     return Seeding(tuple(written), tuple(overwritten))
 
 
@@ -268,21 +274,32 @@ def _copy(cfg: Config, presets: Path) -> tuple[list[str], list[str]]:
                 shutil.copy(item, target)
             written.append(label)
 
-    # The catalogue file, which is not a catalogue *kind* and so has no
-    # destination among the three above. It goes beside where kingfisher
-    # looks for `models.yaml`, because that is where someone would look for
-    # the thing they are about to write.
-    #
-    # As `.example`, never as `models.yaml` itself. Seeding overwrites by
-    # design -- that is what makes re-seeding after an upgrade possible --
-    # and the one file it must never overwrite is the one naming every
-    # endpoint this deployment reaches and whose credentials pay. A template
-    # landing on top of a working catalogue is the worst thing this could do.
-    example = presets / EXAMPLE
-    if example.is_file():  # absence is a packaging fault, caught by a test
+    return written, overwritten
+
+
+def _copy_example(cfg: Config) -> tuple[list[str], list[str]]:
+    """Put the catalogue example beside where `models.yaml` is read from.
+
+    Which is where someone would look for the thing they are about to write.
+    Not into one of the three catalogues: it is not a definition.
+
+    Not from a pack, either, and not conditional on one being installed.
+    `models.yaml` is required and has no fallback, and the error a deployment
+    without one hits names this file as the place to look -- so it is the
+    worked example of a mandatory *configuration* file rather than content, and
+    it arrives with the thing that demands it.
+
+    As `.example`, never as `models.yaml` itself. Seeding overwrites by design
+    -- that is what makes re-seeding after an upgrade possible -- and the one
+    file it must never overwrite is the one naming every endpoint this
+    deployment reaches and whose credentials pay.
+    """
+    with opened() as reference:
+        example = reference / EXAMPLE
+        if not example.is_file():  # a packaging fault, caught by a test
+            return [], []
         target = cfg.workspace / EXAMPLE
-        overwritten += _overwritten(example, target, EXAMPLE)
+        overwritten = _overwritten(example, target, EXAMPLE)
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(example, target)
-        written.append(EXAMPLE)
-    return written, overwritten
+        return [EXAMPLE], overwritten
