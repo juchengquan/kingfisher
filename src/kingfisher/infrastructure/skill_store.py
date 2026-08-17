@@ -17,6 +17,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    from collections.abc import Mapping
 
 from kingfisher.domain.skill import FILENAME
 
@@ -50,6 +54,29 @@ class LocalSkillRepository:
         if not directory.is_dir():
             return ()
         return tuple(sorted(p.name for p in directory.iterdir() if (p / FILENAME).is_file()))
+
+    def files(self, name: str) -> Mapping[str, bytes]:
+        """Every file this skill ships, keyed by path relative to the skill.
+
+        Read on demand rather than cached with the listing. A catalogue's names
+        are read once at wiring and answered from every turn; its *contents* are
+        what a skill's scripts and data live in, and holding all of them for the
+        life of a deployment would trade a directory listing for a copy of the
+        catalogue in memory.
+
+        Not read through `names` either, so an unknown name is a `KeyError`
+        rather than an empty mapping -- a skill that is silently empty is the
+        failure the neighbours here keep refusing.
+        """
+        directory = Path(self.root) / name
+        if not (directory / FILENAME).is_file():
+            msg = f"no skill named {name!r} in {self.root}"
+            raise KeyError(msg)
+        return {
+            str(path.relative_to(directory)): path.read_bytes()
+            for path in sorted(directory.rglob("*"))
+            if path.is_file()
+        }
 
     @cached_property
     def misplaced(self) -> tuple[str, ...]:

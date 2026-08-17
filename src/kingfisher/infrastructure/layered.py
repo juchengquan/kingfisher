@@ -76,6 +76,21 @@ class LayeredSkills:
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(set(self.base.names) | set(self.overlay.names)))
 
+    def files(self, name: str) -> Mapping[str, bytes]:
+        """The session's copy if it has one, otherwise the catalogue's.
+
+        The overlay wins, which is the *subagent* rule rather than the union
+        above -- and it has to be, because a union is not a thing you can do to
+        two sets of file contents. Unreachable today for the same reason as
+        everywhere else here (`uploads` refuses a name the catalogue defines),
+        so what it settles is which way to fall if that check ever fails: to the
+        one request's own copy, never the catalogue every request shares.
+        """
+        try:
+            return self.overlay.files(name)
+        except KeyError:
+            return self.base.files(name)
+
 
 @dataclass(frozen=True)
 class LayeredSubagents:

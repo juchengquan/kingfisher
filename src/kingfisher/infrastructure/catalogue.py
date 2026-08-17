@@ -134,30 +134,23 @@ def source_of(repository: object) -> str:
     return str(root) if root is not None else "the catalogue"
 
 
-def local_root(repository: object, kind: str) -> Path:
-    """The directory behind a repository, or a refusal explaining why one is needed.
+def catalogue_root(repository: object) -> Path | None:
+    """The directory behind a repository, or `None` when there is not one.
 
-    Two things genuinely cannot work without a host directory, and both are
-    about the agent rather than about kingfisher reading a definition: the
-    `/skills` route is a `FilesystemBackend` over a real path, and
-    `$KINGFISHER_SKILLS` is that path handed to a skill's own scripts.
+    This used to refuse rather than answer `None`, because the `/skills` route
+    was a `FilesystemBackend` over a real path and a repository with no path was
+    unmountable. `SkillRepository.files` ended that: `skills_backend` mounts
+    whatever a repository can hand over, so a missing directory is now a fact
+    about *which backend to build*, not a wiring error.
 
-    So this is the edge of the abstraction, and it says so rather than mounting
-    an empty directory and letting the agent be told about nothing -- the
-    silent-emptiness failure the rest of this module keeps refusing. A repository
-    backed by something else would need to reach the agent as a `BackendProtocol`
-    instead, which `SkillRepository` cannot supply today: it answers with names,
-    and a route needs file contents.
+    Two things still follow the directory rather than the repository, and both
+    are the shell rather than the agent's file tools: `$KINGFISHER_SKILLS`, which
+    a skill's own scripts address, and the sandbox profile's readable root. A
+    store has no path for either, so a catalogue held outside the filesystem
+    gets skills the agent can *read* and scripts it cannot *run*. That is a real
+    limit and it is stated where it bites, in `shell_env`.
     """
-    root = _root_of(repository)
-    if root is None:
-        msg = (
-            f"the {kind} repository is not backed by a directory, and the agent reads "
-            f"{kind} through a filesystem route that needs one. Supply a directory-backed "
-            f"repository for {kind}, or stage its definitions to a directory first"
-        )
-        raise ConfigError(msg)
-    return root
+    return _root_of(repository)
 
 
 def resolve_catalogue(

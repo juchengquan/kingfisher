@@ -42,6 +42,13 @@ class InMemory:
     def specs(self):
         return self.held
 
+    def files(self, name):
+        """Enough to satisfy `SkillRepository`. The skill tests below use
+        `Files`, which carries real bytes; this only has to exist."""
+        if name not in self.held:
+            raise KeyError(name)
+        return {"SKILL.md": b""}
+
 
 def _spec(name, prompt="from the catalogue"):
     return SubagentSpec(name=name, description="A subagent.", system_prompt=prompt)
@@ -244,3 +251,54 @@ def test_every_implementation_offers_names_in_a_stable_order(cfg, session_dir):
     assert list(turn.skills.names) == sorted(turn.skills.names)
     # and the same answer twice, which a set-backed implementation would not give
     assert turn.skills.names == for_session(Catalogue.from_config(cfg), session_dir).skills.names
+
+
+def test_a_layered_skill_prefers_the_sessions_copy_of_the_files(tmp_path):
+    """The precedence `files` has to pick, and the one `names` never faces --
+    a union is not something you can do to two sets of file contents.
+
+    Found by mutation testing: reversing these two lines changed nothing that
+    any test noticed, because the mount is handed the deployment's catalogue
+    and a session's uploads travel by their own route. The rule is still the
+    port's to honour, so it is pinned here.
+    """
+
+    @dataclass(frozen=True)
+    class Files:
+        held: dict
+
+        @property
+        def names(self):
+            return tuple(self.held)
+
+        def files(self, name):
+            return self.held[name]
+
+    layered = LayeredSkills(
+        base=Files({"shared": {"SKILL.md": b"reviewed"}}),
+        overlay=Files({"shared": {"SKILL.md": b"uploaded"}, "own": {"SKILL.md": b"mine"}}),
+    )
+
+    assert layered.files("shared")["SKILL.md"] == b"uploaded"
+    assert layered.files("own")["SKILL.md"] == b"mine"
+
+
+def test_a_layered_skill_falls_back_to_the_catalogue(tmp_path):
+    """The other branch: a name only the deployment defines still resolves."""
+
+    @dataclass(frozen=True)
+    class Files:
+        held: dict
+
+        @property
+        def names(self):
+            return tuple(self.held)
+
+        def files(self, name):
+            return self.held[name]
+
+    layered = LayeredSkills(
+        base=Files({"reviewed": {"SKILL.md": b"from the catalogue"}}), overlay=Files({})
+    )
+
+    assert layered.files("reviewed")["SKILL.md"] == b"from the catalogue"
