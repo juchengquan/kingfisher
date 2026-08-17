@@ -8,6 +8,7 @@ faster. What it buys is turns overlapping, which is the shape a service needs.
 from __future__ import annotations
 
 import asyncio
+import threading
 import time
 
 import pytest
@@ -92,18 +93,33 @@ def test_a_sync_saver_is_refused_rather_than_blocking(cfg):
 
 
 def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
-    """`_prepare` is filesystem work -- 15-46ms measured -- and on an
-    event loop that is 15-46ms during which no other turn can progress.
+    """`_prepare` is filesystem work -- 15-46ms measured -- and on an event loop
+    that is 15-46ms during which no other turn can progress. `astream` runs it
+    with `asyncio.to_thread`, so three turns overlap their setup.
 
-    Run on a worker thread, three turns overlap their setup and the wall clock
-    is about one of them. Run on the loop, it is the sum. The margin here is
-    deliberately wide: the claim is "not serialised", not a precise number.
+    Asserted as two facts rather than as a stopwatch. It used to time three
+    turns and require the total under 70% of the serial cost, which is the same
+    claim expressed as a ratio -- and a ratio is a race against the machine. On
+    a loaded runner it came in at 0.34s against a 0.315s bar and failed, having
+    proved nothing except that CI was busy. Both replacements hold whatever
+    speed the machine runs at:
+
+    - the work happened on a thread that is not the loop's, so the loop was free
+    - two of the three overlapped, so they were not merely off the loop one
+      after another -- which `to_thread` awaited in sequence would also be
     """
     real_prepare = Kingfisher._prepare
     delay = 0.15
+    loop_thread: list[int] = []
+    spans: list[tuple[float, float, int]] = []
+    lock = threading.Lock()
 
     def slow_prepare(self, *args, **kwargs):
+        started = time.perf_counter()
         time.sleep(delay)  # blocking, exactly like the I/O it stands in for
+        finished = time.perf_counter()
+        with lock:
+            spans.append((started, finished, threading.get_ident()))
         return real_prepare(self, *args, **kwargs)
 
     monkeypatch.setattr(Kingfisher, "_prepare", slow_prepare)
@@ -112,18 +128,45 @@ def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
     names = [service.start_session() for _ in range(3)]
 
     async def race():
+        loop_thread.append(threading.get_ident())
+
         async def turn(name):
             async for _ in service.astream(Request("go", session_id=name)):
                 pass
 
-        started = time.perf_counter()
         await asyncio.gather(*(turn(n) for n in names))
-        return time.perf_counter() - started
 
-    elapsed = asyncio.run(race())
+    asyncio.run(race())
 
-    serial = delay * len(names)
-    assert elapsed < serial * 0.7, f"setup serialised: {elapsed:.2f}s of a possible {serial:.2f}s"
+    assert len(spans) == len(names), spans
+    assert all(ident != loop_thread[0] for _, _, ident in spans), (
+        "setup ran on the event loop's own thread — every other turn was stalled "
+        "for the duration, which is what `to_thread` is here to prevent"
+    )
+    assert _any_overlap(spans), (
+        f"no two of {len(spans)} setups overlapped, so they ran one after another "
+        f"— off the loop, but still serialised: {_as_intervals(spans)}"
+    )
+
+
+def _any_overlap(spans):
+    """Whether any two of these intervals share a moment.
+
+    The whole claim, and it does not care how long anything took. Serialised
+    work produces disjoint intervals at any speed; concurrent work overlaps at
+    any speed.
+    """
+    return any(
+        a_start < b_end and b_start < a_end
+        for i, (a_start, a_end, _) in enumerate(spans)
+        for b_start, b_end, _ in spans[i + 1 :]
+    )
+
+
+def _as_intervals(spans):
+    """The spans relative to the first start, for a failure worth reading."""
+    origin = min(start for start, _, _ in spans)
+    return [(round(s - origin, 3), round(e - origin, 3)) for s, e, _ in sorted(spans)]
 
 
 def test_the_turn_bound_holds_on_the_async_path_too(cfg):
