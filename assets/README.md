@@ -41,7 +41,7 @@ capability. Copy the shape and rewrite the content.
 | `subagents/reviewer` | independence — recomputing a claim without seeing how it was reached |
 | `subagents/extractor` | context isolation — reading a large pile, returning a short answer |
 | `subagents/second-opinion` | a different model, which is worth nothing until you give it one |
-| `subagents/analysis/profiler` | a definition in a folder, still activated by its `name:` |
+| `subagents/analysis/profiler` | a definition in a folder, still activated by its `name:`; and `where::what`, saying which package a tool comes from |
 | `tools/http_fetch` | something the built-in set cannot do at all |
 | `tools/sql_query` | narrowing a capability `execute` already had |
 | `tools/csv_profile` | a tool that outgrew one file, as a package |
