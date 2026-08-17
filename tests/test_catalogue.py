@@ -479,16 +479,16 @@ def test_the_agent_is_built_from_a_supplied_repository(cfg, session_dir):
     assert defined["ghost"].system_prompt == "You are supplied."
 
 
-def test_a_skills_store_with_no_directory_is_refused_where_one_is_needed(cfg, session_dir):
-    """The edge of the abstraction, said out loud.
+def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, session_dir):
+    """This used to be a refusal. `SkillRepository.files` ended it: a repository
+    that can hand over bytes is mountable whatever it is backed by, so a store
+    with nothing on disk now builds a backend the agent can read.
 
-    Skills are the one kind kingfisher does not read: the agent does, through a
-    `FilesystemBackend` route over a real path, and `$KINGFISHER_SKILLS` hands
-    that same path to a skill's own scripts. So a skills store with nothing on
-    disk cannot be mounted -- and the failure has to be a refusal naming the
-    reason, not an empty route, which is the silent emptiness this module keeps
-    refusing everywhere else.
+    The refusal was honest while the port answered only with names -- a route
+    needs file contents and a name cannot supply them -- but it was a limit of
+    the port, not of the route, and it read as a limit of the design.
     """
+    from kingfisher.infrastructure.backend import SKILLS_ROUTE
 
     @dataclass(frozen=True)
     class Nowhere:
@@ -496,10 +496,16 @@ def test_a_skills_store_with_no_directory_is_refused_where_one_is_needed(cfg, se
         def names(self):
             return ("imaginary",)
 
+        def files(self, name):
+            if name != "imaginary":
+                raise KeyError(name)
+            return {"SKILL.md": b"---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
+
     catalogue = replace(Catalogue.from_config(cfg), skills=Nowhere())
 
-    with pytest.raises(ConfigError, match="not backed by a directory"):
-        build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+
+    assert "body" in str(backend.read(f"{SKILLS_ROUTE}imaginary/SKILL.md"))
 
 
 def test_the_other_two_kinds_need_no_directory_at_all(cfg, session_dir):

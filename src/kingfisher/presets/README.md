@@ -222,6 +222,41 @@ already true of the filename.
 There are no packages here. A definition is a document, not code, so there is
 nothing to import and a folder is only ever organisation.
 
+#### Saying where a tool lives
+
+A `tools:` entry may carry the file it comes from, written `where::what`:
+
+```yaml
+tools:
+  - csv_profile::csv_columns       # from the package tools/csv_profile/
+  - sql_query.py::sql_tables       # a tool whose name is not its file's
+  - http_fetch                     # the short form, still fine
+```
+
+Both spellings mean the same tool. The long one buys a **check**: if
+`csv_columns` moves out of `csv_profile/`, the definition says so at startup
+rather than being quietly wrong about a file nobody can find. The short one asks
+for nothing and is never wrong.
+
+Write the left-hand side exactly as `--list` prints it — `csv_profile`, not
+`csv_profile/`. The `.py` is what tells you a file from a folder, so a package
+needs no trailing slash and a pasted one is ignored.
+
+It is a claim about *location*, never a choice between tools. Two tools cannot
+share a name — the loader refuses the pair, because the agent dispatches by name
+and one would silently replace the other — so there is never a second candidate
+for a path to pick out.
+
+**Built-ins take no path.** They have no file, and they live on the separate
+`builtin_tools:` axis.
+
+**Requests do not take one either.** `--tools` and `capabilities.tools` name
+tools plainly. A definition is written once and read many times, often by
+someone who did not write it, and that is where a location pays; a flag is typed
+once and thrown away. A request also arrives from a caller who has no idea what
+your folders look like — asking them for a path would make your layout part of
+your API, and moving a file a breaking change for people who never saw it.
+
 ```yaml
 name: reviewer
 description: Re-checks numeric claims against the files they came from. Use before reporting figures you computed once.

@@ -641,11 +641,13 @@ def main(argv: list[str]) -> int:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.
         print(f"capability error: {exc}", file=sys.stderr)
-        # Only when the refusal did not already list them. The tool refusals now
-        # print what is on offer and where each one lives, and telling someone
-        # to go and look at the thing directly above their cursor is the kind of
-        # hint that teaches people to stop reading hints.
-        if "this workspace offers" not in str(exc):
+        # Only for a refusal that fits on one line. Those name something and
+        # stop, and `--list` is the next thing to try. A refusal that runs to
+        # several has already listed what is on offer or said what to change,
+        # and pointing at the screen someone is reading is the kind of hint that
+        # teaches people to stop reading hints. It was matched on a phrase until
+        # a second multi-line refusal arrived that did not contain it.
+        if "\n" not in str(exc):
             print("run --list to see what this workspace offers", file=sys.stderr)
         return 2
 

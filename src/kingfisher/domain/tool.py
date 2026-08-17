@@ -32,6 +32,41 @@ from kingfisher.domain.capabilities import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
+#: What separates a tool's file from its name in a definition. Two colons
+#: rather than one because a Windows path can carry a single one, and because
+#: pytest already taught everyone that `file::thing` means "that thing, in that
+#: file".
+SEPARATOR = "::"
+
+
+def reference(source: str, name: str) -> str:
+    """How a definition writes one tool: where it lives, then what it is called.
+
+    The trailing slash a package's `source` carries is dropped. It earns its
+    place in a *listing*, where it says `csv_profile` is a folder rather than a
+    file that is not there -- but a reference already says that with `.py`, or
+    with its absence, and `csv_profile/::csv_columns` is only noisier for it.
+    """
+    return f"{source.rstrip('/')}{SEPARATOR}{name}"
+
+
+def split_reference(text: str) -> tuple[str | None, str]:
+    """A written reference into the file it claims and the name it means.
+
+    The name is what everything downstream uses -- a grant, an allowlist, the
+    dictionary the agent dispatches through -- so it comes back plain whichever
+    form was written. The claim comes back beside it, for whoever checks it, and
+    is `None` when the short form was used.
+
+    A trailing slash is accepted and dropped. `--list` prints a package as
+    `csv_profile/`, and pasting that in should not be a near-miss that someone
+    has to notice.
+    """
+    claimed, found, name = text.rpartition(SEPARATOR)
+    if not found:
+        return None, text.strip()
+    return claimed.strip().rstrip("/") or None, name.strip()
+
 
 def tool_name(tool: Any) -> str:
     """What a request names this tool by.
@@ -60,6 +95,11 @@ class Found:
     def name(self) -> str:
         return tool_name(self.tool)
 
+    @property
+    def reference(self) -> str:
+        """How a definition would name this one, saying where it lives."""
+        return reference(self.source, self.name)
+
 
 def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
     """What a workspace offers, one per line, with where each one lives.
@@ -71,12 +111,19 @@ def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
     Names with no known source -- a built-in, or a tool handed straight to
     `build_agent` rather than found on disk -- are listed bare. There is no file
     to name, and a blank column against `read_file` would be noise.
+
+    The source is printed the way a definition writes it, without a package's
+    trailing slash, so what a reader sees is what they can paste into a `tools:`
+    line. It kept the slash once, which said "folder" at the cost of being a
+    near-miss for the one thing anybody does with it.
     """
     if not names:
         return "  (none)"
     width = max(len(name) for name in names)
     return "\n".join(
-        f"  {name.ljust(width)}  ({where})" if (where := sources.get(name)) else f"  {name}"
+        f"  {name.ljust(width)}  ({where.rstrip('/')})"
+        if (where := sources.get(name))
+        else f"  {name}"
         for name in sorted(names)
     )
 
@@ -151,6 +198,42 @@ class Offering:
                 subject=subject,
                 listing=f"\n{offered(self.sources, own)}",
             )
+
+    def refuse_moved(self, claims: Mapping[str, str], *, subject: str) -> None:
+        """A definition that said where a tool lives, about one that has moved.
+
+        Here rather than beside the definition it came from, because what it
+        needs is `sources` -- and taking a `SubagentSpec` would have `tool`
+        import `subagent` while `subagent` imports this. It takes the claims
+        alone, and `subject` names the reader's file the way `refuse_unknown`
+        does.
+
+        Only entries that made a claim are checked, so a definition written the
+        short way is untouched. The claim can only ever be wrong about
+        *location*: two tools of one name never both load, so this says "it
+        moved" and never "you meant the other one".
+
+        A name this workspace does not offer at all is left alone --
+        `refuse_unknown` says that better, with the full listing, and saying it
+        twice in two voices helps nobody.
+        """
+        moved = [
+            (name, claimed, self.sources[name].rstrip("/"))
+            for name, claimed in claims.items()
+            if name in self.sources and self.sources[name].rstrip("/") != claimed
+        ]
+        if not moved:
+            return
+        lines = "\n".join(
+            f"  {reference(claimed, name)}  ->  {reference(actual, name)}"
+            for name, claimed, actual in sorted(moved)
+        )
+        msg = (
+            f"{subject} says where its tools live, and "
+            f"{'one has' if len(moved) == 1 else 'some have'} moved:\n{lines}\n"
+            f"Update the definition, or drop the path and write the name alone."
+        )
+        raise CapabilityError(msg)
 
     def permitted(self, builtin: Selection, tools: Selection) -> tuple[str, ...] | None:
         """Every tool name a request may call, or `None` for no restriction.
