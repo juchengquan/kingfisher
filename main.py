@@ -13,6 +13,10 @@ was reachable from here.
     uv run main.py --list                       # what this workspace offers
     uv run main.py --seed-assets                # copy in what a pack ships
 
+A workspace that has never been used seeds itself on its first run and prints
+what it wrote, so `--seed-assets` is for re-seeding an existing one after
+installing or upgrading a pack. That overwrites, which is the point of asking.
+
     uv run main.py "Review it" --skills code-review --subagents reviewer
     uv run main.py "Count the rows" --tools read_file,write_file
     uv run main.py "Just this once" --no-memory
@@ -94,7 +98,14 @@ from evals.task import SMOKE_TASK
 # Only the light end of the package at module scope. `kingfisher.infrastructure`
 # reaches deepagents, which costs about a second in provider SDKs, and `--help`
 # should not pay for a model it will never build.
-from kingfisher import Capabilities, ConfigError, Request, ensure_layout, from_env
+from kingfisher import (
+    Capabilities,
+    ConfigError,
+    Request,
+    ensure_layout,
+    from_env,
+    paths_from_env,
+)
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
@@ -546,20 +557,35 @@ def main(argv: list[str]) -> int:
     load_dotenv()
     args = build_parser().parse_args(argv[1:])
 
+    # The directories first, and the catalogue after. A brand-new workspace has
+    # no `models.yaml` -- it is a file *inside* the workspace -- so `from_env`
+    # used to fail before the directory it needed had been created, and the
+    # error told you to run `--seed-assets`, which failed the same way. A first
+    # run could not reach seeding at all, which is precisely the run seeding is
+    # for. This ordering is what makes the message it prints true.
     try:
-        cfg = from_env()
+        paths = paths_from_env()
     except ConfigError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         print("copy .env.example to .env and fill it in", file=sys.stderr)
         return 2
 
-    fresh = is_new_workspace(cfg.workspace)
-    workspace = ensure_layout(cfg.workspace)
+    fresh = is_new_workspace(paths.workspace)
+    workspace = ensure_layout(paths.workspace)
     if fresh:
         print(f"created a new workspace at {workspace}")
 
-    if args.seed_assets:
-        result = seeding.seed(cfg)
+    # A new workspace seeds itself. Nothing is copied unless a pack was
+    # installed, which is somebody's explicit choice; a new workspace is empty
+    # by definition, so nothing can be overwritten; and this is the first moment
+    # the destination exists. It says what it wrote, because `is_new_workspace`
+    # also fires on a *misconfigured* one -- a wrong path holding ten files
+    # reads more like success than an empty one does.
+    #
+    # Here and never in `Kingfisher.__init__`: constructing a library object
+    # must not write to somebody's disk.
+    if fresh or args.seed_assets:
+        result = seeding.seed(paths)
         for name in result.written:
             print(f"seeded {name}")
         for name in result.overwritten:
@@ -567,6 +593,13 @@ def main(argv: list[str]) -> int:
             # your copy, so losing one is the line that has to survive being
             # skimmed.
             print(f"warning: overwrote your edited {name}")
+
+    try:
+        cfg = from_env()
+    except ConfigError as exc:
+        print(f"configuration error: {exc}", file=sys.stderr)
+        print("copy .env.example to .env and fill it in", file=sys.stderr)
+        return 2
 
     if args.list:
         return show_inventory(cfg, workspace)

@@ -238,14 +238,22 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
             f"        endpoint: minimax\n\n"
             # The minimal one above is enough to start; the annotated example
             # is the one that explains `aliases`, `extra`, and why an omitted
-            # `temperature` is not a defaulted one. `--seed-assets` puts it
-            # beside this path, which is the only place a new deployment would
-            # think to look for it.
+            # `temperature` is not a defaulted one. It ships with the framework
+            # rather than with an asset pack, so this can promise it even to a
+            # deployment that installed no pack.
             #
-            # It ships with the framework rather than with an asset pack, which
-            # is what lets this message promise it unconditionally: a deployment
-            # that installed no pack still gets the file this line names.
-            f"`--seed-assets` writes an annotated {EXAMPLE} next to it.\n"
+            # Which of the two sentences depends on whether it is there yet. It
+            # said "`--seed-assets` writes one" unconditionally, and that was a
+            # dead end: running `--seed-assets` hit this same error, because the
+            # driver built its config before it seeded. A first run seeds before
+            # loading now, so by the time anyone reads this the file is usually
+            # already beside them -- and telling someone to run a command that
+            # has just run is how a message stops being read.
+            + (
+                f"An annotated {EXAMPLE} is next to it; copy it across.\n"
+                if (path.parent / EXAMPLE).is_file()
+                else f"`--seed-assets` writes an annotated {EXAMPLE} next to it.\n"
+            )
         )
         raise ConfigError(msg) from exc
 

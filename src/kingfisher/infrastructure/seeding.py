@@ -30,8 +30,9 @@ from dataclasses import dataclass
 from importlib import resources
 from importlib.metadata import entry_points
 from pathlib import Path
+from typing import Protocol, runtime_checkable
 
-from kingfisher.config import Config, ConfigError
+from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
 #: Kingfisher's own package data, as an import path rather than a filesystem one
@@ -112,7 +113,29 @@ def opened(package: str) -> Iterator[Path]:
         yield Path(root)
 
 
-def destinations(cfg: Config) -> tuple[tuple[str, Path], ...]:
+@runtime_checkable
+class Destination(Protocol):
+    """Where seeding puts things: a workspace, and the three catalogues.
+
+    A Protocol rather than `Config` because seeding a *fresh* workspace has to
+    run before a model catalogue can be read -- the catalogue is a file inside
+    the workspace, so `from_env` raises before the directory exists. `Config`
+    satisfies this by shape, and so does `WorkspacePaths`, which is the part of
+    a configuration a first run can actually know.
+
+    Nothing here needs an endpoint, a credential or a timeout. Asking for a
+    whole `Config` to copy files was always more than the job required; it only
+    became a problem when the job had to happen earlier.
+    """
+
+    @property
+    def workspace(self) -> Path: ...
+
+    @property
+    def catalogue_roots(self) -> dict[str, Path]: ...
+
+
+def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
     """Each kind of definition, and the catalogue it belongs in.
 
     The catalogues, not the workspace. They are the same directory until a
@@ -215,7 +238,7 @@ def _refuse_collisions(claimed: Mapping[str, list[str]]) -> None:
     raise ConfigError(msg)
 
 
-def seed(cfg: Config, packs: Sequence[Pack] | None = None) -> Seeding:
+def seed(cfg: Destination, packs: Sequence[Pack] | None = None) -> Seeding:
     """Copy every pack's definitions into this deployment's catalogues, and say
     what it changed.
 
@@ -259,7 +282,7 @@ def seed(cfg: Config, packs: Sequence[Pack] | None = None) -> Seeding:
     return Seeding(tuple(written), tuple(overwritten))
 
 
-def _copy(cfg: Config, tree: Path) -> tuple[list[str], list[str]]:
+def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
     """Copy one opened pack into this deployment's catalogues."""
     written: list[str] = []
     overwritten: list[str] = []
@@ -292,7 +315,7 @@ def _copy(cfg: Config, tree: Path) -> tuple[list[str], list[str]]:
     return written, overwritten
 
 
-def _copy_example(cfg: Config) -> tuple[list[str], list[str]]:
+def _copy_example(cfg: Destination) -> tuple[list[str], list[str]]:
     """Put the catalogue example beside where `models.yaml` is read from.
 
     Which is where someone would look for the thing they are about to write.

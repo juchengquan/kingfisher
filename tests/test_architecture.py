@@ -158,6 +158,11 @@ LIGHT_EXPORTS = frozenset({
     "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
+    # The directory half of a configuration, and the record it returns. Light
+    # because seeding a fresh workspace runs on them before anything is loaded
+    # -- paying for three provider SDKs to find out where `skills/` goes would
+    # be the wrong shape entirely.
+    "paths_from_env", "WorkspacePaths",
 })
 
 #: The rest, which genuinely need deepagents to do their job.

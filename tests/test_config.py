@@ -8,6 +8,7 @@ import pytest
 from kingfisher.application import config as config_module
 from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError
+from tests.conftest import FAKE_CATALOGUE
 
 CATALOGUE = """
 endpoints:
@@ -253,3 +254,51 @@ def test_the_execution_timeout_is_named_for_what_it_bounds(env):
 
     assert cfg.execution_timeout_s == 45
     assert not [f for f in fields(cfg) if f.name == "timeout_s"]
+
+def test_the_paths_half_honours_the_catalogue_overrides(monkeypatch, tmp_path):
+    """The reason seeding reads `paths_from_env` rather than one env var.
+
+    A first run has to decide where to put things before a catalogue exists,
+    and the obvious shortcut -- read `KINGFISHER_WORKSPACE` and be done -- seeds
+    a deployment that relocated `KINGFISHER_SKILLS_DIR` into the directory it
+    stopped reading. Silent, and the kind this codebase refuses everywhere else.
+    """
+    from kingfisher import paths_from_env
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_SKILLS_DIR", str(tmp_path / "elsewhere" / "skills"))
+
+    roots = paths_from_env().catalogue_roots
+
+    assert roots["skills"] == tmp_path / "elsewhere" / "skills"
+    assert roots["subagents"] == tmp_path / "ws" / "subagents"  # the others still default
+
+
+def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
+    """`Config` and `WorkspacePaths` answer the same question, and one of them
+    is used to seed while the other is used to serve. A second copy of
+    `skills_root or workspace / "skills"` is how those two drift apart -- so
+    there is one, and this is what says so."""
+    from kingfisher.config import Config, WorkspacePaths
+
+    overrides = {"skills_root": tmp_path / "s", "tools_root": tmp_path / "t"}
+    paths = WorkspacePaths(workspace=tmp_path / "ws", **overrides)
+    cfg = Config(
+        workspace=tmp_path / "ws",
+        models=FAKE_CATALOGUE,
+        turn_timeout_s=1,
+        execution_timeout_s=1,
+        **overrides,
+    )
+
+    assert paths.catalogue_roots == cfg.catalogue_roots
+
+
+def test_a_config_is_a_seeding_destination(tmp_path):
+    """Both records satisfy the protocol the seeder asks for, by shape and
+    without either being told about it. `Config` is what an ordinary run seeds
+    with; `WorkspacePaths` is what a first run has."""
+    from kingfisher.config import WorkspacePaths
+    from kingfisher.infrastructure.seeding import Destination
+
+    assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
