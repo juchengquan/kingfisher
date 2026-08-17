@@ -178,6 +178,96 @@ def _seed_something(cfg) -> None:
         )
 
 
+# -- `serve`, a second door onto one server --------------------------------
+
+
+def test_serve_is_offered_whether_or_not_the_extra_is_installed():
+    """A command that exists and says what to install beats one that is silently
+    absent -- the same choice `kingfisher-server` already made.
+
+    The design argued the other way once: that a subcommand "would be missing on
+    a plain install". It would not, and the existing script had already shown
+    why.
+
+    Asserted against the parser's own choices, not against a substring of the
+    help text. The first version looked for "serve" in what `main([])` printed,
+    and renaming the verb to `srv` left it green -- the word survives elsewhere
+    on the page.
+    """
+    from kingfisher.cli.__main__ import build_parser
+
+    # Through the public `_actions`, because `_subparsers._group_actions` is
+    # typed as optionally absent and reaching into it needs a cast to satisfy a
+    # checker -- which is a lot of ceremony for reading a list of verbs.
+    verbs = {
+        choice
+        for action in build_parser()._actions
+        for choice in getattr(action, "choices", None) or ()
+    }
+
+    # Membership, not the exact set. Naming every verb here makes this fail on
+    # each one added -- it did, the moment `doctor` landed -- and the claim is
+    # about `serve` being offered, not about how many siblings it has. Still
+    # exact enough: renaming the verb to `srv` fails this.
+    assert "serve" in verbs
+
+
+def test_serve_without_the_extra_says_what_to_install(monkeypatch, capsys):
+    """Not a traceback. The reader has one thing to do and the line says it."""
+    import builtins
+
+    real = builtins.__import__
+
+    def _no_server(name, *args, **kwargs):
+        if name.startswith("kingfisher.presentation"):
+            raise ImportError(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_server)
+
+    assert main(["serve"]) == 1
+
+    printed = capsys.readouterr().err
+    assert "kingfisher[server]" in printed
+
+
+def test_a_missing_server_extra_does_not_take_the_other_verbs_down(monkeypatch, capsys, cfg):
+    """The reason the import is inside the function.
+
+    `kingfisher.presentation` reaches fastapi as it loads. Imported at module
+    scope, a verb nobody asked for would break the two they did -- on exactly
+    the installs that chose not to have the extra.
+    """
+    import builtins
+
+    real = builtins.__import__
+
+    def _no_server(name, *args, **kwargs):
+        if name.startswith("kingfisher.presentation"):
+            raise ImportError(name)
+        return real(name, *args, **kwargs)
+
+    monkeypatch.setattr(builtins, "__import__", _no_server)
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+
+    assert main(["seed"]) == 0
+
+    assert "seeded" in capsys.readouterr().out
+
+
+def test_serve_hands_off_rather_than_deciding_anything(monkeypatch):
+    """One implementation behind two names. If this assembled its own settings
+    or set up its own logging, `kingfisher serve` and `kingfisher-server` would
+    be two servers that merely look alike."""
+    from kingfisher.presentation import __main__ as server
+
+    calls = []
+    monkeypatch.setattr(server, "main", lambda: calls.append("served") or 0)
+
+    from kingfisher.cli.__main__ import _serve
+
+    assert _serve() == 0
+    assert calls == ["served"]
 # -- `list --json`, for a script rather than a person ----------------------
 
 

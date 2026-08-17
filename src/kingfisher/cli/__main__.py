@@ -59,6 +59,17 @@ def build_parser() -> argparse.ArgumentParser:
             "seeds itself on its first run without this."
         ),
     )
+    sub.add_parser(
+        "serve",
+        help="run the HTTP surface (needs the server extra)",
+        description=(
+            "The same thing `kingfisher-server` starts, reading the same "
+            "environment. Both names exist because scripts and unit files "
+            "already call the older one, and there is one implementation behind "
+            "them. Needs `pip install 'kingfisher[server]'`, and says so if it "
+            "is missing rather than being absent from this list."
+        ),
+    )
     checkup = sub.add_parser(
         "doctor",
         help="check everything that stands between this install and a run",
@@ -137,6 +148,30 @@ def _list(*, as_document: bool = False) -> int:
     return 1 if failed(found) else 0
 
 
+def _serve() -> int:
+    """Hand off to the server's own entry point, which decides everything.
+
+    Imported here rather than at module scope, and that is not a style choice.
+    `kingfisher.presentation` reaches fastapi as it loads, so importing it at the
+    top would make `kingfisher list` fail on an install without the server extra
+    -- a verb nobody asked for taking down the two they did.
+
+    The same reason `presentation.__main__` imports uvicorn inside `serve`, and
+    the same reason this subcommand is in `--help` whether or not the extra is
+    installed: a command that exists and says what to install beats one that is
+    silently absent.
+    """
+    try:
+        from kingfisher.presentation.__main__ import main as serve_forever  # noqa: PLC0415
+    except ImportError:
+        print(
+            "kingfisher serve needs the server extra: pip install 'kingfisher[server]'",
+            file=sys.stderr,
+        )
+        return 1
+    return serve_forever()
+
+
 def _doctor(*, as_document: bool = False) -> int:
     """Say what would stop a run, and what would merely surprise.
 
@@ -168,6 +203,10 @@ def main(argv: list[str] | None = None) -> int:
     try:
         if args.command == "seed":
             return _seed()
+        # `serve` before `_list`, and not only for tidiness: it has no
+        # `--json`, so reaching `args.json` on that path is an AttributeError.
+        if args.command == "serve":
+            return _serve()
         if args.command == "doctor":
             return _doctor(as_document=args.json)
         return _list(as_document=args.json)
