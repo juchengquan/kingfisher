@@ -82,7 +82,7 @@ def session_dir(cfg):
 
 @pytest.fixture
 def workspace_with_presets(cfg, shipped):
-    """A workspace seeded with this pack, the way `--seed-presets` leaves one."""
+    """A workspace seeded with this pack, the way `--seed-assets` leaves one."""
     for kind in ("skills", "subagents"):
         shutil.copytree(shipped / kind, cfg.workspace / kind, dirs_exist_ok=True)
     return cfg

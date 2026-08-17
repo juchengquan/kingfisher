@@ -13,14 +13,14 @@ from contextlib import contextmanager
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure import presets
+from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.agent import (
     CapabilityError,
     available_skills,
     build_agent,
     registered_tools,
 )
-from kingfisher.infrastructure.presets import Pack
+from kingfisher.infrastructure.seeding import Pack
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped
@@ -37,7 +37,7 @@ FIXTURE = Pack("fixture", "tests.assets")
 @pytest.fixture
 def fixture_pack():
     """The fixture pack's files, opened the way a shipped pack's are."""
-    with presets.opened(FIXTURE.package) as root:
+    with seeding.opened(FIXTURE.package) as root:
         yield root
 
 
@@ -49,7 +49,7 @@ def shipped():
     does not promise the files sit on disk -- a zip-imported package
     materialises them for the duration of the context and cleans up after.
     """
-    with presets.opened() as root:
+    with seeding.opened(seeding.PACKAGE) as root:
         yield root
 
 
@@ -57,7 +57,7 @@ def test_a_seeded_skill_is_discovered(cfg):
     """Seeding puts a skill where discovery looks. Asserted against the fixture
     pack: the claim is about the two halves meeting, not about which skills
     kingfisher ships."""
-    presets.seed(cfg, packs=[FIXTURE])
+    seeding.seed(cfg, packs=[FIXTURE])
 
     assert "probe-skill" in available_skills(cfg, None)
 
@@ -219,10 +219,10 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 
 
 def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
-    seeding = presets.seed(cfg, packs=[FIXTURE])
+    result = seeding.seed(cfg, packs=[FIXTURE])
 
-    assert seeding.written
-    assert seeding.overwritten == ()
+    assert result.written
+    assert result.overwritten == ()
 
 
 def test_seeding_leaves_the_catalogue_example_where_models_yaml_goes(cfg):
@@ -231,10 +231,10 @@ def test_seeding_leaves_the_catalogue_example_where_models_yaml_goes(cfg):
     Not into one of the three catalogues: it is not a definition, and the
     directory kingfisher reads `models.yaml` from is the workspace root.
     """
-    seeding = presets.seed(cfg, packs=[FIXTURE])
+    result = seeding.seed(cfg, packs=[FIXTURE])
 
-    assert presets.EXAMPLE in seeding.written
-    assert (cfg.workspace / presets.EXAMPLE).is_file()
+    assert seeding.EXAMPLE in result.written
+    assert (cfg.workspace / seeding.EXAMPLE).is_file()
 
 
 def test_seeding_never_writes_the_catalogue_itself(cfg):
@@ -249,7 +249,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     catalogue = cfg.workspace / "models.yaml"
     catalogue.write_text("mine: do not touch\n", encoding="utf-8")
 
-    presets.seed(cfg, packs=[FIXTURE])
+    seeding.seed(cfg, packs=[FIXTURE])
 
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
@@ -284,8 +284,8 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
         # constant. This stand-in ignores it and yields the planted one.
         yield source
 
-    monkeypatch.setattr(presets, "opened", _fixture)
-    presets.seed(cfg)
+    monkeypatch.setattr(seeding, "opened", _fixture)
+    seeding.seed(cfg)
 
     carried = [str(p.relative_to(cfg.tools_dir)) for p in cfg.tools_dir.rglob("__pycache__")]
     assert not carried, f"seeding carried bytecode into the workspace: {carried}"
@@ -295,39 +295,39 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
 def test_seeding_twice_unchanged_is_silent(cfg):
     """By content, not by presence. A warning that fires on the ordinary path
     is one people learn to scroll past."""
-    presets.seed(cfg, packs=[FIXTURE])
+    seeding.seed(cfg, packs=[FIXTURE])
 
-    assert presets.seed(cfg, packs=[FIXTURE]).overwritten == ()
+    assert seeding.seed(cfg, packs=[FIXTURE]).overwritten == ()
 
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
-    presets.seed(cfg, packs=[FIXTURE])
+    seeding.seed(cfg, packs=[FIXTURE])
     edited = cfg.subagents_dir / "probe-agent.yaml"
     edited.write_text("name: probe-agent\ndescription: mine\n"
         "system_prompt: |\n  My prompt.\n", encoding="utf-8")
 
-    seeding = presets.seed(cfg, packs=[FIXTURE])
+    result = seeding.seed(cfg, packs=[FIXTURE])
 
-    assert "subagents/probe-agent.yaml" in seeding.overwritten
+    assert "subagents/probe-agent.yaml" in result.overwritten
     assert "description: mine" not in edited.read_text(encoding="utf-8")
 
 
 def test_a_file_added_beside_a_preset_is_not_reported(cfg):
     """`copytree` merges, so this one survives. Reporting it would be a warning
     about a loss that did not happen."""
-    presets.seed(cfg, packs=[FIXTURE])
+    seeding.seed(cfg, packs=[FIXTURE])
     (cfg.skills_dir / "probe-skill" / "notes.md").write_text("mine", encoding="utf-8")
 
-    assert presets.seed(cfg, packs=[FIXTURE]).overwritten == ()
+    assert seeding.seed(cfg, packs=[FIXTURE]).overwritten == ()
     assert (cfg.skills_dir / "probe-skill" / "notes.md").read_text(encoding="utf-8") == "mine"
 
 
 def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
     """Entries are what you asked for; files are what you might have lost."""
-    presets.seed(cfg, packs=[FIXTURE])
+    seeding.seed(cfg, packs=[FIXTURE])
     (cfg.skills_dir / "probe-skill" / "SKILL.md").write_text("clobber me", encoding="utf-8")
 
-    assert presets.seed(cfg, packs=[FIXTURE]).overwritten == ("skills/probe-skill/SKILL.md",)
+    assert seeding.seed(cfg, packs=[FIXTURE]).overwritten == ("skills/probe-skill/SKILL.md",)
 
 
 def test_the_readme_subagent_table_matches_the_real_field_set(shipped):
