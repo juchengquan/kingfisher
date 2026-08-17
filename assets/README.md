@@ -26,10 +26,9 @@ workspace*, never from this distribution.
 > path, so any caller can seed from whatever is installed —
 >
 > ```python
-> from kingfisher import paths_from_env
-> from kingfisher.infrastructure import seeding
+> from kingfisher import paths_from_env, seed
 >
-> for name in seeding.seed(paths_from_env()).written:
+> for name in seed(paths_from_env()).written:
 >     print(f"seeded {name}")
 > ```
 

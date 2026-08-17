@@ -217,3 +217,52 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
         "skills_enabled",
     ):
         assert hasattr(found, name), name
+
+
+def test_the_whole_job_is_reachable_through_the_front_door(cfg):
+    """What phase 2 is for, and what the CLI will be held to.
+
+    A consumer -- the server today, the shipped command next -- may write
+    `from kingfisher import X` and nothing deeper. If seeding or the inventory
+    needed a reach into `infrastructure`, the claim that any caller can do this
+    was never true; it simply had nothing testing it.
+
+    Imported here the way a consumer would, not through the modules that define
+    them, so a name quietly dropped from `_EXPORTS` fails this rather than
+    passing on the module import.
+    """
+    from kingfisher import Inventory, Pack, Seeding, installed_packs, inventory, seed
+
+    written = seed(cfg)
+    found = inventory(cfg)
+
+    assert isinstance(written, Seeding)
+    assert isinstance(found, Inventory)
+    assert all(isinstance(pack, Pack) for pack in installed_packs())
+    # And it did something, so this cannot pass by every call being a no-op.
+    assert written.written
+    assert found.builtin_tools
+
+
+def test_the_public_names_cost_no_provider_sdk_to_reach(cfg):
+    """Reaching them must stay cheap; *calling* `inventory` is another matter.
+
+    Answering builds an agent, so `harness.agent` is imported inside the
+    function rather than at module scope. Measured at 21-50ms and 148-192
+    modules against 3,100 for a provider -- the split that keeps `--help` from
+    paying for a model it will never build.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys\n"
+        "from kingfisher import seed, installed_packs, inventory, Inventory\n"
+        "print(','.join(m for m in ('deepagents', 'langchain_openai',"
+        " 'langchain_anthropic') if m in sys.modules))"
+    )
+    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+
+    assert out.stdout.strip() == ""

@@ -47,6 +47,12 @@ _EXPORTS = {
     "build_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     "build_model": "kingfisher.infrastructure.harness.models",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
+    "seed": "kingfisher.infrastructure.seeding",
+    "installed_packs": "kingfisher.infrastructure.seeding",
+    "Pack": "kingfisher.infrastructure.seeding",
+    "Seeding": "kingfisher.infrastructure.seeding",
+    "inventory": "kingfisher.infrastructure.inventory",
+    "Inventory": "kingfisher.infrastructure.inventory",
     "from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
     "normalize_answer": "kingfisher.domain.result",
@@ -63,13 +69,16 @@ __all__ = [
     "CapabilityError",
     "Config",
     "ConfigError",
+    "Inventory",
     "Kingfisher",
     "LocalFileStore",
+    "Pack",
     "QuotaExceededError",
     "Request",
     "RunEvent",
     "RunOn",
     "RunResult",
+    "Seeding",
     "SessionBusyError",
     "SessionInfo",
     "SkillError",
@@ -86,10 +95,13 @@ __all__ = [
     "build_model",
     "ensure_layout",
     "from_env",
+    "installed_packs",
+    "inventory",
     "normalize_answer",
     "paths_from_env",
     "protect_data",
     "run",
+    "seed",
     "shell_env",
     "stream",
     "system_prompt",
@@ -135,7 +147,13 @@ if TYPE_CHECKING:
         build_checkpointer as build_checkpointer,
     )
     from kingfisher.infrastructure.harness.models import build_model as build_model
+    from kingfisher.infrastructure.inventory import Inventory as Inventory
+    from kingfisher.infrastructure.inventory import inventory as inventory
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
+    from kingfisher.infrastructure.seeding import Pack as Pack
+    from kingfisher.infrastructure.seeding import Seeding as Seeding
+    from kingfisher.infrastructure.seeding import installed_packs as installed_packs
+    from kingfisher.infrastructure.seeding import seed as seed
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data

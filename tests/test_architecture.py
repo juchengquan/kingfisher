@@ -493,6 +493,15 @@ LIGHT_EXPORTS = frozenset({
     # -- paying for three provider SDKs to find out where `skills/` goes would
     # be the wrong shape entirely.
     "paths_from_env", "WorkspacePaths",
+    # Seeding, and asking what a workspace offers. Measured at 21-50ms and
+    # 148-192 modules with no SDK loaded -- heavier than `system_prompt` at 90,
+    # because `yaml` and `importlib.metadata` come with them, and nowhere near
+    # the 3,100 a provider costs.
+    #
+    # `inventory` is light to *reach*, not to call: answering builds an agent,
+    # so `harness.agent` is imported inside the function. That is the shape
+    # this classification is about -- what a name costs to touch.
+    "seed", "installed_packs", "Pack", "Seeding", "inventory", "Inventory",
 })
 
 #: The rest, which genuinely need deepagents to do their job.

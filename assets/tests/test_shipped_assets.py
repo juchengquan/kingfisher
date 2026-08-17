@@ -170,3 +170,42 @@ def test_the_reviewer_preset_builds_with_and_without_its_helper(
         model=fake_model,
         capabilities=Capabilities(subagents=granted),
     )
+
+
+def test_the_readme_snippet_runs_and_uses_only_the_public_api(tmp_path, monkeypatch, capsys):
+    """The README's Python block, executed rather than eyeballed.
+
+    It is a promise about the front door now -- `from kingfisher import
+    paths_from_env, seed` -- where it used to read
+    `from kingfisher.infrastructure import seeding`, reaching past the public
+    API into a module carrying no stability promise. Nothing checked it either
+    way: the framework's own README has six tests holding it to the code and
+    this one had none.
+
+    Both halves are asserted. That it *runs* catches a rename; that it imports
+    nothing deeper catches the reach coming back.
+    """
+    import re
+    from pathlib import Path
+
+    import kingfisher
+
+    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    blocks = re.findall(r"```python\n(.*?)```", readme, re.DOTALL)
+    assert blocks, "the README stopped carrying a Python example"
+
+    for block in blocks:
+        # The example sits in a blockquote, so every line carries the marker.
+        source = "\n".join(line.removeprefix(">").removeprefix(" ") for line in block.splitlines())
+
+        assert "kingfisher.infrastructure" not in source
+        assert "kingfisher.domain" not in source
+        for name in re.findall(r"^from kingfisher import (.+)$", source, re.M):
+            for imported in (part.strip() for part in name.split(",")):
+                assert imported in kingfisher.__all__, imported
+
+        monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+        exec(compile(source, "README.md", "exec"), {})  # noqa: S102 -- our own file
+
+    # It seeds, which is the thing it claims to do.
+    assert "seeded" in capsys.readouterr().out
