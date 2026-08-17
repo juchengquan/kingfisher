@@ -1,26 +1,109 @@
-# The workspace, and the settings every package in it shares. No `[project]`
-# here on purpose: this directory is not a distribution, it is where three of
-# them live. `packages/kingfisher` is the library, and the other two extend it.
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kingfisher"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.12"
+authors = [
+    {name="juchengquan"}
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+]
+dependencies = [
+    "deepagents>=0.7.6",
+    # Imported directly by infrastructure/harness/agent.py, lazily, so that installing it
+    # costs nothing until `KINGFISHER_INTERPRETER` is on. It also arrives through
+    # deepagents' own `quickjs` extra, but an extra is not a promise either -- if
+    # upstream renames it, uv warns and moves on while our import breaks. The
+    # floor is deepagents' (`>=0.3.3` at 0.7.6) rather than the one the docs page
+    # advertises, which is two minors behind what the library actually needs.
+    # Verified rather than copied: the interpreter tests pass against 0.3.3 in a
+    # venv pinned to it.
+    #
+    # Ceilinged because it is beta and says so at every construction. Under 0.x
+    # the minor is where breaks land, and this one has moved through 0.1, 0.2 and
+    # 0.3 in under two months -- deepagents raising its own floor to 0.3.3 is that
+    # churn showing. `<0.4` takes the patches and stops at the next minor.
+    #
+    # If deepagents later needs `>=0.4`, uv fails to resolve rather than
+    # installing something untested. That is the intended outcome: a build that
+    # stops is a decision to make, where a silent upgrade is one already made.
+    "langchain-quickjs>=0.3.3,<0.4",
+    # Imported directly by infrastructure/harness/models.py. It also arrives
+    # transitively through deepagents, but a transitive dep is not a promise.
+    "langchain-anthropic>=1.5.4",
+    "langchain-openai>=1.5.1",
+    # Imported directly by infrastructure/harness/checkpointing.py for the async
+    # saver. It arrives transitively through langgraph-checkpoint-sqlite, and a
+    # transitive dep is not a promise.
+    "aiosqlite>=0.22.1",
+    # Imported directly by infrastructure/definitions.py and
+    # infrastructure/model_catalogue.py. It also arrives transitively through
+    # deepagents, but a transitive dep is not a promise.
+    #
+    # It named `domain/frontmatter.py` until this commit, which has not existed
+    # for two refactors -- and could not, since the domain is barred from
+    # importing a third-party parser at all. A dependency justified by a file
+    # that is gone is a dependency nobody can re-examine.
+    "pyyaml>=6.0",
+    "langgraph-checkpoint-sqlite>=3.1.1",
+    "python-dotenv>=1.2.2",
+]
+
+[project.optional-dependencies]
+# The HTTP surface, which is its own distribution rather than a directory in
+# this one. An extra separates *dependencies*; only a second wheel separates
+# code, and the requirement here was that a base install carry no web service at
+# all -- not merely an inert copy of one with fastapi left uninstalled.
 #
-# uv calls this a virtual root. It means `uv sync` installs all three, one
-# command lints and tests all three, and none of them can quietly grow its own
-# idea of what the line length is.
+# So this names the package instead of its dependencies. `kingfisher-service`
+# depends back on `kingfisher`, which is a cycle between distributions and
+# resolves fine: verified with a throwaway pair before this was written, since
+# "pip probably handles it" is not a thing to find out in a release.
+service = ["kingfisher-service"]
+
+[project.scripts]
+# No `kingfisher-service` here, deliberately. The service ships its own command
+# of that name, and two distributions declaring one script is not an override --
+# it is a file both own. Measured: installing the service replaces the base's
+# copy, *reinstalling the base replaces it back*, and uninstalling the service
+# deletes the command outright. So an upgrade would silently swap a working
+# server for a note telling you to install what you already have.
+#
+# The pointer lives on `kingfisher serve` instead, which collides with nothing
+# and is in `--help` whether or not the service is installed.
+
+# Seeding a workspace and looking at one, which are the two things the
+# library cannot do for itself: running a task is `kingfisher.run`, and
+# serving one is the script above. Deliberately not a general CLI --
+# `main.py` stays the development driver, keeps its flags, and keeps a bare
+# invocation that runs the eval smoke, which is a fine default for a driver
+# and a wrong one for a stranger's first command.
+kingfisher = "kingfisher.cli.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kingfisher"]
+
+# `src/kingfisher/assets` rides along, and that is the point of it: `kingfisher
+# seed` writes a workspace that already works, from files that came with the
+# install rather than from somewhere a reader has to find. It is 14 files and
+# about 20KB against a wheel of 228KB.
 
 [tool.uv.workspace]
-members = ["packages/kingfisher", "packages/service", "packages/assets"]
+members = ["service"]
 
-# Development only. Nothing in `[project.dependencies]` names the pack: the
-# arrow points assets -> framework and never back.
 [tool.uv.sources]
-kingfisher-assets = { workspace = true }
 kingfisher-service = { workspace = true }
 
 [dependency-groups]
 dev = [
-    # Installed for development so the pack's own tests run and the seeding
-    # tests have a real pack to discover. Not a dependency of the framework --
-    # this group is not part of any wheel.
-    "kingfisher-assets",
     # The server extra, so its tests always run rather than skipping quietly on
     # a machine that happens not to have it. uvicorn is here for the same
     # reason: the entry point is only testable if it can be imported.
@@ -77,7 +160,7 @@ ignore = ["ANN401"]
 # library returned and decides nothing, so it is short and flat. `T201` is the
 # whole exemption -- if this ever needs the other three it has stopped being a
 # thin driver and that is worth noticing.
-"packages/kingfisher/src/kingfisher/cli/**" = ["T201"]
+"src/kingfisher/cli/**" = ["T201"]
 # The long lines are inside string literals: the task's JSON schema commentary
 # has to stay on one line to read as one field.
 "evals/task.py" = ["E501"]
@@ -85,22 +168,19 @@ ignore = ["ANN401"]
 # and compare against literals -- that is what a test is. `RUF012` fires on a
 # pydantic field, where a mutable default is handled by the model.
 #
-# Both test trees, because both are tests: `assets/tests` belongs to the other
+# Both test trees, because both are tests: `service/tests` belongs to the other
 # distribution in this workspace, and holding it to a different bar than the one
 # beside it would only mean two conventions for the same kind of file.
-"packages/kingfisher/tests/**" = [
+"tests/**" = [
     "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
 ]
-"packages/service/tests/**" = [
-    "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
-]
-"packages/assets/tests/**" = [
+"service/tests/**" = [
     "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
 ]
 # Not a test: a report you run by hand, so printing is its entire output. It
 # lives beside the tests because the AST tooling does -- `test_architecture`
 # reads the same trees -- and pytest does not collect it.
-"packages/kingfisher/tests/audit_duplication.py" = ["T201"]
+"tests/audit_duplication.py" = ["T201"]
 # Throwaway probes, kept as a record of what was verified against the live
 # gateway rather than as maintained code.
 "spikes/**" = ["T201", "ANN", "PLC0415"]
@@ -112,11 +192,11 @@ known-first-party = ["kingfisher"]
 # Both distributions in this workspace. The pack's tests are about its content
 # and kingfisher's are about the framework, but one command has to run both or a
 # preset breaks with nothing red.
-testpaths = ["packages/kingfisher/tests", "packages/assets/tests", "packages/service/tests"]
+testpaths = ["tests", "service/tests"]
 # The repository root, so `main.py` is importable, and the library's own
 # test directory, so the other two packages can reach the fixtures that
 # describe a workspace -- `packages/service/tests/conftest.py` says why.
-pythonpath = [".", "packages/kingfisher"]
+pythonpath = ["."]
 
 [tool.ty.environment]
 python-version = "3.12"
@@ -126,7 +206,7 @@ python-version = "3.12"
 python = ".venv"
 
 [tool.ty.src]
-include = ["packages/kingfisher/src", "packages/kingfisher/tests", "main.py", "spikes"]
+include = ["src", "tests", "main.py", "spikes"]
 
 [tool.ty.terminal]
 output-format = "concise"
@@ -150,7 +230,7 @@ invalid-argument-type = "ignore"
 # and nothing else here, so they are scoped off for tests rather than silenced
 # globally -- the same rules still guard `src/`.
 [[tool.ty.overrides]]
-include = ["packages/*/tests/**"]
+include = ["tests/**", "service/tests/**"]
 
 [tool.ty.overrides.rules]
 unresolved-attribute = "ignore"
