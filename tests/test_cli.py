@@ -231,3 +231,92 @@ def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
     printed = capsys.readouterr().err
     assert "teleport" in printed
     assert "seed" in printed and "list" in printed
+# -- `list --json`, for a script rather than a person ----------------------
+
+
+def test_the_json_document_carries_every_field_the_record_has(cfg):
+    """"Field for field" is a claim, and this is the mechanism.
+
+    A key here that `Inventory` does not have would be inventing an answer; a
+    field it has that is missing here would be hiding one. Either happens by a
+    field being added to the record and nobody thinking about the serialiser,
+    which is exactly the kind of drift nobody notices in a format only scripts
+    read.
+    """
+    from dataclasses import fields
+
+    from kingfisher import inventory
+    from kingfisher.cli.listing import as_json
+
+    document = as_json(inventory(cfg))
+
+    assert set(document) == {field.name for field in fields(inventory(cfg))}
+
+
+def test_the_json_document_survives_a_round_trip(cfg):
+    """It is only worth having if `json.dumps` accepts it.
+
+    `Path`, `MappingProxyType` and tuples are all things the record holds and
+    `json` refuses, so this is not a formality -- it is the whole reason the
+    mapping exists rather than `asdict`.
+    """
+    import json
+
+    from kingfisher import inventory
+    from kingfisher.cli.listing import as_json
+
+    _seed_something(cfg)
+
+    document = json.loads(json.dumps(as_json(inventory(cfg))))
+
+    assert isinstance(document["workspace"], str)
+    assert "probe-agent" in document["subagents"]
+    assert document["tools_error"] is None
+
+
+def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, capsys):
+    """Two formats, one answer. A document that disagreed with the listing would
+    be worse than no document at all -- a script would act on it."""
+    import json
+
+    _seed_something(cfg)
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+    printed = capsys.readouterr().out
+    assert main(["list", "--json"]) == 0
+    document = json.loads(capsys.readouterr().out)
+
+    for name in document["subagents"]:
+        assert name in printed
+    for name in document["skills"]:
+        assert name in printed
+
+
+def test_a_broken_workspace_is_non_zero_in_either_format(cfg, monkeypatch, capsys):
+    """The exit code does not depend on the format, and the reason is in the
+    document too -- so a script can find out either way round."""
+    import json
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
+    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+
+    assert main(["list", "--json"]) == 1
+
+    assert json.loads(capsys.readouterr().out)["subagents_error"]
+
+
+def test_json_is_asked_for_rather_than_assumed(cfg, monkeypatch, capsys):
+    """A listing whose default output is JSON is a listing nobody reads."""
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+
+    assert not capsys.readouterr().out.lstrip().startswith("{")
