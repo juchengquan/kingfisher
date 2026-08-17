@@ -42,7 +42,7 @@ class InStore:
 def _held(*names):
     return InStore(
         {
-            name: {"SKILL.md": SKILL.format(name=name).encode()}
+            name: {"SKILL.md": SKILL.format(name=name)}
             for name in names
         }
     )
@@ -77,7 +77,7 @@ def test_the_local_one_returns_every_file_a_skill_ships(tmp_path):
     files = repo.files("demo")
 
     assert set(files) == {"SKILL.md", "run.sh", "lib/nested/data.csv"}
-    assert files["run.sh"] == b"echo hi\n"
+    assert files["run.sh"] == "echo hi\n"
 
 
 def test_an_unknown_name_raises_rather_than_returning_nothing(tmp_path):
@@ -201,3 +201,27 @@ def test_a_skill_reaches_the_store_with_every_file_it_ships(tmp_path):
 
     assert "body of demo" in str(backend.read("/demo/SKILL.md"))
     assert "echo hi" in str(backend.read("/demo/run.sh"))
+
+
+def test_a_skill_shipping_something_binary_does_not_break_the_catalogue(tmp_path, cfg, session_dir):
+    """The port says a binary file is decoded lossily rather than refused, and
+    that is a choice worth pinning: a skill directory may hold a logo or a
+    template beside its definition, and failing the whole catalogue over one of
+    them would take every other skill down with it.
+
+    Found by mutation testing -- flipping `errors="replace"` to `"strict"`
+    changed nothing any test noticed, which meant the claim was prose only.
+    """
+    repo = _on_disk(tmp_path, "demo")
+    (tmp_path / "demo" / "logo.png").write_bytes(b"\x89PNG\r\n\x1a\n\xff\xfe not utf-8")
+
+    files = repo.files("demo")
+
+    assert set(files) == {"SKILL.md", "logo.png"}
+    assert "body of demo" in files["SKILL.md"], "the readable file is unharmed"
+
+    # and the catalogue still mounts, which is the point of not refusing
+    catalogue = replace(Catalogue.from_config(cfg), skills=InStore({"demo": files}))
+    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+
+    assert "body of demo" in str(backend.read(f"{SKILLS_ROUTE}demo/SKILL.md"))

@@ -73,21 +73,29 @@ class SkillRepository(AssetRepository, Protocol):
     stopping a deployment from holding its skills anywhere else, because a route
     needs file contents and a name cannot supply them.
 
-    `files` is what closes that. A repository that can hand over bytes can be
-    mounted for the agent to read, whatever it is backed by.
+    `files` is what closes that. A repository that can hand over a skill's
+    contents can be mounted for the agent to read, whatever it is backed by.
 
-    The mapping shape is `DefinitionStore.fetch`'s, deliberately: a skill is
-    several files and both answer "the files making up one definition, keyed by
-    path relative to it". A deployment already writing one of those has written
-    most of this.
+    Text, not bytes, and that is worth saying because the neighbouring
+    `DefinitionStore.fetch` answers in bytes. It has a reason to: `uploads`
+    writes what it returns straight to disk with `write_bytes`, so anything a
+    caller uploads has to survive the trip. Nothing does that here -- a skill is
+    read, never re-written -- and the one mount decoded immediately, so bytes
+    were a round trip dressed as symmetry.
     """
 
-    def files(self, name: str) -> Mapping[str, bytes]:
+    def files(self, name: str) -> Mapping[str, str]:
         """The files making up one skill, keyed by path relative to the skill.
 
         `skill.FILENAME` is always among them -- it is what makes a directory a
         skill -- and anything else the skill ships travels with it: scripts,
-        data, templates. Raises `KeyError` for a name this does not hold.
+        templates, data. Raises `KeyError` for a name this does not hold.
+
+        A skill is text: a definition the agent reads and scripts it runs. One
+        shipping something genuinely binary is decoded lossily rather than
+        refused, because failing a whole catalogue over one stray image is the
+        worse trade -- and a binary asset is unusable through a store mount
+        either way.
         """
         ...
 

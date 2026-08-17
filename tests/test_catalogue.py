@@ -499,7 +499,7 @@ def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, ses
         def files(self, name):
             if name != "imaginary":
                 raise KeyError(name)
-            return {"SKILL.md": b"---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
+            return {"SKILL.md": "---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
 
     catalogue = replace(Catalogue.from_config(cfg), skills=Nowhere())
 

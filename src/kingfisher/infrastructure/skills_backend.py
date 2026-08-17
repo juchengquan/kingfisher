@@ -22,7 +22,7 @@ the model is told to follow, so a writable skills route is a route by which one
 request edits the instructions of every later one.
 
 The cost, stated because it is real and because it decides where this is used:
-the store holds every skill's bytes for the life of the deployment. A directory
+the store holds every skill's contents for the life of the deployment. A directory
 already on disk should stay a `FilesystemBackend` -- it is cheaper, it needs no
 copy, and it is the only shape whose skills can also be *executed*, since a
 skill's scripts are run by the shell against `$KINGFISHER_SKILLS` and a store
@@ -114,11 +114,10 @@ def skills_backend(repository: SkillRepository) -> ReadOnlyStoreBackend:
     definition that cannot be fetched is a wiring mistake, and this is the last
     point at which saying so is cheap.
 
-    Text, not bytes, because that is what `StoreBackend` stores and what a skill
-    is. A skill shipping something genuinely binary is decoded with `replace`
-    rather than refused: the agent reads a skill's definition and runs the rest,
-    and failing the whole catalogue over one stray image would be a worse trade
-    than one unreadable file.
+    What a repository hands over is already text -- see `SkillRepository.files`
+    -- so nothing is decoded here. It used to be, which was the whole argument
+    for the port answering in bytes: read as bytes, decoded one line later, and
+    never held as bytes by anything.
     """
     store = InMemoryStore()
     for name in repository.names:
@@ -126,6 +125,6 @@ def skills_backend(repository: SkillRepository) -> ReadOnlyStoreBackend:
             store.put(
                 NAMESPACE,
                 f"/{name}/{relative}",
-                {"content": content.decode("utf-8", errors="replace"), "encoding": "utf-8"},
+                {"content": content, "encoding": "utf-8"},
             )
     return ReadOnlyStoreBackend(namespace=lambda _runtime: NAMESPACE, store=store)

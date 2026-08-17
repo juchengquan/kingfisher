@@ -76,7 +76,7 @@ class LayeredSkills:
     def names(self) -> tuple[str, ...]:
         return tuple(sorted(set(self.base.names) | set(self.overlay.names)))
 
-    def files(self, name: str) -> Mapping[str, bytes]:
+    def files(self, name: str) -> Mapping[str, str]:
         """The session's copy if it has one, otherwise the catalogue's.
 
         The overlay wins, which is the *subagent* rule rather than the union
