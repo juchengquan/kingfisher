@@ -27,7 +27,7 @@ def _pack_of(tmp_path, name: str, *entries: str) -> tuple[Pack, object]:
     for entry in entries:
         target = root / entry
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("name: x\ndescription: d\nsystem_prompt: |\n  body\n", encoding="utf-8")
+        target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
     return Pack(name, f"fixture.{name}"), root
 
 

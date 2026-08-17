@@ -225,7 +225,7 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
         target = tmp_path / path
         target.parent.mkdir(parents=True, exist_ok=True)
-        target.write_text("name: x\ndescription: d\nsystem_prompt: |\n  body\n", encoding="utf-8")
+        target.write_text("---\nname: x\ndescription: d\n---\nbody\n", encoding="utf-8")
     (tmp_path / "not-a-skill").mkdir()
 
     assert LocalSkillRepository(tmp_path).names == ("flat",)

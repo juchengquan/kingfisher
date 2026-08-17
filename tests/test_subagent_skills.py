@@ -28,8 +28,7 @@ def offer_skills(cfg, *names: str) -> None:
     for name in names:
         (cfg.skills_dir / name).mkdir(parents=True, exist_ok=True)
         (cfg.skills_dir / name / "SKILL.md").write_text(
-            f"name: {name}\ndescription: A procedure.\n"
-        "system_prompt: |\n  Body.\n", encoding="utf-8"
+            f"---\nname: {name}\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
         )
 
 

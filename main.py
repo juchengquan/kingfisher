@@ -240,8 +240,21 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
 
     print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
     skills = catalogue.skills
-    for name in skills.names or ("(none)",):
-        print(f"  {name}")
+    # From the registry, not the directory listing, because they are different
+    # answers and this command exists to give the one a request can act on. A
+    # description each, which subagents have always had here and skills never
+    # did -- it is what deepagents will actually put in front of the model.
+    registry = catalogue.registry
+    for name in registry.names or ("(none)",):
+        described = registry.description(name)
+        print(f"  {name}{f' — {described}' if described else ''}")
+
+    # Present on disk, and the agent will never see it. Reported rather than
+    # refused, so one malformed skill does not stop a deployment starting --
+    # and a caller who *names* one is refused outright, because the validation
+    # above reads this same registry.
+    for name in registry.unloadable:
+        print(f"  ! {name}/ is not loadable — the agent will not be told about it")
     # Grouping skills into folders is the obvious thing to try and yields
     # nothing at all, because discovery is one level deep. Saying so is the
     # only difference between a catalogue that looks empty and one that is --

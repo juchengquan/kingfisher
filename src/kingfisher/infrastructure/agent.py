@@ -97,8 +97,21 @@ def available_skills(
     What a session adds, and how the two halves merge, is `layered.for_session`
     -- the rule lives there because it differs per kind and a reader comparing
     them should not have to visit two functions to see the difference.
+
+    The catalogue half is the *registry*, not the directory listing, and that is
+    the point of it: a directory that looks like a skill and will not parse
+    used to be advertised here, accepted by the build, allowed through the
+    filter, and then absent from an agent that reported nothing wrong. Asking
+    what will be loaded makes naming one an ordinary unknown-skill refusal.
+
+    A session's own skills stay a listing. They are written by `uploads`, which
+    reads each header to file it under the name inside it, so the two cannot
+    disagree the way a catalogue's could -- and a request's uploads are checked
+    when they are provisioned rather than here.
     """
-    return for_session(catalogue or Catalogue.from_config(cfg), session_dir).skills.names
+    resolved = catalogue or Catalogue.from_config(cfg)
+    session = for_session(resolved, session_dir).skills.names
+    return tuple(sorted(set(resolved.registry.names) | set(session) - set(resolved.skills.names)))
 
 
 def defined_subagents(
