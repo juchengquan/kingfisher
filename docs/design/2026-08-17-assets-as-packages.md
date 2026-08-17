@@ -1,6 +1,7 @@
 # Assets as packages, not as cargo
 
-**Status:** implemented, phases 1-6.
+**Status:** implemented in full, then reversed — see *Superseded* at the end.
+Read it as the record of an arrangement that ran, not as a description of the tree.
 **Date:** 2026-08-17
 
 Kingfisher ships fifteen asset files inside the wheel: three skills, four
@@ -156,3 +157,34 @@ Phases 1 to 3 remain additive and reversible.
   honest and testable, and they are not the same thing. This is the strongest
   argument the current arrangement has, and A1 outweighs it rather than
   answering it.
+
+## Superseded
+
+All six phases landed, and *"Ship the definitions with the library, and drop the
+packages folder"* took them out again. The definitions live in
+`src/kingfisher/assets/` and travel in the wheel; there is no second
+distribution, no `kingfisher.assets` entry-point group, and no `installed_packs`.
+`seed` takes a directory now, defaulting to the one that ships.
+
+The reversal's own account of the trade, which is the fairest summary of it:
+*"The group bought one thing a path does not, several sources merged with a
+collision check, and there was never a second source."* And what it names as
+lost: *"two packs seeding together, and the refusal when two claimed one file.
+Neither can be written against a single directory. If a second publisher ever
+wants in, the group and both tests come back."*
+
+Three things this document argued for survived the reversal, and are worth
+separating from the mechanism that carried them:
+
+- **A1 held.** The framework still does not decide what a definition says; the
+  files are content excluded from every architecture rule, for the reason
+  `presets/` was excluded before it left.
+- **A5 held.** `presets/` is `reference/`, and the directory that holds the
+  definitions is named for what it contains.
+- **A7 held.** A fresh workspace still seeds itself on its first run and says
+  what it wrote, and phase 6's ordering -- paths before catalogue -- is what
+  still makes that reachable at all.
+
+What did not survive is A2, A3 and A4: separate distributions, discovery through
+entry points, and the collision refusal between two packs. Those were the whole
+mechanism, and the case for them was an ecosystem that has one publisher.
