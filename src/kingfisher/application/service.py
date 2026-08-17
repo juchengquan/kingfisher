@@ -165,6 +165,9 @@ class _Admitted:
     #: A fact about the run, like `withheld` -- nothing is wrong enough to stop
     #: for, and nothing else would ever say it.
     indistinct: tuple[tuple[str, str], ...] = ()
+    #: Tool names more than one file defines, which the agent holding the
+    #: grant therefore cannot hold. Reported rather than dropped in silence.
+    delegate_only: tuple[str, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -233,12 +236,29 @@ def _withheld_by_kind(
     return tuple(found)
 
 
-def opening_events(
+def _delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
+    """Names this run was granted that only a delegate can actually ask for.
+
+    Computed from the catalogue rather than threaded out of `build_agent`,
+    because the graph has already dropped them by the time it exists -- which is
+    exactly why it has to be said from somewhere that still knows.
+    """
+    from kingfisher.domain.tool import Offering  # noqa: PLC0415
+    from kingfisher.infrastructure.catalogue import Catalogue  # noqa: PLC0415
+
+    found = (catalogue or Catalogue.from_config(cfg)).tools.found
+    return Offering.of(found).ambiguous(allowed.tools, found)
+
+
+def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
+    # kind, and folding them into a bag would only move the list somewhere
+    # a reader has to go and find it.
     turn_dir: str,
     unprotected: tuple[str, ...],
     placement: Any,
     withheld: tuple[tuple[str, tuple[str, ...]], ...] = (),
     indistinct: tuple[tuple[str, str], ...] = (),
+    delegate_only: tuple[str, ...] = (),
 ) -> tuple[RunEvent, ...]:
     """What the caller is told before the model is reached.
 
@@ -258,6 +278,25 @@ def opening_events(
             RunEvent(
                 kind="withheld",
                 text=f"{len(names)} {what}(s) not granted: {', '.join(names)}",
+            )
+        )
+    # Granted, and still not in the agent's own hands. Two files may each define
+    # a `fetch`, and an agent dispatches by name -- so the pair goes to whichever
+    # delegate names one, and the agent holding the grant gets neither.
+    #
+    # Said out loud because the alternative is the failure this codebase refuses
+    # everywhere: quietly holding less than was asked for. It is deliberately
+    # *not* folded into `withheld`, which means "you did not ask for this" --
+    # here the caller did ask, and the answer is "name which one, in a delegate".
+    if delegate_only:
+        events.append(
+            RunEvent(
+                kind="delegate_only",
+                text=(
+                    f"{len(delegate_only)} tool name(s) more than one file defines, "
+                    f"so this agent holds none of them -- a subagent that names one "
+                    f"gets it: {', '.join(delegate_only)}"
+                ),
             )
         )
     # A delegate that meant to run elsewhere and did not. Said here because
@@ -850,6 +889,7 @@ class Kingfisher:
             # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
             # an admit already measured at 15-46ms.
             withheld=_withheld_by_kind(allowed, cfg, session.directory, graph, self.catalogue),
+            delegate_only=_delegate_only(allowed, cfg, catalogue=self.catalogue),
             indistinct=indistinct_delegates(
                 cfg,
                 allowed,
@@ -909,6 +949,7 @@ class Kingfisher:
                 admitted.placement,
                 admitted.withheld,
                 admitted.indistinct,
+                admitted.delegate_only,
             ),
             deadline=monotonic() + cfg.turn_timeout_s,
             timeout_s=cfg.turn_timeout_s,

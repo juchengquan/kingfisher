@@ -128,6 +128,51 @@ def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
     )
 
 
+
+def written_form(one: Found, *, among: Mapping[str, int]) -> str:
+    """How a grant names this tool: flat where the name is its own, else the file."""
+    return one.reference if among.get(one.name, 0) > 1 else one.name
+
+
+def _by_name(found: Sequence[Found]) -> dict[str, int]:
+    counted: dict[str, int] = {}
+    for one in found:
+        counted[one.name] = counted.get(one.name, 0) + 1
+    return counted
+
+
+def duplicated(found: Sequence[Found]) -> tuple[str, ...]:
+    """Names more than one of these tools answers to, sorted.
+
+    Asked of a *selection* rather than the catalogue, because that is where it
+    matters: two `fetch`es only conflict for whoever ends up holding both, and
+    a run that took one of them has no conflict at all.
+    """
+    return tuple(sorted(name for name, count in _by_name(found).items() if count > 1))
+
+
+def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+    """The tools a grant means, as the objects that will be registered.
+
+    This is what makes two `fetch`es possible, and it is why a grant is resolved
+    to *objects* here rather than to names downstream. A name picks a tool out
+    of a dictionary and a dictionary holds one entry per key -- so handing over
+    a whole catalogue and narrowing it afterwards collapses the pair before any
+    narrowing runs. Handing over exactly what was granted does not.
+
+    A free function rather than a method, because the caller that needs it most
+    has a selection and a catalogue and no `Offering`: `as_subagent` resolves a
+    delegate's own tools, and giving delegation a domain object to hold would
+    buy nothing it does not already have.
+    """
+    if granted is None:
+        return ()
+    among = _by_name(found)
+    if granted == ALL:
+        return tuple(found)
+    wanted = set(granted)
+    return tuple(one for one in found if written_form(one, among=among) in wanted)
+
 @dataclass(frozen=True)
 class Offering:
     """What tools exist to be granted, on which axis, and where each is defined.
@@ -168,67 +213,35 @@ class Offering:
         already says which file, so annotating it with the same path again is
         noise in a listing whose whole job is to be scannable.
         """
-        seen: dict[str, int] = {}
-        for one in found:
-            seen[one.name] = seen.get(one.name, 0) + 1
+        among = _by_name(found)
         return cls(
             builtin=builtin,
-            workspace=tuple(one.reference if seen[one.name] > 1 else one.name for one in found),
-            sources={one.name: one.source for one in found if seen[one.name] == 1},
+            workspace=tuple(written_form(one, among=among) for one in found),
+            sources={one.name: one.source for one in found if among[one.name] == 1},
         )
 
-    def select(self, granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
-        """The tools a grant means, as the objects that will be registered.
+    def carried(self, granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+        """What the agent itself holds: everything granted, minus the ambiguous.
 
-        This is what makes two `fetch`es possible, and it is why the grant is
-        resolved to *objects* here rather than to names downstream. A name picks
-        a tool out of a dictionary, and a dictionary holds one entry per key --
-        so passing a whole catalogue and narrowing it later collapses the pair
-        before any narrowing runs. Passing exactly what was granted does not.
+        The request's grant is what this run may *draw on* -- itself or through
+        a delegate -- and those stopped being the same list once two files could
+        each define a `fetch`. A delegate names which one it wants; the agent
+        holding the grant cannot, because it dispatches by name and would keep
+        one of the two in silence.
 
-        `ALL` is every tool, which is safe only because a request that would
-        thereby hold two of a name is refused before this -- see
-        `refuse_ambiguous`. Nothing here silently picks a winner.
+        So the pair is dropped rather than resolved, and `ambiguous` is what
+        says so out loud. Dropping quietly would be the failure this codebase
+        refuses everywhere else -- the point is that it is reported, not that it
+        is dropped.
         """
-        if granted is None:
-            return ()
-        wanted = set(self.workspace) if granted == ALL else set(granted)
-        seen: dict[str, int] = {}
-        for one in found:
-            seen[one.name] = seen.get(one.name, 0) + 1
-        return tuple(
-            one
-            for one in found
-            if (one.reference if seen[one.name] > 1 else one.name) in wanted
-        )
+        chosen = select(granted, found)
+        clashing = set(duplicated(chosen))
+        return tuple(one for one in chosen if one.name not in clashing)
 
-    def refuse_ambiguous(self, granted: Selection, *, subject: str) -> None:
-        """Refuse a grant that would leave one agent holding two of a name.
+    def ambiguous(self, granted: Selection, found: Sequence[Found]) -> tuple[str, ...]:
+        """The names `carried` had to leave behind, for a caller that must say so."""
+        return duplicated(select(granted, found))
 
-        `ALL` against a catalogue with a collision is the case this exists for,
-        and the tempting one to be clever about: `tools` defaults to `ALL`, so
-        it is the common path. Narrowing it to the unambiguous ones would be
-        quietly less than was asked, which is the failure this codebase refuses
-        everywhere else; picking one would be quietly the wrong tool.
-
-        A named grant reaches here already resolved, so two names can only
-        collide if both were written out -- which is a caller asking for
-        something an agent cannot hold, not a catalogue problem.
-        """
-        chosen = self.workspace if granted == ALL else tuple(granted or ())
-        seen: dict[str, list[str]] = {}
-        for written in chosen:
-            seen.setdefault(split_reference(written)[1], []).append(written)
-        if clashing := sorted(
-            (name, spellings) for name, spellings in seen.items() if len(spellings) > 1
-        ):
-            name, spellings = clashing[0]
-            msg = (
-                f"{subject} would hold {len(spellings)} tools called {name!r}, and an "
-                f"agent dispatches by name -- one would never run. "
-                f"Name the one you meant: {', '.join(sorted(spellings))}"
-            )
-            raise CapabilityError(msg)
 
     def refuse_unknown(
         self, builtin: Selection, tools: Selection, *, subject: str

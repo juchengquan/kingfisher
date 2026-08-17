@@ -1,6 +1,6 @@
 # Two tools called `fetch`, in folders nobody coordinated
 
-**Status:** planned.
+**Status:** implemented.
 **Date:** 2026-08-17
 
 The sibling of `2026-08-17-skills-from-several-parties.md`, and it was ruled out
@@ -64,7 +64,7 @@ ago, applied where a tool's constraint actually lives.
 | T2 | **A reference becomes a selector, not just a checked label.** `vendor_a/fetch.py::fetch` resolves to one `Found`. | `split_reference` today returns the name plain "whichever form was written" and hands the claim off to be *checked* and discarded. That is exactly why a grant cannot currently pick between two — the thing that distinguishes them is thrown away one line after it is validated. No new syntax: this is the vocabulary presets and the README already use. |
 | T3 | **The model never sees a reference.** Every agent is given a flat `fetch`. | Tool names are sent to the provider as identifiers, and `::` is not something to put in one. It also keeps the promise made when references were introduced — flat for the model, precise for the definition. Skills could show a qualifier because a skill is read by path; a tool has to be *called*, so the qualifier must resolve before the schema is built. |
 | T4 | **Each agent is handed only the tool objects it was granted**, rather than the whole set plus an allowlist. | Without this the rest cannot work: both objects reach one `ToolNode` and collapse before any narrowing happens. `ToolAllowlist` stays — it is what filters the model request and refuses a call — but it stops being the thing that decides *which object* a name means. |
-| T5 | **`*` against a catalogue holding a collision is refused**, not silently narrowed to the unambiguous ones. | `tools` defaults to `ALL`, so this is the common path and the tempting place to be clever. Quietly dropping one is the precise failure two PRs of skills work just removed. A deployment that deliberately ships two `fetch`es can name its main-agent tools. |
+| T5 | **A request's grant is what the run may *draw on*, not what the agent itself carries.** The agent takes everything granted except names more than one file defines; those go to whichever delegate names one. | Written as "refuse `*` on a collision" and rejected during the build, because it turned down the configuration this exists to enable: a delegate is clamped by the request's grant, so two delegates wanting two `fetch`es *requires* the request to hold both. Splitting the two meanings is what makes it work, and the split is only visible in a workspace that has a collision. The dropped pair is announced as `delegate_only` -- quietly holding less than was asked is the failure this codebase refuses everywhere, so the point is that it is said, not that it is dropped. |
 | T6 | **A bare name that two folders offer is refused, naming both references.** | The safety property, and the same shape as `research::lookup`. Adding a colliding tool turns a working grant into a loud error rather than silently changing which code runs. |
 | T7 | **A subagent definition's `tools:` selects by reference too.** | The syntax already parses — `split_reference` is called at `domain/subagent.py:391` — and then the reference is discarded: `split_reference(entry)[1]` keeps the name alone. So a definition can already *write* `vendor_a/fetch.py::fetch` and cannot yet *mean* it. This is the same one-line-deep change as T2 and the place a delegate's tools are actually chosen, so it is where the feature earns its keep. |
 | T8 | **The subtraction axis takes references, and refuses an ambiguous bare name.** | `--without-tools fetch` against two `fetch`es has no safe reading. Removing both is quietly more than was asked; removing one is quietly the wrong one. Refusing matches T6, and subtraction is where a silent over-removal would be hardest to notice — the tool simply is not there. |
@@ -118,13 +118,37 @@ belongs with the skills code, not here.
 
 ## The cost, stated
 
-A catalogue with a collision cannot use the default grant. `tools` defaults to
-`ALL`, so `Capabilities()` — the bare request — is exactly the case T5 refuses.
-Such a deployment must name its main-agent tools explicitly.
+`--tools` grows a meaning it did not have. Everything granted used to be
+callable by the agent itself; now a name two files define is delegation-only.
+That is one new idea to learn, and it appears only in a workspace that actually
+has two tools of one name.
 
-That is a real narrowing of the default, and it is the price of not guessing.
-Every alternative I can see either picks a winner silently or shows the model a
-name that changes when an unrelated folder gains a file.
+The delegation ceiling is untouched, and that was the constraint the whole
+design had to bend around rather than through: a delegate still cannot hold
+anything the request was not granted. `test_a_delegate_still_cannot_reach_past_the_request`
+drives it rather than inspecting it, for the reason `test_delegation_ceiling`
+gives -- what a delegate *registers* is identical either way.
+
+## Found while building
+
+**The plan rejected the configuration it exists to enable.** A delegate is
+clamped by the request's grant, so two delegates each wanting a different
+`fetch` requires the request to hold both — and T5 as written refused exactly
+that. Fixed by splitting "what this run may draw on" from "what this agent
+carries", which is the T5 above.
+
+**`SubAgent.tools` adds to the built-ins rather than replacing them.** Measured
+before relying on it: a delegate handed one workspace tool keeps all eight file
+tools. That is what made T4 a small change instead of also having to re-supply
+every built-in per delegate.
+
+**A test that reads a delegate's tool registry proves nothing.** A mutation
+leaving the allowlist keyed on the reference rather than the bare name filters
+every workspace tool out of the *model request* — the delegate holds its
+`fetch` and is never offered it — and every test here still passed.
+`test_a_delegate_can_actually_call_the_one_it_named` exists because of it. The
+repo's own `test_delegation_ceiling` warns about this in as many words; the
+warning was heeded for the negative case and missed for the positive one.
 
 ## Checked before planning
 

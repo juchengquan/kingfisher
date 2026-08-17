@@ -14,6 +14,7 @@ largest of them and the most self-contained: nothing in here calls anything in
 
 from __future__ import annotations
 
+from collections.abc import Sequence
 from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
@@ -29,7 +30,7 @@ from kingfisher.domain.capabilities import (
     refuse_unoffered,
 )
 from kingfisher.domain.subagent import RunOn, resolved_model
-from kingfisher.domain.tool import ceiling
+from kingfisher.domain.tool import Found, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -215,6 +216,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # otherwise so the top-level path keeps deepagents' own defaults.
     default_model: Any = None,
     tool_objects: list[Any] | None = None,
+    catalogue: Sequence[Found] = (),
     skill_sources: list[Any] | None = None,
     #: Where this request wants this delegate to run, replacing its file's
     #: answer. `None` is the ordinary case: the file decides.
@@ -254,10 +256,24 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         granted_tools=tools,
         subject=f"subagent {spec.name!r}",
     )
+    # Its own workspace tools, chosen as objects rather than inherited as a
+    # name. Two files may each define a `fetch`, and the parent cannot register
+    # both -- it dispatches by name -- so a delegate that wants one has to be
+    # handed that one. Measured: `SubAgent.tools` *adds* to the built-ins rather
+    # than replacing them, so this costs a delegate none of its file tools.
+    mine = select(allowed, catalogue)
     if allowed != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist
         # rather than an absent one -- the same split the parent makes.
-        middleware.append(ToolAllowlist(allowed or ()))
+        #
+        # Flattened to bare names, because the middleware compares against
+        # `tool.name` and a tool is called `fetch` however a definition spelled
+        # it. Safe here for the same reason it is safe for the parent: what this
+        # delegate holds was just selected, and `refuse_ambiguous` would have
+        # stopped a definition naming two of a name.
+        middleware.append(
+            ToolAllowlist(tuple(split_reference(one)[1] for one in (allowed or ())))
+        )
     # A subagent inherits none of its parent's middleware, so an index it is
     # not given is an index it has no idea exists. `SubAgent.skills` would take
     # source *paths*; this selects by name, which is what a definition writes.
@@ -302,12 +318,12 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # which made it useless for the one thing a per-delegate model is for:
     # `second-opinion` exists in order *not* to be the model beside it, and a
     # blanket override silently defeats it. The file says where it runs.
-    if tool_objects is not None:
+    if mine or tool_objects is not None:
         # Objects, not names -- `SubAgent.tools` is what deepagents registers,
         # and handing it names raises inside `ToolNode`. Narrowing still
         # happens through `ToolAllowlist` above, which is why the whole set
         # goes in and the allowlist decides.
-        subagent["tools"] = tool_objects
+        subagent["tools"] = [one.tool for one in mine] + list(tool_objects or [])
 
     model_id = model_for(spec, cfg, override=run_on)
     if model_id is not None:

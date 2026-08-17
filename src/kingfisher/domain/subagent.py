@@ -360,7 +360,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         builtin_tools=_selected(
             document.get("builtin_tools"), absent=ALL, key="builtin_tools", source=source
         ),
-        tools=_names_only(written_tools),
+        tools=written_tools,
         tool_sources=_claimed_sources(written_tools),
         skills=_selected(document.get("skills"), absent=None, key="skills", source=source),
         middleware=_selected(
@@ -378,17 +378,15 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
 
 
-def _names_only(written: Selection) -> Selection:
-    """A `tools:` selection with any `where::` stripped off each entry.
-
-    This is what the rest of kingfisher sees, and it has to be, because a name
-    is the only thing a grant, an allowlist or the agent's dispatch dictionary
-    keys on. `ALL` and `None` pass through: neither names anything, so neither
-    can carry a path.
-    """
-    if written in (ALL, None):
-        return written
-    return tuple(split_reference(entry)[1] for entry in written)
+# `tools:` used to be stripped to bare names here, on the reasoning that a name
+# is the only thing a grant, an allowlist or the agent's dispatch dictionary
+# keys on. That held while a name could only mean one tool. Two folders may now
+# each define a `fetch`, and the reference is the only thing that says which --
+# so a definition keeps what it wrote, and the flattening happens at the two
+# places that genuinely need a bare name: `ToolAllowlist`, and `permitted`.
+#
+# `_claimed_sources` still reads the same entries to check the claim is true.
+# One reference, doing two jobs now rather than one.
 
 
 def _claimed_sources(written: Selection) -> Mapping[str, str]:

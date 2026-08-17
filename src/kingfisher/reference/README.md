@@ -183,12 +183,63 @@ tool grows a second file.
 
 Two things follow, and both are the point:
 
-- **A folder never reaches a name.** A tool is named by itself, so
-  `research/find_company.py` still offers `find_company`, and a request grants
-  it by that name. Moving a file between folders changes nothing a caller
-  types. `--list` says where each one came from when the name does not.
+- **A folder reaches a name only when it has to.** A tool is named by itself,
+  so `research/find_company.py` offers `find_company` and a request grants it by
+  that name. Moving a file between folders changes nothing a caller types.
+  `--list` says where each one came from.
+
+  The exception is two files defining one name — see below. Then the bare name
+  is refused and the file is what tells them apart.
 - **Skills go one folder deep, not many.** See below — the difference is real
   and worth knowing before you try.
+
+### Two tools with the same name
+
+Vendors do not coordinate. Two folders may each define a `fetch`, and both load
+— the catalogue used to refuse the pair, which stopped the deployment over a
+clash and was unfixable by anyone who owned neither file.
+
+A **bare name is refused** once two files offer it, because an agent dispatches
+by name and would otherwise run whichever the writer did not mean:
+
+```
+this request names tool 'fetch', which more than one source offers -- naming it
+alone would silently pick one: write vendor_a/fetch.py::fetch,
+vendor_b/fetch.py::fetch
+```
+
+The reference is the same `file::name` a subagent's `tools:` already used, and
+it now *selects* rather than merely being checked.
+
+**A request's grant says what the run may draw on, not what the agent carries.**
+Those were the same list until a name could mean two tools. The agent takes
+everything granted except names more than one file defines, and each such pair
+goes to whichever delegate names one:
+
+```yaml
+# subagents/agent_a.yaml
+tools: [vendor_a/fetch.py::fetch]
+```
+
+Both delegates then have a `fetch`, and each calls its own vendor's. The model
+sees a flat `fetch` in every agent and never sees a reference — a tool name goes
+to the provider as an identifier, so the qualifier resolves before any schema is
+built.
+
+The agent holding the grant is told what it could not take:
+
+```
+[delegate_only] 1 tool name(s) more than one file defines, so this agent holds
+none of them -- a subagent that names one gets it: fetch
+```
+
+**A delegate still cannot exceed what the request was granted.** That ceiling is
+unchanged: a request that withheld `execute` cannot have it handed back by a
+definition that asks.
+
+None of this appears in a workspace whose tool names are unique, which is most
+of them. Renaming one of the two files is still the better answer for anyone who
+controls both — this is for when nobody does.
 
 Modules starting with `_` are still skipped, which is now mostly a way to park
 a file you have not finished. Inside a package you do not need it.
