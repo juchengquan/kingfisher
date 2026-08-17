@@ -156,12 +156,79 @@ class Offering:
 
     @classmethod
     def of(cls, found: Sequence[Found], *, builtin: tuple[str, ...] = ()) -> Offering:
-        """From what the repository returned, plus what the graph registered."""
+        """From what the repository returned, plus what the graph registered.
+
+        A name two files both define is offered under its *reference* instead,
+        and only then. Two folders may each define a `fetch` -- vendors do not
+        coordinate -- and one had to lose before this, at catalogue load, which
+        stopped the deployment over a clash no single agent would ever see.
+
+        Flat where a name is unique, which is every catalogue that has no
+        collision. The redundant half is dropped from `sources`: a reference
+        already says which file, so annotating it with the same path again is
+        noise in a listing whose whole job is to be scannable.
+        """
+        seen: dict[str, int] = {}
+        for one in found:
+            seen[one.name] = seen.get(one.name, 0) + 1
         return cls(
             builtin=builtin,
-            workspace=tuple(one.name for one in found),
-            sources={one.name: one.source for one in found},
+            workspace=tuple(one.reference if seen[one.name] > 1 else one.name for one in found),
+            sources={one.name: one.source for one in found if seen[one.name] == 1},
         )
+
+    def select(self, granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+        """The tools a grant means, as the objects that will be registered.
+
+        This is what makes two `fetch`es possible, and it is why the grant is
+        resolved to *objects* here rather than to names downstream. A name picks
+        a tool out of a dictionary, and a dictionary holds one entry per key --
+        so passing a whole catalogue and narrowing it later collapses the pair
+        before any narrowing runs. Passing exactly what was granted does not.
+
+        `ALL` is every tool, which is safe only because a request that would
+        thereby hold two of a name is refused before this -- see
+        `refuse_ambiguous`. Nothing here silently picks a winner.
+        """
+        if granted is None:
+            return ()
+        wanted = set(self.workspace) if granted == ALL else set(granted)
+        seen: dict[str, int] = {}
+        for one in found:
+            seen[one.name] = seen.get(one.name, 0) + 1
+        return tuple(
+            one
+            for one in found
+            if (one.reference if seen[one.name] > 1 else one.name) in wanted
+        )
+
+    def refuse_ambiguous(self, granted: Selection, *, subject: str) -> None:
+        """Refuse a grant that would leave one agent holding two of a name.
+
+        `ALL` against a catalogue with a collision is the case this exists for,
+        and the tempting one to be clever about: `tools` defaults to `ALL`, so
+        it is the common path. Narrowing it to the unambiguous ones would be
+        quietly less than was asked, which is the failure this codebase refuses
+        everywhere else; picking one would be quietly the wrong tool.
+
+        A named grant reaches here already resolved, so two names can only
+        collide if both were written out -- which is a caller asking for
+        something an agent cannot hold, not a catalogue problem.
+        """
+        chosen = self.workspace if granted == ALL else tuple(granted or ())
+        seen: dict[str, list[str]] = {}
+        for written in chosen:
+            seen.setdefault(split_reference(written)[1], []).append(written)
+        if clashing := sorted(
+            (name, spellings) for name, spellings in seen.items() if len(spellings) > 1
+        ):
+            name, spellings = clashing[0]
+            msg = (
+                f"{subject} would hold {len(spellings)} tools called {name!r}, and an "
+                f"agent dispatches by name -- one would never run. "
+                f"Name the one you meant: {', '.join(sorted(spellings))}"
+            )
+            raise CapabilityError(msg)
 
     def refuse_unknown(
         self, builtin: Selection, tools: Selection, *, subject: str
@@ -249,9 +316,15 @@ class Offering:
         """
         if builtin == ALL and tools == ALL:
             return None
+        # The workspace half comes back to bare names, because that is what the
+        # middleware compares against: it filters by `tool.name`, and a tool's
+        # name is `fetch` however a grant spelled it. Safe to flatten precisely
+        # because `refuse_ambiguous` ran first -- within one agent the names are
+        # unique, so two spellings can never land on one entry here.
+        granted = narrowed(tools, by=self.workspace) or ()
         return (
             *(narrowed(builtin, by=self.builtin) or ()),
-            *(narrowed(tools, by=self.workspace) or ()),
+            *(split_reference(one)[1] for one in granted),
         )
 
 
