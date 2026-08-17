@@ -243,16 +243,20 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
             # deployment that installed no pack.
             #
             # Which of the two sentences depends on whether it is there yet. It
-            # said "`--seed-assets` writes one" unconditionally, and that was a
-            # dead end: running `--seed-assets` hit this same error, because the
-            # driver built its config before it seeded. A first run seeds before
-            # loading now, so by the time anyone reads this the file is usually
-            # already beside them -- and telling someone to run a command that
-            # has just run is how a message stops being read.
+            # said "run this to get one" unconditionally, and that was a dead
+            # end: running it hit this same error, because the driver built its
+            # config before it seeded. A first run seeds before loading now, so
+            # by the time anyone reads this the file is usually already beside
+            # them -- and telling someone to run a command that has just run is
+            # how a message stops being read.
+            #
+            # `kingfisher seed` rather than `--seed-assets`: the flag is on a
+            # file that is not in the wheel, so it names nothing a pip user has,
+            # while the command is on `PATH` for both audiences.
             + (
                 f"An annotated {EXAMPLE} is next to it; copy it across.\n"
                 if (path.parent / EXAMPLE).is_file()
-                else f"`--seed-assets` writes an annotated {EXAMPLE} next to it.\n"
+                else f"`kingfisher seed` writes an annotated {EXAMPLE} next to it.\n"
             )
         )
         raise ConfigError(msg) from exc

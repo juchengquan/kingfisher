@@ -126,17 +126,17 @@ def _catalogue(cfg) -> object:
 
 
 def test_both_drivers_render_through_the_same_code(cfg, capsys):
-    """Two doors printing one block, which is what makes keeping both safe.
+    """Two doors printing one block, and now by construction.
 
-    Not yet by construction. `listing.render` is a faithful copy of what
-    `show_inventory` prints, and `main.py` starts calling it in the next step --
-    so today this proves the copy is exact, and after that it proves nothing has
-    grown a second formatter. It is worth having now for the first reason: a
-    copy nobody compares is how two listings drift.
+    `show_inventory` calls `listing.render`; there is no second formatter to
+    keep in step. It was a copy for one step, and the copy was already wrong:
+    written from the version of `show_inventory` I had in hand rather than the
+    one on disk, it missed a change that had landed days earlier -- two folders
+    may each define a `surveyor`, and then the listing must not print the file
+    twice. This test passed anyway, because its workspace had no such pair.
 
-    Measured before it was written: with the same configuration the two
-    commands were byte-identical, and the only difference in a checkout came
-    from `main.py` loading a `.env` that this one deliberately does not.
+    So the fixture has one now. A comparison is only worth the cases it covers,
+    and the case it did not cover is the one that broke.
     """
     import main as driver
     from kingfisher import inventory
@@ -167,3 +167,12 @@ def _seed_something(cfg) -> None:
         "system_prompt: |\n  Answer briefly.\n",
         encoding="utf-8",
     )
+    # And a name two folders both claim, which is printed as a reference rather
+    # than as a name plus the file it came from. The case the copy got wrong.
+    for folder in ("team", "vendor"):
+        (cfg.subagents_dir / folder).mkdir(parents=True, exist_ok=True)
+        (cfg.subagents_dir / folder / "surveyor.yaml").write_text(
+            f"name: surveyor\ndescription: Surveys, the {folder} way.\n"
+            "system_prompt: |\n  Survey it.\n",
+            encoding="utf-8",
+        )

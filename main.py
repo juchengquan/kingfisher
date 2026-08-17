@@ -17,6 +17,11 @@ A workspace that has never been used seeds itself on its first run and prints
 what it wrote, so `--seed-assets` is for re-seeding an existing one after
 installing or upgrading a pack. That overwrites, which is the point of asking.
 
+Both have a shipped equivalent -- `kingfisher list` and `kingfisher seed` --
+which is what an installed kingfisher has, since this file is not in the wheel.
+They print through the same code; these flags stay because this is the driver
+you already have open.
+
     uv run main.py "Review it" --skills code-review --subagents reviewer
     uv run main.py "Count the rows" --tools read_file,write_file
     uv run main.py "Just this once" --no-memory
@@ -108,9 +113,7 @@ from kingfisher import (
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
-from kingfisher.domain.tool import offered as tool_offered
-from kingfisher.domain.tool import split_reference
-from kingfisher.infrastructure import confinement, seeding, skill_store
+from kingfisher.infrastructure import confinement, seeding
 from kingfisher.infrastructure.harness.runlog import read_usage
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
@@ -175,94 +178,24 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
 def show_inventory(cfg: Config, workspace: Path) -> int:
     """Print what a request may activate here, which is what `--list` is for.
 
-    A printer now, and only a printer. Working out what is on offer moved to
+    Neither half is here any more. Working out what is on offer is
     `infrastructure.inventory`, because this and `--without-skills` were
-    computing it apart -- two assembled agents, two answers, and nothing making
-    them agree. What is left here is formatting, which is the driver's business.
+    computing it apart; formatting it is `cli.listing`, because `kingfisher
+    list` prints the same block and a second copy of a listing is how two
+    listings come to disagree.
+
+    Two doors, one implementation -- which is the whole reason this driver keeps
+    its flags rather than losing them to the shipped command. Removing them
+    would have cost 23 edits across 8 files to buy something this import already
+    gives.
     """
+    from kingfisher.cli.listing import failed, render  # noqa: PLC0415
     from kingfisher.infrastructure.inventory import inventory  # noqa: PLC0415
 
     found = inventory(cfg)
-
-    print(f"workspace : {workspace}")
-    # Named rather than assumed: the catalogues may be deployed outside the
-    # workspace and shared by every deployment that points at them.
-    print(f"skills    : {found.skills_source}")
-    print(f"subagents : {found.subagents_source}\n")
-
-    # Caught rather than raised, so a broken tool catalogue does not take the
-    # other two sections with it. `--list` is where someone goes *because*
-    # something is wrong, and the exit code still says so.
-    if found.tools_error is not None:
-        print("tools")
-        print(f"  cannot load: {found.tools_error}")
-        return 1
-
-    # Two headings, because they are two grants. Printed as one pile, this
-    # listing advertised `read_file` beside `csv_profile` and left a reader to
-    # guess which flag took which -- and guessing wrong is the "that is a
-    # builtin tool" refusal.
-    print("builtin tools — grant with --builtin-tools")
-    for name in found.builtin_tools or ("(could not introspect)",):
-        print(f"  {name}")
-
-    # The same block a refusal prints, so the two agree by construction rather
-    # than by both being edited. Every entry here has a file -- the section is
-    # workspace tools -- so the column is uniform.
-    print("\nworkspace tools — grant with --tools")
-    print(tool_offered(dict(found.tool_sources), found.tools))
-
-    print("\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
-    # A description each, which subagents have always had here and skills never
-    # did -- it is what deepagents will actually put in front of the model.
-    for name, described in found.skills.items() or (("(none)", None),):
-        print(f"  {name}{f' — {described}' if described else ''}")
-    if not found.skills:
-        print("  (none)")
-
-    # Present on disk, and the agent will never see it. Reported rather than
-    # refused, so one malformed skill does not stop a deployment starting --
-    # and a caller who *names* one is refused outright.
-    for name in found.skills_unloadable:
-        print(f"  ! {name}/ is not loadable — the agent will not be told about it")
-    # One folder of grouping works and a second does not, so the obvious next
-    # thing to try yields nothing at all. Saying so is the only difference
-    # between a catalogue that looks empty and one that is -- and it needs the
-    # reason, because tools and subagents nest as deep as anyone likes.
-    for name in found.skills_misplaced:
-        print(f"  ! {name}/ sits too deep to load — skills live at {skill_store.SKILL_LAYOUT}")
-        print("    (a folder under the root is its own source, and a source is read")
-        print("     one level down; tools and subagents are read by kingfisher, so")
-        print("     those may nest as deep as you like)")
-
-    print("\nsubagents")
-    if found.subagents_error is not None:
-        print(f"  cannot load: {found.subagents_error}")
-        return 1
-    for name, described in found.subagents.items():
-        # A reference already names the file, so the trailing annotation is
-        # dropped for it -- `team/surveyor.yaml::surveyor (team/surveyor.yaml)`
-        # says one thing twice in a listing whose job is to be scannable. Two
-        # folders may each define a `surveyor`, and then the key is the
-        # reference; where a name is its own, the two are the same string.
-        claimed, plain = split_reference(name)
-        source = None if claimed else found.subagent_sources.get(name)
-        print(f"  {name}{_from(source, f'{plain}.yaml')} — {described}")
-    if not found.subagents:
-        print("  (none)  — try --seed-assets")
-    return 0
-
-
-def _from(source: str | None, expected: str) -> str:
-    """Name the file a definition came from, when it is not the obvious one.
-
-    Silent for anything where the name already tells you the file -- `reviewer`
-    in `reviewer.yaml` is not worth a line of output. Everything else gets said,
-    which is more than "is it in a folder": a package contributes tools under
-    names that are not its own, so `csv_columns` comes from `csv_profile/` with
-    no slash in sight and is exactly the case someone would go looking for.
-    """
-    return "" if source in (None, expected) else f"  ({source})"
+    for line in render(found, workspace=workspace):
+        print(line)
+    return 1 if failed(found) else 0
 
 
 def warn_if_unconfined(cfg: Config) -> None:

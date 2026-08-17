@@ -512,7 +512,7 @@ LIGHT_EXPORTS = frozenset({
     "seed", "installed_packs", "Pack", "Seeding", "inventory", "Inventory",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
-    "offered", "SKILL_LAYOUT",
+    "offered", "SKILL_LAYOUT", "split_reference",
 })
 
 #: The rest, which genuinely need deepagents to do their job.

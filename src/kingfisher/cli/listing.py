@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from kingfisher import SKILL_LAYOUT, Inventory, offered
+from kingfisher import SKILL_LAYOUT, Inventory, offered, split_reference
 
 
 def _from(source: str | None, expected: str) -> str:
@@ -88,7 +88,14 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
         yield f"  cannot load: {found.subagents_error}"
         return
     for name, described in found.subagents.items():
-        yield f"  {name}{_from(found.subagent_sources.get(name), f'{name}.yaml')} — {described}"
+        # A reference already names the file, so the trailing annotation is
+        # dropped for it -- `team/surveyor.yaml::surveyor (team/surveyor.yaml)`
+        # says one thing twice in a listing whose job is to be scannable. Two
+        # folders may each define a `surveyor`, and then the key is the
+        # reference; where a name is its own, the two are the same string.
+        claimed, plain = split_reference(name)
+        source = None if claimed else found.subagent_sources.get(name)
+        yield f"  {name}{_from(source, f'{plain}.yaml')} — {described}"
     if not found.subagents:
         yield "  (none)  — try `kingfisher seed`"
 

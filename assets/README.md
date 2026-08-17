@@ -4,22 +4,21 @@ One working definition of each thing a kingfisher request can activate — a
 skill, a subagent, a tool.
 
     uv sync                            # from a kingfisher checkout — this is a workspace member
-    uv run main.py                     # a new workspace seeds itself, and says so
+    kingfisher seed                    # copies them into $KINGFISHER_WORKSPACE
 
-A workspace that has never been used copies these in on its first run and prints
-what it wrote. `--seed-assets` re-seeds an existing one, which is how you take an
-upgrade — it overwrites, and that is why it has to be asked for.
+A workspace that has never been used also copies these in on its first run,
+without being asked, and prints what it wrote. `kingfisher seed` is how you take
+an upgrade afterwards — it overwrites, and that is why it has to be asked for.
 
 Nothing here is loaded automatically, and nothing here is imported. The files
 are copied into a workspace and read from there; a tool is imported *from the
 workspace*, never from this distribution.
 
 > **Neither package is published yet, so there is no `pip install` for either.**
-> That is a decision waiting rather than an oversight: both wheels build and
-> install cleanly, but the command that seeds lives in `main.py`, which is not
-> in kingfisher's wheel and imports the smoke harness — so a pip install would
-> get the definitions and no way to use them. Publishing also means owing
-> version floors, and the formats are still moving. See *Still undecided* in
+> A decision waiting rather than an oversight: both wheels build and install
+> cleanly, and `kingfisher seed` ships in the framework's wheel now, so a pip
+> install would work — what is left is owing version floors and a deprecation
+> cycle while the formats are still moving. See *Still undecided* in
 > `docs/design/2026-08-17-assets-as-packages.md`.
 >
 > None of which changes how a pack is *found*: that is an entry point, not a

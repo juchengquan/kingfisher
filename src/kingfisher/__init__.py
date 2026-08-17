@@ -58,6 +58,11 @@ _EXPORTS = {
     # files define reads the same in both. A consumer rendering its own
     # would be the drift that rule exists to stop.
     "offered": "kingfisher.domain.tool",
+    # The third name a consumer turned out to need, and it arrived the same
+    # way: two folders may each define a `surveyor`, so a listing has to tell
+    # a bare name from a `where::what` reference before deciding whether to
+    # print the file it came from.
+    "split_reference": "kingfisher.domain.tool",
     # Said once "so callers can quote it without knowing the filename
     # themselves", by its own comment. It was `skill_store.LAYOUT` with one
     # caller; renamed because a bare `LAYOUT` at the top level sits next to
@@ -116,6 +121,7 @@ __all__ = [
     "run",
     "seed",
     "shell_env",
+    "split_reference",
     "stream",
     "system_prompt",
     "writable_data",
@@ -150,6 +156,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import RunOn as RunOn
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
+    from kingfisher.domain.tool import split_reference as split_reference
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.harness.agent import build_agent as build_agent
     from kingfisher.infrastructure.harness.backend import build_backend as build_backend
