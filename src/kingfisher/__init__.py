@@ -52,6 +52,17 @@ _EXPORTS = {
     "Pack": "kingfisher.infrastructure.seeding",
     "Seeding": "kingfisher.infrastructure.seeding",
     "inventory": "kingfisher.infrastructure.inventory",
+    # Reached for by `kingfisher.cli`, and public because it reached. A
+    # renderer in the domain looks odd until you see what it is for: the
+    # block a *refusal* prints is the block a listing prints, so a name two
+    # files define reads the same in both. A consumer rendering its own
+    # would be the drift that rule exists to stop.
+    "offered": "kingfisher.domain.tool",
+    # Said once "so callers can quote it without knowing the filename
+    # themselves", by its own comment. It was `skill_store.LAYOUT` with one
+    # caller; renamed because a bare `LAYOUT` at the top level sits next to
+    # `LAYOUT_DIRS` and means something else.
+    "SKILL_LAYOUT": "kingfisher.infrastructure.skill_store",
     "Inventory": "kingfisher.infrastructure.inventory",
     "from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
@@ -65,6 +76,7 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "SKILL_LAYOUT",
     "Capabilities",
     "CapabilityError",
     "Config",
@@ -98,6 +110,7 @@ __all__ = [
     "installed_packs",
     "inventory",
     "normalize_answer",
+    "offered",
     "paths_from_env",
     "protect_data",
     "run",
@@ -136,6 +149,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.skill import SkillError as SkillError
     from kingfisher.domain.subagent import RunOn as RunOn
     from kingfisher.domain.subagent import SubagentError as SubagentError
+    from kingfisher.domain.tool import offered as offered
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.harness.agent import build_agent as build_agent
     from kingfisher.infrastructure.harness.backend import build_backend as build_backend
@@ -154,6 +168,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.seeding import Seeding as Seeding
     from kingfisher.infrastructure.seeding import installed_packs as installed_packs
     from kingfisher.infrastructure.seeding import seed as seed
+    from kingfisher.infrastructure.skill_store import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data

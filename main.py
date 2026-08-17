@@ -230,7 +230,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # between a catalogue that looks empty and one that is -- and it needs the
     # reason, because tools and subagents nest as deep as anyone likes.
     for name in found.skills_misplaced:
-        print(f"  ! {name}/ sits too deep to load — skills live at {skill_store.LAYOUT}")
+        print(f"  ! {name}/ sits too deep to load — skills live at {skill_store.SKILL_LAYOUT}")
         print("    (a folder under the root is its own source, and a source is read")
         print("     one level down; tools and subagents are read by kingfisher, so")
         print("     those may nest as deep as you like)")

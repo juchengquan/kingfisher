@@ -93,6 +93,14 @@ server = [
 # audience -- and the same argument keeps the extra above called `server`.
 kingfisher-server = "kingfisher.presentation.__main__:main"
 
+# Seeding a workspace and looking at one, which are the two things the
+# library cannot do for itself: running a task is `kingfisher.run`, and
+# serving one is the script above. Deliberately not a general CLI --
+# `main.py` stays the development driver, keeps its flags, and keeps a bare
+# invocation that runs the eval smoke, which is a fine default for a driver
+# and a wrong one for a stranger's first command.
+kingfisher = "kingfisher.cli.__main__:main"
+
 # No `[project.entry-points."kingfisher.assets"]` here, on purpose. It was here
 # for one phase, so the discovery mechanism could be proved before any file
 # moved; the definitions are their own distribution now and register themselves.
@@ -172,6 +180,11 @@ ignore = ["ANN401"]
 # A driver whose whole job is printing, with the branchiness that implies --
 # and one exit code per way a run can end, which is the clearer shape here.
 "main.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
+# The shipped command, for the first of those reasons only: it prints what the
+# library returned and decides nothing, so it is short and flat. `T201` is the
+# whole exemption -- if this ever needs the other three it has stopped being a
+# thin driver and that is worth noticing.
+"src/kingfisher/cli/**" = ["T201"]
 # The long lines are inside string literals: the task's JSON schema commentary
 # has to stay on one line to read as one field.
 "evals/task.py" = ["E501"]

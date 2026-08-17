@@ -455,10 +455,18 @@ def test_infrastructure_does_not_reach_back_into_application():
 
 def test_the_public_api_list_matches_the_lazy_export_table():
     """`__all__` is a literal so a linter can see it, and `_EXPORTS` drives the
-    lazy loading. Nothing keeps them in step but this."""
+    lazy loading. Nothing keeps them in step but this.
+
+    The same *names*, not the same order. It read `== sorted(_EXPORTS)`, which
+    also asserted a plain sort -- and that quietly disagreed with `RUF022`, which
+    orders SCREAMING_CASE first. The two agreed until `SKILL_LAYOUT` arrived and
+    broke the tie, at which point the linter's fix failed the test and the
+    test's order failed the linter. Ordering is the linter's job; membership is
+    this one's.
+    """
     import kingfisher
 
-    assert kingfisher.__all__ == sorted(kingfisher._EXPORTS)
+    assert sorted(kingfisher.__all__) == sorted(kingfisher._EXPORTS)
 
 
 def test_importing_kingfisher_does_not_pull_in_deepagents():
@@ -502,6 +510,9 @@ LIGHT_EXPORTS = frozenset({
     # so `harness.agent` is imported inside the function. That is the shape
     # this classification is about -- what a name costs to touch.
     "seed", "installed_packs", "Pack", "Seeding", "inventory", "Inventory",
+    # A renderer and a sentence. Both are what a consumer needed and neither
+    # imports anything -- the cheapest names on this list.
+    "offered", "SKILL_LAYOUT",
 })
 
 #: The rest, which genuinely need deepagents to do their job.
@@ -854,15 +865,23 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 # caller-facing errors, `async_checkpointer`, and a way to send a file.
 
 
+#: Everything in this distribution held to the front door. `presentation` was
+#: first; `cli` is the second, and for the same reason -- the claim that any
+#: caller can seed a workspace is worth something only if the command that seeds
+#: is one of them. Adding a name here is what makes that checked rather than
+#: asserted, and it is why `offered` and `SKILL_LAYOUT` are public.
+CONSUMERS = ("presentation", "cli")
+
+
 def _presentation_modules() -> list[Path]:
-    return sorted((SRC / "presentation").rglob("*.py"))
+    return sorted(path for name in CONSUMERS for path in (SRC / name).rglob("*.py"))
 
 
 def _reaches_past_the_public_api(module: str) -> bool:
     return (
         module.split(".", maxsplit=1)[0] == "kingfisher"
         and module != "kingfisher"
-        and not module.startswith("kingfisher.presentation")
+        and not any(module.startswith(f"kingfisher.{name}") for name in CONSUMERS)
     )
 
 
@@ -1103,3 +1122,27 @@ def test_nothing_is_defined_for_tests_alone():
         f"defined but never used outside tests: {orphans} -- delete it, export it, "
         "or add it to DISPATCHED_ELSEWHERE with the contract that calls it"
     )
+
+
+def test_every_console_script_points_at_something_that_exists():
+    """A `[project.scripts]` line is only checked when somebody installs and runs.
+
+    `kingfisher = "kingfisher.cli.__main__:main"` naming a function that is not
+    there fails at the shell, for a stranger, after a pip install -- which is
+    the worst place to find out and the last place we would look. Nothing
+    covered this: renaming the target to `:absent` left the suite green.
+
+    Both scripts, and by import rather than by reading the source, so a target
+    that exists but cannot be imported fails here too.
+    """
+    import tomllib
+    from importlib import import_module
+
+    manifest = tomllib.loads((SRC.parent.parent / "pyproject.toml").read_text(encoding="utf-8"))
+    scripts = manifest["project"]["scripts"]
+    assert scripts, "the scripts table emptied out"
+
+    for command, target in scripts.items():
+        module_name, _, attribute = target.partition(":")
+        module = import_module(module_name)
+        assert callable(getattr(module, attribute, None)), f"{command} -> {target}"
