@@ -17,10 +17,10 @@ from dataclasses import dataclass, replace
 import pytest
 
 from kingfisher.domain.ports import SkillRepository
-from kingfisher.infrastructure.backend import SKILLS_ROUTE, build_backend, shell_env
 from kingfisher.infrastructure.catalogue import Catalogue, catalogue_root
+from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend, shell_env
+from kingfisher.infrastructure.harness.skills_backend import skills_backend
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.skills_backend import skills_backend
 
 SKILL = "---\nname: {name}\ndescription: A skill.\n---\n\nbody of {name}\n"
 

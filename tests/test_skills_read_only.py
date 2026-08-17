@@ -29,8 +29,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.agent import build_agent
-from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.backend import build_backend
 from tests.conftest import FakeToolCallingModel
 
 macos = pytest.mark.skipif(

@@ -17,10 +17,10 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import ceiling
-from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.delegation import as_subagent, subagent_skills
-from kingfisher.infrastructure.scoping import ToolAllowlist
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.delegation import as_subagent, subagent_skills
+from kingfisher.infrastructure.harness.scoping import ToolAllowlist
 from tests.conftest import FakeToolCallingModel
 
 HELPER = """name: helper
@@ -424,7 +424,7 @@ def _built_with(cfg, session_dir, capabilities) -> dict:
     want it without one, and letting the call happen still matters -- it is
     what makes deepagents validate the spec we supply.
     """
-    import kingfisher.infrastructure.agent as agent_module
+    import kingfisher.infrastructure.harness.agent as agent_module
 
     seen: dict = {}
     real = agent_module.create_deep_agent
@@ -655,7 +655,7 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     available" -- and answered around it instead of retrying with the right
     key. The name it could not find was its own typo, and nothing said so.
     """
-    from kingfisher.infrastructure.scoping import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.scoping import DeclaredDelegatesOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
@@ -670,7 +670,7 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
 
 def test_a_delegate_that_does_not_exist_still_names_it():
     """The other half, unchanged: a real name that is not on the list."""
-    from kingfisher.infrastructure.scoping import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.scoping import DeclaredDelegatesOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}

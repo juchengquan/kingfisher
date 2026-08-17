@@ -20,7 +20,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.harness.backend import build_backend
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"

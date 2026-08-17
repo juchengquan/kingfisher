@@ -4,7 +4,7 @@ from dataclasses import replace
 from pathlib import Path
 
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.delegation import as_subagent
+from kingfisher.infrastructure.harness.delegation import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
     render_system_prompt,
@@ -137,7 +137,7 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
     prompt said the run directory was "reachable by relative path" without ever
     saying what that path was, and the model did not derive it.
     """
-    from kingfisher.infrastructure.backend import build_backend
+    from kingfisher.infrastructure.harness.backend import build_backend
 
     backend = build_backend(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()
@@ -156,7 +156,7 @@ def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
     slash silently reads the wrong directory. If the catalogue ever moves under
     the session that warning becomes a lie, which is worse than no warning.
     """
-    from kingfisher.infrastructure.backend import build_backend
+    from kingfisher.infrastructure.harness.backend import build_backend
 
     backend = build_backend(cfg, session_dir)
     cwd = Path(backend.default.cwd).resolve()

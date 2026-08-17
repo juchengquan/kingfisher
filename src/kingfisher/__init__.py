@@ -32,7 +32,7 @@ _EXPORTS = {
     "LocalFileStore": "kingfisher.infrastructure.files",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.uploads",
-    "async_checkpointer": "kingfisher.infrastructure.checkpointing",
+    "async_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
@@ -42,17 +42,17 @@ _EXPORTS = {
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
-    "build_agent": "kingfisher.infrastructure.agent",
-    "build_backend": "kingfisher.infrastructure.backend",
-    "build_checkpointer": "kingfisher.infrastructure.checkpointing",
-    "build_model": "kingfisher.infrastructure.models",
+    "build_agent": "kingfisher.infrastructure.harness.agent",
+    "build_backend": "kingfisher.infrastructure.harness.backend",
+    "build_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
+    "build_model": "kingfisher.infrastructure.harness.models",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
     "from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
     "normalize_answer": "kingfisher.domain.result",
     "protect_data": "kingfisher.infrastructure.workspace_fs",
     "run": "kingfisher.application.run",
-    "shell_env": "kingfisher.infrastructure.backend",
+    "shell_env": "kingfisher.infrastructure.harness.backend",
     "stream": "kingfisher.application.run",
     "system_prompt": "kingfisher.infrastructure.prompting",
     "writable_data": "kingfisher.infrastructure.workspace_fs",
@@ -124,13 +124,17 @@ if TYPE_CHECKING:
     from kingfisher.domain.skill import SkillError as SkillError
     from kingfisher.domain.subagent import RunOn as RunOn
     from kingfisher.domain.subagent import SubagentError as SubagentError
-    from kingfisher.infrastructure.agent import build_agent as build_agent
-    from kingfisher.infrastructure.backend import build_backend as build_backend
-    from kingfisher.infrastructure.backend import shell_env as shell_env
-    from kingfisher.infrastructure.checkpointing import async_checkpointer as async_checkpointer
-    from kingfisher.infrastructure.checkpointing import build_checkpointer as build_checkpointer
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
-    from kingfisher.infrastructure.models import build_model as build_model
+    from kingfisher.infrastructure.harness.agent import build_agent as build_agent
+    from kingfisher.infrastructure.harness.backend import build_backend as build_backend
+    from kingfisher.infrastructure.harness.backend import shell_env as shell_env
+    from kingfisher.infrastructure.harness.checkpointing import (
+        async_checkpointer as async_checkpointer,
+    )
+    from kingfisher.infrastructure.harness.checkpointing import (
+        build_checkpointer as build_checkpointer,
+    )
+    from kingfisher.infrastructure.harness.models import build_model as build_model
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout

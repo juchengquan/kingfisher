@@ -14,7 +14,7 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure import seeding
-from kingfisher.infrastructure.agent import (
+from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
     build_agent,
@@ -97,7 +97,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, s
     row is a CapabilityError someone has to debug."""
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.agent import registered_tools
+    from kingfisher.infrastructure.harness.agent import registered_tools
     from tests.conftest import FakeToolCallingModel
 
     graph = build_agent(

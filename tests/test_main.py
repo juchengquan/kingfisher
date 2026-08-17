@@ -19,8 +19,8 @@ from kingfisher.config import ConfigError
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
-from kingfisher.infrastructure import agent as main_agent_module
 from kingfisher.infrastructure import seeding
+from kingfisher.infrastructure.harness import agent as main_agent_module
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 

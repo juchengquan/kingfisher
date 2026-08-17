@@ -22,7 +22,7 @@ from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
-from kingfisher.infrastructure.agent import build_agent
+from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, capture_build
 
 ELSEWHERE = Endpoint("openai", "https://api.openai.com/v1", "sk-test")

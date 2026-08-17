@@ -19,7 +19,7 @@ from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
-from kingfisher.infrastructure.agent import indistinct_delegates
+from kingfisher.infrastructure.harness.agent import indistinct_delegates
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.

@@ -20,8 +20,8 @@ from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
 
 from kingfisher.application.run import Request, stream
-from kingfisher.infrastructure import runtime
-from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.harness import runtime
+from kingfisher.infrastructure.harness.backend import build_backend
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, start
 from tests.test_run import StubAgent
 

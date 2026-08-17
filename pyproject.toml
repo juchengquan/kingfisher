@@ -18,7 +18,7 @@ classifiers = [
 ]
 dependencies = [
     "deepagents>=0.7.6",
-    # Imported directly by infrastructure/agent.py, lazily, so that installing it
+    # Imported directly by infrastructure/harness/agent.py, lazily, so that installing it
     # costs nothing until `KINGFISHER_INTERPRETER` is on. It also arrives through
     # deepagents' own `quickjs` extra, but an extra is not a promise either -- if
     # upstream renames it, uv warns and moves on while our import breaks. The
@@ -36,17 +36,22 @@ dependencies = [
     # installing something untested. That is the intended outcome: a build that
     # stops is a decision to make, where a silent upgrade is one already made.
     "langchain-quickjs>=0.3.3,<0.4",
-    # Imported directly by adapters/models.py. It also arrives transitively
-    # through deepagents, but a transitive dep is not a promise.
+    # Imported directly by infrastructure/harness/models.py. It also arrives
+    # transitively through deepagents, but a transitive dep is not a promise.
     "langchain-anthropic>=1.5.4",
     "langchain-openai>=1.5.1",
-    # Imported directly by adapters/checkpointing.py for the async saver. It
-    # arrives transitively through langgraph-checkpoint-sqlite, and a
+    # Imported directly by infrastructure/harness/checkpointing.py for the async
+    # saver. It arrives transitively through langgraph-checkpoint-sqlite, and a
     # transitive dep is not a promise.
     "aiosqlite>=0.22.1",
-    # Imported directly by domain/frontmatter.py, which reads the same YAML
-    # header deepagents reads. It also arrives transitively through deepagents,
-    # but a transitive dep is not a promise.
+    # Imported directly by infrastructure/definitions.py and
+    # infrastructure/model_catalogue.py. It also arrives transitively through
+    # deepagents, but a transitive dep is not a promise.
+    #
+    # It named `domain/frontmatter.py` until this commit, which has not existed
+    # for two refactors -- and could not, since the domain is barred from
+    # importing a third-party parser at all. A dependency justified by a file
+    # that is gone is a dependency nobody can re-examine.
     "pyyaml>=6.0",
     "langgraph-checkpoint-sqlite>=3.1.1",
     "python-dotenv>=1.2.2",

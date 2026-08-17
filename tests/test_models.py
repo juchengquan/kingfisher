@@ -12,7 +12,7 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
-from kingfisher.infrastructure.models import ADAPTERS, Adapter, build_model
+from kingfisher.infrastructure.harness.models import ADAPTERS, Adapter, build_model
 
 OPENAI = Endpoint("openai", "https://api.openai.com/v1", "sk-not-real")
 
@@ -156,7 +156,7 @@ def test_describing_an_adapter_does_not_import_its_sdk():
 
     probe = (
         "import sys;"
-        "import kingfisher.infrastructure.models as m;"
+        "import kingfisher.infrastructure.harness.models as m;"
         "print('langchain_openai' in sys.modules, 'langchain_anthropic' in sys.modules)"
     )
     out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal

@@ -20,7 +20,7 @@ from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.subagent import RunOn
-from kingfisher.infrastructure.agent import build_agent
+from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, capture_build
 
 #: A second endpoint, on a different wire format, so a test can tell "went

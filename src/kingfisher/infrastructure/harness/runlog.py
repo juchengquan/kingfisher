@@ -22,7 +22,7 @@ from typing import Any
 
 from langchain_core.callbacks import BaseCallbackHandler
 
-from kingfisher.infrastructure import runtime
+from kingfisher.infrastructure.harness import runtime
 
 MODEL_CALL = "model_call"
 

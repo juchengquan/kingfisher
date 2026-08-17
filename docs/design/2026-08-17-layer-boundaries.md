@@ -122,9 +122,37 @@ rather than by the suite going green.
 | # | What | Verification |
 |---|---|---|
 | 1 | `_modules_in` recurses. | A nested domain module importing `yaml` must fail the rule. Confirm all nine rules still pass unchanged — with no subpackages yet, this is a no-op by construction. |
-| 2 | `infrastructure/harness/`, the ten moved, imports updated, `_EXPORTS` repointed. | Import graph re-measured: `catalogue` → `skill_registry` is the only edge out of the set, and no new one appeared. Full suite, `ruff`, `ty`. |
-| 3 | The containment rule replaces the existence check. | A `from deepagents import SubAgent` added to `catalogue.py` must fail. Removing every foreign import from `harness/` must also fail. |
+| 2+3 | `infrastructure/harness/`, the ten moved, imports updated, `_EXPORTS` repointed, and the containment rule that replaces the existence check. | Import graph re-measured: `catalogue` → `skill_registry` is the only edge out of the set, and no new one appeared. Eight mutations. The shipped server binary booted and served, and the CLI listed a workspace. Full suite, `ruff`, `ty`. |
 | 4 | `server/` → `presentation/`. | `uvicorn kingfisher.presentation.asgi:app` started for real and a turn run through it. The entry point has been unrunnable before while the whole suite passed — nothing in `tests/` starts the shipped command, so nothing in `tests/` can find this. |
+
+## Two things the plan got wrong, found while building it
+
+**Phases 2 and 3 could not be separated.** The `harness/__init__.py` docstring
+has to say what keeps the boundary true, and splitting the phases meant landing
+a docstring that named a test which would not exist for another PR. A boundary
+claimed and unenforced, for however long the second review took. Phase 1's own
+argument settles it the other way round: the guard goes in *before* the move it
+watches, and it did.
+
+**L3 was too narrow to be correct.** Written as "only `infrastructure/harness/`
+may import the harness", which assumes the rule knows what the harness is. It
+did not. `FOREIGN` named five packages; the agent runtime accounts for eight
+here, and `langchain_quickjs`, `aiosqlite` and `langchain_openai` were in none
+of them — an `application/` module importing any of the three passed, as would
+one importing `yaml`, or anything else nobody had thought of.
+
+That is the same defect
+`test_domain_imports_only_the_standard_library_and_itself` was rewritten to
+escape, still present in the two rules that had not been turned around yet. So
+the shipped rule is a table: every area's third-party surface written down, and
+anything undeclared refused wherever it appears. It subsumes both old rules,
+which are gone.
+
+The table also decides what happens when a new directory appears under
+`src/kingfisher/`: `_area_of` finds no entry, falls back to the package root,
+and the root may import nothing third-party. A new area therefore starts denied
+and someone has to write down what it needs — which is the behaviour phase 4
+will meet when `server/` becomes `presentation/`.
 
 ## Not in scope
 
