@@ -1,0 +1,4 @@
+name: probe-agent
+description: A subagent that exists so seeding has a single file to copy.
+system_prompt: |
+  You are a fixture. You do nothing, and nothing depends on what you would say.
