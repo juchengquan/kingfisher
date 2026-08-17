@@ -34,13 +34,22 @@ def _pack_of(tmp_path, name: str, *entries: str) -> tuple[Pack, object]:
 # -- discovery -------------------------------------------------------------
 
 
-def test_kingfisher_registers_its_own_presets_as_a_pack():
-    """The line in `pyproject.toml` that makes the mechanism real before
-    anything moves. Without it the seeder discovers nothing and `--seed-presets`
-    silently stops working, which is the failure this phase must not have."""
+def test_kingfisher_registers_no_pack_of_its_own():
+    """It did, for one phase, so the mechanism could be proved before the files
+    moved. It ships no assets now, so it registers nothing -- a framework that
+    announced itself as a source of content would be the thing this change
+    exists to stop."""
+    found = {pack.package for pack in presets.installed_packs()}
+
+    assert not any(package.startswith("kingfisher.") for package in found)
+
+
+def test_the_asset_pack_in_this_repository_is_discovered():
+    """The real arrangement, end to end: a second distribution, found through
+    the entry point, with no name written down in kingfisher's source."""
     found = {pack.name: pack.package for pack in presets.installed_packs()}
 
-    assert found.get("presets") == "kingfisher.presets"
+    assert found.get("kingfisher-assets") == "kingfisher_assets"
 
 
 def test_packs_come_back_in_a_stable_order():
@@ -79,7 +88,9 @@ def test_two_packs_claiming_one_entry_are_refused(cfg, tmp_path, monkeypatch):
 
     @contextmanager
     def _opened(package: str = ""):
-        yield roots[package]
+        # `_copy_example` asks for kingfisher's own tree with no argument, so
+        # the stand-in has to answer that too -- it is not a pack.
+        yield roots.get(package, tmp_path)
 
     monkeypatch.setattr(presets, "opened", _opened)
 
@@ -96,7 +107,9 @@ def test_the_refusal_names_both_packs(cfg, tmp_path, monkeypatch):
 
     @contextmanager
     def _opened(package: str = ""):
-        yield roots[package]
+        # `_copy_example` asks for kingfisher's own tree with no argument, so
+        # the stand-in has to answer that too -- it is not a pack.
+        yield roots.get(package, tmp_path)
 
     monkeypatch.setattr(presets, "opened", _opened)
 
@@ -120,7 +133,9 @@ def test_nothing_is_written_before_the_refusal(cfg, tmp_path, monkeypatch):
 
     @contextmanager
     def _opened(package: str = ""):
-        yield roots[package]
+        # `_copy_example` asks for kingfisher's own tree with no argument, so
+        # the stand-in has to answer that too -- it is not a pack.
+        yield roots.get(package, tmp_path)
 
     monkeypatch.setattr(presets, "opened", _opened)
 
@@ -140,7 +155,9 @@ def test_two_packs_that_do_not_collide_both_seed(cfg, tmp_path, monkeypatch):
 
     @contextmanager
     def _opened(package: str = ""):
-        yield roots[package]
+        # `_copy_example` asks for kingfisher's own tree with no argument, so
+        # the stand-in has to answer that too -- it is not a pack.
+        yield roots.get(package, tmp_path)
 
     monkeypatch.setattr(presets, "opened", _opened)
 
@@ -151,9 +168,15 @@ def test_two_packs_that_do_not_collide_both_seed(cfg, tmp_path, monkeypatch):
     assert (cfg.subagents_dir / "two.yaml").is_file()
 
 
-def test_seeding_from_no_packs_writes_nothing(cfg):
-    """What an install with no asset pack does. It must be quiet and empty
-    rather than an error — the driver decides what to say about it."""
+def test_seeding_from_no_packs_still_writes_the_catalogue_example(cfg):
+    """What an install with no asset pack does.
+
+    Not nothing: `models.yaml` is required and has no fallback, and the error a
+    deployment without one hits points at this example. It is kingfisher's own
+    file rather than a pack's, so it does not depend on having installed any.
+    No definitions are written, because there are none to write.
+    """
     seeding = presets.seed(cfg, packs=[])
 
-    assert seeding == presets.Seeding()
+    assert seeding.written == (presets.EXAMPLE,)
+    assert (cfg.workspace / presets.EXAMPLE).is_file()

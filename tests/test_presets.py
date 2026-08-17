@@ -9,12 +9,9 @@ from __future__ import annotations
 
 import shutil
 from contextlib import contextmanager
-from dataclasses import fields
 
 import pytest
-import yaml
 
-from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure import presets
 from kingfisher.infrastructure.agent import (
@@ -23,11 +20,8 @@ from kingfisher.infrastructure.agent import (
     build_agent,
     registered_tools,
 )
-from kingfisher.infrastructure.definitions import skill_name
 from kingfisher.infrastructure.presets import Pack
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository, tool_name
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped
 #: pack is reached -- `opened()` through `importlib.resources` -- so those tests
@@ -57,66 +51,6 @@ def shipped():
     """
     with presets.opened() as root:
         yield root
-
-
-def test_every_preset_subagent_parses(shipped):
-    specs = LocalSubagentRepository(shipped / "subagents").specs
-
-    # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the
-    # same: a subagent is named by its `name:` field, so a folder cannot reach
-    # it. Its presence in this flat set is the assertion that nesting works.
-    assert set(specs) == {"reviewer", "extractor", "second-opinion", "profiler"}
-    for spec in specs.values():
-        assert spec.description.strip()
-        assert len(spec.system_prompt) > 200  # a real prompt, not a stub
-
-
-def test_every_preset_skill_parses(shipped):
-    """The mirror of the subagent version, and absent until a probe went looking.
-
-    Seeding a fourth skill preset left the entire suite green, and dropping a
-    shipped one would have too. `test_preset_skills_are_discovered` asserts a
-    *superset*, which is the right shape for that test -- it is about discovery
-    reaching the catalogue -- and the wrong shape for declaring what ships.
-
-    The header's name is checked against the directory because the two are read
-    by different paths: a catalogue skill is found by directory
-    (`LocalSkillRepository.names`), while an uploaded one is filed under the name in its
-    header (`uploads.skill_name`). A preset whose halves disagree is copied,
-    uploaded, and lands somewhere its author did not mean.
-    """
-    root = shipped / "skills"
-    shipped_skills = LocalSkillRepository(root).names
-
-    assert set(shipped_skills) == {"code-review", "release-notes", "tabular-qa"}
-    for name in shipped_skills:
-        text = (root / name / skill.FILENAME).read_text(encoding="utf-8")
-        parts = skill.split(text)
-
-        assert parts is not None, f"{name}: no `---` header"
-        header, body = parts
-        assert skill_name(text) == name  # header and directory agree
-        assert yaml.safe_load(header)["description"].strip()
-        # A real procedure, not a stub. The same threshold the subagent version
-        # uses; the shipped bodies measure 1222-1366 characters.
-        assert len(body.strip()) > 200
-
-
-def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
-    """Both optional fields appear in at least one example, or they are
-    documented in the README and shown nowhere."""
-    extractor = LocalSubagentRepository(shipped / "subagents").specs["extractor"]
-
-    assert extractor.tools is not None
-    assert "write_file" not in extractor.tools  # read-only, as its body claims
-    assert extractor.builtin_tools is not None
-
-
-@pytest.fixture
-def workspace_with_presets(cfg, shipped):
-    for kind in ("skills", "subagents"):
-        shutil.copytree(shipped / kind, cfg.workspace / kind, dirs_exist_ok=True)
-    return cfg
 
 
 def test_a_seeded_skill_is_discovered(cfg):
@@ -220,7 +154,6 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
     nothing: no error, no warning, a catalogue that simply looks empty. The
     layout is a contract, so breaking it should say so.
     """
-    from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
         target = tmp_path / path
@@ -235,35 +168,11 @@ def test_a_skill_hidden_by_a_folder_is_reported_not_ignored(tmp_path):
 def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
     """The negative control: only folders that actually hide one are named, or
     every stray directory in a catalogue becomes a warning."""
-    from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
     (tmp_path / "notes").mkdir()
     (tmp_path / "notes" / "readme.txt").write_text("nothing to see", encoding="utf-8")
 
     assert LocalSkillRepository(tmp_path).misplaced == ()
-
-
-def test_every_preset_tool_loads(shipped):
-    """A tool is code, so "does it parse" means "does it import".
-
-    `csv_profile` and `csv_columns` come from a *package* -- `tools/csv_profile/`
-    with an `__init__.py` -- and arrive in this flat set under their own names,
-    because a folder cannot reach a name either. That they import at all is the
-    part worth having: the package uses a relative import, which is exactly what
-    a standalone-module loader cannot resolve.
-    """
-    tools = LocalToolRepository(shipped / "tools").tools
-
-    assert {tool_name(t) for t in tools} == {
-        "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
-    }
-
-
-def test_every_preset_tool_describes_itself_to_the_model(shipped):
-    """The docstring is what the model reads when deciding whether to call it.
-    An example without a real one teaches the wrong shape."""
-    for tool in LocalToolRepository(shipped / "tools").tools:
-        assert len(tool.description.strip()) > 60  # a trigger, not a title
 
 
 def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
@@ -484,92 +393,7 @@ def test_every_complete_definition_in_the_readme_parses(shipped):
         read_subagent(block, _Path("readme.yaml"))
 
 
-def test_no_preset_names_a_model(shipped):
-    """A file inside the wheel cannot portably name a vendor's model id.
-
-    `extractor` and `profiler` said `MiniMax-M2.5` and `second-opinion` said
-    `gpt-5`. The catalogue is closed now, so any of those would refuse to start
-    for a deployment whose `models.yaml` lacks the entry -- and before it was
-    closed they were worse, reaching whatever endpoint was configured and
-    failing as a 404 mid-run.
-
-    Which model is cheap *here* is a deployment's answer, not a preset's: the
-    same reason `KINGFISHER_MODEL_SUBAGENT` was deleted for being the wrong
-    granularity. The cost-routing demonstration lives in the README instead.
-    """
-    specs = LocalSubagentRepository(shipped / "subagents").specs
-
-    assert {name for name, s in specs.items() if s.model} == set()
-    assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
-
-
 # -- the one preset that consults another ---------------------------------
-
-
-def test_the_reviewer_preset_consults_the_second_opinion(shipped):
-    """The README describes this pairing, so a preset had better demonstrate it.
-
-    It is also the shape the field exists for: `reviewer` runs out of road in a
-    specific place -- two defensible readings and nothing in the file to choose
-    between them -- which is where a *different model* beats more care from the
-    same one.
-    """
-    specs = LocalSubagentRepository(shipped / "subagents").specs
-
-    assert specs["reviewer"].subagents == ("second-opinion",)
-    assert specs["second-opinion"].subagents is None  # a helper works alone
-
-
-def test_the_shipped_catalogue_obeys_the_one_level_rule(shipped):
-    """Seeding a catalogue that refuses to load would be the worst kind of
-    preset: copied, broken on the first run, and the format blamed."""
-    from kingfisher.domain.subagent import refuse_helpers_with_helpers
-
-    refuse_helpers_with_helpers(LocalSubagentRepository(shipped / "subagents").specs)
-
-
-def _reviewer_of(workspace, session_dir, granted):
-    from langchain_core.messages import AIMessage
-
-    from tests.conftest import FakeToolCallingModel
-    from tests.test_delegation_ceiling import _subagent_graphs
-
-    graph = build_agent(
-        workspace,
-        session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        capabilities=Capabilities(subagents=granted),
-    )
-    delegate = _subagent_graphs(graph)["reviewer"]
-    node = getattr(delegate, "nodes", {}).get("tools")
-    return set(getattr(getattr(node, "bound", None), "tools_by_name", {}))
-
-
-def test_the_reviewer_preset_still_works_without_its_helper(
-    workspace_with_presets, session_dir
-):
-    """The path most callers will take, and the reason the prompt says "if you
-    have one". Granting `second-opinion` also grants OpenAI, which plenty of
-    callers will decline -- and declining it must not cost them the reviewer.
-    """
-    assert "task" not in _reviewer_of(workspace_with_presets, session_dir, ("reviewer",))
-
-
-def test_the_reviewer_preset_gets_its_helper_when_granted(
-    workspace_with_presets, session_dir
-):
-    """No second endpoint needed any more: `second-opinion` ships without a
-    `model:`, so it builds anywhere and runs whatever the deployment runs.
-
-    Which is the cost of the rule, stated plainly: this test used to need a
-    routed deployment because the preset pinned one, and a preset that pins
-    nothing is a preset that does not do its job until someone gives it a model.
-    Its own comment says so.
-    """
-
-    assert "task" in _reviewer_of(
-        workspace_with_presets, session_dir, ("reviewer", "second-opinion")
-    )
 
 
 def test_the_readme_run_on_example_is_valid(cfg, session_dir, shipped):

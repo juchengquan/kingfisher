@@ -6,6 +6,12 @@ resolution-markers = [
     "python_full_version < '3.14'",
 ]
 
+[manifest]
+members = [
+    "kingfisher",
+    "kingfisher-assets",
+]
+
 [[package]]
 name = "aiosqlite"
 version = "0.22.1"
@@ -713,6 +719,7 @@ server = [
 [package.dev-dependencies]
 dev = [
     { name = "fastapi" },
+    { name = "kingfisher-assets" },
     { name = "pytest" },
     { name = "ruff" },
     { name = "ty" },
@@ -737,10 +744,26 @@ provides-extras = ["server"]
 [package.metadata.requires-dev]
 dev = [
     { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "kingfisher-assets", editable = "assets" },
     { name = "pytest", specifier = ">=9.1.1" },
     { name = "ruff", specifier = ">=0.16.3" },
     { name = "ty", specifier = ">=0.0.72" },
     { name = "uvicorn", specifier = ">=0.40.0" },
+]
+
+[[package]]
+name = "kingfisher-assets"
+version = "0.1.0"
+source = { editable = "assets" }
+dependencies = [
+    { name = "kingfisher" },
+    { name = "langchain-core" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "kingfisher", editable = "." },
+    { name = "langchain-core", specifier = ">=1.0.0" },
 ]
 
 [[package]]

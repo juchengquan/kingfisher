@@ -82,19 +82,33 @@ server = [
 # "install the extra" is a better answer than one that is silently absent.
 kingfisher-server = "kingfisher.server.__main__:main"
 
-# The presets register as an asset pack like anyone else's, through the same
-# group a third-party pack uses. Kingfisher names no pack in its source -- it
-# asks which are installed -- so this is the line that makes the default
-# arrangement one pack that happens to ship inside the wheel, and the reason
-# the discovery path is exercised by every existing seeding test.
-[project.entry-points."kingfisher.assets"]
-presets = "kingfisher.presets"
+# No `[project.entry-points."kingfisher.assets"]` here, on purpose. It was here
+# for one phase, so the discovery mechanism could be proved before any file
+# moved; the definitions are their own distribution now and register themselves.
+# A framework that announced itself as a source of content would be the thing
+# this arrangement exists to stop.
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
+# Two distributions in one repository: the framework here, the definitions in
+# `assets/`. Separate wheels, so `pip install kingfisher` carries no content --
+# together in one checkout, so a change to a format and the examples of it can
+# land in a single commit and be tested against each other.
+[tool.uv.workspace]
+members = ["assets"]
+
+# Development only. Nothing in `[project.dependencies]` names the pack: the
+# arrow points assets -> framework and never back.
+[tool.uv.sources]
+kingfisher-assets = { workspace = true }
+
 [dependency-groups]
 dev = [
+    # Installed for development so the pack's own tests run and the seeding
+    # tests have a real pack to discover. Not a dependency of the framework --
+    # this group is not part of any wheel.
+    "kingfisher-assets",
     # The server extra, so its tests always run rather than skipping quietly on
     # a machine that happens not to have it. uvicorn is here for the same
     # reason: the entry point is only testable if it can be imported.
@@ -153,7 +167,14 @@ ignore = ["ANN401"]
 # Tests assert, take untyped fixtures, import locally to keep a case readable,
 # and compare against literals -- that is what a test is. `RUF012` fires on a
 # pydantic field, where a mutable default is handled by the model.
+#
+# Both test trees, because both are tests: `assets/tests` belongs to the other
+# distribution in this workspace, and holding it to a different bar than the one
+# beside it would only mean two conventions for the same kind of file.
 "tests/**" = [
+    "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
+]
+"assets/tests/**" = [
     "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
 ]
 # Not a test: a report you run by hand, so printing is its entire output. It
@@ -168,7 +189,10 @@ ignore = ["ANN401"]
 known-first-party = ["kingfisher"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+# Both distributions in this workspace. The pack's tests are about its content
+# and kingfisher's are about the framework, but one command has to run both or a
+# preset breaks with nothing red.
+testpaths = ["tests", "assets/tests"]
 pythonpath = ["."]
 
 [tool.ty.environment]
