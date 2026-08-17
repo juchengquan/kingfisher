@@ -58,6 +58,17 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     sub.add_parser(
+        "serve",
+        help="run the HTTP surface (needs the server extra)",
+        description=(
+            "The same thing `kingfisher-server` starts, reading the same "
+            "environment. Both names exist because scripts and unit files "
+            "already call the older one, and there is one implementation behind "
+            "them. Needs `pip install 'kingfisher[server]'`, and says so if it "
+            "is missing rather than being absent from this list."
+        ),
+    )
+    sub.add_parser(
         "list",
         help="show what this workspace offers a request",
         description=(
@@ -105,6 +116,30 @@ def _list() -> int:
     return 1 if failed(found) else 0
 
 
+def _serve() -> int:
+    """Hand off to the server's own entry point, which decides everything.
+
+    Imported here rather than at module scope, and that is not a style choice.
+    `kingfisher.presentation` reaches fastapi as it loads, so importing it at the
+    top would make `kingfisher list` fail on an install without the server extra
+    -- a verb nobody asked for taking down the two they did.
+
+    The same reason `presentation.__main__` imports uvicorn inside `serve`, and
+    the same reason this subcommand is in `--help` whether or not the extra is
+    installed: a command that exists and says what to install beats one that is
+    silently absent.
+    """
+    try:
+        from kingfisher.presentation.__main__ import main as serve_forever  # noqa: PLC0415
+    except ImportError:
+        print(
+            "kingfisher serve needs the server extra: pip install 'kingfisher[server]'",
+            file=sys.stderr,
+        )
+        return 1
+    return serve_forever()
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -114,7 +149,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        return _seed() if args.command == "seed" else _list()
+        if args.command == "seed":
+            return _seed()
+        if args.command == "serve":
+            return _serve()
+        return _list()
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.
