@@ -32,7 +32,7 @@ import yaml
 
 from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
 from kingfisher.domain import fields
-from kingfisher.infrastructure.presets import EXAMPLE
+from kingfisher.infrastructure.seeding import EXAMPLE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -236,12 +236,16 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
             f"    models:\n"
             f"      MiniMax-M3:\n"
             f"        endpoint: minimax\n\n"
-            # The minimal one above is enough to start; the shipped example is
-            # the one that explains `aliases`, `extra`, and why an omitted
-            # `temperature` is not a defaulted one. `--seed-presets` puts it
+            # The minimal one above is enough to start; the annotated example
+            # is the one that explains `aliases`, `extra`, and why an omitted
+            # `temperature` is not a defaulted one. `--seed-assets` puts it
             # beside this path, which is the only place a new deployment would
             # think to look for it.
-            f"`--seed-presets` writes an annotated {EXAMPLE} next to it.\n"
+            #
+            # It ships with the framework rather than with an asset pack, which
+            # is what lets this message promise it unconditionally: a deployment
+            # that installed no pack still gets the file this line names.
+            f"`--seed-assets` writes an annotated {EXAMPLE} next to it.\n"
         )
         raise ConfigError(msg) from exc
 

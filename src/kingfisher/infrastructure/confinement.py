@@ -117,7 +117,7 @@ def profile(
     watching the wrong thing.
 
     Left broken deliberately. Nothing here needs a browser: not this codebase,
-    not the shipped presets, and not the `pdf` skill, which prescribes `pypdf`,
+    not the definitions a pack ships, and not the `pdf` skill, which prescribes `pypdf`,
     `pdfplumber`, `pdftotext`, `qpdf` and `reportlab`. Chrome appeared once,
     when an agent improvised it to look at its own HTML output. An agent
     spawning a network-capable browser is nearer to what a boundary is for than

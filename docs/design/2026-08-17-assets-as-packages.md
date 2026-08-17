@@ -1,6 +1,6 @@
 # Assets as packages, not as cargo
 
-**Status:** designed, not implemented.
+**Status:** phases 1-5 implemented; phase 6 outstanding.
 **Date:** 2026-08-17
 
 Kingfisher ships fifteen asset files inside the wheel: three skills, four
@@ -100,6 +100,23 @@ Phases 1 to 3 remain additive and reversible.
   the official assets ship as one distribution or as `-analysis`, `-web` and so
   on. That is a packaging question best answered once there is more than
   fifteen files to divide.
+- **How a pip-installed deployment seeds.** `--seed-assets` lives in `main.py`,
+  which is the driver and is not in the wheel — `packages = ["src/kingfisher"]`.
+  So the flag, and A7's auto-seeding with it, are reachable from a checkout and
+  nowhere else. Nothing is broken by this: discovery is an entry point rather
+  than a path, so an installed pack *is* found, and `seeding.seed(cfg)` is three
+  lines from any caller. But the framework's own error message names a flag that
+  a pip user does not have, which is the kind of gap that reads as a lie. The
+  ordinary answer is a `[project.scripts]` console entry, and it is a decision
+  about what kingfisher's CLI *is* rather than a rename, so it is not in phase 5.
+- **The catalogue error is a dead end, and was before the rename.** Measured: a
+  workspace with no `models.yaml` gets a `ConfigError` saying *"`--seed-assets`
+  writes an annotated models.yaml.example next to it"* — and running
+  `--seed-assets` hits the same error, because `main.py` builds the config
+  before it seeds. The message has pointed at an unreachable command since it
+  was written; renaming the flag only made it easy to see. The workspace path is
+  known before the catalogue loads, so seeding the example on that failure path
+  is possible, but it is a behaviour change in the driver rather than a rename.
 - **What a pack declares about the format it was written for.** A definition
   using a field an older kingfisher does not know is refused by name, which is
   a loud and adequate failure. A tool is Python and fails differently. The

@@ -559,7 +559,7 @@ def _activated_subagents(
     # override could apply and defeat it.
     #
     # So it stays per-delegate, at `as_subagent`, where the override has already
-    # been resolved -- and seeding a preset you cannot run costs nothing until
+    # been resolved -- and seeding a definition you cannot run costs nothing until
     # you activate it.
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.

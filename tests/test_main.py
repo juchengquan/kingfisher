@@ -236,7 +236,7 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
     )
     monkeypatch.setattr(driver, "from_env", lambda: relocated)
 
-    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
 
     assert LocalSkillRepository(relocated.skills_dir).names  # the catalogue was filled
     assert not LocalSkillRepository(relocated.workspace / "skills").names  # and not the workspace
@@ -256,7 +256,7 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, mo
 
     # `--list` so it returns after seeding; without it the driver falls
     # through to running the task, which wants a model.
-    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
     assert LocalSkillRepository(cfg.skills_dir).names
 
 
@@ -276,7 +276,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     relocated = replace(cfg, tools_root=catalogue / "tools")
     monkeypatch.setattr(driver, "from_env", lambda: relocated)
 
-    assert driver.main(["main.py", "--seed-presets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
 
     assert "http_fetch" in LocalToolRepository(relocated.tools_dir).names
     # `ensure_layout` still makes the workspace directory, so the place to put
@@ -325,9 +325,9 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
     workspace grant, so `--without-tools execute,delete`, the example this
     driver's own docstring gives, came back as "those are builtin tools".
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
 
     granted = main._grants(cfg, _args(without_builtin_tools="execute,delete"))
 
@@ -344,9 +344,9 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
 
 def test_the_two_tool_axes_subtract_independently(cfg):
     """A workspace tool is subtracted from the workspace set, and only that."""
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
 
     tools = main._grants(cfg, _args(without_tools="http_fetch"))["tools"]
 
@@ -365,9 +365,9 @@ def test_subtracting_skills_and_subagents_too(cfg):
     tested is that the named one is gone and the others are enumerated, which
     is true at any catalogue size.
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
     seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
     seeded_subagents = set(LocalSubagentRepository(cfg.subagents_dir).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
@@ -391,9 +391,9 @@ def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg):
     unknown name(s): execute" beside a list not containing it -- true, and no
     help at all if you do not know a second flag exists.
     """
-    from kingfisher.infrastructure import presets
+    from kingfisher.infrastructure import seeding
 
-    presets.seed(cfg)
+    seeding.seed(cfg)
 
     with pytest.raises(CapabilityError, match=r"subtract it with --without-builtin-tools"):
         main._grants(cfg, _args(without_tools="execute"))
