@@ -38,15 +38,104 @@ def _is_foreign(module: str) -> bool:
     return root in {f.split(".")[0] for f in FOREIGN}
 
 
-def _modules_in(layer: str) -> list[Path]:
-    return sorted(p for p in (SRC / layer).glob("*.py") if p.name != "__init__.py")
+def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
+    """Every module in a layer, subpackages included.
+
+    This was `glob` -- one directory deep. Nine rules in this file read from
+    it, so the first module to move into a subpackage would drop out of all
+    nine at once, and all nine would keep passing. Not a rule getting weaker:
+    a rule silently ceasing to be about the file it was written for, which is
+    the failure mode this whole file exists to prevent elsewhere.
+
+    Nothing had subpackages when this changed, so it caught nothing on the day
+    -- which is the argument for changing it then rather than in the commit
+    that first needed it. `_server_modules`, eight lines from the bug, had used
+    `rglob` since it was written.
+
+    `root` is here so the behaviour can be tested against a tree built for the
+    purpose, rather than by waiting for a real subpackage to prove it.
+    """
+    return sorted(
+        p
+        for p in (root / layer).rglob("*.py")
+        if p.name != "__init__.py" and "__pycache__" not in p.parts
+    )
+
+
+def _module_id(path: Path) -> str:
+    """`harness/agent.py`, not `agent.py`.
+
+    A bare filename stops identifying a module once two layers can hold the
+    same one, and the failure message has to name a file someone can open.
+    """
+    return path.relative_to(SRC).as_posix()
 
 
 def _inside_domain(module: str) -> bool:
     return module == "kingfisher.domain" or module.startswith("kingfisher.domain.")
 
 
-@pytest.mark.parametrize("path", _modules_in("domain"), ids=lambda p: p.name)
+def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
+    """The collection every rule below is built on, tested for the case it missed.
+
+    Nine rules take their files from `_modules_in`. While it used `glob`, a
+    module one directory deeper was not merely unchecked -- it was invisible,
+    and the rule that should have covered it reported success. That is worse
+    than an absent rule, which at least does not claim anything.
+
+    Built here rather than asserted against `src/`, so it keeps testing the
+    collection after the real tree changes shape. `import yaml` is the
+    violation the domain rule was written for -- the third-party parser that
+    sat in `domain/fields.py` while three rules looked straight past it.
+    """
+    layer = tmp_path / "domain"
+    (layer / "inner").mkdir(parents=True)
+    (layer / "__init__.py").touch()
+    (layer / "inner" / "__init__.py").touch()
+    (layer / "inner" / "buried.py").write_text("import yaml\n", encoding="utf-8")
+    (layer / "shallow.py").write_text("import json\n", encoding="utf-8")
+
+    found = _modules_in("domain", root=tmp_path)
+
+    assert [p.relative_to(layer).as_posix() for p in found] == ["inner/buried.py", "shallow.py"]
+    assert "yaml" in _imported_modules(layer / "inner" / "buried.py")
+
+
+def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
+    """Every failure message in this file is built from `_module_id`.
+
+    `tool.py` was a sufficient answer to "which file" while each layer was one
+    directory deep. It stops being one the moment a subpackage exists, and the
+    message would then send its reader to a file with the right name and the
+    wrong contents -- a worse outcome than saying nothing.
+
+    Asserted because nothing else asserts it. Four refusal messages in
+    `capabilities.py` drifted apart for exactly this reason: they existed to be
+    read, and no test held them to reading well.
+    """
+    assert _module_id(SRC / "domain" / "tool.py") == "domain/tool.py"
+    assert _module_id(SRC / "infrastructure" / "harness" / "tool.py") == (
+        "infrastructure/harness/tool.py"
+    )
+
+
+def test_compiled_files_are_not_mistaken_for_modules(tmp_path):
+    """`rglob` descends into `__pycache__`, which `glob` never reached.
+
+    Nothing there is a `.py`, so this holds today by accident rather than by
+    the filter. It is the filter that is being pinned: a stray source file
+    under `__pycache__` would otherwise be parametrized as a module of the
+    layer and named in a failure nobody could act on.
+    """
+    layer = tmp_path / "domain"
+    (layer / "__pycache__").mkdir(parents=True)
+    (layer / "__pycache__" / "stale.py").write_text("import yaml\n", encoding="utf-8")
+    (layer / "real.py").touch()
+
+    assert [p.name for p in _modules_in("domain", root=tmp_path)] == ["real.py"]
+
+
+@pytest.mark.parametrize("path", _modules_in("domain"), ids=_module_id)
 def test_domain_imports_only_the_standard_library_and_itself(path):
     """Deny by default, replacing three rules that were allowlists by omission.
 
@@ -74,12 +163,12 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
         if module.split(".")[0] not in sys.stdlib_module_names and not _inside_domain(module)
     }
     assert not outside, (
-        f"domain/{path.name} imports {sorted(outside)} -- the domain takes the standard "
+        f"{_module_id(path)} imports {sorted(outside)} -- the domain takes the standard "
         "library and itself; have an adapter do that part and hand it the result"
     )
 
 
-@pytest.mark.parametrize("path", _modules_in("application"), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _modules_in("application"), ids=_module_id)
 def test_application_reaches_the_harness_only_through_infrastructure(path):
     """Orchestration speaks Request/RunEvent/RunResult, never AIMessage.
 
@@ -88,7 +177,7 @@ def test_application_reaches_the_harness_only_through_infrastructure(path):
     """
     foreign = {m for m in _imported_modules(path) if _is_foreign(m)}
     assert not foreign, (
-        f"application/{path.name} imports {sorted(foreign)} — route it through infrastructure/"
+        f"{_module_id(path)} imports {sorted(foreign)} — route it through infrastructure/"
     )
 
 
@@ -118,7 +207,7 @@ def test_infrastructure_does_not_reach_back_into_application():
     for path in _modules_in("infrastructure"):
         modules = _imported_modules(path)
         assert not any(m.startswith("kingfisher.application") for m in modules), (
-            f"infrastructure/{path.name} depends on application/ — "
+            f"{_module_id(path)} depends on application/ — "
             "move the shared shape into domain/"
         )
 
@@ -227,7 +316,7 @@ def test_the_package_does_not_depend_on_the_eval_harness():
         for path in _modules_in(layer):
             modules = _imported_modules(path)
             assert not any(m.split(".")[0] == "evals" for m in modules), (
-                f"{layer}/{path.name} imports evals/ — the wheel does not ship it"
+                f"{_module_id(path)} imports evals/ — the wheel does not ship it"
             )
 
 
@@ -269,7 +358,7 @@ def _world_contact(path: Path) -> list[str]:
     return found
 
 
-@pytest.mark.parametrize("path", _modules_in("domain"), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _modules_in("domain"), ids=_module_id)
 def test_domain_touches_nothing_outside_the_process(path):
     """The boundary the older tests were mistaken for.
 
@@ -286,7 +375,7 @@ def test_domain_touches_nothing_outside_the_process(path):
     acts: `retention.plan` names the sessions to drop and touches none of them.
     """
     contact = _world_contact(path)
-    assert not contact, f"domain/{path.name} reaches the world: {contact}"
+    assert not contact, f"{_module_id(path)} reaches the world: {contact}"
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
@@ -321,13 +410,13 @@ def test_the_application_layer_does_not_write_to_disk_itself():
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if isinstance(node, ast.Import) and any(a.name == "shutil" for a in node.names):
-                offenders.append(f"application/{path.name}:{node.lineno} imports shutil")
+                offenders.append(f"{_module_id(path)}:{node.lineno} imports shutil")
             elif (
                 isinstance(node, ast.Call)
                 and isinstance(node.func, ast.Attribute)
                 and node.func.attr in MUTATING_CALLS
             ):
-                offenders.append(f"application/{path.name}:{node.lineno} .{node.func.attr}()")
+                offenders.append(f"{_module_id(path)}:{node.lineno} .{node.func.attr}()")
 
     assert not offenders, (
         f"{offenders} write to disk from the application layer — put it in "
@@ -527,7 +616,7 @@ def _reaches_past_the_public_api(module: str) -> bool:
     )
 
 
-@pytest.mark.parametrize("path", _server_modules(), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _server_modules(), ids=_module_id)
 def test_the_server_uses_the_library_only_through_its_public_api(path):
     """`from kingfisher import X`, never `from kingfisher.domain.y import X`.
 
@@ -538,7 +627,7 @@ def test_the_server_uses_the_library_only_through_its_public_api(path):
     """
     reaching = {m for m in _imported_modules(path) if _reaches_past_the_public_api(m)}
     assert not reaching, (
-        f"server/{path.name} imports {sorted(reaching)} — the server takes `kingfisher` "
+        f"{_module_id(path)} imports {sorted(reaching)} — the server takes `kingfisher` "
         "and nothing deeper; if it needs something private, export it on purpose"
     )
 
@@ -547,7 +636,7 @@ def test_the_server_uses_the_library_only_through_its_public_api(path):
     "path",
     [p for layer in ("domain", "application", "infrastructure") for p in _modules_in(layer)]
     + [SRC / "__init__.py", SRC / "config.py"],
-    ids=lambda p: f"{p.parent.name}/{p.name}",
+    ids=_module_id,
 )
 def test_no_part_of_the_library_imports_the_server(path):
     """The outward half. Dependencies point one way, and a library that imports
@@ -555,7 +644,7 @@ def test_no_part_of_the_library_imports_the_server(path):
     at import without fastapi."""
     modules = _imported_modules(path)
     assert not any(m.startswith("kingfisher.server") for m in modules), (
-        f"{path.parent.name}/{path.name} imports kingfisher.server — the library "
+        f"{_module_id(path)} imports kingfisher.server — the library "
         "does not know its server exists"
     )
 
@@ -571,7 +660,7 @@ BLOCKING_METHODS = frozenset({"run", "stream"})
 NOT_KINGFISHER = frozenset({"uvicorn"})
 
 
-@pytest.mark.parametrize("path", _server_modules(), ids=lambda p: p.name)
+@pytest.mark.parametrize("path", _server_modules(), ids=_module_id)
 def test_the_server_calls_the_async_turn_methods(path):
     """`arun` and `astream`, never `run` and `stream`.
 
@@ -592,7 +681,7 @@ def test_the_server_calls_the_async_turn_methods(path):
         )
     })
     assert not offenders, (
-        f"server/{path.name} calls {offenders} — use arun/astream; the sync pair "
+        f"{_module_id(path)} calls {offenders} — use arun/astream; the sync pair "
         "blocks every other turn on this loop, not just this one"
     )
 
