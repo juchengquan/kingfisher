@@ -20,7 +20,7 @@ from kingfisher.domain.tool import Found, Offering, reference, split_reference
 from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.catalogue import Catalogue
 from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError
+from kingfisher.infrastructure.tool_store import LocalToolRepository
 
 TOOL = """from langchain_core.tools import tool
 
@@ -86,12 +86,22 @@ def test_a_package_reference_carries_no_trailing_slash():
 # -- what a definition does with one ---------------------------------------
 
 
-def test_only_the_name_reaches_the_rest_of_kingfisher():
-    """A grant, an allowlist and the agent's dispatch dictionary all key on the
-    plain name. If a path leaked into `tools`, none of them would match."""
+def test_a_definition_keeps_what_it_wrote():
+    """This used to strip each entry to its bare name, because a name was the
+    only thing a grant or an allowlist could key on. Two folders may now each
+    define a `fetch`, and the reference is the only thing that says which -- so
+    the flattening moved to the two places that genuinely need a bare name.
+
+    Written the short way, an entry stays short: that is still what a catalogue
+    without collisions looks like.
+    """
     spec = _spec(tools="csv_profile::csv_columns, http_fetch.py::http_fetch, plain")
 
-    assert spec.tools == ("csv_columns", "http_fetch", "plain")
+    assert spec.tools == (
+        "csv_profile::csv_columns",
+        "http_fetch.py::http_fetch",
+        "plain",
+    )
 
 
 def test_the_claims_travel_beside_the_names():
@@ -185,13 +195,13 @@ def test_an_untouched_catalogue_warms_cleanly(cfg):
 # -- why it is a label and not a selector ----------------------------------
 
 
-def test_two_tools_of_one_name_never_both_load(cfg):
-    """The reason a path can only ever be a claim about location.
+def test_two_tools_of_one_name_both_load_and_are_told_apart(cfg):
+    """The reason a path stopped being only a claim about location.
 
-    The agent dispatches by name through a dictionary, so a second tool of one
-    name replaces the first with no error at all. The loader refuses the pair
-    before that can happen -- which also means there is never a second candidate
-    for a path to choose between.
+    The agent dispatches by name through a dictionary, so two tools of one name
+    cannot both reach one agent. The loader used to refuse the pair outright;
+    now it keeps both and the *reference* is what picks between them, which is
+    what makes two folders from two vendors survive.
     """
     for folder in ("a", "b"):
         directory = cfg.tools_dir / folder
@@ -200,5 +210,7 @@ def test_two_tools_of_one_name_never_both_load(cfg):
 
     repository = LocalToolRepository(cfg.tools_dir)
 
-    with pytest.raises(ToolError, match="already defined by"):
-        _ = repository.found
+    assert sorted(one.reference for one in repository.found) == [
+        "a/t.py::clash",
+        "b/t.py::clash",
+    ]

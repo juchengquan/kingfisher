@@ -66,12 +66,25 @@ def test_a_module_that_cannot_be_imported_is_refused_loudly(tmp_path):
         _ = LocalToolRepository(directory).tools
 
 
-def test_two_modules_claiming_one_tool_name_are_refused(tmp_path):
-    """`tools_by_name` is a dict: the later one would silently win."""
+def test_two_modules_claiming_one_tool_name_both_load(tmp_path):
+    """Two files may each define an `add`, and the file tells them apart."""
     directory = _write(tmp_path / "tools", "maths.py", MODULE)
     _write(directory, "maths_again.py", MODULE)
 
-    with pytest.raises(ToolError, match="add"):
+    assert sorted(one.reference for one in LocalToolRepository(directory).found) == [
+        "maths.py::add",
+        "maths_again.py::add",
+    ]
+
+
+def test_one_module_claiming_a_name_twice_is_refused(tmp_path):
+    """Where the refusal still belongs. There is no second file to tell these
+    apart, so no reference could pick between them and nothing downstream could
+    offer a way to say which."""
+    body = MODULE.replace("TOOLS = [add]", "TOOLS = [add, add]")
+    directory = _write(tmp_path / "tools", "twice.py", body)
+
+    with pytest.raises(ToolError, match="defined twice in this file"):
         _ = LocalToolRepository(directory).tools
 
 

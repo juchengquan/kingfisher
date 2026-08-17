@@ -158,9 +158,37 @@ def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
 
     A malformed subagent has always been caught and printed; a tool that would
     not load went out as a traceback over the rest of the inventory. Folders
-    make that more likely rather than less -- two people can now each add a
-    `find_company` without seeing the other's -- so the two loaders report the
-    same way.
+    make that more likely rather than less, so the two loaders report the same
+    way.
+
+    The example used to be two folders each defining a `find_company`, which is
+    no longer broken -- see the test below. One file exporting a name twice
+    still is, because there is no second file to tell those apart.
+    """
+    directory = cfg.tools_dir / "research"
+    directory.mkdir(parents=True)
+    (directory / "t.py").write_text(
+        "from langchain_core.tools import tool\n"
+        "@tool\ndef find_company(x: str) -> str:\n"
+        '    """Look up."""\n'
+        "    return x\n"
+        "TOOLS = [find_company, find_company]\n",
+        encoding="utf-8",
+    )
+
+    assert main.show_inventory(cfg, cfg.workspace) == 1
+
+    printed = capsys.readouterr().out
+    assert "cannot load" in printed
+    # The path a reader can open -- `t.py` alone names nothing.
+    assert "research/t.py" in printed
+
+
+def test_two_folders_may_each_define_one_name(cfg, capsys):
+    """The case that used to stop `--list` dead, and stop a deployment with it.
+
+    Vendors do not coordinate names. Both are listed, under the reference a
+    grant would write, because a bare `find_company` no longer says which.
     """
     for folder in ("research", "sales"):
         directory = cfg.tools_dir / folder
@@ -174,13 +202,11 @@ def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
             encoding="utf-8",
         )
 
-    assert main.show_inventory(cfg, cfg.workspace) == 1
+    assert main.show_inventory(cfg, cfg.workspace) == 0
 
     printed = capsys.readouterr().out
-    assert "cannot load" in printed
-    # Both files, by the path a reader can open -- `t.py` names neither.
-    assert "sales/t.py" in printed
-    assert "research/t.py" in printed
+    assert "research/t.py::find_company" in printed
+    assert "sales/t.py::find_company" in printed
 
 
 def test_listing_the_inventory_leaves_no_session_behind(cfg):

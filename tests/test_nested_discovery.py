@@ -180,15 +180,23 @@ def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
         _ = LocalToolRepository(tmp_path).tools
 
 
-def test_a_duplicate_name_across_folders_is_refused(tmp_path):
-    """Flat names mean two folders can collide, so the existing check has to
-    span them. Dispatch is a dict keyed by name: the later one would take it in
-    silence and the earlier tool would simply never run."""
+def test_two_folders_may_each_define_one_name(tmp_path):
+    """This used to stop the deployment, and was unfixable by anyone who owned
+    neither file. Vendors do not coordinate names.
+
+    Both load, and the pair is told apart by the file each came from. Nothing
+    silently wins: an *agent* dispatches by name, so the refusal moved to the
+    agent, where it can say which one you meant.
+    """
     _tool(tmp_path / "research", "find_company")
     _tool(tmp_path / "sales", "find_company", filename="lookup.py")
 
-    with pytest.raises(ToolError, match="already defined by"):
-        _ = LocalToolRepository(tmp_path).tools
+    found = LocalToolRepository(tmp_path).found
+
+    assert [one.reference for one in found] == [
+        "research/find_company.py::find_company",
+        "sales/lookup.py::find_company",
+    ]
 
 
 @pytest.mark.parametrize("debris", ["__pycache__", ".venv", ".hidden"])

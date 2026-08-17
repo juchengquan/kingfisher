@@ -227,12 +227,21 @@ class LocalToolRepository:
     def found(self) -> tuple[Found, ...]:
         """Every tool this directory defines, with its origin, in a stable order.
 
-        Folders are read, and only for the sake of whoever has to find a file
-        again. A folder cannot reach a *name* -- a tool is named by itself,
-        never by where it sits -- so nesting is invisible to a request, to the
-        grant that permits it, and to the model. What it is not invisible to is
-        a second tool claiming a name already taken, which is refused across
-        folders exactly as it is within one.
+        Folders are read for the sake of whoever has to find a file again, and
+        now for one thing more: two files may each define a `fetch`. Vendors do
+        not coordinate names, and refusing the pair here stopped a deployment
+        over a clash no single agent would ever have seen -- unfixable by
+        anyone who owns neither file.
+
+        So the catalogue holds both, under `vendor_a/fetch.py::fetch` and
+        `vendor_b/fetch.py::fetch`, and the refusal moves to the place the
+        constraint actually lives: an *agent* dispatches by name, so an agent
+        granted both is refused. A name still stays flat wherever it is unique,
+        which is every catalogue that has no collision.
+
+        Twice in one file is still refused here, because there is no second
+        source to tell those apart and so nothing downstream could offer a way
+        to pick.
         """
         directory = Path(self.root)
         if not directory.is_dir():
@@ -266,10 +275,11 @@ class LocalToolRepository:
 
             for tool in exported:
                 name = tool_name(tool)
-                if name in claimed:
-                    # `tools_by_name` is a dict, so the later one would take the
-                    # name in silence and the earlier tool would never run.
-                    msg = f"{where}: tool {name!r} is already defined by {claimed[name]}"
+                if name in claimed and claimed[name] == where:
+                    # Within one file it is a plain mistake: the same module
+                    # exporting a name twice has no second source to tell them
+                    # apart, and nothing downstream could offer a way to pick.
+                    msg = f"{where}: tool {name!r} is defined twice in this file"
                     raise ToolError(msg)
                 claimed[name] = where
                 found.append(Found(tool=tool, source=where))

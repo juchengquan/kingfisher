@@ -456,6 +456,20 @@ def refuse_unoffered(
     """
     known = set(offered)
     if unknown := tuple(name for name in asked if name not in known):
+        # A name two sources offer is not a name nobody offers, and the same
+        # distinction `all_but` makes on the way out matters more on the way in:
+        # subtracting an ambiguous name leaves one behind, but *granting* one
+        # would hand over whichever the reader did not mean. Refusing is the
+        # only answer that cannot be silently wrong, and it has to say what to
+        # write instead or it is a refusal someone has to go and research.
+        for name in unknown:
+            if spellings := tuple(sorted(n for n in known if _bare(n) == name)):
+                msg = (
+                    f"{subject} names {kind} {name!r}, which more than one source "
+                    f"offers -- naming it alone would silently pick one: "
+                    f"write {', '.join(spellings)}"
+                )
+                raise CapabilityError(msg)
         shown = listing if listing is not None else f"{tuple(sorted(known))}"
         # `offered:` rather than "this workspace offers" or "this request
         # offers": who owns the set differs by kind -- a workspace offers tools

@@ -110,6 +110,7 @@ from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
+from kingfisher.domain.tool import Offering
 from kingfisher.domain.tool import offered as tool_offered
 from kingfisher.infrastructure import confinement, seeding, skill_store
 from kingfisher.infrastructure.harness.runlog import read_usage
@@ -237,9 +238,13 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     # guess which flag took which -- and guessing wrong is the "that is a
     # builtin tool" refusal. Where each workspace tool is defined goes here too,
     # so a folder is navigable rather than merely tidy.
-    defined_in = {entry.name: entry.source for entry in found}
-    own = tuple(sorted(defined_in))
-    builtin = tuple(n for n in introspected if n not in set(defined_in))
+    # Through the same `Offering` a grant is checked against, so the listing
+    # and the refusal cannot drift: a name two files define is printed as the
+    # reference, because that is what a `--tools` line now has to say.
+    on_offer = Offering.of(found)
+    defined_in = dict(on_offer.sources)
+    own = tuple(sorted(on_offer.workspace))
+    builtin = tuple(n for n in introspected if n not in {entry.name for entry in found})
 
     print("builtin tools — grant with --builtin-tools")
     for name in builtin or ("(could not introspect)",):

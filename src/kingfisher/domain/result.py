@@ -94,10 +94,11 @@ KINDS: tuple[str, ...] = (
     # Warnings, emitted before the model is reached and only when they apply.
     # Each says something that would otherwise be discovered too late: a path
     # that could not be hardened, a grant that means less than the workspace
-    # holds, a delegate that meant to run elsewhere and did not, and durable
-    # data that was overwritten.
+    # holds, a grant this agent cannot hold itself, a delegate that meant to run
+    # elsewhere and did not, and durable data that was overwritten.
     "protect_failed",
     "withheld",
+    "delegate_only",
     "indistinct",
     "data_placed",
     # The run itself.

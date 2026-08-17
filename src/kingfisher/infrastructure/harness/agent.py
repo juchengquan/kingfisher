@@ -40,9 +40,8 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
     refuse_unoffered,
 )
-from kingfisher.domain.ports import ToolRepository
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
-from kingfisher.domain.tool import Found, Offering, tool_name
+from kingfisher.domain.tool import Found, Offering
 from kingfisher.infrastructure.catalogue import Catalogue, source_of
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -422,18 +421,22 @@ def _backend_for(
 def workspace_tool_names(
     cfg: Config, *, catalogue: Catalogue | None = None
 ) -> tuple[str, ...]:
-    """The tools this workspace defines, by name, without assembling anything.
+    """The tools this workspace defines, as a grant would write them.
 
     Knowable off disk, unlike the built-in set. That asymmetry is why the two
     axes resolve differently and why only one of them needs a probe.
+
+    Written forms rather than bare names, because a bare list said `fetch,
+    fetch` once two files could each define one -- which read as a workspace
+    with a stutter rather than two tools a grant has to choose between.
     """
     found = (catalogue or Catalogue.from_config(cfg)).tools.found
-    return tuple(sorted(n for entry in found if (n := tool_name(entry.tool))))
+    return tuple(sorted(Offering.of(found).workspace))
 
 
-def _workspace_tool_names(
-    workspace_tools: Sequence[Any], *, builtin: tuple[str, ...], where: str
-) -> tuple[str, ...]:
+def _refuse_shadowed(
+    walked: Sequence[Found], *, builtin: tuple[str, ...], where: str
+) -> None:
     """What the workspace defines, refusing anything that shadows a built-in.
 
     `tools_by_name` is a dict, so a workspace tool called `read_file` would take
@@ -446,15 +449,13 @@ def _workspace_tool_names(
     derive a directory from: the only use is naming the place to go and rename
     them, and a catalogue that is not a directory can still say where it is.
     """
-    names = tuple(sorted(n for tool in workspace_tools if (n := tool_name(tool))))
-    shadowed = tuple(n for n in names if n in set(builtin))
+    shadowed = tuple(sorted({one.name for one in walked} & set(builtin)))
     if shadowed:
         msg = (
             f"workspace tool(s) {', '.join(shadowed)} would replace a built-in of "
             f"the same name; rename them in {where}"
         )
         raise CapabilityError(msg)
-    return names
 
 
 @dataclass(frozen=True)
@@ -494,6 +495,33 @@ class _ToolSurface:
     #: where nothing here can reach them -- except off an assembled graph,
     #: which is what the probe already is.
     objects: Mapping[str, Any] = field(default_factory=dict)
+    #: Every workspace tool with the file it came from, kept because a grant no
+    #: longer resolves to a name. Two files may each define a `fetch`, so what
+    #: an agent registers has to be chosen as *objects* -- a name would pick one
+    #: of the two out of a dictionary and lose the other before any narrowing
+    #: ran.
+    found: tuple[Found, ...] = ()
+
+    @property
+    def carried(self) -> tuple[Any, ...]:
+        """The tool objects this agent registers: granted, minus the ambiguous.
+
+        A delegate names which `fetch` it wants and gets it. The agent holding
+        the grant cannot name anything -- it dispatches by name -- so a pair it
+        cannot tell apart is left out and `ambiguous` says which.
+        """
+        if self.offering is None:
+            return tuple(one.tool for one in self.found)
+        return tuple(
+            one.tool for one in self.offering.carried(self.granted_workspace, self.found)
+        )
+
+    @property
+    def ambiguous(self) -> tuple[str, ...]:
+        """Names granted to this run that only a delegate can ask for."""
+        if self.offering is None:
+            return ()
+        return self.offering.ambiguous(self.granted_workspace, self.found)
 
     @property
     def offers(self) -> Offering:
@@ -603,37 +631,14 @@ def _activated_subagents(
     return defined, activated
 
 
-def _workspace_catalogue(
-    tools: ToolRepository, found: Sequence[Found] | None = None
-) -> tuple[tuple[Any, ...], dict[str, str]]:
-    """The workspace's tools, and where each one is defined.
-
-    One walk returning both halves. The objects go to the graph; the origins go
-    to anything that has to *say* something about a tool, which is a refusal
-    and a listing. Read apart, this executed every workspace module twice --
-    these are Python files, so reading them means running them.
-
-    A caller that has already walked hands the result in. `--list` is the one
-    that has: it needs the origins to annotate its listing *and* a compiled
-    graph to enumerate the built-ins, and building the graph would otherwise
-    run every tool module a second time.
-    """
-    walked = tools.found if found is None else found
-    return (
-        tuple(entry.tool for entry in walked),
-        {entry.name: entry.source for entry in walked},
-    )
-
-
-def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
+def _resolve_tools(
     # answers came from; folding them up would hide what each one is for.
     where: str,
     capabilities: Capabilities,
-    workspace_tools: Sequence[Any],
+    workspace_tools: Sequence[Found],
     assemble: Callable[[tuple[Any, ...]], CompiledStateGraph],
     *,
     names_needed: bool = False,
-    sources: Mapping[str, str] | None = None,
 ) -> _ToolSurface:
     """What this request may call, and what this agent offers at all.
 
@@ -658,12 +663,17 @@ def _resolve_tools(  # noqa: PLR0913 -- the probe's four jobs, plus where the
 
     probe = assemble(())
     builtin = registered_tools(probe)
-    workspace = _workspace_tool_names(workspace_tools, builtin=builtin, where=where)
-    offering = Offering(builtin=builtin, workspace=workspace, sources=dict(sources or {}))
+    _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
+    offering = Offering.of(workspace_tools, builtin=builtin)
     offering.refuse_unknown(
         capabilities.builtin_tools, capabilities.tools, subject="this request"
     )
-    return _ToolSurface(offering=offering, asked=capabilities, objects=_tool_objects(probe))
+    return _ToolSurface(
+        offering=offering,
+        asked=capabilities,
+        objects=_tool_objects(probe),
+        found=tuple(workspace_tools),
+    )
 
 
 def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
@@ -767,15 +777,14 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
 
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins.
-    tools, tool_sources = _workspace_catalogue(roots.tools, workspace_tools)
+    walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
         source_of(roots.tools),
         capabilities,
-        tools,
+        walked,
         assemble,
-        sources=tool_sources,
         # Either list naming anything is enough: both are checked against their
         # own offered set, and neither set is knowable without the probe.
         # Either tool list naming anything needs the offered sets. A delegate
@@ -844,6 +853,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 helpers=helpers,
                 default_model=default_model,
                 tool_objects=tool_objects,
+                catalogue=walked,
                 run_on=wanted.get(name),
                 extra_middleware=subagent_middleware(
                     defined[name], registry, capabilities.middleware
@@ -888,4 +898,4 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         reachable = tuple(spec["name"] for spec in supplied)
         middleware.append(DeclaredDelegatesOnly(reachable))
 
-    return assemble(tools)
+    return assemble(surface.carried)

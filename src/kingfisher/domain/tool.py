@@ -128,6 +128,51 @@ def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
     )
 
 
+
+def written_form(one: Found, *, among: Mapping[str, int]) -> str:
+    """How a grant names this tool: flat where the name is its own, else the file."""
+    return one.reference if among.get(one.name, 0) > 1 else one.name
+
+
+def _by_name(found: Sequence[Found]) -> dict[str, int]:
+    counted: dict[str, int] = {}
+    for one in found:
+        counted[one.name] = counted.get(one.name, 0) + 1
+    return counted
+
+
+def duplicated(found: Sequence[Found]) -> tuple[str, ...]:
+    """Names more than one of these tools answers to, sorted.
+
+    Asked of a *selection* rather than the catalogue, because that is where it
+    matters: two `fetch`es only conflict for whoever ends up holding both, and
+    a run that took one of them has no conflict at all.
+    """
+    return tuple(sorted(name for name, count in _by_name(found).items() if count > 1))
+
+
+def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+    """The tools a grant means, as the objects that will be registered.
+
+    This is what makes two `fetch`es possible, and it is why a grant is resolved
+    to *objects* here rather than to names downstream. A name picks a tool out
+    of a dictionary and a dictionary holds one entry per key -- so handing over
+    a whole catalogue and narrowing it afterwards collapses the pair before any
+    narrowing runs. Handing over exactly what was granted does not.
+
+    A free function rather than a method, because the caller that needs it most
+    has a selection and a catalogue and no `Offering`: `as_subagent` resolves a
+    delegate's own tools, and giving delegation a domain object to hold would
+    buy nothing it does not already have.
+    """
+    if granted is None:
+        return ()
+    among = _by_name(found)
+    if granted == ALL:
+        return tuple(found)
+    wanted = set(granted)
+    return tuple(one for one in found if written_form(one, among=among) in wanted)
+
 @dataclass(frozen=True)
 class Offering:
     """What tools exist to be granted, on which axis, and where each is defined.
@@ -156,12 +201,47 @@ class Offering:
 
     @classmethod
     def of(cls, found: Sequence[Found], *, builtin: tuple[str, ...] = ()) -> Offering:
-        """From what the repository returned, plus what the graph registered."""
+        """From what the repository returned, plus what the graph registered.
+
+        A name two files both define is offered under its *reference* instead,
+        and only then. Two folders may each define a `fetch` -- vendors do not
+        coordinate -- and one had to lose before this, at catalogue load, which
+        stopped the deployment over a clash no single agent would ever see.
+
+        Flat where a name is unique, which is every catalogue that has no
+        collision. The redundant half is dropped from `sources`: a reference
+        already says which file, so annotating it with the same path again is
+        noise in a listing whose whole job is to be scannable.
+        """
+        among = _by_name(found)
         return cls(
             builtin=builtin,
-            workspace=tuple(one.name for one in found),
-            sources={one.name: one.source for one in found},
+            workspace=tuple(written_form(one, among=among) for one in found),
+            sources={one.name: one.source for one in found if among[one.name] == 1},
         )
+
+    def carried(self, granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
+        """What the agent itself holds: everything granted, minus the ambiguous.
+
+        The request's grant is what this run may *draw on* -- itself or through
+        a delegate -- and those stopped being the same list once two files could
+        each define a `fetch`. A delegate names which one it wants; the agent
+        holding the grant cannot, because it dispatches by name and would keep
+        one of the two in silence.
+
+        So the pair is dropped rather than resolved, and `ambiguous` is what
+        says so out loud. Dropping quietly would be the failure this codebase
+        refuses everywhere else -- the point is that it is reported, not that it
+        is dropped.
+        """
+        chosen = select(granted, found)
+        clashing = set(duplicated(chosen))
+        return tuple(one for one in chosen if one.name not in clashing)
+
+    def ambiguous(self, granted: Selection, found: Sequence[Found]) -> tuple[str, ...]:
+        """The names `carried` had to leave behind, for a caller that must say so."""
+        return duplicated(select(granted, found))
+
 
     def refuse_unknown(
         self, builtin: Selection, tools: Selection, *, subject: str
@@ -249,9 +329,15 @@ class Offering:
         """
         if builtin == ALL and tools == ALL:
             return None
+        # The workspace half comes back to bare names, because that is what the
+        # middleware compares against: it filters by `tool.name`, and a tool's
+        # name is `fetch` however a grant spelled it. Safe to flatten precisely
+        # because `refuse_ambiguous` ran first -- within one agent the names are
+        # unique, so two spellings can never land on one entry here.
+        granted = narrowed(tools, by=self.workspace) or ()
         return (
             *(narrowed(builtin, by=self.builtin) or ()),
-            *(narrowed(tools, by=self.workspace) or ()),
+            *(split_reference(one)[1] for one in granted),
         )
 
 
