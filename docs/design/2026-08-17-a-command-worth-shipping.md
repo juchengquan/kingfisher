@@ -68,7 +68,7 @@ its flags, and its smoke.
 | B12 | **There is a `help` verb, and this document argued against one.** | The argument is below and still holds as far as it goes: `-h`, `--help`, bare `kingfisher` and `<verb> --help` all reach the same text, so this is a fifth route to keep consistent rather than a way out of being stuck. It was asked for twice and built. What building it found -- and what the argument had missed -- is that an unknown verb is a case none of those four handle well: argparse refuses `kingfisher teleport` with a usage line, where `kingfisher help teleport` can say which words exist. That is a real difference, and it was not visible from the outside. |
 | B11 | **`serve` is added as an alias; `kingfisher-server` stays.** | Two names for one thing is a real cost, and it is smaller than breaking every script, unit file and container that already calls `kingfisher-server`. Nothing is published, so nothing external breaks -- but "external" is the wrong test for a command a deployment already runs. One implementation, two ways in, which is the arrangement B6 already chose for the listing. |
 
-| B8 | **This makes kingfisher publishable. It does not publish it.** | Publishing means owing a version floor and a deprecation cycle, and the formats are still moving — `--seed-presets` was renamed, `provider:` removed, `where::what` landed days ago. B1–B7 remove the reason a pip install would be useless; whether to take that step is a separate decision, still open, and the asset pack's missing `kingfisher` floor waits on it. |
+| B8 | **This makes kingfisher publishable. It does not publish it.** | Publishing means owing a version floor and a deprecation cycle, and the formats are still moving — `--seed-presets` was renamed, `provider:` removed, `where::what` landed days ago. B1–B7 remove the reason a pip install would be useless; whether to take that step is a separate decision. It cited the asset pack's own missing floor as waiting on the same call, and that pack is gone -- see *Still undecided*, which is where the question lives now. |
 
 ## Measurements
 
@@ -146,6 +146,23 @@ verb from a wrong answer into a `KeyError` in front of whoever typed it, which
 is louder and still too late.
 
 ## Still undecided
+
+- **Whether to publish at all — deferred, deliberately, and asked twice.**
+  Nothing blocks it any more, which is the change worth recording: both wheels
+  build and install into a clean environment, and `kingfisher seed` ships inside
+  one, so a pip install now works rather than handing somebody definitions and
+  no way to place them. That was the objection, and B1-B7 removed it.
+
+  What is left is a commitment rather than a task. Publishing means owing a
+  version floor and a deprecation cycle from that point, and the formats have
+  moved three times in the weeks around this: `--seed-presets` renamed,
+  `provider:` removed, `where::what` added, and the definitions themselves
+  changed distribution and changed back. None of those would have been free
+  under a published floor.
+
+  The detailed version of this question was written into
+  *assets-as-packages*, which has since been superseded -- so it is restated
+  here, where a reader looking at the shipped command will find it.
 
 - ~~**Whether `list` grows a machine-readable form.**~~ Decided as B9.
 - **What `doctor` does about a check it cannot answer.** A credential can be
