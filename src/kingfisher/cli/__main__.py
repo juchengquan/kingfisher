@@ -57,6 +57,21 @@ def build_parser() -> argparse.ArgumentParser:
             "seeds itself on its first run without this."
         ),
     )
+    explain = sub.add_parser(
+        "help",
+        help="show this, or what one verb does",
+        description=(
+            "The same text `--help` prints. It exists because a reader looking "
+            "for it types the word, and finding it listed beside the verbs it "
+            "describes costs less than knowing that a bare invocation would "
+            "have done."
+        ),
+    )
+    explain.add_argument(
+        "verb",
+        nargs="?",
+        help="a verb to explain; omit for the whole command",
+    )
     sub.add_parser(
         "list",
         help="show what this workspace offers a request",
@@ -105,6 +120,40 @@ def _list() -> int:
     return 1 if failed(found) else 0
 
 
+def _verbs(parser: argparse.ArgumentParser) -> dict[str, argparse.ArgumentParser]:
+    """Every subcommand, from the parser rather than from a list beside it.
+
+    A second list of verb names is one that goes stale the first time somebody
+    adds a verb and does not think about `help` -- and `help` is precisely the
+    thing nobody thinks about.
+    """
+    return {
+        name: subparser
+        for action in parser._actions
+        for name, subparser in (getattr(action, "choices", None) or {}).items()
+    }
+
+
+def _help(parser: argparse.ArgumentParser, verb: str | None) -> int:
+    """Print the whole thing, or one verb's part of it.
+
+    An unknown verb is the one case this does better than `--help`: argparse
+    would refuse it with a usage line, and this says which words exist.
+    """
+    if verb is None:
+        parser.print_help()
+        return 0
+
+    verbs = _verbs(parser)
+    if verb not in verbs:
+        known = ", ".join(sorted(verbs))
+        print(f"no such command: {verb}. kingfisher knows {known}", file=sys.stderr)
+        return 2
+
+    verbs[verb].print_help()
+    return 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -114,7 +163,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        return _seed() if args.command == "seed" else _list()
+        if args.command == "help":
+            return _help(parser, args.verb)
+        if args.command == "seed":
+            return _seed()
+        return _list()
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.

@@ -176,3 +176,58 @@ def _seed_something(cfg) -> None:
             "system_prompt: |\n  Survey it.\n",
             encoding="utf-8",
         )
+
+
+# -- `help`, which repeats what four other routes already say ---------------
+
+
+def test_help_lists_the_verbs(capsys):
+    """The same text `--help` prints, reached by typing the word.
+
+    It was argued against and added anyway: `-h`, `--help`, bare `kingfisher`
+    and `<verb> --help` all reach this already. What it buys is that a reader
+    looking for help finds the word listed beside the verbs it describes.
+    """
+    assert main(["help"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "seed" in printed
+    assert "list" in printed
+
+
+def test_help_explains_one_verb(capsys):
+    """`kingfisher help seed`, which is `kingfisher seed --help` by another road."""
+    assert main(["help", "seed"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "usage: kingfisher seed" in printed
+    assert "Overwrites" in printed  # its own description, not the top-level one
+
+
+def test_help_reads_the_verbs_from_the_parser(capsys):
+    """Not from a list beside it.
+
+    A second list of names goes stale the first time somebody adds a verb and
+    does not think about `help` -- and `help` is precisely the thing nobody
+    thinks about. Asserted by comparing against the parser rather than against
+    words in a docstring.
+    """
+    from kingfisher.cli.__main__ import _verbs, build_parser
+
+    parser = build_parser()
+    for verb in _verbs(parser):
+        assert main(["help", verb]) == 0
+        assert f"usage: kingfisher {verb}" in capsys.readouterr().out
+
+
+def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
+    """The one thing this does better than `--help`.
+
+    argparse refuses an unknown subcommand with a usage line. Here the reader
+    mistyped a word and the useful answer is which words there are.
+    """
+    assert main(["help", "teleport"]) == 2
+
+    printed = capsys.readouterr().err
+    assert "teleport" in printed
+    assert "seed" in printed and "list" in printed
