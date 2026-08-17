@@ -34,7 +34,7 @@ from kingfisher import (
     seed,
 )
 from kingfisher.cli.health import examine, worst
-from kingfisher.cli.listing import failed, render
+from kingfisher.cli.listing import as_json, failed, render
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -75,13 +75,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="emit the same checks as JSON, for a script rather than a person",
     )
-    sub.add_parser(
+    listing = sub.add_parser(
         "list",
         help="show what this workspace offers a request",
         description=(
             "Every name a request may activate here, per grant, with where each "
             "one came from. Exits non-zero if a catalogue will not load."
         ),
+    )
+    # A flag rather than the default. A listing whose default output is JSON is
+    # a listing nobody reads, and whoever wants one already knows to ask.
+    listing.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the same answer as JSON, for a script rather than a person",
     )
     return parser
 
@@ -110,16 +117,23 @@ def _seed() -> int:
     return 0
 
 
-def _list() -> int:
+def _list(*, as_document: bool = False) -> int:
     """Print what the workspace offers.
 
     The whole configuration here, unlike `seed`: answering means building an
     agent, and an agent needs to know which model it would run on.
+
+    The exit code does not depend on the format. A broken catalogue is still one
+    when a script is reading, and the reason is in the document as well -- so a
+    caller can find out either way round rather than having to pick.
     """
     cfg = from_env()
     found = inventory(cfg)
-    for line in render(found, workspace=cfg.workspace):
-        print(line)
+    if as_document:
+        print(json.dumps(as_json(found), indent=2, sort_keys=True))
+    else:
+        for line in render(found, workspace=cfg.workspace):
+            print(line)
     return 1 if failed(found) else 0
 
 
@@ -156,7 +170,7 @@ def main(argv: list[str] | None = None) -> int:
             return _seed()
         if args.command == "doctor":
             return _doctor(as_document=args.json)
-        return _list()
+        return _list(as_document=args.json)
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.
