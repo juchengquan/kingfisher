@@ -234,8 +234,20 @@ def test_every_known_field_still_parses(tmp_path):
 
 def test_the_known_set_matches_the_spec_it_builds():
     """Two lists that must agree: a field added to the dataclass but not to
-    KNOWN would be refused as unknown the moment anyone used it."""
-    assert set(SubagentSpec.__dataclass_fields__) == KNOWN
+    KNOWN would be refused as unknown the moment anyone used it.
+
+    Derived fields are excluded, and have to say so on themselves rather than
+    being listed here -- a name in two places is the drift this test exists to
+    catch. `tool_sources` is the first: it is read out of `tools`, and writing
+    `tool_sources:` in a definition is refused like any other unknown key.
+    """
+    written = {
+        name
+        for name, f in SubagentSpec.__dataclass_fields__.items()
+        if not f.metadata.get("derived")
+    }
+
+    assert written == KNOWN
 
 
 def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):

@@ -761,11 +761,15 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         offered = available_skills(cfg, session_dir, catalogue=roots)
         registry = middleware_registry or {}
         for name in activated:
+            subject = f"subagent {name!r}"
             surface.offers.refuse_unknown(
-                defined[name].builtin_tools,
-                defined[name].tools,
-                subject=f"subagent {name!r}",
+                defined[name].builtin_tools, defined[name].tools, subject=subject
             )
+            # After the unknown-name check, so a definition naming `csv_column`
+            # hears that the name is wrong rather than that it has moved. The
+            # catalogue's own definitions had their paths checked at
+            # construction; this is what covers one a request uploaded.
+            surface.offers.refuse_moved(defined[name].tool_sources, subject=subject)
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)
 

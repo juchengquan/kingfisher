@@ -20,6 +20,7 @@ from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
+from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository
@@ -85,6 +86,13 @@ class Catalogue:
         Returns self, so construction reads as one expression.
         """
         _ = self.skills.names, self.subagents.specs, self.tools.found
+        # A definition saying where its tools live is checked here for the same
+        # reason the reading happens here: it is a claim about this catalogue,
+        # both halves are now in hand, and a stale path found on the first turn
+        # that activates one delegate is a deployment that started while broken.
+        offers = Offering.of(self.tools.found)
+        for spec in self.subagents.specs.values():
+            offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
         return self
 
     @classmethod

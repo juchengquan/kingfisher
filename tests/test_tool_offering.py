@@ -64,13 +64,19 @@ def test_the_refusal_names_the_subject_that_made_it(asked):
 
 def test_an_unknown_name_is_told_where_the_real_ones_live():
     """Nesting exists so a person can find a file again, and a bare list of
-    names is exactly what sends them grepping for it."""
+    names is exactly what sends them grepping for it.
+
+    Without a package's trailing slash, which this asserted until a `tools:`
+    entry could carry a path. The listing and a definition now spell a source
+    the same way, so what is printed here is what gets pasted there -- and
+    `csv_profile/` would be a near-miss someone has to notice.
+    """
     with pytest.raises(CapabilityError) as raised:
         WORKSPACE.refuse_unknown(ALL, ("csv_colums",), subject="this request")
 
     message = str(raised.value)
     assert "csv_columns" in message
-    assert "csv_profile/" in message
+    assert "(csv_profile)" in message
 
 
 def test_naming_nothing_cannot_name_something_wrong():
