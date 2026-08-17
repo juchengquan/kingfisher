@@ -267,7 +267,7 @@ def test_a_usage_only_chunk_produces_no_token(cfg):
 
 def test_the_adapter_owns_the_stream_modes(cfg):
     """`values` and `messages` are LangGraph's words, not orchestration's."""
-    from kingfisher.infrastructure import runtime
+    from kingfisher.infrastructure.harness import runtime
 
     values = {"messages": [AIMessage(content="42")]}
 

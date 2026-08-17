@@ -21,8 +21,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.subagent import SubagentError, refuse_helpers_with_helpers
-from kingfisher.infrastructure.agent import build_agent
 from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel
 
 REVIEWER = """name: reviewer

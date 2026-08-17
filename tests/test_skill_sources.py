@@ -19,10 +19,10 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure import skill_registry
-from kingfisher.infrastructure.agent import build_agent
-from kingfisher.infrastructure.backend import build_backend, skills_sources
-from kingfisher.infrastructure.scoping import ScopedSkills
+from kingfisher.infrastructure.harness import skill_registry
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
+from kingfisher.infrastructure.harness.scoping import ScopedSkills
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from tests.conftest import FakeToolCallingModel, capture_build
 

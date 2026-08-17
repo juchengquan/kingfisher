@@ -22,7 +22,7 @@ import pytest
 from kingfisher import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.checkpointing import session_db_path
+from kingfisher.infrastructure.harness.checkpointing import session_db_path
 from kingfisher.infrastructure.workspace_fs import session_bytes
 from tests.conftest import StubCheckpointer
 from tests.test_async import AsyncStubAgent
@@ -80,8 +80,8 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
     """
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.agent import build_agent
-    from kingfisher.infrastructure.checkpointing import build_session_checkpointer
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.infrastructure.harness.checkpointing import build_session_checkpointer
     from tests.conftest import FakeToolCallingModel
 
     saver = build_session_checkpointer(session_dir)

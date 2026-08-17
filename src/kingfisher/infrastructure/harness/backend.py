@@ -25,7 +25,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 from kingfisher.config import Config, ConfigError
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.catalogue import Catalogue, catalogue_root
-from kingfisher.infrastructure.skills_backend import skills_backend
+from kingfisher.infrastructure.harness.skills_backend import skills_backend
 
 if TYPE_CHECKING:
 

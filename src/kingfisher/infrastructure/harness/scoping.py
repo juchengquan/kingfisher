@@ -37,8 +37,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from kingfisher.infrastructure.backend import HostPathError
-from kingfisher.infrastructure.skill_registry import KEY, qualified
+from kingfisher.infrastructure.harness.backend import HostPathError
+from kingfisher.infrastructure.harness.skill_registry import KEY, qualified
 
 
 def _tool_name(tool: Any) -> str | None:

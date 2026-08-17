@@ -16,9 +16,9 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure import skill_registry
-from kingfisher.infrastructure.agent import available_skills, build_agent
 from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.harness import skill_registry
+from kingfisher.infrastructure.harness.agent import available_skills, build_agent
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from tests.conftest import FakeToolCallingModel
 

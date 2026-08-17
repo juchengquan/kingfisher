@@ -256,7 +256,7 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
         _list_skills_with_errors,
     )
 
-    from kingfisher.infrastructure.skills_backend import skills_backend  # noqa: PLC0415
+    from kingfisher.infrastructure.harness.skills_backend import skills_backend  # noqa: PLC0415
 
     backend = FilesystemBackend(root_dir=str(root)) if root else skills_backend(repository)
 

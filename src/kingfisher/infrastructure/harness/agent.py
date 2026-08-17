@@ -43,14 +43,14 @@ from kingfisher.domain.capabilities import (
 from kingfisher.domain.ports import ToolRepository
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
 from kingfisher.domain.tool import Found, Offering, tool_name
-from kingfisher.infrastructure.backend import (
+from kingfisher.infrastructure.catalogue import Catalogue, source_of
+from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
     SKILLS_ROUTE,
     build_backend,
     skills_sources,
 )
-from kingfisher.infrastructure.catalogue import Catalogue, source_of
-from kingfisher.infrastructure.delegation import (
+from kingfisher.infrastructure.harness.delegation import (
     as_subagent,
     indistinct,
     model_for,
@@ -58,15 +58,15 @@ from kingfisher.infrastructure.delegation import (
     subagent_middleware,
     subagent_skills,
 )
-from kingfisher.infrastructure.layered import for_session
-from kingfisher.infrastructure.models import build_model
-from kingfisher.infrastructure.prompting import system_prompt
-from kingfisher.infrastructure.scoping import (
+from kingfisher.infrastructure.harness.models import build_model
+from kingfisher.infrastructure.harness.scoping import (
     DeclaredDelegatesOnly,
     HostPathGuard,
     ScopedSkills,
     ToolAllowlist,
 )
+from kingfisher.infrastructure.layered import for_session
+from kingfisher.infrastructure.prompting import system_prompt
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

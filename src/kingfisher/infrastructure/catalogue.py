@@ -22,8 +22,8 @@ from pathlib import Path
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
 from kingfisher.domain.tool import Offering
-from kingfisher.infrastructure import skill_registry
-from kingfisher.infrastructure.skill_registry import SkillRegistry
+from kingfisher.infrastructure.harness import skill_registry
+from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository

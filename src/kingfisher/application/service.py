@@ -78,8 +78,10 @@ from kingfisher.domain.session import (
     sessions_root,
     still_held,
 )
-from kingfisher.infrastructure import runtime
-from kingfisher.infrastructure.agent import (
+from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
+from kingfisher.infrastructure.files import fetch_refs
+from kingfisher.infrastructure.harness import runtime
+from kingfisher.infrastructure.harness.agent import (
     available_skills,
     build_agent,
     defined_subagents,
@@ -87,15 +89,13 @@ from kingfisher.infrastructure.agent import (
     registered_tools,
     workspace_tool_names,
 )
-from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
-from kingfisher.infrastructure.checkpointing import (
+from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
     release_checkpointer,
     thread_ids,
 )
-from kingfisher.infrastructure.files import fetch_refs
-from kingfisher.infrastructure.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,

@@ -2,8 +2,8 @@ from __future__ import annotations
 
 from langchain_core.messages import AIMessage
 
-from kingfisher.infrastructure.agent import build_agent
-from kingfisher.infrastructure.backend import SKILLS_SOURCES
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.prompting import system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
 from tests.test_confinement import needs_a_real_toolchain

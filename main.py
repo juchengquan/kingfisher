@@ -112,7 +112,7 @@ from kingfisher.domain.session import Session
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import offered as tool_offered
 from kingfisher.infrastructure import confinement, seeding, skill_store
-from kingfisher.infrastructure.runlog import read_usage
+from kingfisher.infrastructure.harness.runlog import read_usage
 from kingfisher.infrastructure.tool_store import ToolError
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
@@ -183,10 +183,13 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     and `build_agent` agreeing about that should be structural rather than a
     coincidence of nobody having wired anything else yet.
     """
-    from kingfisher.infrastructure.agent import build_agent, registered_tools  # noqa: PLC0415
     from kingfisher.infrastructure.catalogue import (  # noqa: PLC0415
         resolve_catalogue,
         source_of,
+    )
+    from kingfisher.infrastructure.harness.agent import (  # noqa: PLC0415
+        build_agent,
+        registered_tools,
     )
 
     catalogue = resolve_catalogue(cfg)
@@ -462,13 +465,13 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     reading `cfg` here while the agent read somewhere else would make
     `--without-skills X` refuse a name the run did not have.
     """
-    from kingfisher.infrastructure.agent import (  # noqa: PLC0415
+    from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
+    from kingfisher.infrastructure.harness.agent import (  # noqa: PLC0415
         available_skills,
         build_agent,
         defined_subagents,
         registered_tools,
     )
-    from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
 
     catalogue = resolve_catalogue(cfg)
     found = catalogue.tools.found

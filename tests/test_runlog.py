@@ -10,7 +10,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage
 from langchain_core.outputs import ChatGeneration, LLMResult
 
-from kingfisher.infrastructure.runlog import JsonlRunLogger, read_usage
+from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, read_usage
 
 
 def _logger(tmp_path):

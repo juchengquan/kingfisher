@@ -8,13 +8,13 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.agent import (
+from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
     build_agent,
 )
-from kingfisher.infrastructure.backend import build_backend, skills_sources
-from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
+from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build
 
@@ -274,7 +274,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
     """Pins the introspection the check above depends on. If deepagents or
     LangGraph moves the tool node, this fails loudly here rather than silently
     turning tool validation into a no-op."""
-    from kingfisher.infrastructure.agent import registered_tools
+    from kingfisher.infrastructure.harness.agent import registered_tools
 
     graph = build_agent(
         cfg,
@@ -288,7 +288,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
-    from kingfisher.infrastructure.agent import registered_tools
+    from kingfisher.infrastructure.harness.agent import registered_tools
 
     assert registered_tools(object()) == ()
 

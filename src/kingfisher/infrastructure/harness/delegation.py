@@ -30,9 +30,9 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.subagent import RunOn, resolved_model
 from kingfisher.domain.tool import ceiling
-from kingfisher.infrastructure.models import build_model
+from kingfisher.infrastructure.harness.models import build_model
+from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
-from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

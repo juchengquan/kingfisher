@@ -134,5 +134,5 @@ def capture_build(monkeypatch) -> dict:
         captured.update(kwargs)
         return real(**kwargs)
 
-    monkeypatch.setattr("kingfisher.infrastructure.agent.create_deep_agent", spy)
+    monkeypatch.setattr("kingfisher.infrastructure.harness.agent.create_deep_agent", spy)
     return captured

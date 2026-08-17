@@ -20,7 +20,7 @@ import pytest
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.domain.tool import Offering, offered
-from kingfisher.infrastructure.agent import build_agent
+from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.tool_store import LocalToolRepository
 from tests.conftest import FakeToolCallingModel
 

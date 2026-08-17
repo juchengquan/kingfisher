@@ -17,8 +17,6 @@ from pathlib import Path
 
 import pytest
 
-FOREIGN = ("langchain", "langgraph", "deepagents", "langchain_core", "langchain_anthropic")
-
 SRC = Path(__file__).resolve().parent.parent / "src" / "kingfisher"
 
 
@@ -31,11 +29,6 @@ def _imported_modules(path: Path) -> set[str]:
         elif isinstance(node, ast.ImportFrom) and node.module:
             modules.add(node.module)
     return modules
-
-
-def _is_foreign(module: str) -> bool:
-    root = module.split(".", maxsplit=1)[0]
-    return root in {f.split(".")[0] for f in FOREIGN}
 
 
 def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
@@ -168,27 +161,160 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
     )
 
 
-@pytest.mark.parametrize("path", _modules_in("application"), ids=_module_id)
-def test_application_reaches_the_harness_only_through_infrastructure(path):
-    """Orchestration speaks Request/RunEvent/RunResult, never AIMessage.
+#: Which third-party packages each area may import. Deny by default: a package
+#: named nowhere below fails wherever it appears, so the table is what has to be
+#: edited to take on a dependency, and editing it is where someone asks whether
+#: the dependency belongs there.
+#:
+#: Measured, not declared -- every entry is a package some module imports today.
+THIRD_PARTY: dict[str, frozenset[str]] = {
+    # The agent runtime. This is the swap boundary: replace deepagents and the
+    # rewrite stops at this directory.
+    "infrastructure/harness": frozenset({
+        "aiosqlite",
+        "deepagents",
+        "langchain",
+        "langchain_anthropic",
+        "langchain_core",
+        "langchain_openai",
+        "langchain_quickjs",
+        "langgraph",
+    }),
+    # The rest of the layer adapts the disk, the OS and the environment, and
+    # needs one parser to do it.
+    "infrastructure": frozenset({"yaml"}),
+    # A consumer of the library, with its own extra and its own dependencies.
+    "server": frozenset({"fastapi", "pydantic", "starlette", "uvicorn"}),
+    # Nothing. The domain has a stricter rule of its own; these two are here so
+    # the table is total and an unlisted area cannot mean "anything goes".
+    "domain": frozenset(),
+    "application": frozenset(),
+    # `__init__.py` and `config.py`, which belong to no layer.
+    "": frozenset(),
+}
 
-    run.py and runlog.py once each carried their own copy of LangChain's
-    usage-metadata shape, kept in sync by nobody. This is the guard.
+
+def _package_modules() -> list[Path]:
+    return sorted(p for p in SRC.rglob("*.py") if "__pycache__" not in p.parts)
+
+
+def _area_of(path: Path) -> str:
+    """The longest area in `THIRD_PARTY` that contains this module.
+
+    Longest rather than first, so `infrastructure/harness` wins over
+    `infrastructure` and a subpackage can be stricter or looser than its parent
+    without the order of a dict deciding which.
     """
-    foreign = {m for m in _imported_modules(path) if _is_foreign(m)}
-    assert not foreign, (
-        f"{_module_id(path)} imports {sorted(foreign)} — route it through infrastructure/"
+    parent = path.relative_to(SRC).parent.as_posix()
+    parent = "" if parent == "." else parent
+    candidates = [a for a in THIRD_PARTY if a in ("", parent) or parent.startswith(f"{a}/")]
+    return max(candidates, key=len)
+
+
+def _undeclared(used: set[str], area: str) -> set[str]:
+    """The one place the table is consulted, so there is one place to get wrong.
+
+    Separate from the rule below because the rule can only ever see modules
+    that exist. Every one of them passes today, so a rule that quietly stopped
+    distinguishing between areas -- allowing anything any area allows -- would
+    keep passing too, and would have lost the whole point while looking healthy.
+    `test_an_area_is_refused_another_areas_dependencies` asks this the questions
+    the tree cannot.
+    """
+    return used - THIRD_PARTY[area]
+
+
+def test_an_area_is_refused_another_areas_dependencies():
+    """The table has to partition, not merely enumerate.
+
+    Nothing in `src/` can show this. Every module satisfies the rule, so the
+    rule passes whether the areas are distinct or the union of them all is
+    allowed everywhere -- and the union is the mutation that removes the value
+    without removing a single test.
+    """
+    assert _undeclared({"deepagents"}, "domain") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "application") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "server") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
+    assert _undeclared({"fastapi"}, "infrastructure/harness") == {"fastapi"}
+    assert _undeclared({"yaml"}, "infrastructure/harness") == {"yaml"}
+
+    assert _undeclared({"deepagents", "langgraph"}, "infrastructure/harness") == set()
+    assert _undeclared({"yaml"}, "infrastructure") == set()
+    assert _undeclared({"fastapi"}, "server") == set()
+
+
+def test_a_subpackage_is_judged_by_its_own_area():
+    """`infrastructure/harness/agent.py` is not judged as `infrastructure/`.
+
+    Longest match, so a subpackage can be stricter or looser than its parent
+    and the order of a dict does not decide which. Shortest match would let the
+    harness's eight packages leak into all thirteen flat modules.
+    """
+    assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
+    assert _area_of(SRC / "infrastructure" / "catalogue.py") == "infrastructure"
+    assert _area_of(SRC / "domain" / "tool.py") == "domain"
+    assert _area_of(SRC / "config.py") == ""
+
+
+@pytest.mark.parametrize("path", _package_modules(), ids=_module_id)
+def test_a_module_imports_only_what_its_area_may_depend_on(path):
+    """One table, replacing two rules that were allowlists by omission.
+
+    The first checked that no `application/` module imported something in a
+    hand-written `FOREIGN` tuple -- written when the guard was about LangChain
+    leaking into orchestration, which it genuinely was: `run.py` and `runlog.py`
+    each carried their own copy of LangChain's usage-metadata shape, kept in
+    sync by nobody. The second checked that *somebody* in `infrastructure/`
+    imported something from that tuple, and passed while any one file did.
+
+    Both had the same hole. `FOREIGN` named five packages; six of the agent
+    runtime's are actually imported here, and `langchain_quickjs`, `aiosqlite`
+    and `langchain_openai` were in none of them. An `application/` module
+    importing any of the three passed, as would one importing `yaml` or
+    `requests` -- the rule only ever knew the names someone had thought of.
+
+    Turned around, there is nothing to keep up to date. Every area's dependency
+    surface is written down, and a package nobody wrote down fails wherever it
+    is used. That is the same correction
+    `test_domain_imports_only_the_standard_library_and_itself` already made for
+    the domain, applied to the four areas that still had a list.
+    """
+    area = _area_of(path)
+    used = {
+        m.split(".")[0]
+        for m in _imported_modules(path)
+        if m.split(".")[0] not in sys.stdlib_module_names and m.split(".")[0] != "kingfisher"
+    }
+    stray = _undeclared(used, area)
+    assert not stray, (
+        f"{_module_id(path)} imports {sorted(stray)}; "
+        f"{area or 'the package root'} may import "
+        f"{sorted(THIRD_PARTY[area]) or 'nothing third-party'} — have an adapter in an "
+        "area that may do that, and hand this one the result"
     )
 
 
-def test_infrastructure_is_where_foreign_types_live():
-    """Not a restriction — a check that the layer is actually doing its job.
+def test_the_harness_package_is_the_one_speaking_to_the_harness():
+    """The half of the old rule worth keeping, scoped to where it means something.
 
-    If no adapter imports anything foreign, the ACL has evaporated and the
-    coupling has gone somewhere less visible.
+    A `harness/` that imports nothing foreign is not a layer that got cleaner.
+    It is the coupling having moved somewhere no rule is looking, which is what
+    the original existence check was for -- it just asked the question of a
+    whole layer, where thirteen of twenty-three modules were never going to
+    answer it.
     """
-    imports = {m for path in _modules_in("infrastructure") for m in _imported_modules(path)}
-    assert any(_is_foreign(m) for m in imports)
+    runtime = THIRD_PARTY["infrastructure/harness"]
+    imports = {
+        m.split(".")[0]
+        for p in _modules_in("infrastructure")
+        if "harness" in p.parts
+        for m in _imported_modules(p)
+    }
+    assert imports & runtime, (
+        "no module under infrastructure/harness/ imports the agent runtime — "
+        "either the adapters left, or the coupling did not"
+    )
 
 
 def test_infrastructure_does_not_reach_back_into_application():
