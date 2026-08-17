@@ -67,7 +67,13 @@ def _unwrapped(command: str) -> str:
     return command
 
 
-def profile(*, home: Path, readable: tuple[Path, ...], writable: tuple[Path, ...]) -> str:
+def profile(
+    *,
+    home: Path,
+    readable: tuple[Path, ...],
+    writable: tuple[Path, ...],
+    protected: tuple[Path, ...] = (),
+) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
     Deny-the-home rather than allow-only-the-workspace, deliberately. An
@@ -134,6 +140,13 @@ def profile(*, home: Path, readable: tuple[Path, ...], writable: tuple[Path, ...
     # `2>/dev/null` is in half the commands an agent writes, and stdout and
     # stderr are themselves entries here.
     lines.append('(allow file-write* (subpath "/dev"))')
+    # Last, because sandbox-exec takes the last matching rule. `protected` names
+    # directories that must stay read-only even though they sit inside somewhere
+    # writable -- which is the default layout for the skills catalogue, since it
+    # lives in the workspace unless a deployment relocates it. Written after the
+    # allows rather than instead of them: the workspace has to stay writable, and
+    # only this carve-out inside it does not.
+    lines += [f"(deny file-write* (subpath {_sb(p)}))" for p in protected]
     return "\n".join(lines) + "\n"
 
 
@@ -233,6 +246,13 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
             home=home,
             readable=readable_roots(workspace, extra, skills),
             writable=writable_roots(workspace, scratch_dir),
+            # The catalogue is instructions the agent follows, and by default it
+            # sits inside the workspace -- so "the workspace is writable" made a
+            # skill something the agent could rewrite for every later request,
+            # including in the other deployments sharing a relocated one. Read at
+            # the tool level too, by `SKILLS_ARE_READ_ONLY`; both are needed,
+            # because the shell bypasses tool permissions entirely.
+            protected=(Path(skills).resolve(),) if skills is not None else (),
         ),
         encoding="utf-8",
     )

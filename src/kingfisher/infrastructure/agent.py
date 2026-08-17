@@ -185,6 +185,35 @@ DATA_IS_READ_ONLY = FilesystemPermission(
 )
 
 
+# The catalogue is *instructions the agent follows*, which makes it the one
+# route where a write outlasts the request that made it. `/memory` and
+# `/derived` belong to a session and go when it does; a skill belongs to the
+# deployment, and `KINGFISHER_SKILLS_DIR` exists so several deployments can
+# share one reviewed set -- so a skill edited during one request is read by
+# every later request, in every deployment pointing at that directory.
+#
+# Measured before adding, because `/data` had a rule and this did not:
+# `backend.write("/skills/demo/PWNED.md", ...)` and `backend.edit(...)` both
+# succeeded against the catalogue on disk. Nothing depended on it -- a request's
+# own skills are written host-side by `uploads`, never through a file tool.
+#
+# `/skills/uploaded/**` is covered too, and deliberately. It is a session's own
+# half rather than the deployment's, but kingfisher writes it host-side for the
+# same reason, and an agent able to rewrite an uploaded skill could rewrite the
+# instructions it was about to follow.
+#
+# Same `write` operation as above, so it covers write_file, edit_file and
+# delete. It does not cover `execute` either -- which is why
+# `confinement.resolve` denies writes to the same directory in the sandbox
+# profile. Both halves are needed and neither is sufficient: the profile is
+# macOS-only and can be switched off, and this one never sees the shell.
+SKILLS_ARE_READ_ONLY = FilesystemPermission(
+    operations=["write"],
+    paths=["/skills/**"],
+    mode="deny",
+)
+
+
 #: The one warning kingfisher asks for and does not want to hear. Matched on
 #: the message rather than silenced by level, because the same logger carries
 #: warnings that matter -- a snapshot that failed to restore, and a workspace
@@ -640,7 +669,7 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]
-    permissions = [DATA_IS_READ_ONLY]
+    permissions = [DATA_IS_READ_ONLY, SKILLS_ARE_READ_ONLY]
     extras: dict[str, Any] = {}
 
     # Two axes, and this is where they meet: `cfg` says what is wired, the
