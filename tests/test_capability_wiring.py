@@ -9,12 +9,11 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.agent import (
-    SKILLS_SOURCES,
     CapabilityError,
     available_skills,
     build_agent,
 )
-from kingfisher.infrastructure.backend import build_backend
+from kingfisher.infrastructure.backend import build_backend, skills_sources
 from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build
@@ -121,6 +120,14 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatc
     ]
     assert [r.paths for r in denied] == [["/skills/tabular-qa/**"]]
 
+    # What the model is actually shown. This went unasserted, and the whole
+    # point of the middleware is what it renders -- a version of it that loaded
+    # every skill and then filtered them all away passed everything above.
+    loaded = scoped[0].before_agent({}, None, {})["skills_metadata"]
+    shown = scoped[0]._format_skills_list(loaded)
+    assert "other" in shown, shown
+    assert "tabular-qa" not in shown, shown
+
 
 def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, session_dir):
     """Unrestricted is not "restricted to everything": no filter, no deny rules."""
@@ -132,7 +139,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, sessi
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    assert captured["skills"] == SKILLS_SOURCES
+    assert captured["skills"] == skills_sources()
     assert not any(isinstance(m, ScopedSkills) for m in captured["middleware"])
     # The two unconditional read-only routes and nothing skill-specific: a
     # request that granted no skills adds no per-skill denials.

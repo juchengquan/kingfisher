@@ -297,15 +297,16 @@ def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
     assert LocalSubagentRepository(tmp_path).sources == {"profiler": "analysis/whatever.yaml"}
 
 
-# -- skills: the kind that cannot ----------------------------------------
+# -- skills: the kind that goes one level, not many -----------------------
 
 
-def test_a_nested_skill_is_still_not_discovered(tmp_path):
-    """Not an oversight to fix later.
+def test_the_repository_still_lists_only_the_root(tmp_path):
+    """`names` is what a *store-backed* catalogue mounts by, and a store has no
+    folders -- so this stays a root listing on purpose while the registry, which
+    reads through sources, is the one that sees `research::company-lookup`.
 
-    deepagents lists the skills directory once and looks for `SKILL.md`
-    directly inside each entry. Making our own scan recurse would advertise a
-    skill the agent then could not open, which is worse than not offering it.
+    Two questions that look like one. Running them together is what the
+    registry was built to stop.
     """
     nested = tmp_path / "research" / "company-lookup"
     nested.mkdir(parents=True)
@@ -314,6 +315,18 @@ def test_a_nested_skill_is_still_not_discovered(tmp_path):
     )
 
     assert LocalSkillRepository(tmp_path).names == ()
+    assert LocalSkillRepository(tmp_path).misplaced == (), "one level loads now"
+
+
+def test_a_second_level_of_grouping_is_where_it_stops(tmp_path):
+    """Making our own scan recurse further would advertise a skill the agent
+    then could not open, which is worse than not offering it."""
+    nested = tmp_path / "research" / "deep" / "company-lookup"
+    nested.mkdir(parents=True)
+    (nested / "SKILL.md").write_text(
+        "---\nname: company-lookup\ndescription: x\n---\nBody.\n", encoding="utf-8"
+    )
+
     assert LocalSkillRepository(tmp_path).misplaced == (
-        "research",
+        "research/deep/company-lookup",
     ), "the warning has to still fire"

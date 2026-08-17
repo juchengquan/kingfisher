@@ -28,11 +28,17 @@ from __future__ import annotations
 from collections.abc import Awaitable, Callable
 from typing import Any
 
-from deepagents.middleware.skills import SkillsMiddleware
+from deepagents.middleware.skills import (
+    SkillsMiddleware,
+    _alist_skills_with_errors,
+    _list_skills_with_errors,
+)
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
+from langchain_core.runnables import RunnableConfig
 
 from kingfisher.infrastructure.backend import HostPathError
+from kingfisher.infrastructure.skill_registry import KEY, qualified
 
 
 def _tool_name(tool: Any) -> str | None:
@@ -112,15 +118,76 @@ class ScopedSkills(SkillsMiddleware):
     Overrides the formatting seam rather than rewriting the assembled prompt:
     string surgery on a system message would break the moment deepagents
     changes its wording.
+
+    And overrides the *loading* seam, which is a bigger claim and needs its
+    reason. deepagents merges every source into a dictionary keyed by name, so
+    two parties who never met and both shipped a `lookup` end up as one skill
+    and the model is never told the other exists. Skills arriving from several
+    places is what a catalogue looks like after long enough, so the merge is
+    undone here and both survive -- addressed by `source::name`, which is what a
+    request grants and what `_allowed` holds.
+
+    A skill can survive that where a *tool* cannot, and the difference is how
+    each is reached: a tool is called by name through a dictionary, so two can
+    never coexist whatever anyone writes; a skill is read by the path the
+    listing hands the model, so two only need telling apart.
+
+    Both loaders are overridden, and that is not belt-and-braces. `before_agent`
+    and `abefore_agent` do not delegate -- each builds its own
+    `dict[str, SkillMetadata]` -- so overriding one would leave a synchronous
+    run and an `astream` run offering different skills, and it would fail *open*:
+    the async path would keep silently dropping one. `LocalShellBackend` is the
+    opposite case and worth not confusing with this one; its `aexecute` is the
+    protocol default, `await asyncio.to_thread(self.execute, ...)`, so
+    `ConfinedShell` overriding `execute` alone genuinely covers both.
     """
 
     def __init__(self, *, allowed: tuple[str, ...], **kwargs: Any) -> None:
         self._allowed = set(allowed)
         super().__init__(**kwargs)
 
+    def _qualified(self) -> list[Any]:
+        """Every skill every source offers, tagged with the source it came from.
+
+        The listing deepagents would have built, minus the merge. Each entry
+        keeps its own metadata -- including `path`, which is what the model is
+        told to read and therefore what makes two same-named skills two
+        different things rather than one ambiguous one.
+        """
+        found = []
+        for label, path in zip(self.source_labels, self.sources, strict=True):
+            skills, _error = _list_skills_with_errors(self._backend, path)
+            for one in skills:
+                found.append({**one, KEY: qualified(label, one["name"])})
+        return found
+
+    async def _aqualified(self) -> list[Any]:
+        """The same, on the path `astream` takes. See the class docstring."""
+        found = []
+        for label, path in zip(self.source_labels, self.sources, strict=True):
+            skills, _error = await _alist_skills_with_errors(self._backend, path)
+            for one in skills:
+                found.append({**one, KEY: qualified(label, one["name"])})
+        return found
+
+    # `config` is annotated rather than left as `Any`, and langchain is why: it
+    # inspects every hook's signature at construction and warns when this
+    # parameter is not a `RunnableConfig`. Nothing here reads it -- deepagents'
+    # own hooks carry the same unused argument -- but a warning per agent built
+    # is a warning nobody reads by the tenth one.
+    def before_agent(self, state: Any, runtime: Any, config: RunnableConfig) -> Any:  # noqa: ARG002
+        if "skills_metadata" in state:
+            return None
+        return {"skills_metadata": self._qualified()}
+
+    async def abefore_agent(self, state: Any, runtime: Any, config: RunnableConfig) -> Any:  # noqa: ARG002
+        if "skills_metadata" in state:
+            return None
+        return {"skills_metadata": await self._aqualified()}
+
     def _format_skills_list(self, skills: list[Any]) -> str:
         return super()._format_skills_list(
-            [s for s in skills if s.get("name") in self._allowed]
+            [s for s in skills if s.get(KEY, s.get("name")) in self._allowed]
         )
 
 

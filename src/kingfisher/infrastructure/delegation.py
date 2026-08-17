@@ -30,7 +30,6 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.subagent import RunOn, resolved_model
 from kingfisher.domain.tool import ceiling
-from kingfisher.infrastructure.backend import SKILLS_SOURCES
 from kingfisher.infrastructure.models import build_model
 from kingfisher.infrastructure.prompting import with_user_prompt
 from kingfisher.infrastructure.scoping import ScopedSkills, ToolAllowlist
@@ -216,6 +215,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # otherwise so the top-level path keeps deepagents' own defaults.
     default_model: Any = None,
     tool_objects: list[Any] | None = None,
+    skill_sources: list[Any] | None = None,
     #: Where this request wants this delegate to run, replacing its file's
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
@@ -262,8 +262,13 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # not given is an index it has no idea exists. `SubAgent.skills` would take
     # source *paths*; this selects by name, which is what a definition writes.
     if skills is not None and skills != ALL and backend is not None:
+        # The same sources the parent got, so a delegate reads a folder's skills
+        # under the label its parent granted them by. Passed in rather than
+        # rebuilt: two walks of the catalogue could disagree, and a delegate
+        # silently offered a different skill than the one named is the failure
+        # this whole area exists to stop.
         middleware.append(
-            ScopedSkills(allowed=skills, backend=backend, sources=SKILLS_SOURCES)
+            ScopedSkills(allowed=skills, backend=backend, sources=skill_sources or [])
         )
     # What lets this delegate delegate. deepagents gives a subagent no `task`
     # tool of its own -- `create_sub_agent` calls `create_agent` with the

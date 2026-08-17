@@ -91,24 +91,10 @@ skills, oddly, never did.
 
 ## Still undecided
 
-- **Nested skills, on top of this.** `sources` takes several paths, and one per
-  folder loads nested skills that a single root source cannot see -- measured:
-  `['lookup', 'only-here']` where the root source found nothing. No extra
-  backend route is needed, because the sources are paths inside the one
-  `/skills/` mount.
-
-  This was ruled out during the folders work on the grounds that deepagents
-  merges sources last-wins and a name clash would go silent. That objection does
-  not survive: kingfisher already refuses duplicate tool and subagent names
-  across folders, and the same check makes the merge safe. Two folders each
-  holding a `lookup` currently resolve to whichever source came last, silently.
-
-  It needs this registry first -- there is nothing to refuse a duplicate with
-  otherwise, and `_skill_denials` needs the real path of a nested skill, which
-  `SkillMetadata.path` carries.
-
-  A tuple source is *not* what makes this work. It sets the label a section is
-  printed under, nothing more.
+- **Nested skills, on top of this.** Decided and built — see
+  `2026-08-17-skills-from-several-parties.md`. A folder under the root is
+  registered as its own source, a skill's identity becomes `source::name`,
+  and a bare name that two sources offer is refused rather than resolved.
 - **What to do about `mismatch`.** A folder whose header names something else
   loads under the header name, so it is neither missing nor wrong -- it is
   *present under a name nobody typed*. S6 reports what the agent will not load;

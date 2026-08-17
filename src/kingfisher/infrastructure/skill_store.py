@@ -25,8 +25,35 @@ if TYPE_CHECKING:
 from kingfisher.domain.skill import FILENAME
 
 #: Where a skill has to be for anything to find it, said once so callers can
-#: quote it without knowing the filename themselves.
-LAYOUT = f"<skills>/<name>/{FILENAME}"
+#: quote it without knowing the filename themselves. Two shapes, because a
+#: folder directly under the root is registered as its own source and a source
+#: is listed one level deep -- so one level of grouping works and a second does
+#: not.
+LAYOUT = f"<skills>/<name>/{FILENAME} or <skills>/<source>/<name>/{FILENAME}"
+
+#: How many path parts a reachable `SKILL.md` has, relative to the root:
+#: `<name>/SKILL.md` is two, `<source>/<name>/SKILL.md` is three. Anything
+#: longer sits below the deepest source and is unreachable.
+DEEPEST = 3
+
+
+def reachable(root: Path) -> tuple[Path, ...]:
+    """Every directory holding a `SKILL.md` the agent could actually open.
+
+    The listing this repo makes on its own, used for the two questions that
+    need to know what *looks* like a skill: which ones sit too deep to load,
+    and which ones deepagents was offered and dropped. Neither is "what is a
+    skill", which stays deepagents' to answer -- this only walks directories.
+    """
+    if not root.is_dir():
+        return ()
+    return tuple(
+        sorted(
+            found.parent
+            for found in root.rglob(FILENAME)
+            if len(found.relative_to(root).parts) <= DEEPEST
+        )
+    )
 
 
 @dataclass(frozen=True)
@@ -80,26 +107,28 @@ class LocalSkillRepository:
 
     @cached_property
     def misplaced(self) -> tuple[str, ...]:
-        """Directories that hold a skill somewhere below, but not where it counts.
+        """Skills sitting below the deepest place anything will look for them.
 
-        Discovery is one level deep -- `<source>/<name>/SKILL.md` -- because
-        deepagents' own listing is, and going deeper here would advertise skills
-        the agent then could not load. So the layout is a contract, not a
-        preference.
+        Reach is `DEEPEST` parts, because a folder under the root becomes its
+        own source and deepagents lists a source one level deep and no further.
+        So one level of grouping loads and a second does not -- `research/`
+        holds skills, `research/deep/` hides them.
 
-        What makes it worth reporting is that breaking it is *silent*. Grouping
-        skills into folders is the obvious thing to try, and it yields nothing:
-        no error, no warning, just a catalogue that appears empty. This finds
-        those folders so a caller can say so.
+        This used to report the folder rather than the skill, back when *any*
+        folder was too deep. Now that one level works, naming the folder would
+        indict `research/` for the sins of `research/deep/`, so it answers with
+        the path of the skill that is actually out of reach.
 
-        It now has to say *why*, because tools and subagents nest freely and
-        this one does not. That reads as an arbitrary inconsistency unless the
-        reason is stated: those two are read by kingfisher, which can walk as
-        deep as it likes, and a skill is read by the agent itself through a
-        filesystem route. deepagents lists the skills directory once and looks
-        for `SKILL.md` directly inside each entry -- so a nested skill is not
-        tidied away, it is unreachable. See `LAYOUT`, which is the sentence to
-        quote at someone.
+        What makes it worth reporting at all is that breaking the layout is
+        *silent*. Grouping one level further is the obvious next thing to try
+        and it yields nothing: no error, no warning, just a skill that never
+        appears. This finds those so a caller can be told.
+
+        It has to say *why*, because tools and subagents nest freely and this
+        does not. That reads as an arbitrary inconsistency unless the reason is
+        stated: those two are read by kingfisher, which can walk as deep as it
+        likes, and a skill is read by the agent through a filesystem route. See
+        `LAYOUT`, which is the sentence to quote at someone.
 
         Not on `SkillRepository`, deliberately. It is a question about
         directories, and a store that is not one has no answer to give.
@@ -107,11 +136,10 @@ class LocalSkillRepository:
         directory = Path(self.root)
         if not directory.is_dir():
             return ()
-
-        found = []
-        for child in sorted(directory.iterdir()):
-            if not child.is_dir() or (child / FILENAME).is_file():
-                continue  # not a directory, or a perfectly good skill
-            if any(child.rglob(FILENAME)):
-                found.append(child.name)
-        return tuple(found)
+        return tuple(
+            sorted(
+                str(found.parent.relative_to(directory))
+                for found in directory.rglob(FILENAME)
+                if len(found.relative_to(directory).parts) > DEEPEST
+            )
+        )
