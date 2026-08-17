@@ -34,6 +34,11 @@ _EXPORTS = {
     "UploadError": "kingfisher.infrastructure.uploads",
     "async_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     "Config": "kingfisher.config",
+    # The fourth name the consumer rule has forced public, and the first
+    # that improved the library on its own: `resolve` takes six arguments
+    # and two callers were assembling them from the same `Config`.
+    "Confinement": "kingfisher.infrastructure.confinement",
+    "shell_confinement": "kingfisher.infrastructure.confinement",
     "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
@@ -86,6 +91,7 @@ __all__ = [
     "CapabilityError",
     "Config",
     "ConfigError",
+    "Confinement",
     "Inventory",
     "Kingfisher",
     "LocalFileStore",
@@ -120,6 +126,7 @@ __all__ = [
     "protect_data",
     "run",
     "seed",
+    "shell_confinement",
     "shell_env",
     "split_reference",
     "stream",
@@ -157,6 +164,10 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
     from kingfisher.domain.tool import split_reference as split_reference
+    from kingfisher.infrastructure.confinement import Confinement as Confinement
+    from kingfisher.infrastructure.confinement import (
+        shell_confinement as shell_confinement,
+    )
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.harness.agent import build_agent as build_agent
     from kingfisher.infrastructure.harness.backend import build_backend as build_backend
