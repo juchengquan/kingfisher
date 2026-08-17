@@ -100,6 +100,37 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
         yield "  (none)  — try `kingfisher seed`"
 
 
+def as_json(found: Inventory) -> dict[str, object]:
+    """The same answer, in the shape a script can read.
+
+    Field for field what `Inventory` carries, so there is nothing to keep in
+    step: a name here the record does not have would be inventing an answer, and
+    one it has that is missing here would be hiding one. A test holds the two
+    together, because "field for field" is a claim and not a mechanism.
+
+    Mapped here rather than by the record, for the same reason `render` is here
+    -- a serialisation is a format, and formats are the driver's business.
+    `Path` becomes a string because JSON has no other option; the mapping
+    proxies become plain dicts because `json` will not encode them.
+    """
+    return {
+        "workspace": str(found.workspace),
+        "skills_source": found.skills_source,
+        "subagents_source": found.subagents_source,
+        "builtin_tools": list(found.builtin_tools),
+        "tools": list(found.tools),
+        "tool_sources": dict(found.tool_sources),
+        "tools_error": found.tools_error,
+        "skills": dict(found.skills),
+        "skills_unloadable": list(found.skills_unloadable),
+        "skills_misplaced": list(found.skills_misplaced),
+        "skills_enabled": found.skills_enabled,
+        "subagents": dict(found.subagents),
+        "subagent_sources": dict(found.subagent_sources),
+        "subagents_error": found.subagents_error,
+    }
+
+
 def failed(found: Inventory) -> bool:
     """Whether the listing described a workspace that will not load.
 
