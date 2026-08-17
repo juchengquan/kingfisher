@@ -98,20 +98,6 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
 
 
-def test_the_wire_form_names_every_axis():
-    """`CapabilitiesBody` is the HTTP shape, and the one that matters most for a
-    library: a caller narrows over the wire, not through `main.py`. It mirrors
-    `Capabilities` field for field today and nothing said so, which is how the
-    two come to disagree about what a caller may ask for.
-
-    Not a default check -- `test_capabilities_on_the_wire` already owns that.
-    This is only that the vocabulary is the same on both sides.
-    """
-    from kingfisher.presentation.capabilities import CapabilitiesBody
-
-    assert set(CapabilitiesBody.model_fields) == set(AXES)
-
-
 def test_packs_ship_only_kinds_the_catalogue_reads():
     """A kind the catalogue does not read would be copied where nothing looks.
 

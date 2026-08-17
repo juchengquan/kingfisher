@@ -76,13 +76,13 @@ def build_parser() -> argparse.ArgumentParser:
     )
     sub.add_parser(
         "serve",
-        help="run the HTTP surface (needs the server extra)",
+        help="run the HTTP surface (ships separately)",
         description=(
-            "The same thing `kingfisher-server` starts, reading the same "
-            "environment. Both names exist because scripts and unit files "
-            "already call the older one, and there is one implementation behind "
-            "them. Needs `pip install 'kingfisher[server]'`, and says so if it "
-            "is missing rather than being absent from this list."
+            "The same thing `kingfisher-service` starts, reading the same "
+            "environment, with one implementation behind both names. The "
+            "service is its own distribution: `pip install "
+            "'kingfisher[service]'`. This verb says so when it is missing "
+            "rather than being absent from this list."
         ),
     )
     checkup = sub.add_parser(
@@ -201,20 +201,21 @@ def _serve() -> int:
     """Hand off to the server's own entry point, which decides everything.
 
     Imported here rather than at module scope, and that is not a style choice.
-    `kingfisher.presentation` reaches fastapi as it loads, so importing it at the
-    top would make `kingfisher list` fail on an install without the server extra
-    -- a verb nobody asked for taking down the two they did.
+    The service is a separate distribution now, so on a base install the module
+    is not there at all -- importing it at the top would make `kingfisher list`
+    fail over a verb nobody asked for.
 
-    The same reason `presentation.__main__` imports uvicorn inside `serve`, and
-    the same reason this subcommand is in `--help` whether or not the extra is
-    installed: a command that exists and says what to install beats one that is
-    silently absent.
+    This is also the only place that says how to get it. The service ships a
+    `kingfisher-service` command, and the base deliberately does not declare one
+    of the same name: two distributions owning one script is not an override but
+    a shared file, and reinstalling the base would silently swap a working server
+    for a note telling you to install what you already have.
     """
     try:
-        from kingfisher.presentation.__main__ import main as serve_forever  # noqa: PLC0415
+        from kingfisher_service.__main__ import main as serve_forever  # noqa: PLC0415
     except ImportError:
         print(
-            "kingfisher serve needs the server extra: pip install 'kingfisher[server]'",
+            "kingfisher serve needs the service: pip install 'kingfisher[service]'",
             file=sys.stderr,
         )
         return 1

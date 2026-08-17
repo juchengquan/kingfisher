@@ -1,0 +1,48 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "kingfisher-service"
+version = "0.1.0"
+description = "kingfisher's HTTP surface — a consumer of the library, not part of it."
+readme = "README.md"
+requires-python = ">=3.12"
+
+dependencies = [
+    # Capped rather than open, and the library's own rule is why: it caps
+    # `langchain-quickjs` below 0.4 because under 0.x the minor is where breaks
+    # land, and "a build that stops is a decision to make, where a silent
+    # upgrade is one already made". This applies that rule to itself.
+    #
+    # Tighter than `kingfisher-assets`, which names `kingfisher` unpinned. That
+    # is fine for a pack whose content rarely calls the library; this calls the
+    # public names on every request, so a base that moved ahead would fail
+    # inside a request rather than at install time.
+    "kingfisher>=0.1,<0.2",
+    # For inbound validation and the generated schema. Responses are built by
+    # hand from the dataclasses rather than mirrored as pydantic models --
+    # `RunResult` keeps `run_dir` and `log_path` as `Path` so `json.dumps`
+    # raises on them, and a mirror is a second home for that rule.
+    "fastapi>=0.141.1",
+    # Only to serve the app itself. `serve()` imports it inside the function, so
+    # this package stays importable without it -- an app served by gunicorn or a
+    # hosted runner needs the module, not the server.
+    "uvicorn>=0.40.0",
+]
+
+[project.scripts]
+# Named for what it starts, at a person who wants a service running -- the same
+# rule the library's own commands follow. It was `kingfisher-server` while this
+# lived inside `kingfisher`; the rename rides along with the import break rather
+# than arriving as a second migration later.
+kingfisher-service = "kingfisher_service.__main__:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/kingfisher_service"]
+
+[tool.uv.sources]
+# Development only, the same way `assets/` names it: the published wheel depends
+# on `kingfisher` from the index, and this points at the checkout so the two
+# halves of a change are tested together.
+kingfisher = { workspace = true }

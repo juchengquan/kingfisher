@@ -4,7 +4,7 @@ The command exists because a pip-installed kingfisher had the definitions and no
 way to put them anywhere: both operations lived behind flags in `main.py`, which
 is a development driver and is not in the wheel.
 
-Held to the front door, like `kingfisher.presentation`. `test_architecture`
+Held to the front door, like `kingfisher_service`. `test_architecture`
 enforces that against every module here; these are about what the command does.
 """
 
@@ -272,7 +272,7 @@ def test_serve_without_the_extra_says_what_to_install(monkeypatch, capsys):
     real = builtins.__import__
 
     def _no_server(name, *args, **kwargs):
-        if name.startswith("kingfisher.presentation"):
+        if name.startswith("kingfisher_service"):
             raise ImportError(name)
         return real(name, *args, **kwargs)
 
@@ -281,13 +281,13 @@ def test_serve_without_the_extra_says_what_to_install(monkeypatch, capsys):
     assert main(["serve"]) == 1
 
     printed = capsys.readouterr().err
-    assert "kingfisher[server]" in printed
+    assert "kingfisher[service]" in printed
 
 
 def test_a_missing_server_extra_does_not_take_the_other_verbs_down(monkeypatch, capsys, cfg):
     """The reason the import is inside the function.
 
-    `kingfisher.presentation` reaches fastapi as it loads. Imported at module
+    `kingfisher_service` reaches fastapi as it loads. Imported at module
     scope, a verb nobody asked for would break the two they did -- on exactly
     the installs that chose not to have the extra.
     """
@@ -296,7 +296,7 @@ def test_a_missing_server_extra_does_not_take_the_other_verbs_down(monkeypatch, 
     real = builtins.__import__
 
     def _no_server(name, *args, **kwargs):
-        if name.startswith("kingfisher.presentation"):
+        if name.startswith("kingfisher_service"):
             raise ImportError(name)
         return real(name, *args, **kwargs)
 
@@ -312,7 +312,7 @@ def test_serve_hands_off_rather_than_deciding_anything(monkeypatch):
     """One implementation behind two names. If this assembled its own settings
     or set up its own logging, `kingfisher serve` and `kingfisher-server` would
     be two servers that merely look alike."""
-    from kingfisher.presentation import __main__ as server
+    from kingfisher_service import __main__ as server
 
     calls = []
     monkeypatch.setattr(server, "main", lambda: calls.append("served") or 0)

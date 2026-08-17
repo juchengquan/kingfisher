@@ -42,7 +42,7 @@ def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
 
     Nothing had subpackages when this changed, so it caught nothing on the day
     -- which is the argument for changing it then rather than in the commit
-    that first needed it. `_presentation_modules`, a few lines from the bug, had
+    that first needed it. `_consumer_modules`, a few lines from the bug, had
     used `rglob` since it was written.
 
     `root` is here so the behaviour can be tested against a tree built for the
@@ -137,7 +137,7 @@ def _names_a_real_module(module: str) -> bool:
     """Resolved on disk rather than imported.
 
     `importlib.util.find_spec` would answer the same question by executing
-    every parent package on the way, which for `kingfisher.presentation` means
+    every parent package on the way, which for `kingfisher.cli` means
     fastapi and for the harness means three provider SDKs. This rule should
     cost nothing and have no way to fail for a reason other than the one it is
     about.
@@ -218,7 +218,7 @@ def test_no_rule_here_is_parametrized_over_nothing():
         "application": _modules_in("application"),
         "infrastructure": _modules_in("infrastructure"),
         "the package": _package_modules(),
-        "presentation": _presentation_modules(),
+        "consumers": _consumer_modules(),
     }
     empty = sorted(name for name, found in collections.items() if not found)
     assert not empty, (
@@ -298,8 +298,18 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # The rest of the layer adapts the disk, the OS and the environment, and
     # needs one parser to do it.
     "infrastructure": frozenset({"yaml"}),
-    # A consumer of the library, with its own extra and its own dependencies.
-    "presentation": frozenset({"fastapi", "pydantic", "starlette", "uvicorn"}),
+    # The one consumer still in this distribution. `presentation` was the other
+    # and is now `kingfisher-service`, a package of its own with its own rules --
+    # so fastapi and uvicorn are no longer anything this table has an opinion
+    # about, and an area that named them would be permitting what it cannot see.
+    #
+    # `kingfisher_service` is foreign for exactly that reason, and named here
+    # because `kingfisher serve` is the one thing in this distribution allowed to
+    # reach for it -- inside a function, behind `except ImportError`, to say how
+    # to install it. The rule below keeps the *library* clear of it; this area is
+    # not covered by that rule, which is what makes naming it here the decision
+    # rather than an oversight.
+    "cli": frozenset({"kingfisher_service"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
     # the table is total and an unlisted area cannot mean "anything goes".
     "domain": frozenset(),
@@ -349,14 +359,16 @@ def test_an_area_is_refused_another_areas_dependencies():
     """
     assert _undeclared({"deepagents"}, "domain") == {"deepagents"}
     assert _undeclared({"deepagents"}, "application") == {"deepagents"}
-    assert _undeclared({"deepagents"}, "presentation") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "cli") == {"deepagents"}
     assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
     assert _undeclared({"fastapi"}, "infrastructure/harness") == {"fastapi"}
     assert _undeclared({"yaml"}, "infrastructure/harness") == {"yaml"}
 
     assert _undeclared({"deepagents", "langgraph"}, "infrastructure/harness") == set()
     assert _undeclared({"yaml"}, "infrastructure") == set()
-    assert _undeclared({"fastapi"}, "presentation") == set()
+    assert _undeclared({"fastapi"}, "cli") == {"fastapi"}
+    assert _undeclared({"kingfisher_service"}, "cli") == set()
+    assert _undeclared({"kingfisher_service"}, "application") == {"kingfisher_service"}
 
 
 def test_a_subpackage_is_judged_by_its_own_area():
@@ -860,8 +872,11 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 
 # -- the server is a consumer, not an insider ------------------------------
 #
-# `kingfisher.presentation` ships in this distribution and is separated from the
-# library by these two rules rather than by intention. The point is not tidiness:
+# `kingfisher-service` is its own distribution now, so half of this is enforced
+# by packaging: the library cannot import a package that is not installed. The
+# other half is not, and stays here -- an *installed* service is importable, and
+# nothing but this rule stops a library module reaching for it. The point is not
+# tidiness:
 # it puts the server on the same footing as anybody outside the package, so when
 # it needs something the library does not export, the answer is to export it
 # deliberately. Three things came out that way before the server existed -- the
@@ -869,14 +884,16 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 
 
 #: Everything in this distribution held to the front door. `presentation` was
-#: first; `cli` is the second, and for the same reason -- the claim that any
-#: caller can seed a workspace is worth something only if the command that seeds
-#: is one of them. Adding a name here is what makes that checked rather than
-#: asserted, and it is why `offered` and `SKILL_LAYOUT` are public.
-CONSUMERS = ("presentation", "cli")
+#: first and has left -- it is `kingfisher-service` now, and holds itself to the
+#: same rule in its own tests. `cli` is what remains, and it is here for the
+#: reason the other one was: the claim that any caller can seed a workspace is
+#: worth something only if the command that seeds is one of them. Adding a name
+#: here is what makes that checked rather than asserted, and it is why `offered`
+#: and `SKILL_LAYOUT` are public.
+CONSUMERS = ("cli",)
 
 
-def _presentation_modules() -> list[Path]:
+def _consumer_modules() -> list[Path]:
     return sorted(path for name in CONSUMERS for path in (SRC / name).rglob("*.py"))
 
 
@@ -888,7 +905,7 @@ def _reaches_past_the_public_api(module: str) -> bool:
     )
 
 
-@pytest.mark.parametrize("path", _presentation_modules(), ids=_module_id)
+@pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
 def test_the_server_uses_the_library_only_through_its_public_api(path):
     """`from kingfisher import X`, never `from kingfisher.domain.y import X`.
 
@@ -911,13 +928,18 @@ def test_the_server_uses_the_library_only_through_its_public_api(path):
     ids=_module_id,
 )
 def test_no_part_of_the_library_imports_the_server(path):
-    """The outward half. Dependencies point one way, and a library that imports
-    its own server makes the extra a lie -- `pip install kingfisher` would fail
-    at import without fastapi."""
+    """The outward half, and the half packaging leaves open.
+
+    A base install cannot import the service because it is not there -- that
+    much is free. But an install with the service *present* can, and then
+    `pip install kingfisher` alone breaks for everyone else, at import, with a
+    module-not-found nobody can act on. This is the only thing standing between
+    those two states.
+    """
     modules = _imported_modules(path)
-    assert not any(m.startswith("kingfisher.presentation") for m in modules), (
-        f"{_module_id(path)} imports kingfisher.presentation — the library "
-        "does not know its server exists"
+    assert not any(m.startswith("kingfisher_service") for m in modules), (
+        f"{_module_id(path)} imports kingfisher_service — the library ships "
+        "without it and does not know it exists"
     )
 
 
@@ -932,7 +954,7 @@ BLOCKING_METHODS = frozenset({"run", "stream"})
 NOT_KINGFISHER = frozenset({"uvicorn"})
 
 
-@pytest.mark.parametrize("path", _presentation_modules(), ids=_module_id)
+@pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
 def test_the_server_calls_the_async_turn_methods(path):
     """`arun` and `astream`, never `run` and `stream`.
 
@@ -986,40 +1008,6 @@ def test_the_event_kinds_are_what_the_package_emits():
         "as the SSE event names, so an extra entry is a kind no client sees and a "
         "missing one is a kind nobody handles"
     )
-
-
-def test_every_caller_facing_error_has_a_status():
-    """The half phase 1 could not check yet.
-
-    `CALLER_FACING_ERRORS` says which errors a caller can cause;
-    `errors.STATUS` says what each becomes on the wire. Nothing but this keeps
-    them the same set -- and the failure is quiet in both directions. An error
-    classified caller-facing but absent from the map is a 500 for something the
-    caller could fix; one in the map but not classified is a status nobody
-    decided on.
-    """
-    from kingfisher.presentation.errors import STATUS
-
-    mapped = {error.__name__ for error in STATUS}
-
-    assert mapped == CALLER_FACING_ERRORS, (
-        "every caller-facing error needs a status and code, and nothing else "
-        "belongs in the map — a deployment error is a 500 on purpose"
-    )
-
-
-def test_no_two_refusals_share_a_code():
-    """The code is what a client branches on, so two refusals answering the
-    same code are two things it cannot tell apart. Statuses may repeat --
-    `bad_reference`, `bad_skill` and `bad_subagent` are all 400 -- which is
-    exactly why the code carries the meaning."""
-    from kingfisher.presentation.errors import CODE_FOR_STATUS, STATUS
-
-    codes = [code for _, code in STATUS.values()] + list(CODE_FOR_STATUS.values())
-
-    assert len(codes) == len(set(codes)), sorted(codes)
-
-
 # -- nothing here is written for tests alone -------------------------------
 #
 # The recurring failure this guards is not any one module's. Something gets

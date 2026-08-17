@@ -15,11 +15,11 @@ import logging
 
 import pytest
 from fastapi.testclient import TestClient
+from kingfisher_service import ServiceConfig, create_app
+from test_server import AsyncStub, tokens
 
 from kingfisher import Kingfisher
-from kingfisher.presentation import ServerConfig, create_app
 from tests.conftest import StubCheckpointer
-from tests.test_server import AsyncStub, tokens
 
 
 def lines(caplog):
@@ -38,7 +38,7 @@ def audited(cfg, caplog):
         service = Kingfisher(
             cfg, agent=AsyncStub("the answer", tokens=tokens(3)), threads=StubCheckpointer()
         )
-        app = create_app(service, ServerConfig(**settings))
+        app = create_app(service, ServiceConfig(**settings))
         http = TestClient(app)
         http.kingfisher = service
         return http
@@ -177,7 +177,7 @@ def test_a_turn_whose_client_walked_away_says_so(cfg, caplog):
     fires whether the turn answered or its client hung up."""
     import asyncio
 
-    from tests.test_server import hang_up_after
+    from test_server import hang_up_after
 
     caplog.set_level(logging.INFO, logger="kingfisher.audit")
     service = Kingfisher(
@@ -226,22 +226,22 @@ def test_content_is_recorded_when_it_is_asked_for(audited, caplog):
 
 
 def test_content_is_off_unless_the_environment_says_otherwise():
-    assert ServerConfig().audit_content is False
-    assert ServerConfig.from_env({}).audit_content is False
-    assert ServerConfig.from_env({"KINGFISHER_SERVER_AUDIT_CONTENT": "true"}).audit_content
+    assert ServiceConfig().audit_content is False
+    assert ServiceConfig.from_env({}).audit_content is False
+    assert ServiceConfig.from_env({"KINGFISHER_SERVICE_AUDIT_CONTENT": "true"}).audit_content
 
 
 # -- where it goes ---------------------------------------------------------
 
 
 def test_the_audit_log_is_its_own_logger_with_no_handler():
-    """Separate from `kingfisher.presentation` on purpose. The access log omits
+    """Separate from `kingfisher_service` on purpose. The access log omits
     session ids because they are bearer credentials; this one exists to say
     which session did what, so attaching a handler is a deployment choosing
     where those ids may be written."""
     audit = logging.getLogger("kingfisher.audit")
 
-    assert audit.name != "kingfisher.presentation"
+    assert audit.name != "kingfisher_service"
     assert audit.handlers == []
 
 

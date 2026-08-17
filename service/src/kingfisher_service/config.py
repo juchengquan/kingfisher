@@ -13,18 +13,55 @@ can see them.
 from __future__ import annotations
 
 import os
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Callable, Mapping
 
-PREFIX = "KINGFISHER_SERVER_"
+PREFIX = "KINGFISHER_SERVICE_"
+
+#: What these were called while this package was `kingfisher.presentation`, and
+#: still read. Renaming an environment variable is the one rename that fails in
+#: silence: an import that moved stops the program and says so, while a variable
+#: nobody reads falls back to its default and the server comes up on the wrong
+#: port with nothing to show for it. So both are read, the new one wins, and
+#: using the old one says so once.
+WAS = "KINGFISHER_SERVER_"
+
+
+def _reader(source: Mapping[str, str]) -> Callable[[str, Any], Any]:
+    """One setting, under the current name or the one it used to have.
+
+    The new name wins where both are set, because a deployment mid-migration has
+    the new one for a reason. The old one is honoured and reported: honoured so
+    nothing breaks on upgrade, reported so this does not become a second name
+    nobody knows is load-bearing.
+
+    A warning rather than a log line: this is read before any logging is
+    configured, and the one caller is a process starting up.
+    """
+
+    def read(suffix: str, fallback: Any) -> Any:
+        if (value := source.get(f"{PREFIX}{suffix}")) is not None:
+            return value
+        if (value := source.get(f"{WAS}{suffix}")) is not None:
+            warnings.warn(
+                f"{WAS}{suffix} is the old name for {PREFIX}{suffix} and is still "
+                f"read; rename it, since the old one will stop being read.",
+                DeprecationWarning,
+                stacklevel=2,
+            )
+            return value
+        return fallback
+
+    return read
 
 
 @dataclass(frozen=True)
-class ServerConfig:
+class ServiceConfig:
     """How to serve, as opposed to what to serve."""
 
     #: Loopback by default, and that is a decision rather than a placeholder.
@@ -69,24 +106,25 @@ class ServerConfig:
     audit_content: bool = False
 
     @classmethod
-    def from_env(cls, env: Mapping[str, str] | None = None) -> ServerConfig:
-        """Read `KINGFISHER_SERVER_*`, falling back to the defaults above.
+    def from_env(cls, env: Mapping[str, str] | None = None) -> ServiceConfig:
+        """Read `KINGFISHER_SERVICE_*`, falling back to the defaults above.
 
         A prefix of its own rather than sharing `KINGFISHER_`, so that reading
         a deployment's environment tells you which half of the split each
         setting belongs to without consulting anything.
+
+        `KINGFISHER_SERVER_*` still works and warns -- see `WAS`.
         """
         source = os.environ if env is None else env
         defaults = cls()
+        read = _reader(source)
         return cls(
-            host=source.get(f"{PREFIX}HOST", defaults.host),
-            port=int(source.get(f"{PREFIX}PORT", defaults.port)),
-            max_body_bytes=int(
-                source.get(f"{PREFIX}MAX_BODY_BYTES", defaults.max_body_bytes)
-            ),
-            heartbeat_s=float(source.get(f"{PREFIX}HEARTBEAT_S", defaults.heartbeat_s)),
+            host=read("HOST", defaults.host),
+            port=int(read("PORT", defaults.port)),
+            max_body_bytes=int(read("MAX_BODY_BYTES", defaults.max_body_bytes)),
+            heartbeat_s=float(read("HEARTBEAT_S", defaults.heartbeat_s)),
             file_store_dir=(
-                Path(where) if (where := source.get(f"{PREFIX}FILE_STORE_DIR")) else None
+                Path(where) if (where := read("FILE_STORE_DIR", None)) else None
             ),
-            audit_content=source.get(f"{PREFIX}AUDIT_CONTENT", "").lower() == "true",
+            audit_content=str(read("AUDIT_CONTENT", "")).lower() == "true",
         )

@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 #: Named for the package rather than `__name__`, so a deployment configures one
 #: logger and gets everything the server says.
-logger = logging.getLogger("kingfisher.presentation")
+logger = logging.getLogger("kingfisher_service")
 
 
 def route_of(request: Request) -> str:
