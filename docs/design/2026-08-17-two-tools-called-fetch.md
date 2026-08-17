@@ -66,6 +66,8 @@ ago, applied where a tool's constraint actually lives.
 | T4 | **Each agent is handed only the tool objects it was granted**, rather than the whole set plus an allowlist. | Without this the rest cannot work: both objects reach one `ToolNode` and collapse before any narrowing happens. `ToolAllowlist` stays — it is what filters the model request and refuses a call — but it stops being the thing that decides *which object* a name means. |
 | T5 | **`*` against a catalogue holding a collision is refused**, not silently narrowed to the unambiguous ones. | `tools` defaults to `ALL`, so this is the common path and the tempting place to be clever. Quietly dropping one is the precise failure two PRs of skills work just removed. A deployment that deliberately ships two `fetch`es can name its main-agent tools. |
 | T6 | **A bare name that two folders offer is refused, naming both references.** | The safety property, and the same shape as `research::lookup`. Adding a colliding tool turns a working grant into a loud error rather than silently changing which code runs. |
+| T7 | **A subagent definition's `tools:` selects by reference too.** | The syntax already parses — `split_reference` is called at `domain/subagent.py:391` — and then the reference is discarded: `split_reference(entry)[1]` keeps the name alone. So a definition can already *write* `vendor_a/fetch.py::fetch` and cannot yet *mean* it. This is the same one-line-deep change as T2 and the place a delegate's tools are actually chosen, so it is where the feature earns its keep. |
+| T8 | **The subtraction axis takes references, and refuses an ambiguous bare name.** | `--without-tools fetch` against two `fetch`es has no safe reading. Removing both is quietly more than was asked; removing one is quietly the wrong one. Refusing matches T6, and subtraction is where a silent over-removal would be hardest to notice — the tool simply is not there. |
 
 ## What changes
 
@@ -75,8 +77,29 @@ ago, applied where a tool's constraint actually lives.
 | `domain/tool.py` | `Offering` keyed by reference, not name; ambiguity refused; `split_reference`'s claim carried through |
 | `infrastructure/agent.py` | resolve grants to objects; refuse an agent holding two of a name; `*` refused against a collision |
 | `infrastructure/delegation.py` | a subagent gets its granted objects, not the catalogue |
-| `main.py` | `--list` shows both, by reference where a name is ambiguous |
+| `domain/subagent.py` | a definition's `tools:` keeps the reference instead of discarding it |
+| `main.py` | `--list` shows both, by reference where a name is ambiguous; `--without-*` takes references |
 | `tests/test_tool_collisions.py` (new) | both survive, each agent gets its own, and every way of ending up with two is refused |
+
+## Adjacent, and deliberately not here
+
+**Subagents collide the same way and are not fixed by this.** Two folders can
+each hold a `profiler.yaml` and `subagent_store` refuses at load, with a
+`sources` map keyed by name — the identical shape. It is left out because the
+payoff is different: there is one roster per request, so two subagents of one
+name can never coexist in an agent the way two tools can in two delegates. A
+reference would let a request *choose* which `profiler` to activate, which is
+worth doing and is a smaller, separate change.
+
+**An upload can take a foldered skill's name, on main today.** `provision`
+measures "already defined" against `roots.skills.names`, and that lists the root
+and stops — it returns `()` for a catalogue whose skills all live in folders. So
+the rule that a request may not stand its own text in for a reviewed skill fires
+for a root-level skill and silently stops applying to a foldered one. Not an
+override, because sources keep them apart (`uploaded::lookup` is its own
+entry) — an inconsistency rather than a hole, and one the skills work
+introduced. The fix is to ask the registry rather than the repository, and it
+belongs with the skills code, not here.
 
 ## The cost, stated
 
