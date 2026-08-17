@@ -114,14 +114,31 @@ A `.py` file in `$KINGFISHER_WORKSPACE/tools/` defining `TOOLS` — the list of
 tools it contributes. Nothing is inferred: a helper in the same file stays a
 helper.
 
-- [`http_fetch.py`](tools/http_fetch.py) — **something the built-in set cannot
-  do at all.** The clearest reason to write one.
-- [`sql_query.py`](tools/sql_query.py) — **making an existing capability
-  narrower.** `execute` could already reach the database, but it could reach
-  everything else too. A tool states the reach in code, so a request can
-  activate `sql_query` and *not* the shell.
-- [`csv_profile/`](tools/csv_profile/) — **a tool that outgrew one file.** Two
-  tools sharing a notion of what a column is, as a package.
+```python
+from langchain_core.tools import tool
+
+
+@tool
+def http_fetch(url: str) -> str:
+    """Fetch a URL and return the body as text. Use when a task names a page
+    the workspace does not already hold."""
+    ...
+
+
+TOOLS = [http_fetch]
+```
+
+Three reasons to write one:
+
+- **Something the built-in set cannot do at all.** The clearest reason, and the
+  shape above.
+- **Making an existing capability narrower.** `execute` can already reach a
+  database, but it can reach everything else too. A tool states the reach in
+  code, so a request can activate `sql_query` and *not* the shell.
+- **A tool that outgrew one file.** Two tools sharing a notion of what a column
+  is, as a package: `tools/csv_profile/__init__.py` defines `TOOLS`, and the
+  modules beside it are imported relatively. Only the package is scanned; a
+  helper module inside it stays a helper.
 
 The docstring is not decoration — it is what the model reads when deciding
 whether to call the tool, exactly like a skill's `description`. Write it as a
@@ -198,9 +215,9 @@ A YAML document. Everything the delegate is, in one file.
 
 Folders work here too, and for the same reason they work for tools: kingfisher
 reads these, so nothing outside it has an opinion about the layout.
-[`analysis/profiler.yaml`](subagents/analysis/profiler.yaml) sits in a folder
-and is still activated as `profiler` — the `name:` field is the identity and the
-path is not, which was already true of the filename.
+A definition at `subagents/analysis/profiler.yaml` is still activated as
+`profiler` — the `name:` field is the identity and the path is not, which was
+already true of the filename.
 
 There are no packages here. A definition is a document, not code, so there is
 nothing to import and a folder is only ever organisation.
@@ -333,6 +350,26 @@ One more line in `reviewer.yaml`:
 subagents: [second-opinion]
 ```
 
+And the delegate it names, which is an ordinary definition — the only thing
+that makes it a helper is being named above:
+
+```yaml
+name: second-opinion
+description: Re-answers a question on a different model, to catch what one model's habits hide.
+builtin_tools: [read_file, ls, glob, grep]
+tools: []
+model: a-different-one
+system_prompt: |
+  You answer the question you are given, from the files, on your own.
+
+  You are here because a different model already answered it, and the point of
+  you is to be a different model. So do not ask what the earlier answer was,
+  and do not look for it — knowing it is the one thing that would make you
+  agree with it.
+
+  Give your answer and the two or three facts it rests on. Nothing else.
+```
+
 **The caller has to name both.** Asking for `reviewer` does not quietly bring
 `second-opinion` along. That is deliberate: `second-opinion` runs on another
 company's servers, so a caller who declined it usually declined *that*, and a
@@ -373,17 +410,15 @@ visible rather than merely charged.
 
 Three reasons to reach for one, one example each:
 
-- [`reviewer.yaml`](subagents/reviewer.yaml) — **independence.** A second agent
-  that recomputes a claim without seeing how the first one got there catches
-  errors that re-reading your own work does not.
-- [`extractor.yaml`](subagents/extractor.yaml) — **context isolation.** It reads
-  a large pile of files and returns a short answer; the bulk stays in its
-  context rather than yours. Note the narrower `tools`, and add a cheap `model:`
-  of your own.
-- [`second-opinion.yaml`](subagents/second-opinion.yaml) — **a different
-  model.** Two models from one family share failure modes, so this one is meant
-  to answer somewhere else entirely. It is the one preset that is worth nothing
-  until you give it a `model:`, and its comment says so.
+- **Independence.** A second agent that recomputes a claim without seeing how
+  the first one got there catches errors that re-reading your own work does
+  not. The `reviewer` above is this one.
+- **Context isolation.** One that reads a large pile of files and returns a
+  short answer, so the bulk stays in its context rather than yours. Give it a
+  narrow `builtin_tools` and a cheap `model:`.
+- **A different model.** Two models from one family share failure modes, so a
+  second opinion is worth nothing until you give it a `model:` that is genuinely
+  different — and a `provider:` if that model lives somewhere else.
 
 ### Writing the prompt
 
@@ -512,10 +547,25 @@ context by default.** The body is read when the agent decides the skill applies.
 So the description does the work — it is a trigger condition, not a summary. Say
 when to reach for this, in the words a task would use.
 
-- [`code-review/`](skills/code-review/) — single file. The common shape
-- [`release-notes/`](skills/release-notes/) — a `reference/` file the body
-  points to, read on demand. Use this shape when the detail is long and most
-  tasks will not need it: `SKILL.md` stays short enough that reading it is cheap
+```markdown
+---
+name: code-review
+description: Reviewing a diff or a set of source files for defects — correctness,
+  error handling, and tests — and reporting findings with enough evidence to act on.
+---
+
+# Code review
+
+Read the diff first, then the files it touches. Report each finding with the
+file, the line, and what goes wrong — a finding nobody can locate is a comment.
+```
+
+Two shapes:
+
+- **Single file.** `skills/<name>/SKILL.md` and nothing else. The common one.
+- **A `reference/` file the body points to,** read on demand. Use this when the
+  detail is long and most tasks will not need it: `SKILL.md` stays short enough
+  that reading it is cheap, and the reference is fetched only when it applies.
 
 A skill the agent declines to read is not a failure. If the task did not warrant
 it, not loading it is the mechanism working.

@@ -128,6 +128,36 @@ def test_a_seeded_skill_is_discovered(cfg):
     assert "probe-skill" in available_skills(cfg, None)
 
 
+def _materialise(readme: str, cfg) -> None:
+    """Write the README's own inline examples into a workspace.
+
+    So the two tests below still *build* rather than merely parse, without the
+    shipped files they used to lean on. The page is the fixture: if an example
+    on it stops being a loadable definition, these fail for the same reason a
+    reader would be misled.
+    """
+    import re
+
+    for block in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL):
+        if block.startswith("name:"):
+            name = block.split("\n")[0].removeprefix("name:").strip()
+            cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
+            (cfg.subagents_dir / f"{name}.yaml").write_text(block, encoding="utf-8")
+
+    for block in re.findall(r"```markdown\n(.*?)```", readme, re.DOTALL):
+        if not block.startswith("---"):
+            continue
+        header = block.split("---")[1]
+        name = next(
+            line.removeprefix("name:").strip()
+            for line in header.splitlines()
+            if line.startswith("name:")
+        )
+        folder = cfg.skills_dir / name
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "SKILL.md").write_text(block, encoding="utf-8")
+
+
 def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, shipped):
     """The table is the reference a caller builds an allowlist from, so a stale
     row is a CapabilityError someone has to debug."""
@@ -153,16 +183,25 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, s
     assert documented == set(registered_tools(graph))
 
 
-def test_the_readme_call_is_valid(workspace_with_presets, session_dir):
-    """Exactly the capabilities the README shows, built for real."""
+def test_the_readme_call_is_valid(cfg, session_dir, shipped):
+    """Exactly the capabilities the README shows, built for real -- against the
+    definitions the README itself writes out.
+
+    It used to seed the shipped presets, which is why it named `code-review` and
+    `reviewer`: those files happened to exist. The page names them because it
+    shows them, so the page is now the fixture and the test is about the same
+    thing it always was -- that the call it documents actually builds.
+    """
     from dataclasses import replace
 
     from langchain_core.messages import AIMessage
 
     from tests.conftest import FakeToolCallingModel
 
+    _materialise((shipped / "README.md").read_text(encoding="utf-8"), cfg)
+
     build_agent(
-        replace(workspace_with_presets, skills_enabled=True),
+        replace(cfg, skills_enabled=True),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
@@ -402,19 +441,22 @@ def test_the_readme_subagent_table_matches_the_real_field_set(shipped):
     assert documented == KNOWN
 
 
-def test_every_readme_link_resolves(shipped):
-    """The README points at the presets by name, so renaming one breaks it
-    silently -- which is exactly what happened when the subagents became
-    `.yaml` and the two links kept pointing at `.md`.
+def test_the_readme_links_into_no_asset_tree(shipped):
+    """The page has to stand on its own, because the files are leaving.
+
+    It used to link at its examples -- `[reviewer.yaml](subagents/reviewer.yaml)`
+    -- and a test checked every target existed. That check was the right one
+    while they shipped alongside; once they are a separate distribution the link
+    cannot resolve and, worse, would rot quietly: someone renames a file over
+    there and nothing here fails. The examples are written out on the page now.
     """
     import re
 
     readme = (shipped / "README.md").read_text(encoding="utf-8")
     targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", readme)]
 
-    assert targets, "the README links to its own examples; if it stopped, this test is stale"
-    broken = [t for t in targets if not (shipped / t).exists()]
-    assert not broken, f"README links to files that do not exist: {broken}"
+    into_assets = [t for t in targets if t.split("/")[0] in {"skills", "subagents", "tools"}]
+    assert not into_assets, f"README links into an asset tree: {into_assets}"
 
 
 def test_every_complete_definition_in_the_readme_parses(shipped):
@@ -530,21 +572,22 @@ def test_the_reviewer_preset_gets_its_helper_when_granted(
     )
 
 
-def test_the_readme_run_on_example_is_valid(workspace_with_presets, session_dir):
+def test_the_readme_run_on_example_is_valid(cfg, session_dir, shipped):
     """The second call the README shows, built for real.
 
     A documented example that does not work is worse than none: it is copied,
-    it fails, and the format gets blamed. This one puts the shipped
-    `second-opinion` on a model the deployment can actually reach, which is the
-    situation it exists for.
+    it fails, and the format gets blamed. Both delegates it names are written
+    out on the page, so the page supplies them.
     """
     from langchain_core.messages import AIMessage
 
     from kingfisher import RunOn
     from tests.conftest import FakeToolCallingModel
 
+    _materialise((shipped / "README.md").read_text(encoding="utf-8"), cfg)
+
     build_agent(
-        workspace_with_presets,
+        cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=Capabilities(
