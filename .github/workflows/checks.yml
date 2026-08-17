@@ -48,11 +48,11 @@ jobs:
 
       # Three separate steps rather than one `&&` chain, so a red build says
       # which of the three failed from the job list without opening the log.
-      # `assets/` is the second distribution in this workspace, held to the same
-      # bar as the first: it is code that ships, and a tool nobody lints is a
-      # tool whose example teaches whatever slipped through.
+      # `packages/` is all three distributions, held to one bar: they are all
+      # code that ships, and a tool nobody lints is a tool whose example teaches
+      # whatever slipped through.
       - name: ruff
-        run: uv run ruff check src/ main.py tests/ assets/ service/
+        run: uv run ruff check packages/ main.py
 
       - name: ty
         run: uv run ty check
@@ -79,7 +79,7 @@ jobs:
         run: uv python install 3.12
 
       - name: Install only the library
-        run: uv venv && uv pip install .
+        run: uv venv && uv pip install ./packages/kingfisher
 
       # Every public name, not just an import of the package: the package
       # imports lazily, so `import kingfisher` succeeding proves nothing about

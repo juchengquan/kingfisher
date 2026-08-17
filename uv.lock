@@ -13,6 +13,16 @@ members = [
     "kingfisher-service",
 ]
 
+[manifest.dependency-groups]
+dev = [
+    { name = "fastapi", specifier = ">=0.141.1" },
+    { name = "kingfisher-assets", editable = "packages/assets" },
+    { name = "pytest", specifier = ">=9.1.1" },
+    { name = "ruff", specifier = ">=0.16.3" },
+    { name = "ty", specifier = ">=0.0.72" },
+    { name = "uvicorn", specifier = ">=0.40.0" },
+]
+
 [[package]]
 name = "aiosqlite"
 version = "0.22.1"
@@ -699,7 +709,7 @@ wheels = [
 [[package]]
 name = "kingfisher"
 version = "0.1.0"
-source = { editable = "." }
+source = { editable = "packages/kingfisher" }
 dependencies = [
     { name = "aiosqlite" },
     { name = "deepagents" },
@@ -712,25 +722,19 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+assets = [
+    { name = "kingfisher-assets" },
+]
 service = [
     { name = "kingfisher-service" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "fastapi" },
-    { name = "kingfisher-assets" },
-    { name = "pytest" },
-    { name = "ruff" },
-    { name = "ty" },
-    { name = "uvicorn" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "aiosqlite", specifier = ">=0.22.1" },
     { name = "deepagents", specifier = ">=0.7.6" },
-    { name = "kingfisher-service", marker = "extra == 'service'", editable = "service" },
+    { name = "kingfisher-assets", marker = "extra == 'assets'", editable = "packages/assets" },
+    { name = "kingfisher-service", marker = "extra == 'service'", editable = "packages/service" },
     { name = "langchain-anthropic", specifier = ">=1.5.4" },
     { name = "langchain-openai", specifier = ">=1.5.1" },
     { name = "langchain-quickjs", specifier = ">=0.3.3,<0.4" },
@@ -738,22 +742,12 @@ requires-dist = [
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
 ]
-provides-extras = ["service"]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "fastapi", specifier = ">=0.141.1" },
-    { name = "kingfisher-assets", editable = "assets" },
-    { name = "pytest", specifier = ">=9.1.1" },
-    { name = "ruff", specifier = ">=0.16.3" },
-    { name = "ty", specifier = ">=0.0.72" },
-    { name = "uvicorn", specifier = ">=0.40.0" },
-]
+provides-extras = ["service", "assets"]
 
 [[package]]
 name = "kingfisher-assets"
 version = "0.1.0"
-source = { editable = "assets" }
+source = { editable = "packages/assets" }
 dependencies = [
     { name = "kingfisher" },
     { name = "langchain-core" },
@@ -761,14 +755,14 @@ dependencies = [
 
 [package.metadata]
 requires-dist = [
-    { name = "kingfisher", editable = "." },
+    { name = "kingfisher", editable = "packages/kingfisher" },
     { name = "langchain-core", specifier = ">=1.0.0" },
 ]
 
 [[package]]
 name = "kingfisher-service"
 version = "0.1.0"
-source = { editable = "service" }
+source = { editable = "packages/service" }
 dependencies = [
     { name = "fastapi" },
     { name = "kingfisher" },
@@ -778,7 +772,7 @@ dependencies = [
 [package.metadata]
 requires-dist = [
     { name = "fastapi", specifier = ">=0.141.1" },
-    { name = "kingfisher", editable = "." },
+    { name = "kingfisher", editable = "packages/kingfisher" },
     { name = "uvicorn", specifier = ">=0.40.0" },
 ]
 
