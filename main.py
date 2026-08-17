@@ -206,14 +206,7 @@ def warn_if_unconfined(cfg: Config) -> None:
     announced nothing would look exactly like a confined one, which is how this
     went unnoticed until it was measured.
     """
-    confined = confinement.resolve(
-        cfg.shell_sandbox,
-        workspace=cfg.workspace,
-        state_dir=cfg.state_dir,
-        scratch_dir=cfg.scratch_dir,
-        extra=cfg.shell_path_extra,
-        skills=cfg.skills_dir,
-    )
+    confined = confinement.shell_confinement(cfg)
     if confined.warning:
         print(f"WARNING   : {confined.warning}", file=sys.stderr)
 

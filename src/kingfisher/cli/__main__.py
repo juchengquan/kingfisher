@@ -22,6 +22,7 @@ is `site-packages`, so what it finds is either nothing or something nobody meant
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 
 from kingfisher import (
@@ -32,6 +33,7 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
+from kingfisher.cli.health import examine, worst
 from kingfisher.cli.listing import failed, render
 
 
@@ -56,6 +58,22 @@ def build_parser() -> argparse.ArgumentParser:
             "why it has to be asked for. A workspace that has never been used "
             "seeds itself on its first run without this."
         ),
+    )
+    checkup = sub.add_parser(
+        "doctor",
+        help="check everything that stands between this install and a run",
+        description=(
+            "The configuration, the asset packs, the three catalogues and the "
+            "shell confinement. Nothing here calls a model, so it costs nothing "
+            "to run before a deployment rather than after its first failure -- "
+            "which also means a credential it reports as present may still be "
+            "wrong. Exits non-zero only on something that will stop a run."
+        ),
+    )
+    checkup.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the same checks as JSON, for a script rather than a person",
     )
     sub.add_parser(
         "list",
@@ -105,6 +123,26 @@ def _list() -> int:
     return 1 if failed(found) else 0
 
 
+def _doctor(*, as_document: bool = False) -> int:
+    """Say what would stop a run, and what would merely surprise.
+
+    Non-zero on a failure and zero on a warning. An unconfined shell is a
+    deployment's choice, and a command that failed on one would go unrun in
+    exactly the deployments most worth checking.
+    """
+    checks = examine(from_env())
+    if as_document:
+        print(json.dumps([vars(check) for check in checks], indent=2))
+    else:
+        width = max(len(check.name) for check in checks)
+        for check in checks:
+            mark = {"ok": "ok  ", "warn": "warn", "fail": "FAIL"}[check.verdict]
+            print(f"{mark}  {check.name.ljust(width)}  {check.detail}")
+            if check.remedy:
+                print(f"      {' ' * width}  -> {check.remedy}")
+    return 1 if worst(checks) == "fail" else 0
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
@@ -114,7 +152,11 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     try:
-        return _seed() if args.command == "seed" else _list()
+        if args.command == "seed":
+            return _seed()
+        if args.command == "doctor":
+            return _doctor(as_document=args.json)
+        return _list()
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.
