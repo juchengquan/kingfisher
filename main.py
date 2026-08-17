@@ -109,6 +109,7 @@ from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
 from kingfisher.domain.tool import offered as tool_offered
+from kingfisher.domain.tool import split_reference
 from kingfisher.infrastructure import confinement, seeding, skill_store
 from kingfisher.infrastructure.harness.runlog import read_usage
 from kingfisher.infrastructure.workspace_fs import (
@@ -239,8 +240,14 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
         print(f"  cannot load: {found.subagents_error}")
         return 1
     for name, described in found.subagents.items():
-        source = found.subagent_sources.get(name)
-        print(f"  {name}{_from(source, f'{name}.yaml')} — {described}")
+        # A reference already names the file, so the trailing annotation is
+        # dropped for it -- `team/surveyor.yaml::surveyor (team/surveyor.yaml)`
+        # says one thing twice in a listing whose job is to be scannable. Two
+        # folders may each define a `surveyor`, and then the key is the
+        # reference; where a name is its own, the two are the same string.
+        claimed, plain = split_reference(name)
+        source = None if claimed else found.subagent_sources.get(name)
+        print(f"  {name}{_from(source, f'{plain}.yaml')} — {described}")
     if not found.subagents:
         print("  (none)  — try --seed-assets")
     return 0

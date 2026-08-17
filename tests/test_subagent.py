@@ -91,15 +91,19 @@ def test_specs_key_on_the_declared_name_not_the_filename(tmp_path):
     assert set(specs) == {"reviewer"}
 
 
-def test_loading_rejects_two_files_claiming_one_name(tmp_path):
-    """Otherwise one silently shadows the other depending on sort order."""
+def test_two_files_claiming_one_name_are_told_apart_by_file(tmp_path):
+    """One used to shadow the other by sort order, so the loader refused the
+    pair. Both load now, and the file is what says which -- the refusal is an
+    agent's, because an agent's roster is what cannot hold two."""
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "a.yaml").write_text(MINIMAL, encoding="utf-8")
     (directory / "b.yaml").write_text(MINIMAL, encoding="utf-8")
 
-    with pytest.raises(SubagentError, match="duplicate subagent name"):
-        _ = LocalSubagentRepository(tmp_path / "subagents").specs
+    assert sorted(LocalSubagentRepository(directory).specs) == [
+        "a.yaml::reviewer",
+        "b.yaml::reviewer",
+    ]
 
 
 def test_folded_and_block_list_fields_are_accepted(tmp_path):

@@ -83,13 +83,14 @@ ago, applied where a tool's constraint actually lives.
 
 ## Adjacent, and deliberately not here
 
-**Subagents collide the same way and are not fixed by this.** Two folders can
-each hold a `profiler.yaml` and `subagent_store` refuses at load, with a
-`sources` map keyed by name — the identical shape. It is left out because the
-payoff is different: there is one roster per request, so two subagents of one
-name can never coexist in an agent the way two tools can in two delegates. A
-reference would let a request *choose* which `profiler` to activate, which is
-worth doing and is a smaller, separate change.
+**Subagents collide the same way, and are fixed separately** — see
+`2026-08-17-two-subagents-called-surveyor.md`. The reasoning recorded here was
+half wrong: it said there is "one roster per request", when each delegate gets
+its own `SubAgentMiddleware` and so its own helper roster. What actually
+differs is the default. `subagents` activates nothing unless asked, so a plain
+refusal costs a caller who never wanted two exactly nothing; `tools` defaults
+to everything, which is why that axis had to split a grant from what an agent
+carries instead.
 
 **Skills subtraction calls an ambiguous name unknown, on main today.**
 `--without-skills lookup` against two of them refuses — so it is safe, and it

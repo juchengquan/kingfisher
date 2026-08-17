@@ -40,7 +40,11 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
     refuse_unoffered,
 )
-from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
+from kingfisher.domain.subagent import (
+    RunOn,
+    refuse_helpers_with_helpers,
+    refuse_two_of_a_name,
+)
 from kingfisher.domain.tool import Found, Offering
 from kingfisher.infrastructure.catalogue import Catalogue, source_of
 from kingfisher.infrastructure.harness.backend import (
@@ -628,6 +632,10 @@ def _activated_subagents(
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
     refuse_unoffered(activated, offered=defined, kind="subagent", subject="this request")
+    # After the unknown-name check, not before: naming one that does not exist
+    # and naming two that do are different mistakes, and the first would
+    # otherwise be reported as the second.
+    refuse_two_of_a_name(activated, subject="this request")
     return defined, activated
 
 

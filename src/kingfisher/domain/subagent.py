@@ -112,13 +112,13 @@ the files is `infrastructure.subagent_store`; translating a spec into deepagents
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.domain.tool import split_reference
 
 DIRECTORY = "subagents"
@@ -446,6 +446,39 @@ def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Se
         )
         raise SubagentError(msg)
     return ALL
+
+def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
+    """Refuse a roster that would hold two delegates answering to one name.
+
+    An agent picks a delegate out of a dictionary keyed by name, so two of a
+    name is not a conflict it reports -- it is one delegate that quietly never
+    exists. Measured: handing deepagents two subagents called `profiler`
+    compiles one, with no error and nothing to say which survived.
+
+    The catalogue itself keeps both, because two folders may each hold a
+    `profiler.yaml` and refusing the pair on sight stopped the whole deployment
+    over a clash no single agent had yet asked for. This is where the clash
+    actually happens, so this is where it is refused -- and by then there is a
+    reference to name each one by.
+
+    Cheaper here than the same rule is for tools, and worth knowing why: a
+    request activates *no* delegates by default, so a caller who never asked for
+    two can never trip this. `tools` defaults to everything, which is why that
+    axis had to split a grant from what an agent carries instead of refusing.
+    """
+    seen: dict[str, list[str]] = {}
+    for written in activated:
+        seen.setdefault(split_reference(written)[1], []).append(written)
+    clashing = sorted((name, wrote) for name, wrote in seen.items() if len(wrote) > 1)
+    if clashing:
+        name, wrote = clashing[0]
+        msg = (
+            f"{subject} activates {len(wrote)} subagents called {name!r}, and an "
+            f"agent reaches a delegate by name -- one would never run. "
+            f"Activate the one you meant: {', '.join(sorted(wrote))}"
+        )
+        raise CapabilityError(msg)
+
 
 def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
     """Refuse a catalogue where a delegate's helper has helpers of its own.
