@@ -1,6 +1,6 @@
 # A command worth shipping, and the exports that make it one
 
-**Status:** implemented, B1-B8. Three more verbs designed below, not implemented.
+**Status:** implemented, B1-B12. Five verbs.
 **Date:** 2026-08-17
 
 The assets work left one thing unfinished, and it is written into that
@@ -13,6 +13,21 @@ names that command by name.
 This says what to build instead: a small `kingfisher` command that seeds and
 lists, held to the same rule as the server — it may only use the library's
 public API. Not a general CLI. `main.py` stays what it is.
+
+It grew to five verbs — `seed`, `list`, `doctor`, `serve`, `help` — and none of
+them runs a task, which is the line B1 drew and the one that still holds. What
+the rule bought is easier to see now than it was then: every verb reached for
+something private and every reach became an export, seven of them, each one a
+promise made on purpose rather than a name somebody guessed a consumer might
+want.
+
+**Written against asset packs, which are gone.** This assumed definitions came
+from separate distributions found through an entry point, and *2026-08-17
+assets-as-packages* has since been reversed: they ship inside the wheel and
+`seed` takes a directory. Every line below mentioning a pack, `installed_packs`
+or `Pack` is a record of what was true when the command was designed. Nothing
+about the command changed -- `seed` still seeds, from one source instead of
+several -- and the two names left the public API with the mechanism.
 
 Read the decisions with the measurements. Two of the measurements changed a
 decision that had already been made out loud, and both are recorded beside it
@@ -50,6 +65,7 @@ its flags, and its smoke.
 | B7 | **The catalogue error names `kingfisher seed`.** | It currently names `--seed-assets`, which is a flag on a file a pip user does not have. A console script is on `PATH` in a checkout too — measured — so `kingfisher seed` is the one instruction that is true for whoever is reading it. |
 | B9 | **`list` grows `--json`.** | The first thing anyone scripting against it asks for, and it costs almost nothing: `Inventory` is already the shape to serialise and its fields are already public, so this promises nothing new. The human form stays the default -- a listing whose default output is JSON is a listing nobody reads. |
 | B10 | **`doctor` answers "why will this not start?", and nothing else.** | A name is not a job. Without a stated one it becomes a second `list` that prints the same things in a different order. Its job is every check that stands between an install and a run: the catalogue loads, every endpoint it names has a credential, the default model is one this machine can reach, every alias is bound, all three catalogues parse, a pack is installed, and the shell confinement this host will actually use. Those checks exist today -- scattered across error paths, a warning in `model_catalogue.load`, and `warn_if_unconfined` in a driver that is not in the wheel. Collecting them is the whole value: they are the things you want to know *before* a run costs money. |
+| B12 | **There is a `help` verb, and this document argued against one.** | The argument is below and still holds as far as it goes: `-h`, `--help`, bare `kingfisher` and `<verb> --help` all reach the same text, so this is a fifth route to keep consistent rather than a way out of being stuck. It was asked for twice and built. What building it found -- and what the argument had missed -- is that an unknown verb is a case none of those four handle well: argparse refuses `kingfisher teleport` with a usage line, where `kingfisher help teleport` can say which words exist. That is a real difference, and it was not visible from the outside. |
 | B11 | **`serve` is added as an alias; `kingfisher-server` stays.** | Two names for one thing is a real cost, and it is smaller than breaking every script, unit file and container that already calls `kingfisher-server`. Nothing is published, so nothing external breaks -- but "external" is the wrong test for a command a deployment already runs. One implementation, two ways in, which is the arrangement B6 already chose for the listing. |
 
 | B8 | **This makes kingfisher publishable. It does not publish it.** | Publishing means owing a version floor and a deprecation cycle, and the formats are still moving — `--seed-presets` was renamed, `provider:` removed, `where::what` landed days ago. B1–B7 remove the reason a pip install would be useless; whether to take that step is a separate decision, still open, and the asset pack's missing `kingfisher` floor waits on it. |
@@ -110,10 +126,24 @@ The three verbs above are additive and independent of each other:
 | **5** | B9: `list --json`, from the record that already exists. | 4 |
 | **6** | B10: `doctor`, and the one export it needs -- a confinement check a consumer can call, since `confinement.resolve` takes six arguments and `main.py` is the only thing assembling them. | 4 |
 | **7** | B11: `serve`, sharing an implementation with `kingfisher-server`. | 4 |
+| **8** | B12: `help`, reading its verbs from the parser so it picks up whatever else lands. | 4 |
 
-No `help` verb. `-h`, `--help`, bare `kingfisher`, and `kingfisher <verb> --help`
-already print it; a fifth way to reach the same text is not discoverability, it
-is another thing to keep consistent.
+The argument against a `help` verb, kept because it is most of the reason to be
+sparing with the others: `-h`, `--help`, bare `kingfisher` and `kingfisher
+<verb> --help` already print this text, so a fifth route is not discoverability,
+it is another thing to keep consistent. B12 overrides it on one point the
+argument had no way to see from the outside.
+
+All four landed within a day of each other and each conflicted with the last, in
+the same place: `main()`'s chain of `if args.command == ...`. Five verbs took
+that chain past ruff's return-statement limit, which was the useful part -- only
+two verbs take `--json`, the fallthrough read `args.json`, and so the *order* of
+those branches was load-bearing while looking interchangeable. Reordering two of
+them was an `AttributeError` waiting for somebody tidying up. It is a table now,
+each verb naming the arguments it actually has, and a test compares the table
+against the parser's own choices both ways -- because a table turns an unwired
+verb from a wrong answer into a `KeyError` in front of whoever typed it, which
+is louder and still too late.
 
 ## Still undecided
 
