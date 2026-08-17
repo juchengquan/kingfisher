@@ -1,8 +1,8 @@
-"""An application for a server to point at: `kingfisher.server.asgi:app`.
+"""An application for a server to point at: `kingfisher.presentation.asgi:app`.
 
 A module whose only job is to exist under a name uvicorn can resolve. It has to
 be a separate one, which is not obvious until you try: the package already has a
-submodule called `app`, so `kingfisher.server:app` resolves to that module and
+submodule called `app`, so `kingfisher.presentation:app` resolves to that module and
 whatever is served is not an application at all. A `__getattr__` cannot rescue
 it either -- importing the submodule binds the name first.
 
@@ -16,6 +16,6 @@ point uses, so the two ways of starting a server cannot disagree.
 
 from __future__ import annotations
 
-from kingfisher.server.app import create_app
+from kingfisher.presentation.app import create_app
 
 app = create_app()

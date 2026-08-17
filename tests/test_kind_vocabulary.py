@@ -107,7 +107,7 @@ def test_the_wire_form_names_every_axis():
     Not a default check -- `test_capabilities_on_the_wire` already owns that.
     This is only that the vocabulary is the same on both sides.
     """
-    from kingfisher.server.capabilities import CapabilitiesBody
+    from kingfisher.presentation.capabilities import CapabilitiesBody
 
     assert set(CapabilitiesBody.model_fields) == set(AXES)
 

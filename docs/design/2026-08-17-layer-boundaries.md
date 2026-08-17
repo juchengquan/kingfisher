@@ -1,6 +1,6 @@
 # Where the layer boundary actually is
 
-**Status:** proposed.
+**Status:** implemented.
 **Date:** 2026-08-17
 
 The proposal was four top-level folders — `application/`, `domain/`,
@@ -96,7 +96,7 @@ inconsistency is eight lines away from the bug.
 | L3 | **The existence check becomes a containment rule.** | `test_infrastructure_is_where_foreign_types_live` asserts that *somebody* in the layer imports something foreign. It passes as long as one file does, so nothing stops `catalogue.py` growing a `from deepagents import ...` tomorrow — it would be caught by no rule in this file. Replaced by: only `infrastructure/harness/` may import the harness. The existence half stays, scoped to that package, because a `harness/` that imports nothing foreign means the coupling went somewhere less visible. |
 | L4 | **The other thirteen stay flat.** | A second subpackage would be tidiness. `harness/` earns a folder because it carries a rule; `storage/` would carry nothing, and the thirteen have no line between them that a test could hold. Splitting for symmetry is how `layered.py` explains *not* giving tools a layer: it would advertise a distinction that does not exist. |
 | L4a | **`catalogue` keeps its edge into `harness/`, and the rule permits it.** | The alternative is inverting it — a port in `domain/ports.py` that `skill_registry` satisfies and `catalogue` is handed. That would be the textbook move and it would be wrong here: the port would have exactly one implementation, forever, whose entire purpose is to be deepagents-specific. `SkillRepository` is a port because two things already answer it; this would be a port because a diagram wanted one. Left as a direct import, with the rule scoped to foreign packages so it does not have to lie about the edge. |
-| L5 | **`server/` is renamed to `presentation/`.** | The only change here that buys a name rather than a rule, and it should be judged that way. 64 references across 17 files, most of them tests and docs. Against: `uvicorn kingfisher.server.asgi:app` is the sort of string that ends up in a systemd unit, and breaking it costs a real operator a real minute. For: a top level that reads as one vocabulary instead of three layers and a thing. At 0.1.0 with one operator the cost is close to zero, so the name wins. |
+| L5 | **`server/` is renamed to `presentation/`.** | The only change here that buys a name rather than a rule, and it should be judged that way. 64 references across 17 files, most of them tests and docs. Against: `uvicorn kingfisher.presentation.asgi:app` is the sort of string that ends up in a systemd unit, and breaking it costs a real operator a real minute. For: a top level that reads as one vocabulary instead of three layers and a thing. At 0.1.0 with one operator the cost is close to zero, so the name wins. |
 | L6 | **The console script stays `kingfisher-server`.** | `kingfisher-presentation` is a layer name pointed at a person. The folder is named for where it sits in the dependency graph; the command is named for what it starts. Those are different audiences and there is no reason they should match. |
 | L7 | **Registries do not move to `application/`.** | The things that look like registries here — `tool_store`, `skill_store`, `subagent_store`, `catalogue`, `layered`, `model_catalogue`, `definitions` — are adapters implementing Protocols declared in `domain/ports.py`, and two of them parse YAML. In `application/` they would put file reading and YAML parsing in the layer that orchestrates, which `test_the_application_layer_does_not_write_to_disk_itself` exists to prevent and which that test's own docstring records going wrong once already. |
 | L8 | **DTOs do not move to `application/`.** | The wire shapes are `server/payloads.py` and `server/capabilities.py`, and they exist so an HTTP body can change without the domain changing. In `application/` the orchestration layer learns what HTTP is, and the one type that genuinely is an application-level command — `Request` — already exists in `domain/`, described there as "what a caller asks for, with no knowledge of how kingfisher is wired". There is no third thing left for an application DTO to be. |
@@ -123,7 +123,26 @@ rather than by the suite going green.
 |---|---|---|
 | 1 | `_modules_in` recurses. | A nested domain module importing `yaml` must fail the rule. Confirm all nine rules still pass unchanged — with no subpackages yet, this is a no-op by construction. |
 | 2+3 | `infrastructure/harness/`, the ten moved, imports updated, `_EXPORTS` repointed, and the containment rule that replaces the existence check. | Import graph re-measured: `catalogue` → `skill_registry` is the only edge out of the set, and no new one appeared. Eight mutations. The shipped server binary booted and served, and the CLI listed a workspace. Full suite, `ruff`, `ty`. |
-| 4 | `server/` → `presentation/`. | `uvicorn kingfisher.presentation.asgi:app` started for real and a turn run through it. The entry point has been unrunnable before while the whole suite passed — nothing in `tests/` starts the shipped command, so nothing in `tests/` can find this. |
+| 4 | `server/` → `presentation/`, with the area key renamed alongside it. | Both entry points started for real — `kingfisher-server`, and `uvicorn kingfisher.presentation.asgi:app` — each opening, reading and disposing a session over HTTP. Four mutations. The entry point has been unrunnable before while the whole suite passed; nothing in `tests/` starts the shipped command, so nothing in `tests/` can find that. |
+
+## What the rename found
+
+The deny-by-default table did its job twice. Renaming `server/` without
+renaming the `THIRD_PARTY` key drops the new directory to the package root's
+allowance, which is nothing third-party, and fifteen modules fail on `fastapi`.
+That is the rule working, and it is one more required edit than this document
+originally listed.
+
+The second find was not the rule working. Pointing `_presentation_modules` at
+the old name makes it return an empty list, `pytest.mark.parametrize` generates
+no cases, and a rule with no cases **passes**.
+`test_the_server_uses_the_library_only_through_its_public_api` went from
+covering fifteen modules to covering zero, with a green run either way.
+
+Same shape as the `glob`/`rglob` bug in phase 1, in a place phase 1 did not
+look — and this one had teeth, because a rename is exactly the change that
+causes it. `test_no_rule_here_is_parametrized_over_nothing` now asserts that
+every collector in the file found something.
 
 ## Two things the plan got wrong, found while building it
 

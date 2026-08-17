@@ -59,7 +59,7 @@ dependencies = [
 
 [project.optional-dependencies]
 # The HTTP surface. Optional because a library caller pays nothing for a server
-# they do not run, and separable because `kingfisher.server` is a consumer of
+# they do not run, and separable because `kingfisher.presentation` is a consumer of
 # the public API rather than part of it -- it may import `kingfisher` and
 # nothing deeper, and no layer may import it back. `test_architecture.py` holds
 # that line; this extra is what makes it a distribution boundary too.
@@ -85,7 +85,13 @@ server = [
 [project.scripts]
 # Present whether or not the extra is installed -- a script that exists and says
 # "install the extra" is a better answer than one that is silently absent.
-kingfisher-server = "kingfisher.server.__main__:main"
+#
+# Still `kingfisher-server` though the package it points at is now
+# `presentation`. A directory is named for where it sits in the dependency
+# graph; a command is named for what it starts, at a person who wants a server
+# running. `kingfisher-presentation` would be a layer name pointed at the wrong
+# audience -- and the same argument keeps the extra above called `server`.
+kingfisher-server = "kingfisher.presentation.__main__:main"
 
 # No `[project.entry-points."kingfisher.assets"]` here, on purpose. It was here
 # for one phase, so the discovery mechanism could be proved before any file

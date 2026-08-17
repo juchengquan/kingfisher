@@ -13,8 +13,8 @@ import pytest
 from fastapi.testclient import TestClient
 
 from kingfisher import Kingfisher
-from kingfisher.server import ServerConfig, create_app
-from kingfisher.server.__main__ import main, serve
+from kingfisher.presentation import ServerConfig, create_app
+from kingfisher.presentation.__main__ import main, serve
 from tests.conftest import StubCheckpointer
 from tests.test_server import AsyncStub
 
@@ -31,10 +31,10 @@ def client(cfg):
 
 
 def test_a_request_is_logged_once_with_its_route_and_status(client, caplog):
-    with caplog.at_level(logging.INFO, logger="kingfisher.server"):
+    with caplog.at_level(logging.INFO, logger="kingfisher.presentation"):
         client.post("/sessions")
 
-    (line,) = [r.getMessage() for r in caplog.records if r.name == "kingfisher.server"]
+    (line,) = [r.getMessage() for r in caplog.records if r.name == "kingfisher.presentation"]
     assert line.startswith("POST /sessions 201")
     assert line.endswith("ms")
 
@@ -45,7 +45,7 @@ def test_the_session_id_is_not_written_to_the_log(client, caplog):
     by more people than the request was, and keeps it there."""
     session_id = client.post("/sessions").json()["session_id"]
 
-    with caplog.at_level(logging.INFO, logger="kingfisher.server"):
+    with caplog.at_level(logging.INFO, logger="kingfisher.presentation"):
         client.get(f"/sessions/{session_id}")
 
     logged = "\n".join(r.getMessage() for r in caplog.records)
@@ -56,7 +56,7 @@ def test_the_session_id_is_not_written_to_the_log(client, caplog):
 def test_a_turn_logs_its_route_template_not_its_path(client, caplog):
     session_id = client.post("/sessions").json()["session_id"]
 
-    with caplog.at_level(logging.INFO, logger="kingfisher.server"):
+    with caplog.at_level(logging.INFO, logger="kingfisher.presentation"):
         client.post(f"/sessions/{session_id}/turns", json={"task": "go"})
 
     logged = "\n".join(r.getMessage() for r in caplog.records)
@@ -67,7 +67,7 @@ def test_a_turn_logs_its_route_template_not_its_path(client, caplog):
 def test_a_request_that_matched_nothing_logs_no_path_at_all(client, caplog):
     """The case where falling back to the real path would be worst: a caller
     probing for routes controls exactly what gets written."""
-    with caplog.at_level(logging.INFO, logger="kingfisher.server"):
+    with caplog.at_level(logging.INFO, logger="kingfisher.presentation"):
         client.get("/sessions/secret-looking-thing/nope")
 
     logged = "\n".join(r.getMessage() for r in caplog.records)
@@ -76,7 +76,7 @@ def test_a_request_that_matched_nothing_logs_no_path_at_all(client, caplog):
 
 
 def test_a_refusal_is_logged_with_its_status(client, caplog):
-    with caplog.at_level(logging.INFO, logger="kingfisher.server"):
+    with caplog.at_level(logging.INFO, logger="kingfisher.presentation"):
         client.get("/sessions/" + "0" * 32)
 
     logged = "\n".join(r.getMessage() for r in caplog.records)
@@ -138,22 +138,22 @@ def test_a_missing_extra_is_a_message_rather_than_a_traceback(monkeypatch, capsy
 
 
 def test_there_is_an_application_for_a_server_to_point_at():
-    """`uvicorn kingfisher.server.asgi:app`."""
-    from kingfisher.server.asgi import app
+    """`uvicorn kingfisher.presentation.asgi:app`."""
+    from kingfisher.presentation.asgi import app
 
     assert app.title == "kingfisher"
 
 
 def test_the_obvious_target_is_a_module_which_is_why_asgi_exists():
-    """`kingfisher.server:app` looks like the name to point at and is not: the
+    """`kingfisher.presentation:app` looks like the name to point at and is not: the
     package has a submodule called `app`, so that attribute is the module. A
     server pointed there serves something that is not an application, and no
     `__getattr__` can rescue it -- importing the submodule binds the name."""
     import types
 
-    from kingfisher import server
+    from kingfisher import presentation
 
-    assert isinstance(server.app, types.ModuleType)
+    assert isinstance(presentation.app, types.ModuleType)
 
 
 def test_the_docs_routes_are_logged_as_unmatched_too(client, caplog):
@@ -161,7 +161,7 @@ def test_the_docs_routes_are_logged_as_unmatched_too(client, caplog):
     route answering 200 has no template to log. Imprecise and left that way: the
     alternative is falling back to the real path for *some* requests, and this
     rule is worth more without exceptions."""
-    with caplog.at_level(logging.INFO, logger="kingfisher.server"):
+    with caplog.at_level(logging.INFO, logger="kingfisher.presentation"):
         response = client.get("/openapi.json")
 
     assert response.status_code == 200
@@ -197,5 +197,5 @@ def test_the_entry_point_configures_its_own_logging_not_everyones(monkeypatch):
 
     main()
 
-    assert logging.getLogger("kingfisher.server").level == logging.INFO
+    assert logging.getLogger("kingfisher.presentation").level == logging.INFO
     assert logging.getLogger().level == logging.WARNING

@@ -42,8 +42,8 @@ def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
 
     Nothing had subpackages when this changed, so it caught nothing on the day
     -- which is the argument for changing it then rather than in the commit
-    that first needed it. `_server_modules`, eight lines from the bug, had used
-    `rglob` since it was written.
+    that first needed it. `_presentation_modules`, a few lines from the bug, had
+    used `rglob` since it was written.
 
     `root` is here so the behaviour can be tested against a tree built for the
     purpose, rather than by waiting for a real subpackage to prove it.
@@ -109,6 +109,33 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     assert _module_id(SRC / "domain" / "tool.py") == "domain/tool.py"
     assert _module_id(SRC / "infrastructure" / "harness" / "tool.py") == (
         "infrastructure/harness/tool.py"
+    )
+
+
+def test_no_rule_here_is_parametrized_over_nothing():
+    """A directory that stops existing takes its rule down with it, silently.
+
+    `pytest.mark.parametrize` over an empty list generates no cases, and a rule
+    with no cases passes. Found by mutation while renaming `server/` to
+    `presentation/`: pointing the collector at the old name left
+    `test_the_server_uses_the_library_only_through_its_public_api` covering
+    fifteen modules one moment and zero the next, with a green run either way.
+
+    Same shape as the `glob`/`rglob` bug above and the same reason it matters --
+    a rule that has quietly stopped being about anything is worse than one that
+    was never written, because the file still reads as though it is covered.
+    """
+    collections = {
+        "domain": _modules_in("domain"),
+        "application": _modules_in("application"),
+        "infrastructure": _modules_in("infrastructure"),
+        "the package": _package_modules(),
+        "presentation": _presentation_modules(),
+    }
+    empty = sorted(name for name, found in collections.items() if not found)
+    assert not empty, (
+        f"{empty} collected no modules — a renamed or moved directory has taken "
+        "its rules with it, and every one of them is still reporting success"
     )
 
 
@@ -184,7 +211,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # needs one parser to do it.
     "infrastructure": frozenset({"yaml"}),
     # A consumer of the library, with its own extra and its own dependencies.
-    "server": frozenset({"fastapi", "pydantic", "starlette", "uvicorn"}),
+    "presentation": frozenset({"fastapi", "pydantic", "starlette", "uvicorn"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
     # the table is total and an unlisted area cannot mean "anything goes".
     "domain": frozenset(),
@@ -234,14 +261,14 @@ def test_an_area_is_refused_another_areas_dependencies():
     """
     assert _undeclared({"deepagents"}, "domain") == {"deepagents"}
     assert _undeclared({"deepagents"}, "application") == {"deepagents"}
-    assert _undeclared({"deepagents"}, "server") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "presentation") == {"deepagents"}
     assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
     assert _undeclared({"fastapi"}, "infrastructure/harness") == {"fastapi"}
     assert _undeclared({"yaml"}, "infrastructure/harness") == {"yaml"}
 
     assert _undeclared({"deepagents", "langgraph"}, "infrastructure/harness") == set()
     assert _undeclared({"yaml"}, "infrastructure") == set()
-    assert _undeclared({"fastapi"}, "server") == set()
+    assert _undeclared({"fastapi"}, "presentation") == set()
 
 
 def test_a_subpackage_is_judged_by_its_own_area():
@@ -722,7 +749,7 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 
 # -- the server is a consumer, not an insider ------------------------------
 #
-# `kingfisher.server` ships in this distribution and is separated from the
+# `kingfisher.presentation` ships in this distribution and is separated from the
 # library by these two rules rather than by intention. The point is not tidiness:
 # it puts the server on the same footing as anybody outside the package, so when
 # it needs something the library does not export, the answer is to export it
@@ -730,19 +757,19 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 # caller-facing errors, `async_checkpointer`, and a way to send a file.
 
 
-def _server_modules() -> list[Path]:
-    return sorted((SRC / "server").rglob("*.py"))
+def _presentation_modules() -> list[Path]:
+    return sorted((SRC / "presentation").rglob("*.py"))
 
 
 def _reaches_past_the_public_api(module: str) -> bool:
     return (
         module.split(".", maxsplit=1)[0] == "kingfisher"
         and module != "kingfisher"
-        and not module.startswith("kingfisher.server")
+        and not module.startswith("kingfisher.presentation")
     )
 
 
-@pytest.mark.parametrize("path", _server_modules(), ids=_module_id)
+@pytest.mark.parametrize("path", _presentation_modules(), ids=_module_id)
 def test_the_server_uses_the_library_only_through_its_public_api(path):
     """`from kingfisher import X`, never `from kingfisher.domain.y import X`.
 
@@ -769,8 +796,8 @@ def test_no_part_of_the_library_imports_the_server(path):
     its own server makes the extra a lie -- `pip install kingfisher` would fail
     at import without fastapi."""
     modules = _imported_modules(path)
-    assert not any(m.startswith("kingfisher.server") for m in modules), (
-        f"{_module_id(path)} imports kingfisher.server — the library "
+    assert not any(m.startswith("kingfisher.presentation") for m in modules), (
+        f"{_module_id(path)} imports kingfisher.presentation — the library "
         "does not know its server exists"
     )
 
@@ -786,7 +813,7 @@ BLOCKING_METHODS = frozenset({"run", "stream"})
 NOT_KINGFISHER = frozenset({"uvicorn"})
 
 
-@pytest.mark.parametrize("path", _server_modules(), ids=_module_id)
+@pytest.mark.parametrize("path", _presentation_modules(), ids=_module_id)
 def test_the_server_calls_the_async_turn_methods(path):
     """`arun` and `astream`, never `run` and `stream`.
 
@@ -852,7 +879,7 @@ def test_every_caller_facing_error_has_a_status():
     caller could fix; one in the map but not classified is a status nobody
     decided on.
     """
-    from kingfisher.server.errors import STATUS
+    from kingfisher.presentation.errors import STATUS
 
     mapped = {error.__name__ for error in STATUS}
 
@@ -867,7 +894,7 @@ def test_no_two_refusals_share_a_code():
     same code are two things it cannot tell apart. Statuses may repeat --
     `bad_reference`, `bad_skill` and `bad_subagent` are all 400 -- which is
     exactly why the code carries the meaning."""
-    from kingfisher.server.errors import CODE_FOR_STATUS, STATUS
+    from kingfisher.presentation.errors import CODE_FOR_STATUS, STATUS
 
     codes = [code for _, code in STATUS.values()] + list(CODE_FOR_STATUS.values())
 

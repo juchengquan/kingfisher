@@ -20,8 +20,8 @@ import dataclasses
 import pytest
 
 from kingfisher import Capabilities, Kingfisher
-from kingfisher.server.capabilities import CapabilitiesBody
-from kingfisher.server.turns import TurnBody, turn_for
+from kingfisher.presentation.capabilities import CapabilitiesBody
+from kingfisher.presentation.turns import TurnBody, turn_for
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -154,7 +154,7 @@ def test_absent_follows_the_lattice_even_if_the_model_declares_otherwise():
     lie in the generated schema rather than a capability quietly granted or
     withheld. This is that claim, with a deliberately wrong model.
     """
-    from kingfisher.server.capabilities import Axis
+    from kingfisher.presentation.capabilities import Axis
 
     class Drifted(CapabilitiesBody):
         tools: Axis = None  # the lattice says "*"
