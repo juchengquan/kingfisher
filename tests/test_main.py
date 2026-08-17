@@ -465,9 +465,12 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
     with pytest.raises(ConfigError) as with_example:
         model_catalogue.load(absent, {})
 
-    assert "`--seed-assets` writes" in str(without.value)
+    assert "`kingfisher seed` writes" in str(without.value)
     assert "is next to it" in str(with_example.value)
-    assert "`--seed-assets` writes" not in str(with_example.value)
+    assert "`kingfisher seed` writes" not in str(with_example.value)
+    # The command, not the flag. `--seed-assets` is on `main.py`, which is not
+    # in the wheel, so it names nothing a pip-installed reader has.
+    assert "--seed-assets" not in str(without.value)
 
 
 def test_a_new_workspace_with_no_pack_installed_is_quiet(cfg, tmp_path, capsys, monkeypatch):

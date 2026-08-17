@@ -18,7 +18,8 @@ announce themselves, which kingfisher discovers rather than names. One exists,
 repository under `assets/` and installs with the rest of a checkout:
 
     uv sync
-    uv run main.py --seed-assets      # copies what it holds into $KINGFISHER_WORKSPACE
+    kingfisher seed                   # copies what it holds into $KINGFISHER_WORKSPACE
+    kingfisher list                   # and what the workspace offers now
 
 Nothing is published to PyPI yet, so there is no `pip install` for it — a
 decision waiting rather than an oversight, recorded under *Still undecided* in
