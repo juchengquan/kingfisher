@@ -8,7 +8,7 @@ tell which one a run had actually used.
 Reached through `importlib.resources` rather than a path relative to this file,
 so it works from a wheel as well as a checkout.
 
-From `kingfisher_assets`, which is where the definitions live: the framework
+From `kingfisher.assets`, which is where the definitions live: the framework
 ships none. The smoke is development tooling in this repository and the pack is
 a workspace member, so depending on it here costs the framework nothing -- and
 a smoke run that needed content kingfisher does not have would otherwise have
@@ -30,7 +30,7 @@ SKILL_NAME = "tabular-qa"
 def seed_sample_skill(workspace: Path) -> bool:
     """Copy the sample skill into the workspace. True if anything changed."""
     target = Path(workspace) / "skills" / SKILL_NAME
-    with resources.as_file(resources.files("kingfisher_assets")) as root:
+    with resources.as_file(resources.files("kingfisher.assets")) as root:
         source = root / "skills" / SKILL_NAME
         if not source.is_dir():  # pragma: no cover -- the pack ships it
             msg = f"missing sample skill: {source}"
