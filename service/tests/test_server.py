@@ -13,9 +13,9 @@ from typing import Any
 
 import pytest
 from fastapi.testclient import TestClient
+from kingfisher_service import ServiceConfig, create_app
 
 from kingfisher import Kingfisher, Request
-from kingfisher.presentation import ServerConfig, create_app
 from tests.conftest import StubCheckpointer
 from tests.test_run import StubAgent
 
@@ -125,14 +125,14 @@ def test_the_server_binds_loopback_unless_told_otherwise():
     """Not a placeholder. This server does not know who is calling, so a
     default of `0.0.0.0` publishes an unauthenticated API the moment anyone
     runs it."""
-    assert ServerConfig().host == "127.0.0.1"
+    assert ServiceConfig().host == "127.0.0.1"
 
 
 def test_server_settings_come_from_their_own_prefix():
     """A prefix of its own, so reading a deployment's environment says which
     half of the split each setting belongs to."""
-    settings = ServerConfig.from_env(
-        {"KINGFISHER_SERVER_HOST": "0.0.0.0", "KINGFISHER_SERVER_PORT": "9001"}  # noqa: S104
+    settings = ServiceConfig.from_env(
+        {"KINGFISHER_SERVICE_HOST": "0.0.0.0", "KINGFISHER_SERVICE_PORT": "9001"}  # noqa: S104
     )
 
     assert (settings.host, settings.port) == ("0.0.0.0", 9001)  # noqa: S104
@@ -142,7 +142,7 @@ def test_a_body_over_the_limit_is_refused_without_being_read(client, cfg):
     """`task` is unbounded text. The limit is not tidiness -- it is the
     difference between a bad request and a process holding a gigabyte of it."""
     service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
-    app = create_app(service, ServerConfig(max_body_bytes=64))
+    app = create_app(service, ServiceConfig(max_body_bytes=64))
 
     with TestClient(app) as http:
         response = http.post("/sessions", content=b"x" * 128)
@@ -249,7 +249,7 @@ def frames(text):
 
 def serving(cfg, agent, **settings):
     service = Kingfisher(cfg, agent=agent, threads=StubCheckpointer())
-    return service, create_app(service, ServerConfig(**settings))
+    return service, create_app(service, ServiceConfig(**settings))
 
 
 def test_a_turn_streams_its_events_as_named_sse(cfg):
@@ -538,8 +538,9 @@ def test_an_event_with_nothing_to_say_sends_an_empty_body(cfg):
     real run emits happens to carry `text` -- so a stream cannot tell "omitted"
     from "present and non-empty".
     """
+    from kingfisher_service.payloads import event_payload
+
     from kingfisher import RunEvent
-    from kingfisher.presentation.payloads import event_payload
 
     assert event_payload(RunEvent(kind="run_start")) == {}
     assert event_payload(RunEvent(kind="token", text="hi")) == {"text": "hi"}
@@ -549,8 +550,9 @@ def test_an_event_with_nothing_to_say_sends_an_empty_body(cfg):
 def test_a_delegate_is_named_so_its_prose_can_be_told_apart(cfg):
     """Without it a delegate's tokens and the caller's arrive on one channel and
     the type cannot separate them -- both are chunks."""
+    from kingfisher_service.payloads import event_payload
+
     from kingfisher import RunEvent
-    from kingfisher.presentation.payloads import event_payload
 
     assert event_payload(RunEvent(kind="token", text="x", agent="reviewer")) == {
         "text": "x",
@@ -616,7 +618,7 @@ def test_an_oversize_body_refuses_in_the_same_shape(cfg):
     shape. It carries `limit` as an extra rather than every refusal carrying a
     field that is usually null."""
     service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
-    app = create_app(service, ServerConfig(max_body_bytes=64))
+    app = create_app(service, ServiceConfig(max_body_bytes=64))
 
     with TestClient(app) as http:
         body = http.post("/sessions", content=b"x" * 128).json()

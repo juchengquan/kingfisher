@@ -36,7 +36,7 @@ if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from kingfisher import RunEvent
-    from kingfisher.presentation.config import ServerConfig
+    from kingfisher_service.config import ServiceConfig
 
 #: Its own logger, unconfigured. Nothing is written until a deployment attaches
 #: a handler, which is how "may session ids be written here" stays a decision
@@ -61,7 +61,7 @@ class Attempt:
     session_id: str | None
     task: str
     started: float
-    settings: ServerConfig
+    settings: ServiceConfig
 
     @property
     def elapsed_ms(self) -> float:

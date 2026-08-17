@@ -26,8 +26,8 @@ from fastapi import APIRouter, Depends, HTTPException, Response, status
 # annotations at runtime, and an unresolvable one is read as a body field --
 # which turns every request into a 422 asking for a "kf" object.
 from kingfisher import Kingfisher, UnknownSessionError
-from kingfisher.presentation.dependencies import kingfisher_of
-from kingfisher.presentation.payloads import session_payload
+from kingfisher_service.dependencies import kingfisher_of
+from kingfisher_service.payloads import session_payload
 
 router = APIRouter(tags=["sessions"])
 

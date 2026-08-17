@@ -24,13 +24,13 @@ from pydantic import BaseModel
 # annotations at runtime, and an unresolvable one is read as a body field.
 from kingfisher import Kingfisher
 from kingfisher import Request as TurnRequest
-from kingfisher.presentation import audit, streaming
-from kingfisher.presentation.capabilities import CapabilitiesBody
-from kingfisher.presentation.dependencies import kingfisher_of
-from kingfisher.presentation.errors import outcome
+from kingfisher_service import audit, streaming
+from kingfisher_service.capabilities import CapabilitiesBody
+from kingfisher_service.dependencies import kingfisher_of
+from kingfisher_service.errors import outcome
 
 if TYPE_CHECKING:
-    from kingfisher.presentation.config import ServerConfig
+    from kingfisher_service.config import ServiceConfig
 
 
 class TurnBody(BaseModel):
@@ -100,7 +100,7 @@ def turn_for(body: TurnBody, session_id: str | None = None) -> TurnRequest:
 
 
 async def stream_turn(
-    kf: Kingfisher, body: TurnBody, session_id: str | None, settings: ServerConfig
+    kf: Kingfisher, body: TurnBody, session_id: str | None, settings: ServiceConfig
 ) -> Response:
     """Open the stream, having first checked there is one to open.
 
@@ -159,7 +159,7 @@ async def stream_turn(
     )
 
 
-def turn_router(settings: ServerConfig) -> APIRouter:
+def turn_router(settings: ServiceConfig) -> APIRouter:
     """The turn routes, closed over how often a quiet stream should ping."""
     router = APIRouter(tags=["turns"])
 

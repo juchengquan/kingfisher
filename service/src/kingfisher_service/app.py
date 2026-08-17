@@ -20,9 +20,9 @@ from typing import TYPE_CHECKING
 from fastapi import FastAPI, Request, status
 
 from kingfisher import Config, Kingfisher, LocalFileStore, async_checkpointer, from_env
-from kingfisher.presentation import access, errors, sessions
-from kingfisher.presentation.config import ServerConfig
-from kingfisher.presentation.turns import turn_router
+from kingfisher_service import access, errors, sessions
+from kingfisher_service.config import ServiceConfig
+from kingfisher_service.turns import turn_router
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
@@ -30,7 +30,7 @@ if TYPE_CHECKING:
 
 def create_app(
     kingfisher: Kingfisher | None = None,
-    config: ServerConfig | None = None,
+    config: ServiceConfig | None = None,
 ) -> FastAPI:
     """Build the app, optionally around an instance somebody else made.
 
@@ -46,7 +46,7 @@ def create_app(
     needs async methods and `SqliteSaver` raises on `aget_tuple`, so a sync one
     does not merely block the loop, it refuses.
     """
-    settings = config or ServerConfig.from_env()
+    settings = config or ServiceConfig.from_env()
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:

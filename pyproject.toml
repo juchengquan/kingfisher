@@ -58,40 +58,27 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-# The HTTP surface. Optional because a library caller pays nothing for a server
-# they do not run, and separable because `kingfisher.presentation` is a consumer of
-# the public API rather than part of it -- it may import `kingfisher` and
-# nothing deeper, and no layer may import it back. `test_architecture.py` holds
-# that line; this extra is what makes it a distribution boundary too.
-server = [
-    # For inbound validation and the generated schema. Responses are built by
-    # hand from the dataclasses rather than mirrored as pydantic models:
-    # `RunResult` keeps `run_dir` and `log_path` as `Path` so `json.dumps`
-    # raises on them, and a mirror is a second home for that rule -- one where
-    # adding a `Path` serialiser makes the error go away and ships exactly the
-    # leak the original refuses.
-    #
-    # pydantic is not new weight: it already arrives through langchain. Starlette
-    # arrives through fastapi and is imported directly for `Response`, but is not
-    # named here -- fastapi's own floor is what decides which one is installed,
-    # and a second floor would only fight it.
-    "fastapi>=0.141.1",
-    # Imported by nothing in the package; it is how the app gets served. Named
-    # so `kingfisher[server]` installs something runnable rather than something
-    # that needs a second install nobody wrote down.
-    "uvicorn>=0.40.0",
-]
+# The HTTP surface, which is its own distribution rather than a directory in
+# this one. An extra separates *dependencies*; only a second wheel separates
+# code, and the requirement here was that a base install carry no web service at
+# all -- not merely an inert copy of one with fastapi left uninstalled.
+#
+# So this names the package instead of its dependencies. `kingfisher-service`
+# depends back on `kingfisher`, which is a cycle between distributions and
+# resolves fine: verified with a throwaway pair before this was written, since
+# "pip probably handles it" is not a thing to find out in a release.
+service = ["kingfisher-service"]
 
 [project.scripts]
-# Present whether or not the extra is installed -- a script that exists and says
-# "install the extra" is a better answer than one that is silently absent.
+# No `kingfisher-service` here, deliberately. The service ships its own command
+# of that name, and two distributions declaring one script is not an override --
+# it is a file both own. Measured: installing the service replaces the base's
+# copy, *reinstalling the base replaces it back*, and uninstalling the service
+# deletes the command outright. So an upgrade would silently swap a working
+# server for a note telling you to install what you already have.
 #
-# Still `kingfisher-server` though the package it points at is now
-# `presentation`. A directory is named for where it sits in the dependency
-# graph; a command is named for what it starts, at a person who wants a server
-# running. `kingfisher-presentation` would be a layer name pointed at the wrong
-# audience -- and the same argument keeps the extra above called `server`.
-kingfisher-server = "kingfisher.presentation.__main__:main"
+# The pointer lives on `kingfisher serve` instead, which collides with nothing
+# and is in `--help` whether or not the service is installed.
 
 # Seeding a workspace and looking at one, which are the two things the
 # library cannot do for itself: running a task is `kingfisher.run`, and
@@ -115,12 +102,13 @@ packages = ["src/kingfisher"]
 # together in one checkout, so a change to a format and the examples of it can
 # land in a single commit and be tested against each other.
 [tool.uv.workspace]
-members = ["assets"]
+members = ["assets", "service"]
 
 # Development only. Nothing in `[project.dependencies]` names the pack: the
 # arrow points assets -> framework and never back.
 [tool.uv.sources]
 kingfisher-assets = { workspace = true }
+kingfisher-service = { workspace = true }
 
 [dependency-groups]
 dev = [
@@ -198,6 +186,9 @@ ignore = ["ANN401"]
 "tests/**" = [
     "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
 ]
+"service/tests/**" = [
+    "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
+]
 "assets/tests/**" = [
     "S101", "ANN", "ARG", "PLC0415", "PLR2004", "S108", "S607", "RUF012",
 ]
@@ -216,7 +207,7 @@ known-first-party = ["kingfisher"]
 # Both distributions in this workspace. The pack's tests are about its content
 # and kingfisher's are about the framework, but one command has to run both or a
 # preset breaks with nothing red.
-testpaths = ["tests", "assets/tests"]
+testpaths = ["tests", "assets/tests", "service/tests"]
 pythonpath = ["."]
 
 [tool.ty.environment]
