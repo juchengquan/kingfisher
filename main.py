@@ -77,7 +77,6 @@ from __future__ import annotations
 
 import argparse
 import sys
-import tempfile
 from pathlib import Path
 from typing import TYPE_CHECKING
 from uuid import uuid4
@@ -109,12 +108,9 @@ from kingfisher import (
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
-from kingfisher.domain.subagent import SubagentError
-from kingfisher.domain.tool import Offering
 from kingfisher.domain.tool import offered as tool_offered
 from kingfisher.infrastructure import confinement, seeding, skill_store
 from kingfisher.infrastructure.harness.runlog import read_usage
-from kingfisher.infrastructure.tool_store import ToolError
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
     ensure_session_layout,
@@ -176,131 +172,76 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
 
 
 def show_inventory(cfg: Config, workspace: Path) -> int:
-    """What a request may activate here, which is what `--list` is for.
+    """Print what a request may activate here, which is what `--list` is for.
 
-    Read through the resolved catalogue rather than off `cfg` three times. The
-    CLI only ever gets the `cfg`-derived roots, so today the two are the same
-    paths -- but `--list` exists to say which names a request may use, and it
-    and `build_agent` agreeing about that should be structural rather than a
-    coincidence of nobody having wired anything else yet.
+    A printer now, and only a printer. Working out what is on offer moved to
+    `infrastructure.inventory`, because this and `--without-skills` were
+    computing it apart -- two assembled agents, two answers, and nothing making
+    them agree. What is left here is formatting, which is the driver's business.
     """
-    from kingfisher.infrastructure.catalogue import (  # noqa: PLC0415
-        resolve_catalogue,
-        source_of,
-    )
-    from kingfisher.infrastructure.harness.agent import (  # noqa: PLC0415
-        build_agent,
-        registered_tools,
-    )
+    from kingfisher.infrastructure.inventory import inventory  # noqa: PLC0415
 
-    catalogue = resolve_catalogue(cfg)
+    found = inventory(cfg)
 
     print(f"workspace : {workspace}")
     # Named rather than assumed: the catalogues may be deployed outside the
     # workspace and shared by every deployment that points at them.
-    print(f"skills    : {source_of(catalogue.skills)}")
-    print(f"subagents : {source_of(catalogue.subagents)}\n")
+    print(f"skills    : {found.skills_source}")
+    print(f"subagents : {found.subagents_source}\n")
 
-    # Built rather than listed: the tool set is a property of the assembled
-    # agent, and a hardcoded list here would drift from the real one.
-    # Rooted at a throwaway directory. An agent needs a session to root its
-    # backend at, but what a workspace *offers* is a question about the
-    # workspace, and answering it must not leave a session lying around --
-    # `keep_runs` would eventually reap a real one to make room for the decoy.
-    # Caught the way a malformed subagent is, below. `--list` is where someone
-    # goes *because* something is wrong, so a loader that raises here should
-    # say what to fix rather than print a traceback over the rest of the
-    # inventory. Folders make the duplicate case more likely, not less: two
-    # people can now add a `find_company` without ever seeing each other's.
-    try:
-        # Walked once and handed to the build. This listing needs two things
-        # that used to be fetched apart -- where each workspace tool is defined,
-        # and the built-in set, which is only knowable from an assembled graph
-        # -- and a tool module is Python, so fetching them apart ran every one
-        # of them twice per `--list`.
-        found = catalogue.tools.found
-        with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-            introspected = registered_tools(
-                build_agent(
-                    cfg,
-                    session_dir=Path(scratch),
-                    catalogue=catalogue,
-                    workspace_tools=found,
-                )
-            )
-    except ToolError as exc:
+    # Caught rather than raised, so a broken tool catalogue does not take the
+    # other two sections with it. `--list` is where someone goes *because*
+    # something is wrong, and the exit code still says so.
+    if found.tools_error is not None:
         print("tools")
-        print(f"  cannot load: {exc}")
+        print(f"  cannot load: {found.tools_error}")
         return 1
 
     # Two headings, because they are two grants. Printed as one pile, this
     # listing advertised `read_file` beside `csv_profile` and left a reader to
     # guess which flag took which -- and guessing wrong is the "that is a
-    # builtin tool" refusal. Where each workspace tool is defined goes here too,
-    # so a folder is navigable rather than merely tidy.
-    # Through the same `Offering` a grant is checked against, so the listing
-    # and the refusal cannot drift: a name two files define is printed as the
-    # reference, because that is what a `--tools` line now has to say.
-    on_offer = Offering.of(found)
-    defined_in = dict(on_offer.sources)
-    own = tuple(sorted(on_offer.workspace))
-    builtin = tuple(n for n in introspected if n not in {entry.name for entry in found})
-
+    # builtin tool" refusal.
     print("builtin tools — grant with --builtin-tools")
-    for name in builtin or ("(could not introspect)",):
+    for name in found.builtin_tools or ("(could not introspect)",):
         print(f"  {name}")
 
     # The same block a refusal prints, so the two agree by construction rather
     # than by both being edited. Every entry here has a file -- the section is
-    # workspace tools -- so the column is uniform, where suppressing it for
-    # `http_fetch.py` and printing it for `csv_profile/` left it ragged.
+    # workspace tools -- so the column is uniform.
     print("\nworkspace tools — grant with --tools")
-    print(tool_offered(defined_in, own))
+    print(tool_offered(dict(found.tool_sources), found.tools))
 
-    print("\nskills" if cfg.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
-    skills = catalogue.skills
-    # From the registry, not the directory listing, because they are different
-    # answers and this command exists to give the one a request can act on. A
-    # description each, which subagents have always had here and skills never
+    print("\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)")
+    # A description each, which subagents have always had here and skills never
     # did -- it is what deepagents will actually put in front of the model.
-    registry = catalogue.registry
-    for name in registry.names or ("(none)",):
-        described = registry.description(name)
+    for name, described in found.skills.items() or (("(none)", None),):
         print(f"  {name}{f' — {described}' if described else ''}")
+    if not found.skills:
+        print("  (none)")
 
     # Present on disk, and the agent will never see it. Reported rather than
     # refused, so one malformed skill does not stop a deployment starting --
-    # and a caller who *names* one is refused outright, because the validation
-    # above reads this same registry.
-    for name in registry.unloadable:
+    # and a caller who *names* one is refused outright.
+    for name in found.skills_unloadable:
         print(f"  ! {name}/ is not loadable — the agent will not be told about it")
     # One folder of grouping works and a second does not, so the obvious next
     # thing to try yields nothing at all. Saying so is the only difference
     # between a catalogue that looks empty and one that is -- and it needs the
     # reason, because tools and subagents nest as deep as anyone likes.
-    for name in getattr(skills, "misplaced", ()):
+    for name in found.skills_misplaced:
         print(f"  ! {name}/ sits too deep to load — skills live at {skill_store.LAYOUT}")
         print("    (a folder under the root is its own source, and a source is read")
         print("     one level down; tools and subagents are read by kingfisher, so")
         print("     those may nest as deep as you like)")
 
     print("\nsubagents")
-    # One repository, so the definitions are parsed once. Read as two calls --
-    # the specs, then where each came from -- this parsed every file in the
-    # catalogue twice per `--list`, exactly as the tools did before they were.
-    subagents = catalogue.subagents
-    try:
-        specs = subagents.specs
-    except SubagentError as exc:
-        print(f"  cannot load: {exc}")
+    if found.subagents_error is not None:
+        print(f"  cannot load: {found.subagents_error}")
         return 1
-    # Only a directory-backed store can say which file a definition came from;
-    # an inventory of one that cannot simply lists the names.
-    where = getattr(subagents, "sources", {})
-    for spec in specs.values() or ():
-        print(f"  {spec.name}{_from(where.get(spec.name), f'{spec.name}.yaml')}"
-              f" — {spec.description}")
-    if not specs:
+    for name, described in found.subagents.items():
+        source = found.subagent_sources.get(name)
+        print(f"  {name}{_from(source, f'{name}.yaml')} — {described}")
+    if not found.subagents:
         print("  (none)  — try --seed-assets")
     return 0
 
@@ -457,62 +398,17 @@ def build_parser() -> argparse.ArgumentParser:
 def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     """What this workspace offers right now, per kind.
 
-    Built rather than listed, for the reason `--list` builds too: the tool
-    surface includes whatever the workspace defined, so the only honest answer
-    is an assembled agent. Rooted at a throwaway directory so answering "what
-    is on offer" does not leave a session behind for `keep_runs` to reap.
+    One line, because the question is answered in one place. It used to build
+    its own agent here -- a second implementation of `--list`, and the one that
+    mattered more: a subtraction has to be taken from the set the run will
+    actually offer, or `--without-skills X` refuses a name the run did not have.
 
-    Only called when a `--without-*` flag asked, so a run that does not
-    subtract pays nothing for this.
-
-    Through the resolved catalogue, for the reason `--list` is: what a
-    subtraction is taken from has to be what the run will actually offer, and
-    reading `cfg` here while the agent read somewhere else would make
-    `--without-skills X` refuse a name the run did not have.
+    Only called when a `--without-*` flag asked, so a run that does not subtract
+    still pays nothing for it.
     """
-    from kingfisher.infrastructure.catalogue import resolve_catalogue  # noqa: PLC0415
-    from kingfisher.infrastructure.harness.agent import (  # noqa: PLC0415
-        available_skills,
-        build_agent,
-        defined_subagents,
-        registered_tools,
-    )
+    from kingfisher.infrastructure.inventory import inventory  # noqa: PLC0415
 
-    catalogue = resolve_catalogue(cfg)
-    found = catalogue.tools.found
-    # Through the same `Offering` a grant is checked against, so a subtraction is
-    # taken from what a grant could actually name. Bare names here meant
-    # `--without-tools fetch` matched a workspace holding two of them and
-    # removed both without a word, while `--without-tools vendor_a/fetch.py::fetch`
-    # -- the only spelling that says which -- came back as an unknown name.
-    on_offer = Offering.of(found)
-    workspace = tuple(sorted(on_offer.workspace))
-    with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
-        root = Path(scratch)
-        registered = registered_tools(
-            build_agent(cfg, session_dir=root, catalogue=catalogue, workspace_tools=found)
-        )
-        return {
-            # The two axes, apart. They are granted apart and refused apart, and
-            # a subtraction taken from the union produced a grant of built-in
-            # names on the workspace axis -- which is how `--without-tools
-            # execute,delete`, the example this file's own docstring gives, came
-            # back as "those are builtin tools".
-            # Bare names on this side: a built-in has no file, so the two are
-            # told apart by name or not at all.
-            #
-            # Unobservable, and left correct anyway. `_refuse_shadowed` raises
-            # before this line can ever see a workspace tool sharing a built-in's
-            # name, so comparing against written forms instead would behave
-            # identically -- a mutation proved it, and there is no test to write
-            # because there is no input that separates them.
-            "builtin_tools": tuple(
-                n for n in registered if n not in {entry.name for entry in found}
-            ),
-            "tools": workspace,
-            "skills": available_skills(cfg, root, catalogue=catalogue),
-            "subagents": tuple(defined_subagents(cfg, root, catalogue=catalogue)),
-        }
+    return inventory(cfg).offered
 
 
 def _refuse_the_other_axis(
