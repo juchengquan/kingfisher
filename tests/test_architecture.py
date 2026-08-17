@@ -135,25 +135,23 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
 #: on this one, so they are the first place a move here breaks and the last place
 #: anyone thinks to look.
 #:
-#: Named from the source rather than counted in `..`s, so that moving this
-#: package again fails loudly here instead of silently scanning the wrong tree.
-#: `SRC.parent.parent` was the repository while the library *was* the
-#: repository; under `packages/` it is only the library's own directory, and a
-#: rule pointed at it would have quietly stopped seeing the other two.
-REPO = next(
-    p for p in SRC.parents if (p / "pyproject.toml").is_file() and (p / "packages").is_dir()
-)
+#: The library sits at the root again, so this is two levels up and counted.
+#:
+#: It was found by marker for one change -- the directory holding both
+#: `pyproject.toml` and `packages/` -- and that is worth a warning rather than
+#: just deleting. Once `packages/` went, no directory in this tree matched, so
+#: the walk climbed out of the checkout entirely and found the *parent* clone,
+#: which still had one. The rules then read a different repository and passed.
+#: CI, which has no parent clone, raised `StopIteration` instead.
+#:
+#: A marker only works if it cannot match somewhere else. `src/` beside a
+#: `pyproject.toml` describes half the Python repositories on this disk, so
+#: counting is the honest option here.
+REPO = SRC.parent.parent
 
 
 def _everything_that_imports_kingfisher() -> list[Path]:
-    areas = (
-        "packages/kingfisher/src",
-        "packages/kingfisher/tests",
-        "packages/assets",
-        "packages/service",
-        "evals",
-        "spikes",
-    )
+    areas = ("src", "tests", "service", "evals", "spikes")
     found = [
         p
         for area in areas
@@ -226,12 +224,9 @@ def test_the_second_distribution_is_in_scope():
     it is the first thing a move here breaks and the last place anyone checks --
     which is precisely what happened.
     """
-    scanned = {
-        "/".join(p.relative_to(REPO).parts[:2])
-        for p in _everything_that_imports_kingfisher()
-    }
-    assert "packages/assets" in scanned, (
-        "the dangling-import rule is not reading assets/ — the second distribution "
+    scanned = {p.relative_to(REPO).parts[0] for p in _everything_that_imports_kingfisher()}
+    assert "service" in scanned, (
+        "the dangling-import rule is not reading service/ — the other distribution "
         "is where a move in src/ lands first"
     )
 
@@ -1065,7 +1060,7 @@ def test_the_event_kinds_are_what_the_package_emits():
 
 #: Where a caller may live. Tests deliberately do not count -- a test is what
 #: kept every instance of this alive.
-PRODUCTION = ("packages/kingfisher/src/kingfisher", "main.py", "evals")
+PRODUCTION = ("src/kingfisher", "main.py", "evals")
 
 #: Names dispatched by something other than a call in this repository. Each is a
 #: framework contract rather than a convenience nobody got round to using, and
@@ -1080,10 +1075,9 @@ DISPATCHED_ELSEWHERE = frozenset({
 
 
 def _production_files() -> list[Path]:
-    # The repository, not this package. `main.py` and `evals/` sit beside
-    # `packages/`, and `SRC.parent.parent` stopped being the repository when the
-    # library moved under it -- which showed up as three live helpers being
-    # reported as defined for tests alone.
+    # The repository, not this package -- `main.py` and `evals/` live beside
+    # `src/`. Named rather than recomputed, so that when the library last moved
+    # this was one line to change instead of a silent walk over the wrong tree.
     root = REPO
     files: list[Path] = []
     for name in PRODUCTION:

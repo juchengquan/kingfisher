@@ -39,6 +39,18 @@ directory: two packs seeding together, and the refusal when two claimed the same
 file. If a second publisher ever wants in, the entry-point group and both tests
 come back.
 
+## A marker that matched the wrong repository
+
+`test_architecture` found the repository by looking upward for a directory
+holding both `pyproject.toml` and `packages/`. When `packages/` went, nothing in
+this tree matched — so the walk climbed *out of the checkout* and found the
+parent clone, which is on `main` and still has one. Every rule then read a
+different repository and passed. CI, with no parent clone, raised
+`StopIteration` at collection.
+
+It counts levels again. A marker only helps if it cannot match elsewhere, and
+`src/` beside a `pyproject.toml` describes half the repositories on any disk.
+
 ## Verified
 
 Built and read: the wheel carries 73 files, 14 of them definitions. Installed
