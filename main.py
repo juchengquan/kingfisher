@@ -480,7 +480,13 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
 
     catalogue = resolve_catalogue(cfg)
     found = catalogue.tools.found
-    workspace = tuple(sorted(entry.name for entry in found))
+    # Through the same `Offering` a grant is checked against, so a subtraction is
+    # taken from what a grant could actually name. Bare names here meant
+    # `--without-tools fetch` matched a workspace holding two of them and
+    # removed both without a word, while `--without-tools vendor_a/fetch.py::fetch`
+    # -- the only spelling that says which -- came back as an unknown name.
+    on_offer = Offering.of(found)
+    workspace = tuple(sorted(on_offer.workspace))
     with tempfile.TemporaryDirectory(prefix="kingfisher-offered-") as scratch:
         root = Path(scratch)
         registered = registered_tools(
@@ -492,7 +498,17 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
             # names on the workspace axis -- which is how `--without-tools
             # execute,delete`, the example this file's own docstring gives, came
             # back as "those are builtin tools".
-            "builtin_tools": tuple(n for n in registered if n not in set(workspace)),
+            # Bare names on this side: a built-in has no file, so the two are
+            # told apart by name or not at all.
+            #
+            # Unobservable, and left correct anyway. `_refuse_shadowed` raises
+            # before this line can ever see a workspace tool sharing a built-in's
+            # name, so comparing against written forms instead would behave
+            # identically -- a mutation proved it, and there is no test to write
+            # because there is no input that separates them.
+            "builtin_tools": tuple(
+                n for n in registered if n not in {entry.name for entry in found}
+            ),
             "tools": workspace,
             "skills": available_skills(cfg, root, catalogue=catalogue),
             "subagents": tuple(defined_subagents(cfg, root, catalogue=catalogue)),
