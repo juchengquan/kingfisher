@@ -157,6 +157,21 @@ class SkillRegistry:
         spelt_out = [key for key in self.offered if split_qualified(key)[1] in ambiguous]
         return tuple(sorted(unique + spelt_out))
 
+    @property
+    def taken(self) -> tuple[str, ...]:
+        """Every name in use, unqualified, for a caller asking only "is this free".
+
+        Distinct from `names`, which answers "what may a request write" and so
+        spells a colliding name out. This answers "is this name spoken for
+        anywhere", which is what an *upload* needs: a request may not call its
+        own skill `lookup` because the catalogue has one, and it makes no
+        difference to that whether the catalogue's sits in a folder.
+
+        Reading `names` for this was the bug -- it hands back `research::lookup`
+        for a foldered skill, which no upload will ever be called.
+        """
+        return tuple(sorted({name for _, name in map(split_qualified, self.offered)}))
+
     def _sources_of(self, name: str) -> tuple[str, ...]:
         """Which sources offer this bare name, in the order they were read.
 

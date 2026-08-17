@@ -36,6 +36,20 @@ from typing import Literal
 #: because it names nothing that could.
 ALL: Literal["*"] = "*"
 
+#: What separates where a thing came from from what it is called. Two colons
+#: rather than one because a Windows path can carry a single one, and because
+#: pytest already taught everyone that `file::thing` means "that thing, in that
+#: file".
+#:
+#: Here rather than in `tool`, which is where it started, because `tool` imports
+#: this module and a second definition would be a second thing to keep in step.
+SEPARATOR = "::"
+
+
+def _bare(written: str) -> str:
+    """A written name with any source stripped off, for a caller comparing names."""
+    return written.rpartition(SEPARATOR)[2].strip()
+
 #: `"*"` is everything, a tuple is exactly those names, `None` is nothing.
 #:
 #: The declared contract is `ALL` or a tuple, and consumers can rely on that.
@@ -368,10 +382,26 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
     into a grant. One rule, two directions.
     """
     known = set(offered)
-    unknown = tuple(sorted(name for name in excluded if name not in known))
-    if unknown:
+    missing = [name for name in excluded if name not in known]
+
+    # An ambiguous name is not an absent one, and saying so matters more here
+    # than on the granting side. `--without-skills lookup` against two of them
+    # is a subtraction that refuses, so nothing dangerous happens -- but told it
+    # is "unknown", a reader goes looking for a skill they can see in the
+    # listing printed underneath. The two mistakes send them to different
+    # places: one is a typo, the other is a name that stopped being enough.
+    for name in sorted(missing):
+        if spellings := tuple(sorted(n for n in known if _bare(n) == name)):
+            msg = (
+                f"cannot exclude {name!r}: more than one source offers it, so "
+                f"subtracting it alone would leave one behind -- "
+                f"write {', '.join(spellings)}"
+            )
+            raise CapabilityError(msg)
+
+    if missing:
         msg = (
-            f"cannot exclude unknown name(s): {', '.join(unknown)}; "
+            f"cannot exclude unknown name(s): {', '.join(sorted(missing))}; "
             f"this workspace offers {tuple(sorted(known))}"
         )
         raise CapabilityError(msg)

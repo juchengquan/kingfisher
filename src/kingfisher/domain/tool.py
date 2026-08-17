@@ -22,6 +22,7 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.capabilities import (
     ALL,
+    SEPARATOR,
     CapabilityError,
     Selection,
     belongs_in,
@@ -32,11 +33,10 @@ from kingfisher.domain.capabilities import (
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
 
-#: What separates a tool's file from its name in a definition. Two colons
-#: rather than one because a Windows path can carry a single one, and because
-#: pytest already taught everyone that `file::thing` means "that thing, in that
-#: file".
-SEPARATOR = "::"
+# `SEPARATOR` is imported above rather than defined here, where it started:
+# skills spell a source the same way, and one separator both kinds import
+# beats two that agree by coincidence. Re-exported by the import, so
+# `domain.tool.SEPARATOR` still resolves for readers who look here first.
 
 
 def reference(source: str, name: str) -> str:

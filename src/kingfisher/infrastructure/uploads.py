@@ -87,8 +87,13 @@ def provision(
 
     roots = catalogue or Catalogue.from_config(cfg)
     return Brought(
+        # The registry, not the repository. `SkillRepository.names` lists the
+        # root and stops, so once skills could live in folders it returned `()`
+        # for a catalogue that had plenty -- and the rule below silently stopped
+        # applying to every one of them. The registry sees each source, and
+        # `taken` asks the question this needs: is the name spoken for at all.
         skills=materialise_skills(
-            request.skill_refs, store, session_dir, roots.skills.names
+            request.skill_refs, store, session_dir, roots.registry.taken
         ),
         subagents=materialise_subagents(
             request.subagent_refs, store, session_dir, tuple(roots.subagents.specs)
