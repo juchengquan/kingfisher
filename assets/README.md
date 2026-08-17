@@ -3,22 +3,27 @@
 One working definition of each thing a kingfisher request can activate — a
 skill, a subagent, a tool.
 
-    pip install kingfisher-assets
+    uv sync                            # from a kingfisher checkout — this is a workspace member
     uv run main.py                     # a new workspace seeds itself, and says so
 
-Install it and use kingfisher. A workspace that has never been used copies these
-in on its first run and prints what it wrote. `--seed-assets` re-seeds an
-existing one, which is how you take an upgrade — it overwrites, and that is why
-it has to be asked for.
+A workspace that has never been used copies these in on its first run and prints
+what it wrote. `--seed-assets` re-seeds an existing one, which is how you take an
+upgrade — it overwrites, and that is why it has to be asked for.
 
 Nothing here is loaded automatically, and nothing here is imported. The files
 are copied into a workspace and read from there; a tool is imported *from the
 workspace*, never from this distribution.
 
-> **Both of those go through `main.py`, which is not in kingfisher's wheel**, so
-> a pip-only install has no command for them yet. Installing this pack is still
-> what makes the definitions *available* — discovery is an entry point, not a
-> path — and any caller can seed from it directly:
+> **Neither package is published yet, so there is no `pip install` for either.**
+> That is a decision waiting rather than an oversight: both wheels build and
+> install cleanly, but the command that seeds lives in `main.py`, which is not
+> in kingfisher's wheel and imports the smoke harness — so a pip install would
+> get the definitions and no way to use them. Publishing also means owing
+> version floors, and the formats are still moving. See *Still undecided* in
+> `docs/design/2026-08-17-assets-as-packages.md`.
+>
+> None of which changes how a pack is *found*: that is an entry point, not a
+> path, so any caller can seed from whatever is installed —
 >
 > ```python
 > from kingfisher import paths_from_env

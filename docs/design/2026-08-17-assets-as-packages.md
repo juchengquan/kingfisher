@@ -112,6 +112,17 @@ Phases 1 to 3 remain additive and reversible.
   the official assets ship as one distribution or as `-analysis`, `-web` and so
   on. That is a packaging question best answered once there is more than
   fifteen files to divide.
+- **Whether either package is published at all — deferred, on purpose.** Both
+  wheels build and install cleanly into a clean environment, and that is as far
+  as this goes: nothing reaches PyPI. Two reasons, and the first was measured
+  rather than assumed. `main.py` is not in the wheel and imports `evals` — the
+  smoke harness — in four places, with `is_smoke` branching through all 751
+  lines, so a `[project.scripts]` entry is a refactor rather than a line, and a
+  pip install today would hand someone the definitions and no way to seed them.
+  Second, publishing means owing a version floor and a deprecation cycle, and
+  the formats are still moving: `--seed-presets` was renamed, `provider:` was
+  removed, `where::what` landed days before this note. Until then both READMEs
+  say "from a checkout" rather than naming a command that fails.
 - **How a pip-installed deployment seeds.** `--seed-assets` lives in `main.py`,
   which is the driver and is not in the wheel — `packages = ["src/kingfisher"]`.
   So the flag, and A7's auto-seeding with it, are reachable from a checkout and

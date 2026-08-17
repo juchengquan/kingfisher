@@ -12,12 +12,18 @@ where the framework has no business having an opinion. It ships no skills of its
 own for the same reason its base prompt carries no domain instructions: a
 general agent should read the same whatever the project is.
 
-Definitions come from **asset packs**: ordinary pip packages that announce
-themselves, which kingfisher discovers rather than names. One exists, with a
-working example of each format:
+Definitions come from **asset packs**: ordinary Python distributions that
+announce themselves, which kingfisher discovers rather than names. One exists,
+`kingfisher-assets`, with a working example of each format. It lives in this
+repository under `assets/` and installs with the rest of a checkout:
 
-    pip install kingfisher-assets
+    uv sync
     uv run main.py --seed-assets      # copies what it holds into $KINGFISHER_WORKSPACE
+
+Nothing is published to PyPI yet, so there is no `pip install` for it — a
+decision waiting rather than an oversight, recorded under *Still undecided* in
+`docs/design/2026-08-17-assets-as-packages.md`. Discovery does not depend on it:
+a pack is found through its entry point wherever it was installed from.
 
 Nothing is loaded automatically — a definition does nothing until it is in a
 workspace catalogue. Writing your own pack takes one line of metadata:
