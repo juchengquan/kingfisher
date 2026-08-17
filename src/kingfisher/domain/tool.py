@@ -26,6 +26,7 @@ from kingfisher.domain.capabilities import (
     Selection,
     belongs_in,
     narrowed,
+    refuse_unoffered,
 )
 
 if TYPE_CHECKING:
@@ -143,12 +144,13 @@ class Offering:
                     f"but {belongs_in(misplaced, field=there)}"
                 )
                 raise CapabilityError(msg)
-            if unknown := tuple(n for n in asked if n not in set(own)):
-                msg = (
-                    f"{subject} names unknown {here[:-1]}(s): {', '.join(unknown)}; "
-                    f"this workspace offers\n{offered(self.sources, own)}"
-                )
-                raise CapabilityError(msg)
+            refuse_unoffered(
+                asked,
+                offered=own,
+                kind=here[:-1],
+                subject=subject,
+                listing=f"\n{offered(self.sources, own)}",
+            )
 
     def permitted(self, builtin: Selection, tools: Selection) -> tuple[str, ...] | None:
         """Every tool name a request may call, or `None` for no restriction.

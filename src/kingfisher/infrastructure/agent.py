@@ -38,6 +38,7 @@ from kingfisher.domain.capabilities import (
     Selection,
     narrowed,
     refuse_ungranted_models,
+    refuse_unoffered,
 )
 from kingfisher.domain.ports import ToolRepository
 from kingfisher.domain.subagent import RunOn, refuse_helpers_with_helpers
@@ -534,9 +535,7 @@ def _activated_subagents(
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
-    if unknown := tuple(n for n in activated if n not in defined):
-        msg = f"unknown subagent(s): {', '.join(unknown)}; this request offers {tuple(defined)}"
-        raise CapabilityError(msg)
+    refuse_unoffered(activated, offered=defined, kind="subagent", subject="this request")
     return defined, activated
 
 
@@ -663,10 +662,9 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
             pass  # none: no index, and no deny rules to write for one
         else:
             available = available_skills(cfg, session_dir, catalogue=roots)
-            unknown = tuple(s for s in capabilities.skills if s not in available)
-            if unknown:
-                msg = f"unknown skill(s): {', '.join(unknown)}; workspace offers {available}"
-                raise CapabilityError(msg)
+            refuse_unoffered(
+                capabilities.skills, offered=available, kind="skill", subject="this request"
+            )
             # Supplied as middleware rather than via `skills=`: passing that
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.

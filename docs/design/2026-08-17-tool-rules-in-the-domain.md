@@ -144,6 +144,31 @@ produces one message shape. The misplaced-axis message for a request turned out
 to be asserted by *nothing*, which is its own small finding: it changed and no
 test noticed until one was written for it.
 
+## Skills and subagents, after the fact
+
+This document said skills and subagents had "no equivalent duplication", and
+that was asserted rather than measured. Measured afterwards, they had four
+copies between them:
+
+| Kind | Request side | Definition side |
+|---|---|---|
+| skills | `agent` ~line 718 | `delegation.subagent_skills` |
+| subagents | `agent._defined_and_activated` | `delegation.subagent_helpers` |
+
+The subagent pair was the same three lines outright, expansion of `ALL`
+included, differing only in how the subject was spelled. Tools made a fifth
+copy inside `Offering.refuse_unknown`.
+
+| # | Decision | Why |
+|---|---|---|
+| T8 | **One `refuse_unoffered` in `capabilities.py`, beside `refuse_ungranted_models`.** | Same shape as its neighbour — names, what is offered, and a subject — which is what made five call sites collapse into it without merging anything that differs. Each caller keeps its own resolution and narrowing; only the refusal is shared, because `permitted` and `ceiling` already taught what happens when two similar things are folded on the strength of looking alike. |
+| T9 | **The message says `offered:`, claiming no owner.** | It read "this request offers" for tools, where the *workspace* offers them, and "this request names … this request offers" repeats itself. Who owns the set genuinely differs by kind — a workspace offers tools and skills, a request offers the subagents it activated — so one message serving five callers cannot name an owner without being wrong for some of them. |
+
+None of the four messages was asserted by any test, which is how they were free
+to drift apart. That is the finding, more than the duplication: the duplication
+is what happens when nothing holds the wording of a thing whose entire job is to
+be read.
+
 ## Not in scope
 
 - **Skills and subagents.** They have one axis each and no equivalent
