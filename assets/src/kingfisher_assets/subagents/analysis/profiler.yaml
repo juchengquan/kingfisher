@@ -18,7 +18,8 @@ builtin_tools: [read_file, ls, glob]
 # short form -- `[csv_profile, csv_columns]` -- means the same thing and still
 # works. The long one buys a check: if either tool moves out of `csv_profile/`,
 # this definition says so at startup instead of being quietly wrong about a
-# file nobody can find. `--list` prints the left-hand side, so it can be pasted.
+# file nobody can find. `--list` names each tool's source in brackets --
+# `csv_columns  (csv_profile)` -- which is the left-hand side to write here.
 tools:
   - csv_profile::csv_profile
   - csv_profile::csv_columns
