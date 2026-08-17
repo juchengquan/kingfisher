@@ -22,7 +22,7 @@ import os
 from collections.abc import Mapping
 from pathlib import Path
 
-from kingfisher.config import Config, ConfigError
+from kingfisher.config import Config, ConfigError, WorkspacePaths
 from kingfisher.infrastructure import model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
@@ -73,6 +73,33 @@ def _optional_int(environ: Mapping[str, str], key: str) -> int | None:
         raise ConfigError(msg) from exc
 
 
+def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
+    """Where this deployment keeps things, without reading the model catalogue.
+
+    The catalogue lives *inside* the workspace, so a first run cannot load one:
+    `from_env` raises `ConfigError` before the directory it would seed has been
+    created. Seeding a fresh workspace therefore has to run on this much and no
+    more -- and it has to be this rather than `KINGFISHER_WORKSPACE` read
+    directly, because a deployment that relocated `KINGFISHER_SKILLS_DIR` would
+    otherwise be seeded into the directory it stopped reading.
+
+    `KINGFISHER_WORKSPACE` is still required, and still raises `ConfigError`
+    when it is missing. That is the one thing no default can supply.
+    """
+    env = os.environ if environ is None else environ
+
+    def _optional_path(key: str) -> Path | None:
+        raw = (env.get(key) or "").strip()
+        return Path(raw).expanduser().resolve() if raw else None
+
+    return WorkspacePaths(
+        workspace=Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve(),
+        skills_root=_optional_path("KINGFISHER_SKILLS_DIR"),
+        subagents_root=_optional_path("KINGFISHER_SUBAGENTS_DIR"),
+        tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
+    )
+
+
 def from_env(environ: Mapping[str, str] | None = None) -> Config:
     """Build a `Config` from environment variables.
 
@@ -89,7 +116,8 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         raw = (env.get(key) or "").strip()
         return Path(raw).expanduser().resolve() if raw else None
 
-    workspace = Path(_require(env, "KINGFISHER_WORKSPACE")).expanduser().resolve()
+    paths = paths_from_env(env)
+    workspace = paths.workspace
     # Defaults inside the workspace, like every other catalogue root, and
     # relocatable for the same reason: it holds content a person authored and
     # reviewed, so several deployments sharing one file is the point rather than
@@ -111,9 +139,12 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         shell_sandbox=env.get("KINGFISHER_SHELL_SANDBOX", "auto"),
         state_root=_optional_path("KINGFISHER_STATE_DIR"),
         scratch_root=_optional_path("KINGFISHER_SCRATCH_DIR"),
-        skills_root=_optional_path("KINGFISHER_SKILLS_DIR"),
-        subagents_root=_optional_path("KINGFISHER_SUBAGENTS_DIR"),
-        tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
+        # From `paths`, not read again here: `paths_from_env` is the one reader
+        # of these three, so a fresh workspace is seeded into the same
+        # directories a configured one is served from.
+        skills_root=paths.skills_root,
+        subagents_root=paths.subagents_root,
+        tools_root=paths.tools_root,
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
         memory_enabled=_bool(env, "KINGFISHER_MEMORY"),
         interpreter_enabled=_bool(env, "KINGFISHER_INTERPRETER"),

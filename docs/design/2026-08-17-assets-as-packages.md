@@ -1,6 +1,6 @@
 # Assets as packages, not as cargo
 
-**Status:** phases 1-5 implemented; phase 6 outstanding.
+**Status:** implemented, phases 1-6.
 **Date:** 2026-08-17
 
 Kingfisher ships fifteen asset files inside the wheel: three skills, four
@@ -77,6 +77,18 @@ Each step leaves the tree working.
 | **5** | The framing goes with them: `presets/` becomes `reference/`, holding `models.yaml.example` and the docs. `--seed-presets` is renamed, and `model_catalogue`'s error message follows it. | 2, 3, 4 |
 | **6** | A7: a fresh workspace seeds from whatever packs are installed, and says what it wrote. | 5 |
 
+A7 turned out to need one thing it did not anticipate. *"It is the first moment
+the destination exists"* was wrong about the ordering: `models.yaml` lives inside
+the workspace, so `from_env` raised before the destination had been created and
+a first run could not reach seeding at all — the one run seeding is for. So the
+configuration splits. `WorkspacePaths` is the part a first run can know, built by
+`paths_from_env`; `Config` is built on top of it; and `seed` asks for a
+`Destination` protocol that both satisfy by shape, rather than for a whole
+`Config` it never needed. `catalogue_roots_for` is the single home for
+*"an override, or a name in the workspace"*, because a second copy of that rule
+is how a deployment that relocated its catalogue gets seeded into the directory
+it stopped reading.
+
 Phase 4 was written as a *separate repository*, with phase 5 removing the files
 afterwards so both arrangements would work in between. It became a second
 distribution in this repository instead — `assets/`, a uv workspace member —
@@ -109,14 +121,12 @@ Phases 1 to 3 remain additive and reversible.
   a pip user does not have, which is the kind of gap that reads as a lie. The
   ordinary answer is a `[project.scripts]` console entry, and it is a decision
   about what kingfisher's CLI *is* rather than a rename, so it is not in phase 5.
-- **The catalogue error is a dead end, and was before the rename.** Measured: a
-  workspace with no `models.yaml` gets a `ConfigError` saying *"`--seed-assets`
-  writes an annotated models.yaml.example next to it"* — and running
-  `--seed-assets` hits the same error, because `main.py` builds the config
-  before it seeds. The message has pointed at an unreachable command since it
-  was written; renaming the flag only made it easy to see. The workspace path is
-  known before the catalogue loads, so seeding the example on that failure path
-  is possible, but it is a behaviour change in the driver rather than a rename.
+- ~~**The catalogue error is a dead end.**~~ Fixed in phase 6, which had to:
+  A7 could not fire at all while the config was built first, because a first run
+  has no `models.yaml` and never reached the seeding line. The driver now reads
+  the *paths* half of the configuration, seeds, and loads the catalogue after —
+  and the message says "an annotated `models.yaml.example` is next to it" when
+  one is, rather than naming a command that has just run.
 - **What a pack declares about the format it was written for.** A definition
   using a field an older kingfisher does not know is refused by name, which is
   a loud and adequate failure. A tool is Python and fails differently. The
