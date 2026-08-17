@@ -1,5 +1,6 @@
 name: reviewer
-description: Independently re-checks numeric claims in a draft answer against the underlying files. Use before reporting figures you computed once.
+description: |-
+  Independently re-checks numeric claims in a draft answer against the underlying files. Use before reporting figures you computed once.
 # No workspace tools: `[]` is none, and omitting the line would mean all.
 builtin_tools: [read_file, ls, glob, grep, execute]
 tools: []
