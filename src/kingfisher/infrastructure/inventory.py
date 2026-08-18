@@ -26,7 +26,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.config import Config
-from kingfisher.domain.subagent import SubagentError
+from kingfisher.domain.subagent import SubagentError, refuse_cycles
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue, source_of
 from kingfisher.infrastructure.tool_store import ToolError
@@ -185,6 +185,16 @@ def inventory(cfg: Config, *, catalogue: Catalogue | None = None) -> Inventory:
         # with a default does not help, because the property raises rather than
         # being absent.
         specs = resolved.subagents.specs
+        # Asked here as well as at `build_agent`, and that is the point rather
+        # than duplication. A cycle is a property of the catalogue, so an
+        # inventory that reports the catalogue has to report it: this said a
+        # workspace was fine while a run refused it, which is the same shape as
+        # `--list` advertising a skill the agent would not load.
+        #
+        # Reading `specs` cannot raise it -- a definition naming a helper is
+        # perfectly well-formed on its own, and the loop only exists across
+        # files.
+        refuse_cycles(specs)
         subagents = {name: spec.description for name, spec in specs.items()}
         compiled_subagents = tuple(
             name for name, spec in specs.items() if spec.build is not None

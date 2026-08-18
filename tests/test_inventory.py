@@ -136,6 +136,47 @@ def test_a_subagent_catalogue_that_will_not_load_is_carried_too(cfg):
     assert found.builtin_tools  # the build still happened
 
 
+def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
+    """An inventory that says a workspace is fine while a run refuses it is the
+    failure this whole file exists to prevent, and a cycle was exactly that: it
+    is checked when an agent is built, and `--list` does not build one.
+
+    Not caught by reading the definitions, which is why it needs asking for. A
+    file naming a helper is well-formed on its own -- the loop only exists
+    across files, so no single parse can see it.
+    """
+    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
+    for name, helper in (("a", "b"), ("b", "a")):
+        (cfg.subagents_dir / f"{name}.yaml").write_text(
+            f"name: {name}\ndescription: d\nsubagents: [{helper}]\n"
+            f"system_prompt: |\n  Go.\n",
+            encoding="utf-8",
+        )
+
+    found = inventory(cfg)
+
+    assert found.subagents_error is not None
+    assert "reach themselves" in found.subagents_error
+    assert found.tools_error is None, "one catalogue must not take the other down"
+
+
+def test_a_workspace_with_no_cycle_reports_none(cfg):
+    """The negative control. A definition naming a helper, and a helper naming
+    its own, is the shape a cycle is written in -- and is perfectly legal."""
+    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
+    for name, helper in (("a", "b"), ("b", "c")):
+        (cfg.subagents_dir / f"{name}.yaml").write_text(
+            f"name: {name}\ndescription: d\nsubagents: [{helper}]\n"
+            f"system_prompt: |\n  Go.\n",
+            encoding="utf-8",
+        )
+    (cfg.subagents_dir / "c.yaml").write_text(
+        "name: c\ndescription: d\nsystem_prompt: |\n  Go.\n", encoding="utf-8"
+    )
+
+    assert inventory(cfg).subagents_error is None
+
+
 def test_answering_leaves_no_session_behind(cfg):
     """An agent needs a session to root its backend at, and what a workspace
     *offers* is a question about the workspace. A session left here is one
