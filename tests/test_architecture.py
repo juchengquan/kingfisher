@@ -1011,7 +1011,8 @@ DEPLOYMENT_ERRORS = frozenset({
     # `MissingStoreError` is here rather than above on purpose: a request naming
     # files by id with no `FileStore` wired is a deployment that forgot one, and
     # nothing the caller sends can fix it.
-    "ConfigError", "DataError", "HostPathError", "MissingStoreError", "ToolError",
+    "ConfigError", "DataError", "HostPathError", "LoadError", "MissingStoreError",
+    "ToolError",
 })
 
 
