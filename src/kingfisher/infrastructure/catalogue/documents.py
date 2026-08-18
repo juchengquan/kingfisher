@@ -34,7 +34,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import skill, subagent
+from kingfisher.domain import agent, skill, subagent
 from kingfisher.domain.subagent import reading
 
 if TYPE_CHECKING:
@@ -100,11 +100,28 @@ def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
     if isinstance(fields, str):
         msg = f"{source.name}: cannot read definition ({fields})"
         raise subagent.SubagentError(msg)
-    _require_literal_prompt(text, source)
+    _require_literal_prompt(text, source, subagent.SubagentError)
     return reading.parse(fields, source)
 
 
-def _require_literal_prompt(text: str, source: Path) -> None:
+def read_agent(text: str, source: Path) -> agent.AgentSpec:
+    """One agent definition. Raises `AgentError` on anything malformed.
+
+    The same three steps a subagent takes, and deliberately not a shared
+    function taking a parser: what differs is the exception, and that is the
+    one thing a caller reading a traceback needs to be right. `AgentError`
+    and `SubagentError` are not interchangeable to someone finding out which
+    of two folders holds the broken file.
+    """
+    fields = decode(text)
+    if isinstance(fields, str):
+        msg = f"{source.name}: cannot read definition ({fields})"
+        raise agent.AgentError(msg)
+    _require_literal_prompt(text, source, agent.AgentError)
+    return agent.parse(fields, source)
+
+
+def _require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> None:
     """Refuse a `system_prompt` written in a style that reflows it.
 
     `>` folds consecutive lines into one, so
@@ -125,6 +142,10 @@ def _require_literal_prompt(text: str, source: Path) -> None:
     Here rather than in `domain.subagent.reading` because a scalar's style is a fact
     about the document, not about what a subagent means. The domain is handed
     fields; by then every style looks alike.
+
+    Both formats spell the prompt `system_prompt` and both reflow it the same
+    way, so one check serves them -- with the format's own exception passed in,
+    since that is the half a reader needs to be right about which file to open.
     """
     node = yaml.compose(text)
     if not isinstance(node, yaml.MappingNode):  # pragma: no cover -- decode checked
@@ -139,7 +160,7 @@ def _require_literal_prompt(text: str, source: Path) -> None:
                 f"Use a literal block -- `system_prompt: {LITERAL}` -- so the prompt "
                 "reaches the delegate with the line breaks you wrote"
             )
-            raise subagent.SubagentError(msg)
+            raise error(msg)
         return
 
 

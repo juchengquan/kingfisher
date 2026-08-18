@@ -1,0 +1,46 @@
+name: assistant
+description: General-purpose agent for a workspace with no particular specialism.
+# No `builtin_tools:` and no `tools:`, which is how this format says *all of
+# them* -- every tool deepagents brings, and every tool this workspace defines.
+# Leaving them out is the one place omission grants rather than withholds, and
+# the reason is that an agent can do nothing at all without tools.
+#
+# The other two fields work the other way: omit `skills` or `subagents` and you
+# get none. So this file names them, and that asymmetry is the whole of the
+# format's omission rule -- tools are what an agent needs to *act*, skills and
+# delegates are what it needs to *know* and to *ask*.
+skills: ["*"]
+# The delegates that ship beside this file. Naming them is what makes them
+# reachable: a request narrows what an agent declares and can never widen it,
+# so a subagent no agent names is a definition nothing can call.
+#
+# It costs. Each one compiles its own graph, measured at about 4.3ms, on every
+# turn whether or not the task needs it -- so drop a name you never use rather
+# than keeping the list tidy for its own sake.
+#
+# `second-opinion` is deliberately absent and still reachable: `reviewer` names
+# it, and a helper arrives with the delegate that wants it.
+subagents: [extractor, reviewer, profiler]
+# No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
+# That is the right answer for a general agent -- and for a file that ships
+# inside a wheel, since no vendor's model id is portable anywhere else.
+#
+# No `memory:` either, which means "no opinion": memory is on if your
+# deployment wired it and off if it did not.
+system_prompt: |
+  You work in this workspace, on whatever the caller asks for.
+
+  This text is *added* to the harness prompt that already told you about
+  `/data`, `/skills` and your tools -- it does not replace it. Say the things
+  that are true of this agent and nothing else; the rest is already said.
+
+  Delegate the reading. `extractor` exists so that a hundred files can be
+  turned into a short answer without a hundred files landing in your context,
+  and `profiler` exists so nobody computes a figure from a column they have not
+  looked at. Both run on a cheaper model than you do.
+
+  Check what you would report. `reviewer` recomputes a figure from the file
+  rather than from your working, which is the only kind of check worth having.
+
+  Say what you did not do. A report that implies it was exhaustive is worse
+  than one that names its own edges.

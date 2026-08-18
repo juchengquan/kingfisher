@@ -1,9 +1,10 @@
 # Writing definitions
 
-The three formats a workspace can hold — a skill, a subagent, a tool — with
-every field, what it means, and worked examples you can paste. This page is the
-reference for the formats themselves; the pages below are ordered the way you
-are likely to need them.
+The four formats a workspace can hold — an agent, a skill, a subagent, a tool —
+with every field, what it means, and worked examples you can paste. This page is
+the reference for the formats themselves, and it starts with the agent because
+that is what a request names; everything else here is something an agent selects
+from.
 
 Kingfisher ships none of these files. Its job is to find, validate and compose
 definitions, and it does all three against files it did not write — every
@@ -22,8 +23,8 @@ Nothing is loaded automatically. A definition does nothing until it is in a
 workspace catalogue, and what it says there is yours; kingfisher never reads
 back from the copy it shipped.
 
-To seed from your own set instead, point at a directory holding `tools/`,
-`skills/` and `subagents/` — any of them, none required:
+To seed from your own set instead, point at a directory holding `agents/`,
+`tools/`, `skills/` and `subagents/` — any of them, none required:
 
     kingfisher seed --from ./my-definitions
 
@@ -85,6 +86,124 @@ runs.
 
 The endpoint that model resolves to keeps its own permission. Choosing a model
 is not an exemption from where a request's prompts may go.
+
+---
+
+## Agents — `/agents/<name>.yaml`, at any depth
+
+> **Half here.** These files load, validate and show up in `kingfisher list`
+> today. Naming one on a request is the next change — until then a run still
+> takes its tools and model the old way, and the design is written down in
+> [`design/2026-08-18-agents-as-definitions.md`](design/2026-08-18-agents-as-definitions.md).
+
+The agent is what a request runs, and everything else on this page is something
+an agent selects from: the tools it holds, the skills it may read, the delegates
+it may consult, the model it runs on.
+
+```yaml
+name: surveyor
+description: Reads and profiles data without changing anything.
+builtin_tools: [read_file, ls, glob, grep]
+tools: [csv_profile::csv_profile]
+alias: cheap
+memory: false
+system_prompt: |
+  You survey files before anyone trusts them.
+
+  Report what would change how somebody analyses this file, and say what you
+  did not check. A survey that implies it was exhaustive is worse than one that
+  names its own edges.
+```
+
+That is a whole definition: two required fields and whatever else you have an
+opinion about.
+
+Folders work here for the reason they work everywhere else on this page —
+kingfisher reads these files, so nothing outside it has an opinion about the
+layout. `agents/support/triage.yaml` is still `triage`, because `name:` is the
+identity and the path is not.
+
+**A request will have to name one.** There is to be no default agent and no
+implicit one: the agent decides where every prompt in a session goes and what it
+costs, and a default would put that choice somewhere the call site never
+mentions. A session will keep the agent it started with, resolved once and
+stored, so that editing a file mid-conversation cannot change the instructions
+under a history that already happened.
+
+Neither is wired yet. What works today is everything above: the files load, two
+of a name are refused, and `kingfisher list` prints each agent with the
+delegates it reaches.
+
+### The prompt is added to, not replaced
+
+`system_prompt` is the same word a subagent file uses, doing a different job. A
+subagent's *is* the whole prompt. An agent's is the last of three parts:
+
+    prompts/system.md    what the harness is — /data is read-only, /skills is
+                         loadable, where memory lives. Ships with kingfisher
+    PROMPT.md            what this workspace is about. Yours, optional, and it
+                         reaches your delegates too
+    system_prompt        what this agent is. Yours, optional
+
+There is no way to replace the first, and that is not a gap. An agent without it
+is not leaner — it is one holding tools nobody told it about, discovering its
+permissions by being denied. Opening a session returns what was assembled, which
+is where to check rather than guess.
+
+### The fields
+
+| Field | | |
+| --- | --- | --- |
+| `name` | required | What a request names it by. Authoritative — the filename is not |
+| `description` | required | Single line. Nothing reads it at run time; it is how somebody chooses between your agents in `kingfisher list` |
+| `system_prompt` | optional | This agent's own instruction, added after the two documents above |
+| `builtin_tools` | optional | deepagents' own set, listed in the tools table below. Unset means all of them; `[]` means none |
+| `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
+| `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
+| `subagents` | optional | Delegates it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
+| `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
+| `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
+| `alias` | optional | A general name your `models.yaml` binds. For an agent file that travels between deployments and cannot portably name a vendor's model id. Not with `model` |
+| `memory` | optional | `false` to run without the memory file on a deployment that wired one |
+| `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
+
+The two tool fields inherit and the two name fields do not, which is the same
+rule a subagent file follows and worth saying as one sentence: **leave a tool
+field out and you get everything available to you; leave `skills` or
+`subagents` out and you get none.** Tools are what an agent needs to *act* and
+it can do nothing without them. Skills and delegates are what it needs to
+*know* and *ask*, and most agents need neither.
+
+### Helpers arrive with the delegate that wants them
+
+An agent naming `reviewer` gets whatever `reviewer` names, and whatever those
+name in turn. The chain is worked out when the catalogue loads, and
+`kingfisher list` prints it — so an agent file never carries a name it has no
+relationship with, and never goes stale because a file it does not own changed
+its own helpers.
+
+**The agent itself has to work.** A model your catalogue does not define, or an
+alias nobody bound, refuses. **Anything below it that cannot run is left out and
+reported** — which is what lets a freshly seeded workspace run at all, since
+`second-opinion` wants an `alternate` the example config deliberately leaves
+unbound.
+
+### Four fields are refused
+
+Each with its own message rather than a generic "unknown field", because the
+generic one reads as *not supported yet* and sends you looking for a workaround:
+
+- **`distinct`** — there is nothing above an agent for it to differ from.
+- **`permissions`** — deepagents' permissions *replace* the parent's rather than
+  narrowing them, so writing this here would drop `/data` being read-only along
+  with everything else it inherits.
+- **`interrupt_on`** — an agent has a checkpointer and a human, unlike a
+  delegate; what is missing is anything in the service that surfaces an
+  interrupt to a caller.
+- **`response_format`** — refused rather than absent. An agent returns to a real
+  caller who may well want JSON, and there is nowhere to ask for that yet
+  because it changes what a run *returns*: the result, the service's response
+  body and streaming all have a stake in it.
 
 ---
 

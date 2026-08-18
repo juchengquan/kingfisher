@@ -1,0 +1,264 @@
+"""Agent definitions: `/agents/<name>.yaml`.
+
+What a request runs. Every other format on the catalogue is something an agent
+selects from -- the tools it holds, the skills it may read, the delegates it may
+consult, the model it runs on -- and until now the answer to "which agent?" was
+assembled from four places that did not know about each other: `prompts/system.md`
+with the workspace's `PROMPT.md`, three switches in the environment, the
+`default:` line in `models.yaml`, and whatever a request's `Capabilities`
+narrowed to. Every delegate in `subagents/` was a reviewable document; the thing
+that summoned them was not.
+
+    name: surveyor
+    description: Reads and profiles data without changing anything.
+    builtin_tools: [read_file, ls, glob, grep]
+    tools: [csv_profile::csv_profile]
+    alias: cheap
+    memory: false
+    system_prompt: |
+      You survey files before anyone trusts them.
+
+`name` and `description` are required and nothing else is. An agent defined by
+its tools and its model alone is a legitimate thing; `system.md` and `PROMPT.md`
+are already a working prompt.
+
+**Its own folder and its own format, sharing the readers and not the fields.**
+Three fields disagree with `subagents/`, and none of the disagreements are
+cosmetic. `distinct` says "not the model above me" and there is nothing above an
+agent, so it is unwritable here. `memory` is a switch a delegate has no use for.
+And `system_prompt` means the opposite thing -- see below. A shared folder would
+have made a field's meaning depend on the request that read it rather than on
+the file, which is exactly what nobody could then check by reading.
+
+**`system_prompt` is added, never substituted.** A delegate's *is* the whole
+prompt and it gets none of `system.md`, deliberately: that document is the
+harness describing itself, and a delegate already has its own procedure. An
+agent's is the last of three parts --
+
+    prompts/system.md    what the harness is: /data is read-only, /skills is
+                         loadable, where memory lives
+    PROMPT.md            what this workspace is about, and it reaches delegates
+    system_prompt        what this agent is
+
+-- and there is no way to say "instead of". An agent without the first is not
+leaner; it is one holding tools nobody told it about, discovering its permissions
+by being denied.
+
+The field keeps the name deepagents and Anthropic both use rather than gaining a
+kingfisher-only one. What it costs is that a subagent file copied into `agents/`
+parses cleanly and behaves differently, so the warning lives in the
+documentation and in the seeded files rather than in an error.
+
+**Omission means the same thing it means in a subagent file**, which is one
+sentence per field rather than one per format: leave a *tool* field out and you
+get everything available to you -- every built-in, every tool the workspace
+defines -- and leave `skills` or `subagents` out and you get none. Tools are
+what an agent needs to *act* and it can do nothing without them. Skills and
+delegates are what it needs to *know* and to *ask*, and most agents need neither;
+the skills index alone was measured at ~464 tokens for three, growing with the
+catalogue, and every delegate compiles a graph at ~4.3ms.
+
+`subagents: ["*"]` is the one place the two formats genuinely answer differently,
+and the reason is in the files. In a subagent file "everything" includes the
+definition doing the asking, so it is always a loop and is refused. An agent is
+not one of the subagents, so here it means every delegate the workspace offers.
+
+`model` and `alias` read exactly as they do for a delegate -- one or the other
+and never both, either may name several tried in order, an alias nobody bound
+refuses rather than falling back. Omitted, the agent runs the `default:` in
+`models.yaml`. An agent file that travels between deployments cannot portably
+name a vendor's model id, which is the whole reason the indirection exists.
+
+Model *parameters* are not here and will not be. `models.yaml` carries
+`max_tokens`, `temperature` and an `extra` bag for things like reasoning effort,
+it has no credentials in it so it can go through review, and it is meant to be
+the one place saying where prompts go and what they cost. An agent that wants
+the same model to think harder names a second entry.
+
+**A field this format does not define is refused, not ignored**, for the reason
+the subagent format gives: a key we ignore is a key the author believes took
+effect. The four that another format defines and this one declines are named
+individually, because the generic message reads as "not supported yet" and sends
+someone looking for a workaround.
+
+Parsing lives in the domain because this is kingfisher's format. Nothing here
+knows deepagents exists and nothing here reads a disk -- finding the files is
+`infrastructure.catalogue.agents`.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Mapping
+from dataclasses import dataclass, field
+from pathlib import Path
+from types import MappingProxyType
+
+from kingfisher.domain import fields
+from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.subagent import Wanted
+
+# Imported rather than restated: both formats name a model the same way, so a
+# second copy of the reader would be a second thing to keep in step, agreeing
+# by coincidence until it does not. The dependency runs this way round because
+# an agent already names delegates -- it depends on the subagent vocabulary
+# whatever happens here.
+from kingfisher.domain.subagent.reading import wanted_models
+from kingfisher.domain.tool import claimed_sources
+
+DIRECTORY = "agents"
+
+
+class AgentError(ValueError):
+    """Raised when an agent definition cannot be read."""
+
+
+#: Every field this format defines. A key outside it is refused rather than
+#: ignored: a definition writing `tolls:` would otherwise get an agent holding
+#: every tool the workspace defines, since a missing `tools` means all of them.
+KNOWN: frozenset[str] = frozenset(
+    {
+        "name",
+        "description",
+        "system_prompt",
+        "builtin_tools",
+        "tools",
+        "skills",
+        "subagents",
+        "middleware",
+        "model",
+        "alias",
+        "memory",
+        "metadata",
+    }
+)
+
+#: Fields another format defines that this one deliberately does not, each with
+#: the reason. Named separately because the generic message is misleading here:
+#: it reads as "kingfisher has not got round to this" when the answer is that
+#: honouring it would be wrong, or that it is a different piece of work.
+REFUSED: Mapping[str, str] = MappingProxyType(
+    {
+        "distinct": (
+            "it says 'not the model that summoned me', and nothing summons an "
+            "agent -- a delegate is where this belongs"
+        ),
+        "permissions": (
+            "deepagents' permissions *replace* rather than narrow, so writing this "
+            "here would drop the rules an agent already has -- including the ones "
+            "making /data and /skills read-only"
+        ),
+        "interrupt_on": (
+            "an agent has both a checkpointer and a caller, unlike a delegate; what "
+            "is missing is anything in the service that surfaces an interrupt to "
+            "that caller"
+        ),
+        "response_format": (
+            "an agent answers a real caller who may well want a schema, and there is "
+            "nowhere to ask for one yet -- it changes what a *run returns*, so the "
+            "result, the service's response body and streaming all have a stake in it"
+        ),
+    }
+)
+
+
+@dataclass(frozen=True)
+class AgentSpec:
+    """One agent, once its definition has been read.
+
+    The values a request runs against. Everything is a *selection by name* apart
+    from the prompt and the two switches, which is what keeps a definition
+    reviewable: an agent file activates what the workspace already offers and
+    cannot invent a tool or write a delegate's prompt.
+    """
+
+    name: str
+    description: str
+    #: Added after `system.md` and `PROMPT.md`, never instead of them. Empty is
+    #: ordinary -- an agent may be entirely described by what it holds.
+    system_prompt: str = ""
+    builtin_tools: Selection = ALL
+    tools: Selection = ALL
+    #: Where each `tools:` entry said its tool lives, for the entries that said.
+    #: A claim to check, never a choice between tools.
+    tool_sources: Mapping[str, str] = field(default_factory=dict)
+    skills: Selection = None
+    subagents: Selection = None
+    middleware: Selection = None
+    #: What this agent asked to run, in the order it would prefer. Empty means
+    #: it named nothing, so it runs the deployment's `default:`.
+    wanted: tuple[Wanted, ...] = ()
+    #: `False` to run without the memory file on a deployment that wired one.
+    #: `None` is no opinion, which is not the same: a switch narrows like every
+    #: other axis, and only `False` can subtract.
+    memory: bool | None = None
+    metadata: Mapping[str, object] = field(default_factory=dict)
+
+
+def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
+    """One definition, from its decoded fields.
+
+    Raises `AgentError` on anything the format forbids. Whether the document
+    decoded at all was settled before this -- reading YAML needs a library, and
+    a domain module imports the standard library and `kingfisher.domain`.
+    """
+    read = fields.Reader(source=source.name, error=AgentError)
+
+    # Before the required-field check, so `nmae:` is reported as the typo it is
+    # rather than as a missing `name` the author plainly tried to write.
+    complaint = fields.unrecognised(document, known=KNOWN, declined=REFUSED)
+    if complaint is not None:
+        msg = f"{source.name}: {complaint}"
+        raise AgentError(msg)
+
+    for required in ("name", "description"):
+        # Absent and blank are different mistakes and read differently: "missing"
+        # sends someone looking for a line they can see they wrote.
+        if required not in document:
+            msg = f"{source.name}: missing required field {required!r}"
+            raise AgentError(msg)
+        if not fields.text(document[required]):
+            msg = f"{source.name}: {required!r} is present but empty"
+            raise AgentError(msg)
+
+    # Refused rather than ranked, as it is for a delegate: a precedence order
+    # would be invisible in the file relying on it, and whichever way round it
+    # went, half the readers would guess the other.
+    if document.get("model") and document.get("alias"):
+        msg = (
+            f"{source.name}: names both a model ({fields.text(document['model'])!r}) and "
+            f"an alias ({fields.text(document['alias'])!r}); an alias *is* a model name "
+            f"once this deployment binds it, so name one or the other"
+        )
+        raise AgentError(msg)
+
+    # Read once, then split. A `tools:` entry may be written `where::what`, and
+    # only `what` may reach the rest of kingfisher; where it claims to live
+    # travels beside it, for whoever checks the claim.
+    written_tools = read.selection(document.get("tools"), absent=ALL, key="tools")
+
+    return AgentSpec(
+        name=fields.text(document["name"]),
+        description=fields.text(document["description"]),
+        system_prompt=fields.text(document.get("system_prompt")),
+        builtin_tools=read.selection(
+            document.get("builtin_tools"), absent=ALL, key="builtin_tools"
+        ),
+        tools=written_tools,
+        tool_sources=claimed_sources(written_tools),
+        skills=read.selection(document.get("skills"), absent=None, key="skills"),
+        # No `refuse_all` here, and that is the divergence worth reading twice.
+        # A *subagent* naming every subagent names itself, which is always a
+        # loop; an agent is not one of them, so this is the ordinary "give it
+        # the run of the place".
+        subagents=read.selection(document.get("subagents"), absent=None, key="subagents"),
+        middleware=read.selection(document.get("middleware"), absent=None, key="middleware"),
+        wanted=wanted_models(document),
+        # Absent is `None` rather than `False`, which `flag` alone cannot say:
+        # a switch has three states here, and "no opinion" is not "no".
+        memory=(
+            None
+            if document.get("memory") is None
+            else read.flag(document.get("memory"), key="memory")
+        ),
+        metadata=read.mapping(document.get("metadata"), key="metadata"),
+    )

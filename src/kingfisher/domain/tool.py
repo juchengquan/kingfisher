@@ -19,6 +19,7 @@ not a wider import here.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.capabilities import (
@@ -380,3 +381,21 @@ def ceiling(
         )
         raise ValueError(msg)
     return (*(from_builtin or ()), *(from_workspace or ()))
+
+
+def claimed_sources(written: Selection) -> Mapping[str, str]:
+    """Where each entry said its tool lives, for the entries that said.
+
+    Keyed by name rather than kept as a list, because that is how it is asked:
+    the checker holds the real sources by name and wants to know what this
+    definition claimed for that one. Entries written the short way are absent,
+    which is how "made no claim" is told from "claimed and was right".
+    """
+    if written in (ALL, None):
+        return MappingProxyType({})
+    claimed = {}
+    for entry in written:
+        where, name = split_reference(entry)
+        if where is not None:
+            claimed[name] = where
+    return MappingProxyType(claimed)

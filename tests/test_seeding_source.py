@@ -42,8 +42,13 @@ def _definitions(root: Path, *entries: str) -> Path:
 def test_the_definitions_ship_with_the_library():
     """The point of folding them in. `pip install kingfisher` then
     `kingfisher seed` has to write a workspace that already works -- content a
-    reader must go and find teaches nobody."""
-    assert seeding.shipped_kinds() == ("skills", "subagents", "tools")
+    reader must go and find teaches nobody.
+
+    Agents come first, and the order is `Definitions`' field order rather than
+    anything chosen here. It happens to be the useful one: the agent is what a
+    request names, and the other three are what it selects from.
+    """
+    assert seeding.shipped_kinds() == ("agents", "skills", "subagents", "tools")
 
 
 def test_seeding_without_a_source_writes_the_shipped_definitions(cfg):

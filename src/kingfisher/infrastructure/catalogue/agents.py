@@ -1,0 +1,124 @@
+"""Agent definitions held in a directory on this host.
+
+`domain.agent` owns the format -- what a definition means and what makes one
+malformed -- and `documents` turns a document into one. Finding the files is a
+third job, and it is this one.
+
+The subagent repository's shape, minus a half it does not need. There is no
+Python-declared form here: a compiled subagent exists because a workspace may
+want to hand deepagents a graph it assembled itself, and the thing that *runs*
+that graph is the agent -- which is the one position where kingfisher must
+still build the surrounding harness. So an agent is a document, always.
+
+Folders are organisation, exactly as they are for subagents and tools:
+`agents/support/triage.yaml` is `triage`, because `name:` is the identity and
+the path is not.
+"""
+
+from __future__ import annotations
+
+from dataclasses import dataclass
+from functools import cached_property
+from pathlib import Path
+
+from kingfisher.domain.agent import AgentError, AgentSpec
+
+# `SUFFIX` comes from the format that already names it rather than being
+# restated here: both are YAML documents kingfisher reads, and a second copy of
+# the extension is a second thing to keep in step.
+from kingfisher.domain.subagent.reading import SUFFIX
+from kingfisher.infrastructure.catalogue.documents import read_agent
+from kingfisher.infrastructure.catalogue.importing import skipped
+from kingfisher.infrastructure.catalogue.subagents import NEAR_MISS
+
+
+def _definitions_in(directory: Path) -> list[Path]:
+    """Every agent document below `directory`, at any depth, in a stable order.
+
+    Hidden directories and `__pycache__` are skipped for the reason the module
+    loader skips them: a one-level scan could never reach whatever a person left
+    lying under the catalogue, and a recursive one can.
+
+    `.yml` is named rather than ignored, the same way it is for subagents. It is
+    valid YAML everywhere else, so a file spelled that way is a definition
+    somebody wrote and kingfisher silently would not read.
+    """
+    found: list[Path] = []
+    for entry in sorted(directory.iterdir()):
+        if skipped(entry.name):
+            continue
+        if entry.is_dir():
+            found.extend(_definitions_in(entry))
+        elif entry.name.endswith(SUFFIX):
+            found.append(entry)
+        elif entry.suffix == NEAR_MISS:
+            msg = (
+                f"{entry.name}: kingfisher reads {SUFFIX!r} here, so this file is "
+                f"not loaded -- rename it to {entry.stem}{SUFFIX}"
+            )
+            raise AgentError(msg)
+    return found
+
+
+@dataclass(frozen=True)
+class LocalAgentRepository:
+    """The agents defined in one directory.
+
+    Given the directory itself rather than a workspace to derive one from: the
+    catalogue can be deployed outside any workspace and shared by all of them.
+
+    Unlike the other three kinds there is no session layer over this one, and
+    that is not an oversight. A request may upload its own skills and subagents
+    because those are the caller's own text; an agent decides where every prompt
+    in a session goes, and it is pinned for that session's whole life. Adding a
+    layer for symmetry would advertise a capability that does not exist.
+    """
+
+    root: Path
+
+    @cached_property
+    def _defined(self) -> dict[str, tuple[AgentSpec, str]]:
+        """Every definition below `root`, parsed once, with where it came from."""
+        directory = Path(self.root)
+        if not directory.is_dir():
+            return {}
+
+        read: list[tuple[AgentSpec, str]] = []
+        for path in _definitions_in(directory):
+            where = str(path.relative_to(directory))
+            read.append((read_agent(path.read_text(encoding="utf-8"), path), where))
+
+        # Two of a name is refused here rather than reported, which is the one
+        # place this differs from subagents. A request names exactly one agent,
+        # so there is no roster for a reference to disambiguate within -- two
+        # files claiming `assistant` means a request for `assistant` gets
+        # whichever the walk reached last, and nothing anywhere says which.
+        seen: dict[str, str] = {}
+        for spec, where in read:
+            if (first := seen.get(spec.name)) is not None:
+                msg = (
+                    f"two agents are called {spec.name!r} -- {first} and {where}. A "
+                    f"request names one agent and there is nothing to tell them "
+                    f"apart, so rename one of them"
+                )
+                raise AgentError(msg)
+            seen[spec.name] = where
+        return {spec.name: (spec, where) for spec, where in read}
+
+    @cached_property
+    def specs(self) -> dict[str, AgentSpec]:
+        """Every agent defined here, by name."""
+        return {name: spec for name, (spec, _) in self._defined.items()}
+
+    @property
+    def names(self) -> tuple[str, ...]:
+        return tuple(self._defined)
+
+    @cached_property
+    def sources(self) -> dict[str, str]:
+        """Where each agent is defined, by name, relative to the catalogue.
+
+        For `--list`, and for the reason the other loaders have one: a folder
+        exists so a person can find a file, and a bare name does not help them.
+        """
+        return {name: where for name, (_, where) in self._defined.items()}

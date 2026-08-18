@@ -123,8 +123,9 @@ def definition_roots_for(
     skills_root: Path | None = None,
     subagents_root: Path | None = None,
     tools_root: Path | None = None,
+    agents_root: Path | None = None,
 ) -> dict[str, Path]:
-    """The three definition directories: an override, or a name in the workspace.
+    """The four definition directories: an override, or a name in the workspace.
 
     A free function because two records answer this question and the answer has
     to be the same one. `Config` is the whole configuration and needs a model
@@ -134,6 +135,7 @@ def definition_roots_for(
     catalogue gets seeded into the directory it stopped reading.
     """
     return {
+        "agents": agents_root or workspace / "agents",
         "skills": skills_root or workspace / "skills",
         "subagents": subagents_root or workspace / "subagents",
         "tools": tools_root or workspace / "tools",
@@ -159,11 +161,16 @@ class WorkspacePaths:
     skills_root: Path | None = None
     subagents_root: Path | None = None
     tools_root: Path | None = None
+    agents_root: Path | None = None
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
         return definition_roots_for(
-            self.workspace, self.skills_root, self.subagents_root, self.tools_root
+            self.workspace,
+            self.skills_root,
+            self.subagents_root,
+            self.tools_root,
+            self.agents_root,
         )
 
 
@@ -410,6 +417,7 @@ class Config:
     skills_root: Path | None = None
     subagents_root: Path | None = None
     tools_root: Path | None = None
+    agents_root: Path | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix
@@ -519,6 +527,10 @@ class Config:
         able to disagree.
         """
         return definition_roots_for(
-            self.workspace, self.skills_root, self.subagents_root, self.tools_root
+            self.workspace,
+            self.skills_root,
+            self.subagents_root,
+            self.tools_root,
+            self.agents_root,
         )
 

@@ -79,14 +79,26 @@ def _materialise(readme: str, cfg) -> None:
     shipped files they used to lean on. The page is the fixture: if an example
     on it stops being a loadable definition, these fail for the same reason a
     reader would be misled.
+
+    Which directory a block lands in follows the heading above it, for the
+    reason `test_every_complete_definition_in_the_readme_parses` reads them with
+    two different readers: the page documents two YAML formats that look alike,
+    and an agent example written into `subagents/` fails on a field the other
+    format does not have.
     """
     import re
 
-    for block in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL):
-        if block.startswith("name:"):
-            name = block.split("\n")[0].removeprefix("name:").strip()
-            subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
-            (subagents_dir(cfg) / f"{name}.yaml").write_text(block, encoding="utf-8")
+    for section in re.split(r"\n## ", readme):
+        directory = (
+            cfg.catalogue_roots["agents"]
+            if section.startswith("Agents")
+            else subagents_dir(cfg)
+        )
+        for block in re.findall(r"```yaml\n(.*?)```", section, re.DOTALL):
+            if block.startswith("name:"):
+                name = block.split("\n")[0].removeprefix("name:").strip()
+                directory.mkdir(parents=True, exist_ok=True)
+                (directory / f"{name}.yaml").write_text(block, encoding="utf-8")
 
     for block in re.findall(r"```markdown\n(.*?)```", readme, re.DOTALL):
         if not block.startswith("---"):
@@ -403,22 +415,33 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
 
     Only the complete ones: a fenced block starting with `name:` is a
     definition, while the fragments showing one field are not.
+
+    Which reader a block gets is decided by the heading above it, because the
+    page now documents two YAML formats that look alike and are not. Reading an
+    agent example with the subagent reader would fail on `memory:` and read as a
+    broken example rather than as a test that does not know where it is.
     """
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.infrastructure.catalogue.documents import read_subagent
+    from kingfisher.infrastructure.catalogue.documents import read_agent, read_subagent
 
     readme = (formats_doc).read_text(encoding="utf-8")
+    # Split on the top-level headings, so each block is read by the format whose
+    # section it sits in.
+    sections = re.split(r"\n## ", readme)
     blocks = [
-        body
-        for body in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL)
+        (section.startswith("Agents"), body)
+        for section in sections
+        for body in re.findall(r"```yaml\n(.*?)```", section, re.DOTALL)
         if body.startswith("name:")
     ]
 
     assert blocks, "the README opens the section with a whole definition"
-    for block in blocks:
-        read_subagent(block, _Path("readme.yaml"))
+    assert any(is_agent for is_agent, _ in blocks), "the agents section shows one too"
+    for is_agent, block in blocks:
+        read = read_agent if is_agent else read_subagent
+        read(block, _Path("readme.yaml"))
 
 
 # -- the one preset that consults another ---------------------------------

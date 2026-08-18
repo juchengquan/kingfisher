@@ -144,9 +144,9 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.subagent import SubagentError, SubagentSpec, Wanted
-from kingfisher.domain.tool import split_reference
+from kingfisher.domain.tool import claimed_sources
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
@@ -317,8 +317,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         raise SubagentError(msg)
 
     where = Path(source)
-    wanted = _wanted(entry)
-    distinct = _flag(entry.get("distinct"), key="distinct", source=where)
+    read = fields.Reader(source=where.name, error=SubagentError)
+    wanted = wanted_models(entry)
+    distinct = read.flag(entry.get("distinct"), key="distinct")
     if distinct and not wanted:
         msg = (
             f"{source}: 'distinct: True' with no model or alias -- with nothing named, "
@@ -327,7 +328,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    written_tools = _selected(entry.get("tools"), absent=ALL, key="tools", source=where)
+    written_tools = read.selection(entry.get("tools"), absent=ALL, key="tools")
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
@@ -339,33 +340,11 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         # was never able to have.
         builtin_tools=None,
         tools=written_tools,
-        tool_sources=_claimed_sources(written_tools),
+        tool_sources=claimed_sources(written_tools),
         wanted=wanted,
         distinct=distinct,
-        metadata=_metadata(entry, where),
+        metadata=read.mapping(entry.get("metadata"), key="metadata"),
     )
-
-
-def _metadata(document: Mapping[str, object], source: Path) -> Mapping[str, object]:
-    """The caller's own keys, if it brought any.
-
-    A mapping or nothing. `metadata: gold` is refused rather than wrapped,
-    because a bag with no shape cannot be looked up by key and looking up a key
-    is the only thing anyone will do with it.
-
-    Absent and empty both become `{}`, which saves every reader a `None` check
-    for a field whose whole meaning is "nothing extra".
-    """
-    raw = document.get("metadata")
-    if raw is None:
-        return {}
-    if not isinstance(raw, Mapping):
-        msg = (
-            f"{source.name}: metadata must be a mapping of your own keys, "
-            f"got {type(raw).__name__}"
-        )
-        raise SubagentError(msg)
-    return dict(raw)
 
 
 def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
@@ -395,6 +374,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     decoded at all was settled before this — reading YAML needs a library, so
     `infrastructure.catalogue.documents` does that half.
     """
+    read = fields.Reader(source=source.name, error=SubagentError)
     # Before the required-field check, so `nmae:` is reported as the typo it is
     # rather than as a missing `name` the author plainly tried to write.
     _refuse_unknown(document, source)
@@ -422,8 +402,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    wanted = _wanted(document)
-    distinct = _flag(document.get("distinct"), key="distinct", source=source)
+    wanted = wanted_models(document)
+    distinct = read.flag(document.get("distinct"), key="distinct")
     # A definition that must differ and named nothing to differ *with* runs the
     # deployment's own model, which is the one thing `distinct` exists to
     # refuse -- so it could never start, and would say so per activation rather
@@ -441,8 +421,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
     # the dictionary the agent dispatches through all key on the plain name.
     # Where it claims to live travels beside it, for whoever checks the claim.
-    written_tools = _selected(
-        document.get("tools"), absent=ALL, key="tools", source=source
+    written_tools = read.selection(
+        document.get("tools"), absent=ALL, key="tools"
     )
 
     return SubagentSpec(
@@ -454,20 +434,19 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         # Absent means inherit for tools and none for skills -- the
         # asymmetry the format has always had, now said in the values
         # rather than in a reader that special-cases one of them.
-        builtin_tools=_selected(
-            document.get("builtin_tools"), absent=ALL, key="builtin_tools", source=source
+        builtin_tools=read.selection(
+            document.get("builtin_tools"), absent=ALL, key="builtin_tools"
         ),
         tools=written_tools,
-        tool_sources=_claimed_sources(written_tools),
-        skills=_selected(document.get("skills"), absent=None, key="skills", source=source),
-        middleware=_selected(
-            document.get("middleware"), absent=None, key="middleware", source=source
+        tool_sources=claimed_sources(written_tools),
+        skills=read.selection(document.get("skills"), absent=None, key="skills"),
+        middleware=read.selection(
+            document.get("middleware"), absent=None, key="middleware"
         ),
-        subagents=_selected(
+        subagents=read.selection(
             document.get("subagents"),
             absent=None,
             key="subagents",
-            source=source,
             refuse_all=(
                 "it would mean every definition in the catalogue, which includes this "
                 "one, so it is always a loop. Name the delegates this one consults"
@@ -475,7 +454,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         ),
         wanted=wanted,
         distinct=distinct,
-        metadata=_metadata(document, source),
+        metadata=read.mapping(document.get("metadata"), key="metadata"),
     )
 
 
@@ -491,25 +470,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 # One reference, doing two jobs now rather than one.
 
 
-def _claimed_sources(written: Selection) -> Mapping[str, str]:
-    """Where each entry said its tool lives, for the entries that said.
-
-    Keyed by name rather than kept as a list, because that is how it is asked:
-    the checker holds the real sources by name and wants to know what this
-    definition claimed for that one. Entries written the short way are absent,
-    which is how "made no claim" is told from "claimed and was right".
-    """
-    if written in (ALL, None):
-        return MappingProxyType({})
-    claimed = {}
-    for entry in written:
-        where, name = split_reference(entry)
-        if where is not None:
-            claimed[name] = where
-    return MappingProxyType(claimed)
-
-
-def _wanted(document: Mapping[str, object]) -> tuple[Wanted, ...]:
+def wanted_models(document: Mapping[str, object]) -> tuple[Wanted, ...]:
     """What a definition would run, in the order it would prefer.
 
     `model:` and `alias:` are mutually exclusive and checked as such above, so
@@ -534,80 +495,3 @@ def _wanted(document: Mapping[str, object]) -> tuple[Wanted, ...]:
         return tuple(dict.fromkeys(Wanted(alias=name) for name in written))
     return ()
 
-
-def _flag(value: object, *, key: str, source: Path) -> bool:
-    """A yes/no field, refusing the spellings YAML would quietly accept.
-
-    `distinct: "false"` is a non-empty string and truthy in Python, which is the
-    reading that says the opposite of what the file says. YAML already turns
-    `true`, `yes` and `on` into `True` before this sees them, so what is left
-    here is a value that arrived as something other than a bool -- and there is
-    no reading of it that is not a guess.
-    """
-    if value is None:
-        return False
-    if isinstance(value, bool):
-        return value
-    msg = (
-        f"{source.name}: {key} is {value!r}; write true or false. A quoted "
-        f"{str(value)!r} reads as text, and every non-empty text is true -- "
-        f"including {'false'!r}"
-    )
-    raise SubagentError(msg)
-
-
-def _selected(
-    value: object,
-    *,
-    absent: Selection,
-    key: str,
-    source: Path,
-    refuse_all: str | None = None,
-) -> Selection:
-    """One name-list field, or what its absence means for that field.
-
-    `absent` differs per field and that is the point: omitting `tools` inherits
-    the caller's, omitting `skills` grants none. The format has always drawn
-    that distinction; it used to live in a reader that treated `None` two ways.
-
-    `["*"]` is everything. A list, because every one of these fields is a list
-    and a field whose type changes with its value is one more thing to know.
-    The bare `"*"` is refused by name rather than read as a name -- the same
-    trade `system_prompt` makes by accepting one block style and naming the
-    others -- because a request spells this `"*"` and someone will carry the
-    habit across.
-
-    Mixing is refused too. `["*", read_file]` has no reading that is not a
-    guess, and it used to have the worst one: `*` matched no tool, so the star
-    silently contributed nothing.
-
-    `refuse_all` is for the one field where everything is not a coherent answer,
-    and it carries the reason rather than a flag so the message can say it. Four
-    of these five fields read `["*"]` naturally -- every built-in tool, every
-    workspace tool, every skill, every approved middleware. The fifth is
-    `subagents`, where everything includes the definition doing the asking.
-    """
-    if isinstance(value, str) and value.strip() == ALL:
-        msg = (
-            f"{source.name}: {key} is written {value.strip()!r}; write [{ALL!r}] instead. "
-            f"Every selection here is a list, so everything is a list too"
-        )
-        raise SubagentError(msg)
-
-    names = fields.names(value)
-    if names is None:
-        return absent
-    if ALL not in names:
-        return names
-    if refuse_all is not None:
-        msg = f"{source.name}: {key} may not be [{ALL!r}] -- {refuse_all}"
-        raise SubagentError(msg)
-    if len(names) > 1:
-        others = ", ".join(n for n in names if n != ALL)
-        msg = (
-            f"{source.name}: {key} mixes [{ALL!r}] with {others}; "
-            f"[{ALL!r}] is everything, so naming anything beside it means "
-            f"one of the two was not meant"
-        )
-        raise SubagentError(msg)
-    return ALL
