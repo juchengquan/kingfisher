@@ -535,3 +535,25 @@ def test_the_json_listing_carries_it_too(cfg):
     _subagent_catalogue(cfg)
 
     assert as_json(inventory(cfg))["compiled_subagents"] == ["researcher"]
+
+
+def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeypatch, capsys):
+    """`--list` is where somebody goes *because* a grant was refused for a skill
+    they can see in the tree. deepagents files it by its header and warns to a
+    log nobody reads, so this line is the only place the two names meet."""
+    directory = cfg.skills_dir / "company-lookup"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "SKILL.md").write_text(
+        "---\nname: find-company\ndescription: Looks a company up.\n---\nBody.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")  # or the endpoint is dropped
+    monkeypatch.setenv("KINGFISHER_SKILLS", "1")
+
+    assert main(["list"]) == 0, "a misfiled skill loads, so this is not a failure"
+
+    printed = capsys.readouterr().out
+    assert "company-lookup/ is offered as find-company" in printed
+    assert "rename the directory to match" in printed

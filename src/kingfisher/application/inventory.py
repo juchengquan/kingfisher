@@ -76,6 +76,11 @@ class Inventory:
     #: Nested past the one level skills are read at. Reported separately because
     #: the fix is different: these parse, they are simply in the wrong place.
     skills_misplaced: tuple[str, ...] = ()
+    #: Skills the agent *can* read, under a name their directory does not have,
+    #: as `(directory, name)`. Neither missing nor broken: present under a name
+    #: nobody typed, which is why it is its own field rather than folded into
+    #: the two above.
+    skills_misfiled: tuple[tuple[str, str], ...] = ()
 
     #: Subagent name -> its description.
     subagents: Mapping[str, str] = _NOTHING
@@ -216,6 +221,7 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
         skills={name: registry.description(name) for name in registry.names},
         skills_unloadable=tuple(registry.unloadable),
         skills_misplaced=tuple(getattr(resolved.skills, "misplaced", ())),
+        skills_misfiled=tuple(registry.misfiled),
         subagents=MappingProxyType(dict(subagents)),
         subagent_sources=subagent_sources,
         subagents_error=subagents_error,
