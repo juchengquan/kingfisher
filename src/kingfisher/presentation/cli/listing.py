@@ -28,6 +28,33 @@ def _from(source: str | None, expected: str) -> str:
     return "" if source in (None, expected) else f"  ({source})"
 
 
+def _agents(found: Inventory) -> Iterator[str]:
+    """The agents section, which comes first because it is what a request names.
+
+    Its own function rather than eighteen more lines inside `render`, which was
+    already at the branch ceiling -- and a section that prints a nested thing is
+    the one worth lifting out, since the nesting is the only part of this
+    listing a reader has to follow rather than scan.
+    """
+    yield "agents"
+    if found.agents_error is not None:
+        yield f"  cannot load: {found.agents_error}"
+        yield ""
+        return
+    for name, described in found.agents.items():
+        source = found.agent_sources.get(name)
+        yield f"  {name}{_from(source, f'{name}.yaml')} — {described}"
+        # The delegates it ends up with: its own, and the ones those bring.
+        # Printed rather than left to be worked out, because an agent file names
+        # only what it calls -- so this is the one place the whole tree is
+        # visible without opening every definition it reaches.
+        if reached := found.agent_delegates.get(name):
+            yield f"      delegates: {', '.join(reached)}"
+    if not found.agents:
+        yield "  (none)  — a request must name one; try `kingfisher seed`"
+    yield ""
+
+
 def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
     """The listing, line by line.
 
@@ -38,8 +65,11 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
     yield f"workspace : {workspace or found.workspace}"
     # Named rather than assumed: the catalogues may be deployed outside the
     # workspace and shared by every deployment that points at them.
+    yield f"agents    : {found.agents_source}"
     yield f"skills    : {found.skills_source}"
     yield f"subagents : {found.subagents_source}\n"
+
+    yield from _agents(found)
 
     if found.tools_error is not None:
         yield "tools"
@@ -140,6 +170,11 @@ def as_json(found: Inventory) -> dict[str, object]:
         "workspace": str(found.workspace),
         "skills_source": found.skills_source,
         "subagents_source": found.subagents_source,
+        "agents_source": found.agents_source,
+        "agents": dict(found.agents),
+        "agent_sources": dict(found.agent_sources),
+        "agent_delegates": {name: list(v) for name, v in found.agent_delegates.items()},
+        "agents_error": found.agents_error,
         "builtin_tools": list(found.builtin_tools),
         "tools": list(found.tools),
         "tool_sources": dict(found.tool_sources),

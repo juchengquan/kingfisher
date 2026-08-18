@@ -48,6 +48,20 @@ NOT_ON_DISK = {
     "memory": "a switch, not names",
 }
 
+#: Why something the catalogue holds is not an axis a request narrows.
+#:
+#: The one entry is the whole reason this set exists: every other kind is a
+#: *set* a request picks from, and an agent is the thing doing the picking. A
+#: request names one, and the capabilities then apply to what that agent
+#: declared -- so "narrow the agents" is not a sentence with a meaning.
+#:
+#: It is also the one kind a caller cannot upload, and that follows from the
+#: same fact rather than being a second rule: what you would be uploading is
+#: not a set to choose from, it is the thing choosing.
+NOT_AN_AXIS = {
+    "agents": "a request names one rather than narrowing a set of them",
+}
+
 #: Why a kind has no `--without-<kind>` flag. Not a CLI concern only: these are
 #: the axes a *library* caller narrows differently too.
 NOT_SUBTRACTABLE = {
@@ -70,12 +84,20 @@ def test_what_a_request_may_upload_is_accounted_for():
 
 
 def test_what_the_catalogue_loads_is_accounted_for():
-    """Three directories. The five absent are settings or deepagents', and none
-    of them is a thing to glob."""
+    """Four directories. The five absent are settings or deepagents', and none
+    of them is a thing to glob.
+
+    The two sides stopped being the same list when agents arrived, and that is
+    the finding rather than a wrinkle to paper over: a catalogue kind and a
+    capability axis were the same vocabulary only while every kind was a set to
+    choose from.
+    """
     covered = {f.name for f in fields(Definitions)}
 
-    assert covered | set(NOT_ON_DISK) == set(AXES)
+    assert covered | set(NOT_ON_DISK) == set(AXES) | set(NOT_AN_AXIS)
     assert not covered & set(NOT_ON_DISK)
+    assert set(NOT_AN_AXIS) <= covered, "a kind that is not an axis still has to be loaded"
+    assert not set(NOT_AN_AXIS) & set(AXES)
 
 
 def test_what_a_caller_can_subtract_is_accounted_for():

@@ -47,8 +47,15 @@ from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
-from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
+from kingfisher.domain.agent import DIRECTORY as AGENT_DIRECTORY
+from kingfisher.domain.ports import (
+    AgentRepository,
+    SkillRepository,
+    SubagentRepository,
+    ToolRepository,
+)
 from kingfisher.domain.tool import Offering
+from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
@@ -84,6 +91,7 @@ class Definitions:
     a `Definitions` would have it reach into `infrastructure`.
     """
 
+    agents: AgentRepository
     skills: SkillRepository
     subagents: SubagentRepository
     tools: ToolRepository
@@ -129,7 +137,7 @@ class Definitions:
 
         Returns self, so construction reads as one expression.
         """
-        _ = self.skills.names, self.subagents.specs, self.tools.found
+        _ = self.agents.specs, self.skills.names, self.subagents.specs, self.tools.found
         _ = self.registry
         # A definition saying where its tools live is checked here for the same
         # reason the reading happens here: it is a claim about this catalogue,
@@ -151,13 +159,22 @@ class Definitions:
 
     @classmethod
     def from_roots(cls, roots: Mapping[str, Path]) -> Definitions:
-        """Three directories on this host, as three local repositories.
+        """Four directories on this host, as four local repositories.
 
         The shorthand nearly every deployment wants, and the reason
         `Kingfisher(catalogue=...)` takes a mapping as well as a `Definitions`:
-        pointing at three directories should not require naming three classes.
+        pointing at four directories should not require naming four classes.
+
+        `agents` is read with `.get`, unlike its three siblings. A mapping built
+        before this kind existed is a deployment's own dict, not something
+        kingfisher generates, and failing it with a `KeyError` would turn adding
+        a kind into a breaking change for every caller that spelled the other
+        three out. Absent, it lands in the workspace beside them.
         """
         return cls(
+            agents=LocalAgentRepository(
+                Path(roots.get("agents", Path(roots["skills"]).parent / AGENT_DIRECTORY))
+            ),
             skills=LocalSkillRepository(Path(roots["skills"])),
             subagents=LocalSubagentRepository(Path(roots["subagents"])),
             tools=LocalToolRepository(Path(roots["tools"])),
@@ -176,6 +193,20 @@ class Definitions:
 #: this to decide what to copy and in what order, so reordering `Definitions` is
 #: a change to seeding rather than a cosmetic edit.
 DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
+
+#: The kinds a *supplied* catalogue has to name and stage itself.
+#:
+#: `agents` is deliberately outside it, and not because it matters less. It
+#: arrived after this seam was published, and a deployment that spelled out the
+#: three kinds it knew about should not stop starting because a fourth exists.
+#: Omitted, the directory lands beside the others and holds nothing -- which is
+#: the same answer a derived catalogue gives before anyone seeds it.
+#:
+#: The silence this leaves is covered elsewhere and better: a request names the
+#: agent it wants, so an empty `agents/` is reported as "no agent by that name,
+#: this workspace has none" rather than as a missing directory. That is the
+#: message somebody can act on.
+STAGED_KINDS: tuple[str, ...] = tuple(k for k in DEFINITION_KINDS if k != AGENT_DIRECTORY)
 
 
 def _root_of(repository: object) -> Path | None:
@@ -257,10 +288,10 @@ def resolve_definitions(
     # -- another kingfisher, a test fixture -- should not have to take it apart
     # to pass it back.
     if not isinstance(supplied, Definitions):
-        if missing := tuple(kind for kind in DEFINITION_KINDS if kind not in supplied):
+        if missing := tuple(kind for kind in STAGED_KINDS if kind not in supplied):
             msg = (
                 f"catalogue is missing {', '.join(missing)}; it names all of "
-                f"{', '.join(DEFINITION_KINDS)}, since a deployment that leaves one out "
+                f"{', '.join(STAGED_KINDS)}, since a deployment that leaves one out "
                 "means an empty one rather than the configured one"
             )
             raise ConfigError(msg)
@@ -269,7 +300,7 @@ def resolve_definitions(
     # Checked however it arrived, and only where there is something to check: a
     # repository backed by a service has no directory that could be missing, so
     # what it holds is its own business.
-    roots = {kind: _root_of(getattr(supplied, kind)) for kind in DEFINITION_KINDS}
+    roots = {kind: _root_of(getattr(supplied, kind)) for kind in STAGED_KINDS}
     if absent := tuple(
         f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()
     ):

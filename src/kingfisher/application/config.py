@@ -97,6 +97,7 @@ def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
         skills_root=_optional_path("KINGFISHER_SKILLS_DIR"),
         subagents_root=_optional_path("KINGFISHER_SUBAGENTS_DIR"),
         tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
+        agents_root=_optional_path("KINGFISHER_AGENTS_DIR"),
     )
 
 
@@ -145,6 +146,7 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         skills_root=paths.skills_root,
         subagents_root=paths.subagents_root,
         tools_root=paths.tools_root,
+        agents_root=paths.agents_root,
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
         memory_enabled=_bool(env, "KINGFISHER_MEMORY"),
         interpreter_enabled=_bool(env, "KINGFISHER_INTERPRETER"),

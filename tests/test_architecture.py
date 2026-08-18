@@ -1439,8 +1439,13 @@ DEPLOYMENT_ERRORS = frozenset({
     # `MissingStoreError` is here rather than above on purpose: a request naming
     # files by id with no `FileStore` wired is a deployment that forgot one, and
     # nothing the caller sends can fix it.
-    "ConfigError", "DataError", "HostPathError", "LoadError", "MissingStoreError",
-    "ToolError",
+    #
+    # `AgentError` sits here and `SubagentError` sits above, which looks like an
+    # inconsistency and is the rule working: a caller may *upload* a subagent, so
+    # a malformed one is their text and their fault. Agents come from the
+    # catalogue only, so a malformed one is always the deployment's own file.
+    "AgentError", "ConfigError", "DataError", "HostPathError", "LoadError",
+    "MissingStoreError", "ToolError",
 })
 
 

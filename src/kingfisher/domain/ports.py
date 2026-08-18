@@ -30,6 +30,7 @@ from collections.abc import Mapping
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
+from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.domain.tool import Found
 
@@ -97,6 +98,25 @@ class SkillRepository(AssetRepository, Protocol):
         worse trade -- and a binary asset is unusable through a store mount
         either way.
         """
+        ...
+
+
+@runtime_checkable
+class AgentRepository(AssetRepository, Protocol):
+    """Agent definitions, parsed.
+
+    The same shape as `SubagentRepository` and free of the filesystem for the
+    same reason: an agent is a document, and `read_agent` takes text.
+
+    The one kind with no session layer over it. A request may upload skills and
+    subagents because those are its own text; an agent decides where every
+    prompt in the session goes and is pinned for that session's whole life, so
+    it comes from the catalogue or not at all.
+    """
+
+    @property
+    def specs(self) -> Mapping[str, AgentSpec]:
+        """Every agent defined here, by name."""
         ...
 
 
