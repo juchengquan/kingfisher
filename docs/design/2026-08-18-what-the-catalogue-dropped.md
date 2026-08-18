@@ -1,6 +1,6 @@
 # What the catalogue dropped, and the two errors that followed
 
-**Status:** designed, not implemented.
+**Status:** implemented, C1-C9.
 **Date:** 2026-08-18
 
 `doctor` was left with two open questions: whether it should ever make a real

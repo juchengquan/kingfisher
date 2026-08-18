@@ -350,3 +350,20 @@ def test_reaching_the_cli_stays_free_of_provider_sdks():
     )
 
     assert out.stdout.strip() == ""
+
+
+def test_the_description_names_its_own_limit():
+    """A command that never calls a model has to say so where it is read.
+
+    `doctor` can report every credential present and every definition resolving
+    and still be wrong about whether a call succeeds. That hole is deliberate --
+    a probe would make this cost money, and a command that costs money comes out
+    of the pipeline -- so the honest thing is to name it and point at the test
+    that does prove it.
+    """
+    from kingfisher.presentation.cli.__main__ import _verbs, build_parser
+
+    description = _verbs(build_parser())["doctor"].description or ""
+
+    assert "may still be" in description  # present is not working
+    assert "kingfisher.run" in description  # and here is what would prove it
