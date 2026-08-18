@@ -86,7 +86,7 @@ service = ["kingfisher-service"]
 # `main.py` stays the development driver, keeps its flags, and keeps a bare
 # invocation that runs the eval smoke, which is a fine default for a driver
 # and a wrong one for a stranger's first command.
-kingfisher = "kingfisher.cli.__main__:main"
+kingfisher = "kingfisher.presentation.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
@@ -160,7 +160,7 @@ ignore = ["ANN401"]
 # library returned and decides nothing, so it is short and flat. `T201` is the
 # whole exemption -- if this ever needs the other three it has stopped being a
 # thin driver and that is worth noticing.
-"src/kingfisher/cli/**" = ["T201"]
+"src/kingfisher/presentation/cli/**" = ["T201"]
 # The long lines are inside string literals: the task's JSON schema commentary
 # has to stay on one line to read as one field.
 "evals/task.py" = ["E501"]

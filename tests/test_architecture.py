@@ -215,7 +215,7 @@ def _names_a_real_module(module: str) -> bool:
     """Resolved on disk rather than imported.
 
     `importlib.util.find_spec` would answer the same question by executing
-    every parent package on the way, which for `kingfisher.cli` means
+    every parent package on the way, which for `kingfisher.presentation.cli` means
     fastapi and for the harness means three provider SDKs. This rule should
     cost nothing and have no way to fail for a reason other than the one it is
     about.
@@ -387,7 +387,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # to install it. The rule below keeps the *library* clear of it; this area is
     # not covered by that rule, which is what makes naming it here the decision
     # rather than an oversight.
-    "cli": frozenset({"kingfisher_service"}),
+    "presentation/cli": frozenset({"kingfisher_service"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
     # the table is total and an unlisted area cannot mean "anything goes".
     "domain": frozenset(),
@@ -439,15 +439,15 @@ def test_an_area_is_refused_another_areas_dependencies():
     """
     assert _undeclared({"deepagents"}, "domain") == {"deepagents"}
     assert _undeclared({"deepagents"}, "application") == {"deepagents"}
-    assert _undeclared({"deepagents"}, "cli") == {"deepagents"}
+    assert _undeclared({"deepagents"}, "presentation/cli") == {"deepagents"}
     assert _undeclared({"deepagents"}, "infrastructure") == {"deepagents"}
     assert _undeclared({"fastapi"}, "infrastructure/harness") == {"fastapi"}
     assert _undeclared({"yaml"}, "infrastructure/harness") == {"yaml"}
 
     assert _undeclared({"deepagents", "langgraph"}, "infrastructure/harness") == set()
     assert _undeclared({"yaml"}, "infrastructure") == set()
-    assert _undeclared({"fastapi"}, "cli") == {"fastapi"}
-    assert _undeclared({"kingfisher_service"}, "cli") == set()
+    assert _undeclared({"fastapi"}, "presentation/cli") == {"fastapi"}
+    assert _undeclared({"kingfisher_service"}, "presentation/cli") == set()
     assert _undeclared({"kingfisher_service"}, "application") == {"kingfisher_service"}
 
 
@@ -1167,7 +1167,7 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 #: *this* package's public API, and a base that can break its own contract
 #: without its own tests noticing is the arrangement that produced the gap.
 CONSUMERS: dict[str, Path] = {
-    "cli": SRC / "cli",
+    "cli": SRC / "presentation" / "cli",
     "kingfisher_service": REPO / "service" / "src" / "kingfisher_service",
 }
 
@@ -1180,12 +1180,12 @@ def _reaches_past_the_public_api(module: str) -> bool:
     """True when a consumer imports something deeper than `kingfisher` itself.
 
     `kingfisher_service.*` is not a reach and never trips this -- it is a
-    different top-level package. `kingfisher.cli.*` is not one either: the CLI
+    different top-level package. `kingfisher.presentation.cli.*` is not one either: the CLI
     ships *inside* the library, so its own modules are its own business.
     """
     if module.split(".", maxsplit=1)[0] != "kingfisher" or module == "kingfisher":
         return False
-    return not module.startswith("kingfisher.cli")
+    return not module.startswith("kingfisher.presentation.cli")
 
 
 @pytest.mark.parametrize(
@@ -1194,7 +1194,7 @@ def _reaches_past_the_public_api(module: str) -> bool:
         ("kingfisher", False),                      # the front door itself
         ("kingfisher.domain.request", True),        # past it
         ("kingfisher.application.service", True),   # past it, and the tempting one
-        ("kingfisher.cli.health", False),           # the CLI ships inside the package
+        ("kingfisher.presentation.cli.health", False),           # the CLI ships inside the package
         ("kingfisher_service.app", False),          # a different top-level package
         ("fastapi", False),                         # not ours to have an opinion on
     ],
@@ -1539,7 +1539,7 @@ def test_nothing_is_defined_for_tests_alone():
 def test_every_console_script_points_at_something_that_exists():
     """A `[project.scripts]` line is only checked when somebody installs and runs.
 
-    `kingfisher = "kingfisher.cli.__main__:main"` naming a function that is not
+    `kingfisher = "kingfisher.presentation.cli.__main__:main"` naming a function that is not
     there fails at the shell, for a stranger, after a pip install -- which is
     the worst place to find out and the last place we would look. Nothing
     covered this: renaming the target to `:absent` left the suite green.

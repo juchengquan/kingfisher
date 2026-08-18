@@ -173,6 +173,26 @@ and the root may import nothing third-party. A new area therefore starts denied
 and someone has to write down what it needs — which is the behaviour phase 4
 will meet when `server/` becomes `presentation/`.
 
+## What happened to `presentation/` afterwards
+
+L5 renamed `server/` to `presentation/`, and then it left: the HTTP surface
+became `kingfisher-service`, a wheel of its own, so a library caller stops
+paying for fastapi and uvicorn to import `Request`. For a while the top level
+read as three layers and a thing again -- `cli/` beside `domain/` and
+`application/`, which is the shape L5 was written to end.
+
+The folder is back and holds the CLI. Holding only the CLI is not half an
+answer: a distribution's presentation layer is the presentation *it ships*, and
+the service has its own top level for a reason that is about dependencies rather
+than layering.
+
+What the two consumers share is a contract, not a directory, and it is enforced
+as one -- `CONSUMERS` names both and holds each to the front door. That rule
+spans distributions, which is the thing a folder could never do. It also
+records why the paths are spelled out rather than derived: the collector read
+`SRC / name`, so when `presentation` left it kept its name, kept passing, and
+covered the CLI alone.
+
 ## Not in scope
 
 **`application/service.py`.** It is 1068 lines and 24 methods on one class, and it is

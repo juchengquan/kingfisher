@@ -91,8 +91,8 @@ kingfisher list      # what this workspace offers
 kingfisher           # help
 ```
 
-`kingfisher/cli/`, mirroring `kingfisher/server/`: a `__main__.py` that decides
-nothing, dual-invocable as `python -m kingfisher.cli`, and the printing beside
+`kingfisher/presentation/cli/`, mirroring `kingfisher/server/`: a `__main__.py` that decides
+nothing, dual-invocable as `python -m kingfisher.presentation.cli`, and the printing beside
 it. `main.py` imports that printer rather than keeping its own, which is what
 makes B6 safe.
 
@@ -112,7 +112,7 @@ Each step leaves the tree working, and no step is only a rename.
 |---|---|---|
 | **1** | `inventory(cfg)` and its record, in `infrastructure/`. `main.py`'s `show_inventory` and `_offered` become callers. Nothing is exported yet, and nothing new is reachable — the listing has one implementation instead of two halves. | — |
 | **2** | The exports: `seed`, `installed_packs`, `inventory`, and the records they return, each classified light or heavy. `assets/README.md`'s snippet stops reaching past the front door. | 1 |
-| **3** | `kingfisher/cli/`, the two subcommands, help on bare invocation, and `[project.scripts]`. The architecture rule extends to cover it, which is what proves B2 rather than asserting it. | 2 |
+| **3** | `kingfisher/presentation/cli/`, the two subcommands, help on bare invocation, and `[project.scripts]`. The architecture rule extends to cover it, which is what proves B2 rather than asserting it. | 2 |
 | **4** | `main.py` prints through the CLI's formatter; the catalogue error names `kingfisher seed`; both READMEs say so. | 3 |
 
 Phase 1 is invisible from outside and reversible. Phase 3 is the one that adds a

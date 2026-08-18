@@ -56,7 +56,7 @@ _EXPORTS = {
     "shipped_kinds": "kingfisher.infrastructure.seeding",
     "Seeding": "kingfisher.infrastructure.seeding",
     "inventory": "kingfisher.application.inventory",
-    # Reached for by `kingfisher.cli`, and public because it reached. A
+    # Reached for by `kingfisher.presentation.cli`, and public because it reached. A
     # renderer in the domain looks odd until you see what it is for: the
     # block a *refusal* prints is the block a listing prints, so a name two
     # files define reads the same in both. A consumer rendering its own
