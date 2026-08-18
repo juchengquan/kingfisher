@@ -539,6 +539,23 @@ def test_the_harness_package_is_the_one_speaking_to_the_harness():
 #: The enforced import rule is scoped to *foreign* packages on purpose (L4a), so
 #: nothing here forbids these edges. What it forbids is a fourth one arriving
 #: unremarked.
+def _harness_consumers() -> list[Path]:
+    """Every module the harness table is about, in both layers that reach it.
+
+    One function rather than the same comprehension in three places, and that
+    is not tidiness: a mutation narrowing it back to `infrastructure/` survived
+    twice. The first time because both rules pass when the table is complete --
+    a rule with no cases passes -- and the second because the test written to
+    catch that restated the walk instead of calling it, so it tested its own
+    copy. `_repository_root` grew a parameter for the same reason.
+    """
+    return [
+        path
+        for path in [*_modules_in("infrastructure"), *_modules_in("application")]
+        if "harness" not in path.parts
+    ]
+
+
 HARNESS_EDGES: dict[str, frozenset[str]] = {
     # Reads the registry to answer which skill names a deployment already
     # offers. Left a direct import rather than inverted through a port: the port
@@ -551,6 +568,11 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
     "inventory": frozenset({"agent"}),
+    # The service is the harness's largest consumer, and was never in this table
+    # because the rule only walked `infrastructure/`. Running a turn *is* driving
+    # the harness: an agent to run, a checkpointer to resume it, a run log to
+    # record it, and the runtime that turns its stream into events.
+    "service": frozenset({"agent", "checkpointing", "runlog", "runtime"}),
 }
 
 
@@ -596,9 +618,11 @@ def test_only_the_named_adapters_reach_into_the_harness():
     adapter took the coupling on.
     """
     escaped: list[str] = []
-    for path in _modules_in("infrastructure"):
-        if "harness" in path.parts:
-            continue
+    # Both layers, and `application` was missing until `inventory` moved there
+    # and took its edge out of sight. The hole was older than that move:
+    # `application/service.py` has reached into four harness modules the whole
+    # time, unnamed, because this walked one directory.
+    for path in _harness_consumers():
         allowed = HARNESS_EDGES.get(path.stem, frozenset())
         if extra := _harness_reach(path) - allowed:
             escaped.append(f"{_module_id(path)} -> harness.{{{', '.join(sorted(extra))}}}")
@@ -610,6 +634,26 @@ def test_only_the_named_adapters_reach_into_the_harness():
     )
 
 
+def test_the_harness_rule_looks_at_both_layers():
+    """A rule with no cases passes, and both halves above have none by design:
+    every edge is named, so narrowing the walk back to `infrastructure/` alone
+    changes no result. A mutation proved it -- the walk could stop seeing
+    `application/` entirely and the suite stayed green.
+
+    So the coverage is asserted rather than the outcome. `application/service.py`
+    is the largest consumer of the harness in the repository and went unwatched
+    for as long as this rule walked one directory.
+    """
+    walked = {path.stem for path in _harness_consumers()}
+
+    assert "service" in walked, "the rule stopped reading application/"
+    assert "inventory" in walked
+    assert _harness_reach(SRC / "application" / "service.py"), (
+        "service.py reaches into the harness, so it is a real case rather than "
+        "a name in a set"
+    )
+
+
 def test_every_named_harness_edge_is_a_real_one():
     """The other half, so the table cannot outlive what it describes.
 
@@ -618,11 +662,7 @@ def test_every_named_harness_edge_is_a_real_one():
     load-bearing. `THIRD_PARTY` carries the same promise one comment up:
     "measured, not declared".
     """
-    actual = {
-        path.stem: _harness_reach(path)
-        for path in _modules_in("infrastructure")
-        if "harness" not in path.parts
-    }
+    actual = {path.stem: _harness_reach(path) for path in _harness_consumers()}
     stale = [
         f"{module} -> harness.{{{', '.join(sorted(named - actual.get(module, set())))}}}"
         for module, named in HARNESS_EDGES.items()

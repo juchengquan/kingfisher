@@ -15,7 +15,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.inventory import Inventory, inventory
+from kingfisher.application.inventory import Inventory, inventory
 
 A_TOOL = '''
 from langchain_core.tools import tool
@@ -229,7 +229,7 @@ def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
     """A caller that already has one hands it over. Resolving again is not just
     waste -- it is a second read of the same directories, which is how the two
     halves came to disagree in the first place."""
-    from kingfisher.infrastructure import inventory as module
+    from kingfisher.application import inventory as module
     from kingfisher.infrastructure.catalogue import resolve_catalogue
 
     already = resolve_catalogue(cfg)

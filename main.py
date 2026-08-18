@@ -189,8 +189,8 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     would have cost 23 edits across 8 files to buy something this import already
     gives.
     """
+    from kingfisher.application.inventory import inventory  # noqa: PLC0415
     from kingfisher.cli.listing import failed, render  # noqa: PLC0415
-    from kingfisher.infrastructure.inventory import inventory  # noqa: PLC0415
 
     found = inventory(cfg)
     for line in render(found, workspace=workspace):
@@ -339,7 +339,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     Only called when a `--without-*` flag asked, so a run that does not subtract
     still pays nothing for it.
     """
-    from kingfisher.infrastructure.inventory import inventory  # noqa: PLC0415
+    from kingfisher.application.inventory import inventory  # noqa: PLC0415
 
     return inventory(cfg).offered
 
