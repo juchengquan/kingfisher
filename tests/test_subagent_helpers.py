@@ -7,9 +7,10 @@ right: `create_sub_agent` does call `create_agent` with the spec's tools and no
 what supplies `task` to the main agent -- so the format could express it all
 along, through the one field it already had.
 
-One level, and the bound is structural: a helper is built by a call that is not
-passed helpers of its own. There is no counter and no cycle detection, because
-the code that would build a second level never runs.
+It nests to any depth now. What stops a catalogue building forever is
+`refuse_cycles`, checked over the whole catalogue at load -- there is no depth
+bound, because with each definition compiled once rather than once per path,
+depth costs nothing to allow.
 """
 
 from __future__ import annotations
@@ -20,7 +21,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.domain.subagent import SubagentError, refuse_helpers_with_helpers
+from kingfisher.domain.subagent import SubagentError, refuse_cycles
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel
@@ -39,9 +40,18 @@ system_prompt: |
 """
 
 
-#: The same helper, but with helpers of its own -- which is what the one-level
-#: rule refuses, and the only shape a cycle could be written in.
-NESTED_HELPER = HELPER.replace("system_prompt:", "subagents: [reviewer]\nsystem_prompt:")
+#: The same helper, naming `reviewer` back. Legal shape, illegal graph: this is
+#: the two-cycle, and the only thing between it and an endless build.
+CYCLIC_HELPER = HELPER.replace("system_prompt:", "subagents: [reviewer]\nsystem_prompt:")
+
+#: A third level. `reviewer` consults `second-opinion`, which consults `checker`.
+CHECKER = """name: checker
+description: Checks the checker.
+system_prompt: |
+  You are the last word.
+"""
+
+NESTING_HELPER = HELPER.replace("system_prompt:", "subagents: [checker]\nsystem_prompt:")
 
 
 def _define(cfg, *definitions: str) -> None:
@@ -82,6 +92,18 @@ def _helper(graph, delegate: str, name: str):
     return _subagent_graphs(_delegate(graph, delegate))[name]
 
 
+def _delegates_of(graph) -> set[str]:
+    """The delegates this compiled agent can reach, by name.
+
+    Read off the compiled graphs rather than the spec that asked for them: a
+    spec carrying `middleware` proves what was requested, and the whole question
+    at depth is whether the level below was actually built.
+    """
+    from tests.test_delegation_ceiling import _subagent_graphs
+
+    return set(_subagent_graphs(graph))
+
+
 def _tools_of(graph) -> set[str]:
     node = getattr(graph, "nodes", {}).get("tools")
     by_name = getattr(getattr(node, "bound", None), "tools_by_name", {})
@@ -110,40 +132,58 @@ def test_naming_none_is_the_default(tmp_path):
 # -- one level, structurally ----------------------------------------------
 
 
-def test_a_helper_with_helpers_is_refused_when_the_catalogue_loads(cfg, session_dir):
-    """The bound, and where it is enforced: on the definitions, not on a
-    request, because a set of files is either coherent or it is not."""
-    _define(cfg, REVIEWER, NESTED_HELPER)
+def test_a_helper_may_have_helpers_of_its_own(cfg, session_dir):
+    """Three levels, which the format refused until now. `reviewer` consults
+    `second-opinion`, which consults `checker`."""
+    _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
 
-    with pytest.raises(SubagentError, match="delegation goes one level"):
+    graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
+    helper = _helper(graph, "reviewer", "second-opinion")
+
+    assert "checker" in _delegates_of(helper)
+
+
+def test_a_cycle_is_refused_when_the_catalogue_loads(cfg, session_dir):
+    """The only thing left standing between a catalogue and an endless build,
+    now that depth is unbounded. Enforced on the definitions rather than on a
+    request, because a set of files is either coherent or it is not."""
+    _define(cfg, REVIEWER, CYCLIC_HELPER)
+
+    with pytest.raises(SubagentError, match="reach themselves"):
         _build(cfg, session_dir)
 
 
-def test_the_refusal_names_both_files(cfg, session_dir):
-    """Whoever reads it may own neither: adding one line to `reviewer.yaml` is
-    what made `second-opinion.yaml` invalid, and it was not edited."""
-    _define(cfg, REVIEWER, NESTED_HELPER)
+def test_the_refusal_names_the_whole_loop(cfg, session_dir):
+    """One edge does not say which link to cut, and whoever reads this may own
+    none of the files in it."""
+    _define(cfg, REVIEWER, CYCLIC_HELPER)
 
     with pytest.raises(SubagentError) as raised:
         _build(cfg, session_dir)
 
-    assert "reviewer" in str(raised.value)
-    assert "second-opinion" in str(raised.value)
+    assert "reviewer -> second-opinion -> reviewer" in str(raised.value)
 
 
-def test_a_cycle_cannot_be_written_at_all():
-    """`reviewer` -> `second-opinion` -> `reviewer` needs a helper with helpers.
-
-    Asserted against the rule directly, because the interesting claim is that
-    the shape is unspellable rather than that one instance is caught.
-    """
+def test_a_definition_reached_twice_is_not_a_cycle():
+    """The distinction the check exists to draw. A diamond reaches `checker` by
+    two routes and is perfectly coherent; a loop reaches a name already on the
+    path being walked. Testing `seen` before the path is what made an earlier
+    version of this pass every cycle."""
     specs = {
         "reviewer": read_subagent(REVIEWER, Path("reviewer.yaml")),
-        "second-opinion": read_subagent(NESTED_HELPER, Path("second-opinion.yaml")),
+        "second-opinion": read_subagent(NESTING_HELPER, Path("second-opinion.yaml")),
+        "checker": read_subagent(CHECKER, Path("checker.yaml")),
     }
 
-    with pytest.raises(SubagentError, match="one level"):
-        refuse_helpers_with_helpers(specs)
+    refuse_cycles(specs)  # no raise
+
+
+def test_a_definition_naming_itself_is_a_cycle():
+    """The one-node loop, which a check written around pairs would miss."""
+    body = HELPER.replace("system_prompt:", "subagents: [second-opinion]\nsystem_prompt:")
+
+    with pytest.raises(SubagentError, match="second-opinion -> second-opinion"):
+        refuse_cycles({"second-opinion": read_subagent(body, Path("second-opinion.yaml"))})
 
 
 def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
@@ -281,3 +321,61 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
     # that makes a helper worth having rather than just another tool call.
     assert "SECOND-OPINION-ANSWERED" not in transcript
 
+
+
+# -- what nesting must not have loosened ------------------------------------
+
+
+def test_a_nested_agent_gets_no_unrestricted_delegate(cfg, session_dir):
+    """`DeclaredDelegatesOnly` is applied to the main agent and nowhere else.
+
+    That was sufficient while nothing below the top held `task`. It nests now,
+    so the question is live: deepagents supplies a `general-purpose` delegate
+    "with the same capabilities as the main agent" wherever it builds one, and
+    a nested agent holding an unrestricted delegate would hand back everything
+    the request withheld, one level down where nothing is watching.
+
+    Measured rather than reasoned: `create_deep_agent` adds it, and
+    `SubAgentMiddleware` does not. So the backstop stays where it is -- and this
+    is what fails if an upgrade changes that.
+    """
+    _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
+
+    graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
+    nested = _delegate(graph, "reviewer")
+
+    assert "task" in _tools_of(nested), "a delegate with helpers needs task to reach them"
+    assert "general-purpose" not in _delegates_of(nested)
+
+
+def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monkeypatch):
+    """Once per definition, not once per path -- the difference between linear
+    and exponential, and the thing that makes reuse affordable.
+
+    Twice rather than once because a top-level delegate and a nested one are
+    not the same agent: the first inherits its model and tools, the second is
+    refused by deepagents without them.
+    """
+    shared = HELPER.replace("second-opinion", "shared")
+    left = REVIEWER.replace("reviewer", "left").replace("second-opinion", "shared")
+    right = REVIEWER.replace("reviewer", "right").replace("second-opinion", "shared")
+    _define(cfg, left, right, shared)
+
+    from kingfisher.infrastructure.harness import delegation
+
+    built: list[str] = []
+    real = delegation.as_subagent
+    monkeypatch.setattr(
+        delegation,
+        "as_subagent",
+        lambda spec, *a, **k: (built.append(spec.name), real(spec, *a, **k))[1],
+    )
+    monkeypatch.setattr("kingfisher.infrastructure.harness.agent.as_subagent",
+                        delegation.as_subagent)
+
+    _build(cfg, session_dir, subagents=("left", "right", "shared"))
+
+    assert built.count("shared") == 2, (
+        f"`shared` is reached by two parents and activated directly; it should "
+        f"compile once per position, got {built}"
+    )
