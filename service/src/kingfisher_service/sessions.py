@@ -21,6 +21,7 @@ puts `_prepare` behind `asyncio.to_thread`.
 from __future__ import annotations
 
 from fastapi import APIRouter, Depends, HTTPException, Response, status
+from pydantic import BaseModel, ConfigDict
 
 # Imported for real, not under `TYPE_CHECKING`: fastapi resolves a handler`s
 # annotations at runtime, and an unresolvable one is read as a body field --
@@ -32,16 +33,60 @@ from kingfisher_service.payloads import session_payload
 router = APIRouter(tags=["sessions"])
 
 
-@router.post("/sessions", status_code=status.HTTP_201_CREATED)
-def open_session(kf: Kingfisher = Depends(kingfisher_of)) -> dict[str, str]:  # noqa: B008
-    """Start a session and return its id.
+class OpenBody(BaseModel):
+    """What opening a session takes: the agent it will run.
 
-    The only way a session comes into existence with a name someone chose. A
-    *request* may not create one -- its id may have come from whoever is calling
-    the service, and an id that could create would let that caller choose, or
-    guess, somebody else's. Hence no `session_id` in this body.
+    Required, and here rather than on a turn because this is where the choice is
+    actually made. A session runs one agent for its whole life, so the mistake
+    happens once, at the point that decides it, instead of being re-checked on
+    every turn afterwards.
+
+    Still no `session_id`. An id names a conversation and the files beside it,
+    so it is a bearer credential -- and one a caller could choose would let them
+    name, or guess, somebody else's.
     """
-    return {"session_id": kf.start_session()}
+
+    model_config = ConfigDict(extra="forbid")
+
+    agent: str
+
+
+@router.post("/sessions", status_code=status.HTTP_201_CREATED)
+def open_session(
+    body: OpenBody,
+    kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
+) -> dict[str, object]:
+    """Start a session on one agent and say what that resolved to.
+
+    The response carries the resolution rather than only the id, because it is
+    the one moment a caller can be told what they got without running a turn:
+    the agent is resolved and pinned right here. What it names -- its model, its
+    delegates -- is decided now and cannot change for the life of the session.
+    """
+    spec = kf.agent_named(body.agent)
+    session_id = kf.start_session()
+    # Fixed to the session at the same moment it is reported, so the two cannot
+    # disagree: what this says is what every turn will be built from.
+    kf.remember_agent(session_id, body.agent)
+    return {
+        "session_id": session_id,
+        "agent": {
+            "name": spec.name,
+            "description": spec.description,
+            "skills": _named(spec.skills),
+            "subagents": _named(spec.subagents),
+        },
+    }
+
+
+def _named(selection: object) -> object:
+    """A selection as JSON says it: a list, `"*"`, or `null`.
+
+    The wire spelling rather than the library's, for the reason the capabilities
+    model gives: a JSON caller writes `"*"` because there is nothing else to
+    write.
+    """
+    return list(selection) if isinstance(selection, tuple) else selection
 
 
 @router.get("/sessions/{session_id}")

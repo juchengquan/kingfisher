@@ -27,7 +27,7 @@ from types import MappingProxyType
 
 from kingfisher.config import Config
 from kingfisher.domain.agent import AgentError
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.domain.tool import Offering
@@ -209,6 +209,13 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
                     session_dir=Path(scratch),
                     catalogue=resolved,
                     workspace_tools=found,
+                    # No delegates. What a workspace *offers* is answered from
+                    # the catalogue a few lines down; this build exists solely to
+                    # read the built-in tool set off a compiled graph, and wiring
+                    # a roster to do it would make a listing refuse the very
+                    # things it is meant to report -- two definitions of a name
+                    # are printed here, not raised.
+                    capabilities=Capabilities(subagents=None),
                 )
             )
         if introspected is None:

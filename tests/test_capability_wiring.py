@@ -57,8 +57,13 @@ def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.yaml"):
 
 
 def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
-    """The default has to stay zero-cost, or every existing caller pays for a
-    feature it never asked for."""
+    """The default narrows nothing, which is what it has always meant.
+
+    `subagents` no longer proves that by being absent -- every axis defaults to
+    `"*"` now, and `"*"` means whatever the agent declares. A workspace with no
+    delegates in it still hands the build none, which is what this asserts;
+    filtering is the thing that must not appear.
+    """
     captured = capture_build(monkeypatch)
     build_agent(
         cfg,
@@ -68,7 +73,7 @@ def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
     names = {type(m).__name__ for m in captured["middleware"]}
     assert "ToolAllowlist" not in names
     assert "NarrowedSkills" not in names
-    assert "subagents" not in captured
+    assert not captured.get("subagents")
 
 
 def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, session_dir):

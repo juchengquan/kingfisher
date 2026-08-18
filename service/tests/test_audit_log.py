@@ -69,7 +69,7 @@ def test_the_reason_matches_what_the_caller_was_told(audited, caplog):
     """One code, both sides. That is what makes a line here and the response a
     caller got correlatable without a request id neither of them keeps."""
     http = audited()
-    session = http.post("/sessions").json()["session_id"]
+    session = http.post("/sessions", json={"agent": "only"}).json()["session_id"]
     (http.kingfisher.cfg.state_dir / "claims" / session).mkdir(parents=True, exist_ok=True)
 
     response = http.post(f"/sessions/{session}/turns", json={"task": "go"})
@@ -146,7 +146,7 @@ def test_a_deployment_error_is_audited_as_the_500_it_is(cfg, caplog):
 
 def test_a_turn_is_recorded_once_when_it_ends(audited, caplog):
     http = audited()
-    session = http.post("/sessions").json()["session_id"]
+    session = http.post("/sessions", json={"agent": "only"}).json()["session_id"]
     caplog.clear()
 
     http.post(f"/sessions/{session}/turns", json={"task": "go"})

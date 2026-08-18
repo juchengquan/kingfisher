@@ -207,6 +207,23 @@ def dispatched(graph) -> tuple[str, ...]:
     return names
 
 
+def an_agent(cfg, name: str = "only", **fields: str) -> str:
+    """Write one agent into this workspace and return its name.
+
+    A helper because naming an agent is required now, so every test that runs a
+    *request* needs a workspace holding one -- and a test about withheld tools
+    or per-request builds should say that in one line rather than in a YAML
+    block it does not care about.
+    """
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    written = "".join(f"{key}: {value}\n" for key, value in fields.items())
+    (directory / f"{name}.yaml").write_text(
+        f"name: {name}\ndescription: An agent.\n{written}", encoding="utf-8"
+    )
+    return name
+
+
 def subagents_dir(cfg) -> Path:
     """Where this config's subagent definitions live.
 

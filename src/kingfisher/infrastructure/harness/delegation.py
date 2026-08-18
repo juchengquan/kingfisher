@@ -23,6 +23,7 @@ from urllib.parse import urlsplit
 from deepagents.middleware import SubAgentMiddleware
 
 from kingfisher.config import ConfigError
+from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     ALL,
     Selection,
@@ -31,7 +32,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_endpoint,
     refuse_unoffered,
 )
-from kingfisher.domain.subagent import RunOn, SubagentError
+from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.domain.tool import Found, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.models import build_model
@@ -42,7 +43,6 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from kingfisher.config import Config
-    from kingfisher.domain.subagent import SubagentSpec
 
 def subagent_skills(
     spec: SubagentSpec, available: tuple[str, ...], activated: Selection
@@ -137,8 +137,30 @@ def _host(url: str) -> str:
     return urlsplit(url).netloc
 
 
+def _must_differ(spec: SubagentSpec | AgentSpec) -> bool:
+    """Whether this definition refuses to run the model that summoned it.
+
+    Only a delegate can. `distinct` is refused in an agent file because nothing
+    summons an agent, so there is nothing for it to differ from -- which makes
+    this the one line the two formats need between them, rather than a second
+    copy of the resolution below.
+    """
+    return isinstance(spec, SubagentSpec) and spec.distinct
+
+
+def _subject(spec: SubagentSpec | AgentSpec) -> str:
+    """How a refusal names the file it is about.
+
+    Two folders hold definitions that look alike, so "which kind" is the first
+    thing somebody reading the error needs -- it decides which directory they
+    open.
+    """
+    kind = "subagent" if isinstance(spec, SubagentSpec) else "agent"
+    return f"{kind} {spec.name!r}"
+
+
 def model_for(
-    spec: SubagentSpec,
+    spec: SubagentSpec | AgentSpec,
     cfg: Config,
     *,
     override: RunOn | None = None,
@@ -158,7 +180,7 @@ def model_for(
     unbound and left to grep for whoever wanted it -- and this is the one
     refusal that fires on a file they may not own.
     """
-    candidates = resolved_model(spec, override=override)
+    candidates = resolved_model(spec.wanted, override=override)
     if not candidates:
         return None  # it asked for nothing: run whatever the deployment runs
 
@@ -176,7 +198,7 @@ def model_for(
                 # and an alias nobody bound is precisely one it anticipated.
                 passed_over.append(f"alias {wanted.alias!r}: {exc}")
                 continue
-        if spec.distinct and (why := indistinct(spec, cfg, model=model, caller=caller)):
+        if _must_differ(spec) and (why := indistinct(spec, cfg, model=model, caller=caller)):
             passed_over.append(f"{model!r} {why}")
             continue
         return model
@@ -187,7 +209,7 @@ def model_for(
     # this is the one refusal that fires on a file they may not own.
     reasons = "; ".join(passed_over)
     msg = (
-        f"subagent {spec.name!r}: none of the {len(candidates)} model(s) it names "
+        f"{_subject(spec)}: none of the {len(candidates)} model(s) it names "
         f"can be used here -- {reasons}"
     )
     raise ConfigError(msg)
@@ -198,7 +220,7 @@ def model_object(  # noqa: PLR0913 -- six things decide which model a delegate
     # binds, which endpoints this request may reach, what the request overrode,
     # what it inherits when it names nothing, and what it may not match. Folding
     # any pair together would hide which of the six produced the answer.
-    spec: SubagentSpec,
+    spec: SubagentSpec | AgentSpec,
     cfg: Config,
     *,
     endpoints: Selection = ALL,
@@ -237,16 +259,18 @@ def model_object(  # noqa: PLR0913 -- six things decide which model a delegate
         # *who asked*. Without the name the reader is told `gpt-5` cannot be
         # run and left to grep the catalogue for whoever wanted it -- and
         # this is the one refusal that fires on a file they may not own.
-        msg = f"subagent {spec.name!r}: {exc}"
+        msg = f"{_subject(spec)}: {exc}"
         raise ConfigError(msg) from exc
-    refuse_ungranted_endpoint(
-        profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
-    )
+    refuse_ungranted_endpoint(profile.endpoint, granted=endpoints, subject=_subject(spec))
     return build_model(profile, endpoint)
 
 
 def indistinct(
-    spec: SubagentSpec, cfg: Config, *, model: str | None, caller: str | None = None
+    spec: SubagentSpec | AgentSpec,
+    cfg: Config,
+    *,
+    model: str | None,
+    caller: str | None = None,
 ) -> str | None:
     """Why this delegate is not running anywhere different, or `None`.
 
@@ -277,7 +301,12 @@ def indistinct(
     # a MiniMax default, found a difference, and let the two run side by side.
     # Which is the answer this whole function exists to catch.
     against = cfg.models.default if caller is None else caller
-    whose = "the main agent" if caller is None else "the delegate that summoned it"
+    # "whatever", not "the delegate". A summoner used to be one, because only a
+    # delegate could name a model above another; an agent can now, so naming the
+    # kind here would be wrong exactly when the agent is the one that pinned it.
+    # `None` still means the main agent on the deployment's own model, which is
+    # the one case this can name precisely.
+    whose = "the main agent" if caller is None else "whatever summoned it"
     if model == against:
         return f"runs {model!r}, the same model as {whose}"
     profile, endpoint = cfg.models.resolve(model)

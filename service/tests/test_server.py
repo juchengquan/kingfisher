@@ -34,7 +34,7 @@ def client(cfg):
 def test_opening_a_session_returns_an_id_the_library_can_see(client):
     """The two halves agreeing is the point: an id minted over HTTP is a
     session, not a token the server invented and holds somewhere."""
-    response = client.post("/sessions")
+    response = client.post("/sessions", json={"agent": "only"})
 
     assert response.status_code == 201
     session_id = response.json()["session_id"]
@@ -44,16 +44,21 @@ def test_opening_a_session_returns_an_id_the_library_can_see(client):
 def test_a_request_cannot_choose_a_session_id(client):
     """T2, at the edge. A supplied id may resume but never create, so there is
     no field for one here -- a service forwarding an id from its own caller
-    would otherwise let that caller choose, or guess, somebody else's."""
-    response = client.post("/sessions", json={"session_id": "chosen"})
+    would otherwise let that caller choose, or guess, somebody else's.
 
-    assert response.status_code == 201
-    assert response.json()["session_id"] != "chosen"
+    Refused rather than ignored, which is stronger than it used to be: this body
+    forbids what it does not define, so a caller who believed the field worked
+    is told it does not, instead of getting a 201 and a different id than the one
+    they think they hold.
+    """
+    response = client.post("/sessions", json={"agent": "only", "session_id": "chosen"})
+
+    assert response.status_code == 422
     assert client.kingfisher.session("chosen") is None
 
 
 def test_reading_a_session_reports_its_id_and_when_it_was_used(client):
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     body = client.get(f"/sessions/{session_id}").json()
 
@@ -64,7 +69,7 @@ def test_reading_a_session_reports_its_id_and_when_it_was_used(client):
 def test_what_comes_back_names_no_path(client):
     """A caller handed a directory would start reading files out of it, and the
     layout would become a contract nobody wrote down."""
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     body = client.get(f"/sessions/{session_id}").json()
 
@@ -82,7 +87,7 @@ def test_reading_a_session_does_not_disturb_it(client, cfg):
     import os
     import time
 
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
     directory = cfg.workspace / "sessions" / session_id
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
@@ -94,7 +99,7 @@ def test_reading_a_session_does_not_disturb_it(client, cfg):
 
 
 def test_deleting_a_session_removes_it(client):
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     assert client.delete(f"/sessions/{session_id}").status_code == 204
 
@@ -113,7 +118,7 @@ def test_there_is_no_way_to_list_sessions(client):
     """A session id is a bearer credential, so a collection endpoint hands out
     every credential on the box. Whatever knows whose sessions are whose calls
     `sessions()` in-process."""
-    client.post("/sessions")
+    client.post("/sessions", json={"agent": "only"})
 
     assert client.get("/sessions").status_code in (404, 405)
 
@@ -158,7 +163,7 @@ def test_the_app_serves_the_instance_it_was_given(cfg):
     app = create_app(service)
 
     with TestClient(app) as http:
-        session_id = http.post("/sessions").json()["session_id"]
+        session_id = http.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     assert app.state.kingfisher is service
     assert service.session(session_id) is not None
@@ -603,7 +608,7 @@ def test_every_refusal_has_the_same_shape(client, case):
 def test_a_busy_session_refuses_in_the_same_shape(client, cfg):
     """The turn path raises rather than building a response, so it arrives at
     the same handler as everything else."""
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
     (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
 
     response = client.post(f"/sessions/{session_id}/turns", json={"task": "go"})
@@ -816,3 +821,33 @@ def test_references_without_a_wired_store_are_the_deployments_problem(cfg):
         )
 
     assert response.status_code == 500
+
+
+def test_opening_a_session_requires_an_agent(client):
+    """No default and no implicit one. The agent decides where every prompt in
+    the session goes and what it costs, so a body without one is a 422 rather
+    than a guess."""
+    assert client.post("/sessions", json={}).status_code == 422
+
+
+def test_opening_a_session_says_what_it_resolved(client):
+    """The one moment a caller can be told what they got without running a turn.
+
+    The agent is resolved and pinned right here, so reporting it costs nothing
+    and answers the question a caller would otherwise have to infer from a
+    turn's behaviour.
+    """
+    body = client.post("/sessions", json={"agent": "only"}).json()
+
+    assert body["agent"]["name"] == "only"
+    assert "description" in body["agent"]
+
+
+def test_an_unknown_agent_is_refused_before_a_session_exists(client):
+    """Nothing is created for a request that cannot be served. A session left
+    behind by a refused open is one more thing for retention to reap, and one
+    more id a caller holds and cannot use."""
+    response = client.post("/sessions", json={"agent": "nobody"})
+
+    assert response.status_code >= 400
+    assert client.kingfisher.sessions() == ()

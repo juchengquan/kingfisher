@@ -25,7 +25,7 @@ from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import indistinct_delegates
 from kingfisher.infrastructure.harness.delegation import model_for
-from tests.conftest import subagents_dir
+from tests.conftest import an_agent, subagents_dir
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
@@ -202,9 +202,11 @@ def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
 
 
 def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir):
+    """Written `subagents=None` rather than left at the default, which stopped
+    meaning "none" once an agent could declare a roster of its own."""
     _define(cfg, ASKED)
 
-    assert indistinct_delegates(cfg, Capabilities(), session_dir) == ()
+    assert indistinct_delegates(cfg, Capabilities(subagents=None), session_dir) == ()
 
 
 # -- an override counts as asking too --------------------------------------
@@ -240,11 +242,17 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
 
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
+    an_agent(same, subagents="[second-opinion]")
     service = Kingfisher(same)
     service.start_session("s")
 
     admitted = service._admit(
-        Request("go", session_id="s", capabilities=Capabilities(subagents=("second-opinion",)))
+        Request(
+            "go",
+            agent="only",
+            session_id="s",
+            capabilities=Capabilities(subagents=("second-opinion",)),
+        )
     )
 
     (name, why) = admitted.indistinct[0]
@@ -262,11 +270,17 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     from kingfisher import Kingfisher
 
     _define(cfg, ASKED_FOR_NOTHING)
+    an_agent(cfg, subagents="[reviewer]")
     service = Kingfisher(cfg)
     service.start_session("quiet")
 
     admitted = service._admit(
-        Request("go", session_id="quiet", capabilities=Capabilities(subagents=("reviewer",)))
+        Request(
+            "go",
+            agent="only",
+            session_id="quiet",
+            capabilities=Capabilities(subagents=("reviewer",)),
+        )
     )
 
     assert admitted.indistinct == ()
@@ -368,7 +382,7 @@ def test_a_delegate_that_must_differ_is_measured_against_who_summoned_it(cfg):
     assert model_for(spec, cfg) == "elsewhere-model"
 
     # Under a delegate already running that model, it is not.
-    with pytest.raises(ConfigError, match="same model as the delegate that summoned it"):
+    with pytest.raises(ConfigError, match="same model as whatever summoned it"):
         model_for(spec, cfg, caller="elsewhere-model")
 
 

@@ -115,13 +115,17 @@ class Capabilities:
     #: The tools this workspace defines, loaded from `tools/`.
     tools: Selection = ALL
     skills: Selection = ALL
-    #: `None`, alone among these, and it is not an inconsistency in the model --
-    #: it is the one axis whose default differs from the others, for a reason
-    #: the model can now state. Wiring a subagent compiles a whole graph, at a
-    #: measured 4.3ms each, so a workspace with eight of them would charge every
-    #: unrestricted turn ~34ms for delegates it may never call. `"*"` here means
-    #: every subagent defined, and a request that wants them says so.
-    subagents: Selection = None
+    #: `"*"` like the rest, which it was not until an agent could declare a
+    #: roster. It defaulted to `None` because wiring a subagent compiles a whole
+    #: graph -- a measured 4.3ms each -- so a workspace with eight of them
+    #: charged every unrestricted turn ~34ms for delegates it might never call.
+    #:
+    #: That cost argument has not gone away; it has moved to where it can be
+    #: answered. `"*"` means *everything this agent declares*, and an agent
+    #: declares the delegates it calls -- so the set is small and deliberate
+    #: rather than "whatever the workspace happens to hold". A request naming
+    #: none is no longer the only way to avoid paying for eight.
+    subagents: Selection = ALL
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike the three above it is never widened by `including` -- see there.
     middleware: Selection = ALL
@@ -547,15 +551,17 @@ def approved_middleware(
     return tuple(declared)
 
 
-#: Permits everything, which is not the same as the default a request gets.
+#: What a deployment permits when it says nothing, which is now exactly the
+#: default a request gets.
 #:
-#: One type serves two jobs -- what a request *asks for*, and what a deployment
-#: *permits* -- and `subagents` is where they part. A request that says nothing
-#: should wire no delegates, because each one compiles a graph it may never use.
-#: A deployment that says nothing should permit all of them, or the first
-#: request to name one is clamped to nothing by a grant nobody wrote.
+#: It was a second constant, because one type served two jobs -- what a request
+#: *asks for* and what a deployment *permits* -- and `subagents` was where they
+#: parted. A request saying nothing had to wire no delegates on cost grounds; a
+#: grant saying nothing had to permit all of them, or the first request to name
+#: one was clamped to nothing by a grant nobody wrote.
 #:
-#: So `Capabilities()` is the request default and this is the grant default, and
-#: the difference is one field. It was found by a test: a request naming a
-#: subagent was silently narrowed away by `Capabilities().intersect(...)`.
-UNRESTRICTED = Capabilities(subagents=ALL)
+#: The agent file settled that. `"*"` on either side means "everything this
+#: agent declares", so both jobs want the same answer and there is one default
+#: again. Kept as a name rather than deleted, because `granted.intersect(asked)`
+#: reads better when the left-hand side says what it is.
+UNRESTRICTED = Capabilities()

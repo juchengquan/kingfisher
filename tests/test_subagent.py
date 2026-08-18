@@ -400,7 +400,7 @@ def _spec(*models: str, distinct: bool = False) -> SubagentSpec:
 
 
 def test_a_definition_that_pins_nothing_runs_what_everything_else_does():
-    assert resolved_model(_spec()) == ()
+    assert resolved_model(_spec().wanted) == ()
 
 
 def test_the_definition_decides():
@@ -413,13 +413,13 @@ def test_the_definition_decides():
     model through a catalogue only `Config` holds -- so it is
     `refuse_ungranted_endpoint`, called where the lookup happens.
     """
-    assert resolved_model(_spec("gpt-5")) == (Wanted(model="gpt-5"),)
+    assert resolved_model(_spec("gpt-5").wanted) == (Wanted(model="gpt-5"),)
 
 
 def test_a_request_replaces_what_the_file_said():
     """Wholesale, which is now the only shape an override can have: there is no
     second field to take half of."""
-    assert resolved_model(_spec("gpt-5"), override=RunOn(model="cheap-one")) == (
+    assert resolved_model(_spec("gpt-5").wanted, override=RunOn(model="cheap-one")) == (
         Wanted(model="cheap-one"),
     )
 
@@ -544,7 +544,7 @@ def test_an_alias_is_carried_through_resolution(tmp_path):
         name="r", description="d", system_prompt="Go.", wanted=(Wanted(alias="cheap"),)
     )
 
-    assert resolved_model(spec) == (Wanted(alias="cheap"),)
+    assert resolved_model(spec.wanted) == (Wanted(alias="cheap"),)
 
 
 def test_an_override_replaces_an_alias_rather_than_joining_it(tmp_path):
@@ -554,7 +554,7 @@ def test_an_override_replaces_an_alias_rather_than_joining_it(tmp_path):
         name="r", description="d", system_prompt="Go.", wanted=(Wanted(alias="cheap"),)
     )
 
-    assert resolved_model(spec, override=RunOn(model="gpt-5")) == (Wanted(model="gpt-5"),)
+    assert resolved_model(spec.wanted, override=RunOn(model="gpt-5")) == (Wanted(model="gpt-5"),)
 
 
 def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):

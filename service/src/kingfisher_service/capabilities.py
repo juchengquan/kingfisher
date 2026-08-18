@@ -15,8 +15,10 @@ holds the two in step.
 The direction of that mistake is not uniform, which is why it cannot be reasoned
 about axis by axis in the head. `builtin_tools`, `tools`, `skills`, `middleware`
 and `endpoints` default to `"*"`, so collapsing absent into null fails closed.
-`subagents`, `models` and `memory` default to `None`, so the same collapse hands
-back the default to a caller who explicitly asked for nothing.
+`models` and `memory` default to `None`, so the same collapse hands back the
+default to a caller who explicitly asked for nothing. `subagents` was in that
+list until an agent could declare its own roster; it defaults to `"*"` now, like
+the five above it, and `"*"` means whatever that agent declares.
 
 This is the second time this shape has caused trouble. `Selection` used to spell
 "no opinion" as `None`, and the capabilities docstring records why it stopped:
@@ -60,7 +62,10 @@ class CapabilitiesBody(BaseModel):
     builtin_tools: Axis = "*"
     tools: Axis = "*"
     skills: Axis = "*"
-    subagents: Axis = None
+    # The literal rather than the library's constant: this is the wire, and a
+    # JSON caller writes "*" because there is nothing else to write. The test
+    # below holds it equal to the lattice's own default.
+    subagents: Axis = "*"
     middleware: Axis = "*"
     endpoints: Axis = "*"
     models: Axis = None
