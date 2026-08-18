@@ -165,16 +165,19 @@ is louder and still too late.
   here, where a reader looking at the shipped command will find it.
 
 - ~~**Whether `list` grows a machine-readable form.**~~ Decided as B9.
-- **What `doctor` does about a check it cannot answer.** A credential can be
-  present and wrong, and the only way to find out is to spend money on a call
-  nobody asked for. The likely answer is that it reports what it *can* see and
-  says plainly that a reachable endpoint is not a working one, but nothing here
-  settles whether a `--probe` that makes one real call is worth having.
-- **Whether `doctor` and the smoke overlap.** `main.py` with no arguments runs a
-  real task and checks the result, which is the strongest possible answer to
-  "will this work". `doctor` is the cheap version that never calls a model.
-  Whether the expensive one belongs in the shipped command at all is not decided
-  here -- B1 says the shipped command does not run tasks, and a smoke is a task.
+- ~~**What `doctor` does about a check it cannot answer.**~~ Answered by
+  *2026-08-18 what-the-catalogue-dropped*, and the asking found a bug: `doctor`
+  could not report a credential that was simply *absent*, and misdiagnosed the
+  consequence as an undefined model. With that fixed the case a probe would
+  catch shrinks to present-and-rejected, and C6 declines it -- a command that
+  sometimes costs money comes out of the pipeline. The limit gets printed
+  instead of assumed.
+- ~~**Whether `doctor` and the smoke overlap.**~~ Answered by the same document
+  as C8: they barely do. The smoke checks `GROUND_TRUTH` against a fixture the
+  eval harness generates -- *does kingfisher still get its own dataset right*,
+  which is a maintainer's question, not a deployment's. B1 holds without needing
+  to be defended, and the consequence is stated rather than implied: nothing
+  shipped makes a real call, and a caller's own task is the better proof.
 - **What `list` prints for a tool's source.** Today: `csv_columns
   (csv_profile)`, which reads well and cannot be pasted into a definition —
   `profiler.yaml`'s comment was corrected to stop implying otherwise. The
