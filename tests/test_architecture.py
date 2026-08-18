@@ -265,6 +265,37 @@ def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
     }
 
 
+def test_a_harness_edge_is_seen_however_it_is_spelled(tmp_path):
+    """`_harness_reach` had the same blindness as `_imported_modules`, found
+    only after the other was fixed and the file searched for the rest.
+
+    It compares `node.module` against the harness's absolute name, so
+    `from .harness import agent` matched neither branch and the edge was lost --
+    which would let a module absent from `HARNESS_EDGES` reach the harness with
+    the rule reporting success. Its own docstring records that a first draft
+    detected none of these edges at all, so this is the second near-miss for the
+    same function.
+    """
+    package = tmp_path / "kingfisher" / "infrastructure"
+    (package / "harness").mkdir(parents=True)
+    for marker in (
+        tmp_path / "kingfisher" / "__init__.py",
+        package / "__init__.py",
+        package / "harness" / "__init__.py",
+    ):
+        marker.touch()
+
+    absolute = package / "absolute.py"
+    absolute.write_text(
+        "from kingfisher.infrastructure.harness import agent\n", encoding="utf-8"
+    )
+    relative = package / "relative.py"
+    relative.write_text("from .harness import agent\n", encoding="utf-8")
+
+    assert _harness_reach(absolute) == {"agent"}
+    assert _harness_reach(relative) == {"agent"}, "the spelling that used to hide the edge"
+
+
 def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     """Every failure message in this file is built from `_module_id`.
 
@@ -856,22 +887,35 @@ def _harness_reach(path: Path) -> set[str]:
     """Which harness modules one flat module imports, by their bare names.
 
     Its own walk rather than `_imported_modules`, which keeps only the *module*
-    of an `ImportFrom` and drops the names -- so `from ...harness import agent`
-    arrives as the bare package and the module reached is lost. That is the
-    form nearly every one of these edges is written in, and a first draft of
+    of an `ImportFrom` and drops the names -- so `from <pkg>.harness import
+    agent` arrives as the bare package and the module reached is lost. That is
+    the form nearly every one of these edges is written in, and a first draft of
     this rule read it through the shared helper and detected none of them.
     Mutation testing is the only reason that is a sentence in a docstring rather
     than a rule in the file doing nothing.
+
+    It resolves relative imports for the same reason `_imported_modules` does,
+    and it is worth saying that the two had the *same* defect independently: a
+    rule whose answer depends on how someone spelled an import is not a rule.
+    Written `from .harness import agent`, every edge here was invisible and the
+    table of who may reach the harness enforced nothing.
     """
     reached: set[str] = set()
+    package = _package_of(path)
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            if node.module == HARNESS:                      # from ...harness import agent
+        if isinstance(node, ast.ImportFrom):
+            # Resolved first, for the reason `_imported_modules` is: written
+            # relatively, `node.module` is a fragment that matches neither
+            # branch below, and the edge is simply lost. Same rule, same file,
+            # different spelling.
+            base = package[: max(len(package) - (node.level - 1), 0)] if node.level else ()
+            module = ".".join((*base, node.module)) if node.module else ".".join(base)
+            if module == HARNESS:                           # from <pkg>.harness import agent
                 reached.update(alias.name for alias in node.names)
-            elif node.module.startswith(HARNESS + "."):     # from ...harness.agent import x
-                reached.add(node.module[len(HARNESS) + 1 :].split(".")[0])
+            elif module.startswith(HARNESS + "."):          # from <pkg>.harness.agent import x
+                reached.add(module[len(HARNESS) + 1 :].split(".")[0])
         elif isinstance(node, ast.Import):
-            for alias in node.names:                        # import ...harness.agent
+            for alias in node.names:                        # import <pkg>.harness.agent
                 if alias.name.startswith(HARNESS + "."):
                     reached.add(alias.name[len(HARNESS) + 1 :].split(".")[0])
     return reached
