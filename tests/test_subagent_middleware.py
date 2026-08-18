@@ -193,3 +193,100 @@ def test_omitting_it_means_none(tmp_path):
 def test_a_request_with_no_opinion_is_still_unrestricted():
     assert Capabilities().is_unrestricted
     assert not Capabilities(middleware=()).is_unrestricted
+
+
+# -- the whole stack, pinned once -----------------------------------------
+
+
+EVERYTHING = (
+    "name: reviewer\ndescription: d\n"
+    "builtin_tools: [read_file]\ntools: [always_fails]\nskills: [tabular-qa]\n"
+    "subagents: [helper]\nmiddleware: [audit]\n"
+    "system_prompt: |\n  You review.\n"
+)
+
+HELPER = "name: helper\ndescription: d\nsystem_prompt: |\n  You help.\n"
+
+A_TOOL = '''
+from langchain_core.tools import tool
+
+
+@tool
+def always_fails(anything: str) -> str:
+    """Present so the workspace has a tool at all."""
+    raise FileNotFoundError(anything)
+
+
+TOOLS = [always_fails]
+'''
+
+
+def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, monkeypatch):
+    """The exact stack, in order, for a definition that triggers every branch.
+
+    Its neighbours deliberately do not assert this. A test about the allowlist a
+    `tools:` line produced should not fail when an unrelated guard is added, so
+    they read the entries they are about -- and that left the composition itself
+    pinned nowhere. This is the one place it is, so that adding to the stack is
+    a decision somebody makes here rather than a thing that happens.
+
+    Order is not cosmetic. The two guards wrap every call and go first, so
+    nothing below them can raise past them. `ToolAllowlist` and `NarrowedSkills`
+    are what the definition asked for. `SubAgentMiddleware` is what lets it
+    delegate at all. A deployment's own goes last, deliberately: "so a
+    deployment's middleware sees the tool and skill scoping kingfisher applied
+    rather than running ahead of it".
+    """
+    from tests.conftest import tools_dir
+    from tests.test_subagent_skills import offer_skills
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "always_fails.py").write_text(A_TOOL, encoding="utf-8")
+    offer_skills(cfg, "tabular-qa")
+    define(cfg, EVERYTHING)
+    define(cfg, HELPER, name="helper")
+
+    captured = build(
+        cfg,
+        monkeypatch,
+        registry={"audit": Audited},
+        subagents=("reviewer", "helper"),
+    )
+
+    assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == [
+        "HostPathGuard",
+        "WorkspaceToolErrors",
+        "ToolAllowlist",
+        "NarrowedSkills",
+        "SubAgentMiddleware",
+        "Audited",
+    ]
+
+
+def test_a_bare_definition_carries_three_of_them(cfg, session_dir, monkeypatch):
+    """The other end of the same pin, and it is not two.
+
+    A definition that narrows nothing is still handed an allowlist, because the
+    ceiling it is built against is the *request's* grant rather than its own
+    silence -- and that is concrete the moment a workspace defines any tool. A
+    delegate may never be offered more than whoever reached it, which is a
+    sentence about the caller and stays true of a definition that asked for
+    nothing.
+
+    The two guards are there for the reason they are always there: the backend
+    rejects host paths for a delegate exactly as it does for its parent, and a
+    workspace tool it can reach fails the same way.
+    """
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "always_fails.py").write_text(A_TOOL, encoding="utf-8")
+    define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
+
+    captured = build(cfg, monkeypatch, subagents=("reviewer",))
+
+    assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == [
+        "HostPathGuard",
+        "WorkspaceToolErrors",
+        "ToolAllowlist",
+    ]
