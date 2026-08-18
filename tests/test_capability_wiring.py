@@ -12,14 +12,14 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
     build_agent,
 )
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
-from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, capture_build, dispatched, subagents_dir
 
 SUBAGENT = """name: reviewer
@@ -67,7 +67,7 @@ def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
 
     names = {type(m).__name__ for m in captured["middleware"]}
     assert "ToolAllowlist" not in names
-    assert "ScopedSkills" not in names
+    assert "NarrowedSkills" not in names
     assert "subagents" not in captured
 
 
@@ -113,7 +113,7 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatc
         capabilities=Capabilities(skills=("other",)),
     )
 
-    scoped = [m for m in captured["middleware"] if isinstance(m, ScopedSkills)]
+    scoped = [m for m in captured["middleware"] if isinstance(m, NarrowedSkills)]
     assert len(scoped) == 1
     # Passing `skills=` would make deepagents build its own unfiltered
     # SkillsMiddleware alongside ours; ours has to be the only one.
@@ -144,7 +144,7 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, sessi
     )
 
     assert captured["skills"] == skills_sources()
-    assert not any(isinstance(m, ScopedSkills) for m in captured["middleware"])
+    assert not any(isinstance(m, NarrowedSkills) for m in captured["middleware"])
     # The two unconditional read-only routes and nothing skill-specific: a
     # request that granted no skills adds no per-skill denials.
     assert {r.paths[0] for r in captured["permissions"]} == {"/data/**", "/skills/**"}
@@ -214,7 +214,7 @@ def test_an_unnamed_tool_survives_the_allowlist():
     assert ToolAllowlist(("read_file",))._filter(Request()).tools == [unnamed]
 
 
-def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
+def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
     """It was built elsewhere, so the restrictions were never applied to it.
     Refusing beats running with more access than the caller asked for."""
     from kingfisher.application.run import run
@@ -225,15 +225,15 @@ def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
-    with pytest.raises(ValueError, match="pre-built agent"):
+    with pytest.raises(ValueError, match="pre-built graph"):
         run(
             Request(task="go", capabilities=Capabilities(builtin_tools=("read_file",))),
             cfg=cfg,
-            agent=prebuilt,
+            graph=prebuilt,
         )
 
-    # The unrestricted case still works, so the guard is not just "reject agent=".
-    assert run(Request(task="go"), cfg=cfg, agent=prebuilt).answer == "ok"
+    # The unrestricted case still works, so the guard is not just "reject graph=".
+    assert run(Request(task="go"), cfg=cfg, graph=prebuilt).answer == "ok"
 
 
 

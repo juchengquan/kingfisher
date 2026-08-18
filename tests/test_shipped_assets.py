@@ -20,11 +20,11 @@ import yaml
 
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.definitions import skill_name
+from kingfisher.infrastructure.catalogue.documents import skill_name
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository, tool_name
 
 
 def test_every_preset_subagent_parses(shipped):
@@ -171,7 +171,7 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     It checked the one-level rule until delegation learned to nest. The rule
     that replaced it is the only thing left that a catalogue can violate here,
     so this follows it rather than being deleted."""
-    from kingfisher.domain.subagent import refuse_cycles
+    from kingfisher.domain.subagent.rules import refuse_cycles
 
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
 

@@ -98,7 +98,7 @@ def test_an_unset_param_stays_unset(tmp_path):
     ],
 )
 def test_a_key_this_format_does_not_define_is_refused(tmp_path, body, expected):
-    """The rule `domain.subagent` states, for the same reason: ignoring a key is
+    """The rule `domain.subagent.reading` states, for the same reason: ignoring a key is
     indistinguishable from honouring it. `max_token:` singular would parse, be
     dropped, and hand back the default with no error anywhere.
     """
@@ -299,7 +299,7 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     assert not (tmp_path / "models.yaml").exists()
     cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE)
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"))
+    service = Kingfisher(cfg, graph=StubAgent("ok"))
 
     assert service.run(Request("go")).answer == "ok"
     assert service.cfg.models.default == "fake-model"

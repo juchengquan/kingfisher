@@ -10,8 +10,8 @@ from kingfisher import Kingfisher
 from kingfisher.application.service import opening_events, turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
 from tests.conftest import StubCheckpointer, start, subagents_dir
 from tests.test_run import StubAgent
@@ -38,7 +38,7 @@ def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
     """
     CountingCheckpointer.built = 0
     store = CountingCheckpointer()
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=store)
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=store)
 
     for _ in range(3):
         service.run(Request("go"))
@@ -50,7 +50,7 @@ def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
 def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     """Wiring is shared; per-turn state is not."""
     start(cfg, "s")
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
     turns = [service.run(Request("go", session_id="s")).turn_id for _ in range(3)]
     assert turns == ["t001", "t002", "t003"]
@@ -68,16 +68,16 @@ def test_construction_prepares_only_what_sessions_share(cfg):
     assert not (service.workspace / "data").exists()
 
 
-def test_an_injected_agent_is_reused_and_refuses_narrowing(cfg, session_dir):
+def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     """Injection is by collaborator, not by monkeypatching -- and an agent
     built elsewhere cannot honour restrictions it never saw."""
     agent = StubAgent("ok")
-    service = Kingfisher(cfg, agent=agent, threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
 
-    assert service.agent_for(Request("go"), session_dir) is agent
+    assert service.graph_for(Request("go"), session_dir) is agent
 
-    with pytest.raises(ValueError, match="pre-built agent"):
-        service.agent_for(
+    with pytest.raises(ValueError, match="pre-built graph"):
+        service.graph_for(
             Request("go", capabilities=Capabilities(builtin_tools=("read_file",))), session_dir
         )
 
@@ -90,7 +90,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     # the saver it is handed.
     service = Kingfisher(cfg)
 
-    assert service.agent_for(Request("go"), session_dir) is not service.agent_for(
+    assert service.graph_for(Request("go"), session_dir) is not service.graph_for(
         Request("go"), session_dir
     )
 
@@ -104,7 +104,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
     are bare and the run proceeds.
     """
     start(cfg, "s")
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
     real_chmod = Path.chmod
 
@@ -129,7 +129,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
         "kingfisher.application.service.protect_data",
         lambda _dir: ("theirs.pdf: Operation not permitted",),
     )
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
     events = list(service.stream(Request("go", session_id="s")))
     (failed,) = [e for e in events if e.kind == "protect_failed"]
@@ -143,7 +143,7 @@ def test_the_module_level_helpers_are_unchanged(cfg):
     is unaffected by it."""
     from kingfisher import run
 
-    result = run("say hello", cfg=cfg, agent=StubAgent("hello"), checkpointer=StubCheckpointer())
+    result = run("say hello", cfg=cfg, graph=StubAgent("hello"), checkpointer=StubCheckpointer())
     assert result.answer == "hello"
 
 
@@ -257,7 +257,7 @@ def _refusal(how: str, tmp_path: Path) -> dict:
 @pytest.mark.parametrize("how", REFUSALS, ids=lambda s: s)
 def test_a_refused_request_leaves_no_turn_behind(cfg, tmp_path, how):
     start(cfg, "s")
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.run(Request("first", session_id="s"))  # t001 is real work
 
     with pytest.raises(DataError):

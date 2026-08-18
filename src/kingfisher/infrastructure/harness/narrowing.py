@@ -1,10 +1,19 @@
 """Applying a request's capabilities to the agent that runs it.
 
-Named `scoping`, not `capabilities`: `domain/capabilities.py` is the value
+Named `narrowing`, not `capabilities`: `domain/capabilities.py` is the value
 object a caller passes, and this is the machinery that enforces it. Two files
 with one name across two layers made every import a small act of guessing.
 
-Two middleware, because the two restrictions bite in different places:
+It was `scoping`, which satisfied that rule and broke another. "Narrow" is the
+word the domain uses for this and uses everywhere -- `narrowed()` is the
+function, `intersect` says "narrow these capabilities by another set", and
+`Capabilities` calls itself the narrowing axis. "Scope" appeared here and
+nowhere else in this sense: every other use in the package means a lifetime
+(`session-scoped`, `turn-scoped`) or a Python scope, and `backend` already says
+a permission is "scoped to a route" about a different mechanism entirely. One
+operation, one word, and the domain had already chosen it.
+
+Three middleware, because the three restrictions bite in different places:
 
 `ToolAllowlist` works at two layers, and it needs both. Filtering
 `ModelRequest.tools` stops the tool being *offered*; on its own that is not a
@@ -15,12 +24,24 @@ Refusing the call in `wrap_tool_call` is what actually holds. The filter is kept
 alongside it so the model is not tempted in the first place, and so its context
 is not spent on tool schemas it may not use.
 
-`ScopedSkills` filters what the skills index advertises. Note what that is and
+`NarrowedSkills` filters what the skills index advertises. Note what that is and
 is not: removing a skill from the listing means the agent is not *told* about
 it. The file is still on disk, so this is guidance, not a boundary — the
 boundary comes from the deny rules `build_agent` adds alongside it, and even
 those are bypassable by `execute`. Stated plainly rather than implied, because
 a guarantee that quietly is not one is worse than none.
+
+`DeclaredDelegatesOnly` refuses `task` to a delegate the request did not
+declare. It is here rather than beside the subagent machinery because the thing
+it closes is a capability hole: deepagents supplies a `general-purpose` delegate
+carrying the main agent's tools and none of kingfisher's middleware, so a
+request that withheld `execute` could ask that one for it.
+
+`HostPathGuard` used to be here too, and is not, because it applies no
+capability. It turns a rejected host path into a `ToolMessage` the model can act
+on, and it now sits in `backend`, beside the `reject_host_path` that raises what
+it catches -- one mechanism in one file rather than two halves that never
+mention each other.
 """
 
 from __future__ import annotations
@@ -37,7 +58,6 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 from langchain_core.runnables import RunnableConfig
 
-from kingfisher.infrastructure.harness.backend import HostPathError
 from kingfisher.infrastructure.harness.skill_registry import KEY, qualified
 
 
@@ -112,7 +132,7 @@ class ToolAllowlist(AgentMiddleware):
         return refusal if refusal is not None else await handler(request)
 
 
-class ScopedSkills(SkillsMiddleware):
+class NarrowedSkills(SkillsMiddleware):
     """A skills index restricted to the skills a request activated.
 
     Overrides the formatting seam rather than rewriting the assembled prompt:
@@ -189,46 +209,6 @@ class ScopedSkills(SkillsMiddleware):
         return super()._format_skills_list(
             [s for s in skills if s.get(KEY, s.get("name")) in self._allowed]
         )
-
-
-class HostPathGuard(AgentMiddleware):
-    """Turn a rejected host path back into something the agent can act on.
-
-    `reject_host_path` exists to correct the model mid-turn -- its message
-    names the virtual path to use instead. But it raises from inside the
-    backend, and deepagents' file tools only convert `ValueError` raised during
-    *path validation*; `backend.write()` is called outside that guard. So the
-    exception escaped the tool, escaped the graph, and killed the run. The
-    message meant to teach the model never reached it.
-
-    Returning it as a failed `ToolMessage` is what makes the correction work,
-    exactly as `ToolAllowlist` does for a tool the request did not activate.
-    Only `HostPathError` is caught: a middleware that swallowed every
-    `ValueError` would hide real faults behind a retry.
-    """
-
-    def _as_tool_error(self, request: Any, exc: HostPathError) -> ToolMessage:
-        call = request.tool_call
-        return ToolMessage(
-            content=f"Error: {exc}",
-            tool_call_id=call.get("id", ""),
-            name=call.get("name"),
-            status="error",
-        )
-
-    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
-        try:
-            return handler(request)
-        except HostPathError as exc:
-            return self._as_tool_error(request, exc)
-
-    async def awrap_tool_call(
-        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
-    ) -> Any:
-        try:
-            return await handler(request)
-        except HostPathError as exc:
-            return self._as_tool_error(request, exc)
 
 
 class DeclaredDelegatesOnly(AgentMiddleware):

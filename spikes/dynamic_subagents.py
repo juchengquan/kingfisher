@@ -63,7 +63,7 @@ async def main() -> int:
     from kingfisher import Kingfisher, from_env
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.domain.request import Request
-    from kingfisher.domain.subagent import SUFFIX
+    from kingfisher.domain.subagent.reading import SUFFIX
     from kingfisher.infrastructure.harness.checkpointing import async_checkpointer
 
     cfg = replace(from_env(), interpreter_enabled=True)

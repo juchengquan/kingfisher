@@ -15,8 +15,8 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.capabilities import CapabilityError, all_but
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness import skill_registry
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\nBody.\n"
 

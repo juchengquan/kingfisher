@@ -29,15 +29,15 @@ __all__ = [
 ]
 
 
-def _service(cfg: Config | None, agent: Any, checkpointer: Any, dirs: Any) -> Kingfisher:
-    return Kingfisher(cfg, agent=agent, threads=checkpointer, dirs=dirs)
+def _service(cfg: Config | None, graph: Any, checkpointer: Any, dirs: Any) -> Kingfisher:
+    return Kingfisher(cfg, graph=graph, threads=checkpointer, dirs=dirs)
 
 
 def stream(
     request: str | Request,
     *,
     cfg: Config | None = None,
-    agent: Any | None = None,
+    graph: Any | None = None,
     checkpointer: Any | None = None,
     dirs: Any | None = None,
 ) -> Iterator[RunEvent]:
@@ -49,16 +49,16 @@ def stream(
         for event in stream(Request(task, session_id=sid, turn_id=req.id)):
             print(event)
     """
-    return _service(cfg, agent, checkpointer, dirs).stream(request)
+    return _service(cfg, graph, checkpointer, dirs).stream(request)
 
 
 def run(
     request: str | Request,
     *,
     cfg: Config | None = None,
-    agent: Any | None = None,
+    graph: Any | None = None,
     checkpointer: Any | None = None,
     dirs: Any | None = None,
 ) -> RunResult:
     """Run one task to completion and return where its outputs landed."""
-    return _service(cfg, agent, checkpointer, dirs).run(request)
+    return _service(cfg, graph, checkpointer, dirs).run(request)

@@ -1,21 +1,25 @@
-"""Finding installed asset packs, and putting what they hold in a workspace.
+"""Copying a set of definitions into a workspace, so a fresh install works.
 
-Kingfisher ships no skills, no subagents and no tools. Its job is to find,
-validate and compose definitions held as static files, and it can do all three
+Kingfisher does not *read* the definitions it ships. Its job is to find,
+validate and compose definitions held as static files, and it does all three
 against files it did not write — every asset is content a workspace rewrites on
 first contact with a real task, which is a different kind of thing from the code
-that reads it.
+that reads it. Shipping a working set and copying it out keeps that true: what
+lands in the workspace is yours the moment it arrives.
 
-So the definitions come from *packs*: ordinary distributions that announce
-themselves through an entry point. This module asks who is installed and gets an
-answer, which is why kingfisher names no pack anywhere in its source. A pack
-published by a team internally is no less first-class than any other.
+One directory, `kingfisher.assets`, inside this wheel. That is the whole
+discovery story now, and it used to be longer -- definitions were their own
+distribution, found through an entry point so anyone could publish a pack. The
+constants below say what went and why; what matters here is that nothing
+enumerates publishers any more, so there is no loop and no question of who is
+installed. A deployment with its own definitions points `seed` at a directory
+and needs no wheel, no metadata and no publish step.
 
-The one thing that does ship here is `models.yaml.example`. That is not content:
+`models.yaml.example` ships too, and is the one thing here that is not content:
 `models.yaml` is required and has no fallback, and the error a deployment
 without one hits names that file as the place to look, so it has to arrive with
-the thing that demands it rather than with a pack somebody may not have
-installed. `_copy_example` is why it is seeded outside the loop over packs.
+the thing that demands it. `_copy_example` is why it is seeded apart from the
+definitions rather than beside them.
 
 Everything is read through `importlib.resources`, the way `kingfisher.prompts`
 is, so the same code finds a source tree and an installed wheel.
@@ -72,7 +76,7 @@ EXAMPLE = "models.yaml.example"
 def opened(package: str) -> Iterator[Path]:
     """A package's files as real files, wherever it was installed.
 
-        with opened(pack.package) as root:
+        with opened(ASSETS) as root:
             shutil.copytree(root / "skills" / "tabular-qa", target)
 
     A context manager because `importlib.resources` does not promise the files
@@ -81,10 +85,10 @@ def opened(package: str) -> Iterator[Path]:
     back the real directory and costs nothing.
 
     `package` is required, though `PACKAGE` was its default until the assets
-    left. A default meaning *kingfisher's own tree* is the wrong shape once the
-    usual argument is a pack's: code written `opened()` while meaning a pack
-    would silently read the framework's two files and copy nothing, which is a
-    failure with no error in it. Every caller says which package it wants.
+    left. A default meaning *kingfisher's own tree* is the wrong shape for a
+    reader who wants the definitions: code written `opened()` while meaning the
+    assets would silently read the framework's two files and copy nothing, which
+    is a failure with no error in it. Every caller says which package it wants.
     """
     with resources.as_file(resources.files(package)) as root:
         yield Path(root)
@@ -121,8 +125,8 @@ def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
 
     Derived from `DEFINITION_KINDS` rather than listed again. This was the
     fourth place the three kinds were written out, and the one where getting it
-    wrong is quietest: a kind missing here is one a pack ships and nothing ever
-    copies.
+    wrong is quietest: a kind missing here is one the definitions ship and
+    nothing ever copies.
     """
     roots = cfg.catalogue_roots
     return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
@@ -160,7 +164,7 @@ def _overwritten(source: Path, target: Path, label: str) -> list[str]:
     on the path that matters.
 
     `copytree(dirs_exist_ok=True)` merges, so a file the catalogue has and the
-    pack does not survives and is not reported. Only a collision loses work.
+    source does not survives and is not reported. Only a collision loses work.
     """
     if source.is_file():
         changed = target.is_file() and target.read_bytes() != source.read_bytes()
@@ -229,7 +233,7 @@ def seed(cfg: Destination, source: Path | None = None) -> Seeding:
 
 
 def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
-    """Copy one opened pack into this deployment's catalogues."""
+    """Copy one opened tree of definitions into this deployment's catalogues."""
     written: list[str] = []
     overwritten: list[str] = []
     for kind, destination in destinations(cfg):
@@ -267,8 +271,8 @@ def _copy_example(cfg: Destination) -> tuple[list[str], list[str]]:
     Which is where someone would look for the thing they are about to write.
     Not into one of the three catalogues: it is not a definition.
 
-    Not from a pack, either, and not conditional on one being installed.
-    `models.yaml` is required and has no fallback, and the error a deployment
+    Not out of the definitions, either, and not conditional on a deployment
+    having any. `models.yaml` is required and has no fallback, and the error a deployment
     without one hits names this file as the place to look -- so it is the
     worked example of a mandatory *configuration* file rather than content, and
     it arrives with the thing that demands it.

@@ -12,6 +12,7 @@ legitimately discuss deepagents at length; it is the `import` that matters.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -72,14 +73,60 @@ REPO = _repository_root()
 SRC = REPO / "src" / "kingfisher"
 
 
+def _package_of(path: Path) -> tuple[str, ...]:
+    """The dotted package a module sits in, walked rather than counted.
+
+    Climbs while there is an `__init__.py`, so it answers the same way for the
+    real tree and for the fake ones these tests build -- and does not need to
+    know where `src/` is, which is the assumption every other way of finding
+    this has eventually got wrong here.
+    """
+    parts: list[str] = []
+    directory = path.parent
+    while (directory / "__init__.py").is_file():
+        parts.append(directory.name)
+        directory = directory.parent
+    return tuple(reversed(parts))
+
+
 def _imported_modules(path: Path) -> set[str]:
+    """Every module this file imports, relative ones resolved to their real name.
+
+    Relative imports were dropped, not resolved: the guard was `elif
+    isinstance(node, ast.ImportFrom) and node.module`, and `from . import x`
+    has no `module` at all. So it contributed nothing, and every rule in this
+    file reported success without having looked.
+
+    That is exploitable rather than merely untidy. `from .. import config` in a
+    domain module is the import the domain rule exists to refuse -- the layer
+    reading deployment configuration -- and it was invisible, while the same
+    import written out was caught. A rule that depends on which spelling
+    someone used is not a rule.
+
+    Resolved rather than refused, so the analysis reads relative imports as
+    what they are. Refusing them would be this file legislating a style because
+    it could not parse one, and `assets/` already uses them for a reason of its
+    own: those files are copied out into a workspace, where nothing is named
+    `kingfisher` any more.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    package = _package_of(path)
     modules: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             modules.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            modules.add(node.module)
+        elif isinstance(node, ast.ImportFrom):
+            if not node.level:
+                if node.module:
+                    modules.add(node.module)
+                continue
+            # `.` is this package, `..` its parent, and so on.
+            base = package[: max(len(package) - (node.level - 1), 0)]
+            if node.module:
+                modules.add(".".join((*base, node.module)))
+            else:
+                # `from . import x` imports modules, so each name is one.
+                modules.update(".".join((*base, alias.name)) for alias in node.names)
     return modules
 
 
@@ -119,9 +166,7 @@ def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     return sorted(
         p
         for p in (root / layer).rglob("*.py")
-        if p.name != "__init__.py"
-        and "__pycache__" not in p.parts
-        and CONTENT not in p.parts
+        if "__pycache__" not in p.parts and CONTENT not in p.parts
     )
 
 
@@ -157,18 +202,98 @@ def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
     collection after the real tree changes shape. `import yaml` is the
     violation the domain rule was written for -- the third-party parser that
     sat in `domain/fields.py` while three rules looked straight past it.
+
+    An `__init__.py` counts, and that is the second half of the same defect.
+    The walk skipped them, which was harmless while every one in this package
+    held a docstring and nothing else -- and stopped being harmless the moment
+    `infrastructure/catalogue/` made one hold two hundred and fifty lines,
+    including the package's only edge into the harness. Nine rules would have
+    looked straight past it, exactly as they looked past a subpackage before.
+    Skipping a file because of its name is the same mistake as skipping it
+    because of its depth.
     """
     layer = tmp_path / "domain"
     (layer / "inner").mkdir(parents=True)
     (layer / "__init__.py").touch()
-    (layer / "inner" / "__init__.py").touch()
+    (layer / "inner" / "__init__.py").write_text("import yaml\n", encoding="utf-8")
     (layer / "inner" / "buried.py").write_text("import yaml\n", encoding="utf-8")
     (layer / "shallow.py").write_text("import json\n", encoding="utf-8")
 
     found = _modules_in("domain", root=tmp_path)
 
-    assert [p.relative_to(layer).as_posix() for p in found] == ["inner/buried.py", "shallow.py"]
+    assert [p.relative_to(layer).as_posix() for p in found] == [
+        "__init__.py",
+        "inner/__init__.py",
+        "inner/buried.py",
+        "shallow.py",
+    ]
     assert "yaml" in _imported_modules(layer / "inner" / "buried.py")
+    assert "yaml" in _imported_modules(layer / "inner" / "__init__.py")
+
+
+def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
+    """`from .. import config` in a domain module used to pass every rule here.
+
+    The collector kept only `node.module`, and a relative import written that
+    way has none -- so the import contributed nothing and the rules reported
+    success without having looked. Written out as
+    `from kingfisher.config import Config` the same import was caught, which
+    made the layer boundary a question of spelling.
+
+    Built against a fake tree for the reason the collection test above is: it
+    has to keep testing the resolution after the real one changes shape. Both
+    forms are checked, because they fail differently -- one was invisible, the
+    other was read as a foreign top-level package.
+    """
+    package = tmp_path / "kingfisher"
+    (package / "domain").mkdir(parents=True)
+    (package / "__init__.py").touch()
+    (package / "domain" / "__init__.py").touch()
+    (package / "config.py").touch()
+    module = package / "domain" / "subagent.py"
+    module.write_text(
+        "from . import fields\nfrom .. import config\nfrom .capabilities import ALL\n",
+        encoding="utf-8",
+    )
+
+    found = _imported_modules(module)
+
+    assert found == {
+        "kingfisher.domain.fields",  # `.` is this package
+        "kingfisher.config",  # `..` is its parent -- the one that was invisible
+        "kingfisher.domain.capabilities",  # and a dotted form resolves too
+    }
+
+
+def test_a_harness_edge_is_seen_however_it_is_spelled(tmp_path):
+    """`_harness_reach` had the same blindness as `_imported_modules`, found
+    only after the other was fixed and the file searched for the rest.
+
+    It compares `node.module` against the harness's absolute name, so
+    `from .harness import agent` matched neither branch and the edge was lost --
+    which would let a module absent from `HARNESS_EDGES` reach the harness with
+    the rule reporting success. Its own docstring records that a first draft
+    detected none of these edges at all, so this is the second near-miss for the
+    same function.
+    """
+    package = tmp_path / "kingfisher" / "infrastructure"
+    (package / "harness").mkdir(parents=True)
+    for marker in (
+        tmp_path / "kingfisher" / "__init__.py",
+        package / "__init__.py",
+        package / "harness" / "__init__.py",
+    ):
+        marker.touch()
+
+    absolute = package / "absolute.py"
+    absolute.write_text(
+        "from kingfisher.infrastructure.harness import agent\n", encoding="utf-8"
+    )
+    relative = package / "relative.py"
+    relative.write_text("from .harness import agent\n", encoding="utf-8")
+
+    assert _harness_reach(absolute) == {"agent"}
+    assert _harness_reach(relative) == {"agent"}, "the spelling that used to hide the edge"
 
 
 def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
@@ -276,6 +401,148 @@ def test_the_second_distribution_is_in_scope():
         "the dangling-import rule is not reading service/ — the other distribution "
         "is where a move in src/ lands first"
     )
+
+
+#: The layers a prose reference can be rooted at, and the only form of it that
+#: can be checked. `models.yaml`, `run.py` and `uploads.provision` are shaped
+#: exactly like module paths; `infrastructure.harness.backend` cannot be
+#: anything else. Measured across this repository: the rooted form gives fifty
+#: references and finds thirteen that are wrong, while the unrestricted form
+#: gives 143 and calls 115 of them broken.
+PROSE_LAYERS = ("domain", "application", "infrastructure", "presentation")
+PROSE_REF = re.compile(
+    r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_LAYERS) + r")(?:\.[a-z_]+)+)`"
+)
+
+#: Prose that names a module *because* it is gone, excused per file. Deny by
+#: default like the tables above, and keyed by file rather than by name for a
+#: reason the first draft found: `infrastructure.agent` appears twice in this
+#: repository, once in the docstring explaining which move renamed it and once
+#: in `domain/subagent.py` as a live pointer at where a spec is translated. One
+#: is the rule doing its job and the other is the defect it exists to catch, and
+#: a table keyed by name alone would have to excuse both.
+PROSE_GONE: dict[str, frozenset[str]] = {
+    # The file that owns the rules is the one place a gone module is named on
+    # purpose -- in the docstring of the rule that renaming broke, and in the
+    # negatives below, which are asserted gone rather than merely absent.
+    "tests/test_architecture.py": frozenset({
+        "infrastructure.agent",
+        "infrastructure.backend",
+        "infrastructure.backend.prepare_scratch",
+        "infrastructure.workspace_fs.resolve_definitions",
+    }),
+}
+
+
+def _module_file(name: str) -> Path | None:
+    """The file a dotted name refers to, or `None`.
+
+    Resolved on disk rather than imported, for the reason `_names_a_real_module`
+    gives: reaching `kingfisher.presentation.cli` through `find_spec` executes
+    fastapi on the way, and a rule should have no way to fail for a reason other
+    than the one it is about.
+    """
+    base = SRC.joinpath(*name.split("."))
+    if base.with_suffix(".py").exists():
+        return base.with_suffix(".py")
+    return base / "__init__.py" if (base / "__init__.py").exists() else None
+
+
+def _top_level_names(path: Path) -> set[str]:
+    """What a module defines or imports at its top level.
+
+    Parsed rather than imported, and only ever asked about a module some comment
+    already named, so the cost is a handful of files rather than the tree.
+    """
+    names: set[str] = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+    return names
+
+
+def _prose_unresolved(text: str, excused: frozenset[str] = frozenset()) -> list[str]:
+    """References in some text that name neither a module nor something in one.
+
+    Two answers count as resolved, and the second is why this reads the target
+    file instead of a set of module names. A reference may name a module, or a
+    module and one thing defined in it -- `domain.skill.split` and
+    `infrastructure.harness.backend.prepare_scratch` are both correct prose about
+    a real function, and refusing them would refuse the most useful thing a
+    comment can say.
+
+    Checking the trailing segment is what closes the hole the first draft had.
+    Matching a *parent* was enough to pass, and `infrastructure` is a package,
+    so every `infrastructure.<gone module>` resolved as a package and an
+    attribute nobody looked for -- which is exactly the shape of six of the
+    thirteen references this found on the day it was written.
+    """
+    unresolved = []
+    for ref in PROSE_REF.findall(text):
+        bare = ref.removeprefix("kingfisher.")
+        if bare in excused or _module_file(bare):
+            continue
+        parent, _, last = bare.rpartition(".")
+        target = _module_file(parent)
+        if target is None or last not in _top_level_names(target):
+            unresolved.append(bare)
+    return unresolved
+
+
+def test_prose_naming_a_module_names_one_that_exists():
+    """A comment naming a module makes a claim, and a move falsifies it in silence.
+
+    The rule above does this for `import` statements, and its own docstring says
+    why it checks the path rather than the symbol. Nothing did it for prose, and
+    thirteen references were wrong when this was written -- six of them left by
+    one move, `infrastructure/harness/`, which renamed four modules that eight
+    comments went on naming at the old path.
+
+    The same files as the dangling-import rule, for the reason stated there: the
+    other distributions are where a move here lands first.
+    """
+    stale = []
+    for path in _everything_that_imports_kingfisher():
+        rel = path.relative_to(REPO).as_posix()
+        text = path.read_text(encoding="utf-8")
+        excused = PROSE_GONE.get(rel, frozenset())
+        stale += [f"{rel} -> {ref}" for ref in _prose_unresolved(text, excused)]
+
+    assert not stale, (
+        f"{stale} name kingfisher modules that do not exist — something moved "
+        "and the comment about it did not"
+    )
+
+
+def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
+    """Every reference in the tree resolves once the thirteen are fixed, so the
+    rule above passes whether it discriminates or answers nothing at all. These
+    are the answers the tree cannot supply, and the negatives are the names this
+    commit actually removed -- asserted gone rather than merely absent.
+    """
+    assert _prose_unresolved("`infrastructure.harness.backend`") == []
+    assert _prose_unresolved("`domain.skill.split` and `application.inventory`") == []
+    assert _prose_unresolved("`infrastructure.harness.backend.prepare_scratch`") == []
+
+    assert _prose_unresolved("`infrastructure.backend.prepare_scratch`") == [
+        "infrastructure.backend.prepare_scratch"
+    ]
+    # A package and a name it does not hold. This is the one a parent-only check
+    # let through, and six of the thirteen were this shape.
+    assert _prose_unresolved("`infrastructure.backend`") == ["infrastructure.backend"]
+    # Excused, but only where the table says so.
+    assert _prose_unresolved("`infrastructure.agent`") == ["infrastructure.agent"]
+    assert _prose_unresolved("`infrastructure.agent`", frozenset({"infrastructure.agent"})) == []
+
+    # Not rooted at a layer, so not this rule's business: these are the shapes
+    # that make the unrestricted version unusable.
+    assert _prose_unresolved("`models.yaml`, `run.py`, `importlib.resources`") == []
 
 
 def test_no_rule_here_is_parametrized_over_nothing():
@@ -461,11 +728,28 @@ def test_a_subpackage_is_judged_by_its_own_area():
     Longest match, so a subpackage can be stricter or looser than its parent
     and the order of a dict does not decide which. Shortest match would let the
     harness's eight packages leak into all thirteen flat modules.
+
+    Every path here exists, and that is not decoration. `_area_of` computes
+    from the path string and never touches disk, so an assertion about a file
+    that has moved goes on passing while being about nothing -- which is what
+    this one did when `catalogue.py` became a package, and the whole suite
+    stayed green. The paths are asserted present so the next move fails here
+    instead.
     """
+    catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
+    buried = SRC / "infrastructure" / "catalogue" / "skills.py"
+    for path in (catalogue, buried, SRC / "domain" / "tool.py", SRC / "config.py"):
+        assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
+
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
-    assert _area_of(SRC / "infrastructure" / "catalogue.py") == "infrastructure"
     assert _area_of(SRC / "domain" / "tool.py") == "domain"
     assert _area_of(SRC / "config.py") == ""
+
+    # A subpackage with no entry of its own is judged by its parent, which is
+    # what lets `catalogue/` inherit `{yaml}` without naming it -- and what
+    # would stop being true the moment someone gave it an entry.
+    assert _area_of(catalogue) == "infrastructure"
+    assert _area_of(buried) == "infrastructure"
 
 
 @pytest.mark.parametrize("path", _package_modules(), ids=_module_id)
@@ -584,26 +868,54 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
 HARNESS = "kingfisher.infrastructure.harness"
 
 
+def _consumer_key(path: Path) -> str:
+    """A module's name below its layer, which is how `HARNESS_EDGES` is keyed.
+
+    Was `path.stem`, and a package broke it: `catalogue/__init__.py` has the
+    stem `__init__`, so the entry whose reason is written beside it stopped
+    matching and the edge read as an unnamed escape. Keyed this way the four
+    existing entries are unchanged -- a move does not get to rewrite the
+    reasons -- and two modules sharing a stem in different layers no longer
+    share one key.
+    """
+    parts = list(path.relative_to(SRC).parts[1:])
+    parts = parts[:-1] if parts[-1] == "__init__.py" else [*parts[:-1], parts[-1][:-3]]
+    return ".".join(parts)
+
+
 def _harness_reach(path: Path) -> set[str]:
     """Which harness modules one flat module imports, by their bare names.
 
     Its own walk rather than `_imported_modules`, which keeps only the *module*
-    of an `ImportFrom` and drops the names -- so `from ...harness import agent`
-    arrives as the bare package and the module reached is lost. That is the
-    form nearly every one of these edges is written in, and a first draft of
+    of an `ImportFrom` and drops the names -- so `from <pkg>.harness import
+    agent` arrives as the bare package and the module reached is lost. That is
+    the form nearly every one of these edges is written in, and a first draft of
     this rule read it through the shared helper and detected none of them.
     Mutation testing is the only reason that is a sentence in a docstring rather
     than a rule in the file doing nothing.
+
+    It resolves relative imports for the same reason `_imported_modules` does,
+    and it is worth saying that the two had the *same* defect independently: a
+    rule whose answer depends on how someone spelled an import is not a rule.
+    Written `from .harness import agent`, every edge here was invisible and the
+    table of who may reach the harness enforced nothing.
     """
     reached: set[str] = set()
+    package = _package_of(path)
     for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-        if isinstance(node, ast.ImportFrom) and node.module:
-            if node.module == HARNESS:                      # from ...harness import agent
+        if isinstance(node, ast.ImportFrom):
+            # Resolved first, for the reason `_imported_modules` is: written
+            # relatively, `node.module` is a fragment that matches neither
+            # branch below, and the edge is simply lost. Same rule, same file,
+            # different spelling.
+            base = package[: max(len(package) - (node.level - 1), 0)] if node.level else ()
+            module = ".".join((*base, node.module)) if node.module else ".".join(base)
+            if module == HARNESS:                           # from <pkg>.harness import agent
                 reached.update(alias.name for alias in node.names)
-            elif node.module.startswith(HARNESS + "."):     # from ...harness.agent import x
-                reached.add(node.module[len(HARNESS) + 1 :].split(".")[0])
+            elif module.startswith(HARNESS + "."):          # from <pkg>.harness.agent import x
+                reached.add(module[len(HARNESS) + 1 :].split(".")[0])
         elif isinstance(node, ast.Import):
-            for alias in node.names:                        # import ...harness.agent
+            for alias in node.names:                        # import <pkg>.harness.agent
                 if alias.name.startswith(HARNESS + "."):
                     reached.add(alias.name[len(HARNESS) + 1 :].split(".")[0])
     return reached
@@ -627,7 +939,7 @@ def test_only_the_named_adapters_reach_into_the_harness():
     # `application/service.py` has reached into four harness modules the whole
     # time, unnamed, because this walked one directory.
     for path in _harness_consumers():
-        allowed = HARNESS_EDGES.get(path.stem, frozenset())
+        allowed = HARNESS_EDGES.get(_consumer_key(path), frozenset())
         if extra := _harness_reach(path) - allowed:
             escaped.append(f"{_module_id(path)} -> harness.{{{', '.join(sorted(extra))}}}")
 
@@ -648,7 +960,7 @@ def test_the_harness_rule_looks_at_both_layers():
     is the largest consumer of the harness in the repository and went unwatched
     for as long as this rule walked one directory.
     """
-    walked = {path.stem for path in _harness_consumers()}
+    walked = {_consumer_key(path) for path in _harness_consumers()}
 
     assert "service" in walked, "the rule stopped reading application/"
     assert "inventory" in walked
@@ -666,7 +978,7 @@ def test_every_named_harness_edge_is_a_real_one():
     load-bearing. `THIRD_PARTY` carries the same promise one comment up:
     "measured, not declared".
     """
-    actual = {path.stem: _harness_reach(path) for path in _harness_consumers()}
+    actual = {_consumer_key(path): _harness_reach(path) for path in _harness_consumers()}
     stale = [
         f"{module} -> harness.{{{', '.join(sorted(named - actual.get(module, set())))}}}"
         for module, named in HARNESS_EDGES.items()
@@ -689,7 +1001,7 @@ def test_infrastructure_does_not_reach_back_into_application():
     `Config` lived in the application layer and every adapter imported it,
     inverting the direction this module claims to hold. It sits at the package
     root now, belonging to no layer, and this is what stops it drifting back
-    up. `application/config.py` reads `infrastructure.models` for the
+    up. `application/config.py` reads `infrastructure.harness.models` for the
     credential variable names, which is the legal direction.
     """
     for path in _modules_in("infrastructure"):
@@ -980,14 +1292,14 @@ def test_only_one_module_decides_what_a_skill_is():
     byte-identical copy of the lookup, so a change to the definition would have
     left `--list` advertising names the validator then rejected.
 
-    `domain.skill` owns the filename and `infrastructure.skill_store` owns the
+    `domain.skill` owns the filename and `infrastructure.catalogue.skills` owns the
     listing. Asserting they *agree* with a caller is tautological once the
     caller imports them; what is worth asserting is that nothing else decides.
     """
     repo = REPO
     owners = {
         SRC / "domain" / "skill.py",
-        SRC / "infrastructure" / "skill_store.py",
+        SRC / "infrastructure" / "catalogue" / "skills.py",
     }
 
     searched = [
@@ -1054,6 +1366,34 @@ def test_the_shipped_definitions_live_only_under_assets():
     )
 
 
+def test_the_catalogue_holds_one_module_per_kind():
+    """The third place the three kinds are written down, bound to the first.
+
+    `DEFINITION_KINDS` is derived from `Definitions`' fields, so those two
+    cannot drift. The module names are the copy with no type and no constant
+    behind it: `skills.py`, `subagents.py` and `tools.py` say "there are three
+    kinds and these are they" as loudly as either, and nothing was holding them
+    to it. A fourth kind added to `Definitions` with no module to read it, or a
+    module renamed out from under the constant, would both have passed.
+
+    The folder is what makes this checkable at all. Flat among thirteen other
+    modules, "one module per kind" was not a shape anything could ask about.
+
+    Subset rather than equality: `layered`, `documents` and `importing` are in
+    this package for good reasons and are not kinds.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    package = SRC / "infrastructure" / "catalogue"
+    modules = {p.stem for p in package.glob("*.py")}
+
+    assert modules, f"{package} holds no modules — this rule is about nothing"
+    assert set(DEFINITION_KINDS) <= modules, (
+        f"{sorted(set(DEFINITION_KINDS) - modules)} is a kind the catalogue reads "
+        "with no module in catalogue/ named for it"
+    )
+
+
 def test_the_package_ships_the_catalogue_example():
     """The one file that is not an asset and has to stay.
 
@@ -1099,8 +1439,13 @@ DEPLOYMENT_ERRORS = frozenset({
     # `MissingStoreError` is here rather than above on purpose: a request naming
     # files by id with no `FileStore` wired is a deployment that forgot one, and
     # nothing the caller sends can fix it.
-    "ConfigError", "DataError", "HostPathError", "LoadError", "MissingStoreError",
-    "ToolError",
+    #
+    # `AgentError` sits here and `SubagentError` sits above, which looks like an
+    # inconsistency and is the rule working: a caller may *upload* a subagent, so
+    # a malformed one is their text and their fault. Agents come from the
+    # catalogue only, so a malformed one is always the deployment's own file.
+    "AgentError", "ConfigError", "DataError", "HostPathError", "LoadError",
+    "MissingStoreError", "ToolError",
 })
 
 
@@ -1477,22 +1822,42 @@ def _production_files() -> list[Path]:
     return files
 
 
-def _referenced_in_code() -> set[str]:
-    """Every name production code *uses*, ignoring prose.
+def _names_read(source: str) -> set[str]:
+    """Every name one module *reads*, ignoring prose and ignoring what it binds.
 
     Prose matters here: `withheld`'s docstring named `Capabilities.unknown`, so
     a guard counting text would have taken that mention for a caller and left
     the dead method exactly where it was.
+
+    Binding matters for the constant rule below. A `def` or a `class` carries its
+    own name as a string on the node, so a definition is never an `ast.Name` and
+    every `Name` in the tree -- including one in the defining file -- is a real
+    reference. `KINDS = (...)` is not built that way: the target is a `Name` like
+    any other, and counting it would mean every constant in the package
+    referenced itself and the constant rule found nothing, ever. So a load counts
+    and a store does not, which is the truer reading for functions too: `foo = 1`
+    was never a use of `foo`. Narrowing it changes no answer today -- both
+    readings leave `test_nothing_is_defined_for_tests_alone` with zero orphans,
+    and no name defined in the package is sighted in production by a store alone.
+    Measured before the narrowing went in, because a rule that only ever agreed
+    with itself is not evidence.
     """
     seen: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            seen.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            seen.add(node.attr)
+        elif isinstance(node, ast.alias):
+            seen.add(node.asname or node.name.split(".")[-1])
+    return seen
+
+
+def _referenced_in_code() -> set[str]:
+    """Every name production code reads, across every file production means."""
+    seen: set[str] = set()
     for path in _production_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Name):
-                seen.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                seen.add(node.attr)
-            elif isinstance(node, ast.alias):
-                seen.add(node.asname or node.name.split(".")[-1])
+        seen |= _names_read(path.read_text(encoding="utf-8"))
     return seen
 
 
@@ -1542,6 +1907,246 @@ def test_nothing_is_defined_for_tests_alone():
     assert not orphans, (
         f"defined but never used outside tests: {orphans} -- delete it, export it, "
         "or add it to DISPATCHED_ELSEWHERE with the contract that calls it"
+    )
+
+
+# -- and neither is any constant --------------------------------------------
+#
+# The rule above collects `FunctionDef`, `AsyncFunctionDef` and `ClassDef` off
+# each module's body, which is every kind of definition a module has except the
+# commonest one. A constant was invisible to it, and `domain.capabilities.AXES`
+# spent its whole life in that blind spot: a public tuple in the domain, read by
+# three test files and by nothing in either distribution, deleted only because
+# somebody went looking by hand. This half is the same rule pointed at the shape
+# the first half could not see.
+
+
+#: Constants whose reader is somewhere neither `PRODUCTION` nor a test, named one
+#: at a time with what reads them. Deliberately not a general "it is published"
+#: escape: a name this package publishes belongs in `kingfisher.__all__`, which
+#: the rule already exempts, and reaching for this table instead would be the way
+#: to publish something without saying so.
+READ_ELSEWHERE = frozenset({
+    # The SSE event names. Nothing in `src/`, `main.py`, `evals/` or
+    # `service/src/` reads it -- `payloads.frame` puts `event.kind` on the wire
+    # straight from the event and only *mentions* `KINDS` in prose -- so its
+    # readers are the clients subscribing to those event names, and they are not
+    # in this repository to be counted.
+    #
+    # Which is why `AXES`' fix does not transfer. That one was deleted and
+    # re-derived in the tests that wanted it, because deriving it from
+    # `fields(Capabilities)` is one line and cannot drift from the type it asks.
+    # `KINDS` has nothing to derive from: it is the declaration, and the two
+    # rules above are what pin it -- one against the kinds the package
+    # constructs, one against the kinds it branches on. Deriving it in a test
+    # would leave both comparing a list against itself, which is the tautology
+    # the `AXES` commit deleted two tests for.
+    "KINDS",
+})
+
+
+def _constants_defined(source: str) -> list[tuple[str, str]]:
+    """Every SCREAMING_CASE name a module binds at its top level, with its value.
+
+    Top level by reading `body` rather than walking the tree: a name bound inside
+    a class or a function is that scope's business, and `Capabilities`' fields
+    are not module constants. Nothing in the package hides one inside a
+    module-level `if` either -- of the twenty-one, twenty are `if TYPE_CHECKING`
+    and one is `if __name__ == "__main__"`, and not one of them binds a name.
+    Counted before this leaned on it, since the shortcut is only safe if it is
+    true of the tree rather than of the tree somebody imagined.
+
+    Case is the whole test for "constant", which is not a new opinion: it is what
+    `test_no_value_is_written_down_twice` was already using, and the two rules
+    share this so they cannot come to disagree about what a constant is. It also
+    settles `__version__` without an exemption, since `"__version__".isupper()`
+    is false -- which is the right answer rather than a lucky one. A package
+    version has no reader in its own package and never will, and a rule that
+    demanded one would be teaching people to write the exemption list.
+    """
+    found: list[tuple[str, str]] = []
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.AnnAssign):
+            if node.value is None:
+                continue  # `NAME: int` declares a type, not a constant
+            targets: list[ast.expr] = [node.target]
+            value = node.value
+        elif isinstance(node, ast.Assign):
+            targets = node.targets
+            value = node.value
+        else:
+            continue
+        written = ast.unparse(value)
+        found += [
+            (t.id, written) for t in targets if isinstance(t, ast.Name) and t.id.isupper()
+        ]
+    return found
+
+
+def _constants_in_package() -> dict[str, Path]:
+    """Every module-level constant in the package, at the first file defining it.
+
+    By name, like the rule above, and with the same blind spot: two files may
+    each define `EXPORT` with different values, and this reports one path for
+    both. `test_no_value_is_written_down_twice` is the rule that has an opinion
+    about a name in two places; this one only asks whether anything reads it.
+    """
+    found: dict[str, Path] = {}
+    for path in sorted(p for p in SRC.rglob("*.py") if not _is_content(p)):
+        for name, _ in _constants_defined(path.read_text(encoding="utf-8")):
+            found.setdefault(name, path)
+    return found
+
+
+def _unread(found: dict[str, Path], read: set[str], public: frozenset[str]) -> dict[str, Path]:
+    """Of the constants defined, the ones nothing outside a test reads.
+
+    A separate function rather than a comprehension inside the rule, and the
+    reason is the one `_reaches_past_the_public_api` gives: nothing in the tree
+    is unread today, so the rule passes whether this subtracts anything or
+    nothing, and `if False and ...` slipped into the comprehension would go
+    green. A rule that can be switched off in silence is decoration. Here the
+    three ways out -- read, published, exempted -- are answerable against named
+    input instead.
+    """
+    return {
+        name: path
+        for name, path in found.items()
+        if name not in read and name not in public and name not in READ_ELSEWHERE
+    }
+
+
+def test_no_constant_is_published_for_tests_alone():
+    """A constant nothing reads is a claim about the code the code does not make.
+
+    `AXES` is the instance that found this gap. It was a public tuple on
+    `domain.capabilities`, and the only things that read it were three test
+    files -- one of which had already given up and re-derived it from
+    `fields(Capabilities)` rather than importing it. Forty-nine architecture
+    rules ran over it for as long as it existed and not one of them was looking
+    at constants.
+
+    The second instance is what this caught on the way in, and it is the worse
+    of the two because it was still being maintained. `harness.backend`
+    published `SKILLS_SOURCES = [(SKILLS_ROUTE, "catalogue"),
+    (UPLOADED_SKILLS_ROUTE, "uploaded")]`, which is exactly what `skills_sources()`
+    returns when a session has no catalogue folders. The commit that let two
+    parties each ship a `lookup` replaced every production reader of the constant
+    with a call to the function, and in the same diff edited the constant --
+    "Catalogue" to "catalogue" -- so it went on looking cared for. Its comment
+    still claimed "both `agent` and `delegation` need them"; neither had
+    mentioned it for a day. One test held it up, asserting
+    `captured["skills"] == SKILLS_SOURCES` while the test beside it in
+    `test_capability_wiring` made the identical assertion against
+    `skills_sources()`. That is the fourth copy, caught at three.
+
+    The service is not counted as a reader, and that is a decision rather than an
+    inherited default. `PRODUCTION` has never included `service/src`, and for
+    constants it provably need not: `test_a_consumer_uses_the_library_only_through_its_public_api`
+    forbids the server from importing anything but `kingfisher` itself, so every
+    library constant it can legally read is in `__all__` and exempt here already.
+    Checked against the tree rather than argued -- no constant in the package is
+    read by `service/src` and unread by the library.
+    """
+    import kingfisher
+
+    read = _referenced_in_code()
+    public = frozenset(kingfisher.__all__)
+    found = _constants_in_package()
+
+    # A collector pointed at the wrong root finds nothing and reports success --
+    # the failure this file has shipped twice, once in `_modules_in` and once in
+    # the consumer collector. Named layers rather than a count, so this says
+    # which half of the package stopped being walked. All four define constants;
+    # `domain` and `infrastructure` hold sixty-seven of the seventy-three.
+    layers = {"domain", "application", "infrastructure", "presentation"}
+    walked = {path.relative_to(SRC).parts[0] for path in found.values()}
+
+    assert layers <= walked, (
+        f"no constants found under {sorted(layers - walked)} -- the walk has shrunk "
+        "and this rule is now about whatever is left"
+    )
+
+    orphans = {
+        name: str(path.relative_to(SRC))
+        for name, path in _unread(found, read, public).items()
+    }
+
+    assert not orphans, (
+        f"defined but never read outside tests: {orphans} -- delete it, export it, "
+        "or add it to READ_ELSEWHERE naming what reads it. A constant a test is "
+        "the sole reader of pins the test to itself"
+    )
+
+
+def test_the_unread_check_knows_the_three_ways_out():
+    """Every constant in the tree is read, published or exempted, so the rule
+    above passes whether `_unread` subtracts anything or nothing. This is the
+    answer `src/` cannot give: one name for each way out, and one with none.
+    """
+    here = Path("domain/result.py")
+    found = {"READ": here, "PUBLISHED": here, "KINDS": here, "ORPHAN": here}
+
+    assert _unread(found, {"READ"}, frozenset({"PUBLISHED"})) == {"ORPHAN": here}
+    # And the direction that must not fire: nothing defined is nothing to report.
+    assert _unread({}, set(), frozenset()) == {}
+
+
+def test_a_constant_is_not_counted_as_its_own_reader():
+    """The mutation the tree cannot catch, because a clean tree is silent about it.
+
+    Drop the `Load` test in `_names_read` and every constant in the package
+    reports itself read, the rule above passes over anything, and nothing goes
+    red -- which is precisely how it would ship. These are the six answers
+    `src/` cannot give: an assignment is not a read of what it assigns, but a
+    load, an attribute, either shape of import and an annotated assignment's
+    value all are, and prose is not.
+    """
+    assert _names_read("KINDS = ('token',)\n") == set()
+    assert _names_read("SOURCES = [ROUTE, OTHER]\n") == {"ROUTE", "OTHER"}
+    assert _names_read("SOURCES: list[str] = [ROUTE]\n") == {"list", "str", "ROUTE"}
+    assert _names_read("x = mod.KINDS\n") == {"mod", "KINDS"}
+    assert _names_read("from m import KINDS\nimport a.b as ROUTE\n") == {"KINDS", "ROUTE"}
+    assert _names_read('"""KINDS is named here in prose only."""\n') == set()
+
+
+def test_the_constant_reader_reads_module_level_constants():
+    """Pinned against source written for the purpose, because the real tree is
+    expected to be clean and a reader that found nothing would look identical --
+    the same reason `_kinds_branched_on` has a test of its own.
+    """
+    source = (
+        "ROUTE = '/skills/'\n"
+        "SOURCES: list[str] = [ROUTE]\n"
+        "FIRST = SECOND = 1\n"
+        "LATER: int\n"
+        "__version__ = '0.1.0'\n"
+        "lower = 1\n"
+        "class K:\n"
+        "    INNER = 2\n"
+        "def f():\n"
+        "    ALSO_INNER = 3\n"
+    )
+
+    assert _constants_defined(source) == [
+        ("ROUTE", "'/skills/'"),
+        ("SOURCES", "[ROUTE]"),
+        ("FIRST", "1"),
+        ("SECOND", "1"),
+    ]
+
+
+def test_every_named_constant_exemption_is_a_real_constant():
+    """An exemption for a name nobody defines any more silences nothing, and
+    reads as though somebody thought about it. `DISPATCHED_ELSEWHERE` has no such
+    guard and should; this table starts with one, since it exists to hold the
+    cases a reader has to take on trust.
+    """
+    defined = set(_constants_in_package())
+
+    assert defined >= READ_ELSEWHERE, (
+        f"{sorted(READ_ELSEWHERE - defined)} is exempted but no longer defined in "
+        "the package -- drop the entry"
     )
 
 
@@ -1694,20 +2299,17 @@ def test_no_value_is_written_down_twice():
 
     `assets/` is excluded like everywhere else here: those are definitions the
     agent runs, and two of them declaring the same constant is their business.
+
+    The collector moved out to `_constants_defined` when the orphan rule needed
+    the same walk. Two readings of "what is a constant" in one file is the fault
+    this rule is named for, one level up.
     """
     seen: dict[tuple[str, str], list[str]] = {}
     for path in sorted(SRC.rglob("*.py")):
         if _is_content(path):
             continue
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            targets = (
-                [node.target] if isinstance(node, ast.AnnAssign) else
-                getattr(node, "targets", []) if isinstance(node, ast.Assign) else []
-            )
-            for target in targets:
-                if isinstance(target, ast.Name) and target.id.isupper() and node.value:
-                    key = (target.id, ast.unparse(node.value))
-                    seen.setdefault(key, []).append(str(path.relative_to(SRC)))
+        for name, value in _constants_defined(path.read_text(encoding="utf-8")):
+            seen.setdefault((name, value), []).append(str(path.relative_to(SRC)))
 
     twice = {
         f"{name} = {value}": places

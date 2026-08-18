@@ -74,7 +74,7 @@ def _events(cfg, session_dir, name="s"):
         stream(
             Request("go", session_id=name),
             cfg=cfg,
-            agent=_two_level(cfg, session_dir),
+            graph=_two_level(cfg, session_dir),
             checkpointer=StubCheckpointer(),
         )
     )
@@ -147,7 +147,7 @@ def test_a_run_without_delegates_renders_exactly_as_before(cfg):
         stream(
             Request("go", session_id="plain"),
             cfg=cfg,
-            agent=StubAgent("42", updates=[{"agent": {"messages": [AIMessage(content="hi")]}}]),
+            graph=StubAgent("42", updates=[{"agent": {"messages": [AIMessage(content="hi")]}}]),
             checkpointer=StubCheckpointer(),
         )
     )
@@ -204,7 +204,7 @@ def test_a_turn_cut_short_after_a_delegate_reports_no_delegate_answer(cfg):
         stream(
             Request("go", session_id="cut"),
             cfg=replace(cfg, turn_timeout_s=0),
-            agent=_DelegateSpeaksFirst(),
+            graph=_DelegateSpeaksFirst(),
             checkpointer=StubCheckpointer(),
         )
     )

@@ -17,9 +17,9 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.agent import available_skills, build_agent
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from tests.conftest import FakeToolCallingModel
 
 GOOD = "---\nname: {name}\ndescription: {desc}\n---\nBody of the skill.\n"
@@ -92,7 +92,7 @@ def test_validation_offers_only_what_will_load(cfg):
 
 
 def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):
-    """It used to build. The grant was accepted, `ScopedSkills` allowed the
+    """It used to build. The grant was accepted, `NarrowedSkills` allowed the
     name, deepagents never listed it, and the agent got no skills at all --
     with nothing anywhere saying so."""
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")

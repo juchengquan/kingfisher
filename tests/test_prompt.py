@@ -3,7 +3,7 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.delegation import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,

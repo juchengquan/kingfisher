@@ -19,8 +19,8 @@ could choose between. It conflated two things: which *wire format* to construct
 and which *endpoint* to send to, welded 1:1 -- so a deployment had exactly one
 endpoint per wire format and two Anthropic-compatible gateways were
 unconfigurable. The wire formats are now a closed registry in
-`infrastructure.models`, keyed by `api`, and endpoints are open data read from
-`models.yaml`. See `docs/design/2026-08-16-model-catalogue.md`.
+`infrastructure.harness.models`, keyed by `api`, and endpoints are open data
+read from `models.yaml`. See `docs/design/2026-08-16-model-catalogue.md`.
 """
 
 from __future__ import annotations
@@ -123,8 +123,9 @@ def definition_roots_for(
     skills_root: Path | None = None,
     subagents_root: Path | None = None,
     tools_root: Path | None = None,
+    agents_root: Path | None = None,
 ) -> dict[str, Path]:
-    """The three definition directories: an override, or a name in the workspace.
+    """The four definition directories: an override, or a name in the workspace.
 
     A free function because two records answer this question and the answer has
     to be the same one. `Config` is the whole configuration and needs a model
@@ -134,6 +135,7 @@ def definition_roots_for(
     catalogue gets seeded into the directory it stopped reading.
     """
     return {
+        "agents": agents_root or workspace / "agents",
         "skills": skills_root or workspace / "skills",
         "subagents": subagents_root or workspace / "subagents",
         "tools": tools_root or workspace / "tools",
@@ -159,11 +161,16 @@ class WorkspacePaths:
     skills_root: Path | None = None
     subagents_root: Path | None = None
     tools_root: Path | None = None
+    agents_root: Path | None = None
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
         return definition_roots_for(
-            self.workspace, self.skills_root, self.subagents_root, self.tools_root
+            self.workspace,
+            self.skills_root,
+            self.subagents_root,
+            self.tools_root,
+            self.agents_root,
         )
 
 
@@ -410,6 +417,7 @@ class Config:
     skills_root: Path | None = None
     subagents_root: Path | None = None
     tools_root: Path | None = None
+    agents_root: Path | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix
@@ -471,7 +479,7 @@ class Config:
 
         Defaults inside the workspace so scratch is disposed of with it. Point
         it at `/tmp` for one fixed location per machine — but see
-        `infrastructure.backend.prepare_scratch`: `/tmp` is world-writable, so the
+        `infrastructure.harness.backend.prepare_scratch`: `/tmp` is world-writable, so the
         directory is created private and checked before use.
         """
         return self.scratch_root or self.state_dir / "tmp"
@@ -512,13 +520,17 @@ class Config:
 
         A `Kingfisher` may be handed a different mapping, which is the whole
         seam: this is the fallback, not the only source. See
-        `workspace_fs.resolve_definitions`.
+        `infrastructure.catalogue.resolve_definitions`.
 
         Delegated to `definition_roots_for` because `WorkspacePaths` answers the
         same question before a catalogue has been read, and the two must not be
         able to disagree.
         """
         return definition_roots_for(
-            self.workspace, self.skills_root, self.subagents_root, self.tools_root
+            self.workspace,
+            self.skills_root,
+            self.subagents_root,
+            self.tools_root,
+            self.agents_root,
         )
 

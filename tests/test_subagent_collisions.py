@@ -17,8 +17,8 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 SPEC = """

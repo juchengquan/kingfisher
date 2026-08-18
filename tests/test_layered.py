@@ -16,7 +16,7 @@ import pytest
 from kingfisher.domain.ports import SkillRepository, SubagentRepository
 from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.layered import (
+from kingfisher.infrastructure.catalogue.layered import (
     LayeredSkills,
     LayeredSubagents,
     for_session,

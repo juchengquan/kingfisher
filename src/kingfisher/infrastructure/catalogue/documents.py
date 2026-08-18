@@ -18,9 +18,14 @@ ones are, so a skill that loaded fine could not be uploaded.
 arrive from a catalogue service under `DefinitionStore`, which makes them input
 rather than something we wrote.
 
-Named `definitions` rather than `fields`: one name across two layers makes
-every import a small act of guessing, which is why `scoping` is not called
-`capabilities` either.
+Named `documents` rather than `definitions`, which is what it was called while
+it sat flat in `infrastructure/`. The old name was chosen against `domain.fields`
+-- one name across two layers makes every import a small act of guessing, which
+is why `narrowing` is not called `capabilities` either -- and the move gave it a
+nearer collision than the one it was avoiding: `Definitions`, the deployment's
+three repositories, is defined one file away in this package's `__init__`. Two
+unrelated things a directory listing apart is worse than two related things a
+layer apart. `documents` is what the first line already said it does.
 """
 
 from __future__ import annotations
@@ -29,7 +34,8 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import skill, subagent
+from kingfisher.domain import agent, skill, subagent
+from kingfisher.domain.subagent import reading
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -94,11 +100,28 @@ def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
     if isinstance(fields, str):
         msg = f"{source.name}: cannot read definition ({fields})"
         raise subagent.SubagentError(msg)
-    _require_literal_prompt(text, source)
-    return subagent.parse(fields, source)
+    _require_literal_prompt(text, source, subagent.SubagentError)
+    return reading.parse(fields, source)
 
 
-def _require_literal_prompt(text: str, source: Path) -> None:
+def read_agent(text: str, source: Path) -> agent.AgentSpec:
+    """One agent definition. Raises `AgentError` on anything malformed.
+
+    The same three steps a subagent takes, and deliberately not a shared
+    function taking a parser: what differs is the exception, and that is the
+    one thing a caller reading a traceback needs to be right. `AgentError`
+    and `SubagentError` are not interchangeable to someone finding out which
+    of two folders holds the broken file.
+    """
+    fields = decode(text)
+    if isinstance(fields, str):
+        msg = f"{source.name}: cannot read definition ({fields})"
+        raise agent.AgentError(msg)
+    _require_literal_prompt(text, source, agent.AgentError)
+    return agent.parse(fields, source)
+
+
+def _require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> None:
     """Refuse a `system_prompt` written in a style that reflows it.
 
     `>` folds consecutive lines into one, so
@@ -116,9 +139,13 @@ def _require_literal_prompt(text: str, source: Path) -> None:
     refuses to load. Checking it would mean reading the document a second time
     by hand, to catch something that is not silent.
 
-    Here rather than in `domain.subagent` because a scalar's style is a fact
+    Here rather than in `domain.subagent.reading` because a scalar's style is a fact
     about the document, not about what a subagent means. The domain is handed
     fields; by then every style looks alike.
+
+    Both formats spell the prompt `system_prompt` and both reflow it the same
+    way, so one check serves them -- with the format's own exception passed in,
+    since that is the half a reader needs to be right about which file to open.
     """
     node = yaml.compose(text)
     if not isinstance(node, yaml.MappingNode):  # pragma: no cover -- decode checked
@@ -133,7 +160,7 @@ def _require_literal_prompt(text: str, source: Path) -> None:
                 f"Use a literal block -- `system_prompt: {LITERAL}` -- so the prompt "
                 "reaches the delegate with the line breaks you wrote"
             )
-            raise subagent.SubagentError(msg)
+            raise error(msg)
         return
 
 

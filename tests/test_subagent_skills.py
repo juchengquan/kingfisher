@@ -13,9 +13,9 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, capture_build
 
 
@@ -58,7 +58,7 @@ def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir, mo
 
     captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
 
-    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, ScopedSkills)]
+    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
     assert set(scoped._allowed) == {"tabular-qa"}
 
 
@@ -70,7 +70,7 @@ def test_omitting_skills_grants_none(cfg, session_dir, monkeypatch):
 
     captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
 
-    assert not [m for m in middleware_of(captured, "reviewer") if isinstance(m, ScopedSkills)]
+    assert not [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
 
 
 def test_omitting_tools_still_inherits(cfg, session_dir, monkeypatch):
@@ -95,7 +95,7 @@ def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
     captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
     middleware = middleware_of(captured, "reviewer")
 
-    assert [type(m).__name__ for m in middleware] == ["ToolAllowlist", "ScopedSkills"]
+    assert [type(m).__name__ for m in middleware] == ["ToolAllowlist", "NarrowedSkills"]
 
 
 # -- the two refusals -----------------------------------------------------
@@ -126,7 +126,7 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch)
         cfg, session_dir, monkeypatch, subagents=("reviewer",), skills=("tabular-qa",)
     )
 
-    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, ScopedSkills)]
+    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
     assert set(scoped._allowed) == {"tabular-qa"}, "the delegate kept a skill its caller lacked"
 
 

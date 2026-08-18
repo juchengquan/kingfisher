@@ -37,7 +37,7 @@ def _session_dir(cfg: Config, session_id: str):
 
 
 def test_the_conversation_is_a_file_inside_the_session(cfg):
-    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"))
 
     result = kf.run(Request("go"))
 
@@ -47,7 +47,7 @@ def test_the_conversation_is_a_file_inside_the_session(cfg):
 def test_nothing_is_written_to_a_workspace_wide_database(cfg):
     """The shared file is what orphans came from. If one is still being opened,
     this whole change bought nothing."""
-    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"))
 
     kf.run(Request("go"))
 
@@ -58,7 +58,7 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
     """`session_max_bytes` measures a directory, so checkpoint state was
     invisible to it while it sat above every session -- the same blind spot the
     tool caches had before `HOME` moved into the session."""
-    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
 
     directory = _session_dir(cfg, result.session_id)
@@ -108,7 +108,7 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
 
 def test_two_sessions_keep_separate_conversations(cfg):
     """Structural, not enforced: they are different files."""
-    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"))
 
     one, two = kf.run(Request("a")), kf.run(Request("b"))
 
@@ -122,7 +122,7 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg):
     """No `ThreadStore` involved, which is the point. An orphaned thread is not
     something the janitor cleans up here -- it is something that cannot happen.
     """
-    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
     assert session_db_path(directory).is_file()
@@ -141,7 +141,7 @@ def test_astream_works_with_nothing_injected(cfg):
     means one database shared by every session, which is the contention this
     exists to avoid.
     """
-    kf = Kingfisher(cfg, agent=AsyncStubAgent("ok"))
+    kf = Kingfisher(cfg, graph=AsyncStubAgent("ok"))
 
     async def go() -> str | None:
         session_id = None
@@ -167,7 +167,7 @@ def test_the_async_saver_actually_supports_async(cfg, session_dir):
     """
     from contextlib import AsyncExitStack
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"))
+    service = Kingfisher(cfg, graph=StubAgent("ok"))
 
     async def resolve_and_use() -> object:
         async with AsyncExitStack() as stack:
@@ -188,7 +188,7 @@ def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
     """A deployment's own store outlives every turn. Closing it after one would
     break the next."""
     store = StubCheckpointer()
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=store)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=store)
 
     kf.run(Request("go"))
     kf.run(Request("go"))
@@ -205,7 +205,7 @@ def test_a_factory_is_asked_once_per_session(cfg):
         seen.append(session_dir.name)
         return StubCheckpointer()
 
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=factory)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=factory)
     first = kf.run(Request("a"))
     kf.run(Request("b", session_id=first.session_id))
 
@@ -225,7 +225,7 @@ def test_the_connection_does_not_outlive_the_turn(cfg):
         def close(self) -> None:
             closed.append(self)
 
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=lambda _dir: Recorder())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=lambda _dir: Recorder())
     kf.run(Request("go"))
 
     assert len(closed) == 1, "the saver this service opened was not released"
@@ -236,7 +236,7 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
     more, so the sweep is one `rmtree` and the reconciliation finds nothing."""
     import time
 
-    kf = Kingfisher(cfg, agent=StubAgent("ok"))
+    kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
 
     swept = kf.reap(older_than_seconds=0, now=time.time())
@@ -251,7 +251,7 @@ def test_the_default_and_a_factory_both_survive_two_turns(cfg, injected):
     """The two shapes this service opens for itself, driven rather than
     inspected."""
     threads = None if injected is None else (lambda _dir: StubCheckpointer())
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
 
     first = kf.run(Request("one"))
     second = kf.run(Request("two", session_id=first.session_id))
@@ -271,7 +271,7 @@ def test_conversation_can_be_turned_off_entirely(cfg):
     from dataclasses import replace as replace_cfg
 
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(stateless, agent=StubAgent("ok"))
+    kf = Kingfisher(stateless, graph=StubAgent("ok"))
 
     result = kf.run(Request("go"))
 
@@ -288,7 +288,7 @@ def test_files_survive_a_stateless_turn(cfg):
     from dataclasses import replace as replace_cfg
 
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    kf = Kingfisher(stateless, agent=StubAgent("ok"))
+    kf = Kingfisher(stateless, graph=StubAgent("ok"))
     first = kf.run(Request("go"))
     directory = _session_dir(cfg, first.session_id)
     (directory / "derived" / "kept.txt").write_text("still here", encoding="utf-8")
@@ -306,7 +306,7 @@ def test_the_flag_wins_over_an_injected_store(cfg):
 
     store = StubCheckpointer()
     stateless = replace_cfg(cfg, conversation_enabled=False)
-    service = Kingfisher(stateless, agent=StubAgent("ok"), threads=store)
+    service = Kingfisher(stateless, graph=StubAgent("ok"), threads=store)
 
     saver, release = service._checkpointer_for(_session_dir(cfg, "anything"))
 
@@ -321,7 +321,7 @@ def test_the_async_path_honours_it_too(cfg, session_dir):
     from contextlib import AsyncExitStack
     from dataclasses import replace as replace_cfg
 
-    service = Kingfisher(replace_cfg(cfg, conversation_enabled=False), agent=StubAgent("ok"))
+    service = Kingfisher(replace_cfg(cfg, conversation_enabled=False), graph=StubAgent("ok"))
 
     async def resolve() -> object:
         async with AsyncExitStack() as stack:

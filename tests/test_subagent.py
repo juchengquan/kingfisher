@@ -7,17 +7,11 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.subagent import (
-    KNOWN,
-    REFUSED,
-    RunOn,
-    SubagentError,
-    SubagentSpec,
-    Wanted,
-    resolved_model,
-)
-from kingfisher.infrastructure.definitions import read_subagent, skill_name
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec, Wanted
+from kingfisher.domain.subagent.reading import KNOWN, REFUSED
+from kingfisher.domain.subagent.rules import resolved_model
+from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 
 MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -241,7 +235,7 @@ def test_every_known_field_still_parses(tmp_path):
 #: one question -- what this delegate runs -- and a file may write either as a
 #: list, so both are read into `wanted` and neither has a field of its own.
 #:
-#: Here rather than in `domain.subagent` because only this test needs it, and a
+#: Here rather than in `domain.subagent.reading` because only this test needs it, and a
 #: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
 #: exists to refuse.
 FOLDED_INTO = {"model": "wanted", "alias": "wanted"}
@@ -388,8 +382,8 @@ def test_the_description_may_still_be_folded(tmp_path):
 
 # -- where a delegate runs ------------------------------------------------
 #
-# The rule used to sit in `infrastructure.delegation` and take a whole `Config`
-# to read two values out of. It takes the two values now, so it is reachable
+# The rule used to sit in `infrastructure.harness.delegation` and take a whole
+# `Config` to read two values out of. It takes the two values now, so it is reachable
 # without a deployment -- which is the same "a domain rule that needs a value
 # takes the value" that `test_domain_imports_only_the_standard_library_and_itself`
 # already enforces for the record itself.

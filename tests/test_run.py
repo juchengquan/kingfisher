@@ -69,7 +69,7 @@ def test_run_creates_the_session_triple(cfg):
     result = run(
         Request("count things", session_id="sess123"),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 
@@ -88,7 +88,7 @@ def test_run_tells_the_agent_its_run_directory_in_the_task(cfg):
     run(
         Request("do a thing", session_id="abc"),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 
@@ -104,7 +104,7 @@ def test_run_logs_usage_shaped_records(cfg):
     result = run(
         Request("t", session_id="logged"),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 
@@ -128,7 +128,7 @@ def test_a_turn_disposes_of_nothing(cfg):
         start(cfg, name)
     start(cfg, "s4")
 
-    run(Request("t", session_id="s4"), cfg=cfg, agent=StubAgent("ok"),
+    run(Request("t", session_id="s4"), cfg=cfg, graph=StubAgent("ok"),
         checkpointer=StubCheckpointer())
 
     for name in ("s1", "s2", "s3", "s4"):
@@ -142,12 +142,12 @@ def test_a_second_turn_does_not_overwrite_the_first(cfg):
     start(cfg, "sess")
     ck = StubCheckpointer()
     first = run(
-        Request("turn one", session_id="sess"), cfg=cfg, agent=StubAgent("a"), checkpointer=ck
+        Request("turn one", session_id="sess"), cfg=cfg, graph=StubAgent("a"), checkpointer=ck
     )
     (first.run_dir / "report.md").write_text("FROM TURN ONE")
 
     second = run(
-        Request("turn two", session_id="sess"), cfg=cfg, agent=StubAgent("b"), checkpointer=ck
+        Request("turn two", session_id="sess"), cfg=cfg, graph=StubAgent("b"), checkpointer=ck
     )
     (second.run_dir / "report.md").write_text("FROM TURN TWO")
 
@@ -171,7 +171,7 @@ def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
     result = run(
         Request("summarise it", session_id="s", inputs=(supplied,)),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 
@@ -188,7 +188,7 @@ def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
     result = run(
         Request("just answer", session_id="s"),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 
@@ -198,7 +198,7 @@ def test_no_inputs_means_no_input_directory_and_no_mention(cfg):
 
 def test_a_bare_task_string_still_works(cfg):
     """`run("do a thing")` must stay readable; Request is for when you need it."""
-    result = run("just this", cfg=cfg, agent=StubAgent("ok"), checkpointer=StubCheckpointer())
+    result = run("just this", cfg=cfg, graph=StubAgent("ok"), checkpointer=StubCheckpointer())
     assert result.answer == "ok"
 
 
@@ -263,7 +263,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
     demand was softened to a suggestion, a real analysis that recorded nothing.
     """
     quiet = StubAgent("ok")
-    result = run(Request("say hello"), cfg=cfg, agent=quiet, checkpointer=StubCheckpointer())
+    result = run(Request("say hello"), cfg=cfg, graph=quiet, checkpointer=StubCheckpointer())
     sent = quiet.state["messages"][0]["content"]
 
     assert result.run_dir.name in sent  # the turn directory is a fact, and reaches it
@@ -274,7 +274,7 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
     run(
         Request("Analyse it and write findings.csv"),
         cfg=cfg,
-        agent=asked,
+        graph=asked,
         checkpointer=StubCheckpointer(),
     )
     # Whatever the caller names, verbatim and unembellished.
@@ -292,13 +292,13 @@ def test_supplied_data_is_still_there_on_the_next_turn(cfg):
     first = run(
         Request("look at it", session_id="keeps", data=(source,)),
         cfg=cfg,
-        agent=StubAgent("ok"),
+        graph=StubAgent("ok"),
         checkpointer=ck,
     )
     second = run(
         Request("and again", session_id="keeps"),
         cfg=cfg,
-        agent=StubAgent("ok"),
+        graph=StubAgent("ok"),
         checkpointer=ck,
     )
 
@@ -319,7 +319,7 @@ def test_data_and_inputs_go_to_different_places(cfg):
     result = run(
         Request("go", session_id="split", inputs=(transient,), data=(durable,)),
         cfg=cfg,
-        agent=StubAgent("ok"),
+        graph=StubAgent("ok"),
         checkpointer=StubCheckpointer(),
     )
     session = result.run_dir.parent.parent
@@ -340,7 +340,7 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
     run(
         Request("go", session_id="told", data=(source,)),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 
@@ -358,7 +358,7 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
 def test_the_result_names_the_turn_the_way_the_agent_does(cfg):
     """Machine-independent, and the same string the agent was given, so a
     caller reading the answer and a caller reading the files agree."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 
     result = service.run(Request("go", session_id="s"))
@@ -371,7 +371,7 @@ def test_everything_but_the_host_paths_is_json(cfg):
     a bespoke converter and they would each pick something different."""
     import dataclasses
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
     result = service.run(Request("go", session_id="s"))
 
@@ -389,7 +389,7 @@ def test_the_host_paths_refuse_to_serialise(cfg):
     every response; raising is what sends them looking."""
     import dataclasses
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
     result = service.run(Request("go", session_id="s"))
 
@@ -400,7 +400,7 @@ def test_the_host_paths_refuse_to_serialise(cfg):
 def test_the_virtual_directory_and_the_artifacts_share_a_root(cfg):
     """Both are rooted at the session, so they read together. A caller that
     joins them gets a path the agent would recognise."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 
     result = service.run(Request("go", session_id="s"))

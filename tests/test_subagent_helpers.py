@@ -20,11 +20,13 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.domain.subagent import SubagentError, SubagentSpec, refuse_cycles
-from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.domain.subagent import SubagentError, SubagentSpec
+from kingfisher.domain.subagent.rules import refuse_cycles
+from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
-from tests.conftest import FakeToolCallingModel, subagents_dir
+from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -52,6 +54,20 @@ system_prompt: |
 """
 
 NESTING_HELPER = HELPER.replace("system_prompt:", "subagents: [checker]\nsystem_prompt:")
+
+#: A parent that pinned a model, above a helper that named none. The pair is
+#: the whole question of what "no model" means one level down.
+CHEAP_REVIEWER = REVIEWER.replace("subagents:", "model: cheap-model\nsubagents:")
+
+#: The same pairing, where the helper is the one that asked to be elsewhere.
+#: `alternate` binds to `elsewhere-model`, and so does the parent -- so the two
+#: are the same model, which is exactly what `distinct` rules out.
+ELSEWHERE_REVIEWER = REVIEWER.replace(
+    "subagents:", "model: elsewhere-model\nsubagents:"
+)
+DISTINCT_HELPER = HELPER.replace(
+    "system_prompt:", "alias: alternate\ndistinct: true\nsystem_prompt:"
+)
 
 
 def _define(cfg, *definitions: str) -> None:
@@ -465,3 +481,88 @@ def test_a_diamond_is_not_a_cycle():
     }
 
     refuse_cycles(specs)  # no raise
+
+
+def _helper_specs(spec) -> dict:
+    """The helper specs kingfisher hung off one delegate, by name.
+
+    They reach deepagents inside a `SubAgentMiddleware` rather than on the spec,
+    so this is where a helper's own model is legible -- the compiled graph has
+    it too, several closures down, and reading it there would test the walk
+    rather than the decision.
+    """
+    for middleware in spec.get("middleware", []):
+        for attribute in ("subagents", "_subagents"):
+            if found := getattr(middleware, attribute, None):
+                return {helper["name"]: helper for helper in found}
+    return {}
+
+
+def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(
+    cfg, session_dir, monkeypatch
+):
+    """A definition naming no model runs whatever reached it, and one level down
+    that is the delegate above -- not the main agent.
+
+    The two were the same thing while nothing between the agent and a helper
+    could name a model. `reviewer` pinning the cheap one is where they part, and
+    the old answer handed its helper the expensive model with nothing saying so:
+    no error, no warning, and a bill that looks like somebody else's.
+    """
+    _define(cfg, CHEAP_REVIEWER, HELPER)
+    captured = capture_build(monkeypatch)
+    main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=main,
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    )
+
+    parent = {spec["name"]: spec for spec in captured["subagents"]}["reviewer"]
+    helper = _helper_specs(parent)["second-opinion"]
+
+    assert helper["model"] is not main, "the helper inherited the main agent's model"
+    assert helper["model"].model == "cheap-model"
+
+
+def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
+    cfg, session_dir, monkeypatch
+):
+    """The other half, and the one that must not have changed.
+
+    Nothing between the agent and the helper names a model, so "whatever
+    summoned it" resolves all the way up to the agent -- which is what happened
+    before and what every existing catalogue relies on.
+    """
+    _define(cfg, REVIEWER, HELPER)
+    captured = capture_build(monkeypatch)
+    main = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=main,
+        capabilities=Capabilities(subagents=("reviewer", "second-opinion")),
+    )
+
+    parent = {spec["name"]: spec for spec in captured["subagents"]}["reviewer"]
+    assert _helper_specs(parent)["second-opinion"]["model"] is main
+
+
+def test_a_helper_that_must_differ_is_refused_beside_its_own_summoner(
+    cfg, session_dir
+):
+    """The build is where the summoner is known, so the build is where this has
+    to be measured.
+
+    `second-opinion` is genuinely elsewhere from the main agent and not from
+    `reviewer`, which pinned the same model. Judged against the deployment's
+    default it looks fine; judged against what summoned it, it is the one thing
+    it was written to refuse.
+    """
+    _define(cfg, ELSEWHERE_REVIEWER, DISTINCT_HELPER)
+
+    with pytest.raises(ConfigError, match="same model as the delegate that summoned it"):
+        _build(cfg, session_dir)

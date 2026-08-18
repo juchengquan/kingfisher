@@ -22,7 +22,7 @@ from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
-from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import indistinct_delegates
 from kingfisher.infrastructure.harness.delegation import model_for
 from tests.conftest import subagents_dir
@@ -346,6 +346,30 @@ def test_a_delegate_that_must_differ_is_content_when_it_does(cfg):
     spec = _spec_from(DISTINCT_BY_ALIAS.format(alias="alternate"))
 
     assert model_for(spec, cfg) == "elsewhere-model"
+
+
+def test_a_delegate_that_must_differ_is_measured_against_who_summoned_it(cfg):
+    """"Elsewhere" is relative to the thing that asked, not to the deployment.
+
+    The two agreed while only the deployment could name a model. They part the
+    moment anything between the agent and this delegate names one of its own: a
+    parent already running `elsewhere-model` summoning a helper bound to
+    `elsewhere-model` is two of the same model side by side, and measured
+    against the deployment's default it looks like a difference.
+
+    Which is the failure this flag exists for, arriving through the one door it
+    was not watching -- the delegate still builds, still answers, and the answer
+    is worth nothing.
+    """
+    spec = _spec_from(DISTINCT_BY_ALIAS.format(alias="alternate"))
+
+    # Under the main agent, which runs the deployment's own model, it genuinely
+    # is somewhere else.
+    assert model_for(spec, cfg) == "elsewhere-model"
+
+    # Under a delegate already running that model, it is not.
+    with pytest.raises(ConfigError, match="same model as the delegate that summoned it"):
+        model_for(spec, cfg, caller="elsewhere-model")
 
 
 def test_without_the_flag_the_same_model_is_still_only_reported(cfg, session_dir):

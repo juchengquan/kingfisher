@@ -41,7 +41,7 @@ def store(tmp_path):
 def service(cfg, store):
     return Kingfisher(
         cfg,
-        agent=StubAgent("ok"),
+        graph=StubAgent("ok"),
         threads=StubCheckpointer(),
         files=LocalFileStore(store),
     )
@@ -167,7 +167,7 @@ def test_a_bad_reference_gives_the_claim_back(service, cfg):
 def test_naming_files_by_id_without_a_store_is_a_deployment_error(cfg):
     """Told apart from a ref that does not resolve, because one is a wiring
     mistake nobody outside can fix and the other is a bad request."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session_id = service.start_session()
 
     with pytest.raises(MissingStoreError):
@@ -183,7 +183,7 @@ def test_a_request_with_no_references_never_asks_the_store(cfg, store):
             pytest.fail("a request naming no references must not consult the store")
 
     service = Kingfisher(
-        cfg, agent=StubAgent("ok"), threads=StubCheckpointer(), files=Explodes()
+        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), files=Explodes()
     )
     session_id = service.start_session()
 
@@ -250,7 +250,7 @@ def test_a_store_key_that_climbs_out_is_refused(cfg):
             return {"../../escaped.txt": b"x"}
 
     service = Kingfisher(
-        cfg, agent=StubAgent("ok"), threads=StubCheckpointer(), files=Hostile()
+        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), files=Hostile()
     )
     session_id = service.start_session()
 
@@ -278,7 +278,7 @@ def test_a_hostile_key_is_refused_before_a_turn_exists(cfg):
             return {"../../escaped.txt": b"x"}
 
     service = Kingfisher(
-        cfg, agent=StubAgent("ok"), threads=StubCheckpointer(), files=Hostile()
+        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), files=Hostile()
     )
     session_id = service.start_session()
     runs = cfg.workspace / "sessions" / session_id / "runs"

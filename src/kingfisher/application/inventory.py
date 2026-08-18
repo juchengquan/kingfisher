@@ -26,13 +26,20 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.config import Config
-from kingfisher.domain.subagent import SubagentError, refuse_cycles
+from kingfisher.domain.agent import AgentError
+from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.subagent import SubagentError, SubagentSpec
+from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions, source_of
-from kingfisher.infrastructure.tool_store import ToolError
+from kingfisher.infrastructure.catalogue.tools import ToolError
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
+#: The same emptiness for the one field whose values are name tuples. Two
+#: constants rather than one untyped: an empty mapping cannot drift in value,
+#: so what this buys is the type staying honest at the field it defaults.
+_NO_NAMES: Mapping[str, tuple[str, ...]] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -54,6 +61,20 @@ class Inventory:
     #: Where each shared catalogue resolved to. Named rather than assumed.
     skills_source: str
     subagents_source: str
+    agents_source: str = ""
+
+    #: Agent name -> its description. First in the record because it is first in
+    #: the listing: an agent is what a request names, and the three kinds below
+    #: are what it selects from.
+    agents: Mapping[str, str] = _NOTHING
+    #: Agent name -> the file it came from.
+    agent_sources: Mapping[str, str] = _NOTHING
+    #: Delegate names each agent reaches, its own and theirs, resolved through
+    #: the chain. Printed because nobody maintains it: an agent file names the
+    #: delegates it calls, and what *those* call comes along -- so this is the
+    #: only place the whole tree is visible without opening every file.
+    agent_delegates: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    agents_error: str | None = None
 
     #: The agent's own tools, granted with `--builtin-tools`. Empty when the
     #: build failed, which `tools_error` says.
@@ -114,6 +135,34 @@ class Inventory:
             "skills": tuple(self.skills),
             "subagents": tuple(self.subagents),
         }
+
+
+def reached(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str, ...]:
+    """Every delegate an agent ends up with: the ones it names, and theirs.
+
+    Resolved when the catalogue is read rather than kept in a file, which is the
+    whole reason an agent names only the delegates it calls. A list written by
+    hand goes stale the moment a file somebody else owns changes its own
+    helpers, and nothing anywhere says so.
+
+    Sorted, and deduplicated by the visit rather than at the end: a definition
+    reached twice is not a loop, and `refuse_cycles` has already refused the
+    ones that are -- so this cannot run away.
+    """
+    if named is None:
+        return ()
+    frontier = list(defined) if named == ALL else list(named)
+    seen: set[str] = set()
+    while frontier:
+        name = frontier.pop()
+        if name in seen:
+            continue
+        seen.add(name)
+        spec = defined.get(name)
+        if spec is None or spec.subagents is None:
+            continue
+        frontier.extend(defined if spec.subagents == ALL else spec.subagents)
+    return tuple(sorted(seen))
 
 
 def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory:
@@ -210,10 +259,38 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
     except SubagentError as exc:
         subagents_error = str(exc)
 
+    agents: Mapping[str, str] = _NOTHING
+    agent_sources: Mapping[str, str] = _NOTHING
+    agent_delegates: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    agents_error: str | None = None
+    try:
+        # The same shape as the subagent read below it, and in one `try` for the
+        # same reason: `sources` parses the files `specs` does.
+        defined_agents = resolved.agents.specs
+        agents = {name: spec.description for name, spec in defined_agents.items()}
+        agent_sources = MappingProxyType(dict(getattr(resolved.agents, "sources", {})))
+        agent_delegates = MappingProxyType(
+            {
+                name: reached(spec.subagents, resolved.subagents.specs)
+                for name, spec in defined_agents.items()
+            }
+        )
+    except (AgentError, SubagentError) as exc:
+        # `SubagentError` too: resolving the chain reads the subagent catalogue,
+        # so a broken delegate makes the *agents* half unanswerable. Reported
+        # here rather than raised, like its neighbours -- a listing is where
+        # somebody goes because something is broken.
+        agents_error = str(exc)
+
     return Inventory(
         workspace=cfg.workspace,
         skills_source=source_of(resolved.skills),
         subagents_source=source_of(resolved.subagents),
+        agents_source=source_of(resolved.agents),
+        agents=MappingProxyType(dict(agents)),
+        agent_sources=agent_sources,
+        agent_delegates=agent_delegates,
+        agents_error=agents_error,
         builtin_tools=builtin,
         tools=workspace_tools,
         tool_sources=sources,

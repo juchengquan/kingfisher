@@ -21,7 +21,7 @@ from tests.conftest import StubCheckpointer
 
 @pytest.fixture
 def client(cfg):
-    service = Kingfisher(cfg, agent=AsyncStub("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStub("ok"), threads=StubCheckpointer())
     with TestClient(create_app(service)) as http:
         http.kingfisher = service
         yield http
