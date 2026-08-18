@@ -18,7 +18,7 @@ startup, and `yaml.load` would let a crafted document construct arbitrary
 objects before anything else runs.
 
 **A key this format does not define is refused, not ignored.** The same rule
-`domain.subagent` states, for the same reason: ignoring a key is
+`domain.subagent.reading` states, for the same reason: ignoring a key is
 indistinguishable from honouring it, and `max_token:` singular would otherwise
 parse, be dropped, and hand back the default with no error anywhere.
 """

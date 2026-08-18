@@ -1,8 +1,9 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
-`domain.subagent` owns what a definition means, `infrastructure.catalogue.subagents`
-finds the files and `infrastructure.catalogue.documents` reads one; this resolves
-what a delegate actually runs with.
+`domain.subagent` owns what a definition is and `domain.subagent.reading` what
+it means; `infrastructure.catalogue.subagents` finds the files and
+`infrastructure.catalogue.documents` reads one. This resolves what a delegate
+actually runs with.
 Each field a definition may narrow -- skills, tools, middleware, endpoint -- has
 its own rule here, and every one of them shares a shape: a name nothing defines
 is a mistake and raises, while a name the *request* did not activate is a caller
@@ -30,7 +31,8 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_endpoint,
     refuse_unoffered,
 )
-from kingfisher.domain.subagent import RunOn, SubagentError, resolved_model
+from kingfisher.domain.subagent import RunOn, SubagentError
+from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.domain.tool import Found, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist

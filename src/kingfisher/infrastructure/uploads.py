@@ -19,7 +19,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.domain import skill
-from kingfisher.domain.subagent import SUFFIX
+from kingfisher.domain.subagent.reading import SUFFIX
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
 

@@ -26,7 +26,8 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.config import Config
-from kingfisher.domain.subagent import SubagentError, refuse_cycles
+from kingfisher.domain.subagent import SubagentError
+from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions, source_of
 from kingfisher.infrastructure.catalogue.tools import ToolError

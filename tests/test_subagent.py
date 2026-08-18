@@ -7,15 +7,9 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.subagent import (
-    KNOWN,
-    REFUSED,
-    RunOn,
-    SubagentError,
-    SubagentSpec,
-    Wanted,
-    resolved_model,
-)
+from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec, Wanted
+from kingfisher.domain.subagent.reading import KNOWN, REFUSED
+from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 
@@ -241,7 +235,7 @@ def test_every_known_field_still_parses(tmp_path):
 #: one question -- what this delegate runs -- and a file may write either as a
 #: list, so both are read into `wanted` and neither has a field of its own.
 #:
-#: Here rather than in `domain.subagent` because only this test needs it, and a
+#: Here rather than in `domain.subagent.reading` because only this test needs it, and a
 #: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
 #: exists to refuse.
 FOLDED_INTO = {"model": "wanted", "alias": "wanted"}
