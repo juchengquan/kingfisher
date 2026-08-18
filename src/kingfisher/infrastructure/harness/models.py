@@ -49,7 +49,7 @@ from importlib import import_module
 from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.config import ConfigError
+from kingfisher.config import NO_EXTRA, ConfigError
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -57,9 +57,6 @@ if TYPE_CHECKING:
     from langchain_core.language_models import BaseChatModel
 
     from kingfisher.config import Endpoint, ModelProfile
-
-_NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
-
 
 @dataclass(frozen=True)
 class Adapter:
@@ -83,7 +80,7 @@ class Adapter:
     """
 
     chat_class: str
-    extra: Mapping[str, Any] = _NO_EXTRA
+    extra: Mapping[str, Any] = NO_EXTRA
 
     def resolve(self) -> type[BaseChatModel]:
         """Import the chat class this row names."""
