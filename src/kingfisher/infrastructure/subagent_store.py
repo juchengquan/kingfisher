@@ -16,20 +16,45 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.domain.subagent import SUFFIX, SubagentSpec
+from kingfisher.domain.subagent import (
+    EXPORT,
+    SUFFIX,
+    SubagentError,
+    SubagentSpec,
+    declared,
+)
 from kingfisher.domain.tool import reference
 from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.importing import (
+    PACKAGE_MARKER,
+    load,
+    modules_in,
+    skipped,
+)
+
+#: The spelling people reach for, and the one that used to vanish. `.yml` is
+#: valid YAML everywhere else, so a file named that way is a definition someone
+#: wrote and kingfisher silently did not read.
+#:
+#: Named rather than "any extension we do not recognise", which was the first
+#: draft. A folder here may now be a Python package, and a package is entitled
+#: to hold whatever it needs beside its `__init__.py` -- a JSON fixture, a CSV,
+#: a prompt in a text file. Refusing every unfamiliar suffix would break that
+#: for the sake of one confusion, so the one confusion is named.
+NEAR_MISS = ".yml"
 
 
 def _definitions_in(directory: Path) -> list[Path]:
-    """Every definition below `directory`, at any depth, in a stable order.
+    """Every definition document below `directory`, at any depth, in a stable order.
 
-    Folders are organisation and nothing else. There is no package shape to
-    honour here as there is for tools -- a definition is a document we parse,
-    not code we import -- so a walk is the whole feature.
+    Folders are organisation, and that stays true now that one may also be a
+    Python package: a package's documents are still read. A folder is a package
+    for the *module* walk, which stops at it, and a folder for this one, which
+    does not -- the two searches never look at each other's files, so one tree
+    carries both without either needing to know.
 
     Hidden directories and `__pycache__` are skipped for the same reason the
-    tool loader skips them: a one-level scan could never reach whatever a
+    module loader skips them: a one-level scan could never reach whatever a
     person left lying under the catalogue, and a recursive one can.
 
     A function and not a method: it recurses into subdirectories, so most of its
@@ -37,12 +62,53 @@ def _definitions_in(directory: Path) -> list[Path]:
     """
     found: list[Path] = []
     for entry in sorted(directory.iterdir()):
-        if entry.name.startswith(".") or entry.name == "__pycache__":
+        if skipped(entry.name):
             continue
         if entry.is_dir():
             found.extend(_definitions_in(entry))
         elif entry.name.endswith(SUFFIX):
             found.append(entry)
+        elif entry.suffix == NEAR_MISS:
+            msg = (
+                f"{entry.name}: kingfisher reads {SUFFIX!r} here, so this file is "
+                f"not loaded -- rename it to {entry.stem}{SUFFIX}"
+            )
+            raise SubagentError(msg)
+    return found
+
+
+def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
+    """Every subagent a module under `directory` declares, with where it came from.
+
+    The Python half. `modules_in` is the same collection the tool catalogue
+    walks, with the same two shapes -- a loose file is a module, a folder
+    holding `__init__.py` is one unit and is not descended into -- so a compiled
+    subagent that grew helpers writes a folder exactly as a tool does.
+
+    A module without `SUBAGENTS` is an error rather than a skipped file, for the
+    reason the tool loader gives: quietly offering fewer than the workspace
+    defines is the failure `CapabilityError` exists to prevent, one layer down.
+    """
+    found: list[tuple[SubagentSpec, str]] = []
+    for path in modules_in(directory):
+        where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
+        module = load(path, declares=EXPORT, error=SubagentError)
+        exported = getattr(module, EXPORT, None)
+        if exported is None:
+            declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
+            msg = f"{declared_in}: must define {EXPORT}, the subagents it contributes"
+            raise SubagentError(msg)
+        # A list or a tuple, and nothing looser. A compiled subagent is a
+        # `dict`, and a dict is iterable, so `SUBAGENTS = {...}` would pass a
+        # duck test and then loop over its own key names. `TOOLS` learned this
+        # from pydantic models, which are iterable for a different reason.
+        if not isinstance(exported, (list, tuple)):
+            msg = (
+                f"{where}: {EXPORT} must be a list or tuple of subagents, "
+                f"got {type(exported).__name__} -- write {EXPORT} = [my_subagent]"
+            )
+            raise SubagentError(msg)
+        found.extend((declared(entry, where), where) for entry in exported)
     return found
 
 
@@ -89,6 +155,11 @@ class LocalSubagentRepository:
             # file once two folders may each hold one.
             where = str(path.relative_to(directory))
             read.append((read_subagent(path.read_text(encoding="utf-8"), path), where))
+        # The Python half, keyed and counted with the documents rather than
+        # beside them: the two kinds share one namespace, so two definitions
+        # claiming `reviewer` are told apart the same way whichever formats they
+        # were written in.
+        read.extend(_declared_in(directory))
 
         counted: dict[str, int] = {}
         for spec, _ in read:

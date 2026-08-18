@@ -29,7 +29,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_endpoint,
     refuse_unoffered,
 )
-from kingfisher.domain.subagent import RunOn, resolved_model
+from kingfisher.domain.subagent import RunOn, SubagentError, resolved_model
 from kingfisher.domain.tool import Found, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
@@ -218,6 +218,76 @@ def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | N
     return None
 
 
+
+def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
+    # decides for a graph it did not build, each resolved by its own rule.
+    # `as_subagent` carries the same note for the same reason.
+    spec: SubagentSpec,
+    cfg: Config,
+    *,
+    endpoints: Selection = ALL,
+    tools: Selection = ALL,
+    catalogue: Sequence[Found] = (),
+    run_on: RunOn | None = None,
+    default_model: Any = None,
+) -> dict[str, Any]:
+    """A delegate the workspace built itself, wrapped the way deepagents takes one.
+
+    `CompiledSubAgent` is three keys -- name, description, runnable -- and
+    deepagents uses the runnable as given: no state schema, no tools, no model,
+    no middleware of ours reaches it. Which is why almost none of `as_subagent`
+    applies here, and why this returns early rather than sharing that body.
+
+    What kingfisher still decides is the two things a file cannot know: which
+    model this deployment binds the delegate's name to, and which of the
+    workspace's tools this request granted it. Both are resolved here and handed
+    in. The graph is free to ignore them -- nothing can stop it, since deepagents
+    never applies an allowlist to a graph it did not build -- but the honest
+    thing is the easy thing, and `--list` says which delegates are compiled so
+    nobody reads a tool grant as a guarantee.
+
+    The required keys come from deepagents' own declaration rather than a copy
+    of it, so a rename upstream fails `test_the_compiled_shape_is_deepagents_own`
+    instead of arriving as something confusing much later.
+    """
+    model_id = model_for(spec, cfg, override=run_on)
+    if model_id is not None:
+        try:
+            profile, endpoint = cfg.models.resolve(model_id)
+        except ConfigError as exc:
+            msg = f"subagent {spec.name!r}: {exc}"
+            raise ConfigError(msg) from exc
+        refuse_ungranted_endpoint(
+            profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
+        )
+        model = build_model(profile, endpoint)
+    elif default_model is not None:
+        model = default_model
+    else:
+        # It named nothing, so it runs what the deployment runs -- built here
+        # rather than left to the graph, which would otherwise reach for
+        # `init_chat_model` and read credentials around the catalogue entirely.
+        model = build_model(*cfg.models.resolve())
+
+    # `narrowed` rather than `ceiling`, and the difference is the point.
+    # `ceiling` merges the two tool axes into one allowlist, and says plainly
+    # that both must be resolved against what is offered or neither. A compiled
+    # delegate has one axis: deepagents' built-ins do not exist as objects here,
+    # so `builtin_tools` is refused in the declaration and there is no second
+    # axis to merge. What is left is the workspace's own, narrowed by what this
+    # request granted -- which is the same rule, with nothing to fold.
+    granted = [one.tool for one in select(narrowed(spec.tools, by=tools), catalogue)]
+
+    runnable = spec.build(model, granted)
+    if runnable is None:
+        msg = (
+            f"subagent {spec.name!r}: 'build' returned None. It is given a model and "
+            f"the tools this delegate was granted, and returns the graph to run"
+        )
+        raise SubagentError(msg)
+    return {"name": spec.name, "description": spec.description, "runnable": runnable}
+
+
 def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # narrow, each resolved by its own rule above. Bundling them would hide
     # which of those rules applied to a given delegate.
@@ -257,6 +327,20 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     own tool restriction is: a `ToolAllowlist` on the subagent's middleware,
     which selects by name and refuses anything else.
     """
+    if spec.build is not None:
+        # A graph the workspace assembled. Nothing below applies to it --
+        # deepagents runs it as given -- so this leaves before building a
+        # middleware stack that would be dropped on the floor.
+        return compiled(
+            spec,
+            cfg,
+            endpoints=endpoints,
+            tools=tools,
+            catalogue=catalogue,
+            run_on=run_on,
+            default_model=default_model,
+        )
+
     subagent: dict[str, Any] = {
         "name": spec.name,
         "description": spec.description,

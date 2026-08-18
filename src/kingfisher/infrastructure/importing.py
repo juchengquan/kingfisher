@@ -101,7 +101,7 @@ def _module_name(path: Path) -> str:
     return f"{_NAMESPACE}.{path.stem}_{abs(hash(str(path)))}"
 
 
-def load(path: Path, *, declares: str, error: type[LoadError] = LoadError) -> Any:
+def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> Any:
     """Import one file, or one package, without putting it on the import path.
 
     A directory is imported as a package: the spec is built from its
@@ -112,8 +112,13 @@ def load(path: Path, *, declares: str, error: type[LoadError] = LoadError) -> An
 
     `declares` is the export name the caller will look for, used only to say
     what to write when a loose file tries a relative import. `error` is the
-    caller's own subclass, so the message a reader sees names their catalogue
+    caller's own class, so the message a reader sees names their catalogue
     rather than this shared loader.
+
+    `type[ValueError]` rather than `type[LoadError]`, which was the first
+    spelling and cannot hold: `SubagentError` belongs to the domain, and a
+    domain type subclassing one from `infrastructure/` would point the
+    dependency the wrong way for the sake of a signature.
     """
     is_package = path.is_dir()
     source = path / PACKAGE_MARKER if is_package else path
