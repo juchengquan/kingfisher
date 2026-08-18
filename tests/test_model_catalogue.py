@@ -313,3 +313,104 @@ def test_the_loader_is_the_only_thing_that_needs_the_file(tmp_path):
     catalogue = loaded(tmp_path)
 
     assert catalogue.source == written(tmp_path)
+
+
+# -- a model this file defines and this machine cannot reach ---------------
+
+TWO_ENDPOINTS = """
+endpoints:
+  gateway:
+    api: anthropic
+    base_url: https://example.invalid/anthropic
+    key_env: GATEWAY_API_KEY
+  elsewhere:
+    api: openai
+    base_url: https://example.invalid/v1
+    key_env: ELSEWHERE_API_KEY
+
+default: main-model
+
+models:
+  main-model:
+    endpoint: gateway
+  far-model:
+    endpoint: elsewhere
+
+aliases:
+  alternate: far-model
+"""
+
+
+def test_a_model_on_an_unkeyed_endpoint_is_not_reported_as_undefined(tmp_path):
+    """The message this whole change exists to fix.
+
+    `far-model` is defined in the file. Its endpoint was dropped because this
+    machine has no key for it, and the answer used to be "no model 'far-model'
+    defined in <that very file>" -- true of nothing, and it sent its reader to
+    edit YAML that was correct. The fix is a variable, and the message names it.
+    """
+    models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
+
+    with pytest.raises(ConfigError) as refused:
+        models.resolve("far-model")
+
+    said = str(refused.value)
+    assert "ELSEWHERE_API_KEY" in said
+    assert "elsewhere" in said
+    assert "no model" not in said
+
+
+def test_a_name_the_file_never_defined_still_says_so(tmp_path):
+    """The other half, and why the two cannot share one message: this one *is*
+    undefined, and telling its reader about a credential would send them hunting
+    for a variable that has nothing to do with it."""
+    models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
+
+    with pytest.raises(ConfigError) as refused:
+        models.resolve("invented")
+
+    said = str(refused.value)
+    assert "no model 'invented'" in said
+    assert "API_KEY" not in said
+
+
+def test_the_alias_path_reaches_the_same_message(tmp_path):
+    """What a definition writing `alias: alternate` actually hits.
+
+    `_aliases` keeps a binding whose model was dropped, deliberately, so that
+    "saying so at the point of use names the endpoint and the variable". This is
+    that promise, tested rather than asserted in a docstring.
+    """
+    models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
+
+    with pytest.raises(ConfigError) as refused:
+        models.resolve(models.bound("alternate"))
+
+    assert "ELSEWHERE_API_KEY" in str(refused.value)
+
+
+def test_what_cannot_run_is_kept_apart_from_what_can(tmp_path):
+    """`models` means what can run and has to keep meaning it.
+
+    Which is why `unreachable` holds sentences rather than profiles: a caller
+    reaching into it for something to run gets a string, so the mistake reads
+    wrong instead of half-working.
+    """
+    models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
+
+    assert set(models.models) == {"main-model"}
+    assert set(models.unreachable) == {"far-model"}
+    assert isinstance(models.unreachable["far-model"], str)
+
+
+def test_a_catalogue_with_every_key_reaches_nothing_unreachable(tmp_path):
+    """The negative control. Without it the assertions above would pass on a
+    record that marked everything unreachable."""
+    models = load(
+        written(tmp_path, TWO_ENDPOINTS),
+        {**KEYS, "ELSEWHERE_API_KEY": "sk-elsewhere"},
+    )
+
+    assert set(models.models) == {"main-model", "far-model"}
+    assert models.unreachable == {}
+    assert models.resolve("far-model")[1].api == "openai"

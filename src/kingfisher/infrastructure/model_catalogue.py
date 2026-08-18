@@ -86,7 +86,7 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
 
 def _endpoints(
     document: Mapping[str, Any], environ: Mapping[str, str], source: Path
-) -> tuple[dict[str, Endpoint], tuple[str, ...]]:
+) -> tuple[dict[str, Endpoint], dict[str, str]]:
     """Every endpoint whose key is actually present, and the names dropped.
 
     Dropping rather than refusing is what makes one reviewed file shareable
@@ -96,7 +96,7 @@ def _endpoints(
     for.
     """
     resolved: dict[str, Endpoint] = {}
-    dropped: list[str] = []
+    dropped: dict[str, str] = {}
     for name, raw in _mapping(document.get("endpoints"), f"{source}: endpoints").items():
         entry = _mapping(raw, f"{source}: endpoint {name!r}")
         _refuse_unknown(entry, KNOWN_ENDPOINT, f"{source}: endpoint {name!r}")
@@ -108,23 +108,36 @@ def _endpoints(
         if not key:
             # Named, not hinted at. "endpoint 'minimax' has no credentials"
             # sends someone to the YAML, where everything looks correct.
-            dropped.append(f"{name} ({entry['key_env']} is not set)")
+            #
+            # Keyed by endpoint rather than pre-formatted, because two callers
+            # need it now and they word it differently: the warning below lists
+            # them, and `resolve` names one inside a sentence about a model.
+            dropped[name] = str(entry["key_env"])
             continue
         resolved[name] = Endpoint(
             api=str(entry["api"]),
             base_url=str(entry["base_url"]),
             api_key=key,
         )
-    return resolved, tuple(dropped)
+    return resolved, dropped
 
 
 def _models(
-    document: Mapping[str, Any], endpoints: Mapping[str, Endpoint], source: Path
-) -> dict[str, ModelProfile]:
-    """Every model whose endpoint survived, keyed by the id sent on the wire.
+    document: Mapping[str, Any],
+    endpoints: Mapping[str, Endpoint],
+    dropped: Mapping[str, str],
+    source: Path,
+) -> tuple[dict[str, ModelProfile], dict[str, str]]:
+    """Every model whose endpoint survived, and why each of the others did not.
 
-    A model whose endpoint was dropped is dropped with it, and silently: the
-    endpoint already said why, once, rather than once per model on it.
+    A model whose endpoint was dropped is still dropped from the first mapping:
+    it cannot run, and `models` means what can. It is no longer dropped
+    *silently*, which was the whole trouble -- once it was gone, nothing could
+    tell a name this file never defined from one this machine cannot reach, and
+    both `resolve` and `doctor` told people to go and edit correct YAML.
+
+    The second mapping is what makes that answerable, and is deliberately not a
+    place to look models up from: it holds the reason, not the profile.
     """
     profiles: dict[str, ModelProfile] = {}
     for name, raw in _mapping(document.get("models"), f"{source}: models").items():
@@ -165,7 +178,16 @@ def _models(
                 f"which this file does not define; it defines {tuple(sorted(declared))}"
             )
             raise ConfigError(msg)
-    return {n: p for n, p in profiles.items() if p.endpoint in endpoints}
+    return (
+        {n: p for n, p in profiles.items() if p.endpoint in endpoints},
+        # Worded to slot into a sentence about a model, because that is where it
+        # is read: "model 'gpt-5' runs on endpoint 'openai', whose ...".
+        {
+            name: f"endpoint {p.endpoint!r}, whose {dropped[p.endpoint]} is not set"
+            for name, p in profiles.items()
+            if p.endpoint not in endpoints and p.endpoint in dropped
+        },
+    )
 
 
 def _aliases(
@@ -275,12 +297,13 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
         # Warned even when nothing names them. A shared catalogue listing an
         # endpoint this machine cannot reach is the normal case, but silence
         # would make a *typo* in `key_env` look identical to it.
+        named = ", ".join(f"{name} ({key} is not set)" for name, key in sorted(dropped.items()))
         warnings.warn(
-            f"{path}: no credentials for endpoint(s) {', '.join(dropped)}; "
+            f"{path}: no credentials for endpoint(s) {named}; "
             f"models on them are unavailable here",
             stacklevel=2,
         )
-    models = _models(document, endpoints, path)
+    models, unreachable = _models(document, endpoints, dropped, path)
 
     default = str(document.get("default") or "").strip()
     if not default:
@@ -304,5 +327,6 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
         endpoints=endpoints,
         default=default,
         aliases=_aliases(document, models, path),
+        unreachable=unreachable,
         source=path,
     )
