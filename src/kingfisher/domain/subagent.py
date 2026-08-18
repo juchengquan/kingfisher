@@ -846,8 +846,18 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
             # past every cycle and reported a clean catalogue.
             if name in on_path:
                 loop = [*path[path.index(name) :], name]
+                # A definition that says `subagents: ['*']` never names the loop
+                # it made, so the message has to. It is always a loop: `*` is
+                # every definition in the catalogue, and every catalogue holding
+                # it holds that one.
+                by_star = specs[path[-1]].subagents == ALL if path else False
+                how = (
+                    f" -- {path[-1]!r} names every subagent with `*`, and that includes itself"
+                    if by_star
+                    else ""
+                )
                 msg = (
-                    f"subagents reach themselves: {' -> '.join(loop)}. Delegation "
+                    f"subagents reach themselves: {' -> '.join(loop)}{how}. Delegation "
                     f"nests to any depth, so a loop would build without end -- one "
                     f"of these has to stop naming the next"
                 )
@@ -859,7 +869,19 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
             seen.add(name)
             stack.append((name, True))
             spec = specs.get(name)
-            named = () if spec is None or spec.subagents in (ALL, None) else spec.subagents
+            # `*` means every definition here, which is what `subagent_helpers`
+            # expands it to when it builds. This read it as *no* edges, so a
+            # definition saying it consults everything passed the walk and then
+            # recursed without bound at build time -- `_with_helpers` has no
+            # re-entry guard and says in a comment that it needs none, because
+            # this ran. The two have to agree about what `*` means or the
+            # guarantee is only about the catalogues that avoid it.
+            if spec is None or spec.subagents is None:
+                named: tuple[str, ...] = ()
+            elif spec.subagents == ALL:
+                named = tuple(specs)
+            else:
+                named = spec.subagents
             # Reverse-sorted onto a stack, so they pop in order and a loop is
             # reported by the same path every time rather than by whichever
             # branch the dict happened to yield first.

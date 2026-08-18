@@ -162,7 +162,7 @@ def test_a_skill_repository_lists_once_for_both_of_its_questions(catalogue, monk
 def test_a_repository_does_not_notice_a_definition_written_after_it_read(catalogue):
     """Stated as behaviour rather than left to be discovered. A repository is
     the *deployment's* view of its catalogue, settled when it was wired --
-    `Catalogue.warm` already made that trade deliberately, and this is where it
+    `Definitions.warm` already made that trade deliberately, and this is where it
     now lives. A dev loop gets the old behaviour by building a new one.
     """
     subagents = LocalSubagentRepository(catalogue / "subagents")
@@ -178,7 +178,7 @@ def test_a_repository_does_not_notice_a_definition_written_after_it_read(catalog
 
 def test_a_broken_definition_raises_on_the_read_and_not_on_construction(catalogue):
     """Which is what lets `--list` build one and still report the failure over
-    the rest of the inventory, and what lets `Catalogue.warm` choose when a
+    the rest of the inventory, and what lets `Definitions.warm` choose when a
     deployment pays for it."""
     # A malformed definition, where this used to use two files claiming one
     # name -- that pair is legal now and told apart by file, so it no longer

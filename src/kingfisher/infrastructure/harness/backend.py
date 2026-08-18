@@ -24,7 +24,7 @@ from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellB
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.catalogue import Catalogue, catalogue_root
+from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.harness.skills_backend import skills_backend
 
 if TYPE_CHECKING:
@@ -58,7 +58,7 @@ def agent_home(session_dir: Path) -> Path:
 
 
 def shell_env(
-    cfg: Config, session_dir: Path, *, catalogue: Catalogue | None = None
+    cfg: Config, session_dir: Path, *, catalogue: Definitions | None = None
 ) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
@@ -96,7 +96,7 @@ def shell_env(
     # deployment cannot run skill scripts" into `no such file or directory` on
     # a path the operator never configured. Absent, `sh "$KINGFISHER_SKILLS/x"`
     # fails immediately and says the variable is unset, which is the truth.
-    root = catalogue_root((catalogue or Catalogue.from_config(cfg)).skills)
+    root = catalogue_root((catalogue or Definitions.from_config(cfg)).skills)
     if root is not None:
         env["KINGFISHER_SKILLS"] = str(root)
     return env
@@ -342,7 +342,7 @@ MEMORY_SOURCES = [f"{MEMORY_ROUTE}AGENTS.md"]
 
 
 def build_backend(
-    cfg: Config, session_dir: Path, *, catalogue: Catalogue | None = None
+    cfg: Config, session_dir: Path, *, catalogue: Definitions | None = None
 ) -> BackendProtocol:
     """Build the backend rooted at one session.
 
@@ -373,7 +373,7 @@ def build_backend(
     `execute` still works, because CompositeBackend delegates execution to its
     default backend.
     """
-    skills = (catalogue or Catalogue.from_config(cfg)).skills
+    skills = (catalogue or Definitions.from_config(cfg)).skills
     # A directory on this host stays a directory: cheaper than copying every
     # skill into a store, and the only shape whose skills can also be *run*,
     # since a skill's scripts are executed by the shell against
@@ -388,7 +388,7 @@ def build_backend(
     uploaded = session_dir / "skills" / "uploaded"
     uploaded.mkdir(parents=True, exist_ok=True)
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
-    # already refused by `resolve_catalogue` if it did not, so this only ever
+    # already refused by `resolve_definitions` if it did not, so this only ever
     # creates a derived one -- and stays here for the callers that build a
     # backend directly, without a service to have resolved anything for them.
     if skills_dir is not None:

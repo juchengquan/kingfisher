@@ -28,7 +28,7 @@ from types import MappingProxyType
 from kingfisher.config import Config
 from kingfisher.domain.subagent import SubagentError, refuse_cycles
 from kingfisher.domain.tool import Offering
-from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue, source_of
+from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions, source_of
 from kingfisher.infrastructure.tool_store import ToolError
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
@@ -111,7 +111,7 @@ class Inventory:
         }
 
 
-def inventory(cfg: Config, *, catalogue: Catalogue | None = None) -> Inventory:
+def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use.
 
     `catalogue` is accepted so a caller that already resolved one does not
@@ -124,7 +124,7 @@ def inventory(cfg: Config, *, catalogue: Catalogue | None = None) -> Inventory:
         registered_tools,
     )
 
-    resolved = catalogue if catalogue is not None else resolve_catalogue(cfg)
+    resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
 
     builtin: tuple[str, ...] = ()
     workspace_tools: tuple[str, ...] = ()

@@ -379,3 +379,72 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
         f"`shared` is reached by two parents and activated directly; it should "
         f"compile once per position, got {built}"
     )
+
+
+# -- the star is an edge, not an absence -----------------------------------
+
+
+def _spec(name, subagents=None):
+    body = f"name: {name}\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+    if subagents is not None:
+        body += f"subagents: {subagents}\n"
+    return read_subagent(body, Path(f"{name}.yaml"))
+
+
+def test_a_definition_that_consults_everything_is_a_loop():
+    """`subagents: ['*']` is every definition in the catalogue, which includes
+    the one saying it -- so it is always a cycle, and was always missed.
+
+    `refuse_cycles` read `*` as *no* edges while `subagent_helpers` expands it to
+    `tuple(defined)`. The two disagreeing is the whole bug: the catalogue passed
+    the walk and `_with_helpers` then recursed into itself until the interpreter
+    stopped it. That function has no re-entry guard and a comment saying it needs
+    none "because `refuse_cycles` already ran".
+    """
+    with pytest.raises(SubagentError, match="reach themselves"):
+        refuse_cycles({"greedy": _spec("greedy", '["*"]')})
+
+
+def test_the_refusal_says_where_the_edge_came_from():
+    """Whoever wrote `['*']` never typed the name in the loop, so a message that
+    only prints `greedy -> greedy` sends them looking for an edge they cannot
+    find."""
+    with pytest.raises(SubagentError, match=r"names every subagent with `\*`"):
+        refuse_cycles({"greedy": _spec("greedy", '["*"]')})
+
+
+def test_the_star_reaches_the_others_too_not_only_itself():
+    """`*` is every definition, so it is also an edge to each of them -- a loop
+    running through a second delegate is caught for the same reason."""
+    specs = {
+        "hub": _spec("hub", '["*"]'),
+        "spoke": _spec("spoke", "[hub]"),
+    }
+
+    with pytest.raises(SubagentError, match="reach themselves"):
+        refuse_cycles(specs)
+
+
+def test_a_catalogue_without_a_star_is_untouched():
+    """The fix widens what counts as an edge, so the case it must not break is
+    an ordinary chain: `a` consults `b` consults `c`, which N1 exists to allow."""
+    specs = {
+        "a": _spec("a", "[b]"),
+        "b": _spec("b", "[c]"),
+        "c": _spec("c"),
+    }
+
+    refuse_cycles(specs)  # no raise
+
+
+def test_a_diamond_is_not_a_cycle():
+    """A definition reached twice by different paths is a DAG, which N2 allows
+    deliberately. Reading `seen` before `on_path` would call this a loop."""
+    specs = {
+        "top": _spec("top", "[left, right]"),
+        "left": _spec("left", "[shared]"),
+        "right": _spec("right", "[shared]"),
+        "shared": _spec("shared"),
+    }
+
+    refuse_cycles(specs)  # no raise

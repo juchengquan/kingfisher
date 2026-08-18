@@ -1,7 +1,7 @@
 """One list of the kinds, and everything by-kind checked against it.
 
 `Capabilities` grew to eight axes. `main.GRANTS` names four, `Brought` has two
-fields, `Catalogue` has three -- and nothing kept them in step. Adding a ninth
+fields, `Definitions` has three -- and nothing kept them in step. Adding a ninth
 axis passed the whole suite, ruff and ty without a word, which is how a feature
 comes to silently not exist.
 
@@ -17,7 +17,7 @@ from dataclasses import fields
 
 import main as driver
 from kingfisher.domain.capabilities import AXES, Capabilities
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.uploads import Brought
 
 #: Why a kind is not something a caller can upload. A definition arrives as a
@@ -75,7 +75,7 @@ def test_what_a_request_may_upload_is_accounted_for():
 def test_what_the_catalogue_loads_is_accounted_for():
     """Three directories. The five absent are settings or deepagents', and none
     of them is a thing to glob."""
-    covered = {f.name for f in fields(Catalogue)}
+    covered = {f.name for f in fields(Definitions)}
 
     assert covered | set(NOT_ON_DISK) == set(AXES)
     assert not covered & set(NOT_ON_DISK)
@@ -113,14 +113,14 @@ def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads():
     tree can hold anything.
     """
     from kingfisher.infrastructure import seeding
-    from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
     with seeding.opened(seeding.ASSETS) as root:
         found = {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")}
 
     assert found, "the shipped definitions are empty -- this asserts nothing"
-    assert found <= set(CATALOGUE_KINDS), (
-        f"kingfisher ships {sorted(found - set(CATALOGUE_KINDS))}, which is not a "
+    assert found <= set(DEFINITION_KINDS), (
+        f"kingfisher ships {sorted(found - set(DEFINITION_KINDS))}, which is not a "
         "catalogue kind and would be copied where nothing looks"
     )
 

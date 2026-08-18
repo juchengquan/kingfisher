@@ -22,7 +22,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import SubagentRepository
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
-from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
+from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness.agent import (
     available_skills,
     build_agent,
@@ -59,7 +59,7 @@ macos = pytest.mark.skipif(
 def _staged(root, *, skill=None, subagent=None, tool=None):
     """A catalogue laid out somewhere that is not a workspace.
 
-    Returns the `Catalogue`, and `_roots` gives the directories back for a test
+    Returns the `Definitions`, and `_roots` gives the directories back for a test
     that needs to write into them.
     """
     roots = {kind: root / kind for kind in ("skills", "subagents", "tools")}
@@ -74,7 +74,7 @@ def _staged(root, *, skill=None, subagent=None, tool=None):
         (roots["subagents"] / "reviewer.yaml").write_text(subagent, encoding="utf-8")
     if tool is not None:
         (roots["tools"] / "extra.py").write_text(tool, encoding="utf-8")
-    return Catalogue.from_roots(roots)
+    return Definitions.from_roots(roots)
 
 
 def _roots(catalogue):
@@ -86,10 +86,10 @@ def test_omitted_it_is_the_three_directories_config_names(cfg):
     """The fallback, and the whole reason 45 call sites did not have to change.
 
     `build_agent` derives from `cfg` or raises but never invents, which is the
-    rule `model=` already followed. Catalogue roots have a `cfg`-derived answer,
+    rule `model=` already followed. Definitions roots have a `cfg`-derived answer,
     so this is that rule and not an exception to it.
     """
-    assert resolve_catalogue(cfg) == Catalogue.from_roots(
+    assert resolve_definitions(cfg) == Definitions.from_roots(
         {"skills": cfg.skills_dir, "subagents": cfg.subagents_dir, "tools": cfg.tools_dir}
     )
 
@@ -113,7 +113,7 @@ def test_relocated_directories_are_created_rather_than_silently_empty(tmp_path, 
     )
     assert not (elsewhere / "a").exists()
 
-    roots = resolve_catalogue(relocated)
+    roots = resolve_definitions(relocated)
 
     assert all(path.is_dir() for path in _roots(roots).values())
 
@@ -128,7 +128,7 @@ def test_a_supplied_catalogue_must_already_exist(tmp_path, cfg):
     """
     missing = tmp_path / "never-staged"
     with pytest.raises(ConfigError, match="not a directory"):
-        resolve_catalogue(
+        resolve_definitions(
             cfg,
             {"skills": missing, "subagents": missing, "tools": missing},
         )
@@ -140,7 +140,7 @@ def test_a_supplied_catalogue_names_all_three(tmp_path, cfg):
     roots = _staged(tmp_path / "staged")
     with pytest.raises(ConfigError, match="missing tools"):
         staged = _roots(roots)
-        resolve_catalogue(cfg, {"skills": staged["skills"], "subagents": staged["subagents"]})
+        resolve_definitions(cfg, {"skills": staged["skills"], "subagents": staged["subagents"]})
 
 
 def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, cfg):
@@ -285,7 +285,7 @@ def test_the_three_directories_are_attributes_not_keys(cfg):
     modules keep refusing. An attribute that is wrong is a type error before it
     runs.
     """
-    catalogue = Catalogue.from_config(cfg)
+    catalogue = Definitions.from_config(cfg)
 
     assert catalogue.skills.root == cfg.skills_dir
     assert catalogue.subagents.root == cfg.subagents_dir
@@ -295,13 +295,13 @@ def test_the_three_directories_are_attributes_not_keys(cfg):
 
 def test_resolving_accepts_one_that_is_already_resolved(tmp_path, cfg):
     """A deployment stages directories and hands over a mapping, which is the
-    documented seam. Something already holding a `Catalogue` -- another
+    documented seam. Something already holding a `Definitions` -- another
     kingfisher, a test fixture -- should not have to take it apart to pass it
     back. The fixture in this file hit exactly that.
     """
     staged = _staged(tmp_path / "staged")
 
-    assert resolve_catalogue(cfg, staged) == staged
+    assert resolve_definitions(cfg, staged) == staged
 
 
 def test_a_resolved_one_is_still_checked(tmp_path, cfg):
@@ -310,10 +310,10 @@ def test_a_resolved_one_is_still_checked(tmp_path, cfg):
     failure and has to say so however it arrived.
     """
     missing = tmp_path / "never-staged"
-    handed = Catalogue.from_roots({"skills": missing, "subagents": missing, "tools": missing})
+    handed = Definitions.from_roots({"skills": missing, "subagents": missing, "tools": missing})
 
     with pytest.raises(ConfigError, match="not a directory"):
-        resolve_catalogue(cfg, handed)
+        resolve_definitions(cfg, handed)
 
 
 # -- the catalogue reads once ---------------------------------------------
@@ -335,7 +335,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     `specs`.
 
     The stub caches, because the real one does and that is now where the
-    guarantee lives. `Catalogue` used to hold the cache itself; it holds
+    guarantee lives. `Definitions` used to hold the cache itself; it holds
     repositories instead, so reading once is something they do and this is what
     says so. Written without the cache, this measured 7 reads rather than 4 --
     one per turn for the catalogue on top of one per turn for the session.
@@ -396,13 +396,13 @@ def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
 
 def test_listing_still_survives_a_definition_that_will_not_load(cfg):
     """`--list` is run *because* something is wrong, so it must not be the thing
-    that dies. Warming belongs to `Kingfisher`, not to `resolve_catalogue`, and
+    that dies. Warming belongs to `Kingfisher`, not to `resolve_definitions`, and
     a test caught the first version doing it in the wrong place.
     """
     (cfg.subagents_dir).mkdir(parents=True, exist_ok=True)
     (cfg.subagents_dir / "broken.yaml").write_text("name: x\nnonsense: 1\n", encoding="utf-8")
 
-    catalogue = resolve_catalogue(cfg)  # must not raise
+    catalogue = resolve_definitions(cfg)  # must not raise
 
     with pytest.raises(SubagentError):
         _ = catalogue.subagents.specs
@@ -438,7 +438,7 @@ def _spec(name):
 
 
 def test_one_kind_can_be_swapped_without_touching_the_other_two(tmp_path, cfg):
-    """What the object bought. `Catalogue` is frozen, so exchanging a single
+    """What the object bought. `Definitions` is frozen, so exchanging a single
     seam is `replace` and the other two keep whatever they were.
     """
     staged = _staged(tmp_path / "staged", skill="staged-only")
@@ -452,16 +452,16 @@ def test_one_kind_can_be_swapped_without_touching_the_other_two(tmp_path, cfg):
 
 
 def test_a_supplied_repository_needs_no_directory_to_be_accepted(cfg):
-    """The check `resolve_catalogue` makes is about *staging*, and staging is
+    """The check `resolve_definitions` makes is about *staging*, and staging is
     something only a directory-backed store does. A repository holding its
     definitions elsewhere has no root that could be missing, so demanding one
     would refuse exactly the deployments the ports exist for.
     """
     handed = replace(
-        Catalogue.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
+        Definitions.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
     )
 
-    assert resolve_catalogue(cfg, handed) is handed
+    assert resolve_definitions(cfg, handed) is handed
 
 
 def test_the_agent_is_built_from_a_supplied_repository(cfg, session_dir):
@@ -469,7 +469,7 @@ def test_the_agent_is_built_from_a_supplied_repository(cfg, session_dir):
     port and the graph knows which kind of store answered.
     """
     catalogue = replace(
-        Catalogue.from_config(cfg), subagents=InMemorySubagents({"ghost": _spec("ghost")})
+        Definitions.from_config(cfg), subagents=InMemorySubagents({"ghost": _spec("ghost")})
     )
 
     defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
@@ -500,7 +500,7 @@ def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, ses
                 raise KeyError(name)
             return {"SKILL.md": "---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
 
-    catalogue = replace(Catalogue.from_config(cfg), skills=Nowhere())
+    catalogue = replace(Definitions.from_config(cfg), skills=Nowhere())
 
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
 
@@ -514,7 +514,7 @@ def test_the_other_two_kinds_need_no_directory_at_all(cfg, session_dir):
     route. A catalogue whose subagents live in memory builds a backend fine.
     """
     catalogue = replace(
-        Catalogue.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
+        Definitions.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
     )
 
     assert build_backend(cfg, session_dir, catalogue=catalogue) is not None
@@ -523,7 +523,7 @@ def test_the_other_two_kinds_need_no_directory_at_all(cfg, session_dir):
 def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):
     """The other half of "fails at startup", and the half `warm` is for.
 
-    The test above stages a directory that is not there, which `resolve_catalogue`
+    The test above stages a directory that is not there, which `resolve_definitions`
     refuses before anything is read. This is a directory that exists holding a
     definition that does not parse -- nothing refuses that except reading it, so
     without `warm` the failure waits for the first turn, with a caller on the

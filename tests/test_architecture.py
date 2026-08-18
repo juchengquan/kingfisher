@@ -1020,16 +1020,16 @@ def test_the_shipped_definitions_live_only_under_assets():
     escapes `assets/` is content being read as code -- shipped, unreviewed by
     any rule here, and invisible for exactly that reason.
     """
-    from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
     shipped = {
         path
-        for kind in CATALOGUE_KINDS
+        for kind in DEFINITION_KINDS
         for path in SRC.rglob(kind)
         if path.is_dir() and "__pycache__" not in path.parts
     }
     stray = sorted(str(p.relative_to(SRC)) for p in shipped if p.parent != SRC / CONTENT)
-    missing = sorted(k for k in CATALOGUE_KINDS if not (SRC / CONTENT / k).is_dir())
+    missing = sorted(k for k in DEFINITION_KINDS if not (SRC / CONTENT / k).is_dir())
 
     # Named per kind, not counted. `assert shipped` passed with two of the three
     # gone, which is the same "at most N" weakness the harness-edge table avoids:
