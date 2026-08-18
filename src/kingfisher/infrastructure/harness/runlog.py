@@ -105,10 +105,6 @@ class JsonlRunLogger(BaseCallbackHandler):
     def run_end(self, *, ok: bool, answer_chars: int) -> None:
         self._write("run_end", ok=ok, answer_chars=answer_chars)
 
-    def swept(self, removed: tuple[str, ...], kept: int) -> None:
-        if removed:
-            self._write("swept", removed=list(removed), kept=kept)
-
     # -- callbacks ---------------------------------------------------------
 
     def on_llm_end(self, response: Any, **_: Any) -> None:

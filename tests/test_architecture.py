@@ -1337,6 +1337,95 @@ def test_the_event_kinds_are_what_the_package_emits():
         "as the SSE event names, so an extra entry is a kind no client sees and a "
         "missing one is a kind nobody handles"
     )
+def _kinds_branched_on(source: str) -> set[str]:
+    """Every literal a `self.kind == ...` comparison tests for."""
+    found: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.Compare):
+            continue
+        if not (isinstance(node.left, ast.Attribute) and node.left.attr == "kind"):
+            continue
+        for other in node.comparators:
+            if isinstance(other, ast.Constant) and isinstance(other.value, str):
+                found.add(other.value)
+            elif isinstance(other, ast.Tuple | ast.List | ast.Set):
+                found.update(
+                    item.value
+                    for item in other.elts
+                    if isinstance(item, ast.Constant) and isinstance(item.value, str)
+                )
+    return found
+
+
+def _unreachable(branched: set[str], kinds: tuple[str, ...]) -> set[str]:
+    """Branches for a kind no run can emit.
+
+    One direction only. Kinds with no branch are fine and expected -- six of
+    them fall through to the default line on purpose -- so this is a difference
+    rather than a comparison.
+    """
+    return branched - set(kinds)
+
+
+def test_no_branch_is_written_for_a_kind_that_cannot_exist():
+    """The other direction of the rule above, and the one that went unwatched.
+
+    That one compares `KINDS` against the kinds *constructed*, so it notices a
+    kind nobody emits and a kind nobody declared. It says nothing about the code
+    that *reads* a kind -- and `RunEvent.__str__` carried a branch for `swept`
+    long after retention moved off the request path, rendering a line no run
+    could produce. Two comments in the package already said `swept` had stopped
+    firing, which is the tell: it was known, written down, and still there.
+
+    A dead branch is quieter than a dead function. It has a caller, it type
+    checks, and coverage over a suite that never constructs the kind looks the
+    same as coverage over one that does. Comparing the two lists is the only
+    thing that sees it.
+    """
+    from kingfisher.domain.result import KINDS
+
+    branched = _kinds_branched_on((SRC / "domain" / "result.py").read_text(encoding="utf-8"))
+
+    # A reader pointed at the wrong file finds nothing and passes, which is the
+    # `_modules_in` failure again: a rule that has quietly stopped being about
+    # anything reports success.
+    assert branched, "found no kind branches at all — is this still the right file?"
+    assert not _unreachable(branched, KINDS), (
+        f"result.py branches on {sorted(_unreachable(branched, KINDS))}, which no run "
+        "can emit — the branch is unreachable, so delete it or add the kind to KINDS"
+    )
+
+
+def test_the_unreachable_check_can_tell_a_live_branch_from_a_dead_one():
+    """Every branch in the tree is live, so the rule above passes whether it
+    subtracts anything or nothing. These are the two answers `src/` cannot give.
+    """
+    assert _unreachable({"swept"}, ("token", "finished")) == {"swept"}
+    assert _unreachable({"token"}, ("token", "finished")) == set()
+    # The direction that must *not* fire: a kind nobody branches on is the
+    # ordinary case, not a fault.
+    assert _unreachable(set(), ("token", "finished")) == set()
+
+
+def test_the_branch_reader_reads_branches():
+    """Pinned against source written for the purpose, because the real file is
+    expected to be clean and a reader that found nothing would look identical.
+    """
+    source = (
+        "class E:\n"
+        "    def __str__(self):\n"
+        '        if self.kind == "token":\n'
+        "            return 1\n"
+        '        if self.kind in ("a", "b"):\n'
+        "            return 2\n"
+        "        if self.other == \"ignored\":\n"
+        "            return 3\n"
+        "        return 4\n"
+    )
+
+    assert _kinds_branched_on(source) == {"token", "a", "b"}
+
+
 # -- nothing here is written for tests alone -------------------------------
 #
 # The recurring failure this guards is not any one module's. Something gets

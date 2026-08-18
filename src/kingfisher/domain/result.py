@@ -171,7 +171,7 @@ class RunEvent:
 
     # A flat dispatch, one branch per kind: fewer returns would mean more
     # nesting, not less branching.
-    def __str__(self) -> str:  # noqa: PLR0911
+    def __str__(self) -> str:
         if self.kind == "token":
             # A fragment, not a line. A tag would assert a boundary that is not
             # there -- chunks split mid-word -- and `_line` would flatten the
@@ -193,8 +193,6 @@ class RunEvent:
             )
         if self.kind == "tool_result":
             return f"[{self._tag('tool ')}] {self.tool}: {self._line()}"
-        if self.kind == "swept":
-            return f"[sweep] removed {self.text}"
         if self.kind == "run_start":
             return f"[start] {self.text}"
         if self.kind == "finished":
