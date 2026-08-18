@@ -22,7 +22,7 @@ from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
-from kingfisher.infrastructure.definitions import read_subagent
+from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import indistinct_delegates
 from kingfisher.infrastructure.harness.delegation import model_for
 from tests.conftest import subagents_dir

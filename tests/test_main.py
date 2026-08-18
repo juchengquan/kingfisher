@@ -20,9 +20,9 @@ from kingfisher.domain import skill
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure import seeding
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness import agent as main_agent_module
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import subagents_dir, tools_dir
 
 
@@ -330,7 +330,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     from dataclasses import replace
 
     import main as driver
-    from kingfisher.infrastructure.tool_store import LocalToolRepository
+    from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 
     catalogue = tmp_path / "catalogue"
     relocated = replace(cfg, tools_root=catalogue / "tools")

@@ -16,9 +16,9 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.tool import Offering
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository, ToolError, tool_name
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, ToolError, tool_name
 
 TOOL = """from langchain_core.tools import tool
 

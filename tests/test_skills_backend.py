@@ -18,9 +18,9 @@ import pytest
 
 from kingfisher.domain.ports import SkillRepository
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend, shell_env
 from kingfisher.infrastructure.harness.skills_backend import skills_backend
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
 SKILL = "---\nname: {name}\ndescription: A skill.\n---\n\nbody of {name}\n"
 

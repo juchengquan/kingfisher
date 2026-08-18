@@ -18,8 +18,8 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import EXPORT, NOT_COMPILED, SubagentError, declared
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build
 
 COMPILED = '''"""A delegate the workspace assembled."""
@@ -162,7 +162,7 @@ def _entry(**extra):
 #: test that used one would be asserting against a shape deepagents rejects.
 RECORDING = """from langchain_core.runnables import RunnableLambda
 
-import kingfisher.infrastructure.subagent_store as store
+import kingfisher.infrastructure.catalogue.subagents as store
 
 
 def _record(model, tools):
@@ -306,7 +306,7 @@ def test_the_graph_is_handed_the_model_the_deployment_bound(cfg, session_dir, mo
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    import kingfisher.infrastructure.subagent_store as store
+    import kingfisher.infrastructure.catalogue.subagents as store
 
     model, tools = store.SEEN
     del store.SEEN
@@ -362,7 +362,7 @@ def _tools_seen(cfg, session_dir, monkeypatch, capabilities):
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=capabilities,
     )
-    import kingfisher.infrastructure.subagent_store as store
+    import kingfisher.infrastructure.catalogue.subagents as store
 
     _model, tools = store.SEEN
     del store.SEEN

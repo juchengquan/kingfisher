@@ -12,7 +12,7 @@ Splitting a markdown header off a body lives with the format that still has one
 document, not a thing both formats do.
 
 What does *not* live here is the YAML decode, which needs a third-party
-library. `infrastructure.definitions` owns that, because a domain module
+library. `infrastructure.catalogue.documents` owns that, because a domain module
 imports the standard library and `kingfisher.domain`, nothing else.
 """
 

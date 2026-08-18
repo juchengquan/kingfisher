@@ -1,5 +1,25 @@
 """Where a deployment's definitions are read from.
 
+A package, and the three kinds are the point of it: `skills`, `subagents` and
+`tools` are one module each, so the layer's top level names the concepts rather
+than the mechanisms it used to spell them with -- `skill_store`,
+`subagent_store`, `tool_store`. `documents` reads one definition document,
+`layered` puts a session's own definitions over the deployment's, and
+`importing` loads a module from a path for the two kinds that need one. Nothing
+else in the codebase reaches past this front door: outside these files,
+`documents` and `importing` have no callers at all, `layered` has one, and the
+three repositories are reached for `ToolError`, `SKILL_LAYOUT` and one function.
+
+Two things that belong to this subject are deliberately elsewhere.
+`infrastructure.harness.skill_registry` answers which skills deepagents actually
+loaded, which is a different question from what exists to mount -- running the
+two together is the bug it was written to end -- and its answer carries
+deepagents' own skill objects, so it lives where foreign types may be named.
+Moving it here would also spread the swap boundary `harness/` exists to hold,
+and cost more watched edges than it saved. `uploads` is request-scoped and
+writes what `layered` then reads; splitting the pair costs less than filing a
+per-request concern under a per-deployment one.
+
 Split out of `workspace_fs`, which is "the filesystem, doing what
 `domain.layout` describes" -- and a catalogue is the one thing here that need
 not be in a workspace at all. `KINGFISHER_SKILLS_DIR` and its two siblings exist
@@ -22,20 +42,18 @@ and -- one line away in `config.py` -- `models.yaml` as well.
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, fields
 from functools import cached_property
 from pathlib import Path
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import SkillRepository, SubagentRepository, ToolRepository
 from kingfisher.domain.tool import Offering
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository
-
-DEFINITION_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
 
 
 @dataclass(frozen=True)
@@ -144,6 +162,20 @@ class Definitions:
             subagents=LocalSubagentRepository(Path(roots["subagents"])),
             tools=LocalToolRepository(Path(roots["tools"])),
         )
+
+
+#: The kinds, taken from the type that already has one field per kind.
+#:
+#: It was written out again here, six lines above a `Definitions` whose three
+#: fields have exactly these names, with nothing holding the two together. The
+#: folder made it three: `skills.py`, `subagents.py` and `tools.py` are the same
+#: vocabulary a third time, and the one with no type behind it --
+#: `test_the_catalogue_holds_one_module_per_kind` is what binds those.
+#:
+#: Field order is load-bearing now rather than by coincidence: `seeding` walks
+#: this to decide what to copy and in what order, so reordering `Definitions` is
+#: a change to seeding rather than a cosmetic edit.
+DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 
 
 def _root_of(repository: object) -> Path | None:

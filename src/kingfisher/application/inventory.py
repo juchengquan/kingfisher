@@ -29,7 +29,7 @@ from kingfisher.config import Config
 from kingfisher.domain.subagent import SubagentError, refuse_cycles
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions, source_of
-from kingfisher.infrastructure.tool_store import ToolError
+from kingfisher.infrastructure.catalogue.tools import ToolError
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})

@@ -19,8 +19,8 @@ from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.domain.tool import Found, Offering, reference, split_reference
 from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.tool_store import LocalToolRepository
+from kingfisher.infrastructure.catalogue.documents import read_subagent
+from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from tests.conftest import tools_dir
 
 TOOL = """from langchain_core.tools import tool

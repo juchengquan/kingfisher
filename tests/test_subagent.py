@@ -16,8 +16,8 @@ from kingfisher.domain.subagent import (
     Wanted,
     resolved_model,
 )
-from kingfisher.infrastructure.definitions import read_subagent, skill_name
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 
 MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.

@@ -77,7 +77,7 @@ _EXPORTS = {
     # themselves", by its own comment. It was `skill_store.LAYOUT` with one
     # caller; renamed because a bare `LAYOUT` at the top level sits next to
     # `LAYOUT_DIRS` and means something else.
-    "SKILL_LAYOUT": "kingfisher.infrastructure.skill_store",
+    "SKILL_LAYOUT": "kingfisher.infrastructure.catalogue.skills",
     "Inventory": "kingfisher.application.inventory",
     "from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
@@ -171,6 +171,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
     from kingfisher.domain.tool import split_reference as split_reference
+    from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.confinement import Confinement as Confinement
     from kingfisher.infrastructure.confinement import (
         shell_confinement as shell_confinement,
@@ -193,7 +194,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.seeding import Seeding as Seeding
     from kingfisher.infrastructure.seeding import seed as seed
     from kingfisher.infrastructure.seeding import shipped_kinds as shipped_kinds
-    from kingfisher.infrastructure.skill_store import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data
