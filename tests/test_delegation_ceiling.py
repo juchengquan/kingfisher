@@ -21,7 +21,7 @@ from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.delegation import as_subagent, subagent_skills
 from kingfisher.infrastructure.harness.scoping import ToolAllowlist
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, subagents_dir
 
 HELPER = """name: helper
 description: Declares no tools, so it inherits whatever it is given.
@@ -32,7 +32,7 @@ system_prompt: |
 
 
 def _with_helper(cfg, definition: str = HELPER, name: str = "helper.yaml"):
-    directory = cfg.subagents_dir
+    directory = subagents_dir(cfg)
     directory.mkdir(parents=True, exist_ok=True)
     (directory / name).write_text(definition, encoding="utf-8")
     return cfg

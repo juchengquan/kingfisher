@@ -71,8 +71,8 @@ async def main() -> int:
     # A delegate to fan out to. Written beside the catalogue rather than into
     # it permanently -- this is a demonstration, not a definition anyone asked
     # to keep.
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    definition = cfg.subagents_dir / f"namer{SUFFIX}"
+    cfg.catalogue_roots["subagents"].mkdir(parents=True, exist_ok=True)
+    definition = cfg.catalogue_roots["subagents"] / f"namer{SUFFIX}"
     existed = definition.exists()
     if not existed:
         definition.write_text(NAMER, encoding="utf-8")
@@ -82,7 +82,7 @@ async def main() -> int:
             service = Kingfisher(cfg, threads=threads)
             session = service.start_session()
             print(f"session   : {session}")
-            print(f"catalogue : {cfg.subagents_dir}")
+            print(f"catalogue : {cfg.catalogue_roots["subagents"]}")
             print(f"task      : fan out over {list(WORDS)}\n", flush=True)
 
             request = Request(

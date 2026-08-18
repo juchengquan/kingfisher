@@ -20,7 +20,7 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from tests.conftest import FakeToolCallingModel, capture_build, dispatched
+from tests.conftest import FakeToolCallingModel, capture_build, dispatched, subagents_dir
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -474,7 +474,7 @@ def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
     )
     relocated = replace(cfg, subagents_root=catalogue)
 
-    assert set(LocalSubagentRepository(relocated.subagents_dir).specs) == {"reviewer"}
+    assert set(LocalSubagentRepository(subagents_dir(relocated)).specs) == {"reviewer"}
     assert LocalSubagentRepository(relocated.workspace / "subagents").specs == {}
 
 

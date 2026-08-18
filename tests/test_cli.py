@@ -13,6 +13,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.cli.__main__ import main
+from tests.conftest import subagents_dir
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
@@ -85,8 +86,8 @@ def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")  # or the endpoint is dropped
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
     assert main(["list"]) == 1
 
@@ -163,8 +164,8 @@ def _seed_something(cfg) -> None:
         "---\nname: probe-skill\ndescription: Something to list.\n---\nDo it.\n",
         encoding="utf-8",
     )
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "probe-agent.yaml").write_text(
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "probe-agent.yaml").write_text(
         "name: probe-agent\ndescription: Something to list.\n"
         "system_prompt: |\n  Answer briefly.\n",
         encoding="utf-8",
@@ -172,8 +173,8 @@ def _seed_something(cfg) -> None:
     # And a name two folders both claim, which is printed as a reference rather
     # than as a name plus the file it came from. The case the copy got wrong.
     for folder in ("team", "vendor"):
-        (cfg.subagents_dir / folder).mkdir(parents=True, exist_ok=True)
-        (cfg.subagents_dir / folder / "surveyor.yaml").write_text(
+        (subagents_dir(cfg) / folder).mkdir(parents=True, exist_ok=True)
+        (subagents_dir(cfg) / folder / "surveyor.yaml").write_text(
             f"name: surveyor\ndescription: Surveys, the {folder} way.\n"
             "system_prompt: |\n  Survey it.\n",
             encoding="utf-8",
@@ -395,8 +396,8 @@ def test_a_broken_workspace_is_non_zero_in_either_format(cfg, monkeypatch, capsy
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
     assert main(["list", "--json"]) == 1
 

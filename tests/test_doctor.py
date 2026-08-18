@@ -15,6 +15,7 @@ import json
 
 from kingfisher.cli.__main__ import main
 from kingfisher.cli.health import examine, worst
+from tests.conftest import subagents_dir, tools_dir
 
 BROKEN_TOOL = '''
 from langchain_core.tools import tool
@@ -57,8 +58,8 @@ def test_an_unbound_alias_is_a_failure(cfg):
 
 def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
     """And it names the file, because the reader has to go and fix one."""
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
     checks = {check.name: check for check in examine(cfg)}
 
@@ -70,8 +71,8 @@ def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
 
 
 def test_a_broken_tool_catalogue_is_a_failure_too(cfg):
-    cfg.tools_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "twice.py").write_text(BROKEN_TOOL, encoding="utf-8")
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "twice.py").write_text(BROKEN_TOOL, encoding="utf-8")
 
     checks = {check.name: check for check in examine(cfg)}
 
@@ -120,8 +121,8 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
 
     ok = examine(cfg)
     warned = examine(replace(cfg, shell_sandbox="off"))
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
     failed = examine(cfg)
 
     assert worst(ok) == "ok"
@@ -153,8 +154,8 @@ def test_the_command_prints_a_remedy_for_what_it_can_fix(cfg, monkeypatch, capsy
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
     assert main(["doctor"]) == 1
 

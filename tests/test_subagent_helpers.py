@@ -24,7 +24,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.subagent import SubagentError, refuse_cycles
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, subagents_dir
 
 REVIEWER = """name: reviewer
 description: Checks figures.
@@ -55,7 +55,7 @@ NESTING_HELPER = HELPER.replace("system_prompt:", "subagents: [checker]\nsystem_
 
 
 def _define(cfg, *definitions: str) -> None:
-    directory = cfg.subagents_dir
+    directory = subagents_dir(cfg)
     directory.mkdir(parents=True, exist_ok=True)
     for body in definitions:
         name = body.split("\n")[0].removeprefix("name: ").strip()

@@ -13,7 +13,7 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
-from tests.conftest import StubCheckpointer, start
+from tests.conftest import StubCheckpointer, start, subagents_dir
 from tests.test_run import StubAgent
 
 
@@ -351,7 +351,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     # nothing to do with reporting. Sortedness is still asserted -- this is a
     # line a person reads -- but the membership comes from the catalogue.
     seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
-    seeded_subagents = set(LocalSubagentRepository(cfg.subagents_dir).specs)
+    seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: the granted name has to be one the catalogue offers, or
     # "everything except it" would be the whole catalogue by accident.
     assert {"code-review"} < seeded_skills

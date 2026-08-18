@@ -25,6 +25,7 @@ from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.harness.agent import indistinct_delegates
 from kingfisher.infrastructure.harness.delegation import model_for
+from tests.conftest import subagents_dir
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
@@ -62,7 +63,7 @@ class _NoPlacement:
 
 
 def _define(cfg, *definitions: str) -> None:
-    directory = cfg.subagents_dir
+    directory = subagents_dir(cfg)
     directory.mkdir(parents=True, exist_ok=True)
     for body in definitions:
         name = body.split("\n")[0].removeprefix("name: ").strip()

@@ -30,7 +30,7 @@ from kingfisher.infrastructure.harness.agent import (
     workspace_tool_names,
 )
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -90,7 +90,7 @@ def test_omitted_it_is_the_three_directories_config_names(cfg):
     so this is that rule and not an exception to it.
     """
     assert resolve_definitions(cfg) == Definitions.from_roots(
-        {"skills": cfg.skills_dir, "subagents": cfg.subagents_dir, "tools": cfg.tools_dir}
+        {"skills": cfg.skills_dir, "subagents": subagents_dir(cfg), "tools": tools_dir(cfg)}
     )
 
 
@@ -288,8 +288,8 @@ def test_the_three_directories_are_attributes_not_keys(cfg):
     catalogue = Definitions.from_config(cfg)
 
     assert catalogue.skills.root == cfg.skills_dir
-    assert catalogue.subagents.root == cfg.subagents_dir
-    assert catalogue.tools.root == cfg.tools_dir
+    assert catalogue.subagents.root == subagents_dir(cfg)
+    assert catalogue.tools.root == tools_dir(cfg)
     assert not hasattr(catalogue, "__getitem__"), "indexing would let both idioms survive"
 
 
@@ -349,7 +349,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
 
     for kind in ("skills", "subagents", "tools"):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "a.yaml").write_text(
+    (subagents_dir(cfg) / "a.yaml").write_text(
         "name: alpha\ndescription: A.\nsystem_prompt: |\n  x\n", encoding="utf-8"
     )
 
@@ -386,7 +386,7 @@ def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
     service = Kingfisher(cfg, agent=StubAgent("ok"))
 
-    (cfg.subagents_dir / "late.yaml").write_text(
+    (subagents_dir(cfg) / "late.yaml").write_text(
         "name: late\ndescription: Written afterwards.\nsystem_prompt: |\n  x\n", encoding="utf-8"
     )
 
@@ -399,8 +399,8 @@ def test_listing_still_survives_a_definition_that_will_not_load(cfg):
     that dies. Warming belongs to `Kingfisher`, not to `resolve_definitions`, and
     a test caught the first version doing it in the wrong place.
     """
-    (cfg.subagents_dir).mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: x\nnonsense: 1\n", encoding="utf-8")
+    (subagents_dir(cfg)).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: x\nnonsense: 1\n", encoding="utf-8")
 
     catalogue = resolve_definitions(cfg)  # must not raise
 
@@ -533,7 +533,7 @@ def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):
     """
     for kind in ("skills", "subagents", "tools"):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text(
+    (subagents_dir(cfg) / "broken.yaml").write_text(
         "name: broken\ndescription: A.\nsystem_prompt: |\n  x\nnonsense_field: true\n",
         encoding="utf-8",
     )

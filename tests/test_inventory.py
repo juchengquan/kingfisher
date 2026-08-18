@@ -16,6 +16,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.application.inventory import Inventory, inventory
+from tests.conftest import subagents_dir, tools_dir
 
 A_TOOL = '''
 from langchain_core.tools import tool
@@ -39,8 +40,8 @@ def _populate(cfg) -> None:
     does -- which is what a mutation caught: emptying `offered["skills"]`
     outright left it green.
     """
-    cfg.tools_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "probe.py").write_text(A_TOOL, encoding="utf-8")
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
 
     skill = cfg.skills_dir / "probe-skill"
     skill.mkdir(parents=True, exist_ok=True)
@@ -50,8 +51,8 @@ def _populate(cfg) -> None:
         encoding="utf-8",
     )
 
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "probe-agent.yaml").write_text(
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "probe-agent.yaml").write_text(
         "name: probe-agent\ndescription: A delegate the inventory can find.\n"
         "system_prompt: |\n  Answer briefly.\n",
         encoding="utf-8",
@@ -111,7 +112,7 @@ def test_a_tool_catalogue_that_will_not_load_is_carried_not_raised(cfg):
     field, so the printer decides what to say -- and skills and subagents are
     still answered, which is the half a traceback took away.
     """
-    directory = cfg.tools_dir / "research"
+    directory = tools_dir(cfg) / "research"
     directory.mkdir(parents=True)
     (directory / "t.py").write_text(
         A_TOOL + "\nTOOLS = [probe_one, probe_one]\n", encoding="utf-8"
@@ -126,8 +127,8 @@ def test_a_tool_catalogue_that_will_not_load_is_carried_not_raised(cfg):
 
 def test_a_subagent_catalogue_that_will_not_load_is_carried_too(cfg):
     """The same rule for the other loader, so neither can take the other down."""
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
     found = inventory(cfg)
 
@@ -145,9 +146,9 @@ def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
     file naming a helper is well-formed on its own -- the loop only exists
     across files, so no single parse can see it.
     """
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "a")):
-        (cfg.subagents_dir / f"{name}.yaml").write_text(
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(
             f"name: {name}\ndescription: d\nsubagents: [{helper}]\n"
             f"system_prompt: |\n  Go.\n",
             encoding="utf-8",
@@ -163,14 +164,14 @@ def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
 def test_a_workspace_with_no_cycle_reports_none(cfg):
     """The negative control. A definition naming a helper, and a helper naming
     its own, is the shape a cycle is written in -- and is perfectly legal."""
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "c")):
-        (cfg.subagents_dir / f"{name}.yaml").write_text(
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(
             f"name: {name}\ndescription: d\nsubagents: [{helper}]\n"
             f"system_prompt: |\n  Go.\n",
             encoding="utf-8",
         )
-    (cfg.subagents_dir / "c.yaml").write_text(
+    (subagents_dir(cfg) / "c.yaml").write_text(
         "name: c\ndescription: d\nsystem_prompt: |\n  Go.\n", encoding="utf-8"
     )
 
@@ -197,8 +198,8 @@ def test_a_tool_says_which_module_defined_it(cfg):
     """Not decoration: a folder cannot reach a tool's name, so a package
     contributes tools under names that are not its own and `csv_columns` comes
     from `csv_profile/` with no slash in sight."""
-    (cfg.tools_dir).mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "probe.py").write_text(A_TOOL, encoding="utf-8")
+    (tools_dir(cfg)).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
 
     found = inventory(cfg)
 
@@ -211,7 +212,7 @@ def test_the_record_says_where_each_catalogue_resolved_to(cfg):
     found = inventory(cfg)
 
     assert Path(found.skills_source) == cfg.skills_dir
-    assert Path(found.subagents_source) == cfg.subagents_dir
+    assert Path(found.subagents_source) == subagents_dir(cfg)
 
 
 def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):

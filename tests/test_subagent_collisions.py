@@ -19,7 +19,7 @@ import pytest
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 SPEC = """
 name: {name}
@@ -33,7 +33,7 @@ tools: []
 
 def _two_vendors(cfg, *, name="surveyor"):
     for vendor in ("vendor", "team"):
-        directory = cfg.subagents_dir / vendor
+        directory = subagents_dir(cfg) / vendor
         directory.mkdir(parents=True, exist_ok=True)
         (directory / f"{name}.yaml").write_text(
             SPEC.format(name=name, vendor=vendor), encoding="utf-8"
@@ -57,7 +57,7 @@ def test_two_folders_may_each_define_one_name(cfg):
     an error and no run could start."""
     _two_vendors(cfg)
 
-    assert sorted(LocalSubagentRepository(cfg.subagents_dir).specs) == [
+    assert sorted(LocalSubagentRepository(subagents_dir(cfg)).specs) == [
         "team/surveyor.yaml::surveyor",
         "vendor/surveyor.yaml::surveyor",
     ]
@@ -65,12 +65,12 @@ def test_two_folders_may_each_define_one_name(cfg):
 
 def test_a_unique_name_stays_flat(cfg):
     """Every catalogue without a clash is untouched, which is all of them."""
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / "alone.yaml").write_text(
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "alone.yaml").write_text(
         SPEC.format(name="alone", vendor="only"), encoding="utf-8"
     )
 
-    assert tuple(LocalSubagentRepository(cfg.subagents_dir).specs) == ("alone",)
+    assert tuple(LocalSubagentRepository(subagents_dir(cfg)).specs) == ("alone",)
 
 
 # -- the refusal, where the clash actually happens ------------------------
@@ -145,7 +145,7 @@ def test_two_different_names_are_not_a_clash(cfg, session_dir):
     """The rule is about the name a roster keys on, not about how many
     delegates a request activates."""
     _two_vendors(cfg)
-    (cfg.subagents_dir / "other.yaml").write_text(
+    (subagents_dir(cfg) / "other.yaml").write_text(
         SPEC.format(name="other", vendor="third"), encoding="utf-8"
     )
 
@@ -181,10 +181,10 @@ def test_subtracting_something_else_still_hits_the_clash(cfg, session_dir):
     from kingfisher.domain.capabilities import all_but
 
     _two_vendors(cfg)
-    (cfg.subagents_dir / "other.yaml").write_text(
+    (subagents_dir(cfg) / "other.yaml").write_text(
         SPEC.format(name="other", vendor="third"), encoding="utf-8"
     )
-    offered = tuple(LocalSubagentRepository(cfg.subagents_dir).specs)
+    offered = tuple(LocalSubagentRepository(subagents_dir(cfg)).specs)
 
     with pytest.raises(CapabilityError, match="would never run"):
         _build(cfg, session_dir, all_but(("other",), offered=offered))
@@ -195,6 +195,6 @@ def test_subtracting_one_of_the_pair_leaves_a_workable_roster(cfg, session_dir):
     from kingfisher.domain.capabilities import all_but
 
     _two_vendors(cfg)
-    offered = tuple(LocalSubagentRepository(cfg.subagents_dir).specs)
+    offered = tuple(LocalSubagentRepository(subagents_dir(cfg)).specs)
 
     _build(cfg, session_dir, all_but(("vendor/surveyor.yaml::surveyor",), offered=offered))

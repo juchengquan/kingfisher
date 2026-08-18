@@ -8,7 +8,7 @@ import pytest
 from kingfisher.application import config as config_module
 from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError
-from tests.conftest import FAKE_CATALOGUE
+from tests.conftest import FAKE_CATALOGUE, subagents_dir
 
 CATALOGUE = """
 endpoints:
@@ -177,7 +177,7 @@ def test_the_catalogue_defaults_inside_the_workspace(env):
     assert cfg.skills_root is None
     assert cfg.subagents_root is None
     assert cfg.skills_dir == cfg.workspace / "skills"
-    assert cfg.subagents_dir == cfg.workspace / "subagents"
+    assert subagents_dir(cfg) == cfg.workspace / "subagents"
 
 
 def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
@@ -192,7 +192,7 @@ def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
     )
 
     assert cfg.skills_dir == tmp_path / "catalogue" / "skills"
-    assert cfg.subagents_dir == tmp_path / "catalogue" / "subagents"
+    assert subagents_dir(cfg) == tmp_path / "catalogue" / "subagents"
 
 
 def test_every_variable_read_is_documented():

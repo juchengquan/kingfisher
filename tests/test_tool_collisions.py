@@ -22,7 +22,7 @@ from langgraph.prebuilt.tool_node import ToolNode
 from kingfisher.domain.capabilities import Capabilities, CapabilityError, all_but
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.tool_store import LocalToolRepository
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
 from tests.test_delegation_ceiling import _subagent_graphs
 
 TOOL = """
@@ -50,7 +50,7 @@ tools: [{grant}]
 
 def _two_vendors(cfg, *, name="fetch"):
     for vendor in ("vendor_a", "vendor_b"):
-        directory = cfg.tools_dir / vendor
+        directory = tools_dir(cfg) / vendor
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "fetch.py").write_text(
             TOOL.format(name=name, vendor=vendor), encoding="utf-8"
@@ -58,8 +58,8 @@ def _two_vendors(cfg, *, name="fetch"):
 
 
 def _delegate(cfg, vendor, *, grant):
-    cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.subagents_dir / f"agent_{vendor}.yaml").write_text(
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / f"agent_{vendor}.yaml").write_text(
         SPEC.format(name=f"agent_{vendor}", vendor=vendor, grant=grant), encoding="utf-8"
     )
 
@@ -81,7 +81,7 @@ def test_two_folders_may_each_define_one_name(cfg):
     neither file."""
     _two_vendors(cfg)
 
-    assert sorted(one.reference for one in LocalToolRepository(cfg.tools_dir).found) == [
+    assert sorted(one.reference for one in LocalToolRepository(tools_dir(cfg)).found) == [
         "vendor_a/fetch.py::fetch",
         "vendor_b/fetch.py::fetch",
     ]
@@ -266,7 +266,7 @@ def test_a_definition_naming_it_bare_is_refused_too(cfg, session_dir):
 def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
     """Every catalogue without a collision behaves exactly as it did. The
     reference is required only where a bare name stopped being enough."""
-    directory = cfg.tools_dir / "solo"
+    directory = tools_dir(cfg) / "solo"
     directory.mkdir(parents=True)
     (directory / "only.py").write_text(
         TOOL.format(name="fetch", vendor="solo"), encoding="utf-8"
@@ -333,22 +333,22 @@ def test_one_file_defining_a_name_twice_is_still_refused(cfg):
     pick between them and nothing downstream could offer a way to say which."""
     from kingfisher.infrastructure.tool_store import ToolError
 
-    cfg.tools_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "twice.py").write_text(
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "twice.py").write_text(
         TOOL.format(name="fetch", vendor="x").replace("TOOLS = [fetch]", "TOOLS = [fetch, fetch]"),
         encoding="utf-8",
     )
 
     with pytest.raises(ToolError, match="defined twice in this file"):
-        _ = LocalToolRepository(cfg.tools_dir).found
+        _ = LocalToolRepository(tools_dir(cfg)).found
 
 
 def test_a_workspace_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir):
     """The other collapse, which is not fixed by references: a workspace
     `read_file` would take a built-in's name, and the built-in has no file to be
     told apart by."""
-    cfg.tools_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "shadow.py").write_text(
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shadow.py").write_text(
         TOOL.format(name="read_file", vendor="x"), encoding="utf-8"
     )
 
