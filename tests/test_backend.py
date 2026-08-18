@@ -232,6 +232,58 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
     assert out["messages"][-1].content == "retried and finished"  # the run survived
 
 
+def test_a_delegate_gets_the_correction_too(cfg, session_dir):
+    """The same guard, one level down, where the same backend raises.
+
+    A delegate is built with the parent's backend and inherits none of the
+    parent's middleware, so `reject_host_path` fired for it exactly as it fires
+    for the parent and the correction had nothing to turn it into. Measured
+    before the fix: `HostPathError` out of the delegate's graph, killing the run.
+
+    Worse than it looks from the parent's side. This needs no workspace tools at
+    all -- `write_file` is a built-in, and a delegate that leaves
+    `builtin_tools` out has every one of them.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, subagents_dir
+    from tests.test_delegation_ceiling import _subagent_graphs
+
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "writer.yaml").write_text(
+        "name: writer\ndescription: Writes a file.\nsystem_prompt: |\n  You write files.\n",
+        encoding="utf-8",
+    )
+
+    host_path = f"{cfg.workspace}/runs/s1/t001/notes.md"
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[
+                {"name": "write_file", "args": {"file_path": host_path, "content": "x"}, "id": "c1"}
+            ],
+        ),
+        AIMessage(content="retried and finished"),
+    ]
+
+    graph = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses),
+        capabilities=Capabilities(subagents=("writer",)),
+    )
+    out = _subagent_graphs(graph)["writer"].invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
+    )
+
+    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+    assert "is a host path" in transcript  # the correction reached the delegate
+    assert "/runs/s1/t001/notes.md" in transcript  # including what to use instead
+    assert out["messages"][-1].content == "retried and finished"  # the run survived
+
+
 # -- the agent's HOME ------------------------------------------------------
 
 

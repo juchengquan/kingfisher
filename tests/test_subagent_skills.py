@@ -95,7 +95,14 @@ def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
     captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
     middleware = middleware_of(captured, "reviewer")
 
-    assert [type(m).__name__ for m in middleware] == ["ToolAllowlist", "NarrowedSkills"]
+    # The two this definition asked for, in order, ignoring the guards every
+    # delegate carries whether or not its file mentions them.
+    asked_for = [
+        type(m).__name__
+        for m in middleware
+        if type(m).__name__ in {"ToolAllowlist", "NarrowedSkills"}
+    ]
+    assert asked_for == ["ToolAllowlist", "NarrowedSkills"]
 
 
 # -- the two refusals -----------------------------------------------------

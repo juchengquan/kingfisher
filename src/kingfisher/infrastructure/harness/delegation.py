@@ -35,7 +35,7 @@ from kingfisher.domain.capabilities import (
 from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.domain.tool import Found, ceiling, select, split_reference
-from kingfisher.infrastructure.harness.backend import WorkspaceToolErrors
+from kingfisher.infrastructure.harness.backend import HostPathGuard, WorkspaceToolErrors
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -470,8 +470,20 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # handed that one. Measured: `SubAgent.tools` *adds* to the built-ins rather
     # than replacing them, so this costs a delegate none of its file tools.
     mine = select(allowed, catalogue)
-    # First, so it wraps every call this delegate makes -- the same position it
-    # has on the parent, which appends it before its own allowlist.
+    # Unconditional, for the reason the parent gives: the backend rejects host
+    # paths on every run, so the thing that turns that rejection into a
+    # correction must always be here. A delegate is built with the parent's
+    # backend and inherits none of the parent's middleware, so the rejection
+    # fired for it exactly as it fires above and had nothing to become --
+    # `HostPathError` came out of the graph and killed the run.
+    #
+    # The one with the widest reach of the two, and it needs no workspace tools
+    # at all: `write_file` is a built-in, and a delegate that leaves
+    # `builtin_tools` out has every one of them.
+    middleware.append(HostPathGuard())
+    # Then the workspace tools' own failures. Both wrap every call this delegate
+    # makes -- they catch different exceptions, so the order between them is the
+    # parent's rather than a requirement.
     #
     # A delegate is handed the workspace's tool *objects* and inherits none of
     # its parent's middleware, so the guard the parent installed stopped at the

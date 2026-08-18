@@ -59,7 +59,15 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir, monkeypatch
 
     captured = build(cfg, monkeypatch, registry={"audit": Audited}, subagents=("reviewer",))
 
-    assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == ["Audited"]
+    # The deployment's own, which is what this file is about. A delegate also
+    # carries guards nothing in its definition mentions -- the host-path
+    # correction, and the workspace tools' own failures -- and asserting the
+    # whole list would make this fail every time one is added.
+    assert [
+        type(m).__name__
+        for m in middleware_of(captured, "reviewer")
+        if type(m).__name__ == "Audited"
+    ] == ["Audited"]
 
 
 def test_the_registry_is_empty_until_a_deployment_wires_one(cfg):
@@ -112,7 +120,15 @@ def test_a_granted_name_goes_through(cfg, session_dir, monkeypatch):
         middleware=("audit",),
     )
 
-    assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == ["Audited"]
+    # The deployment's own, which is what this file is about. A delegate also
+    # carries guards nothing in its definition mentions -- the host-path
+    # correction, and the workspace tools' own failures -- and asserting the
+    # whole list would make this fail every time one is added.
+    assert [
+        type(m).__name__
+        for m in middleware_of(captured, "reviewer")
+        if type(m).__name__ == "Audited"
+    ] == ["Audited"]
 
 
 def test_grants_clamp_middleware_like_everything_else():
