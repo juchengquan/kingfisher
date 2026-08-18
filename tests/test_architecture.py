@@ -517,6 +517,117 @@ def test_the_harness_package_is_the_one_speaking_to_the_harness():
     )
 
 
+#: Which flat `infrastructure/` modules may reach into `infrastructure/harness/`,
+#: and what each one reaches for. Deny by default, like `THIRD_PARTY`: an edge
+#: named nowhere below fails, so this table is what has to be edited to add one,
+#: and editing it is where someone asks whether the edge belongs.
+#:
+#: The split's argument was that the line runs *one way* -- harness modules read
+#: the adapters, not the reverse -- with a single exception reasoned about in the
+#: design note. That claim decayed without saying so: two more edges arrived
+#: nine hours after the note was written, neither of them wrong and neither of
+#: them noticed. This is the claim turned into a rule, which is the same move
+#: `_modules_in` made when nine rules quietly stopped covering a subpackage.
+#:
+#: The enforced import rule is scoped to *foreign* packages on purpose (L4a), so
+#: nothing here forbids these edges. What it forbids is a fourth one arriving
+#: unremarked.
+HARNESS_EDGES: dict[str, frozenset[str]] = {
+    # Reads the registry to answer which skill names a deployment already
+    # offers. Left a direct import rather than inverted through a port: the port
+    # would have exactly one implementation, forever, whose whole purpose is to
+    # be deepagents-specific.
+    "catalogue": frozenset({"skill_registry"}),
+    # Asks the registry what names are taken before accepting an upload, which
+    # is the same question `catalogue` asks and the same answer.
+    "uploads": frozenset({"skill_registry"}),
+    # Builds an agent to enumerate what it registered -- the only way to know
+    # the built-in tool set is to assemble one and look.
+    "inventory": frozenset({"agent"}),
+}
+
+
+#: The package the edges below cross into.
+HARNESS = "kingfisher.infrastructure.harness"
+
+
+def _harness_reach(path: Path) -> set[str]:
+    """Which harness modules one flat module imports, by their bare names.
+
+    Its own walk rather than `_imported_modules`, which keeps only the *module*
+    of an `ImportFrom` and drops the names -- so `from ...harness import agent`
+    arrives as the bare package and the module reached is lost. That is the
+    form nearly every one of these edges is written in, and a first draft of
+    this rule read it through the shared helper and detected none of them.
+    Mutation testing is the only reason that is a sentence in a docstring rather
+    than a rule in the file doing nothing.
+    """
+    reached: set[str] = set()
+    for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+        if isinstance(node, ast.ImportFrom) and node.module:
+            if node.module == HARNESS:                      # from ...harness import agent
+                reached.update(alias.name for alias in node.names)
+            elif node.module.startswith(HARNESS + "."):     # from ...harness.agent import x
+                reached.add(node.module[len(HARNESS) + 1 :].split(".")[0])
+        elif isinstance(node, ast.Import):
+            for alias in node.names:                        # import ...harness.agent
+                if alias.name.startswith(HARNESS + "."):
+                    reached.add(alias.name[len(HARNESS) + 1 :].split(".")[0])
+    return reached
+
+
+def test_only_the_named_adapters_reach_into_the_harness():
+    """The line runs one way, apart from the edges written down above.
+
+    `harness/` earns its folder by carrying a rule: replace deepagents and
+    exactly those ten files are rewritten. An adapter that imports one of them
+    has taken a share of that rewrite, which is a thing to decide rather than to
+    discover -- and three modules have decided it so far.
+
+    Names, not counts. A rule that said "at most three" would pass while an edge
+    moved from one module to another, and the question is always *which*
+    adapter took the coupling on.
+    """
+    escaped: list[str] = []
+    for path in _modules_in("infrastructure"):
+        if "harness" in path.parts:
+            continue
+        allowed = HARNESS_EDGES.get(path.stem, frozenset())
+        if extra := _harness_reach(path) - allowed:
+            escaped.append(f"{_module_id(path)} -> harness.{{{', '.join(sorted(extra))}}}")
+
+    assert not escaped, (
+        f"{escaped} reach into infrastructure/harness/ without being named in "
+        "HARNESS_EDGES; add the entry and the reason, or route the call through "
+        "an adapter that already has one"
+    )
+
+
+def test_every_named_harness_edge_is_a_real_one():
+    """The other half, so the table cannot outlive what it describes.
+
+    An allowlist nobody prunes is a list of permissions granted for reasons that
+    stopped applying -- and the next reader takes it as evidence the coupling is
+    load-bearing. `THIRD_PARTY` carries the same promise one comment up:
+    "measured, not declared".
+    """
+    actual = {
+        path.stem: _harness_reach(path)
+        for path in _modules_in("infrastructure")
+        if "harness" not in path.parts
+    }
+    stale = [
+        f"{module} -> harness.{{{', '.join(sorted(named - actual.get(module, set())))}}}"
+        for module, named in HARNESS_EDGES.items()
+        if named - actual.get(module, set())
+    ]
+
+    assert not stale, (
+        f"HARNESS_EDGES names {stale}, which nothing imports any more; delete the "
+        "entry so the table keeps describing the code"
+    )
+
+
 def test_infrastructure_does_not_reach_back_into_application():
     """The outward half of the rule, which went unenforced for a while.
 
