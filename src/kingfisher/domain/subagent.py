@@ -290,6 +290,12 @@ class SubagentSpec:
     #: means none -- like `skills`, and for the same reason: a delegate that
     #: needed the whole catalogue would not have been worth defining.
     #:
+    #: The only one of these five fields that refuses `["*"]`, and this is the
+    #: sentence it refuses on. It was accepted for a while because all five share
+    #: one type and one reader, not because anyone chose it -- and everything
+    #: here includes the definition asking, so it was always a loop. Named
+    #: delegates, or none.
+    #:
     #: Any depth: a delegate named here may name its own. `refuse_cycles` is
     #: what stops a catalogue coming back to where it started, and it runs over
     #: the whole catalogue at load, so nobody writes a `subagents:` line that is
@@ -642,7 +648,14 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             document.get("middleware"), absent=None, key="middleware", source=source
         ),
         subagents=_selected(
-            document.get("subagents"), absent=None, key="subagents", source=source
+            document.get("subagents"),
+            absent=None,
+            key="subagents",
+            source=source,
+            refuse_all=(
+                "it would mean every definition in the catalogue, which includes this "
+                "one, so it is always a loop. Name the delegates this one consults"
+            ),
         ),
         wanted=wanted,
         distinct=distinct,
@@ -727,7 +740,14 @@ def _flag(value: object, *, key: str, source: Path) -> bool:
     raise SubagentError(msg)
 
 
-def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Selection:
+def _selected(
+    value: object,
+    *,
+    absent: Selection,
+    key: str,
+    source: Path,
+    refuse_all: str | None = None,
+) -> Selection:
     """One name-list field, or what its absence means for that field.
 
     `absent` differs per field and that is the point: omitting `tools` inherits
@@ -744,6 +764,12 @@ def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Se
     Mixing is refused too. `["*", read_file]` has no reading that is not a
     guess, and it used to have the worst one: `*` matched no tool, so the star
     silently contributed nothing.
+
+    `refuse_all` is for the one field where everything is not a coherent answer,
+    and it carries the reason rather than a flag so the message can say it. Four
+    of these five fields read `["*"]` naturally -- every built-in tool, every
+    workspace tool, every skill, every approved middleware. The fifth is
+    `subagents`, where everything includes the definition doing the asking.
     """
     if isinstance(value, str) and value.strip() == ALL:
         msg = (
@@ -757,6 +783,9 @@ def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Se
         return absent
     if ALL not in names:
         return names
+    if refuse_all is not None:
+        msg = f"{source.name}: {key} may not be [{ALL!r}] -- {refuse_all}"
+        raise SubagentError(msg)
     if len(names) > 1:
         others = ", ".join(n for n in names if n != ALL)
         msg = (

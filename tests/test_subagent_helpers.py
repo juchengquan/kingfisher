@@ -21,7 +21,7 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.domain.subagent import SubagentError, refuse_cycles
+from kingfisher.domain.subagent import SubagentError, SubagentSpec, refuse_cycles
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, subagents_dir
@@ -391,38 +391,55 @@ def _spec(name, subagents=None):
     return read_subagent(body, Path(f"{name}.yaml"))
 
 
-def test_a_definition_that_consults_everything_is_a_loop():
-    """`subagents: ['*']` is every definition in the catalogue, which includes
-    the one saying it -- so it is always a cycle, and was always missed.
+def test_a_definition_may_not_ask_for_every_delegate():
+    """The refusal that makes the rest of this moot: `subagents` must be named.
 
-    `refuse_cycles` read `*` as *no* edges while `subagent_helpers` expands it to
-    `tuple(defined)`. The two disagreeing is the whole bug: the catalogue passed
-    the walk and `_with_helpers` then recursed into itself until the interpreter
-    stopped it. That function has no re-entry guard and a comment saying it needs
-    none "because `refuse_cycles` already ran".
+    It was accepted for a while, and not because anyone chose it -- all five
+    list-shaped fields on a definition share one type and one reader, and `["*"]`
+    reads naturally for four of them. The fifth is this one, where everything
+    includes the definition doing the asking. The field's own documentation had
+    said so all along: "a delegate that needed the whole catalogue would not have
+    been worth defining".
     """
+    with pytest.raises(SubagentError, match=r"subagents may not be"):
+        _spec("greedy", '["*"]')
+
+
+def test_the_refusal_says_why_rather_than_only_no():
+    """Whoever wrote `['*']` was copying the habit from a request, where it is
+    the ordinary way to say everything. The message has to say what is different
+    here, or it reads as an arbitrary gap in the format."""
+    with pytest.raises(SubagentError, match="includes this one"):
+        _spec("greedy", '["*"]')
+
+
+def test_the_other_selections_still_take_a_star():
+    """The refusal is one field, not a change to the format. A delegate asking
+    for every skill or every workspace tool is ordinary and stays so."""
+    spec = read_subagent(
+        "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+        'skills: ["*"]\ntools: ["*"]\n',
+        Path("broad.yaml"),
+    )
+
+    assert spec.skills == ALL
+    assert spec.tools == ALL
+
+
+def test_the_cycle_walk_still_reads_a_star_as_every_edge():
+    """The backstop, and worth keeping now that the parser refuses this.
+
+    A `SubagentSpec` is a plain record and nothing stops one being built in code
+    -- a test, or a catalogue that arrives from somewhere other than a file. If
+    that ever happens, `refuse_cycles` is the thing standing between it and
+    `_with_helpers`, which recurses with no re-entry guard because this ran.
+    """
+    greedy = SubagentSpec(
+        name="greedy", description="Consults everything.", system_prompt="x", subagents=ALL
+    )
+
     with pytest.raises(SubagentError, match="reach themselves"):
-        refuse_cycles({"greedy": _spec("greedy", '["*"]')})
-
-
-def test_the_refusal_says_where_the_edge_came_from():
-    """Whoever wrote `['*']` never typed the name in the loop, so a message that
-    only prints `greedy -> greedy` sends them looking for an edge they cannot
-    find."""
-    with pytest.raises(SubagentError, match=r"names every subagent with `\*`"):
-        refuse_cycles({"greedy": _spec("greedy", '["*"]')})
-
-
-def test_the_star_reaches_the_others_too_not_only_itself():
-    """`*` is every definition, so it is also an edge to each of them -- a loop
-    running through a second delegate is caught for the same reason."""
-    specs = {
-        "hub": _spec("hub", '["*"]'),
-        "spoke": _spec("spoke", "[hub]"),
-    }
-
-    with pytest.raises(SubagentError, match="reach themselves"):
-        refuse_cycles(specs)
+        refuse_cycles({"greedy": greedy})
 
 
 def test_a_catalogue_without_a_star_is_untouched():

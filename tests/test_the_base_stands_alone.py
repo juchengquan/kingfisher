@@ -29,7 +29,7 @@ ABSENT = ("kingfisher_service", "fastapi", "uvicorn", "starlette")
 #: `kingfisher serve` imports it inside a function behind `except ImportError`.
 #: Listed by path rather than waved through by rule, so adding a second one is a
 #: decision somebody makes here rather than a thing that quietly becomes true.
-MAY_NAME_IT = {"cli/__main__.py"}
+MAY_NAME_IT = {"presentation/cli/__main__.py"}
 
 
 def _named_by(node: ast.AST) -> set[str]:

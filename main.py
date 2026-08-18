@@ -190,7 +190,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     gives.
     """
     from kingfisher.application.inventory import inventory  # noqa: PLC0415
-    from kingfisher.cli.listing import failed, render  # noqa: PLC0415
+    from kingfisher.presentation.cli.listing import failed, render  # noqa: PLC0415
 
     found = inventory(cfg)
     for line in render(found, workspace=workspace):

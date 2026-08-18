@@ -61,7 +61,8 @@ _EXPORTS = {
     # *which definitions cannot run*, and exporting the two calls it would
     # need to combine would promise a recipe instead of an answer.
     "unrunnable_delegates": "kingfisher.infrastructure.harness.agent",
-    # Reached for by `kingfisher.cli`, and public because it reached. A
+    # Reached for by `kingfisher.presentation.cli`, and public because it
+    # reached. A
     # renderer in the domain looks odd until you see what it is for: the
     # block a *refusal* prints is the block a listing prints, so a name two
     # files define reads the same in both. A consumer rendering its own
