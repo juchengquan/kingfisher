@@ -68,6 +68,28 @@ is silent -- the delegate builds, answers, and the answer is worth nothing.
 Name one or the other, never both: an alias *is* a model name once bound, so a
 file saying both has said one thing twice with no rule for which wins.
 
+**Either may name several, tried in order.** A candidate is passed over for two
+reasons and no others -- an alias this deployment never bound, and, when
+`distinct` is set, a model that turns out to be the one this delegate exists not
+to be. Both are the deployment's doing, so a list is not the definition hedging;
+it is the definition naming the deployments it can still be useful in. If every
+candidate is passed over there is nothing left to run, and that refuses, naming
+each one and why.
+
+`distinct: true` says that running beside the main agent defeats this delegate.
+`indistinct` has always been able to see the two crude cases -- the same model as
+the default, or a different id on the same host -- and has only ever reported
+them, because nothing in a file could say whether being elsewhere was the point:
+`reviewer` deliberately runs on the same model and is right to. This is how a
+definition says it, and it is what turns that report into a refusal.
+
+That refusal is less new than it looks. `second-opinion` already depends on one
+for the other half of the same problem: an *unbound* alias stops the build, for
+exactly the reason two paragraphs up. A bound alias that resolves to the default
+is the identical sentence with the identical ending, and until now it fell
+through. `distinct: true` with nothing named is refused at the file, since a
+delegate running the deployment's own model is precisely what it rules out.
+
 There was a `provider:` beside `model:`, naming an endpoint by style, and a rule
 that the two moved together -- a model name sent to an endpoint that has never
 heard of it is a 404 if you are lucky and a wrong-model run if you are not. Both
@@ -145,6 +167,7 @@ KNOWN: frozenset[str] = frozenset(
         "subagents",
         "model",
         "alias",
+        "distinct",
         "metadata",
     }
 )
@@ -174,6 +197,28 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 
 class SubagentError(ValueError):
     """Raised when a subagent definition cannot be read."""
+
+
+@dataclass(frozen=True)
+class Wanted:
+    """One thing a delegate would run, in whichever of the two ways it may say it.
+
+    Exactly one of these is ever set. `model` is a wire id and needs no
+    deployment to interpret it; `alias` is a general name and means nothing
+    until something binds it, which is `Config.bound`.
+
+    A record rather than a bare string because the two cannot be told apart by
+    looking. Returned as `"cheap"`, a caller has no way to know whether to send
+    that to an endpoint or to look it up -- and sending an alias to an endpoint
+    is a 404 at best.
+
+    Above `SubagentSpec` because a spec now holds a tuple of these. It used to
+    sit below, describing what came *out* of `resolved_model`; it describes what
+    a definition wrote as well, and those were always the same thing.
+    """
+
+    model: str | None = None
+    alias: str | None = None
 
 
 @dataclass(frozen=True)
@@ -244,16 +289,46 @@ class SubagentSpec:
     #: *catalogue* that would ask for one, so nobody writes a file whose
     #: `subagents:` is silently ignored.
     subagents: Selection = None
-    #: What this delegate runs, by model name, out of what the catalogue
-    #: defines. `None` means the deployment's own. Naming one decides where the
-    #: prompt goes and whose credentials pay -- the endpoint follows from the
-    #: model -- which is why it is granted rather than free.
-    model: str | None = None
-    #: The same decision, made generally: a name the *deployment* binds to a
-    #: model of its own. For a definition that knows what kind of model it needs
-    #: and cannot know its name -- which is every definition shipped inside the
-    #: wheel, since a vendor's model id is not portable.
-    alias: str | None = None
+    #: What this delegate would run, in the order it would prefer, out of what
+    #: the catalogue defines. Empty means the deployment's own. Naming one
+    #: decides where the prompt goes and whose credentials pay -- the endpoint
+    #: follows from the model -- which is why it is granted rather than free.
+    #:
+    #: An ordered tuple rather than the `model` / `alias` pair it replaces,
+    #: which held one answer and could not hold a second choice. A file writes
+    #: either `model:` or `alias:`, never both, and either may name several;
+    #: each entry becomes one `Wanted`, so what varies between them -- a wire id
+    #: needs no deployment to interpret it, an alias means nothing until one
+    #: binds it -- stays inside the entry rather than being a fact about the
+    #: whole field.
+    #:
+    #: A candidate is passed over for two reasons and no others: an alias this
+    #: deployment never bound, and -- when `distinct` is set -- a model that
+    #: turns out to be the one this delegate exists not to be. Both are the
+    #: deployment's doing, which is why a *list* is not the definition hedging.
+    #: It is a definition naming the deployments it can still be useful in.
+    #:
+    #: `derived`, like `tool_sources`, and for the same reason: no definition
+    #: writes `wanted:`. It is read out of `model:` and `alias:`, and a file
+    #: spelling this field's own name is refused like any other key the format
+    #: does not define.
+    wanted: tuple[Wanted, ...] = field(default=(), metadata={"derived": True})
+    #: Whether running beside the main agent defeats this delegate.
+    #:
+    #: `indistinct` has always been able to see the two crude cases -- the same
+    #: model as the deployment's default, or a different id on the same host --
+    #: and has only ever reported them, because it "cannot know that a delegate
+    #: *needs* to differ": `reviewer` deliberately runs on the same model and is
+    #: right to. This is the definition saying so, and it is what turns that
+    #: report into a refusal.
+    #:
+    #: The refusal is not new so much as completed. `second-opinion` already
+    #: relies on one for the other half of this: an *unbound* alias refuses,
+    #: because falling back to the default "would hand this delegate the one
+    #: model it exists not to be, and nothing in the output would look wrong".
+    #: A bound alias resolving to that same model is the identical sentence with
+    #: the identical ending, and it fell through.
+    distinct: bool = False
     #: The caller's own keys, carried and never interpreted. Kingfisher reads
     #: nothing here and never will: the moment it did, this would be a field
     #: with rules, and the point of it is to be the one place a definition can
@@ -340,6 +415,21 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
+    wanted = _wanted(document)
+    distinct = _flag(document.get("distinct"), key="distinct", source=source)
+    # A definition that must differ and named nothing to differ *with* runs the
+    # deployment's own model, which is the one thing `distinct` exists to
+    # refuse -- so it could never start, and would say so per activation rather
+    # than once, at the file. Refused here, where a reader can see both halves
+    # of the contradiction on the same screen.
+    if distinct and not wanted:
+        msg = (
+            f"{source.name}: 'distinct: true' with no model or alias -- with nothing "
+            f"named, this delegate runs the deployment's own model, which is exactly "
+            f"what 'distinct' refuses; name what it may run instead"
+        )
+        raise SubagentError(msg)
+
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
     # the dictionary the agent dispatches through all key on the plain name.
@@ -369,10 +459,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         subagents=_selected(
             document.get("subagents"), absent=None, key="subagents", source=source
         ),
-        # `or None` rather than a conditional: unset and blank mean the same
-        # thing here -- run whatever the deployment runs.
-        model=fields.text(document.get("model")) or None,
-        alias=fields.text(document.get("alias")) or None,
+        wanted=wanted,
+        distinct=distinct,
         metadata=_metadata(document, source),
     )
 
@@ -405,6 +493,53 @@ def _claimed_sources(written: Selection) -> Mapping[str, str]:
         if where is not None:
             claimed[name] = where
     return MappingProxyType(claimed)
+
+
+def _wanted(document: Mapping[str, object]) -> tuple[Wanted, ...]:
+    """What a definition would run, in the order it would prefer.
+
+    `model:` and `alias:` are mutually exclusive and checked as such above, so
+    at most one of these loops runs. Each accepts a scalar or a list through
+    `fields.names`, which is the same reader every other name-list field uses --
+    a single unbracketed name stays legal because that is what every definition
+    written so far says.
+
+    Order is the file's, and is kept. A candidate is only ever passed over for a
+    reason the deployment caused, so second place means "if you did not bind the
+    first" rather than "if the first were unavailable for any reason at all".
+
+    Duplicates are dropped rather than refused. A repeat can only be reached by
+    the rule that already passed over the first one, so it changes nothing, and
+    refusing it would fail a file over a line that was merely redundant.
+    """
+    written = fields.names(document.get("model"))
+    if written:
+        return tuple(dict.fromkeys(Wanted(model=name) for name in written))
+    written = fields.names(document.get("alias"))
+    if written:
+        return tuple(dict.fromkeys(Wanted(alias=name) for name in written))
+    return ()
+
+
+def _flag(value: object, *, key: str, source: Path) -> bool:
+    """A yes/no field, refusing the spellings YAML would quietly accept.
+
+    `distinct: "false"` is a non-empty string and truthy in Python, which is the
+    reading that says the opposite of what the file says. YAML already turns
+    `true`, `yes` and `on` into `True` before this sees them, so what is left
+    here is a value that arrived as something other than a bool -- and there is
+    no reading of it that is not a guess.
+    """
+    if value is None:
+        return False
+    if isinstance(value, bool):
+        return value
+    msg = (
+        f"{source.name}: {key} is {value!r}; write true or false. A quoted "
+        f"{str(value)!r} reads as text, and every non-empty text is true -- "
+        f"including {'false'!r}"
+    )
+    raise SubagentError(msg)
 
 
 def _selected(value: object, *, absent: Selection, key: str, source: Path) -> Selection:
@@ -514,32 +649,15 @@ def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
                 raise SubagentError(msg)
 
 
-@dataclass(frozen=True)
-class Wanted:
-    """What a delegate asked to run, in whichever of the two ways it may ask.
-
-    Exactly one of these is ever set, and both being `None` is the ordinary
-    case: run whatever the deployment runs. `model` is a wire id and needs no
-    deployment to interpret it; `alias` is a general name and means nothing
-    until something binds it, which is `Config.bound`.
-
-    A record rather than a bare string because the two cannot be told apart by
-    looking. Returned as `"cheap"`, a caller has no way to know whether to send
-    that to an endpoint or to look it up -- and sending an alias to an endpoint
-    is a 404 at best.
-    """
-
-    model: str | None = None
-    alias: str | None = None
-
-
-def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> Wanted:
-    """What a delegate runs, once the request has had its say.
+def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> tuple[Wanted, ...]:
+    """What a delegate would run, in order, once the request has had its say.
 
     The override replaces wholesale, and that includes replacing an *alias* with
-    a model. A caller naming a concrete model has said something more specific
-    than the file did, and keeping the file's alias beside it would mean
-    resolving two answers to one question.
+    a model, and a list with one entry. A caller naming a concrete model has
+    said something more specific than the file did, and keeping the file's
+    candidates beside it would mean resolving several answers to one question --
+    including the case where the file's second choice quietly outranks the
+    caller's only one.
 
     Almost nothing else left, and that is the result rather than an oversight.
     This was `resolved_endpoint` and returned a `(provider, model)` pair,
@@ -557,5 +675,5 @@ def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> Want
     reach this endpoint -- stays in `capabilities`.
     """
     if override is not None:
-        return Wanted(model=override.model)
-    return Wanted(model=spec.model, alias=spec.alias)
+        return (Wanted(model=override.model),)
+    return spec.wanted

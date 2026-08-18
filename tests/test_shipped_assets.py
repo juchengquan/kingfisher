@@ -103,6 +103,28 @@ def test_every_preset_tool_describes_itself_to_the_model(shipped):
         assert len(tool.description.strip()) > 60  # a trigger, not a title
 
 
+def test_the_second_opinion_preset_insists_on_differing(shipped):
+    """The one definition whose whole reason is to be a different model, and the
+    one that could silently stop being one.
+
+    Bind `alternate` to whatever the main agent runs and, without this, the
+    delegate builds, answers, and the answer is worth nothing -- with a line in
+    the run report as the only sign. `distinct: true` is what turns that into a
+    refusal, so a preset that quietly lost the line would be back to the defect
+    this shipped to fix.
+
+    Asserted here rather than trusted, because it is one line in a file nobody
+    reads twice. Its neighbours deliberately do *not* set it: `reviewer` runs on
+    the deployment's own model on purpose, and `extractor` wants a cheap model
+    rather than a different one.
+    """
+    specs = LocalSubagentRepository(shipped / "subagents").specs
+
+    assert specs["second-opinion"].distinct is True
+    assert specs["second-opinion"].wanted, "it must name what it may run instead"
+    assert {name for name, s in specs.items() if s.distinct} == {"second-opinion"}
+
+
 def test_no_preset_names_a_model(shipped):
     """A file inside the wheel cannot portably name a vendor's model id.
 
@@ -118,7 +140,13 @@ def test_no_preset_names_a_model(shipped):
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
 
-    assert {name for name, s in specs.items() if s.model} == set()
+    named = {
+        name
+        for name, s in specs.items()
+        for candidate in s.wanted
+        if candidate.model is not None
+    }
+    assert named == set()
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 

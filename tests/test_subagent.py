@@ -44,14 +44,14 @@ def test_minimal_definition_parses():
     assert spec.system_prompt.startswith("You review analyses.")
     # Unset, not empty: the subagent inherits the parent's tools.
     assert spec.tools == ALL  # declared nothing, so whatever its caller has
-    assert spec.model is None
+    assert spec.wanted == ()
 
 
 def test_optional_fields_and_quoting():
     spec = read_subagent(FULL, Path("reviewer.yaml"))
 
     assert spec.tools == ("read_file", "glob", "grep")
-    assert spec.model == "MiniMax-M2.5"
+    assert spec.wanted == (Wanted(model="MiniMax-M2.5"),)
     assert spec.description == "Checks an analysis for arithmetic errors."  # unquoted
 
 
@@ -233,25 +233,50 @@ def test_every_known_field_still_parses(tmp_path):
 
     assert spec.tools == ("read_file",)
     assert spec.middleware == ("audit",)
-    assert spec.model == "gpt-5"
+    assert spec.wanted == (Wanted(model="gpt-5"),)
+
+
+#: Keys a definition writes that reach the spec through a *derived* field
+#: instead of one named after them. `model:` and `alias:` are two spellings of
+#: one question -- what this delegate runs -- and a file may write either as a
+#: list, so both are read into `wanted` and neither has a field of its own.
+#:
+#: Here rather than in `domain.subagent` because only this test needs it, and a
+#: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
+#: exists to refuse.
+FOLDED_INTO = {"model": "wanted", "alias": "wanted"}
 
 
 def test_the_known_set_matches_the_spec_it_builds():
-    """Two lists that must agree: a field added to the dataclass but not to
-    KNOWN would be refused as unknown the moment anyone used it.
+    """Two lists that must agree, in both directions.
+
+    A field added to the dataclass but not to KNOWN would be refused as unknown
+    the moment anyone used it. A key added to KNOWN with nothing behind it is
+    the opposite failure and the quieter one: the parser accepts it, nothing
+    reads it, and the definition that wrote it is obeyed by nobody.
 
     Derived fields are excluded, and have to say so on themselves rather than
     being listed here -- a name in two places is the drift this test exists to
     catch. `tool_sources` is the first: it is read out of `tools`, and writing
     `tool_sources:` in a definition is refused like any other unknown key.
+
+    `FOLDED_INTO` is the one thing that cannot be said on a field, because it is
+    a fact about keys that have no field. It is checked rather than trusted: a
+    key claiming to be folded somewhere that is not a derived field would be a
+    hole in the direction this test just gained.
     """
+    fields_by_name = SubagentSpec.__dataclass_fields__
     written = {
-        name
-        for name, f in SubagentSpec.__dataclass_fields__.items()
-        if not f.metadata.get("derived")
+        name for name, f in fields_by_name.items() if not f.metadata.get("derived")
     }
 
-    assert written == KNOWN
+    assert written | set(FOLDED_INTO) == KNOWN
+
+    for key, target in FOLDED_INTO.items():
+        assert key not in fields_by_name, f"{key!r} has a field, so it is not folded"
+        assert fields_by_name[target].metadata.get("derived"), (
+            f"{key!r} claims to fold into {target!r}, which is not a derived field"
+        )
 
 
 def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
@@ -370,12 +395,18 @@ def test_the_description_may_still_be_folded(tmp_path):
 # already enforces for the record itself.
 
 
-def _spec(model: str | None = None) -> SubagentSpec:
-    return SubagentSpec(name="reviewer", description="d", system_prompt="Go.", model=model)
+def _spec(*models: str, distinct: bool = False) -> SubagentSpec:
+    return SubagentSpec(
+        name="reviewer",
+        description="d",
+        system_prompt="Go.",
+        wanted=tuple(Wanted(model=name) for name in models),
+        distinct=distinct,
+    )
 
 
 def test_a_definition_that_pins_nothing_runs_what_everything_else_does():
-    assert resolved_model(_spec()) == Wanted()
+    assert resolved_model(_spec()) == ()
 
 
 def test_the_definition_decides():
@@ -388,14 +419,14 @@ def test_the_definition_decides():
     model through a catalogue only `Config` holds -- so it is
     `refuse_ungranted_endpoint`, called where the lookup happens.
     """
-    assert resolved_model(_spec("gpt-5")) == Wanted(model="gpt-5")
+    assert resolved_model(_spec("gpt-5")) == (Wanted(model="gpt-5"),)
 
 
 def test_a_request_replaces_what_the_file_said():
     """Wholesale, which is now the only shape an override can have: there is no
     second field to take half of."""
-    assert resolved_model(_spec("gpt-5"), override=RunOn(model="cheap-one")) == Wanted(
-        model="cheap-one"
+    assert resolved_model(_spec("gpt-5"), override=RunOn(model="cheap-one")) == (
+        Wanted(model="cheap-one"),
     )
 
 
@@ -509,23 +540,27 @@ def test_an_alias_alone_parses(tmp_path):
 
     spec = read_subagent(definition, tmp_path / "reviewer.yaml")
 
-    assert (spec.alias, spec.model) == ("cheap", None)
+    assert spec.wanted == (Wanted(alias="cheap"),)
 
 
 def test_an_alias_is_carried_through_resolution(tmp_path):
     """The domain hands back which of the two was asked for; binding needs the
     catalogue and happens a layer out."""
-    spec = SubagentSpec(name="r", description="d", system_prompt="Go.", alias="cheap")
+    spec = SubagentSpec(
+        name="r", description="d", system_prompt="Go.", wanted=(Wanted(alias="cheap"),)
+    )
 
-    assert resolved_model(spec) == Wanted(alias="cheap")
+    assert resolved_model(spec) == (Wanted(alias="cheap"),)
 
 
 def test_an_override_replaces_an_alias_rather_than_joining_it(tmp_path):
     """Wholesale, like everything else `RunOn` does. A caller naming a concrete
     model has said something more specific than the file did."""
-    spec = SubagentSpec(name="r", description="d", system_prompt="Go.", alias="cheap")
+    spec = SubagentSpec(
+        name="r", description="d", system_prompt="Go.", wanted=(Wanted(alias="cheap"),)
+    )
 
-    assert resolved_model(spec, override=RunOn(model="gpt-5")) == Wanted(model="gpt-5")
+    assert resolved_model(spec, override=RunOn(model="gpt-5")) == (Wanted(model="gpt-5"),)
 
 
 def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):
@@ -539,4 +574,91 @@ def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):
 
     spec = read_subagent(definition, tmp_path / "reviewer.yaml")
 
-    assert spec.model == "cheap-one"
+    assert spec.wanted == (Wanted(model="cheap-one"),)
+
+
+# -- naming several models, and saying one must differ ----------------------
+#
+# `model:` and `alias:` each take a scalar or a list. The list is not a file
+# hedging: a candidate is only ever passed over for a reason the deployment
+# caused -- an alias nobody bound, or a model that turns out to be the one this
+# delegate exists not to be -- so a second entry says which other deployments
+# this definition can still be useful in.
+
+
+def _runs(*lines: str) -> str:
+    return _definition(*lines)
+
+
+def test_one_model_reads_as_a_list_of_one(tmp_path):
+    """The shape every definition written so far has, and it does not change."""
+    spec = read_subagent(_runs("model: gpt-5"), tmp_path / "r.yaml")
+
+    assert spec.wanted == (Wanted(model="gpt-5"),)
+    assert spec.distinct is False
+
+
+def test_several_models_keep_the_order_the_file_wrote(tmp_path):
+    spec = read_subagent(_runs("model: [gpt-5, claude-4]"), tmp_path / "r.yaml")
+
+    assert spec.wanted == (Wanted(model="gpt-5"), Wanted(model="claude-4"))
+
+
+def test_several_aliases_keep_the_order_the_file_wrote(tmp_path):
+    spec = read_subagent(_runs("alias: [alternate, fallback]"), tmp_path / "r.yaml")
+
+    assert spec.wanted == (Wanted(alias="alternate"), Wanted(alias="fallback"))
+
+
+def test_a_repeated_candidate_is_dropped_rather_than_refused(tmp_path):
+    """It could only be reached by the rule that already passed over the first
+    one, so it changes nothing -- and failing a file over a redundant line would
+    be a refusal with no defect behind it."""
+    spec = read_subagent(_runs("model: [gpt-5, gpt-5, claude-4]"), tmp_path / "r.yaml")
+
+    assert spec.wanted == (Wanted(model="gpt-5"), Wanted(model="claude-4"))
+
+
+def test_naming_both_a_model_and_an_alias_is_still_refused(tmp_path):
+    """Lists did not create a way to mean both at once."""
+    with pytest.raises(SubagentError, match="name one or the other"):
+        read_subagent(_runs("model: [gpt-5]", "alias: [cheap]"), tmp_path / "r.yaml")
+
+
+def test_distinct_parses_as_a_flag(tmp_path):
+    spec = read_subagent(_runs("model: gpt-5", "distinct: true"), tmp_path / "r.yaml")
+
+    assert spec.distinct is True
+
+
+def test_distinct_with_nothing_named_is_refused_at_the_file(tmp_path):
+    """With nothing named it runs the deployment's own model, which is exactly
+    what the flag rules out -- so it could never start, and would say so once per
+    activation instead of once, here, where both halves are on one screen."""
+    with pytest.raises(SubagentError, match="no model or alias") as raised:
+        read_subagent(_runs("distinct: true"), tmp_path / "r.yaml")
+
+    assert "distinct" in str(raised.value)
+
+
+@pytest.mark.parametrize("written", ["'false'", '"no"', "0", "maybe"])
+def test_a_flag_that_is_not_a_bool_is_refused(tmp_path, written):
+    """`distinct: "false"` is a non-empty string, and every non-empty string is
+    true -- so the reading Python would take says the opposite of what the file
+    says."""
+    with pytest.raises(SubagentError, match="write true or false"):
+        read_subagent(_runs("model: gpt-5", f"distinct: {written}"), tmp_path / "r.yaml")
+
+
+def test_yaml_spellings_of_true_are_accepted(tmp_path):
+    """`yes` and `on` arrive here already a bool, so there is nothing to refuse
+    and nothing to special-case."""
+    for written in ("true", "True", "yes", "on"):
+        spec = read_subagent(
+            _runs("model: gpt-5", f"distinct: {written}"), tmp_path / "r.yaml"
+        )
+        assert spec.distinct is True, written
+
+
+def test_distinct_left_out_is_false(tmp_path):
+    assert read_subagent(_runs("model: gpt-5"), tmp_path / "r.yaml").distinct is False

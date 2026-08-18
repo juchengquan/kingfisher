@@ -27,6 +27,19 @@ tools: []
 # an unbound alias falling back to the default would hand this delegate the one
 # model it exists not to be, and nothing in the output would look wrong.
 alias: alternate
+# And the half the refusal above did not cover. An *unbound* alias already
+# stopped the build; a bound one resolving to the deployment's own model went
+# through with a note in the run report, which is the same worthless answer
+# arriving quietly. Move your main agent onto whatever `alternate` names and
+# this delegate now refuses instead of agreeing with itself.
+#
+# `alias` may name several if one binding cannot serve every deployment:
+#
+#     alias: [alternate, fallback]
+#
+# tried in order, each passed over only if you never bound it or if it turns out
+# to be the model this exists not to be.
+distinct: true
 system_prompt: |
   You answer the question you are given, from the files, on your own.
 

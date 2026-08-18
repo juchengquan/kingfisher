@@ -149,16 +149,39 @@ def model_for(spec: SubagentSpec, cfg: Config, *, override: RunOn | None = None)
     unbound and left to grep for whoever wanted it -- and this is the one
     refusal that fires on a file they may not own.
     """
-    wanted = resolved_model(spec, override=override)
-    if wanted.model is not None:
-        return wanted.model
-    if wanted.alias is None:
-        return None  # it asked for neither: run whatever the deployment runs
-    try:
-        return cfg.models.bound(wanted.alias)
-    except ConfigError as exc:
-        msg = f"subagent {spec.name!r}: {exc}"
-        raise ConfigError(msg) from exc
+    candidates = resolved_model(spec, override=override)
+    if not candidates:
+        return None  # it asked for nothing: run whatever the deployment runs
+
+    passed_over: list[str] = []
+    for wanted in candidates:
+        if wanted.model is not None:
+            model = wanted.model
+        else:
+            assert wanted.alias is not None  # noqa: S101 -- Wanted sets exactly one
+            try:
+                model = cfg.models.bound(wanted.alias)
+            except ConfigError as exc:
+                # Not fatal while another candidate is left. A file naming
+                # several has said which deployments it can still be useful in,
+                # and an alias nobody bound is precisely one it anticipated.
+                passed_over.append(f"alias {wanted.alias!r}: {exc}")
+                continue
+        if spec.distinct and (why := indistinct(spec, cfg, model=model)):
+            passed_over.append(f"{model!r} {why}")
+            continue
+        return model
+
+    # Every candidate was passed over, so there is nothing left to run. The
+    # message carries each one and why, because the fix is in the deployment's
+    # bindings and a reader has to know which of them to change -- and because
+    # this is the one refusal that fires on a file they may not own.
+    reasons = "; ".join(passed_over)
+    msg = (
+        f"subagent {spec.name!r}: none of the {len(candidates)} model(s) it names "
+        f"can be used here -- {reasons}"
+    )
+    raise ConfigError(msg)
 
 
 def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | None:
@@ -180,7 +203,7 @@ def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | N
     "second opinion" served by the same gateway is the disappointment this
     exists to name.
     """
-    if spec.model is None and spec.alias is None:
+    if not spec.wanted:
         return None  # it never asked to be anywhere in particular
 
     if model == cfg.models.default:

@@ -63,6 +63,15 @@ FAKE_ENDPOINT = Endpoint(
     api_key="test-key-not-real",
 )
 
+#: A second host, so "somewhere else" is expressible. `indistinct` compares
+#: hosts rather than endpoint names, deliberately -- two endpoints may point at
+#: one gateway -- so a fixture needs a different netloc, not a different key.
+OTHER_ENDPOINT = Endpoint(
+    api="anthropic",
+    base_url="http://127.0.0.2:9/never-called",
+    api_key="test-key-not-real",
+)
+
 #: Two models on one endpoint, which is the shape the catalogue exists to allow
 #: and the shape a delegate test needs: `cheap-model` carries params that differ
 #: from the default's, so a test asserting a delegate got *its own* ceiling
@@ -72,6 +81,11 @@ FAKE_MODELS = {
     "cheap-model": ModelProfile(
         model="cheap-model", endpoint="fake", max_tokens=321, timeout_s=45
     ),
+    #: On the *other* endpoint, and that is its whole job. A delegate written
+    #: `distinct: true` refuses a model sharing a host with the default, so a
+    #: one-endpoint fixture cannot build `second-opinion` at all -- every alias
+    #: it could name resolves to the same machine.
+    "elsewhere-model": ModelProfile(model="elsewhere-model", endpoint="elsewhere"),
 }
 
 
@@ -80,12 +94,12 @@ FAKE_MODELS = {
 #: naming one a test of that refusal instead. They used to be here because the
 #: shipped presets named them; the presets are a separate distribution now and
 #: bind their own, and these are kingfisher's own fixtures.
-FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "cheap-model"}
+FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "elsewhere-model"}
 
 #: One record where the fixture used to set four fields on `Config`.
 FAKE_CATALOGUE = Models(
     models=FAKE_MODELS,
-    endpoints={"fake": FAKE_ENDPOINT},
+    endpoints={"fake": FAKE_ENDPOINT, "elsewhere": OTHER_ENDPOINT},
     default="fake-model",
     aliases=FAKE_ALIASES,
 )
