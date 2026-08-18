@@ -958,19 +958,51 @@ def test_only_one_module_decides_what_a_skill_is():
     )
 
 
-def test_the_package_ships_no_assets():
-    """The framework loads and composes definitions; it does not supply any.
+def test_the_shipped_definitions_live_only_under_assets():
+    """The package ships definitions, and ships them in one place.
 
-    This asserted the opposite, and was right to: `packages = ["src/kingfisher"]`
-    means anything one level up is not shipped, so seeding from an installed
-    kingfisher needed the definitions inside the wheel. They are a distribution
-    of their own now, found through the `kingfisher.assets` entry point, and
-    this holds the framework to shipping none of them.
+    This asserted the opposite twice, and the second time outlived its subject.
+    It began as "the framework supplies none": true while they were a
+    distribution of their own behind a `kingfisher.assets` entry point. D1 of
+    *the definitions ship with the library* reversed that -- they live in
+    `src/kingfisher/assets/` and ship in the wheel -- and the rule was left
+    asserting that `src/kingfisher/reference/<kind>/` does not exist. Then #187
+    moved the last file out of `reference/` and deleted the directory, at which
+    point the assertion could no longer fail for any reason at all.
+
+    It passed a 41-mutation audit on the way, because the mutation created
+    `reference/skills/` to match what the rule *checked* rather than what it
+    *claimed*. Measuring the assertion instead of the claim is the failure this
+    file keeps finding, and it found it here in the test of the test.
+
+    What is left worth holding is D3's other half: assets are excluded from
+    every rule in this file because they are content, so a definition that
+    escapes `assets/` is content being read as code -- shipped, unreviewed by
+    any rule here, and invisible for exactly that reason.
     """
     from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-    for kind in CATALOGUE_KINDS:
-        assert not (SRC / "reference" / kind).exists(), kind
+    shipped = {
+        path
+        for kind in CATALOGUE_KINDS
+        for path in SRC.rglob(kind)
+        if path.is_dir() and "__pycache__" not in path.parts
+    }
+    stray = sorted(str(p.relative_to(SRC)) for p in shipped if p.parent != SRC / CONTENT)
+    missing = sorted(k for k in CATALOGUE_KINDS if not (SRC / CONTENT / k).is_dir())
+
+    # Named per kind, not counted. `assert shipped` passed with two of the three
+    # gone, which is the same "at most N" weakness the harness-edge table avoids:
+    # what matters is *which* one stopped shipping, and seeding a workspace
+    # without subagents is not a smaller version of seeding one.
+    assert not missing, (
+        f"{CONTENT}/ ships no {', '.join(missing)} — D1 says the definitions ship "
+        "in the wheel, and `kingfisher seed` hands out what is here"
+    )
+    assert not stray, (
+        f"{stray} hold definitions outside {CONTENT}/ — every rule in this file skips "
+        f"{CONTENT}/ as content, so a kind that escapes it ships unread by any of them"
+    )
 
 
 def test_the_package_ships_the_catalogue_example():
