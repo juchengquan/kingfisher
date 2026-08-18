@@ -20,7 +20,7 @@ from kingfisher.domain.tool import ceiling
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.delegation import as_subagent, subagent_skills
-from kingfisher.infrastructure.harness.scoping import ToolAllowlist
+from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
 from tests.conftest import FakeToolCallingModel, subagents_dir
 
 HELPER = """name: helper
@@ -655,7 +655,7 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
     available" -- and answered around it instead of retrying with the right
     key. The name it could not find was its own typo, and nothing said so.
     """
-    from kingfisher.infrastructure.harness.scoping import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.narrowing import DeclaredDelegatesOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagentType": "reviewer"}, "id": "c1"}
@@ -670,7 +670,7 @@ def test_a_missing_subagent_type_says_so_rather_than_naming_none():
 
 def test_a_delegate_that_does_not_exist_still_names_it():
     """The other half, unchanged: a real name that is not on the list."""
-    from kingfisher.infrastructure.harness.scoping import DeclaredDelegatesOnly
+    from kingfisher.infrastructure.harness.narrowing import DeclaredDelegatesOnly
 
     class _Call:
         tool_call = {"name": "task", "args": {"subagent_type": "nobody"}, "id": "c1"}

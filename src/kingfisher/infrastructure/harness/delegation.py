@@ -35,7 +35,7 @@ from kingfisher.domain.subagent import RunOn, SubagentError
 from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.domain.tool import Found, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.models import build_model
-from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
+from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
 
 if TYPE_CHECKING:
@@ -394,7 +394,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # silently offered a different skill than the one named is the failure
         # this whole area exists to stop.
         middleware.append(
-            ScopedSkills(allowed=skills, backend=backend, sources=skill_sources or [])
+            NarrowedSkills(allowed=skills, backend=backend, sources=skill_sources or [])
         )
     # What lets this delegate delegate. deepagents gives a subagent no `task`
     # tool of its own -- `create_sub_agent` calls `create_agent` with the
@@ -409,7 +409,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # also what a caller who withheld the helper should see.
     if helpers:
         middleware.append(SubAgentMiddleware(backend=backend, subagents=helpers))
-    # Last, so a deployment's middleware sees the tool and skill scoping
+    # Last, so a deployment's middleware sees the tool and skill narrowing
     # kingfisher applied rather than running ahead of it.
     middleware.extend(extra_middleware or [])
     if middleware:
