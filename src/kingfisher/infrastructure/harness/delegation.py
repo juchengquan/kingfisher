@@ -35,6 +35,7 @@ from kingfisher.domain.capabilities import (
 from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.domain.tool import Found, ceiling, select, split_reference
+from kingfisher.infrastructure.harness.backend import WorkspaceToolErrors
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -469,6 +470,22 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # handed that one. Measured: `SubAgent.tools` *adds* to the built-ins rather
     # than replacing them, so this costs a delegate none of its file tools.
     mine = select(allowed, catalogue)
+    # First, so it wraps every call this delegate makes -- the same position it
+    # has on the parent, which appends it before its own allowlist.
+    #
+    # A delegate is handed the workspace's tool *objects* and inherits none of
+    # its parent's middleware, so the guard the parent installed stopped at the
+    # parent while the code it guards went one level down. That was rare while a
+    # delegate ran only when a caller named one; an agent declares its own
+    # roster now and `subagents` defaults to everything in it, so several
+    # delegates holding the workspace's tools is the ordinary case.
+    #
+    # Built from everything walked rather than from what this delegate was
+    # granted, for the reason the parent gives: a delegate that holds none of
+    # them cannot reach one, and narrowing it here would mean building the guard
+    # from a set that is decided afterwards.
+    if catalogue:
+        middleware.append(WorkspaceToolErrors(frozenset(entry.name for entry in catalogue)))
     if allowed != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist
         # rather than an absent one -- the same split the parent makes.
