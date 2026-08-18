@@ -55,7 +55,7 @@ _EXPORTS = {
     "seed": "kingfisher.infrastructure.seeding",
     "shipped_kinds": "kingfisher.infrastructure.seeding",
     "Seeding": "kingfisher.infrastructure.seeding",
-    "inventory": "kingfisher.infrastructure.inventory",
+    "inventory": "kingfisher.application.inventory",
     # Reached for by `kingfisher.cli`, and public because it reached. A
     # renderer in the domain looks odd until you see what it is for: the
     # block a *refusal* prints is the block a listing prints, so a name two
@@ -72,7 +72,7 @@ _EXPORTS = {
     # caller; renamed because a bare `LAYOUT` at the top level sits next to
     # `LAYOUT_DIRS` and means something else.
     "SKILL_LAYOUT": "kingfisher.infrastructure.skill_store",
-    "Inventory": "kingfisher.infrastructure.inventory",
+    "Inventory": "kingfisher.application.inventory",
     "from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
     "normalize_answer": "kingfisher.domain.result",
@@ -138,6 +138,8 @@ if TYPE_CHECKING:
     # checker cannot otherwise tell they are public.
     from kingfisher.application.config import from_env as from_env
     from kingfisher.application.config import paths_from_env as paths_from_env
+    from kingfisher.application.inventory import Inventory as Inventory
+    from kingfisher.application.inventory import inventory as inventory
     from kingfisher.application.run import run as run
     from kingfisher.application.run import stream as stream
     from kingfisher.application.service import Kingfisher as Kingfisher
@@ -177,8 +179,6 @@ if TYPE_CHECKING:
         build_checkpointer as build_checkpointer,
     )
     from kingfisher.infrastructure.harness.models import build_model as build_model
-    from kingfisher.infrastructure.inventory import Inventory as Inventory
-    from kingfisher.infrastructure.inventory import inventory as inventory
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.seeding import Seeding as Seeding
     from kingfisher.infrastructure.seeding import seed as seed

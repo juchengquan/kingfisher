@@ -575,7 +575,7 @@ def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch
     Patched at `harness.agent`, which is where `inventory` imports it from at
     call time.
     """
-    from kingfisher.infrastructure import inventory as inventory_module
+    from kingfisher.application import inventory as inventory_module
     from kingfisher.infrastructure.harness import agent as agent_module
 
     monkeypatch.setattr(agent_module, "registered_tools", lambda _graph: None)

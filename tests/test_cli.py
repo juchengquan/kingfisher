@@ -468,8 +468,8 @@ def _subagent_catalogue(cfg):
 def test_the_listing_marks_a_compiled_delegate(cfg):
     """Marked because the rest of the listing means something different for it,
     and nothing else in the output would say so."""
+    from kingfisher.application.inventory import inventory
     from kingfisher.cli.listing import render
-    from kingfisher.infrastructure.inventory import inventory
 
     _subagent_catalogue(cfg)
     lines = list(render(inventory(cfg), workspace=cfg.workspace))
@@ -484,8 +484,8 @@ def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
     """The assumption a reader would otherwise make. deepagents runs the graph
     as given and never applies our allowlist to it, so a tool grant is a
     suggestion there rather than a limit."""
+    from kingfisher.application.inventory import inventory
     from kingfisher.cli.listing import render
-    from kingfisher.infrastructure.inventory import inventory
 
     _subagent_catalogue(cfg)
     printed = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
@@ -497,8 +497,8 @@ def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
 def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
     """The note is about a minority, so it stays absent for everyone else --
     a caveat printed to every reader is one none of them reads."""
+    from kingfisher.application.inventory import inventory
     from kingfisher.cli.listing import render
-    from kingfisher.infrastructure.inventory import inventory
 
     directory = cfg.workspace / "subagents"
     directory.mkdir(parents=True, exist_ok=True)
@@ -513,8 +513,8 @@ def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(
     """`_from` stays silent when the name already tells you the file. There are
     two spellings now, so the obvious filename depends on the kind -- comparing
     a `.py` definition against `<name>.yaml` would annotate every one of them."""
+    from kingfisher.application.inventory import inventory
     from kingfisher.cli.listing import render
-    from kingfisher.infrastructure.inventory import inventory
 
     _subagent_catalogue(cfg)
     (line,) = [
@@ -528,8 +528,8 @@ def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(
 def test_the_json_listing_carries_it_too(cfg):
     """`--json` is what a script reads, and a script deciding whether a grant
     means anything needs the same fact the text gives a person."""
+    from kingfisher.application.inventory import inventory
     from kingfisher.cli.listing import as_json
-    from kingfisher.infrastructure.inventory import inventory
 
     _subagent_catalogue(cfg)
 
