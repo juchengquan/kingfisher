@@ -299,7 +299,7 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
     assert not (tmp_path / "models.yaml").exists()
     cfg = Config(workspace=tmp_path / "ws", models=FAKE_CATALOGUE)
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"))
+    service = Kingfisher(cfg, graph=StubAgent("ok"))
 
     assert service.run(Request("go")).answer == "ok"
     assert service.cfg.models.default == "fake-model"

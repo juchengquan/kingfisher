@@ -36,7 +36,7 @@ def audited(cfg, caplog):
 
     def build(**settings):
         service = Kingfisher(
-            cfg, agent=AsyncStub("the answer", tokens=tokens(3)), threads=StubCheckpointer()
+            cfg, graph=AsyncStub("the answer", tokens=tokens(3)), threads=StubCheckpointer()
         )
         app = create_app(service, ServiceConfig(**settings))
         http = TestClient(app)
@@ -129,7 +129,7 @@ def test_a_deployment_error_is_audited_as_the_500_it_is(cfg, caplog):
     not decided where files come from. The audit still records it, because "this
     kept happening" is exactly what an operator needs to see."""
     caplog.set_level(logging.INFO, logger="kingfisher.audit")
-    service = Kingfisher(cfg, agent=AsyncStub("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStub("ok"), threads=StubCheckpointer())
     caplog.clear()
 
     with TestClient(create_app(service), raise_server_exceptions=False) as http:
@@ -182,7 +182,7 @@ def test_a_turn_whose_client_walked_away_says_so(cfg, caplog):
     caplog.set_level(logging.INFO, logger="kingfisher.audit")
     service = Kingfisher(
         cfg,
-        agent=AsyncStub("done", tokens=tokens(200), pause=0.01),
+        graph=AsyncStub("done", tokens=tokens(200), pause=0.01),
         threads=StubCheckpointer(),
     )
     app = create_app(service)
@@ -248,7 +248,7 @@ def test_the_audit_log_is_its_own_logger_with_no_handler():
 def test_nothing_is_written_when_nobody_is_listening(cfg, caplog):
     """A deployment that never wires a handler pays a level check per turn and
     writes nothing."""
-    service = Kingfisher(cfg, agent=AsyncStub("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStub("ok"), threads=StubCheckpointer())
     logging.getLogger("kingfisher.audit").setLevel(logging.WARNING)
     try:
         with TestClient(create_app(service)) as http, caplog.at_level(logging.INFO):

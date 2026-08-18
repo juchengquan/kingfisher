@@ -35,7 +35,7 @@ def create_app(
     """Build the app, optionally around an instance somebody else made.
 
     Taking one is what makes this testable without inventing anything: tests
-    build `Kingfisher(agent=StubAgent(...), threads=StubCheckpointer())` and
+    build `Kingfisher(graph=StubAgent(...), threads=StubCheckpointer())` and
     hand it over, which is the substitution point every existing test already
     uses. An app that constructed its own at import time would push its tests
     toward patching `create_deep_agent` instead -- which this repo forbids,

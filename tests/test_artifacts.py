@@ -11,12 +11,12 @@ from tests.test_run import StubAgent
 def test_what_the_turn_left_in_derived_comes_back(cfg):
     """The session is reapable, so anything not reported is lost."""
     start(cfg, "s")
-    result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
+    result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
     session = cfg.workspace / "sessions" / "s"
     (session / "derived" / "model.pkl").write_bytes(b"fitted")
 
-    again = run(Request("t2", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
+    again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                 checkpointer=StubCheckpointer())
 
     assert "derived/model.pkl" in again.artifacts
@@ -26,7 +26,7 @@ def test_what_the_turn_left_in_derived_comes_back(cfg):
 def test_memory_is_reported_too(cfg):
     """It is scaffolded at session creation, so it is there from turn one."""
     start(cfg, "s")
-    result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
+    result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
 
     assert "memory/AGENTS.md" in result.artifacts
@@ -35,11 +35,11 @@ def test_memory_is_reported_too(cfg):
 def test_run_scratch_is_not_reported(cfg):
     """`/runs` is disposable by design, and the prompt tells the agent so."""
     start(cfg, "s")
-    result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
+    result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
     (result.run_dir / "scratch.txt").write_text("intermediate")
 
-    again = run(Request("t2", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
+    again = run(Request("t2", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                 checkpointer=StubCheckpointer())
 
     assert not any("runs/" in path for path in again.artifacts)
@@ -50,7 +50,7 @@ def test_inputs_are_not_reported(cfg):
     asking them to store what they already have."""
     start(cfg, "s")
     session = cfg.workspace / "sessions" / "s"
-    result = run(Request("t", session_id="s"), cfg=cfg, agent=StubAgent("ok"),
+    result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
                  checkpointer=StubCheckpointer())
 
     assert session.is_dir()

@@ -364,7 +364,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     monkeypatch.setattr(catalogue_module, "LocalSubagentRepository", Counting)
     monkeypatch.setattr(layered_module, "LocalSubagentRepository", Counting)
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"))
+    service = Kingfisher(cfg, graph=StubAgent("ok"))
     at_construction = len(reads)
     for _ in range(3):
         service.run(Request("go"))
@@ -384,14 +384,14 @@ def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
 
     for kind in ("skills", "subagents", "tools"):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
-    service = Kingfisher(cfg, agent=StubAgent("ok"))
+    service = Kingfisher(cfg, graph=StubAgent("ok"))
 
     (subagents_dir(cfg) / "late.yaml").write_text(
         "name: late\ndescription: Written afterwards.\nsystem_prompt: |\n  x\n", encoding="utf-8"
     )
 
     assert "late" not in service.catalogue.subagents.specs
-    assert "late" in Kingfisher(cfg, agent=StubAgent("ok")).catalogue.subagents.specs
+    assert "late" in Kingfisher(cfg, graph=StubAgent("ok")).catalogue.subagents.specs
 
 
 def test_listing_still_survives_a_definition_that_will_not_load(cfg):
@@ -539,4 +539,4 @@ def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):
     )
 
     with pytest.raises(SubagentError):
-        Kingfisher(cfg, agent=None)
+        Kingfisher(cfg, graph=None)

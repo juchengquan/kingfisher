@@ -394,7 +394,7 @@ class Kingfisher:
 
     Every collaborator is injectable, and by protocol rather than by patching:
     a test hands in its own `SessionDirs` to watch turn allocation, or its own
-    agent to drive a scripted conversation.
+    graph to drive a scripted conversation.
 
     `catalogue` follows that shape too, and takes either form. A deployment
     pointing at three directories passes the mapping and names no classes; one
@@ -420,7 +420,7 @@ class Kingfisher:
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
-        agent: Any | None = None,
+        graph: Any | None = None,
     ) -> None:
         self.cfg = cfg or config_module.from_env()
         config_module.enforce_local_only_tracing()
@@ -477,7 +477,7 @@ class Kingfisher:
         # middleware is. Registering is not the same as permitting: `grants`
         # still clamps which registered names a request may reach.
         self.middleware: Mapping[str, Any] = middleware or {}
-        self._agent = agent
+        self._graph = graph
 
     def _session_id_for(self, request: Request, root: Path) -> str:
         """Mint an id, or accept one that already names a session.
@@ -661,7 +661,7 @@ class Kingfisher:
                 dropped.append(thread)
         return replace(result, orphans=tuple(dropped))
 
-    def agent_for(
+    def graph_for(
         self,
         request: Request,
         session_dir: Path,
@@ -673,15 +673,15 @@ class Kingfisher:
         Built per request because capabilities narrow it, because it reads
         workspace content that can change between turns, and now because its
         backend is anchored to the session -- two sessions cannot share a
-        graph without sharing a filesystem root. An injected agent is returned
+        graph without sharing a filesystem root. An injected graph is returned
         as-is -- and refused if the request narrows anything, since those
         restrictions were never applied to it.
         """
-        if self._agent is not None:
+        if self._graph is not None:
             if not request.capabilities.is_unrestricted:
-                msg = "cannot honour request.capabilities against a pre-built agent"
+                msg = "cannot honour request.capabilities against a pre-built graph"
                 raise ValueError(msg)
-            return self._agent
+            return self._graph
 
         return build_agent(
             self.cfg,
@@ -869,7 +869,7 @@ class Kingfisher:
         release: Any = None
         if checkpointer is _UNSET:
             checkpointer, release = self._checkpointer_for(session.directory)
-        graph = self.agent_for(
+        graph = self.graph_for(
             request, session.directory, capabilities=allowed, checkpointer=checkpointer
         )
 

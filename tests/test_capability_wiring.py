@@ -214,7 +214,7 @@ def test_an_unnamed_tool_survives_the_allowlist():
     assert ToolAllowlist(("read_file",))._filter(Request()).tools == [unnamed]
 
 
-def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
+def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
     """It was built elsewhere, so the restrictions were never applied to it.
     Refusing beats running with more access than the caller asked for."""
     from kingfisher.application.run import run
@@ -225,15 +225,15 @@ def test_an_injected_agent_cannot_honour_capabilities(cfg, session_dir):
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
 
-    with pytest.raises(ValueError, match="pre-built agent"):
+    with pytest.raises(ValueError, match="pre-built graph"):
         run(
             Request(task="go", capabilities=Capabilities(builtin_tools=("read_file",))),
             cfg=cfg,
-            agent=prebuilt,
+            graph=prebuilt,
         )
 
-    # The unrestricted case still works, so the guard is not just "reject agent=".
-    assert run(Request(task="go"), cfg=cfg, agent=prebuilt).answer == "ok"
+    # The unrestricted case still works, so the guard is not just "reject graph=".
+    assert run(Request(task="go"), cfg=cfg, graph=prebuilt).answer == "ok"
 
 
 

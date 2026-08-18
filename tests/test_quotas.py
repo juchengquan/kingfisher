@@ -41,7 +41,7 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
     """`recursion_limit` bounds steps and `timeout_s` bounds one call; nothing
     bounded their product, so a turn could hold a process for hours."""
     agent = SlowAgent(steps=50)
-    kf = Kingfisher(replace(cfg, turn_timeout_s=0), agent=agent, threads=StubCheckpointer())
+    kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=agent, threads=StubCheckpointer())
 
     result = kf.run(Request("go"))
 
@@ -52,7 +52,7 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
 def test_being_cut_short_keeps_the_work(cfg):
     """The artifacts are already on disk and the manifest lists them, so
     discarding the answer would hide work rather than undo it."""
-    kf = Kingfisher(replace(cfg, turn_timeout_s=0), agent=SlowAgent(), threads=StubCheckpointer())
+    kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=SlowAgent(), threads=StubCheckpointer())
 
     result = kf.run(Request("go"))
 
@@ -63,7 +63,7 @@ def test_being_cut_short_keeps_the_work(cfg):
 def test_the_caller_is_told_rather_than_left_to_guess(cfg):
     """An answer that quietly overstates what was checked is worse than one
     that admits a gap -- which is what system.md already tells the agent."""
-    kf = Kingfisher(replace(cfg, turn_timeout_s=0), agent=SlowAgent(), threads=StubCheckpointer())
+    kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=SlowAgent(), threads=StubCheckpointer())
 
     kinds = [e.kind for e in kf.stream(Request("go"))]
 
@@ -74,7 +74,7 @@ def test_the_caller_is_told_rather_than_left_to_guess(cfg):
 def test_an_ordinary_turn_is_untouched(cfg):
     """An hour is far past any real turn, so this only fires on the
     pathological case."""
-    result = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer()).run(Request("go"))
+    result = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer()).run(Request("go"))
 
     assert not result.cut_short
     assert result.answer == "ok"
@@ -86,7 +86,7 @@ def test_an_ordinary_turn_is_untouched(cfg):
 def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
     """Checked before a turn, never during: `execute` writes without any file
     tool seeing it, so there is nothing to intercept mid-turn."""
-    kf = Kingfisher(replace(cfg, session_max_bytes=10), agent=StubAgent("ok"),
+    kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
                     threads=StubCheckpointer())
     session_id = kf.start_session()
     (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 100)
@@ -100,7 +100,7 @@ def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
     refusing a turn over a number nobody chose is worse than not bounding it."""
     assert cfg.session_max_bytes is None
 
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session_id = kf.start_session()
     (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 10_000)
 
@@ -122,7 +122,7 @@ def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
 
 def test_reap_falls_back_to_the_configured_ttl(cfg):
     """A janitor that does not want to restate the policy on every call."""
-    kf = Kingfisher(replace(cfg, session_ttl_s=60), agent=StubAgent("ok"),
+    kf = Kingfisher(replace(cfg, session_ttl_s=60), graph=StubAgent("ok"),
                     threads=StubCheckpointer())
     import os
 
@@ -143,7 +143,7 @@ def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_pat
     supplied = tmp_path / "report.pdf"
     supplied.write_bytes(b"z" * 500)
 
-    kf = Kingfisher(replace(cfg, session_max_bytes=10), agent=StubAgent("ok"),
+    kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
                     threads=StubCheckpointer())
     session_id = kf.start_session()
     session = cfg.workspace / "sessions" / session_id

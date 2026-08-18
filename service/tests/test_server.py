@@ -22,7 +22,7 @@ from tests.test_run import StubAgent
 
 @pytest.fixture
 def client(cfg):
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     with TestClient(create_app(service)) as http:
         http.kingfisher = service
         yield http
@@ -141,7 +141,7 @@ def test_server_settings_come_from_their_own_prefix():
 def test_a_body_over_the_limit_is_refused_without_being_read(client, cfg):
     """`task` is unbounded text. The limit is not tidiness -- it is the
     difference between a bad request and a process holding a gigabyte of it."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     app = create_app(service, ServiceConfig(max_body_bytes=64))
 
     with TestClient(app) as http:
@@ -154,7 +154,7 @@ def test_a_body_over_the_limit_is_refused_without_being_read(client, cfg):
 def test_the_app_serves_the_instance_it_was_given(cfg):
     """The substitution point. An app that built its own would push these tests
     toward patching `create_deep_agent`, which this repo forbids."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     app = create_app(service)
 
     with TestClient(app) as http:
@@ -178,7 +178,7 @@ def test_a_filesystem_endpoint_does_not_stall_every_other_request(cfg, monkeypat
 
     import httpx
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session_id = service.start_session()
     delay = 0.15
     real = Kingfisher.session
@@ -248,7 +248,7 @@ def frames(text):
 
 
 def serving(cfg, agent, **settings):
-    service = Kingfisher(cfg, agent=agent, threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
     return service, create_app(service, ServiceConfig(**settings))
 
 
@@ -617,7 +617,7 @@ def test_an_oversize_body_refuses_in_the_same_shape(cfg):
     """The middleware used to hand-write its JSON, which made it the fourth
     shape. It carries `limit` as an extra rather than every refusal carrying a
     field that is usually null."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     app = create_app(service, ServiceConfig(max_body_bytes=64))
 
     with TestClient(app) as http:
@@ -654,7 +654,7 @@ def test_a_bug_is_not_dressed_up_as_a_refusal(cfg, monkeypatch):
         raise RuntimeError(boom)
 
     monkeypatch.setattr(Kingfisher, "session", explode)
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
     with TestClient(create_app(service), raise_server_exceptions=False) as http:
         response = http.get("/sessions/anything")
@@ -686,7 +686,7 @@ def test_a_capabilities_object_travels_with_the_turn(cfg):
 def test_narrowing_against_an_injected_agent_is_a_deployment_error(cfg):
     """Not a caller-facing refusal, and deliberately not in the error map.
 
-    `Kingfisher(agent=...)` returns that graph as-is, so restrictions the
+    `Kingfisher(graph=...)` returns that graph as-is, so restrictions the
     request asks for were never applied to it -- the library refuses rather than
     pretending. A deployment that wants per-request capabilities must let
     kingfisher build the agent. It is a 500 because it is the deployment that is
@@ -735,7 +735,7 @@ def test_a_turn_can_bring_files_by_reference(cfg, tmp_path):
     (store / "sales.csv").write_bytes(b"a,b\n1,2\n")
     service = Kingfisher(
         cfg,
-        agent=AsyncStub("done"),
+        graph=AsyncStub("done"),
         threads=StubCheckpointer(),
         files=LocalFileStore(store),
     )
@@ -764,7 +764,7 @@ def test_a_reference_that_climbs_out_is_refused_in_the_usual_shape(cfg, tmp_path
     (tmp_path / "secret").write_bytes(b"not yours")
     service = Kingfisher(
         cfg,
-        agent=AsyncStub("done"),
+        graph=AsyncStub("done"),
         threads=StubCheckpointer(),
         files=LocalFileStore(store),
     )
@@ -787,7 +787,7 @@ def test_a_reference_nobody_has_is_a_400_not_a_500(cfg, tmp_path):
     store.mkdir()
     service = Kingfisher(
         cfg,
-        agent=AsyncStub("done"),
+        graph=AsyncStub("done"),
         threads=StubCheckpointer(),
         files=LocalFileStore(store),
     )
