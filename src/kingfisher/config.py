@@ -31,7 +31,14 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-_NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
+#: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
+#: rather than written twice: the two are spread into one `build_model` call
+#: and carry one rule between them -- additive only, may not name a value the
+#: deployment configured -- so a reader meeting one should find the other.
+#:
+#: Public for that reason alone. An empty mapping cannot drift in value, so
+#: this buys no safety; what it buys is that the pairing is visible.
+NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -94,7 +101,7 @@ class ModelProfile:
     timeout_s: int = 120
     temperature: float | None = None
     top_p: float | None = None
-    extra: Mapping[str, Any] = _NO_EXTRA
+    extra: Mapping[str, Any] = NO_EXTRA
 
     def kwargs(self) -> dict[str, Any]:
         """The model params to build with, omitting everything unset.

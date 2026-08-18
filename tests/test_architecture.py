@@ -1665,3 +1665,50 @@ def test_every_path_rule_starts_from_the_same_two_names():
     assert SRC == REPO / "src" / "kingfisher"
     assert SRC.is_dir()
     assert (REPO / "pyproject.toml").is_file()
+
+
+def test_no_value_is_written_down_twice():
+    """One definition per value, across the library.
+
+    `domain.tool` made this move for `SEPARATOR` and said why -- "one separator
+    both kinds import beats two that agree by coincidence" -- and named skills
+    as the other kind. `harness.skill_registry` kept its copy anyway, along with
+    a second copy of `domain.skill.UPLOADED`, and both carried comments claiming
+    they matched the original. A copied literal cannot keep that promise; it can
+    only happen to. Nothing noticed, because nothing was looking.
+
+    Same name *and* same value, so the cases that merely rhyme are left alone:
+    `EXPORT` is `"TOOLS"` in one place and `"SUBAGENTS"` in another, `DIRECTORY`
+    is `"skills"` against `"subagents"`, and `TOOLS` is the export protocol each
+    asset module declares for itself. Those are three formats each naming their
+    own thing, which is the opposite of this.
+
+    `assets/` is excluded like everywhere else here: those are definitions the
+    agent runs, and two of them declaring the same constant is their business.
+    """
+    seen: dict[tuple[str, str], list[str]] = {}
+    for path in sorted(SRC.rglob("*.py")):
+        if _is_content(path):
+            continue
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            targets = (
+                [node.target] if isinstance(node, ast.AnnAssign) else
+                getattr(node, "targets", []) if isinstance(node, ast.Assign) else []
+            )
+            for target in targets:
+                if isinstance(target, ast.Name) and target.id.isupper() and node.value:
+                    key = (target.id, ast.unparse(node.value))
+                    seen.setdefault(key, []).append(str(path.relative_to(SRC)))
+
+    twice = {
+        f"{name} = {value}": places
+        for (name, value), places in seen.items()
+        if len(places) > 1
+    }
+
+    assert not twice, (
+        "defined in more than one place, with the same value: "
+        f"{twice}. Import it from wherever it belongs; a second definition is a "
+        "second thing to keep in step, and the two will agree by coincidence "
+        "until they do not."
+    )

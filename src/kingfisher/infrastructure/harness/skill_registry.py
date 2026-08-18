@@ -32,7 +32,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import CapabilityError
+from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
+from kingfisher.domain.skill import UPLOADED
 from kingfisher.infrastructure.skill_store import reachable
 
 if TYPE_CHECKING:
@@ -41,10 +42,14 @@ if TYPE_CHECKING:
 
     from kingfisher.domain.ports import SkillRepository
 
-#: What separates a skill's source from its name when one has to be said.
-#: The spelling tools already use for the same question -- a second syntax for
-#: "where this came from" would be worse than a slightly stretched first one.
-SEPARATOR = "::"
+# `SEPARATOR` and `UPLOADED` are imported above rather than defined here.
+# Both were written out again with a comment saying they matched something
+# else -- the separator tools already use, and the string the backend mounts
+# uploads at -- which is a claim a copied literal cannot keep. `domain.tool`
+# had already made this exact move for the separator and said why: one
+# separator both kinds import beats two that agree by coincidence. It named
+# skills as the other kind; this is skills. Re-exported by the import, so
+# `skill_registry.SEPARATOR` still resolves for readers who look here first.
 
 #: The key a qualified id travels under inside deepagents' own metadata. Added
 #: beside `name` rather than replacing it: `name` is what the file says and what
@@ -55,11 +60,6 @@ KEY = "kingfisher_id"
 #: What skills sitting directly in the root are called, when they have to be
 #: told apart from a folder's. Not a folder name, because they are not in one.
 CATALOGUE = "catalogue"
-
-#: The label a skill that arrived with the request is offered under. The same
-#: string the backend mounts them at, so what a grant writes and where the
-#: agent reads from cannot drift apart.
-UPLOADED = "uploaded"
 
 
 def qualified(source: str, name: str) -> str:
