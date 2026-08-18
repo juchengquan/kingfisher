@@ -66,11 +66,26 @@ rule that removes a capability mid-run deserves its own argument.
 | Phase | Deliverable | Depends on |
 |---|---|---|
 | **1** | A middleware that turns an exception from a *workspace* tool into a failed `ToolMessage`, and a test that the same failure through a built-in is untouched. | — |
-| **2** | The smoke passes with the workspace tools granted, which is the case that found this. Asserted, so it cannot quietly stop being true. | 1 |
+| **2** | The claim through an assembled graph, with a tool that always raises and a scripted model that always calls it. | 1 |
 
-Phase 1 is the whole change. Phase 2 is what proves it against the run that
-started it -- and is worth its own step, because passing with tools withheld is
-what disguised the problem in the first place.
+Phase 1 is the whole change. Phase 2 is what proves the two halves meet: a
+middleware can be installed and still be ordered somewhere the exception never
+reaches it, which neither the isolated guard nor the wiring test would catch.
+
+**Phase 2 was first written as "the smoke passes with the workspace tools
+granted, asserted", and that is not a test.** It was tried: after phase 1 the
+smoke did pass with them granted, and the transcript showed the model had not
+called the failing tool at all that run. A green run proved nothing about a code
+path it never entered, and keeping it green would have cost a real model call
+forever to go on proving nothing.
+
+So the assertion is a graph invoked with a scripted model and a tool rigged to
+raise, where the call is certain and the cost is zero. Two claims rather than
+one, because surviving is not finishing: that the failure reached the model, and
+that the turn went on to an answer.
+
+The lesson generalises past this document. A behaviour that appears only when a
+model chooses to trigger it cannot be asserted by asking a model nicely.
 
 ## Still undecided
 
