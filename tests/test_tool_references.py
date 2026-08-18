@@ -18,7 +18,7 @@ import pytest
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.domain.tool import Found, Offering, reference, split_reference
 from kingfisher.infrastructure import seeding
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.tool_store import LocalToolRepository
 
@@ -181,7 +181,7 @@ def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg):
     (cfg.tools_dir / "csv_profile").rename(cfg.tools_dir / "analysis")
 
     with pytest.raises(CapabilityError, match="have moved"):
-        Catalogue.from_config(cfg).warm()
+        Definitions.from_config(cfg).warm()
 
 
 def test_an_untouched_catalogue_warms_cleanly(cfg):
@@ -189,7 +189,7 @@ def test_an_untouched_catalogue_warms_cleanly(cfg):
     would fail if the check were wrong about the layout it ships with."""
     seeding.seed(cfg)
 
-    Catalogue.from_config(cfg).warm()
+    Definitions.from_config(cfg).warm()
 
 
 # -- why it is a label and not a selector ----------------------------------

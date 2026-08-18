@@ -78,7 +78,7 @@ from kingfisher.domain.session import (
     sessions_root,
     still_held,
 )
-from kingfisher.infrastructure.catalogue import Catalogue, resolve_catalogue
+from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.agent import (
@@ -197,7 +197,7 @@ def _withheld_by_kind(
     cfg: Config,
     session_dir: Path,
     graph: Any,
-    catalogue: Catalogue,
+    catalogue: Definitions,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
@@ -248,9 +248,9 @@ def _delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tup
     exactly why it has to be said from somewhere that still knows.
     """
     from kingfisher.domain.tool import Offering  # noqa: PLC0415
-    from kingfisher.infrastructure.catalogue import Catalogue  # noqa: PLC0415
+    from kingfisher.infrastructure.catalogue import Definitions  # noqa: PLC0415
 
-    found = (catalogue or Catalogue.from_config(cfg)).tools.found
+    found = (catalogue or Definitions.from_config(cfg)).tools.found
     return Offering.of(found).ambiguous(allowed.tools, found)
 
 
@@ -399,7 +399,7 @@ class Kingfisher:
     `catalogue` follows that shape too, and takes either form. A deployment
     pointing at three directories passes the mapping and names no classes; one
     holding its definitions somewhere kingfisher did not choose passes a
-    `Catalogue` of its own repositories. Both settle to the same object here, so
+    `Definitions` of its own repositories. Both settle to the same object here, so
     nothing downstream knows which arrived -- and swapping a single kind is
     `replace(catalogue, subagents=...)`, since it is frozen.
     """
@@ -417,7 +417,7 @@ class Kingfisher:
         threads: ThreadStore | Callable[[Path], Any] | None = None,
         definitions: DefinitionStore | None = None,
         files: FileStore | None = None,
-        catalogue: Catalogue | Mapping[str, Path] | None = None,
+        catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
         agent: Any | None = None,
@@ -439,7 +439,7 @@ class Kingfisher:
         # Read now rather than on the first turn: a definition that will not
         # parse is a wiring mistake, and this is the last moment it is cheap
         # to say so. `--list` deliberately does not do this -- see `warm`.
-        self.catalogue: Catalogue = resolve_catalogue(self.cfg, catalogue).warm()
+        self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
 
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the

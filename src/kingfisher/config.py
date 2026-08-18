@@ -111,7 +111,7 @@ class ModelProfile:
         return params
 
 
-def catalogue_roots_for(
+def definition_roots_for(
     workspace: Path,
     skills_root: Path | None = None,
     subagents_root: Path | None = None,
@@ -137,10 +137,15 @@ def catalogue_roots_for(
 class WorkspacePaths:
     """Where a deployment keeps things, before anything has been read.
 
-    Everything else in a `Config` needs the model catalogue, and the catalogue
-    is a file *inside* the workspace — so a first run has to be able to answer
-    "which directories?" before it can answer "which models?". This is that
-    answer, and `Config` is built on top of it rather than beside it.
+    Everything else in a `Config` needs the model catalogue, and *that* file
+    lives inside the workspace — so a first run has to be able to answer "which
+    directories?" before it can answer "which models?". This is that answer, and
+    `Config` is built on top of it rather than beside it.
+
+    Said as "that file" rather than "the catalogue", which used to appear twice
+    in this sentence meaning two different things. `catalogue_roots` below is
+    the other one: where the *definitions* are kept, which is why the type it
+    resolves to is `Definitions` and not `Catalogue`.
     """
 
     workspace: Path
@@ -150,7 +155,7 @@ class WorkspacePaths:
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
-        return catalogue_roots_for(
+        return definition_roots_for(
             self.workspace, self.skills_root, self.subagents_root, self.tools_root
         )
 
@@ -172,14 +177,14 @@ class Models:
     this name resolve to, what is bound here -- had nowhere to live but `Config`
     itself.
 
-    The same move `Catalogue` made, for the same two reasons its docstring
+    The same move `Definitions` made, for the same two reasons its docstring
     gives. This comes from a file that is deliberately relocatable and shared
     across a fleet, and it is addressed by name everywhere, so a type is what
     makes `.defualt` an error before the code runs rather than a `KeyError`
     while it does.
 
-    Still not named by analogy with `Catalogue`, but the difference is no longer
-    the one this used to give. `Catalogue` held three paths and deliberately did
+    Still not named by analogy with `Definitions`, but the difference is no longer
+    the one this used to give. `Definitions` held three paths and deliberately did
     not read them; it holds a repository per kind now, and they do the reading.
     What separates the two is *when* and *how often*: a catalogue is read when
     the deployment is wired, answers every turn from what it held, and is layered
@@ -195,7 +200,7 @@ class Models:
     no file and no loader. The test suite runs that way.
 
     It lives here rather than in `infrastructure` for the reason
-    `Config.catalogue_roots` does *not* return a `Catalogue`: this file sits
+    `Config.catalogue_roots` does *not* return a `Definitions`: this file sits
     above the layers and imports none of them. Nothing this record does needs
     one -- `model_catalogue` reads the file and hands one back, and everything
     after that is a lookup.
@@ -483,13 +488,13 @@ class Config:
 
         A `Kingfisher` may be handed a different mapping, which is the whole
         seam: this is the fallback, not the only source. See
-        `workspace_fs.resolve_catalogue`.
+        `workspace_fs.resolve_definitions`.
 
-        Delegated to `catalogue_roots_for` because `WorkspacePaths` answers the
+        Delegated to `definition_roots_for` because `WorkspacePaths` answers the
         same question before a catalogue has been read, and the two must not be
         able to disagree.
         """
-        return catalogue_roots_for(
+        return definition_roots_for(
             self.workspace, self.skills_root, self.subagents_root, self.tools_root
         )
 

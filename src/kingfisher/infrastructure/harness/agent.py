@@ -47,7 +47,7 @@ from kingfisher.domain.subagent import (
     refuse_two_of_a_name,
 )
 from kingfisher.domain.tool import Found, Offering
-from kingfisher.infrastructure.catalogue import Catalogue, source_of
+from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -96,7 +96,7 @@ MEMORY_IS_DENIED = FilesystemPermission(
 
 
 def available_skills(
-    cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
+    cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
 ) -> tuple[str, ...]:
     """Every skill this request may activate: the catalogue, plus its own.
 
@@ -120,7 +120,7 @@ def available_skills(
 
 
 def activatable_skills(
-    cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
+    cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
 ) -> SkillRegistry:
     """One registry for both halves: the catalogue, plus this request's own.
 
@@ -135,13 +135,13 @@ def activatable_skills(
     half is read per turn, because that is when it arrives. One listing of a
     directory holding at most a handful of skills.
     """
-    resolved = catalogue or Catalogue.from_config(cfg)
+    resolved = catalogue or Definitions.from_config(cfg)
     uploaded = None if session_dir is None else session_dir / skill.DIRECTORY / skill.UPLOADED
     return resolved.registry.merged(skill_registry.read_uploaded(uploaded))
 
 
 def defined_subagents(
-    cfg: Config, session_dir: Path | None, *, catalogue: Catalogue | None = None
+    cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
 ) -> dict[str, SubagentSpec]:
     """Every subagent this request may activate: the catalogue, plus its own.
 
@@ -150,7 +150,7 @@ def defined_subagents(
     which of them a request did not grant. Written out at both, the rule about
     what a session adds to the catalogue would exist twice.
     """
-    return dict(for_session(catalogue or Catalogue.from_config(cfg), session_dir).subagents.specs)
+    return dict(for_session(catalogue or Definitions.from_config(cfg), session_dir).subagents.specs)
 
 
 def indistinct_delegates(
@@ -158,7 +158,7 @@ def indistinct_delegates(
     capabilities: Capabilities,
     session_dir: Path | None,
     *,
-    catalogue: Catalogue | None = None,
+    catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each activated delegate that asked to run elsewhere and
@@ -446,7 +446,7 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
 
 
 def _backend_for(
-    cfg: Config, session_dir: Path | None, backend: Any | None, catalogue: Catalogue
+    cfg: Config, session_dir: Path | None, backend: Any | None, catalogue: Definitions
 ) -> Any:
     """The filesystem an agent sees: rooted at a session, or supplied ready-made.
 
@@ -468,7 +468,7 @@ def _backend_for(
 
 
 def workspace_tool_names(
-    cfg: Config, *, catalogue: Catalogue | None = None
+    cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[str, ...]:
     """The tools this workspace defines, as a grant would write them.
 
@@ -479,7 +479,7 @@ def workspace_tool_names(
     fetch` once two files could each define one -- which read as a workspace
     with a stutter rather than two tools a grant has to choose between.
     """
-    found = (catalogue or Catalogue.from_config(cfg)).tools.found
+    found = (catalogue or Definitions.from_config(cfg)).tools.found
     return tuple(sorted(Offering.of(found).workspace))
 
 
@@ -645,7 +645,7 @@ def _activated_subagents(
     capabilities: Capabilities,
     session_dir: Path | None,
     *,
-    catalogue: Catalogue | None = None,
+    catalogue: Definitions | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which delegates this request wired, and every definition available.
 
@@ -743,7 +743,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     model: Any | None = None,
     backend: Any | None = None,
     checkpointer: Any | None = None,
-    catalogue: Catalogue | None = None,
+    catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
     workspace_tools: Sequence[Found] | None = None,
 ) -> CompiledStateGraph:
@@ -765,7 +765,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     only be rewritten worse.
     """
     capabilities = capabilities or Capabilities()
-    roots = catalogue or Catalogue.from_config(cfg)
+    roots = catalogue or Definitions.from_config(cfg)
     resolved_backend = _backend_for(cfg, session_dir, backend, roots)
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.

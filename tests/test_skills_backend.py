@@ -17,7 +17,7 @@ from dataclasses import dataclass, replace
 import pytest
 
 from kingfisher.domain.ports import SkillRepository
-from kingfisher.infrastructure.catalogue import Catalogue, catalogue_root
+from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend, shell_env
 from kingfisher.infrastructure.harness.skills_backend import skills_backend
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
@@ -106,7 +106,7 @@ def test_a_directory_that_is_not_a_skill_is_not_one(tmp_path):
 def test_the_agent_can_read_a_skill_held_in_a_store(cfg, session_dir):
     """The whole point. No directory anywhere, and the file tools still open
     it through the route deepagents reads."""
-    catalogue = replace(Catalogue.from_config(cfg), skills=_held("remote"))
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
 
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
 
@@ -116,7 +116,7 @@ def test_the_agent_can_read_a_skill_held_in_a_store(cfg, session_dir):
 def test_the_listing_deepagents_reads_finds_it(cfg, session_dir):
     """`ls` on the route is how the skills middleware discovers what exists, so
     a mount that reads but does not list would offer the agent nothing."""
-    catalogue = replace(Catalogue.from_config(cfg), skills=_held("alpha", "beta"))
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("alpha", "beta"))
 
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
     entries = {entry["path"] for entry in backend.ls(SKILLS_ROUTE).entries or []}
@@ -140,7 +140,7 @@ def test_a_store_mount_is_read_only_by_construction(cfg, session_dir):
     """Not by a permission someone remembers to add. A skill is the text the
     model is told to follow, so a writable skills route is one by which a
     request edits the instructions of every later request."""
-    catalogue = replace(Catalogue.from_config(cfg), skills=_held("remote"))
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
 
     refused = backend.write(f"{SKILLS_ROUTE}remote/PWNED.md", "tampered")
@@ -166,7 +166,7 @@ def test_the_async_half_refuses_too(cfg, session_dir, operation):
     """
     import asyncio
 
-    catalogue = replace(Catalogue.from_config(cfg), skills=_held("remote"))
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
     path = f"{SKILLS_ROUTE}remote/SKILL.md"
 
@@ -189,7 +189,7 @@ def test_the_async_half_refuses_too(cfg, session_dir, operation):
 def test_every_mutating_operation_is_refused(cfg, session_dir, operation):
     """`delete` included: a route the agent can empty is a route it can
     silence."""
-    catalogue = replace(Catalogue.from_config(cfg), skills=_held("remote"))
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
     path = f"{SKILLS_ROUTE}remote/SKILL.md"
 
@@ -210,7 +210,7 @@ def test_a_store_backed_catalogue_names_no_directory(cfg):
     the mount above exist at all -- the missing directory is a fact about which
     backend to build, not a wiring error."""
     assert catalogue_root(_held("remote")) is None
-    assert catalogue_root(Catalogue.from_config(cfg).skills) == cfg.skills_dir
+    assert catalogue_root(Definitions.from_config(cfg).skills) == cfg.skills_dir
 
 
 def test_the_shell_is_told_nothing_rather_than_told_a_lie(cfg, session_dir):
@@ -221,7 +221,7 @@ def test_the_shell_is_told_nothing_rather_than_told_a_lie(cfg, session_dir):
     deployment cannot run skill scripts" into `no such file or directory` on a
     path the operator never configured; unset, the failure names the variable.
     """
-    catalogue = replace(Catalogue.from_config(cfg), skills=_held("remote"))
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
 
     assert "KINGFISHER_SKILLS" not in shell_env(cfg, session_dir, catalogue=catalogue)
     assert "KINGFISHER_SKILLS" in shell_env(cfg, session_dir)
@@ -257,7 +257,7 @@ def test_a_skill_shipping_something_binary_does_not_break_the_catalogue(tmp_path
     assert "body of demo" in files["SKILL.md"], "the readable file is unharmed"
 
     # and the catalogue still mounts, which is the point of not refusing
-    catalogue = replace(Catalogue.from_config(cfg), skills=InStore({"demo": files}))
+    catalogue = replace(Definitions.from_config(cfg), skills=InStore({"demo": files}))
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
 
     assert "body of demo" in str(backend.read(f"{SKILLS_ROUTE}demo/SKILL.md"))

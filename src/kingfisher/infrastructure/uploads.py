@@ -20,7 +20,7 @@ from typing import TYPE_CHECKING
 
 from kingfisher.domain import skill
 from kingfisher.domain.subagent import SUFFIX
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.definitions import read_subagent, skill_name
 
 if TYPE_CHECKING:
@@ -64,7 +64,7 @@ def provision(
     session_dir: Path,
     cfg: Config,
     *,
-    catalogue: Catalogue | None = None,
+    catalogue: Definitions | None = None,
 ) -> Brought:
     """Unpack everything this request brought with it, or refuse to.
 
@@ -85,7 +85,7 @@ def provision(
         msg = "request supplies definitions by id, but no DefinitionStore is wired"
         raise UploadError(msg)
 
-    roots = catalogue or Catalogue.from_config(cfg)
+    roots = catalogue or Definitions.from_config(cfg)
     return Brought(
         # The registry, not the repository. `SkillRepository.names` lists the
         # root and stops, so once skills could live in folders it returned `()`

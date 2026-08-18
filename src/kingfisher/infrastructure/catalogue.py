@@ -10,6 +10,13 @@ beside `ensure_layout` read as misfiled rather than as a deliberate exception.
 What it holds is one repository per kind rather than three paths. A path is what
 a *local* catalogue happens to be; what every caller actually wants is the
 definitions, and two of the three kinds need no filesystem to supply them.
+
+The module keeps the word and the type does not, and that is the split rather
+than an oversight. A *catalogue* is where definitions are kept -- `catalogue_root`
+and `Config.catalogue_roots` answer with places, and a deployment may point at
+one it shares. `Definitions` is what you get when you read it. The type was
+called `Catalogue` too, which made "the catalogue" mean the place, the contents,
+and -- one line away in `config.py` -- `models.yaml` as well.
 """
 
 from __future__ import annotations
@@ -28,16 +35,16 @@ from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from kingfisher.infrastructure.tool_store import LocalToolRepository
 
-CATALOGUE_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
+DEFINITION_KINDS: tuple[str, ...] = ("skills", "subagents", "tools")
 
 
 @dataclass(frozen=True)
-class Catalogue:
+class Definitions:
     """This deployment's definitions: one repository per kind.
 
     A type rather than a mapping so the three names are checkable. `.skils` is
     an `unresolved-attribute` before the code runs; `["skils"]` is a `KeyError`
-    while it does, and in this codebase a missing catalogue key surfaces as an
+    while it does, and in this codebase a missing key surfaces as an
     empty catalogue -- the silent emptiness this module's neighbours keep
     refusing.
 
@@ -56,7 +63,7 @@ class Catalogue:
     `Config.catalogue_roots` still answers with a mapping of paths and is
     deliberately not this type. `Config` is a record a deployment fills in, and
     it sits above the layers precisely so it never imports one; making it return
-    a `Catalogue` would have it reach into `infrastructure`.
+    a `Definitions` would have it reach into `infrastructure`.
     """
 
     skills: SkillRepository
@@ -79,12 +86,12 @@ class Catalogue:
         """
         return skill_registry.read(self.skills, root=catalogue_root(self.skills))
 
-    def warm(self) -> Catalogue:
+    def warm(self) -> Definitions:
         """Read all three now, so a broken definition fails here.
 
         A repository is lazy, which is right for the fallback in `build_agent`
         -- a caller wanting skills should not pay for importing every tool. It
-        is wrong for a deployment: `resolve_catalogue` already refuses a
+        is wrong for a deployment: `resolve_definitions` already refuses a
         catalogue that is not a directory because "a catalogue that cannot be
         read is a wiring mistake and this is the last moment it is cheap to say
         so", and a subagent with an unknown field is the same mistake one layer
@@ -95,7 +102,7 @@ class Catalogue:
         payload and they hold it -- and a deployment supplying a repository that
         does not cache gets a read per turn, which is its own choice to make.
 
-        Called by `Kingfisher`, not by `resolve_catalogue`, and the difference
+        Called by `Kingfisher`, not by `resolve_definitions`, and the difference
         is `--list`. That command exists to be run *because* something is
         wrong, and it catches a loader error and prints it over the rest of
         the inventory rather than dying on it. Warming inside resolution
@@ -116,7 +123,7 @@ class Catalogue:
         return self
 
     @classmethod
-    def from_config(cls, cfg: Config) -> Catalogue:
+    def from_config(cls, cfg: Config) -> Definitions:
         """The deployment's own directories, without staging anything.
 
         The fallback for a caller that was handed no catalogue -- `build_agent`
@@ -125,11 +132,11 @@ class Catalogue:
         return cls.from_roots(cfg.catalogue_roots)
 
     @classmethod
-    def from_roots(cls, roots: Mapping[str, Path]) -> Catalogue:
+    def from_roots(cls, roots: Mapping[str, Path]) -> Definitions:
         """Three directories on this host, as three local repositories.
 
         The shorthand nearly every deployment wants, and the reason
-        `Kingfisher(catalogue=...)` takes a mapping as well as a `Catalogue`:
+        `Kingfisher(catalogue=...)` takes a mapping as well as a `Definitions`:
         pointing at three directories should not require naming three classes.
         """
         return cls(
@@ -181,9 +188,9 @@ def catalogue_root(repository: object) -> Path | None:
     return _root_of(repository)
 
 
-def resolve_catalogue(
-    cfg: Config, supplied: Catalogue | Mapping[str, Path] | None = None
-) -> Catalogue:
+def resolve_definitions(
+    cfg: Config, supplied: Definitions | Mapping[str, Path] | None = None
+) -> Definitions:
     """Where this deployment's definitions are read from, settled once.
 
     Called at construction and nowhere else, so a deployment that stages its
@@ -211,26 +218,26 @@ def resolve_catalogue(
         derived = cfg.catalogue_roots
         for path in derived.values():
             path.mkdir(parents=True, exist_ok=True)
-        return Catalogue.from_config(cfg)
+        return Definitions.from_config(cfg)
 
     # Either shape. A deployment stages directories and hands over a mapping,
-    # which is the documented seam; something that already holds a `Catalogue`
+    # which is the documented seam; something that already holds a `Definitions`
     # -- another kingfisher, a test fixture -- should not have to take it apart
     # to pass it back.
-    if not isinstance(supplied, Catalogue):
-        if missing := tuple(kind for kind in CATALOGUE_KINDS if kind not in supplied):
+    if not isinstance(supplied, Definitions):
+        if missing := tuple(kind for kind in DEFINITION_KINDS if kind not in supplied):
             msg = (
                 f"catalogue is missing {', '.join(missing)}; it names all of "
-                f"{', '.join(CATALOGUE_KINDS)}, since a deployment that leaves one out "
+                f"{', '.join(DEFINITION_KINDS)}, since a deployment that leaves one out "
                 "means an empty one rather than the configured one"
             )
             raise ConfigError(msg)
-        supplied = Catalogue.from_roots(supplied)
+        supplied = Definitions.from_roots(supplied)
 
     # Checked however it arrived, and only where there is something to check: a
     # repository backed by a service has no directory that could be missing, so
     # what it holds is its own business.
-    roots = {kind: _root_of(getattr(supplied, kind)) for kind in CATALOGUE_KINDS}
+    roots = {kind: _root_of(getattr(supplied, kind)) for kind in DEFINITION_KINDS}
     if absent := tuple(
         f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()
     ):

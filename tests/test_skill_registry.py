@@ -16,7 +16,7 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.agent import available_skills, build_agent
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
@@ -123,7 +123,7 @@ def test_the_catalogue_reads_it_once(cfg):
     and checkpoints the answer, so re-reading per turn would be answering a
     question nobody re-asks."""
     _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
-    catalogue = Catalogue.from_config(cfg)
+    catalogue = Definitions.from_config(cfg)
 
     assert catalogue.registry is catalogue.registry
 

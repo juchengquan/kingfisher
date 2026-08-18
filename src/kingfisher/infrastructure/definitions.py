@@ -11,7 +11,7 @@ type coercion into a format whose point is that a person can read it at a
 glance. deepagents accepts exactly those when it reads a skill, which made
 kingfisher *stricter than the format it mirrors*: a folded description or a
 block list — the Agent Skills spec's own form for `allowed-tools` — parsed there
-and raised here. Catalogue skills are never read by kingfisher, but uploaded
+and raised here. Definitions skills are never read by kingfisher, but uploaded
 ones are, so a skill that loaded fine could not be uploaded.
 
 `safe_load`, so a document cannot construct arbitrary objects. Definitions
