@@ -92,7 +92,7 @@ def test_validation_offers_only_what_will_load(cfg):
 
 
 def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):
-    """It used to build. The grant was accepted, `ScopedSkills` allowed the
+    """It used to build. The grant was accepted, `NarrowedSkills` allowed the
     name, deepagents never listed it, and the agent got no skills at all --
     with nothing anywhere saying so."""
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")

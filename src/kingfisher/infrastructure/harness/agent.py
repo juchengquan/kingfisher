@@ -50,6 +50,7 @@ from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
     SKILLS_ROUTE,
+    HostPathGuard,
     build_backend,
     skills_sources,
 )
@@ -62,10 +63,9 @@ from kingfisher.infrastructure.harness.delegation import (
     subagent_skills,
 )
 from kingfisher.infrastructure.harness.models import build_model
-from kingfisher.infrastructure.harness.scoping import (
+from kingfisher.infrastructure.harness.narrowing import (
     DeclaredDelegatesOnly,
-    HostPathGuard,
-    ScopedSkills,
+    NarrowedSkills,
     ToolAllowlist,
 )
 from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
@@ -836,7 +836,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
             # argument makes deepagents construct its own SkillsMiddleware,
             # leaving no way to substitute a filtered one.
             middleware.append(
-                ScopedSkills(
+                NarrowedSkills(
                     allowed=activated,
                     backend=resolved_backend,
                     sources=sources,

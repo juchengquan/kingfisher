@@ -23,7 +23,7 @@ from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
-from kingfisher.infrastructure.harness.scoping import ScopedSkills
+from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
 from tests.conftest import FakeToolCallingModel, capture_build
 
 SKILL = "---\nname: {name}\ndescription: {desc}\n---\nBody of the skill.\n"
@@ -176,7 +176,7 @@ def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
     """
     _two_parties(cfg)
     backend = build_backend(replace(cfg, skills_enabled=True), session_dir)
-    middleware = ScopedSkills(
+    middleware = NarrowedSkills(
         allowed=("research::lookup",),
         backend=backend,
         sources=skills_sources(("research", "legal")),
@@ -198,7 +198,7 @@ def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
     away passed the whole suite."""
     _two_parties(cfg)
     backend = build_backend(replace(cfg, skills_enabled=True), session_dir)
-    middleware = ScopedSkills(
+    middleware = NarrowedSkills(
         allowed=("research::lookup",),
         backend=backend,
         sources=skills_sources(("research", "legal")),

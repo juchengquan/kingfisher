@@ -21,7 +21,7 @@ rather than something we wrote.
 Named `documents` rather than `definitions`, which is what it was called while
 it sat flat in `infrastructure/`. The old name was chosen against `domain.fields`
 -- one name across two layers makes every import a small act of guessing, which
-is why `scoping` is not called `capabilities` either -- and the move gave it a
+is why `narrowing` is not called `capabilities` either -- and the move gave it a
 nearer collision than the one it was avoiding: `Definitions`, the deployment's
 three repositories, is defined one file away in this package's `__init__`. Two
 unrelated things a directory listing apart is worse than two related things a
