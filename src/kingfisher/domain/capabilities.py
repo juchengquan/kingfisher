@@ -28,7 +28,7 @@ the two ends are an ordinary lattice and narrowing is set intersection.
 from __future__ import annotations
 
 from collections.abc import Iterable
-from dataclasses import dataclass, fields
+from dataclasses import dataclass
 from typing import Literal
 
 #: Everything the workspace offers, whatever that turns out to be. The top of
@@ -242,21 +242,6 @@ class Capabilities:
             memory=_narrow_switch(self.memory, other.memory),
         )
 
-
-#: Every axis a request can be narrowed on, derived from the type that owns them.
-#: Named `AXES` rather than `KINDS` because `domain.result.KINDS` already means
-#: something else and is a published wire contract -- two `KINDS` in one layer
-#: is a reader's problem even when it is not an importer's.
-#: rather than written a second time. `API_STYLES` does the same with its
-#: `Literal`, for the same reason: a list kept by hand beside the thing it
-#: describes is a list that drifts from it.
-#:
-#: This is the vocabulary, not the shape. The eight are not eight of the same
-#: thing -- each has its own type, and several have their own default carrying a
-#: measurement (`subagents` is `None` because wiring one costs 4.3ms). So what is
-#: shared is the *names*, and every by-kind type in the package is checked
-#: against them: it either has a field for a kind or says in one place why not.
-AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 
 def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
     """A refusal from either side wins; otherwise the side with an opinion does.

@@ -16,9 +16,17 @@ from __future__ import annotations
 from dataclasses import fields
 
 import main as driver
-from kingfisher.domain.capabilities import AXES, Capabilities
+from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.uploads import Brought
+
+#: The vocabulary, derived here rather than imported. It was a constant on
+#: `domain.capabilities`, and nothing in the package ever read it -- only
+#: these tests and the wire test in `service`, one of which re-derived it
+#: anyway. A name published from the domain for its own tests to import is
+#: API surface pointing the wrong way; `fields(Capabilities)` is the same
+#: sentence and cannot drift from the type it asks.
+AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 
 #: Why a kind is not something a caller can upload. A definition arrives as a
 #: document this package parses; these are not that.
@@ -48,17 +56,6 @@ NOT_SUBTRACTABLE = {
     "models": "an assignment, not a permission",
     "memory": "a switch, not names -- `--no-memory` says it",
 }
-
-
-def test_the_vocabulary_is_derived_rather_than_written_twice():
-    """If it were a hand-kept tuple it would be one more thing to drift."""
-    assert tuple(f.name for f in fields(Capabilities)) == AXES
-    assert len(AXES) == len(set(AXES))
-
-
-def test_every_kind_is_a_field_on_capabilities_or_is_not_a_kind():
-    """The type that owns the vocabulary has to cover all of it, by construction."""
-    assert set(AXES) == {f.name for f in fields(Capabilities)}
 
 
 def test_what_a_request_may_upload_is_accounted_for():
