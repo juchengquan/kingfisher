@@ -37,7 +37,7 @@ def _agent_with_a_tool_call() -> StubAgent:
 def _events(cfg, agent):
     start(cfg, "s")
     return list(
-        stream(Request("t", session_id="s"), cfg=cfg, agent=agent, checkpointer=StubCheckpointer())
+        stream(Request("t", session_id="s"), cfg=cfg, graph=agent, checkpointer=StubCheckpointer())
     )
 
 
@@ -285,7 +285,7 @@ def test_run_is_a_drain_of_stream(cfg):
     result = run(
         Request("t", session_id="drained"),
         cfg=cfg,
-        agent=agent,
+        graph=agent,
         checkpointer=StubCheckpointer(),
     )
 

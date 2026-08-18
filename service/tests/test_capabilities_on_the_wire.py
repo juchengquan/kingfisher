@@ -135,7 +135,7 @@ def test_a_caller_can_only_narrow_within_what_the_deployment_granted(cfg):
     allowed."""
     deployment = Capabilities(tools=("read_file",))
     service = Kingfisher(
-        cfg, agent=StubAgent("ok"), threads=StubCheckpointer(), grants=deployment
+        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), grants=deployment
     )
     reaching = turn_for(TurnBody(task="go", capabilities={"tools": ["read_file", "shell"]}))
 

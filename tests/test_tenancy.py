@@ -22,7 +22,7 @@ from tests.test_run import StubAgent
 
 
 def service(cfg, **kwargs):
-    return Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer(), **kwargs)
+    return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), **kwargs)
 
 
 # -- T2: a session id is a bearer credential ------------------------------
@@ -140,7 +140,7 @@ def test_a_turn_disposes_of_nothing(cfg):
 
 def test_delete_session_removes_the_directory_and_the_thread(cfg):
     threads = StubCheckpointer()
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
     session_id = kf.run(Request("go")).session_id
 
     assert kf.delete_session(session_id) is None
@@ -207,7 +207,7 @@ def test_a_thread_whose_session_is_gone_is_deleted(cfg):
     import time
 
     threads = ListingCheckpointer(held=("ghost-a", "ghost-b"))
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
 
     result = kf.reap(older_than_seconds=0, now=time.time())
 
@@ -217,11 +217,11 @@ def test_a_thread_whose_session_is_gone_is_deleted(cfg):
 
 def test_a_thread_whose_session_still_exists_is_left_alone(cfg):
     """The reconciliation must not eat live conversations."""
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     live = kf.start_session()
 
     threads = ListingCheckpointer(held=(live, "ghost"))
-    kf2 = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads)
+    kf2 = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
     result = kf2.reap(older_than_seconds=10_000, now=1_000)  # nothing expired
 
     assert result.removed == ()
@@ -236,11 +236,11 @@ def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
     """
     import time
 
-    kf = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     doomed = kf.start_session()
 
     threads = ListingCheckpointer(held=("ghost",))
-    result = Kingfisher(cfg, agent=StubAgent("ok"), threads=threads).reap(
+    result = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads).reap(
         older_than_seconds=0, now=time.time()
     )
 
@@ -283,7 +283,7 @@ def _claims(cfg) -> Path:
 def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     """Refused, not queued: a queue hides a wait as long as whatever the other
     turn is doing, and tells a racing caller nothing."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
 
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
@@ -295,7 +295,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
 
 def test_the_slot_goes_back_when_the_turn_ends(cfg):
     """Or the first turn would wedge the session for an hour."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 
     service.run(Request("first", session_id="s"))
@@ -308,7 +308,7 @@ def test_the_slot_goes_back_when_the_turn_ends(cfg):
 def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     """Every check after the claim can raise, and each one holding the slot on
     the way out would wedge the session over a typo."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 
     with pytest.raises(ValueError):
@@ -322,7 +322,7 @@ def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
     """A process that died leaves its claim behind. `turn_timeout_s` already
     bounds how long a turn may run, so past it the holder is gone or was going
     to be stopped anyway."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
     held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
@@ -336,7 +336,7 @@ def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
 def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     """The session directory is the backend root, so a claim kept there is
     something `execute` could delete. `state_dir` is host-side only."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
     claim = held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
@@ -347,7 +347,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
 
 def test_two_sessions_do_not_block_each_other(cfg):
     """The slot is per session. One busy conversation must not stop another."""
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     busy = service.start_session("busy")
     other = service.start_session("other")
 
@@ -371,7 +371,7 @@ def test_a_turn_records_that_its_session_was_used(cfg):
     import os
     import time
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     directory = cfg.workspace / "sessions" / session
 
@@ -390,7 +390,7 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     import os
     import time
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     directory = cfg.workspace / "sessions" / session
 
@@ -410,7 +410,7 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     import os
     import time
 
-    service = Kingfisher(cfg, agent=StubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     busy = service.start_session("busy")
     idle = service.start_session("idle")
 

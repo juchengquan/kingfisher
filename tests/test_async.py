@@ -30,7 +30,7 @@ class AsyncStubAgent(StubAgent):
 
 def test_astream_yields_the_same_events_as_stream(cfg):
     """One `_prepare`, two loops. If they drift, this is what notices."""
-    service = Kingfisher(cfg, agent=AsyncStubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
 
     sync_kinds = [e.kind for e in service.stream(Request("go"))]
 
@@ -41,7 +41,7 @@ def test_astream_yields_the_same_events_as_stream(cfg):
 
 
 def test_arun_returns_the_same_result_shape(cfg):
-    service = Kingfisher(cfg, agent=AsyncStubAgent("hello"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStubAgent("hello"), threads=StubCheckpointer())
 
     result = asyncio.run(service.arun(Request("go")))
 
@@ -66,7 +66,7 @@ def test_turns_on_one_service_genuinely_overlap(cfg):
             for chunk in self.stream(state, config, stream_mode):
                 yield chunk
 
-    service = Kingfisher(cfg, agent=Barred("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=Barred("ok"), threads=StubCheckpointer())
     # A session id is a credential now: it has to be started before it is used.
     names = [service.start_session() for _ in range(3)]
 
@@ -124,7 +124,7 @@ def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
 
     monkeypatch.setattr(Kingfisher, "_prepare", slow_prepare)
 
-    service = Kingfisher(cfg, agent=AsyncStubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
     names = [service.start_session() for _ in range(3)]
 
     async def race():
@@ -186,7 +186,7 @@ def test_the_turn_bound_holds_on_the_async_path_too(cfg):
 
     agent = SlowAsyncAgent(steps=50)
     service = Kingfisher(
-        replace(cfg, turn_timeout_s=0), agent=agent, threads=StubCheckpointer()
+        replace(cfg, turn_timeout_s=0), graph=agent, threads=StubCheckpointer()
     )
 
     result = asyncio.run(service.arun(Request("go")))
@@ -198,7 +198,7 @@ def test_the_turn_bound_holds_on_the_async_path_too(cfg):
 def test_an_unbounded_async_turn_is_untouched(cfg):
     """The negative control: without it the test above would pass even if
     every async turn were cut short."""
-    service = Kingfisher(cfg, agent=AsyncStubAgent("ok"), threads=StubCheckpointer())
+    service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
 
     assert not asyncio.run(service.arun(Request("go"))).cut_short
 
