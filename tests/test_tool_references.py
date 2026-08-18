@@ -21,6 +21,7 @@ from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.definitions import read_subagent
 from kingfisher.infrastructure.tool_store import LocalToolRepository
+from tests.conftest import tools_dir
 
 TOOL = """from langchain_core.tools import tool
 
@@ -178,7 +179,7 @@ def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg):
     when someone finally activates that one delegate means a deployment that
     started while broken."""
     seeding.seed(cfg)
-    (cfg.tools_dir / "csv_profile").rename(cfg.tools_dir / "analysis")
+    (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
 
     with pytest.raises(CapabilityError, match="have moved"):
         Definitions.from_config(cfg).warm()
@@ -204,11 +205,11 @@ def test_two_tools_of_one_name_both_load_and_are_told_apart(cfg):
     what makes two folders from two vendors survive.
     """
     for folder in ("a", "b"):
-        directory = cfg.tools_dir / folder
+        directory = tools_dir(cfg) / folder
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "t.py").write_text(TOOL.format(name="clash"), encoding="utf-8")
 
-    repository = LocalToolRepository(cfg.tools_dir)
+    repository = LocalToolRepository(tools_dir(cfg))
 
     assert sorted(one.reference for one in repository.found) == [
         "a/t.py::clash",

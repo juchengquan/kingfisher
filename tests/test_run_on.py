@@ -23,7 +23,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.harness.agent import build_agent
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 ELSEWHERE = Endpoint("openai", "https://api.openai.com/v1", "sk-test")
 
@@ -42,7 +42,7 @@ system_prompt: |
 
 
 def _define(cfg, *definitions: str) -> None:
-    directory = cfg.subagents_dir
+    directory = subagents_dir(cfg)
     directory.mkdir(parents=True, exist_ok=True)
     for body in definitions:
         name = body.split("\n")[0].removeprefix("name: ").strip()

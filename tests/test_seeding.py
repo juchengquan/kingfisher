@@ -21,6 +21,7 @@ from kingfisher.infrastructure.harness.agent import (
     build_agent,
 )
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
+from tests.conftest import subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped
 #: pack is reached -- `opened()` through `importlib.resources` -- so those tests
@@ -84,8 +85,8 @@ def _materialise(readme: str, cfg) -> None:
     for block in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL):
         if block.startswith("name:"):
             name = block.split("\n")[0].removeprefix("name:").strip()
-            cfg.subagents_dir.mkdir(parents=True, exist_ok=True)
-            (cfg.subagents_dir / f"{name}.yaml").write_text(block, encoding="utf-8")
+            subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+            (subagents_dir(cfg) / f"{name}.yaml").write_text(block, encoding="utf-8")
 
     for block in re.findall(r"```markdown\n(.*?)```", readme, re.DOTALL):
         if not block.startswith("---"):
@@ -314,9 +315,9 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
     monkeypatch.setattr(seeding, "opened", _fixture)
     seeding.seed(cfg)
 
-    carried = [str(p.relative_to(cfg.tools_dir)) for p in cfg.tools_dir.rglob("__pycache__")]
+    carried = [str(p.relative_to(tools_dir(cfg))) for p in tools_dir(cfg).rglob("__pycache__")]
     assert not carried, f"seeding carried bytecode into the workspace: {carried}"
-    assert (cfg.tools_dir / "csv_profile" / "__init__.py").is_file(), "and the package itself"
+    assert (tools_dir(cfg) / "csv_profile" / "__init__.py").is_file(), "and the package itself"
 
 
 def test_seeding_twice_unchanged_is_silent(cfg):
@@ -329,7 +330,7 @@ def test_seeding_twice_unchanged_is_silent(cfg):
 
 def test_an_edited_copy_is_reported_and_still_replaced(cfg):
     seeding.seed(cfg, FIXTURE)
-    edited = cfg.subagents_dir / "probe-agent.yaml"
+    edited = subagents_dir(cfg) / "probe-agent.yaml"
     edited.write_text("name: probe-agent\ndescription: mine\n"
         "system_prompt: |\n  My prompt.\n", encoding="utf-8")
 

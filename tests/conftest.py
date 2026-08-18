@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
@@ -203,3 +205,23 @@ def dispatched(graph) -> tuple[str, ...]:
     names = registered_tools(graph)
     assert names is not None, "a graph built here must be readable"
     return names
+
+
+def subagents_dir(cfg) -> Path:
+    """Where this config's subagent definitions live.
+
+    A test helper, and that is the whole finding. `Config` carried
+    `subagents_dir` and `tools_dir` as properties until a sweep showed neither
+    had a reader in the package -- `catalogue_roots` answers for all three, and
+    is what production asks. The convenience was only ever wanted here, so it
+    lives here, and the published record is one field smaller.
+
+    `skills_dir` stayed on `Config`, because `confinement.shell_confinement`
+    genuinely needs that one directory on its own.
+    """
+    return cfg.catalogue_roots["subagents"]
+
+
+def tools_dir(cfg) -> Path:
+    """Where this config's tool modules live. See `subagents_dir`."""
+    return cfg.catalogue_roots["tools"]

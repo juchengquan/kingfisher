@@ -464,31 +464,28 @@ class Config:
         they are authored, reviewed and deployed. Relocating them is safe for
         the same reason the state directory is — the agent reaches `/skills`
         through a route, and the shell has no business there.
+
+        The only one of the three left, and the asymmetry is the point rather
+        than an oversight. `subagents_dir` and `tools_dir` sat beside it with no
+        reader in the package: `catalogue_roots` took both over when it became
+        the one answer to "where are the definitions". They stayed on because the
+        trio looked symmetrical, which is the argument a vestige makes for
+        itself.
+
+        This one has a caller. `confinement.shell_confinement` needs the skills
+        root on its own, because the shell boundary is built per directory and
+        not from a mapping.
         """
         return self.skills_root or self.workspace / "skills"
-
-    @property
-    def subagents_dir(self) -> Path:
-        """The subagent catalogue. Read off disk, never addressed by the agent."""
-        return self.subagents_root or self.workspace / "subagents"
-
-    @property
-    def tools_dir(self) -> Path:
-        """The tool catalogue: Python modules imported into this process.
-
-        Deliberately not a backend route. A skill is data the agent reads and a
-        tool is code this process runs, so the agent is given no path that
-        reaches here — the only agent that could write a tool is one already
-        holding `execute`, which can run anything on the host regardless.
-        """
-        return self.tools_root or self.workspace / "tools"
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
         """The three definition directories, together, as one answer.
 
-        The three above are what a deployment *sets*; this is what everything
-        that reads a catalogue *asks for*. Kept as a mapping rather than a tuple
+        `skills_root` and its two siblings are what a deployment *sets*; this is
+        what everything that reads a catalogue *asks for* -- and now the only
+        way to ask, since the two per-directory properties that used to sit
+        above had no reader left. Kept as a mapping rather than a tuple
         of paths because the three are relocatable apart -- `skills_root` and
         its siblings are separate overrides on purpose -- so there is no tree to
         name them by position under.

@@ -22,7 +22,7 @@ from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.domain.tool import Offering, offered
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.tool_store import LocalToolRepository
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, tools_dir
 
 TOOL = """from langchain_core.tools import tool
 
@@ -67,10 +67,10 @@ def test_the_origins_come_off_the_same_walk_that_loaded_the_tools(cfg, capfd):
     -- a listing, a refusal -- executed every workspace module twice. Any
     module-level side effect happened twice with it.
     """
-    cfg.tools_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "noisy.py").write_text(NOISY, encoding="utf-8")
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "noisy.py").write_text(NOISY, encoding="utf-8")
 
-    found = LocalToolRepository(cfg.tools_dir).found
+    found = LocalToolRepository(tools_dir(cfg)).found
 
     assert [entry.name for entry in found] == ["noisy"]
     assert [entry.source for entry in found] == ["noisy.py"]
@@ -81,10 +81,10 @@ def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
     """`--list` needs the origins *and* a compiled graph, and the graph is the
     only way to know the built-in set. Fetching them apart ran every tool
     module a second time, so the walk is handed in."""
-    cfg.tools_dir.mkdir(parents=True, exist_ok=True)
-    (cfg.tools_dir / "noisy.py").write_text(NOISY, encoding="utf-8")
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "noisy.py").write_text(NOISY, encoding="utf-8")
 
-    found = LocalToolRepository(cfg.tools_dir).found
+    found = LocalToolRepository(tools_dir(cfg)).found
     capfd.readouterr()  # discard the walk's own execution
 
     build_agent(
@@ -107,7 +107,7 @@ def test_a_request_naming_an_unknown_tool_is_told_where_the_real_ones_live(cfg):
     the shape nobody finishes reading, and a bare name is what sends someone
     grepping through `tools/` for a file that could be anywhere.
     """
-    _tool(cfg.tools_dir / "research", "find_company")
+    _tool(tools_dir(cfg) / "research", "find_company")
 
     with pytest.raises(CapabilityError) as raised:
         build_agent(
@@ -129,7 +129,7 @@ def test_a_subagent_naming_an_unknown_tool_is_told_the_same_thing(cfg):
     Same wording as the request-side refusal, because the two disagreeing about
     format would be its own small confusion.
     """
-    _tool(cfg.tools_dir / "research", "find_company")
+    _tool(tools_dir(cfg) / "research", "find_company")
     spec = SubagentSpec(
         name="typo",
         description="Names a tool nothing offers.",

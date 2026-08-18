@@ -23,6 +23,7 @@ from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.harness import agent as main_agent_module
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from tests.conftest import subagents_dir, tools_dir
 
 
 def _render(events: list[RunEvent]) -> tuple[str, RunResult | None]:
@@ -165,7 +166,7 @@ def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
     no longer broken -- see the test below. One file exporting a name twice
     still is, because there is no second file to tell those apart.
     """
-    directory = cfg.tools_dir / "research"
+    directory = tools_dir(cfg) / "research"
     directory.mkdir(parents=True)
     (directory / "t.py").write_text(
         "from langchain_core.tools import tool\n"
@@ -197,7 +198,7 @@ def test_two_folders_may_each_define_one_subagent_name(cfg, capsys):
         "system_prompt: |\n  Do the thing.\n"
     )
     for who in ("vendor", "team"):
-        directory = cfg.subagents_dir / who
+        directory = subagents_dir(cfg) / who
         directory.mkdir(parents=True, exist_ok=True)
         (directory / "surveyor.yaml").write_text(spec.format(who=who), encoding="utf-8")
 
@@ -215,7 +216,7 @@ def test_two_folders_may_each_define_one_name(cfg, capsys):
     grant would write, because a bare `find_company` no longer says which.
     """
     for folder in ("research", "sales"):
-        directory = cfg.tools_dir / folder
+        directory = tools_dir(cfg) / folder
         directory.mkdir(parents=True)
         (directory / "t.py").write_text(
             "from langchain_core.tools import tool\n"
@@ -340,7 +341,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
 
     assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
 
-    assert "http_fetch" in LocalToolRepository(relocated.tools_dir).names
+    assert "http_fetch" in LocalToolRepository(tools_dir(relocated)).names
     # `ensure_layout` still makes the workspace directory, so the place to put
     # one is obvious. What must not happen is a preset landing in it.
     assert LocalToolRepository(relocated.workspace / "tools").names == ()
@@ -579,7 +580,7 @@ def test_subtracting_skills_and_subagents_too(cfg):
 
     seeding.seed(cfg)
     seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
-    seeded_subagents = set(LocalSubagentRepository(cfg.subagents_dir).specs)
+    seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
     # "the rest" equal to the whole of it, and this would still pass.
     assert {"tabular-qa"} < seeded_skills
