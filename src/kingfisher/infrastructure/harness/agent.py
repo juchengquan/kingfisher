@@ -153,6 +153,41 @@ def defined_subagents(
     return dict(for_session(catalogue or Definitions.from_config(cfg), session_dir).subagents.specs)
 
 
+def unrunnable_delegates(
+    cfg: Config, *, catalogue: Definitions | None = None
+) -> tuple[tuple[str, str], ...]:
+    """`(name, why)` for each defined delegate this deployment cannot run.
+
+    Every definition the catalogue holds, not the ones a request activated --
+    which is the difference from `indistinct_delegates` beside it, and the whole
+    point. A delegate binding an alias to a model on an endpoint with no key is
+    invisible until somebody activates it: the workspace loads, the listing is
+    clean, and the failure waits for the first request that names it.
+
+    Through `model_for` and `resolve`, the two calls a build makes, so this
+    cannot come to disagree with what actually happens. Both are needed and
+    neither is enough: `model_for` catches an alias nothing binds and a delegate
+    whose every candidate was passed over, and returns a model *name*; whether
+    that name can be reached is `resolve`'s question, and it is the one the
+    dropped-endpoint case fails.
+
+    Reported, never refused, and never called -- no model is built and nothing
+    goes over a network. It costs two dictionary lookups per definition, which
+    is what lets `doctor` run it before a deployment rather than after.
+    """
+    from kingfisher.infrastructure.harness.delegation import model_for  # noqa: PLC0415
+
+    found: list[tuple[str, str]] = []
+    for name, spec in sorted(defined_subagents(cfg, None, catalogue=catalogue).items()):
+        try:
+            model = model_for(spec, cfg)
+            if model is not None:
+                cfg.models.resolve(model)
+        except ConfigError as exc:
+            found.append((name, str(exc)))
+    return tuple(found)
+
+
 def indistinct_delegates(
     cfg: Config,
     capabilities: Capabilities,

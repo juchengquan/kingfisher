@@ -66,16 +66,38 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
         "catalogue",
         "ok",
         f"{len(models.models)} model(s) on {len(models.endpoints)} endpoint(s), "
-        f"default {models.default!r}",
+        f"default {models.default!r} -- credentials present, not tested",
     )
 
-    # Named with what each points at, not just which alias is wrong. The reader
-    # has to edit one of the two, and `cheap` alone does not say which model was
-    # meant -- `cheap -> gpt-5` does, and is usually enough to spot the typo.
+    # A dropped endpoint is a warning, not a failure. A shared catalogue naming
+    # endpoints this machine cannot reach is the normal case by the loader's own
+    # account -- "one reviewed file works across a fleet holding different
+    # subsets of keys" -- so failing here would fail on the arrangement the
+    # format encourages. It becomes a failure through the definitions check,
+    # when something actually names one.
+    #
+    # Reported at all because it was not: the drop is announced by a warning at
+    # load and then discarded, so this printed a tick over a lost endpoint.
+    if models.unreachable:
+        named = ", ".join(f"{name} ({why})" for name, why in sorted(models.unreachable.items()))
+        yield Check(
+            "credentials",
+            "warn",
+            f"{len(models.unreachable)} model(s) this file defines cannot be reached: {named}",
+            "set the variable each one names, or ignore this if no definition wants them",
+        )
+    else:
+        yield Check("credentials", "ok", "every endpoint this file names has a key")
+
+    # `models.models` and `models.unreachable` together, because the difference
+    # is the whole point: a binding whose model was dropped for want of a key is
+    # not an unbound alias, and calling it one sent its reader to edit YAML that
+    # was correct. The loader already refuses a binding naming a model the file
+    # does not define, so anything left here that is not unreachable is bound.
     unbound = sorted(
         f"{name} -> {target}"
         for name, target in models.aliases.items()
-        if target not in models.models
+        if target not in models.models and target not in models.unreachable
     )
     if unbound:
         yield Check(
@@ -159,6 +181,53 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
         yield Check("skills", "ok", detail)
 
 
+def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
+    """Which definitions this deployment cannot actually run.
+
+    The check the dropped-endpoint bug produces, and the one nothing else does:
+    a delegate binding an alias to a model on an endpoint with no key leaves a
+    workspace that loads, lists cleanly, and fails on the first request naming
+    it. The build refuses it then, with a message worth reading -- but then is
+    after somebody waited, and `doctor` exists to be the before.
+
+    A failure rather than a warning, unlike a merely unreachable endpoint: a
+    catalogue naming endpoints this machine cannot use is ordinary, and a
+    definition that cannot run is a workspace promising something it will not
+    deliver.
+
+    Imported inside the function. `unrunnable_delegates` reaches deepagents as
+    it loads -- 868ms and 3,137 modules, measured -- and at module scope every
+    other verb would pay it, so `kingfisher help` would cost a second to print
+    text. The CLI starts in 40ms and should keep doing so.
+    """
+    # Asked only when the catalogue parsed. `unrunnable_delegates` reads the
+    # same files, so a definition that will not load raises out of here instead
+    # of being reported -- and a diagnosis that stops at the first problem is
+    # what this command exists to replace. The check above already said so, so
+    # this one says nothing rather than saying it twice.
+    if found.subagents_error is not None:
+        yield Check(
+            "definitions run",
+            "warn",
+            "not checked -- the subagent catalogue did not load, which is above",
+        )
+        return
+
+    from kingfisher import unrunnable_delegates  # noqa: PLC0415
+
+    unrunnable = unrunnable_delegates(cfg)
+    if not unrunnable:
+        yield Check("definitions run", "ok", "every definition resolves to a model")
+        return
+    for name, why in unrunnable:
+        yield Check(
+            f"definition {name!r}",
+            "fail",
+            why,
+            "set the credential it needs, or bind its alias to a model you can run",
+        )
+
+
 def _shell(cfg: Config) -> Iterator[Check]:
     """What is keeping `execute` off the host, if anything.
 
@@ -193,7 +262,9 @@ def examine(cfg: Config) -> tuple[Check, ...]:
     try:
         checks += _catalogue(cfg)
         checks += _packs()
-        checks += _catalogues(inventory(cfg))
+        found = inventory(cfg)
+        checks += _catalogues(found)
+        checks += _definitions(cfg, found)
         checks += _shell(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces
         checks.append(Check("configuration", "fail", str(exc)))
