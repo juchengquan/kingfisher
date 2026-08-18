@@ -15,8 +15,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.harness.agent import build_agent, registered_tools
-from tests.conftest import FakeToolCallingModel, capture_build
+from kingfisher.infrastructure.harness.agent import build_agent
+from tests.conftest import FakeToolCallingModel, capture_build, dispatched
 
 
 def _model():
@@ -27,14 +27,14 @@ def test_it_is_off_unless_a_deployment_wires_it(cfg, session_dir):
     """A second execution surface, and a beta dependency, should not arrive
     because someone upgraded."""
     graph = build_agent(cfg, session_dir=session_dir, model=_model())
-    assert "eval" not in registered_tools(graph)
+    assert "eval" not in dispatched(graph)
 
 
 def test_wiring_it_adds_one_tool(cfg, session_dir):
     graph = build_agent(
         replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model()
     )
-    assert "eval" in registered_tools(graph)
+    assert "eval" in dispatched(graph)
 
 
 def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
@@ -50,7 +50,7 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
     )
     # Registered either way -- the allowlist refuses at call time, it does not
     # unregister. What matters is that the name is known to the validator.
-    assert "eval" in registered_tools(without)
+    assert "eval" in dispatched(without)
 
 
 def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, session_dir, monkeypatch):

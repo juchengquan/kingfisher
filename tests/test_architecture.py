@@ -130,8 +130,15 @@ def _module_id(path: Path) -> str:
 
     A bare filename stops identifying a module once two layers can hold the
     same one, and the failure message has to name a file someone can open.
+
+    Relative to the repository for anything outside `src/kingfisher`, because
+    one consumer is a distribution of its own and `relative_to(SRC)` raises on
+    it rather than naming it. `service/src/kingfisher_service/app.py` is longer
+    than `app.py` and is the thing someone can open.
     """
-    return path.relative_to(SRC).as_posix()
+    if path.is_relative_to(SRC):
+        return path.relative_to(SRC).as_posix()
+    return path.relative_to(REPO).as_posix()
 
 
 def _inside_domain(module: str) -> bool:
@@ -1072,40 +1079,101 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 # caller-facing errors, `async_checkpointer`, and a way to send a file.
 
 
-#: Everything in this distribution held to the front door. `presentation` was
-#: first and has left -- it is `kingfisher-service` now, and holds itself to the
-#: same rule in its own tests. `cli` is what remains, and it is here for the
-#: reason the other one was: the claim that any caller can seed a workspace is
-#: worth something only if the command that seeds is one of them. Adding a name
-#: here is what makes that checked rather than asserted, and it is why `offered`
-#: and `SKILL_LAYOUT` are public.
-CONSUMERS = ("cli",)
+#: Every consumer held to the front door, and the directory each one lives in.
+#: The claim that any caller can drive this library is worth something only if
+#: the callers that ship with it are held to it -- which is why `offered` and
+#: `SKILL_LAYOUT` are public.
+#:
+#: The paths are here because one of them is not under `src/`. `presentation`
+#: used to be, and became `kingfisher-service`, a wheel of its own -- at which
+#: point this collector, which read `SRC / name`, stopped finding it. The rule
+#: kept its name, kept passing, and covered the CLI alone. A comment here said
+#: the service "holds itself to the same rule in its own tests"; it does not,
+#: and there is no architecture test under `service/tests/` at all.
+#:
+#: Kept in this suite rather than moved there, deliberately: the rule is about
+#: *this* package's public API, and a base that can break its own contract
+#: without its own tests noticing is the arrangement that produced the gap.
+CONSUMERS: dict[str, Path] = {
+    "cli": SRC / "cli",
+    "kingfisher_service": REPO / "service" / "src" / "kingfisher_service",
+}
 
 
 def _consumer_modules() -> list[Path]:
-    return sorted(path for name in CONSUMERS for path in (SRC / name).rglob("*.py"))
+    return sorted(path for root in CONSUMERS.values() for path in root.rglob("*.py"))
 
 
 def _reaches_past_the_public_api(module: str) -> bool:
-    return (
-        module.split(".", maxsplit=1)[0] == "kingfisher"
-        and module != "kingfisher"
-        and not any(module.startswith(f"kingfisher.{name}") for name in CONSUMERS)
+    """True when a consumer imports something deeper than `kingfisher` itself.
+
+    `kingfisher_service.*` is not a reach and never trips this -- it is a
+    different top-level package. `kingfisher.cli.*` is not one either: the CLI
+    ships *inside* the library, so its own modules are its own business.
+    """
+    if module.split(".", maxsplit=1)[0] != "kingfisher" or module == "kingfisher":
+        return False
+    return not module.startswith("kingfisher.cli")
+
+
+@pytest.mark.parametrize(
+    ("module", "reaches"),
+    [
+        ("kingfisher", False),                      # the front door itself
+        ("kingfisher.domain.request", True),        # past it
+        ("kingfisher.application.service", True),   # past it, and the tempting one
+        ("kingfisher.cli.health", False),           # the CLI ships inside the package
+        ("kingfisher_service.app", False),          # a different top-level package
+        ("fastapi", False),                         # not ours to have an opinion on
+    ],
+)
+def test_the_reach_predicate_says_what_it_means(module, reaches):
+    """The rule's own arithmetic, checked against named inputs.
+
+    Nothing in this repository violates the rule today, which means weakening
+    the predicate -- `return False` -- passes every module it is pointed at. A
+    rule that can be switched off in silence is decoration, and this file has
+    twice shipped one: a collector reading the wrong root, and an import scan
+    that discarded the names it needed.
+
+    `kingfisher_service.app` is the case worth naming. It looks like a reach and
+    is not: string-prefix matching on "kingfisher" would call it one, and the
+    consumer most subject to this rule would fail it for importing itself.
+    """
+    assert _reaches_past_the_public_api(module) is reaches
+
+
+def test_the_rule_above_still_finds_every_consumer():
+    """The guard the parametrised rule cannot give itself.
+
+    A rule parametrised over an empty list passes. That is how the service
+    slipped out: it moved to a distribution of its own, the collector kept
+    reading `SRC / name`, and a test named for the server ran against four CLI
+    files and reported success. `_modules_in` learned to recurse for the same
+    reason one level down; recursion does not help when the root is wrong.
+
+    Named roots, not a count, so this says *which* consumer went missing.
+    """
+    found = {name for name, root in CONSUMERS.items() for _ in root.rglob("*.py")}
+
+    assert found == set(CONSUMERS), (
+        f"no modules found for {sorted(set(CONSUMERS) - found)} -- the consumer moved "
+        "and the rule below is now silently about whatever is left"
     )
 
 
 @pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
-def test_the_server_uses_the_library_only_through_its_public_api(path):
+def test_a_consumer_uses_the_library_only_through_its_public_api(path):
     """`from kingfisher import X`, never `from kingfisher.domain.y import X`.
 
-    A server that reaches into `kingfisher.application.service` for something
-    unexported is a server that has quietly made a private name load-bearing --
-    and the next person to move it breaks an HTTP contract without touching
+    A consumer that reaches into `kingfisher.application.service` for something
+    unexported has quietly made a private name load-bearing -- and the next
+    person to move it breaks an HTTP contract, or a command, without touching
     anything that looks like one.
     """
     reaching = {m for m in _imported_modules(path) if _reaches_past_the_public_api(m)}
     assert not reaching, (
-        f"{_module_id(path)} imports {sorted(reaching)} — the server takes `kingfisher` "
+        f"{_module_id(path)} imports {sorted(reaching)} — a consumer takes `kingfisher` "
         "and nothing deeper; if it needs something private, export it on purpose"
     )
 

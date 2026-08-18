@@ -195,18 +195,41 @@ def indistinct_delegates(
     return tuple(found)
 
 
-def registered_tools(graph: Any) -> tuple[str, ...]:
-    """Tool names the compiled agent can actually dispatch.
+def registered_tools(graph: Any) -> tuple[str, ...] | None:
+    """Tool names the compiled agent can actually dispatch, or `None` if unreadable.
 
     Derived from the graph rather than listed here, because a hardcoded list
     would drift the first time deepagents adds or renames a tool. The path into
-    the tool node is not a public contract, so a shape we do not recognise
-    yields `()` — which callers read as "cannot check" — rather than raising and
-    taking down every build over an introspection detail.
+    the tool node is not a public contract, so a shape we do not recognise is
+    reported rather than raised: taking down every build over an introspection
+    detail would be the worse trade, and a rename upstream is meant to fail
+    `test_a_real_build_is_readable` instead.
+
+    It used to answer `()` for both "no tools" and "cannot read this", and said
+    so -- callers "read [it] as *cannot check*". They were the same answer
+    because nothing needed them apart: every graph here is one `build_agent`
+    made, and those always dispatch something.
+
+    A compiled subagent is the first graph kingfisher will be handed rather than
+    have built, and there the difference is the whole point -- a listing that
+    prints "no tools" for a graph it could not read has stated a fact it does
+    not have. So `()` now means none, and `None` means unreadable.
+
+    Telling them apart takes a second look, because the obvious one does not
+    work: `create_agent(model, tools=[])` compiles to `['__start__', 'model']`
+    with **no tool node at all**, which is exactly the shape of a hand-written
+    graph that dispatches nothing. Measured, not assumed. What separates them is
+    the `model` node -- an agent graph keeps one whether or not it has tools, so
+    a tool node missing from *that* shape is a definite none, and anything else
+    is a shape with no answer in it.
     """
-    node = getattr(graph, "nodes", {}).get("tools")
-    by_name = getattr(getattr(node, "bound", None), "tools_by_name", None)
-    return tuple(sorted(by_name)) if isinstance(by_name, dict) else ()
+    nodes = getattr(graph, "nodes", None)
+    if not hasattr(nodes, "get"):
+        return None
+    by_name = getattr(getattr(nodes.get("tools"), "bound", None), "tools_by_name", None)
+    if isinstance(by_name, dict):
+        return tuple(sorted(by_name))
+    return () if "model" in nodes else None
 
 
 # `/data` holds what a caller supplied and nothing else has a copy of: it is
@@ -692,7 +715,9 @@ def _resolve_tools(
         return _ToolSurface()
 
     probe = assemble(())
-    builtin = registered_tools(probe)
+    # Our own probe, so `None` is not reachable here; `or ()` keeps a shape
+    # change upstream from becoming a crash at the one site that would.
+    builtin = registered_tools(probe) or ()
     _refuse_shadowed(workspace_tools, builtin=builtin, where=where)
     offering = Offering.of(workspace_tools, builtin=builtin)
     offering.refuse_unknown(

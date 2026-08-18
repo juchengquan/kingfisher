@@ -19,7 +19,6 @@ from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
     build_agent,
-    registered_tools,
 )
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 
@@ -103,8 +102,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, r
     row is a CapabilityError someone has to debug."""
     from langchain_core.messages import AIMessage
 
-    from kingfisher.infrastructure.harness.agent import registered_tools
-    from tests.conftest import FakeToolCallingModel
+    from tests.conftest import FakeToolCallingModel, dispatched
 
     graph = build_agent(
         cfg,
@@ -120,7 +118,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, r
         if line.startswith("| `")
     }
 
-    assert documented == set(registered_tools(graph))
+    assert documented == set(dispatched(graph))
 
 
 def test_the_readme_call_is_valid(cfg, session_dir, reference_tree):
@@ -205,9 +203,11 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
     reaching the agent. Naming `http_fetch` tied a test of the loading path to
     which tools kingfisher happens to ship.
     """
+    from tests.conftest import dispatched
+
     shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
 
-    tools = registered_tools(build_agent(cfg, session_dir=cfg.workspace / "s"))
+    tools = dispatched(build_agent(cfg, session_dir=cfg.workspace / "s"))
 
     assert "probe" in tools
     assert "read_file" in tools  # and the built-ins are still there

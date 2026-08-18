@@ -186,3 +186,20 @@ def fake_model():
     from langchain_core.messages import AIMessage
 
     return FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+
+def dispatched(graph) -> tuple[str, ...]:
+    """`registered_tools` for a graph the tests built themselves.
+
+    It answers `None` for a graph it cannot read, which is a real state and has
+    its own tests. It is never the right answer *here*: every graph these tests
+    pass in came from `build_agent`, so unreadable means the introspection broke
+    rather than that the agent dispatches nothing -- and silently reading it as
+    the empty tuple is how a rename upstream would empty the built-in set with
+    every assertion still passing.
+    """
+    from kingfisher.infrastructure.harness.agent import registered_tools
+
+    names = registered_tools(graph)
+    assert names is not None, "a graph built here must be readable"
+    return names
