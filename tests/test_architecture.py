@@ -990,7 +990,7 @@ def test_the_package_ships_the_catalogue_example():
     """
     from kingfisher.infrastructure import seeding
 
-    assert (SRC / "reference" / seeding.EXAMPLE).is_file()
+    assert (SRC / seeding.EXAMPLE).is_file()
     with seeding.opened(seeding.PACKAGE) as root:
         assert (root / seeding.EXAMPLE).is_file()
 

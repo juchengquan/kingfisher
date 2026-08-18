@@ -1,4 +1,4 @@
-"""The reference_tree presets have to work.
+"""The shipped presets have to work.
 
 A preset that does not parse is worse than none: it is copied, it fails, and
 the format gets blamed. These run against the real loaders, and reach the
@@ -33,6 +33,10 @@ from kingfisher.infrastructure.skill_store import LocalSkillRepository
 #: A directory now, not a pack. `seed` takes a path, so the fixture needs no
 #: metadata and no installed distribution to stand in for one -- which is most
 #: of what the pack machinery was for here.
+#: The checkout, for the one file these tests read from the repository
+#: rather than from the installed package.
+REPO = Path(__file__).resolve().parent.parent
+
 FIXTURE = Path(__file__).resolve().parent / "assets"
 
 
@@ -43,19 +47,19 @@ def fixture_pack():
 
 
 @pytest.fixture(scope="session")
-def reference_tree():
-    """The `reference/` directory -- the README and the catalogue example.
+def formats_doc():
+    """`docs/formats.md` -- the format reference these tests check against.
 
-    Renamed from `shipped` when the definitions moved into this package. Both
-    were called that and meant different directories: this one is documentation,
-    and `shipped` in `conftest` is the definitions `seed` copies.
+    A repository path now, not package data. It lived in `kingfisher.reference`
+    beside the catalogue example and shipped in the wheel, where nothing in
+    `src/` ever read it. These are its only readers, and they run from the
+    checkout.
 
-    A fixture rather than a module constant because `importlib.resources`
-    does not promise the files sit on disk -- a zip-imported package
-    materialises them for the duration of the context and cleans up after.
+    Named for the file rather than the directory it used to live in. It was
+    `shipped`, then `reference_tree`, and both names meant a different directory
+    from the `shipped` in `conftest` -- which is the definitions `seed` copies.
     """
-    with seeding.opened(seeding.PACKAGE) as root:
-        yield root
+    return REPO / "docs" / "formats.md"
 
 
 def test_a_seeded_skill_is_discovered(cfg):
@@ -71,7 +75,7 @@ def _materialise(readme: str, cfg) -> None:
     """Write the README's own inline examples into a workspace.
 
     So the two tests below still *build* rather than merely parse, without the
-    reference_tree files they used to lean on. The page is the fixture: if an example
+    shipped files they used to lean on. The page is the fixture: if an example
     on it stops being a loadable definition, these fail for the same reason a
     reader would be misled.
     """
@@ -97,7 +101,7 @@ def _materialise(readme: str, cfg) -> None:
         (folder / "SKILL.md").write_text(block, encoding="utf-8")
 
 
-def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, reference_tree):
+def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, formats_doc):
     """The table is the reference a caller builds an allowlist from, so a stale
     row is a CapabilityError someone has to debug."""
     from langchain_core.messages import AIMessage
@@ -110,7 +114,7 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, r
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
     # Only the tools table -- the file has other tables, and scooping up their
     # first columns too is how the first draft of this test "passed" nothing.
-    readme = (reference_tree / "README.md").read_text(encoding="utf-8")
+    readme = (formats_doc).read_text(encoding="utf-8")
     table = readme.split("## Tools")[1].split("\n---")[0]
     documented = {
         line.split("|")[1].strip().strip("`")
@@ -121,11 +125,11 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, r
     assert documented == set(dispatched(graph))
 
 
-def test_the_readme_call_is_valid(cfg, session_dir, reference_tree):
+def test_the_readme_call_is_valid(cfg, session_dir, formats_doc):
     """Exactly the capabilities the README shows, built for real -- against the
     definitions the README itself writes out.
 
-    It used to seed the reference_tree presets, which is why it named `code-review` and
+    It used to seed the shipped presets, which is why it named `code-review` and
     `reviewer`: those files happened to exist. The page names them because it
     shows them, so the page is now the fixture and the test is about the same
     thing it always was -- that the call it documents actually builds.
@@ -136,7 +140,7 @@ def test_the_readme_call_is_valid(cfg, session_dir, reference_tree):
 
     from tests.conftest import FakeToolCallingModel
 
-    _materialise((reference_tree / "README.md").read_text(encoding="utf-8"), cfg)
+    _materialise((formats_doc).read_text(encoding="utf-8"), cfg)
 
     build_agent(
         replace(cfg, skills_enabled=True),
@@ -235,7 +239,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
 #
 # `seed` says the entire point is that you edit your copy, and seeding is the
 # one operation that writes over those copies. It used to do so silently: an
-# edited `reviewer.yaml` came back as the reference_tree one, reported identically to a
+# edited `reviewer.yaml` came back as the shipped one, reported identically to a
 # file that had never been there. It still overwrites -- refusing would make
 # re-seeding after an upgrade impossible, which is the same trade `place_data`
 # makes -- but it no longer does it quietly.
@@ -353,16 +357,16 @@ def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
     assert seeding.seed(cfg, FIXTURE).overwritten == ("skills/probe-skill/SKILL.md",)
 
 
-def test_the_readme_subagent_table_matches_the_real_field_set(reference_tree):
+def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
     """The table is where a contributor learns which fields exist, and now that
     an unlisted one is an error, a stale row is a definition that will not load.
 
     It had gone stale three times over -- `skills`, `middleware` and `provider`
-    all reference_tree without a row.
+    all shipped without a row.
     """
     from kingfisher.domain.subagent import KNOWN
 
-    readme = (reference_tree / "README.md").read_text(encoding="utf-8")
+    readme = (formats_doc).read_text(encoding="utf-8")
     table = readme.split("## Subagents")[1].split("\n---")[0]
     documented = {
         line.split("|")[1].strip().strip("`")
@@ -373,25 +377,25 @@ def test_the_readme_subagent_table_matches_the_real_field_set(reference_tree):
     assert documented == KNOWN
 
 
-def test_the_readme_links_into_no_asset_tree(reference_tree):
+def test_the_readme_links_into_no_asset_tree(formats_doc):
     """The page has to stand on its own, because the files are leaving.
 
     It used to link at its examples -- `[reviewer.yaml](subagents/reviewer.yaml)`
     -- and a test checked every target existed. That check was the right one
-    while they reference_tree alongside; once they are a separate distribution the link
+    while they shipped alongside; once they are a separate distribution the link
     cannot resolve and, worse, would rot quietly: someone renames a file over
     there and nothing here fails. The examples are written out on the page now.
     """
     import re
 
-    readme = (reference_tree / "README.md").read_text(encoding="utf-8")
+    readme = (formats_doc).read_text(encoding="utf-8")
     targets = [t for _, t in re.findall(r"\[([^\]]+)\]\(([^)]+)\)", readme)]
 
     into_assets = [t for t in targets if t.split("/")[0] in {"skills", "subagents", "tools"}]
     assert not into_assets, f"README links into an asset tree: {into_assets}"
 
 
-def test_every_complete_definition_in_the_readme_parses(reference_tree):
+def test_every_complete_definition_in_the_readme_parses(formats_doc):
     """The README shows a whole definition before it shows the field table, and
     a documented example that does not load is worse than none -- it is copied,
     it fails, and the format gets blamed.
@@ -404,7 +408,7 @@ def test_every_complete_definition_in_the_readme_parses(reference_tree):
 
     from kingfisher.infrastructure.definitions import read_subagent
 
-    readme = (reference_tree / "README.md").read_text(encoding="utf-8")
+    readme = (formats_doc).read_text(encoding="utf-8")
     blocks = [
         body
         for body in re.findall(r"```yaml\n(.*?)```", readme, re.DOTALL)
@@ -419,7 +423,7 @@ def test_every_complete_definition_in_the_readme_parses(reference_tree):
 # -- the one preset that consults another ---------------------------------
 
 
-def test_the_readme_run_on_example_is_valid(cfg, session_dir, reference_tree):
+def test_the_readme_run_on_example_is_valid(cfg, session_dir, formats_doc):
     """The second call the README shows, built for real.
 
     A documented example that does not work is worse than none: it is copied,
@@ -431,7 +435,7 @@ def test_the_readme_run_on_example_is_valid(cfg, session_dir, reference_tree):
     from kingfisher import RunOn
     from tests.conftest import FakeToolCallingModel
 
-    _materialise((reference_tree / "README.md").read_text(encoding="utf-8"), cfg)
+    _materialise((formats_doc).read_text(encoding="utf-8"), cfg)
 
     build_agent(
         cfg,
