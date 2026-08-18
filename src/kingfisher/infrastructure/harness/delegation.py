@@ -137,7 +137,13 @@ def _host(url: str) -> str:
     return urlsplit(url).netloc
 
 
-def model_for(spec: SubagentSpec, cfg: Config, *, override: RunOn | None = None) -> str | None:
+def model_for(
+    spec: SubagentSpec,
+    cfg: Config,
+    *,
+    override: RunOn | None = None,
+    caller: str | None = None,
+) -> str | None:
     """The model this delegate will actually run, or `None` for the deployment's.
 
     One function because two callers must not disagree: `as_subagent` builds
@@ -170,7 +176,7 @@ def model_for(spec: SubagentSpec, cfg: Config, *, override: RunOn | None = None)
                 # and an alias nobody bound is precisely one it anticipated.
                 passed_over.append(f"alias {wanted.alias!r}: {exc}")
                 continue
-        if spec.distinct and (why := indistinct(spec, cfg, model=model)):
+        if spec.distinct and (why := indistinct(spec, cfg, model=model, caller=caller)):
             passed_over.append(f"{model!r} {why}")
             continue
         return model
@@ -187,7 +193,61 @@ def model_for(spec: SubagentSpec, cfg: Config, *, override: RunOn | None = None)
     raise ConfigError(msg)
 
 
-def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | None:
+def model_object(  # noqa: PLR0913 -- six things decide which model a delegate
+    # runs, and each is a separate rule: what the file names, what the deployment
+    # binds, which endpoints this request may reach, what the request overrode,
+    # what it inherits when it names nothing, and what it may not match. Folding
+    # any pair together would hide which of the six produced the answer.
+    spec: SubagentSpec,
+    cfg: Config,
+    *,
+    endpoints: Selection = ALL,
+    run_on: RunOn | None = None,
+    inherited: Any = None,
+    caller: str | None = None,
+) -> Any | None:
+    """The model instance this delegate runs, or `None` to leave it inheriting.
+
+    `model_for` answers which model *id*; this answers with the thing that can
+    be called, which is a second step and a second set of refusals -- a model
+    outside the catalogue, an endpoint this request may not reach.
+
+    A function because two callers need the same answer and must not compute it
+    twice. `as_subagent` puts it on the spec it hands deepagents; `agent.py`
+    needs it *before* that, because a delegate's helpers inherit it and the
+    helpers are built first.
+
+    `inherited` is what summoned this one runs, and it is what a definition
+    naming no model gets. `None` for both means the spec carries no model at
+    all, which is how a top-level delegate keeps deepagents' own inheritance
+    from the agent that holds it.
+    """
+    model_id = model_for(spec, cfg, override=run_on, caller=caller)
+    if model_id is None:
+        return inherited
+    # A lookup, where this used to `replace` four fields of the `Config` and
+    # build from the copy. That copy is why the change happened: a param
+    # nobody remembered to add to it was silently the deployment's own, so
+    # a per-model `max_tokens` would have been dropped without a word. A
+    # profile carries every param, and there is nothing here to forget.
+    try:
+        profile, endpoint = cfg.models.resolve(model_id)
+    except ConfigError as exc:
+        # `resolve` knows the model and the catalogue; only here knows
+        # *who asked*. Without the name the reader is told `gpt-5` cannot be
+        # run and left to grep the catalogue for whoever wanted it -- and
+        # this is the one refusal that fires on a file they may not own.
+        msg = f"subagent {spec.name!r}: {exc}"
+        raise ConfigError(msg) from exc
+    refuse_ungranted_endpoint(
+        profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
+    )
+    return build_model(profile, endpoint)
+
+
+def indistinct(
+    spec: SubagentSpec, cfg: Config, *, model: str | None, caller: str | None = None
+) -> str | None:
     """Why this delegate is not running anywhere different, or `None`.
 
     Reported, never refused. Kingfisher cannot know that a delegate *needs* to
@@ -209,14 +269,24 @@ def indistinct(spec: SubagentSpec, cfg: Config, *, model: str | None) -> str | N
     if not spec.wanted:
         return None  # it never asked to be anywhere in particular
 
-    if model == cfg.models.default:
-        return f"runs {model!r}, the same model as the main agent"
+    # Whoever summoned this one, which is the main agent for a delegate a
+    # request activated and the delegate above it for a helper. It used to be
+    # the deployment's default in both cases, and that reading survived only
+    # while nothing above a delegate could name a model of its own: an agent
+    # pinned to `gpt-5` summoning a helper bound to `gpt-5` compared it against
+    # a MiniMax default, found a difference, and let the two run side by side.
+    # Which is the answer this whole function exists to catch.
+    against = cfg.models.default if caller is None else caller
+    whose = "the main agent" if caller is None else "the delegate that summoned it"
+    if model == against:
+        return f"runs {model!r}, the same model as {whose}"
     profile, endpoint = cfg.models.resolve(model)
-    default = _host(cfg.models.resolve()[1].base_url)
-    if _host(endpoint.base_url) == default:
+    summoner = _host(cfg.models.resolve(against)[1].base_url)
+    if _host(endpoint.base_url) == summoner:
+        named = "the default" if caller is None else f"{against!r}"
         return (
             f"runs {model!r} on endpoint {profile.endpoint!r}, which points at the "
-            f"same host as the default ({default})"
+            f"same host as {named} ({summoner})"
         )
     return None
 
@@ -233,6 +303,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     catalogue: Sequence[Found] = (),
     run_on: RunOn | None = None,
     default_model: Any = None,
+    caller: str | None = None,
 ) -> dict[str, Any]:
     """A delegate the workspace built itself, wrapped the way deepagents takes one.
 
@@ -253,23 +324,14 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     of it, so a rename upstream fails `test_the_compiled_shape_is_deepagents_own`
     instead of arriving as something confusing much later.
     """
-    model_id = model_for(spec, cfg, override=run_on)
-    if model_id is not None:
-        try:
-            profile, endpoint = cfg.models.resolve(model_id)
-        except ConfigError as exc:
-            msg = f"subagent {spec.name!r}: {exc}"
-            raise ConfigError(msg) from exc
-        refuse_ungranted_endpoint(
-            profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
-        )
-        model = build_model(profile, endpoint)
-    elif default_model is not None:
-        model = default_model
-    else:
-        # It named nothing, so it runs what the deployment runs -- built here
-        # rather than left to the graph, which would otherwise reach for
-        # `init_chat_model` and read credentials around the catalogue entirely.
+    model = model_object(
+        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model, caller=caller
+    )
+    if model is None:
+        # It named nothing and inherited nothing, so it runs what the deployment
+        # runs -- built here rather than left to the graph, which would otherwise
+        # reach for `init_chat_model` and read credentials around the catalogue
+        # entirely. A graph cannot be handed "no model" the way a spec can.
         model = build_model(*cfg.models.resolve())
 
     # `narrowed` rather than `ceiling`, and the difference is the point.
@@ -318,6 +380,11 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
+    #: The model whoever summoned this delegate is running, by name. `None`
+    #: means the main agent on the deployment's own model, which is what a
+    #: top-level delegate under an unpinned agent has. It is what a definition
+    #: naming no model inherits, and what `distinct` refuses to match.
+    caller: str | None = None,
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
 
@@ -342,6 +409,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             catalogue=catalogue,
             run_on=run_on,
             default_model=default_model,
+            caller=caller,
         )
 
     subagent: dict[str, Any] = {
@@ -436,26 +504,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # goes in and the allowlist decides.
         subagent["tools"] = [one.tool for one in mine] + list(tool_objects or [])
 
-    model_id = model_for(spec, cfg, override=run_on)
-    if model_id is not None:
-        # A lookup, where this used to `replace` four fields of the `Config` and
-        # build from the copy. That copy is why the change happened: a param
-        # nobody remembered to add to it was silently the deployment's own, so
-        # a per-model `max_tokens` would have been dropped without a word. A
-        # profile carries every param, and there is nothing here to forget.
-        try:
-            profile, endpoint = cfg.models.resolve(model_id)
-        except ConfigError as exc:
-            # `resolve` knows the model and the catalogue; only here knows
-            # *who asked*. Without the name the reader is told `gpt-5` cannot be
-            # run and left to grep the catalogue for whoever wanted it -- and
-            # this is the one refusal that fires on a file they may not own.
-            msg = f"subagent {spec.name!r}: {exc}"
-            raise ConfigError(msg) from exc
-        refuse_ungranted_endpoint(
-            profile.endpoint, granted=endpoints, subject=f"subagent {spec.name!r}"
-        )
-        subagent["model"] = build_model(profile, endpoint)
-    elif default_model is not None:
-        subagent["model"] = default_model
+    built = model_object(
+        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model, caller=caller
+    )
+    if built is not None:
+        subagent["model"] = built
     return subagent

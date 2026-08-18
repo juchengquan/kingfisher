@@ -58,6 +58,7 @@ from kingfisher.infrastructure.harness.delegation import (
     as_subagent,
     indistinct,
     model_for,
+    model_object,
     subagent_helpers,
     subagent_middleware,
     subagent_skills,
@@ -916,6 +917,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
             helpers: list[Any] | None = None,
             default_model: Any = None,
             tool_objects: list[Any] | None = None,
+            caller: str | None = None,
         ) -> dict[str, Any]:
             """One delegate, with the request's ceiling on every axis.
 
@@ -929,6 +931,10 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
             tools, its own skills, its own endpoint, each clamped by what the
             *request* granted rather than by the delegate that reached it. The
             caller had to name it too, so the caller has already seen it.
+
+            `caller` is the one thing it does take from above: the model the
+            delegate that summoned it is running, which is what it inherits when
+            it names none and what `distinct` refuses to match.
             """
             return as_subagent(
                 defined[name],
@@ -941,6 +947,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                 skill_sources=skills_sources(roots.registry.folders),
                 helpers=helpers,
                 default_model=default_model,
+                caller=caller,
                 tool_objects=tool_objects,
                 catalogue=walked,
                 run_on=wanted.get(name),
@@ -968,13 +975,52 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
         # two per definition rather than one per path. Handing the explicit
         # model and tools to a top-level delegate instead would work and would
         # cost it the inheritance: it would stop tracking a parent that changed.
-        compiled: dict[tuple[str, bool], Any] = {}
+        #
+        # The summoner's model is part of the key for the same reason position
+        # is: a definition naming no model runs whatever reached it, so `checker`
+        # under a cheap parent and `checker` under an expensive one are two
+        # different agents wearing one name. Bounded by definitions times the
+        # models above them, which is a catalogue's own shape rather than the
+        # number of paths through it.
+        compiled: dict[tuple[str, bool, str | None], Any] = {}
 
-        def _with_helpers(name: str, *, nested: bool) -> Any:
-            key = (name, nested)
+        # What the main agent itself runs, as an object a helper can be handed.
+        # A top-level delegate needs none of this -- deepagents gives it the
+        # agent's own model -- but `SubAgentMiddleware` gives a nested one
+        # nothing, and deepagents refuses a nested spec with no model at all.
+        root = model if model is not None else build_model(*cfg.models.resolve())
+
+        def _with_helpers(
+            name: str, *, nested: bool, inherited: Any = None, caller: str | None = None
+        ) -> Any:
+            key = (name, nested, caller)
             if key not in compiled:
+                # This delegate's own model, before its helpers rather than
+                # after, because they inherit it. `model_for` is the same call
+                # `as_subagent` makes below and answers identically; asking here
+                # only moves *when* an unusable model is refused, from part-way
+                # through building a tree to before it starts.
+                override = wanted.get(name)
+                own = model_for(defined[name], cfg, override=override, caller=caller)
+                mine = model_object(
+                    defined[name],
+                    cfg,
+                    endpoints=capabilities.endpoints,
+                    run_on=override,
+                    inherited=inherited,
+                    caller=caller,
+                )
                 helpers = [
-                    _with_helpers(helper, nested=True)
+                    _with_helpers(
+                        helper,
+                        nested=True,
+                        # Its parent's model, which is what "runs whatever
+                        # summoned it" means one level down. This was the main
+                        # agent's, so a helper under a delegate pinned to the
+                        # cheap model quietly ran the expensive one.
+                        inherited=mine if mine is not None else root,
+                        caller=own if own is not None else caller,
+                    )
                     for helper in subagent_helpers(
                         defined[name], defined, capabilities.subagents
                     )
@@ -982,11 +1028,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                 compiled[key] = _built(
                     name,
                     helpers=helpers or None,
-                    default_model=(
-                        (model if model is not None else build_model(*cfg.models.resolve()))
-                        if nested
-                        else None
-                    ),
+                    default_model=inherited if nested else None,
+                    caller=caller,
                     tool_objects=list(surface.objects.values()) if nested else None,
                 )
             return compiled[key]
