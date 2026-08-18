@@ -48,6 +48,7 @@ from kingfisher.domain.subagent import (
 )
 from kingfisher.domain.tool import Found, Offering
 from kingfisher.infrastructure.catalogue import Definitions, source_of
+from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -71,7 +72,6 @@ from kingfisher.infrastructure.harness.scoping import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
-from kingfisher.infrastructure.layered import for_session
 from kingfisher.infrastructure.prompting import system_prompt
 
 if TYPE_CHECKING:

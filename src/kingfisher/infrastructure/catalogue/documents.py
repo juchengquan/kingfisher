@@ -18,9 +18,14 @@ ones are, so a skill that loaded fine could not be uploaded.
 arrive from a catalogue service under `DefinitionStore`, which makes them input
 rather than something we wrote.
 
-Named `definitions` rather than `fields`: one name across two layers makes
-every import a small act of guessing, which is why `scoping` is not called
-`capabilities` either.
+Named `documents` rather than `definitions`, which is what it was called while
+it sat flat in `infrastructure/`. The old name was chosen against `domain.fields`
+-- one name across two layers makes every import a small act of guessing, which
+is why `scoping` is not called `capabilities` either -- and the move gave it a
+nearer collision than the one it was avoiding: `Definitions`, the deployment's
+three repositories, is defined one file away in this package's `__init__`. Two
+unrelated things a directory listing apart is worse than two related things a
+layer apart. `documents` is what the first line already said it does.
 """
 
 from __future__ import annotations

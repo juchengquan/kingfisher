@@ -34,8 +34,8 @@ from typing import TYPE_CHECKING
 from kingfisher.domain import skill
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

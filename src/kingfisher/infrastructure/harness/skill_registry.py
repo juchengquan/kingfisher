@@ -35,7 +35,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
 from kingfisher.domain.skill import UPLOADED
-from kingfisher.infrastructure.skill_store import reachable
+from kingfisher.infrastructure.catalogue.skills import reachable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

@@ -12,6 +12,7 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
@@ -19,7 +20,6 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build, dispatched, subagents_dir
 
 SUBAGENT = """name: reviewer

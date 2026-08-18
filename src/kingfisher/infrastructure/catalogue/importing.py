@@ -1,6 +1,6 @@
 """Importing a workspace's own Python, without putting it on the import path.
 
-Moved out of `tool_store`, unchanged, because tools stopped being the only kind
+Moved out of `tools`, unchanged, because tools stopped being the only kind
 that is code. A workspace may now define a subagent as a compiled graph, and
 that arrives the same way a tool does: a file or a folder under a catalogue,
 imported into this process and asked what it declares.

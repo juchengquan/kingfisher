@@ -1,7 +1,7 @@
 """Subagent definitions held in a directory on this host.
 
 `domain.subagent` owns the format -- what a definition means and what makes one
-malformed -- and `definitions` turns a document into one. Finding the files is a
+malformed -- and `documents` turns a document into one. Finding the files is a
 third job, and it is this one: nothing in either of those globs a directory.
 
 A class rather than two functions taking the same `Path`. Beyond holding the
@@ -24,8 +24,8 @@ from kingfisher.domain.subagent import (
     declared,
 )
 from kingfisher.domain.tool import reference
-from kingfisher.infrastructure.definitions import read_subagent
-from kingfisher.infrastructure.importing import (
+from kingfisher.infrastructure.catalogue.documents import read_subagent
+from kingfisher.infrastructure.catalogue.importing import (
     PACKAGE_MARKER,
     load,
     modules_in,

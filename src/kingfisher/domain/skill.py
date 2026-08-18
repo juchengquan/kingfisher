@@ -34,8 +34,8 @@ def name_of(document: Mapping[str, object], source: str = FILENAME) -> str:
     """The skill's declared name, which is also its directory name.
 
     Takes decoded fields rather than the document. Reading YAML needs a
-    library, so `infrastructure.definitions` does that half and hands the result
-    here — see `domain.fields` for where the seam falls and why.
+    library, so `infrastructure.catalogue.documents` does that half and hands
+    the result here — see `domain.fields` for where the seam falls and why.
     """
     name = fields.text(document.get("name"))
     if not name:

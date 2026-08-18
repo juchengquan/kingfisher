@@ -24,10 +24,10 @@ from kingfisher.domain.ports import (
 )
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import Offering
-from kingfisher.infrastructure import subagent_store
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from kingfisher.infrastructure.tool_store import LocalToolRepository
+from kingfisher.infrastructure.catalogue import subagents as store
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 
 NOISY = """
 import sys
@@ -120,13 +120,13 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     each came from -- parsed the whole catalogue twice.
     """
     parsed = []
-    real = subagent_store.read_subagent
+    real = store.read_subagent
 
     def counting(text, path):
         parsed.append(path)
         return real(text, path)
 
-    monkeypatch.setattr(subagent_store, "read_subagent", counting)
+    monkeypatch.setattr(store, "read_subagent", counting)
 
     subagents = LocalSubagentRepository(catalogue / "subagents")
     assert set(subagents.specs) == {"alpha"}

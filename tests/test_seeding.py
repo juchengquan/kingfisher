@@ -15,12 +15,12 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure import seeding
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
     build_agent,
 )
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from tests.conftest import subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped
@@ -182,7 +182,7 @@ def test_one_folder_of_grouping_is_not_misplaced(tmp_path):
     """The negative control for the level that now works. Reported here, this
     warning would contradict `--list`'s own skills listing one line above it --
     which is exactly what it did before this was fixed."""
-    from kingfisher.infrastructure.skill_store import LocalSkillRepository
+    from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 
     target = tmp_path / "research" / "lookup" / "SKILL.md"
     target.parent.mkdir(parents=True)
@@ -407,7 +407,7 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.infrastructure.definitions import read_subagent
+    from kingfisher.infrastructure.catalogue.documents import read_subagent
 
     readme = (formats_doc).read_text(encoding="utf-8")
     blocks = [

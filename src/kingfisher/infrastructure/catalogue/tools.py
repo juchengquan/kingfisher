@@ -1,6 +1,7 @@
 """Finding a workspace's own tools on disk.
 
-The third of the store trio, and the odd one out. A skill is markdown and a
+The third of the three kinds this package is named for, and the odd one out.
+A skill is markdown and a
 subagent is a YAML document; both are *data* the agent reads. A tool
 is Python, imported into this process and called in it. There is no format to
 parse here — only a module to import and a decision about what to refuse.
@@ -52,7 +53,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.tool import Found, tool_name
-from kingfisher.infrastructure.importing import (
+from kingfisher.infrastructure.catalogue.importing import (
     PACKAGE_MARKER,
     LoadError,
     load,

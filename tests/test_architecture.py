@@ -166,9 +166,7 @@ def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     return sorted(
         p
         for p in (root / layer).rglob("*.py")
-        if p.name != "__init__.py"
-        and "__pycache__" not in p.parts
-        and CONTENT not in p.parts
+        if "__pycache__" not in p.parts and CONTENT not in p.parts
     )
 
 
@@ -204,18 +202,33 @@ def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
     collection after the real tree changes shape. `import yaml` is the
     violation the domain rule was written for -- the third-party parser that
     sat in `domain/fields.py` while three rules looked straight past it.
+
+    An `__init__.py` counts, and that is the second half of the same defect.
+    The walk skipped them, which was harmless while every one in this package
+    held a docstring and nothing else -- and stopped being harmless the moment
+    `infrastructure/catalogue/` made one hold two hundred and fifty lines,
+    including the package's only edge into the harness. Nine rules would have
+    looked straight past it, exactly as they looked past a subpackage before.
+    Skipping a file because of its name is the same mistake as skipping it
+    because of its depth.
     """
     layer = tmp_path / "domain"
     (layer / "inner").mkdir(parents=True)
     (layer / "__init__.py").touch()
-    (layer / "inner" / "__init__.py").touch()
+    (layer / "inner" / "__init__.py").write_text("import yaml\n", encoding="utf-8")
     (layer / "inner" / "buried.py").write_text("import yaml\n", encoding="utf-8")
     (layer / "shallow.py").write_text("import json\n", encoding="utf-8")
 
     found = _modules_in("domain", root=tmp_path)
 
-    assert [p.relative_to(layer).as_posix() for p in found] == ["inner/buried.py", "shallow.py"]
+    assert [p.relative_to(layer).as_posix() for p in found] == [
+        "__init__.py",
+        "inner/__init__.py",
+        "inner/buried.py",
+        "shallow.py",
+    ]
     assert "yaml" in _imported_modules(layer / "inner" / "buried.py")
+    assert "yaml" in _imported_modules(layer / "inner" / "__init__.py")
 
 
 def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
@@ -684,11 +697,28 @@ def test_a_subpackage_is_judged_by_its_own_area():
     Longest match, so a subpackage can be stricter or looser than its parent
     and the order of a dict does not decide which. Shortest match would let the
     harness's eight packages leak into all thirteen flat modules.
+
+    Every path here exists, and that is not decoration. `_area_of` computes
+    from the path string and never touches disk, so an assertion about a file
+    that has moved goes on passing while being about nothing -- which is what
+    this one did when `catalogue.py` became a package, and the whole suite
+    stayed green. The paths are asserted present so the next move fails here
+    instead.
     """
+    catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
+    buried = SRC / "infrastructure" / "catalogue" / "skills.py"
+    for path in (catalogue, buried, SRC / "domain" / "tool.py", SRC / "config.py"):
+        assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
+
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
-    assert _area_of(SRC / "infrastructure" / "catalogue.py") == "infrastructure"
     assert _area_of(SRC / "domain" / "tool.py") == "domain"
     assert _area_of(SRC / "config.py") == ""
+
+    # A subpackage with no entry of its own is judged by its parent, which is
+    # what lets `catalogue/` inherit `{yaml}` without naming it -- and what
+    # would stop being true the moment someone gave it an entry.
+    assert _area_of(catalogue) == "infrastructure"
+    assert _area_of(buried) == "infrastructure"
 
 
 @pytest.mark.parametrize("path", _package_modules(), ids=_module_id)
@@ -807,6 +837,21 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
 HARNESS = "kingfisher.infrastructure.harness"
 
 
+def _consumer_key(path: Path) -> str:
+    """A module's name below its layer, which is how `HARNESS_EDGES` is keyed.
+
+    Was `path.stem`, and a package broke it: `catalogue/__init__.py` has the
+    stem `__init__`, so the entry whose reason is written beside it stopped
+    matching and the edge read as an unnamed escape. Keyed this way the four
+    existing entries are unchanged -- a move does not get to rewrite the
+    reasons -- and two modules sharing a stem in different layers no longer
+    share one key.
+    """
+    parts = list(path.relative_to(SRC).parts[1:])
+    parts = parts[:-1] if parts[-1] == "__init__.py" else [*parts[:-1], parts[-1][:-3]]
+    return ".".join(parts)
+
+
 def _harness_reach(path: Path) -> set[str]:
     """Which harness modules one flat module imports, by their bare names.
 
@@ -850,7 +895,7 @@ def test_only_the_named_adapters_reach_into_the_harness():
     # `application/service.py` has reached into four harness modules the whole
     # time, unnamed, because this walked one directory.
     for path in _harness_consumers():
-        allowed = HARNESS_EDGES.get(path.stem, frozenset())
+        allowed = HARNESS_EDGES.get(_consumer_key(path), frozenset())
         if extra := _harness_reach(path) - allowed:
             escaped.append(f"{_module_id(path)} -> harness.{{{', '.join(sorted(extra))}}}")
 
@@ -871,7 +916,7 @@ def test_the_harness_rule_looks_at_both_layers():
     is the largest consumer of the harness in the repository and went unwatched
     for as long as this rule walked one directory.
     """
-    walked = {path.stem for path in _harness_consumers()}
+    walked = {_consumer_key(path) for path in _harness_consumers()}
 
     assert "service" in walked, "the rule stopped reading application/"
     assert "inventory" in walked
@@ -889,7 +934,7 @@ def test_every_named_harness_edge_is_a_real_one():
     load-bearing. `THIRD_PARTY` carries the same promise one comment up:
     "measured, not declared".
     """
-    actual = {path.stem: _harness_reach(path) for path in _harness_consumers()}
+    actual = {_consumer_key(path): _harness_reach(path) for path in _harness_consumers()}
     stale = [
         f"{module} -> harness.{{{', '.join(sorted(named - actual.get(module, set())))}}}"
         for module, named in HARNESS_EDGES.items()
@@ -1203,14 +1248,14 @@ def test_only_one_module_decides_what_a_skill_is():
     byte-identical copy of the lookup, so a change to the definition would have
     left `--list` advertising names the validator then rejected.
 
-    `domain.skill` owns the filename and `infrastructure.skill_store` owns the
+    `domain.skill` owns the filename and `infrastructure.catalogue.skills` owns the
     listing. Asserting they *agree* with a caller is tautological once the
     caller imports them; what is worth asserting is that nothing else decides.
     """
     repo = REPO
     owners = {
         SRC / "domain" / "skill.py",
-        SRC / "infrastructure" / "skill_store.py",
+        SRC / "infrastructure" / "catalogue" / "skills.py",
     }
 
     searched = [
@@ -1274,6 +1319,34 @@ def test_the_shipped_definitions_live_only_under_assets():
     assert not stray, (
         f"{stray} hold definitions outside {CONTENT}/ — every rule in this file skips "
         f"{CONTENT}/ as content, so a kind that escapes it ships unread by any of them"
+    )
+
+
+def test_the_catalogue_holds_one_module_per_kind():
+    """The third place the three kinds are written down, bound to the first.
+
+    `DEFINITION_KINDS` is derived from `Definitions`' fields, so those two
+    cannot drift. The module names are the copy with no type and no constant
+    behind it: `skills.py`, `subagents.py` and `tools.py` say "there are three
+    kinds and these are they" as loudly as either, and nothing was holding them
+    to it. A fourth kind added to `Definitions` with no module to read it, or a
+    module renamed out from under the constant, would both have passed.
+
+    The folder is what makes this checkable at all. Flat among thirteen other
+    modules, "one module per kind" was not a shape anything could ask about.
+
+    Subset rather than equality: `layered`, `documents` and `importing` are in
+    this package for good reasons and are not kinds.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    package = SRC / "infrastructure" / "catalogue"
+    modules = {p.stem for p in package.glob("*.py")}
+
+    assert modules, f"{package} holds no modules — this rule is about nothing"
+    assert set(DEFINITION_KINDS) <= modules, (
+        f"{sorted(set(DEFINITION_KINDS) - modules)} is a kind the catalogue reads "
+        "with no module in catalogue/ named for it"
     )
 
 

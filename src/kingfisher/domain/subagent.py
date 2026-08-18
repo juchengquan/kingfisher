@@ -129,7 +129,7 @@ consumer can be added later without changing what a definition may say.
 
 Parsing lives in the domain because this is kingfisher's format, not a library's
 — nothing here knows deepagents exists, and nothing here reads a disk. Finding
-the files is `infrastructure.subagent_store`; translating a spec into deepagents'
+the files is `infrastructure.catalogue.subagents`; translating a spec into
 `SubAgent` is `infrastructure.harness.agent`.
 """
 
@@ -577,7 +577,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 
     Raises `SubagentError` on anything the format forbids. Whether the document
     decoded at all was settled before this — reading YAML needs a library, so
-    `infrastructure.definitions` does that half.
+    `infrastructure.catalogue.documents` does that half.
     """
     # Before the required-field check, so `nmae:` is reported as the typo it is
     # rather than as a missing `name` the author plainly tried to write.

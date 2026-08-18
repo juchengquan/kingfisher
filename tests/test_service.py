@@ -10,8 +10,8 @@ from kingfisher import Kingfisher
 from kingfisher.application.service import opening_events, turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.skill_store import LocalSkillRepository
-from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
+from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
 from tests.conftest import StubCheckpointer, start, subagents_dir
 from tests.test_run import StubAgent

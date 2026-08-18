@@ -1,6 +1,7 @@
 """What a tool is, seen from the domain: an object, and where it came from.
 
-Here rather than in `tool_store` because `ToolRepository` is a port, and a port
+Here rather than in `infrastructure.catalogue.tools` because `ToolRepository` is
+a port, and a port
 in `domain/ports.py` cannot name a type that lives one layer out. Nothing
 foreign travels with it: `tool` is `Any` on purpose and `tool_name` is three
 `getattr` calls, so the pure layer stays pure under the same rule

@@ -343,8 +343,8 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     from functools import cached_property
 
     from kingfisher.infrastructure import catalogue as catalogue_module
-    from kingfisher.infrastructure import layered as layered_module
-    from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
+    from kingfisher.infrastructure.catalogue import layered as layered_module
+    from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
     from tests.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):
