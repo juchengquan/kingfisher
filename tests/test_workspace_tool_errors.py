@@ -268,3 +268,123 @@ def test_the_run_carries_on_to_an_answer(cfg, session_dir):
     )
 
     assert out["messages"][-1].content == "done"
+
+
+# -- and one level down, where delegation put the same tools ----------------
+
+CALLS_IT = """name: helper
+description: Calls the tool that fails.
+tools: [always_fails]
+system_prompt: |
+  You call always_fails.
+"""
+
+
+def _delegate_with_a_failing_tool(cfg, session_dir):
+    """The same graph, one level down: a delegate holding the failing tool.
+
+    A delegate is handed the workspace's tool *objects* -- `SubAgent.tools` is
+    what deepagents registers -- so it can reach exactly the code the parent can.
+    What it inherits none of is the parent's middleware.
+    """
+    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
+    from tests.test_delegation_ceiling import _subagent_graphs
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(CALLS_IT, encoding="utf-8")
+
+    graph = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=_calls("always_fails")),
+        capabilities=Capabilities(subagents=("helper",)),
+    )
+    return _subagent_graphs(graph)["helper"]
+
+
+def test_a_failing_workspace_tool_does_not_stop_a_delegate_either(cfg, session_dir):
+    """The gap the parent's guard left, and the reason it matters more now.
+
+    A delegate ran only when a caller named one, so this path was rare. An agent
+    declares its own roster and `subagents` defaults to everything that roster
+    holds, so the common case is now several delegates holding the workspace's
+    tools -- with the parent's guard on the parent and nothing below it.
+
+    The argument is the one the guard was written with: which tool the model
+    reaches for is not something a deployment can predict, and it is no more
+    predictable one level down.
+    """
+    out = _delegate_with_a_failing_tool(cfg, session_dir).invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
+    )
+
+    failures = [
+        m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"
+    ]
+    assert failures, "the tool's exception never reached the delegate's model"
+    assert "FileNotFoundError" in failures[0].content
+
+
+def test_the_delegate_carries_on_to_an_answer(cfg, session_dir):
+    """Surviving is not enough: the delegate has to finish, or its caller gets
+    nothing back and the run is dead a level higher instead."""
+    out = _delegate_with_a_failing_tool(cfg, session_dir).invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
+    )
+
+    assert out["messages"][-1].content == "done"
+
+
+NESTS = """name: helper
+description: Consults another, which calls the tool that fails.
+subagents: [deeper]
+system_prompt: |
+  You ask deeper.
+"""
+
+DEEPER = """name: deeper
+description: Calls the tool that fails.
+tools: [always_fails]
+system_prompt: |
+  You call always_fails.
+"""
+
+
+def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
+    """Worth its own test rather than assumed from the one above.
+
+    A helper is built by a different call than a delegate the request activated,
+    and this file's neighbour records what that costs: reaching for the
+    top-level instance instead is "an easy mistake that passes", because a
+    standalone delegate has neither the helper nor the bug. Delegation nests to
+    any depth, so an unguarded level is an unguarded run.
+    """
+    from kingfisher.domain.capabilities import Capabilities
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
+    from tests.test_delegation_ceiling import _subagent_graphs
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(NESTS, encoding="utf-8")
+    (subagents_dir(cfg) / "deeper.yaml").write_text(DEEPER, encoding="utf-8")
+
+    graph = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=_calls("always_fails")),
+        capabilities=Capabilities(subagents=("helper", "deeper")),
+    )
+    nested = _subagent_graphs(_subagent_graphs(graph)["helper"])["deeper"]
+
+    out = nested.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 8}
+    )
+
+    assert [m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"]
+    assert out["messages"][-1].content == "done"

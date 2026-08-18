@@ -341,8 +341,10 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, ses
 
     (subagent,) = captured["subagents"]
     assert "tools" not in subagent  # names here would raise inside ToolNode
-    (allowlist,) = subagent["middleware"]
-    assert isinstance(allowlist, ToolAllowlist)
+    # By type rather than by position. A delegate carries guards it did not ask
+    # for -- the host-path correction, and the workspace tools' own failures --
+    # and this test is about the allowlist its definition produced.
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
     assert allowlist._allowed == {"read_file", "glob"}
 
 
