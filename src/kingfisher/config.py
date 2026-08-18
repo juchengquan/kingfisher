@@ -19,8 +19,8 @@ could choose between. It conflated two things: which *wire format* to construct
 and which *endpoint* to send to, welded 1:1 -- so a deployment had exactly one
 endpoint per wire format and two Anthropic-compatible gateways were
 unconfigurable. The wire formats are now a closed registry in
-`infrastructure.models`, keyed by `api`, and endpoints are open data read from
-`models.yaml`. See `docs/design/2026-08-16-model-catalogue.md`.
+`infrastructure.harness.models`, keyed by `api`, and endpoints are open data
+read from `models.yaml`. See `docs/design/2026-08-16-model-catalogue.md`.
 """
 
 from __future__ import annotations
@@ -471,7 +471,7 @@ class Config:
 
         Defaults inside the workspace so scratch is disposed of with it. Point
         it at `/tmp` for one fixed location per machine — but see
-        `infrastructure.backend.prepare_scratch`: `/tmp` is world-writable, so the
+        `infrastructure.harness.backend.prepare_scratch`: `/tmp` is world-writable, so the
         directory is created private and checked before use.
         """
         return self.scratch_root or self.state_dir / "tmp"
@@ -512,7 +512,7 @@ class Config:
 
         A `Kingfisher` may be handed a different mapping, which is the whole
         seam: this is the fallback, not the only source. See
-        `workspace_fs.resolve_definitions`.
+        `infrastructure.catalogue.resolve_definitions`.
 
         Delegated to `definition_roots_for` because `WorkspacePaths` answers the
         same question before a catalogue has been read, and the two must not be

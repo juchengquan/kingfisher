@@ -130,7 +130,7 @@ consumer can be added later without changing what a definition may say.
 Parsing lives in the domain because this is kingfisher's format, not a library's
 — nothing here knows deepagents exists, and nothing here reads a disk. Finding
 the files is `infrastructure.subagent_store`; translating a spec into deepagents'
-`SubAgent` is `infrastructure.agent`.
+`SubAgent` is `infrastructure.harness.agent`.
 """
 
 from __future__ import annotations
@@ -236,7 +236,7 @@ class RunOn:
 
     A name, not a `"provider:model"` string: that spelling is
     `init_chat_model`'s, and resolving a model through *it* is exactly what
-    `infrastructure.models` exists to avoid.
+    `infrastructure.harness.models` exists to avoid.
     """
 
     model: str

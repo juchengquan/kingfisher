@@ -179,7 +179,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     """Print what a request may activate here, which is what `--list` is for.
 
     Neither half is here any more. Working out what is on offer is
-    `infrastructure.inventory`, because this and `--without-skills` were
+    `application.inventory`, because this and `--without-skills` were
     computing it apart; formatting it is `cli.listing`, because `kingfisher
     list` prints the same block and a second copy of a listing is how two
     listings come to disagree.

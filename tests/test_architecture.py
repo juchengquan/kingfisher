@@ -12,6 +12,7 @@ legitimately discuss deepagents at length; it is the `import` that matters.
 from __future__ import annotations
 
 import ast
+import re
 import sys
 from pathlib import Path
 
@@ -276,6 +277,148 @@ def test_the_second_distribution_is_in_scope():
         "the dangling-import rule is not reading service/ — the other distribution "
         "is where a move in src/ lands first"
     )
+
+
+#: The layers a prose reference can be rooted at, and the only form of it that
+#: can be checked. `models.yaml`, `run.py` and `uploads.provision` are shaped
+#: exactly like module paths; `infrastructure.harness.backend` cannot be
+#: anything else. Measured across this repository: the rooted form gives fifty
+#: references and finds thirteen that are wrong, while the unrestricted form
+#: gives 143 and calls 115 of them broken.
+PROSE_LAYERS = ("domain", "application", "infrastructure", "presentation")
+PROSE_REF = re.compile(
+    r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_LAYERS) + r")(?:\.[a-z_]+)+)`"
+)
+
+#: Prose that names a module *because* it is gone, excused per file. Deny by
+#: default like the tables above, and keyed by file rather than by name for a
+#: reason the first draft found: `infrastructure.agent` appears twice in this
+#: repository, once in the docstring explaining which move renamed it and once
+#: in `domain/subagent.py` as a live pointer at where a spec is translated. One
+#: is the rule doing its job and the other is the defect it exists to catch, and
+#: a table keyed by name alone would have to excuse both.
+PROSE_GONE: dict[str, frozenset[str]] = {
+    # The file that owns the rules is the one place a gone module is named on
+    # purpose -- in the docstring of the rule that renaming broke, and in the
+    # negatives below, which are asserted gone rather than merely absent.
+    "tests/test_architecture.py": frozenset({
+        "infrastructure.agent",
+        "infrastructure.backend",
+        "infrastructure.backend.prepare_scratch",
+        "infrastructure.workspace_fs.resolve_definitions",
+    }),
+}
+
+
+def _module_file(name: str) -> Path | None:
+    """The file a dotted name refers to, or `None`.
+
+    Resolved on disk rather than imported, for the reason `_names_a_real_module`
+    gives: reaching `kingfisher.presentation.cli` through `find_spec` executes
+    fastapi on the way, and a rule should have no way to fail for a reason other
+    than the one it is about.
+    """
+    base = SRC.joinpath(*name.split("."))
+    if base.with_suffix(".py").exists():
+        return base.with_suffix(".py")
+    return base / "__init__.py" if (base / "__init__.py").exists() else None
+
+
+def _top_level_names(path: Path) -> set[str]:
+    """What a module defines or imports at its top level.
+
+    Parsed rather than imported, and only ever asked about a module some comment
+    already named, so the cost is a handful of files rather than the tree.
+    """
+    names: set[str] = set()
+    for node in ast.parse(path.read_text(encoding="utf-8")).body:
+        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+            names.add(node.name)
+        elif isinstance(node, ast.Assign):
+            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
+        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+            names.add(node.target.id)
+        elif isinstance(node, (ast.Import, ast.ImportFrom)):
+            names.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+    return names
+
+
+def _prose_unresolved(text: str, excused: frozenset[str] = frozenset()) -> list[str]:
+    """References in some text that name neither a module nor something in one.
+
+    Two answers count as resolved, and the second is why this reads the target
+    file instead of a set of module names. A reference may name a module, or a
+    module and one thing defined in it -- `domain.skill.split` and
+    `infrastructure.harness.backend.prepare_scratch` are both correct prose about
+    a real function, and refusing them would refuse the most useful thing a
+    comment can say.
+
+    Checking the trailing segment is what closes the hole the first draft had.
+    Matching a *parent* was enough to pass, and `infrastructure` is a package,
+    so every `infrastructure.<gone module>` resolved as a package and an
+    attribute nobody looked for -- which is exactly the shape of six of the
+    thirteen references this found on the day it was written.
+    """
+    unresolved = []
+    for ref in PROSE_REF.findall(text):
+        bare = ref.removeprefix("kingfisher.")
+        if bare in excused or _module_file(bare):
+            continue
+        parent, _, last = bare.rpartition(".")
+        target = _module_file(parent)
+        if target is None or last not in _top_level_names(target):
+            unresolved.append(bare)
+    return unresolved
+
+
+def test_prose_naming_a_module_names_one_that_exists():
+    """A comment naming a module makes a claim, and a move falsifies it in silence.
+
+    The rule above does this for `import` statements, and its own docstring says
+    why it checks the path rather than the symbol. Nothing did it for prose, and
+    thirteen references were wrong when this was written -- six of them left by
+    one move, `infrastructure/harness/`, which renamed four modules that eight
+    comments went on naming at the old path.
+
+    The same files as the dangling-import rule, for the reason stated there: the
+    other distributions are where a move here lands first.
+    """
+    stale = []
+    for path in _everything_that_imports_kingfisher():
+        rel = path.relative_to(REPO).as_posix()
+        text = path.read_text(encoding="utf-8")
+        excused = PROSE_GONE.get(rel, frozenset())
+        stale += [f"{rel} -> {ref}" for ref in _prose_unresolved(text, excused)]
+
+    assert not stale, (
+        f"{stale} name kingfisher modules that do not exist — something moved "
+        "and the comment about it did not"
+    )
+
+
+def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
+    """Every reference in the tree resolves once the thirteen are fixed, so the
+    rule above passes whether it discriminates or answers nothing at all. These
+    are the answers the tree cannot supply, and the negatives are the names this
+    commit actually removed -- asserted gone rather than merely absent.
+    """
+    assert _prose_unresolved("`infrastructure.harness.backend`") == []
+    assert _prose_unresolved("`domain.skill.split` and `application.inventory`") == []
+    assert _prose_unresolved("`infrastructure.harness.backend.prepare_scratch`") == []
+
+    assert _prose_unresolved("`infrastructure.backend.prepare_scratch`") == [
+        "infrastructure.backend.prepare_scratch"
+    ]
+    # A package and a name it does not hold. This is the one a parent-only check
+    # let through, and six of the thirteen were this shape.
+    assert _prose_unresolved("`infrastructure.backend`") == ["infrastructure.backend"]
+    # Excused, but only where the table says so.
+    assert _prose_unresolved("`infrastructure.agent`") == ["infrastructure.agent"]
+    assert _prose_unresolved("`infrastructure.agent`", frozenset({"infrastructure.agent"})) == []
+
+    # Not rooted at a layer, so not this rule's business: these are the shapes
+    # that make the unrestricted version unusable.
+    assert _prose_unresolved("`models.yaml`, `run.py`, `importlib.resources`") == []
 
 
 def test_no_rule_here_is_parametrized_over_nothing():
@@ -685,7 +828,7 @@ def test_infrastructure_does_not_reach_back_into_application():
     `Config` lived in the application layer and every adapter imported it,
     inverting the direction this module claims to hold. It sits at the package
     root now, belonging to no layer, and this is what stops it drifting back
-    up. `application/config.py` reads `infrastructure.models` for the
+    up. `application/config.py` reads `infrastructure.harness.models` for the
     credential variable names, which is the legal direction.
     """
     for path in _modules_in("infrastructure"):

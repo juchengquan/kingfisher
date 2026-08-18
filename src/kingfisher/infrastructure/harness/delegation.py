@@ -416,7 +416,8 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # infers its own provider and reads credentials from the environment --
     # around the catalogue, its endpoint's base_url, and every param the
     # profile carries. It also re-enables the profile behaviour that
-    # `infrastructure.models` exists to avoid. So we build the instance ourselves.
+    # `infrastructure.harness.models` exists to avoid. So we build the instance
+    # ourselves.
     #
     # The definition decides, and nothing here second-guesses it. An operator
     # pair -- `KINGFISHER_MODEL_SUBAGENT` / `KINGFISHER_PROVIDER_SUBAGENT` --
