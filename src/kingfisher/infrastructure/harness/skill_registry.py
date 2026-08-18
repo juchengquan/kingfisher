@@ -29,6 +29,7 @@ new place -- so `test_skill_registry` pins the import.
 from __future__ import annotations
 
 from dataclasses import dataclass
+from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import skill
@@ -141,6 +142,16 @@ class SkillRegistry:
     #: this exists to undo.
     offered: Mapping[str, Any]
     unloadable: tuple[str, ...] = ()
+    #: Skills deepagents filed under a name their directory does not have, as
+    #: `(directory, name)`. Loaded, offered, and reachable -- under the name in
+    #: the header, which is the one nobody typed.
+    #:
+    #: Not `unloadable`, and the difference is the whole reason this is separate:
+    #: one is a skill the agent will never hear about, the other is a skill it
+    #: will hear about under another name. Reported rather than refused, because
+    #: deepagents accepts it and refusing here would make a working catalogue
+    #: fail to start over a spelling.
+    misfiled: tuple[tuple[str, str], ...] = ()
     #: The folders under the catalogue root that hold skills, in the order they
     #: were read. What `skills_sources` turns into one source each -- kept here
     #: rather than recomputed there so the labels a caller types and the labels
@@ -163,6 +174,7 @@ class SkillRegistry:
         return SkillRegistry(
             offered={**self.offered, **other.offered},
             unloadable=tuple(sorted({*self.unloadable, *other.unloadable})),
+            misfiled=tuple(sorted({*self.misfiled, *other.misfiled})),
             folders=self.folders,
         )
 
@@ -357,8 +369,24 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
         if root
         else sorted(name for name in repository.names if not any(f"/{name}/" in p for p in kept))
     )
+    # A skill whose header names something its directory does not. deepagents
+    # files it under the header and logs a warning nobody reads, so `--list`
+    # shows a name that is not in the tree and a caller who typed the directory
+    # name gets "unknown skill" for a skill that is plainly there.
+    #
+    # Read off what came back rather than by parsing again: `path` is where the
+    # file is and `name` is what deepagents decided to call it, which is exactly
+    # the pair that can disagree.
+    misfiled = tuple(
+        sorted(
+            (directory, one["name"])
+            for one in loaded
+            if (directory := PurePosixPath(one["path"]).parent.name) != one["name"]
+        )
+    )
     return SkillRegistry(
         offered=offered,
         unloadable=missing,
+        misfiled=misfiled,
         folders=tuple(label for label, _ in found_sources if label != CATALOGUE),
     )

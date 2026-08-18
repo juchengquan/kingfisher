@@ -255,7 +255,8 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
     for name in (
         "workspace", "skills_source", "subagents_source", "builtin_tools", "tools",
         "tool_sources", "tools_error", "skills", "skills_unloadable",
-        "skills_misplaced", "subagents", "subagent_sources", "subagents_error",
+        "skills_misplaced", "skills_misfiled", "subagents", "subagent_sources",
+        "subagents_error",
         "skills_enabled",
     ):
         assert hasattr(found, name), name

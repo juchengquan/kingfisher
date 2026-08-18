@@ -95,11 +95,16 @@ skills, oddly, never did.
   `2026-08-17-skills-from-several-parties.md`. A folder under the root is
   registered as its own source, a skill's identity becomes `source::name`,
   and a bare name that two sources offer is refused rather than resolved.
-- **What to do about `mismatch`.** A folder whose header names something else
-  loads under the header name, so it is neither missing nor wrong -- it is
-  *present under a name nobody typed*. S6 reports what the agent will not load;
-  this one it will load, as something else. Worth a line in the same warning,
-  and not designed here.
+- **What to do about `mismatch`.** Decided: reported, as `misfiled`, in the same
+  warning block as `unloadable` and `misplaced` -- and as its own field rather
+  than folded into either, because the three are different things. One is a
+  skill the agent will never hear about, one sits too deep to load, and this one
+  loads perfectly and answers to a name that is not in the directory tree.
+
+  Reported rather than refused, for the reason S6 gives: deepagents accepts it,
+  so refusing here would stop a working catalogue over a spelling. `--list` and
+  `kingfisher doctor` both name the pair, and the message says both ways out --
+  grant it by the name shown, or rename the directory.
 - **Uploaded skills.** Decided, and it was not a preference in the end -- see
   below. They join the registry, *and* get the check at provisioning time.
 

@@ -83,6 +83,14 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
         yield "     one level down; tools and subagents are read by kingfisher, so"
         yield "     those may nest as deep as you like)"
 
+    # Loaded, offered, and under a name that is not in the tree. deepagents
+    # files a skill by its header and logs a warning nobody reads, so this is
+    # the only place a reader learns why `--skills company-lookup` comes back
+    # unknown for a directory they are looking straight at.
+    for directory, name in found.skills_misfiled:
+        yield f"  ! {directory}/ is offered as {name} — its own header names that instead"
+        yield f"    (grant it as {name}, or rename the directory to match)"
+
     yield "\nsubagents"
     if found.subagents_error is not None:
         yield f"  cannot load: {found.subagents_error}"
@@ -139,6 +147,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "skills": dict(found.skills),
         "skills_unloadable": list(found.skills_unloadable),
         "skills_misplaced": list(found.skills_misplaced),
+        "skills_misfiled": [list(pair) for pair in found.skills_misfiled],
         "skills_enabled": found.skills_enabled,
         "subagents": dict(found.subagents),
         "subagent_sources": dict(found.subagent_sources),

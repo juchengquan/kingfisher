@@ -154,3 +154,49 @@ def test_the_metadata_still_carries_what_the_registry_reads():
     from deepagents.middleware.skills import SkillMetadata
 
     assert {"name", "path", "description"} <= set(SkillMetadata.__annotations__)
+
+
+# -- present, and under a name nobody typed ---------------------------------
+
+
+def test_a_header_naming_something_else_is_reported(cfg):
+    """The gap the two neighbouring reports left open.
+
+    `unloadable` is a skill the agent will never hear about; `misplaced` is one
+    sitting too deep to load. This is neither -- it loads, it is offered, and it
+    answers to a name that is not in the directory tree. deepagents files it by
+    its header and logs a warning nobody reads, so until this the only sign was
+    a caller typing the directory name and being told there is no such skill.
+    """
+    _skill(cfg.skills_dir, "company-lookup", GOOD.format(name="find-company", desc="Looks up."))
+
+    registry = _read(cfg.skills_dir)
+
+    assert registry.names == ("find-company",), "it loads, under the header name"
+    assert registry.unloadable == (), "it is not missing"
+    assert registry.misfiled == (("company-lookup", "find-company"),)
+
+
+def test_a_header_that_agrees_is_not_reported(cfg):
+    """The negative control, and the one that matters most: every well-formed
+    skill in every catalogue takes this path, so a false positive here is a
+    warning on every listing."""
+    _skill(cfg.skills_dir, "tidy", GOOD.format(name="tidy", desc="Tidies."))
+
+    assert _read(cfg.skills_dir).misfiled == ()
+
+
+def test_a_nested_skill_is_judged_by_its_own_directory(cfg):
+    """Not by the folder above it. `research/lookup/` is filed correctly when
+    its header says `lookup`, and the source label is not part of the name."""
+    _skill(cfg.skills_dir, "research/lookup", GOOD.format(name="lookup", desc="Looks up."))
+
+    assert _read(cfg.skills_dir).misfiled == ()
+
+
+def test_a_nested_skill_can_be_misfiled_too(cfg):
+    """And the report names the directory, not the reference -- it is the
+    directory somebody has to rename."""
+    _skill(cfg.skills_dir, "research/lookup", GOOD.format(name="finder", desc="Finds."))
+
+    assert _read(cfg.skills_dir).misfiled == (("lookup", "finder"),)

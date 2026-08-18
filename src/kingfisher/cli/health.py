@@ -135,7 +135,19 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
         detail += ", and KINGFISHER_SKILLS is off so none will be offered"
+    # `misfiled` is not hidden -- the agent has it. It is a warning of its own
+    # because the failure is a caller typing the directory name and being told
+    # there is no such skill.
     hidden = found.skills_unloadable + found.skills_misplaced
+    if found.skills_misfiled:
+        yield Check(
+            "skill names",
+            "warn",
+            f"{len(found.skills_misfiled)} offered under a name their directory "
+            f"does not have: "
+            + ", ".join(f"{d}/ as {n}" for d, n in found.skills_misfiled),
+            "grant them by the name shown, or rename the directory to match",
+        )
     if hidden:
         yield Check(
             "skills",
