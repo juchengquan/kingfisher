@@ -145,6 +145,28 @@ against the parser's own choices both ways -- because a table turns an unwired
 verb from a wrong answer into a `KeyError` in front of whoever typed it, which
 is louder and still too late.
 
+## Corrections
+
+**"The environment only, no `.env`" was too broad, and it broke a real
+deployment.** The argument was that `load_dotenv()` searches *upward from the
+calling file*, which for an installed package starts in `site-packages` and
+finds either nothing or something nobody meant. That is true, and it is about
+the *search*. Running it together with the file was the mistake: a checkout
+keeps its keys in `.env`, so `kingfisher list` failed where `main.py --list`
+worked, with the key three lines away in a file.
+
+`load_dotenv(".env", override=False)` keeps the objection and loses the
+breakage. A relative path resolves against the working directory and stops, so
+it reads the one beside you or nothing -- never a parent's, never
+`site-packages`. The environment still wins, because an explicit
+`KINGFISHER_WORKSPACE=... kingfisher list` must not be replaced by a file the
+caller may not have known was there.
+
+The hint on a configuration error changed with it. It said `.env` is never read,
+which was true and was why this failed; it names the path it read and whether it
+was there, because the reader standing one directory from theirs is being told
+about a variable that is set, just not here.
+
 ## Still undecided
 
 - **Whether to publish at all — deferred, deliberately, and asked twice.**

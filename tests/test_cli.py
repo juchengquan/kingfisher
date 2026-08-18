@@ -10,6 +10,8 @@ enforces that against every module here; these are about what the command does.
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import pytest
 
 from kingfisher.presentation.cli.__main__ import main
@@ -104,7 +106,12 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
 
     printed = capsys.readouterr().err
     assert "configuration error" in printed
-    assert "`.env` is not loaded" in printed
+    # Where the answer would have come from. It said `.env` is never read, which
+    # was true and was the reason this failed where `main.py` worked; now the
+    # useful thing is *which* file was read, since a caller one directory from
+    # theirs is told about a variable that is set, just not here.
+    assert "the environment and" in printed
+    assert ".env" in printed
 
 
 def test_an_unknown_verb_is_refused(capsys):
@@ -557,3 +564,89 @@ def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeyp
     printed = capsys.readouterr().out
     assert "company-lookup/ is offered as find-company" in printed
     assert "rename the directory to match" in printed
+
+
+# -- `./.env`, and nowhere else --------------------------------------------
+
+
+def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys):
+    """The failure this was written for.
+
+    A checkout keeps its keys in `.env`, and reading the environment alone left
+    `kingfisher list` failing on a deployment where `main.py --list` worked --
+    with the key three lines away in a file.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        f"KINGFISHER_WORKSPACE={tmp_path / 'ws'}\n", encoding="utf-8"
+    )
+    monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
+
+    assert main(["seed"]) == 0
+
+    assert (tmp_path / "ws").is_dir()
+
+
+def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
+    """The objection that was right, kept.
+
+    `load_dotenv()` with no argument walks *upward* from the calling file, which
+    for an installed package starts in `site-packages`. Naming the path is what
+    takes that away, so a file one directory up must stay invisible -- somebody
+    standing in a subdirectory should not silently inherit it.
+    """
+    (tmp_path / ".env").write_text("KINGFISHER_WORKSPACE=/should/never/be/read\n", encoding="utf-8")
+    below = tmp_path / "below"
+    below.mkdir()
+    monkeypatch.chdir(below)
+    monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
+
+    assert main(["seed"]) == 2  # no workspace named anywhere it looked
+
+    assert not Path("/should/never/be/read").exists()
+
+
+def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys):
+    """`override=False`, and it matters.
+
+    Somebody writing `KINGFISHER_WORKSPACE=... kingfisher seed` has said exactly
+    where they mean. A file they may not have known was in the directory must
+    not quietly replace it.
+    """
+    monkeypatch.chdir(tmp_path)
+    (tmp_path / ".env").write_text(
+        f"KINGFISHER_WORKSPACE={tmp_path / 'from-the-file'}\n", encoding="utf-8"
+    )
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "from-the-shell"))
+
+    assert main(["seed"]) == 0
+
+    assert (tmp_path / "from-the-shell").is_dir()
+    assert not (tmp_path / "from-the-file").exists()
+
+
+def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys):
+    """An installed kingfisher usually has none, so absent must be silent and
+    must not stop the command reaching the environment."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    assert not (tmp_path / ".env").exists()
+
+    assert main(["seed"]) == 0
+
+    assert (tmp_path / "ws").is_dir()
+
+
+def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
+    """A caller standing one directory from theirs is told about a variable that
+    is set, just not here. Naming the path is the difference between that and a
+    hunt."""
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
+
+    assert main(["list"]) == 2
+
+    printed = capsys.readouterr().err
+    assert str(tmp_path / ".env") in printed
+    assert "not found" in printed
