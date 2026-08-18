@@ -416,6 +416,73 @@ def build_backend(
 # model can act on, and the error is raised twenty lines up.
 
 
+class WorkspaceToolErrors(AgentMiddleware):
+    """Turn a workspace tool's exception into a failed tool result.
+
+    A built-in reports its failures through `_tool_error` and the model carries
+    on; `HostPathGuard` below gives a rejected host path the same treatment. A
+    workspace tool had neither, so upstream's default applied -- bad *arguments*
+    are converted, everything else is re-raised -- and one wrong path killed a
+    sixteen-call run. Measured, on one deployment: the same mistake through
+    `read_file` cost nothing, and through `csv_profile` cost the run. Which of
+    the two happened depended on the tool the model reached for, which the
+    deployment cannot predict.
+
+    Not swallowing. `status="error"` and the text carried whole, so the model
+    sees a failure rather than a value and the transcript records it. The
+    objection this answers -- that catching everything would "hide real faults
+    behind a retry" -- is about hiding, and a failed tool result is the opposite:
+    a tool that always raises now fails `recursion_limit` times in a log
+    somebody can read, rather than once with a traceback.
+
+    Only tools the workspace defined. Built-ins already report properly and
+    `HostPathGuard` covers the one thing they do not; widening this to them
+    would put a second opinion between deepagents and its own error handling.
+
+    `BaseException` is deliberately not caught -- an interrupt or a memory error
+    is not a tool telling the model something.
+    """
+
+    def __init__(self, names: frozenset[str]) -> None:
+        super().__init__()
+        self.names = names
+
+    def _mine(self, request: Any) -> str | None:
+        """The tool's name if this middleware speaks for it, else `None`."""
+        name = request.tool_call.get("name")
+        return name if name in self.names else None
+
+    def _as_tool_error(self, request: Any, exc: Exception) -> ToolMessage:
+        call = request.tool_call
+        # The type as well as the message. A workspace tool is somebody else's
+        # code and its exceptions were not written to be read by a model, so
+        # `FileNotFoundError: /data/x.csv` reads far better than the path alone.
+        return ToolMessage(
+            content=f"Error: {type(exc).__name__}: {exc}",
+            tool_call_id=call.get("id", ""),
+            name=call.get("name"),
+            status="error",
+        )
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        try:
+            return handler(request)
+        except Exception as exc:
+            if self._mine(request) is None:
+                raise
+            return self._as_tool_error(request, exc)
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        try:
+            return await handler(request)
+        except Exception as exc:
+            if self._mine(request) is None:
+                raise
+            return self._as_tool_error(request, exc)
+
+
 class HostPathGuard(AgentMiddleware):
     """Turn a rejected host path back into something the agent can act on.
 

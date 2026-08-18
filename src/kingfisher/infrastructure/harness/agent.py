@@ -51,6 +51,7 @@ from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
     SKILLS_ROUTE,
     HostPathGuard,
+    WorkspaceToolErrors,
     build_backend,
     skills_sources,
 )
@@ -867,6 +868,16 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     # The catalogue walked these when the deployment was wired; a caller that
     # has already walked them itself -- `--list` -- still wins.
     walked = tuple(roots.tools.found if workspace_tools is None else workspace_tools)
+
+    # Appended here rather than beside `HostPathGuard` above, because it needs
+    # the names and they are not known until now. `assemble` closes over the
+    # list, so anything added before it runs is in the built agent.
+    #
+    # Every walked tool, not the granted ones: a request that activated none of
+    # them cannot reach one, and narrowing this to the grant would mean building
+    # the guard from a set that is computed after it.
+    if walked:
+        middleware.append(WorkspaceToolErrors(frozenset(entry.name for entry in walked)))
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(
