@@ -374,8 +374,13 @@ more line:
 model: gpt-5            # an entry in your models.yaml
 ```
 
-Omit it and the delegate runs whatever the deployment runs. That is the usual
-case, and `reviewer` is the shipped example of it.
+Omit it and the delegate runs whatever *summoned* it — the main agent, or the
+delegate that called this one. That is the usual case, and `reviewer` is the
+shipped example of it: re-checking a figure is work for the same model that
+produced it, whichever one that turned out to be.
+
+Which makes the two settings opposites, and they are. Say nothing and you match
+your caller. Say `distinct: true` and you must not.
 
 There was a `provider:` beside it, naming an endpoint by style, and a rule that
 the two moved together. Both are gone. An endpoint is a property of the model —
@@ -439,7 +444,7 @@ not bound for still costs nothing until you use them.
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | An entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. May be a list, tried in order |
 | `alias` | optional | A general name your `models.yaml` binds to a model. For a definition that knows what *kind* of model it needs and cannot know its name. Not with `model`. May be a list, and an alias you never bound is passed over rather than fatal |
-| `distinct` | optional | `true` when running beside the main agent defeats this delegate. Turns "ended up on the same model" from a note in the run report into a refusal, and is what makes a list of candidates worth writing |
+| `distinct` | optional | `true` when running on the same model as whatever summoned it defeats this delegate. Turns "ended up on the same model" from a note in the run report into a refusal, and is what makes a list of candidates worth writing |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 ### A delegate that consults another
