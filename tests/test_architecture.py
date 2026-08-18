@@ -72,14 +72,60 @@ REPO = _repository_root()
 SRC = REPO / "src" / "kingfisher"
 
 
+def _package_of(path: Path) -> tuple[str, ...]:
+    """The dotted package a module sits in, walked rather than counted.
+
+    Climbs while there is an `__init__.py`, so it answers the same way for the
+    real tree and for the fake ones these tests build -- and does not need to
+    know where `src/` is, which is the assumption every other way of finding
+    this has eventually got wrong here.
+    """
+    parts: list[str] = []
+    directory = path.parent
+    while (directory / "__init__.py").is_file():
+        parts.append(directory.name)
+        directory = directory.parent
+    return tuple(reversed(parts))
+
+
 def _imported_modules(path: Path) -> set[str]:
+    """Every module this file imports, relative ones resolved to their real name.
+
+    Relative imports were dropped, not resolved: the guard was `elif
+    isinstance(node, ast.ImportFrom) and node.module`, and `from . import x`
+    has no `module` at all. So it contributed nothing, and every rule in this
+    file reported success without having looked.
+
+    That is exploitable rather than merely untidy. `from .. import config` in a
+    domain module is the import the domain rule exists to refuse -- the layer
+    reading deployment configuration -- and it was invisible, while the same
+    import written out was caught. A rule that depends on which spelling
+    someone used is not a rule.
+
+    Resolved rather than refused, so the analysis reads relative imports as
+    what they are. Refusing them would be this file legislating a style because
+    it could not parse one, and `assets/` already uses them for a reason of its
+    own: those files are copied out into a workspace, where nothing is named
+    `kingfisher` any more.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
+    package = _package_of(path)
     modules: set[str] = set()
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
             modules.update(alias.name for alias in node.names)
-        elif isinstance(node, ast.ImportFrom) and node.module:
-            modules.add(node.module)
+        elif isinstance(node, ast.ImportFrom):
+            if not node.level:
+                if node.module:
+                    modules.add(node.module)
+                continue
+            # `.` is this package, `..` its parent, and so on.
+            base = package[: max(len(package) - (node.level - 1), 0)]
+            if node.module:
+                modules.add(".".join((*base, node.module)))
+            else:
+                # `from . import x` imports modules, so each name is one.
+                modules.update(".".join((*base, alias.name)) for alias in node.names)
     return modules
 
 
@@ -169,6 +215,40 @@ def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
 
     assert [p.relative_to(layer).as_posix() for p in found] == ["inner/buried.py", "shallow.py"]
     assert "yaml" in _imported_modules(layer / "inner" / "buried.py")
+
+
+def test_a_relative_import_is_read_as_the_module_it_reaches(tmp_path):
+    """`from .. import config` in a domain module used to pass every rule here.
+
+    The collector kept only `node.module`, and a relative import written that
+    way has none -- so the import contributed nothing and the rules reported
+    success without having looked. Written out as
+    `from kingfisher.config import Config` the same import was caught, which
+    made the layer boundary a question of spelling.
+
+    Built against a fake tree for the reason the collection test above is: it
+    has to keep testing the resolution after the real one changes shape. Both
+    forms are checked, because they fail differently -- one was invisible, the
+    other was read as a foreign top-level package.
+    """
+    package = tmp_path / "kingfisher"
+    (package / "domain").mkdir(parents=True)
+    (package / "__init__.py").touch()
+    (package / "domain" / "__init__.py").touch()
+    (package / "config.py").touch()
+    module = package / "domain" / "subagent.py"
+    module.write_text(
+        "from . import fields\nfrom .. import config\nfrom .capabilities import ALL\n",
+        encoding="utf-8",
+    )
+
+    found = _imported_modules(module)
+
+    assert found == {
+        "kingfisher.domain.fields",  # `.` is this package
+        "kingfisher.config",  # `..` is its parent -- the one that was invisible
+        "kingfisher.domain.capabilities",  # and a dotted form resolves too
+    }
 
 
 def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
