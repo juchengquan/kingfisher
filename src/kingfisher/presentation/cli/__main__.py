@@ -10,13 +10,23 @@ money, which is right for a driver you type daily and wrong for a stranger's
 first contact. Flags would force a default to be invented, and there is no good
 one.
 
-**The environment only, no `.env`** -- which is where this differs from
-`main.py`, deliberately, and the difference is visible: run both `--list`s in a
-checkout and they disagree about `KINGFISHER_SKILLS`. `load_dotenv()` with no
-argument searches upward from the *calling file*, which for an installed package
-is `site-packages`, so what it finds is either nothing or something nobody meant.
-`main.py` is a driver in a checkout and that search is exactly right for it.
-`kingfisher-server` reads the environment and so does this.
+**`./.env` if there is one, and nowhere else.** This read the environment
+alone at first, on the grounds that `load_dotenv()` with no argument searches
+*upward from the calling file* -- which for an installed package starts in
+`site-packages` and finds either nothing or something nobody meant.
+
+That objection is sound and it is about the search, not about the file. The two
+were run together and the conclusion was too broad: a checkout keeps its keys in
+`.env`, so `kingfisher list` failed on a deployment where `main.py --list`
+worked, with the key sitting in a file three lines away. Naming the path takes
+the search away and leaves the file, which is what was wanted.
+
+Relative on purpose. `load_dotenv(".env")` resolves against the working
+directory and stops there, so it finds the one beside you or nothing -- never
+one belonging to a parent, and never one under `site-packages`. Values already
+in the environment win, which is what `override=False` is for: an explicit
+`KINGFISHER_WORKSPACE=... kingfisher list` must not be quietly replaced by a
+file the caller may not have known was there.
 """
 
 from __future__ import annotations
@@ -25,6 +35,8 @@ import argparse
 import json
 import sys
 from pathlib import Path
+
+from dotenv import load_dotenv
 
 from kingfisher import (
     ConfigError,
@@ -36,6 +48,12 @@ from kingfisher import (
 )
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, render
+
+#: Read from the working directory and nowhere else. A bare `load_dotenv()`
+#: walks up looking for one, which is the behaviour this deliberately does not
+#: have -- a command should not pick up a file two directories above the one you
+#: are standing in.
+ENV_FILE = ".env"
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -279,6 +297,11 @@ HANDLERS = {
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Before anything reads the environment, and it must not become a reason to
+    # depend on being in a checkout: absent is the ordinary case for an
+    # installed kingfisher, and `load_dotenv` returns False rather than raising.
+    load_dotenv(ENV_FILE, override=False)
+
     parser = build_parser()
     args = parser.parse_args(sys.argv[1:] if argv is None else argv)
 
@@ -292,10 +315,15 @@ def main(argv: list[str] | None = None) -> int:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.
         print(f"configuration error: {exc}", file=sys.stderr)
-        # Said because the other driver reads a `.env` and this one does not:
-        # somebody who has one and is being told a variable is unset would
-        # otherwise go looking in the file rather than at their shell.
-        print("kingfisher reads the environment; `.env` is not loaded", file=sys.stderr)
+        # Where the answer would have come from, said only when it is somewhere
+        # the reader is not. This used to say `.env` is never read -- true then,
+        # and the reason this command failed while `main.py` worked with the key
+        # three lines away in a file. Now the useful thing to say is *which*
+        # file was read, because a caller standing one directory from theirs
+        # gets a message about a variable that is set, just not here.
+        where = Path(ENV_FILE).resolve()
+        found = "read" if Path(ENV_FILE).is_file() else "not found"
+        print(f"configuration comes from the environment and {where} ({found})", file=sys.stderr)
         return 2
 
 

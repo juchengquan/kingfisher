@@ -387,7 +387,11 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # to install it. The rule below keeps the *library* clear of it; this area is
     # not covered by that rule, which is what makes naming it here the decision
     # rather than an oversight.
-    "presentation/cli": frozenset({"kingfisher_service"}),
+    # `dotenv` because the command reads `./.env` before anything asks the
+    # environment. A driver's business rather than the library's: `from_env`
+    # takes a mapping and does not care where it came from, which is what keeps
+    # this on one side of the line.
+    "presentation/cli": frozenset({"kingfisher_service", "dotenv"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
     # the table is total and an unlisted area cannot mean "anything goes".
     "domain": frozenset(),
