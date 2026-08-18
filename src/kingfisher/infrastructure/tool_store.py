@@ -46,14 +46,18 @@ calls. It changes where a person looks for the file, which is what it is for.
 
 from __future__ import annotations
 
-import importlib.util
-import sys
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.tool import Found, tool_name
+from kingfisher.infrastructure.importing import (
+    PACKAGE_MARKER,
+    LoadError,
+    load,
+    modules_in,
+)
 
 if TYPE_CHECKING:
     pass
@@ -70,139 +74,13 @@ __all__ = [
 #: What a module must define: the tools it contributes, as a sequence.
 EXPORT = "TOOLS"
 
-#: The package marker. A subfolder holding one is a unit rather than a pile:
-#: it states its exports once, in here, and nothing inside it is scanned.
-PACKAGE_MARKER = "__init__.py"
+class ToolError(LoadError):
+    """A workspace's tool module could not be loaded, or should not be.
 
-#: The namespace every workspace module is imported under. Never registered and
-#: never on `sys.path`: it exists to make a module name unique, nothing more. A
-#: package resolves its own relative imports against *itself*, so no parent has
-#: to exist -- measured, after writing one that turned out to do nothing.
-_NAMESPACE = "kingfisher_workspace_tools"
-
-
-class ToolError(ValueError):
-    """A workspace's tool module could not be loaded, or should not be."""
-
-
-def _module_name(path: Path) -> str:
-    """A name no other workspace file can collide with.
-
-    Keyed on the full path rather than the stem: two workspaces with a
-    `maths.py` each must not share an entry in `sys.modules`, and neither
-    should a workspace file and a real installed package.
+    A `LoadError` since the loader moved to `importing`, so the shared code can
+    raise the caller's own error and a reader still sees the word for the
+    catalogue they were editing.
     """
-    return f"{_NAMESPACE}.{path.stem}_{abs(hash(str(path)))}"
-
-
-def _import(path: Path) -> Any:
-    """Import one file, or one package, without putting it on the import path.
-
-    A directory is imported as a package: the spec is built from its
-    `__init__.py` and told the directory is where its submodules live, which is
-    the whole of what makes `from .client import resolve` resolve. A tool that
-    grew helpers is the reason to write a folder at all, so the folder has to
-    import the way Python says a folder imports.
-    """
-    is_package = path.is_dir()
-    source = path / PACKAGE_MARKER if is_package else path
-
-    module_name = _module_name(path)
-    spec = importlib.util.spec_from_file_location(
-        module_name,
-        source,
-        submodule_search_locations=[str(path)] if is_package else None,
-    )
-    if spec is None or spec.loader is None:  # pragma: no cover -- defensive
-        msg = f"{path.name}: cannot be imported as a module"
-        raise ToolError(msg)
-
-    module = importlib.util.module_from_spec(spec)
-    sys.modules[module_name] = module
-    try:
-        # Importing writes `__pycache__` beside the source, which here means
-        # inside the tools catalogue -- a directory holding what a person
-        # authored, and the one an operator is most likely to keep under version
-        # control. Bytecode there is noise in `git status` at best and something
-        # committed at worst.
-        #
-        # Suppressed rather than deleted afterwards, so nothing is created to
-        # clean up. Global for the length of one `exec_module` and restored
-        # either way: a concurrent import elsewhere might skip its own cache
-        # once, which costs a recompile and nothing else. The alternative,
-        # `sys.pycache_prefix`, redirects every module in the process rather
-        # than these few.
-        written = sys.dont_write_bytecode
-        sys.dont_write_bytecode = True
-        try:
-            spec.loader.exec_module(module)
-        finally:
-            sys.dont_write_bytecode = written
-    except Exception as exc:
-        del sys.modules[module_name]
-        # The file name matters more than the traceback here: the reader is
-        # someone who just added a tool, not someone debugging kingfisher.
-        msg = _relative_import_advice(path, exc) or f"{path.name}: {type(exc).__name__}: {exc}"
-        raise ToolError(msg) from exc
-    return module
-
-
-def _relative_import_advice(path: Path, exc: Exception) -> str | None:
-    """Turn a leaked internal module name into the thing to actually do.
-
-    A loose file cannot use a relative import: it is loaded as a module with no
-    parent package, so `from .client import x` resolves against the namespace
-    this loader invents and fails naming it -- which tells a reader nothing
-    except that kingfisher has internals. The fix is always the same, and it is
-    the feature next door: make the folder a package.
-    """
-    if not isinstance(exc, ModuleNotFoundError) or _NAMESPACE not in str(exc.name or ""):
-        return None
-    return (
-        f"{path.name}: a relative import needs a package, and this file is loaded on "
-        f"its own. Add {PACKAGE_MARKER} to {path.parent.name}/ and declare {EXPORT} "
-        f"there -- then its modules import from each other normally."
-    )
-
-
-def _skipped(name: str) -> bool:
-    """Directories a walk must not descend into, nor a file be read from.
-
-    New because the exposure is new. A one-level scan could never reach a
-    virtualenv or a build directory left under `tools/`; a recursive one can,
-    and this module *imports what it finds*. `__pycache__` is the one that
-    turns up by accident -- importing a workspace tool once leaves it behind.
-    """
-    return name.startswith(".") or name == "__pycache__"
-
-
-def _modules_in(directory: Path) -> list[Path]:
-    """Every module a directory contributes, deepest layout first resolved.
-
-    Two shapes, and `__init__.py` is the switch between them:
-
-    * a folder holding one is a **package** -- one unit, imported whole, its
-      exports declared once in `__init__.py`. The walk stops there, because
-      descending would scan the helper modules it exists to hold as though each
-      were a tool file.
-    * anything else is **organisation** -- files are independent, nested as
-      deep as you like, and each declares its own tools exactly as a flat one
-      always did.
-
-    Sorted so two workspaces holding the same files build the same agent.
-    """
-    found: list[Path] = []
-    for entry in sorted(directory.iterdir()):
-        if _skipped(entry.name):
-            continue
-        if entry.is_dir():
-            if (entry / PACKAGE_MARKER).is_file():
-                found.append(entry)  # a package: one module, not a directory to walk
-            else:
-                found.extend(_modules_in(entry))
-        elif entry.suffix == ".py" and not entry.name.startswith("_"):
-            found.append(entry)
-    return found
 
 
 @dataclass(frozen=True)
@@ -249,7 +127,7 @@ class LocalToolRepository:
 
         found: list[Found] = []
         claimed: dict[str, str] = {}
-        for path in _modules_in(directory):
+        for path in modules_in(directory):
             # Relative to the catalogue, so an error names something a reader
             # can go and open. `find_company.py` is ambiguous once three folders
             # may hold one; `research/find_company.py` is not. A package keeps
@@ -257,7 +135,7 @@ class LocalToolRepository:
             # there.
             where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
 
-            module = _import(path)
+            module = load(path, declares=EXPORT, error=ToolError)
             exported = getattr(module, EXPORT, None)
             if exported is None:
                 declared_in = f"{where}{PACKAGE_MARKER}" if path.is_dir() else where
