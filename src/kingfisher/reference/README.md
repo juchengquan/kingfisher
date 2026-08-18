@@ -486,24 +486,27 @@ So write the prompt to work both ways — *"if you can get a second opinion on a
 contested figure, do; if not, flag it"* — because the caller decides, not the
 file.
 
-**One level.** A helper works alone. A file named as somebody's helper may not
-declare helpers of its own, and a catalogue that asks for it is refused when
-the definitions load, naming both files:
+**Any depth, no loops.** A helper may name helpers of its own, and so may
+those. What a catalogue may not do is come back to where it started — and that
+is checked over the whole catalogue when the definitions load, not per request,
+because a set of files is either coherent or it is not:
 
 ```
-'reviewer' names 'second-opinion' as a helper, but 'second-opinion' names
-helpers of its own (extractor); delegation goes one level, so either
-'reviewer' stops naming 'second-opinion' or 'second-opinion' stops naming its own
+subagents reach themselves: reviewer -> second-opinion -> reviewer. Delegation
+nests to any depth, so a loop would build without end -- one of these has to
+stop naming the next
 ```
 
-That bound is what makes a loop impossible: `reviewer` → `second-opinion` →
-`reviewer` needs a helper with helpers, and there is no such thing.
+The message names the whole loop rather than one edge of it, because one edge
+does not say which link to cut and whoever reads it may own none of the files.
 
-It does mean a file can mean different things depending on who reached it.
-`second-opinion.yaml` may consult `reviewer` while callers name it directly,
-and stops being allowed to the moment `reviewer` names it as a helper — so
-adding one line to one file can invalidate another that nobody touched. The
-error names both, because whoever reads it may own neither.
+A definition may appear in several places — two delegates may both consult the
+same `checker` — and reaching one twice is not a loop. Each is built once for
+each position it occupies rather than once per route to it, so a wide catalogue
+costs what it has, not what it can describe.
+
+Depth costs you nothing to *declare*. It costs on every axis that matters at
+run time, which is the next paragraph.
 
 **What it costs.** Every level is a real conversation with a real model. A
 helper's tokens are on your bill and in the run log, attributed to it by name,

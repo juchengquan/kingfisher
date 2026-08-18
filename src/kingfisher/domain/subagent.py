@@ -42,11 +42,12 @@ The second half was not. A spec carries `middleware`, and `SubAgentMiddleware`
 is exactly what supplies `task`, so the format could always express it through
 a field it already had.
 
-One level. A helper is built by a call that is not passed helpers of its own,
-so a cycle cannot form -- not because one is detected, but because the code
-that would build the second level never runs. `refuse_helpers_with_helpers`
-refuses a *catalogue* that asks for one, so nobody writes a `subagents:` line
-that is silently ignored.
+Any depth. A helper may name helpers of its own, so a cycle *can* form, and
+`refuse_cycles` is the only thing stopping one -- checked over the whole
+catalogue when it loads rather than per request, because a set of definitions is
+either coherent or it is not. This was bounded at one level until delegation
+learned to nest, and the bound was structural: the call that would build the
+second level was simply never made.
 
 `model` names what this delegate runs, out of the models `models.yaml`
 defines. Omitted, it runs whatever the deployment runs. It is granted like
@@ -238,11 +239,11 @@ class SubagentSpec:
     #: means none -- like `skills`, and for the same reason: a delegate that
     #: needed the whole catalogue would not have been worth defining.
     #:
-    #: One level. A delegate named here is built without helpers of its own, so
-    #: a cycle cannot form -- not because one is detected, but because the code
-    #: that would build it never runs. `refuse_helpers_with_helpers` refuses the
-    #: *catalogue* that would ask for one, so nobody writes a file whose
-    #: `subagents:` is silently ignored.
+    #: Any depth: a delegate named here may name its own. `refuse_cycles` is
+    #: what stops a catalogue coming back to where it started, and it runs over
+    #: the whole catalogue at load, so nobody writes a `subagents:` line that is
+    #: silently ignored. Each definition is built once per position it holds
+    #: rather than once per route to it, which is what makes reuse affordable.
     subagents: Selection = None
     #: What this delegate runs, by model name, out of what the catalogue
     #: defines. `None` means the deployment's own. Naming one decides where the
@@ -480,38 +481,72 @@ def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:
         raise CapabilityError(msg)
 
 
-def refuse_helpers_with_helpers(specs: Mapping[str, SubagentSpec]) -> None:
-    """Refuse a catalogue where a delegate's helper has helpers of its own.
+def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
+    """Refuse a catalogue where delegation can reach itself.
 
-    Delegation goes one level: a delegate may consult a helper, and the helper
-    works alone. That bound is what makes a cycle impossible -- `reviewer`
-    naming `second-opinion` naming `reviewer` needs a helper with helpers, and
-    there is no such thing.
+    Delegation nests to any depth, so this is the only thing standing between a
+    catalogue and an agent that builds forever. It replaces a rule that bounded
+    the depth at one -- `refuse_helpers_with_helpers` -- which made a cycle
+    impossible by making the shape impossible, and cost every catalogue the
+    ability to say `a` consults `b` consults `c`.
 
-    Enforced on the *catalogue* rather than per request, so it does not depend
-    on which delegates a caller happened to activate: a set of definitions is
-    either coherent or it is not. And enforced rather than ignored, because a
-    file whose `subagents:` silently did nothing is the failure this format
-    refuses unknown keys to avoid, arriving through a key it does define.
+    Enforced on the *catalogue* rather than per request, for the reason the old
+    rule was: a set of definitions is either coherent or it is not, whoever
+    activates what. A per-request check would pass for one caller and fail for
+    another against identical files. It also falls out of work already being
+    done -- compiling each definition once needs a dependency order, and a cycle
+    is precisely what makes one impossible.
 
-    The consequence belongs in the message, and in the README: the same file
-    means different things depending on who reached it. `second-opinion.yaml`
-    may consult `reviewer` when a caller names it directly, and may not once
-    `reviewer` names it as a helper. So one file's contents constrain another's,
-    and both names have to appear or the error cannot be acted on -- whoever
-    reads it may own neither file.
+    What it does *not* bound is cost, and that is worth stating because it is
+    the assumption this rule invites. A catalogue with no cycle at all can still
+    describe an enormous number of paths; compiling once per definition rather
+    than once per path is what makes that free, and lives in `delegation`.
+
+    The message names the whole loop rather than one edge of it, the same way a
+    tool collision names both files: whoever reads it may own none of them, and
+    an edge alone does not say which link to cut.
     """
-    for name, spec in sorted(specs.items()):
-        for helper in spec.subagents or ():
-            nested = specs.get(helper)
-            if nested is not None and nested.subagents:
+    # Iterative depth-first, so a catalogue deep enough to matter cannot take
+    # the interpreter's recursion limit with it -- the one bound this rule
+    # removes is the one that used to make that impossible.
+    seen: set[str] = set()
+    for start in sorted(specs):
+        if start in seen:
+            continue
+        path: list[str] = []
+        on_path: set[str] = set()
+        stack: list[tuple[str, bool]] = [(start, False)]
+        while stack:
+            name, leaving = stack.pop()
+            if leaving:
+                on_path.discard(path.pop())
+                continue
+            # `on_path` before `seen`, and the order is the whole check: a node
+            # reached twice is ordinary in a DAG, a node reached while still on
+            # the current path is the loop. Testing `seen` first skipped straight
+            # past every cycle and reported a clean catalogue.
+            if name in on_path:
+                loop = [*path[path.index(name) :], name]
                 msg = (
-                    f"{name!r} names {helper!r} as a helper, but {helper!r} names "
-                    f"helpers of its own ({', '.join(nested.subagents)}); delegation "
-                    f"goes one level, so either {name!r} stops naming {helper!r} or "
-                    f"{helper!r} stops naming its own"
+                    f"subagents reach themselves: {' -> '.join(loop)}. Delegation "
+                    f"nests to any depth, so a loop would build without end -- one "
+                    f"of these has to stop naming the next"
                 )
                 raise SubagentError(msg)
+            if name in seen:
+                continue
+            path.append(name)
+            on_path.add(name)
+            seen.add(name)
+            stack.append((name, True))
+            spec = specs.get(name)
+            named = () if spec is None or spec.subagents in (ALL, None) else spec.subagents
+            # Reverse-sorted onto a stack, so they pop in order and a loop is
+            # reported by the same path every time rather than by whichever
+            # branch the dict happened to yield first.
+            for helper in sorted(named, reverse=True):
+                if helper in specs:
+                    stack.append((helper, False))
 
 
 @dataclass(frozen=True)

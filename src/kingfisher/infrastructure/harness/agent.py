@@ -43,7 +43,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.subagent import (
     RunOn,
-    refuse_helpers_with_helpers,
+    refuse_cycles,
     refuse_two_of_a_name,
 )
 from kingfisher.domain.tool import Found, Offering
@@ -637,7 +637,7 @@ def _activated_subagents(
     # the merged set is known and before anything reads a single spec. An
     # upload can break it by shadowing a catalogue name, which is why it cannot
     # be checked at seed time and left at that.
-    refuse_helpers_with_helpers(defined)
+    refuse_cycles(defined)
     # There is deliberately *no* matching check that every definition names a
     # runnable model. It was written and taken out again: the two rules look
     # alike and are not. Helper depth is structural -- a catalogue asking for
@@ -706,9 +706,10 @@ def _resolve_tools(
     )
 
 
-def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
-    # injectable collaborator, and folding them into a parameter object would
-    # hide exactly what a test is allowed to substitute.
+def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argument
+    # is one injectable collaborator, and the body is the wiring itself: every
+    # statement attaches one thing to the graph, so splitting it would move the
+    # wiring somewhere a reader has to go and find rather than shortening it.
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
@@ -861,10 +862,11 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
         ) -> dict[str, Any]:
             """One delegate, with the request's ceiling on every axis.
 
-            `helpers` is passed for a delegate and omitted for a helper, and
-            that omission is the entire depth bound -- there is no counter and
-            no cycle check, because the call that would build a second level is
-            simply not made. A test asserts the recursion stays absent.
+            `helpers` is whatever this delegate names, built first. The
+            recursion is the feature: delegation nests to any depth, and what
+            stops it running forever is `refuse_cycles` on the catalogue rather
+            than a bound here. This used to omit `helpers` for a helper, and
+            that omission *was* the depth bound.
 
             A helper is otherwise built exactly like any other delegate: its own
             tools, its own skills, its own endpoint, each clamped by what the
@@ -890,23 +892,49 @@ def build_agent(  # noqa: PLR0913 -- the composition root; each argument is one
                 ),
             )
 
-        extras["subagents"] = [
-            _built(
-                n,
-                helpers=[
-                    _built(
-                        helper,
-                        default_model=(
-                            model if model is not None else build_model(*cfg.models.resolve())
-                        ),
-                        tool_objects=list(surface.objects.values()),
+        # One compiled agent per definition, however many places it appears.
+        # Not an optimisation: compiling per *path* is exponential in the shape
+        # of the catalogue, and a catalogue with no cycle at all can describe an
+        # enormous number of paths. Measured -- 15 definitions each naming three
+        # is 6,872 compilations and seven seconds, twenty is two and a half
+        # minutes. Compiled once each, the same catalogue is twenty.
+        #
+        # Safe because `refuse_cycles` already ran: a definition cannot be
+        # in-flight when it is asked for again, so this needs no re-entry guard.
+        # Keyed by name *and position*, because the two are not the same agent.
+        # A delegate the request activated is registered by `create_deep_agent`
+        # and inherits its model and its built-in tools; one nested inside
+        # another is built by `SubAgentMiddleware` and inherits nothing --
+        # deepagents refuses a nested spec with no `model` outright.
+        #
+        # So a definition used in both places compiles twice, which is still
+        # two per definition rather than one per path. Handing the explicit
+        # model and tools to a top-level delegate instead would work and would
+        # cost it the inheritance: it would stop tracking a parent that changed.
+        compiled: dict[tuple[str, bool], Any] = {}
+
+        def _with_helpers(name: str, *, nested: bool) -> Any:
+            key = (name, nested)
+            if key not in compiled:
+                helpers = [
+                    _with_helpers(helper, nested=True)
+                    for helper in subagent_helpers(
+                        defined[name], defined, capabilities.subagents
                     )
-                    for helper in subagent_helpers(defined[n], defined, capabilities.subagents)
                 ]
-                or None,
-            )
-            for n in activated
-        ]
+                compiled[key] = _built(
+                    name,
+                    helpers=helpers or None,
+                    default_model=(
+                        (model if model is not None else build_model(*cfg.models.resolve()))
+                        if nested
+                        else None
+                    ),
+                    tool_objects=list(surface.objects.values()) if nested else None,
+                )
+            return compiled[key]
+
+        extras["subagents"] = [_with_helpers(n, nested=False) for n in activated]
 
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))

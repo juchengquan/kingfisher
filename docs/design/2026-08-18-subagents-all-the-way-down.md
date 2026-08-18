@@ -1,6 +1,6 @@
 # Subagents of subagents, with no cycles
 
-**Status:** planned.
+**Status:** implemented.
 **Date:** 2026-08-18
 
 Delegation goes one level today: a request activates delegates, a delegate may
@@ -66,14 +66,37 @@ typing without weakening the grant. Deliberately held until someone hits the
 long line, because a grant syntax added before anyone needs it is one nobody can
 judge.
 
-## Still to settle, while building
+## Settled while building
 
-- **The runtime depth.** Nothing here bounds how deep a *turn* recurses, only
-  how deep the catalogue nests. `recursion_limit` is set per run and may or may
-  not already cover it.
-- **`DeclaredDelegatesOnly` at every level.** It refuses `task` to a delegate
-  the request did not declare, and exists because deepagents adds an
-  unrestricted `general-purpose` delegate wherever `task` is. Whether that is
-  now needed on each nested agent rather than only the top has not been checked.
-- **What a cycle's message says.** Naming the loop rather than one edge of it,
-  the way the collision refusals name both files.
+**`DeclaredDelegatesOnly` stays where it is, and that was measured.** It refuses
+`task` to a delegate the request did not declare, and exists because deepagents
+supplies an unrestricted `general-purpose` delegate "with the same capabilities
+as the main agent". The question was whether a nested agent now gets one too --
+it holds `task`, so it would be the obvious place. It does not:
+`create_deep_agent` adds that delegate and `SubAgentMiddleware` does not. A test
+pins it, because an upstream change here would hand back everything a request
+withheld, one level down where nothing is watching.
+
+**A definition is compiled once per position, not once per route.** Two
+positions rather than one, and the reason is not an optimisation: a top-level
+delegate inherits its model and built-in tools from `create_deep_agent`, while a
+nested one is refused outright by deepagents without them. So a definition used
+both ways compiles twice -- still linear, where per-route is exponential.
+
+**The message names the whole loop**, `reviewer -> second-opinion -> reviewer`,
+for the reason a tool collision names both files: one edge does not say which
+link to cut, and whoever reads it may own none of them.
+
+**The runtime depth is not bounded here and is not the same question.** Each
+delegation is its own graph invocation with its own `recursion_limit`, so depth
+in the catalogue does not consume a parent's budget. What it does consume is
+tokens and wall clock, which the README already says.
+
+## Found while building
+
+**Testing `seen` before the path passed every cycle.** The first version of
+`refuse_cycles` marked a node visited on arrival and skipped anything already
+seen -- which is correct for a DAG walk and silently correct-looking here. A
+self-loop, a two-cycle and a three-cycle all reported a clean catalogue. The
+order is the whole check: a node reached twice is ordinary, a node reached while
+still on the path being walked is the loop.

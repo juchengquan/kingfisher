@@ -136,12 +136,16 @@ def test_the_reviewer_preset_consults_the_second_opinion(shipped):
     assert specs["second-opinion"].subagents is None  # a helper works alone
 
 
-def test_the_shipped_catalogue_obeys_the_one_level_rule(shipped):
+def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     """Seeding a catalogue that refuses to load would be the worst kind of
-    preset: copied, broken on the first run, and the format blamed."""
-    from kingfisher.domain.subagent import refuse_helpers_with_helpers
+    example: copied, broken on the first run, and the format blamed.
 
-    refuse_helpers_with_helpers(LocalSubagentRepository(shipped / "subagents").specs)
+    It checked the one-level rule until delegation learned to nest. The rule
+    that replaced it is the only thing left that a catalogue can violate here,
+    so this follows it rather than being deleted."""
+    from kingfisher.domain.subagent import refuse_cycles
+
+    refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
 
 
 @pytest.mark.parametrize(
