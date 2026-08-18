@@ -2,10 +2,14 @@
 
 from __future__ import annotations
 
+import operator
 from dataclasses import replace
+from typing import Annotated, Any
 
 import pytest
 from langchain_core.messages import AIMessage
+from langgraph.graph import END, START, StateGraph
+from typing_extensions import TypedDict
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import (
@@ -16,7 +20,7 @@ from kingfisher.infrastructure.harness.agent import (
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.scoping import ScopedSkills, ToolAllowlist
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel, capture_build, dispatched
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -274,13 +278,12 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
     """Pins the introspection the check above depends on. If deepagents or
     LangGraph moves the tool node, this fails loudly here rather than silently
     turning tool validation into a no-op."""
-    from kingfisher.infrastructure.harness.agent import registered_tools
 
     graph = build_agent(
         cfg,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]))
-    names = registered_tools(graph)
+    names = dispatched(graph)
 
     assert {"read_file", "write_file", "edit_file", "ls", "glob", "grep"} <= set(names)
     assert "execute" in names  # the shell
@@ -288,9 +291,17 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
+    """Still no crash, and now it says which of the two answers it is giving.
+
+    `()` was both "dispatches nothing" and "cannot read this", which was fine
+    while every graph here was one `build_agent` made. It stops being fine the
+    moment kingfisher is handed a graph it did not build, because a listing that
+    prints "no tools" for a graph it could not read has stated a fact it does
+    not have.
+    """
     from kingfisher.infrastructure.harness.agent import registered_tools
 
-    assert registered_tools(object()) == ()
+    assert registered_tools(object()) is None
 
 
 RESTRICTED_SUBAGENT = """name: reader
@@ -485,3 +496,92 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, 
 
     (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
     assert spec["model"].model == "cheap-model"
+
+
+# -- none, versus could not tell -------------------------------------------
+
+
+class _CustomState(TypedDict):
+    """At module scope on purpose.
+
+    `from __future__ import annotations` makes every annotation a string, and a
+    `TypedDict` resolves its own against the *module* globals -- so declaring
+    this inside a function gives `NameError: Annotated` at class creation.
+    """
+
+    messages: Annotated[list, operator.add]
+
+
+def _hand_written_graph():
+    """A graph kingfisher did not build: no model node, no tool node.
+
+    The shape a compiled subagent may have, and the reason the two answers had
+    to come apart.
+    """
+    # ty reads langgraph's `StateT` bound as unsatisfied by a
+    # `typing_extensions.TypedDict` under `from __future__ import annotations`.
+    # The graph compiles and runs; the limitation is in the checker's model of
+    # the bound, and narrowing the suppression to these two lines keeps it from
+    # covering anything else in the file.
+    builder = StateGraph(_CustomState)  # ty: ignore[invalid-argument-type]
+    def work(_state: _CustomState) -> dict[str, Any]:
+        return {"messages": []}
+
+    builder.add_node("work", work)  # ty: ignore[invalid-argument-type]
+    builder.add_edge(START, "work")
+    builder.add_edge("work", END)
+    return builder.compile()
+
+
+def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
+    """Measured, because the obvious reading is wrong: `create_agent(tools=[])`
+    compiles to `['__start__', 'model']` with **no tool node at all**, which is
+    exactly the shape of a graph that dispatches nothing for a different reason.
+    The `model` node is what separates them."""
+    from langchain.agents import create_agent
+
+    from kingfisher.infrastructure.harness.agent import registered_tools
+
+    assert registered_tools(create_agent(fake_model, tools=[])) == ()
+
+
+def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
+    from kingfisher.infrastructure.harness.agent import registered_tools
+
+    assert registered_tools(_hand_written_graph()) is None
+
+
+def test_a_real_build_is_readable(cfg, session_dir):
+    """The pin. Every other caller reads `None` as "assume nothing" so that an
+    upstream rename cannot take down a build -- which means an upstream rename
+    would otherwise be silent, and the built-in set would quietly empty.
+
+    So this is where it fails instead: a graph `build_agent` made must always be
+    readable, and must dispatch something.
+    """
+    from kingfisher.infrastructure.harness.agent import build_agent, registered_tools
+
+    names = registered_tools(build_agent(cfg, session_dir=session_dir, model=None))
+
+    assert names is not None, "a graph we built must be readable"
+    assert names, "and must dispatch something"
+
+
+def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
+    """The reason any of this changed. `--list` reported no built-in tools for a
+    graph it failed to read, which is a fact it did not have -- and it looked
+    exactly like a deployment that genuinely had none.
+
+    Patched at `harness.agent`, which is where `inventory` imports it from at
+    call time.
+    """
+    from kingfisher.infrastructure import inventory as inventory_module
+    from kingfisher.infrastructure.harness import agent as agent_module
+
+    monkeypatch.setattr(agent_module, "registered_tools", lambda _graph: None)
+
+    found = inventory_module.inventory(cfg)
+
+    assert found.builtin_tools == ()
+    assert found.tools_error is not None
+    assert "unknown" in found.tools_error

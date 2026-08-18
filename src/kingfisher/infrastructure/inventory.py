@@ -148,8 +148,19 @@ def inventory(cfg: Config, *, catalogue: Catalogue | None = None) -> Inventory:
                     workspace_tools=found,
                 )
             )
-        defined = {entry.name for entry in found}
-        builtin = tuple(name for name in introspected if name not in defined)
+        if introspected is None:
+            # The graph compiled and then could not be read, which means the
+            # built-in set is unknown rather than empty. Carried as an error for
+            # the same reason the others are: a listing is where someone goes
+            # *because* something is broken, and printing "(none)" here would
+            # answer a question we did not manage to ask.
+            tools_error = (
+                "built-in tools could not be read from the compiled agent -- the graph "
+                "has no shape this version recognises, so what it dispatches is unknown"
+            )
+        else:
+            defined = {entry.name for entry in found}
+            builtin = tuple(name for name in introspected if name not in defined)
     except ToolError as exc:
         tools_error = str(exc)
 
