@@ -766,17 +766,35 @@ def _resolve_tools(
     )
 
 
-def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; each
-    # argument is one injectable collaborator, and the body is the wiring itself:
-    # every statement attaches one thing to the graph, so splitting it would move
-    # the wiring somewhere a reader has to go and find rather than shortening it.
-    #
-    # `PLR0912` joined the other two the day two branches landed within an hour
-    # of each other -- a request naming its agent, and a guard for workspace
-    # tool failures. Each was green alone and they were 13 together, which is
-    # the same fact the other two record: a wiring function grows a branch every
-    # time something becomes optional, and counting them measures how much this
-    # deployment can vary rather than how hard this is to read.
+def _running(
+    agent: AgentSpec | None, cfg: Config, endpoints: Selection, injected: Any
+) -> tuple[str | None, Any]:
+    """What this agent runs: its model id, and the instance to build the graph on.
+
+    Both, from one place, because the two must not disagree. The instance is
+    what the graph calls; the id is what a delegate's `distinct` is measured
+    against, since a delegate compares itself with whatever summoned it and at
+    the top that is the agent.
+
+    An injected model still wins. A caller handing one in has said the catalogue
+    is not the subject -- but the *id* is still the agent's, because what the
+    file asked for is what a delegate should be judged against either way.
+
+    Lifted out of `build_agent` rather than left inline, and not only for the
+    branch count: the composition root is one statement per thing attached to
+    the graph, and this was three working out one value between them.
+    """
+    if agent is None:
+        return None, injected or build_model(*cfg.models.resolve())
+    wanted = model_for(agent, cfg)
+    mine = model_object(agent, cfg, endpoints=endpoints)
+    return wanted, injected or mine or build_model(*cfg.models.resolve())
+
+
+def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argument
+    # is one injectable collaborator, and the body is the wiring itself: every
+    # statement attaches one thing to the graph, so splitting it would move the
+    # wiring somewhere a reader has to go and find rather than shortening it.
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
@@ -807,12 +825,16 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     already carries anti-overuse guidance and a finishing convention that would
     only be rewritten worse.
     """
-    capabilities = capabilities or Capabilities()
-    if agent is not None:
-        # The agent file is the baseline and the request only ever subtracts
-        # from it. One lattice, applied in the one direction it already goes:
-        # what a caller asks for cannot exceed what the definition declared.
-        capabilities = agent.declares.intersect(capabilities)
+    # The agent file is the baseline and the request only ever subtracts from
+    # it. One lattice, applied in the one direction it already goes: what a
+    # caller asks for cannot exceed what the definition declared.
+    #
+    # Written as an expression rather than an `if`, and not for the branch
+    # count alone: `Capabilities().intersect(asked)` is not the identity -- it
+    # would zero `models`, whose default is `None` -- so there is no neutral
+    # left-hand side to fold this into.
+    asked = capabilities or Capabilities()
+    capabilities = agent.declares.intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
     resolved_backend = _backend_for(cfg, session_dir, backend, roots)
     # Unconditional: the backend rejects host paths on every run, so the
@@ -867,18 +889,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         interpreter_at = len(middleware)
         middleware.append(_interpreter(cfg, None))
 
-    # What this agent runs, resolved once: the id for the delegates below --
-    # `distinct` is measured against whatever summoned a delegate, and at the
-    # top that is the agent -- and the instance for the graph itself. An
-    # injected `model=` still wins, since a test handing one in has said the
-    # catalogue is not the subject.
-    agent_model_id = model_for(agent, cfg) if agent is not None else None
-    agent_model = (
-        model_object(agent, cfg, endpoints=capabilities.endpoints)
-        if agent is not None
-        else None
-    )
-    running = model or agent_model or build_model(*cfg.models.resolve())
+    agent_model_id, running = _running(agent, cfg, capabilities.endpoints, model)
 
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
