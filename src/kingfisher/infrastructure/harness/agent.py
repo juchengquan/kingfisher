@@ -766,10 +766,17 @@ def _resolve_tools(
     )
 
 
-def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argument
-    # is one injectable collaborator, and the body is the wiring itself: every
-    # statement attaches one thing to the graph, so splitting it would move the
-    # wiring somewhere a reader has to go and find rather than shortening it.
+def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; each
+    # argument is one injectable collaborator, and the body is the wiring itself:
+    # every statement attaches one thing to the graph, so splitting it would move
+    # the wiring somewhere a reader has to go and find rather than shortening it.
+    #
+    # `PLR0912` joined the other two the day two branches landed within an hour
+    # of each other -- a request naming its agent, and a guard for workspace
+    # tool failures. Each was green alone and they were 13 together, which is
+    # the same fact the other two record: a wiring function grows a branch every
+    # time something becomes optional, and counting them measures how much this
+    # deployment can vary rather than how hard this is to read.
     cfg: Config,
     *,
     capabilities: Capabilities | None = None,
