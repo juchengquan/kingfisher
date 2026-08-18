@@ -138,6 +138,7 @@ from collections.abc import Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any
 
 from kingfisher.domain import fields
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
@@ -246,7 +247,12 @@ class SubagentSpec:
 
     name: str
     description: str
-    system_prompt: str
+    #: The delegate's whole instruction -- or empty, when `build` carries it
+    #: instead. Exactly one of the two is set, checked below rather than
+    #: promised: a spec with neither builds a delegate with no instructions, and
+    #: a spec with both has said one thing twice with no rule for which wins --
+    #: which is the argument `model` and `alias` already make about themselves.
+    system_prompt: str = ""
     #: The two tool axes, granted apart because they are offered apart: the
     #: built-ins come with deepagents, `tools` is what this workspace wrote.
     #: One list meant a delegate could not ask for a workspace tool without
@@ -337,6 +343,184 @@ class SubagentSpec:
     #: Read by whatever loads the catalogue, not by the run -- see the module
     #: docstring for why the seam into a turn was left unbuilt.
     metadata: Mapping[str, object] = field(default_factory=dict)
+    #: What assembles this delegate, when a workspace declared it in Python
+    #: rather than YAML. Called with a model and the tools it was granted, and
+    #: it returns a graph deepagents runs as given.
+    #:
+    #: `Any` for the same reason `domain.tool.Found.tool` is, and it is worth
+    #: being as honest about it here. What this holds is, in practice, a
+    #: callable returning a LangGraph graph. The domain never calls one, never
+    #: imports the type and never depends on its shape -- it carries the thing
+    #: from the loader that imported it to the adapter that runs it. If that
+    #: stops being true, the fix is a domain-owned description of a graph, not a
+    #: wider import here.
+    #:
+    #: `derived`, so it is not in `KNOWN`: a YAML document cannot write it, and
+    #: writing `build:` in one is refused like any other key this format does
+    #: not define. The Python declaration has its own key set, `DECLARED`.
+    build: Any = field(default=None, metadata={"derived": True})
+
+    def __post_init__(self) -> None:
+        """Exactly one of `system_prompt` and `build`.
+
+        A `ValueError` rather than `SubagentError`, and deliberately: both
+        parsers refuse this case with a message naming the file, so reaching
+        here means a spec was constructed in code. That is a programming
+        mistake rather than a malformed definition, and the two should not
+        arrive at the caller looking alike.
+        """
+        if bool(self.system_prompt) == (self.build is not None):
+            written = "both a system_prompt and a build" if self.system_prompt else "neither"
+            msg = f"subagent {self.name!r} has {written}; a delegate is one or the other"
+            raise ValueError(msg)
+
+
+
+#: What a module must define: the subagents it contributes, as a sequence.
+#: Declared, never inferred -- the same rule `TOOLS` makes, and here it is not
+#: even a preference. A compiled subagent is a plain `dict` at runtime, so there
+#: is no type to search for, and searching for "a mapping with a `build` key"
+#: would find imported names too: `from .base import RESEARCHER`, written to
+#: compose one delegate into another, would offer `RESEARCHER` as a delegate
+#: nobody meant to expose.
+EXPORT = "SUBAGENTS"
+
+#: Every key a Python declaration may write. Deliberately not `KNOWN`: the two
+#: formats describe the same delegate and do not describe it with the same
+#: words, and a shared set would have to be the union, which permits each format
+#: the other's keys.
+DECLARED: frozenset[str] = frozenset(
+    {
+        "name",
+        "description",
+        "build",
+        "tools",
+        "model",
+        "alias",
+        "distinct",
+        "metadata",
+    }
+)
+
+#: Keys the YAML format defines that a Python declaration may not, each with the
+#: reason. Named individually rather than folded into "unknown key", because
+#: every one of them is a thing a reader would reasonably expect to work -- and
+#: the answer is not "not yet", it is that deepagents would ignore it.
+NOT_COMPILED: Mapping[str, str] = MappingProxyType(
+    {
+        "builtin_tools": (
+            "deepagents' own tools are built inside the parent's assembly and do "
+            "not exist as objects when a delegate is put together, so there is "
+            "nothing to hand a graph. A compiled subagent brings its own"
+        ),
+        "system_prompt": (
+            "a compiled subagent brings its own graph, and whatever prompt it "
+            "uses is inside it. Write the prompt where the graph is built"
+        ),
+        "skills": (
+            "deepagents mounts skills for a delegate it builds; it runs a "
+            "compiled graph as given and never adds a skills middleware to it. "
+            "Read what the delegate needs inside the graph instead"
+        ),
+        "middleware": (
+            "middleware is wrapped around a graph deepagents builds. A compiled "
+            "one is already built, so naming middleware here would be a line "
+            "that does nothing"
+        ),
+        "subagents": (
+            "delegation reaches a delegate through the `task` tool its own "
+            "middleware supplies, and a compiled graph is given no middleware. "
+            "Build the nesting into the graph if it needs it"
+        ),
+    }
+)
+
+
+def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
+    """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
+
+    The Python sibling of `parse`, and it reads the same fields by the same
+    rules: `tools` narrows the same way, `alias` binds the same way, `distinct`
+    refuses the same way. What differs is one key -- `build` where a document
+    writes `system_prompt` -- and four the other format has that this one
+    cannot honour.
+
+    Those four are refused rather than ignored for the reason the whole
+    `REFUSED` table exists: a definition writing a line that does nothing reads
+    tighter than the delegate it produces, and nothing in the output says so.
+
+    `source` is a string rather than a `Path` because a declaration is one entry
+    of a list in a file, not a file -- `researcher.py` names it as precisely as
+    anything can, and the name inside it does the rest.
+    """
+    if not isinstance(entry, Mapping):
+        msg = (
+            f"{source}: every entry of {EXPORT} must be a mapping with a "
+            f"'name', a 'description' and a 'build'; got {type(entry).__name__}"
+        )
+        raise SubagentError(msg)
+
+    if declined := sorted(set(entry) & set(NOT_COMPILED)):
+        reasons = "; ".join(f"{key!r} -- {NOT_COMPILED[key]}" for key in declined)
+        msg = f"{source}: {reasons}"
+        raise SubagentError(msg)
+
+    if unknown := sorted(set(entry) - DECLARED):
+        msg = (
+            f"{source}: {EXPORT} entry names {unknown}, which this format does not "
+            f"define; it takes {sorted(DECLARED)}"
+        )
+        raise SubagentError(msg)
+
+    for required in ("name", "description", "build"):
+        if required not in entry:
+            msg = f"{source}: {EXPORT} entry is missing {required!r}"
+            raise SubagentError(msg)
+
+    build = entry["build"]
+    if not callable(build):
+        msg = (
+            f"{source}: 'build' is {type(build).__name__}, which cannot be called. "
+            f"It is given a model and the tools this delegate was granted, and "
+            f"returns the graph to run"
+        )
+        raise SubagentError(msg)
+
+    if entry.get("model") and entry.get("alias"):
+        msg = (
+            f"{source}: names both a model and an alias; an alias *is* a model "
+            f"name once this deployment binds it, so name one or the other"
+        )
+        raise SubagentError(msg)
+
+    where = Path(source)
+    wanted = _wanted(entry)
+    distinct = _flag(entry.get("distinct"), key="distinct", source=where)
+    if distinct and not wanted:
+        msg = (
+            f"{source}: 'distinct: True' with no model or alias -- with nothing named, "
+            f"this delegate runs the deployment's own model, which is exactly what "
+            f"'distinct' refuses; name what it may run instead"
+        )
+        raise SubagentError(msg)
+
+    written_tools = _selected(entry.get("tools"), absent=ALL, key="tools", source=where)
+    return SubagentSpec(
+        name=fields.text(entry["name"]),
+        description=fields.text(entry["description"]),
+        build=build,
+        # Not `ALL`, which is what a document that stays quiet means. A
+        # compiled graph is handed the workspace tools it was granted and
+        # nothing else, so claiming every built-in would be a ceiling nothing
+        # can fill -- and `--run` would report a delegate withholding tools it
+        # was never able to have.
+        builtin_tools=None,
+        tools=written_tools,
+        tool_sources=_claimed_sources(written_tools),
+        wanted=wanted,
+        distinct=distinct,
+        metadata=_metadata(entry, where),
+    )
 
 
 def _metadata(document: Mapping[str, object], source: Path) -> Mapping[str, object]:

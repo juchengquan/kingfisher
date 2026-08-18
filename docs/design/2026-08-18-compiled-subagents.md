@@ -145,6 +145,36 @@ whether its tools were confirmed. Making it a *grant* was considered and
 rejected: anyone who can add a file here can add one to `tools/`, so the switch
 adds a step and protects nothing.
 
+## Three things this got wrong, found while building phases 2 and 3
+
+**`builtin_tools` cannot be honoured, so it is refused.** The example above
+writes one. Traced through, deepagents' own tools are constructed inside the
+parent's assembly and exist as objects only after it — `tool_objects` is passed
+to a *helper* and is `None` for a top-level delegate. There is nothing to hand a
+graph, so accepting the key would be a line that does nothing, which is the
+thing `REFUSED` exists to prevent. It joins `system_prompt`, `skills`,
+`middleware` and `subagents` in `NOT_COMPILED`, each with its own reason.
+
+The spec's `builtin_tools` is set to `None` rather than left at `ALL` for the
+same reason: a ceiling nothing can fill would have `--run` reporting a delegate
+withholding tools it was never able to have.
+
+**S12 was too broad.** "An unrecognised extension is an error" was written
+before S4 and S5 let a folder be a Python package. A package is entitled to hold
+what it needs beside its `__init__.py` — a JSON fixture, a prompt in a text file
+— and refusing every unfamiliar suffix would break that for the sake of one
+confusion. So the one confusion is named: `.yml` is refused, because it is valid
+YAML everywhere else and a file spelled that way is a definition somebody wrote
+and kingfisher silently did not read.
+
+**S11 applies one step later than it reads.** "Validate against
+`CompiledSubAgent.__required_keys__`" sounds like it governs what a file
+declares. It does not: a declaration is kingfisher's own format, with `build`
+where deepagents has `runnable`, so kingfisher owns its key set exactly as it
+owns the YAML one. deepagents' declaration governs the dict we *hand over*, and
+that is where it is pinned. The useful consequence is that discovery needs no
+deepagents at all, and therefore no new entry in `HARNESS_EDGES`.
+
 ## Phases
 
 | # | What | Verification |
