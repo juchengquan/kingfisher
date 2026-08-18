@@ -232,6 +232,15 @@ class Models:
     #: `model_for("main")`, deleted for being the wrong granularity, and reusing
     #: it would revive the vocabulary of the thing that was removed.
     aliases: Mapping[str, str] = field(default_factory=dict)
+    #: Models this file defines that this machine cannot reach, and why -- keyed
+    #: by model name, valued as the clause `resolve` drops into its refusal.
+    #:
+    #: Not somewhere to look a model up. `models` is what can run and stays the
+    #: only answer to that; this exists so that "there is no such model" can stop
+    #: being said about a model that is right there in the file, on an endpoint
+    #: with no key. Named to make the mistake read wrong: `unreachable[name]`
+    #: gives a sentence, never a profile.
+    unreachable: Mapping[str, str] = field(default_factory=dict)
     #: Where all of it was read from. Informational, so a refusal can name the
     #: file that should have defined what it could not find.
     source: Path | None = None
@@ -302,13 +311,24 @@ class Models:
         if profile is None:
             known = tuple(sorted(self.models))
             where = f" defined in {self.source}" if self.source else ""
+            # Asked before "no such model", because for a model on an endpoint
+            # with no key that answer is false and sends its reader to the wrong
+            # file. The catalogue defines it; this machine cannot use it. Both
+            # `_aliases` and the branch below said this was how it would read,
+            # and until `unreachable` existed neither could deliver it: the
+            # model had already been filtered out one step earlier, so the
+            # lookup failed here and answered a question nobody asked.
+            if reason := self.unreachable.get(wanted):
+                msg = f"model {wanted!r} runs on {reason}; this deployment can run {known}"
+                raise ConfigError(msg)
             msg = f"no model {wanted!r}{where}; this deployment can run {known}"
             raise ConfigError(msg)
         endpoint = self.endpoints.get(profile.endpoint)
         if endpoint is None:
-            # Unreachable for the default, which `load` checks. Reachable for a
-            # model a request named, whose endpoint was dropped for having no
-            # credentials on this machine.
+            # A `Models` assembled by hand -- a fixture, a caller building one
+            # directly -- whose profile names an endpoint the mapping beside it
+            # does not have. `load` cannot produce this: it drops such models,
+            # and the clause above is what speaks for them.
             msg = (
                 f"model {wanted!r} runs on endpoint {profile.endpoint!r}, which this "
                 f"deployment has no credentials for; it has {tuple(sorted(self.endpoints))}"
