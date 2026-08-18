@@ -293,17 +293,6 @@ MEMORY_ROUTE = "/memory/"
 #: nest underneath it rather than forcing it to be renamed.
 UPLOADED_SKILLS_ROUTE = "/skills/uploaded/"
 
-#: What deepagents is told to load skills from: the catalogue first, then this
-#: session's uploads. It loads sources in order and lets a later one override an
-#: earlier, which is exactly what `uploads` refuses to allow -- a collision is
-#: rejected before it can happen, so the ordering here never decides anything.
-#:
-#: Built from the routes rather than written out again. These paths were spelled
-#: as literals in `agent.py` while living here as constants, which is two copies
-#: of the same string kept in step by nobody -- and both `agent` and `delegation`
-#: need them, so they belong with the routes they name.
-SKILLS_SOURCES = [(SKILLS_ROUTE, "catalogue"), (UPLOADED_SKILLS_ROUTE, "uploaded")]
-
 
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Every place the agent should look for skills, labelled.

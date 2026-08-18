@@ -1700,22 +1700,42 @@ def _production_files() -> list[Path]:
     return files
 
 
-def _referenced_in_code() -> set[str]:
-    """Every name production code *uses*, ignoring prose.
+def _names_read(source: str) -> set[str]:
+    """Every name one module *reads*, ignoring prose and ignoring what it binds.
 
     Prose matters here: `withheld`'s docstring named `Capabilities.unknown`, so
     a guard counting text would have taken that mention for a caller and left
     the dead method exactly where it was.
+
+    Binding matters for the constant rule below. A `def` or a `class` carries its
+    own name as a string on the node, so a definition is never an `ast.Name` and
+    every `Name` in the tree -- including one in the defining file -- is a real
+    reference. `KINDS = (...)` is not built that way: the target is a `Name` like
+    any other, and counting it would mean every constant in the package
+    referenced itself and the constant rule found nothing, ever. So a load counts
+    and a store does not, which is the truer reading for functions too: `foo = 1`
+    was never a use of `foo`. Narrowing it changes no answer today -- both
+    readings leave `test_nothing_is_defined_for_tests_alone` with zero orphans,
+    and no name defined in the package is sighted in production by a store alone.
+    Measured before the narrowing went in, because a rule that only ever agreed
+    with itself is not evidence.
     """
     seen: set[str] = set()
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Name) and isinstance(node.ctx, ast.Load):
+            seen.add(node.id)
+        elif isinstance(node, ast.Attribute):
+            seen.add(node.attr)
+        elif isinstance(node, ast.alias):
+            seen.add(node.asname or node.name.split(".")[-1])
+    return seen
+
+
+def _referenced_in_code() -> set[str]:
+    """Every name production code reads, across every file production means."""
+    seen: set[str] = set()
     for path in _production_files():
-        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
-            if isinstance(node, ast.Name):
-                seen.add(node.id)
-            elif isinstance(node, ast.Attribute):
-                seen.add(node.attr)
-            elif isinstance(node, ast.alias):
-                seen.add(node.asname or node.name.split(".")[-1])
+        seen |= _names_read(path.read_text(encoding="utf-8"))
     return seen
 
 
@@ -1765,6 +1785,246 @@ def test_nothing_is_defined_for_tests_alone():
     assert not orphans, (
         f"defined but never used outside tests: {orphans} -- delete it, export it, "
         "or add it to DISPATCHED_ELSEWHERE with the contract that calls it"
+    )
+
+
+# -- and neither is any constant --------------------------------------------
+#
+# The rule above collects `FunctionDef`, `AsyncFunctionDef` and `ClassDef` off
+# each module's body, which is every kind of definition a module has except the
+# commonest one. A constant was invisible to it, and `domain.capabilities.AXES`
+# spent its whole life in that blind spot: a public tuple in the domain, read by
+# three test files and by nothing in either distribution, deleted only because
+# somebody went looking by hand. This half is the same rule pointed at the shape
+# the first half could not see.
+
+
+#: Constants whose reader is somewhere neither `PRODUCTION` nor a test, named one
+#: at a time with what reads them. Deliberately not a general "it is published"
+#: escape: a name this package publishes belongs in `kingfisher.__all__`, which
+#: the rule already exempts, and reaching for this table instead would be the way
+#: to publish something without saying so.
+READ_ELSEWHERE = frozenset({
+    # The SSE event names. Nothing in `src/`, `main.py`, `evals/` or
+    # `service/src/` reads it -- `payloads.frame` puts `event.kind` on the wire
+    # straight from the event and only *mentions* `KINDS` in prose -- so its
+    # readers are the clients subscribing to those event names, and they are not
+    # in this repository to be counted.
+    #
+    # Which is why `AXES`' fix does not transfer. That one was deleted and
+    # re-derived in the tests that wanted it, because deriving it from
+    # `fields(Capabilities)` is one line and cannot drift from the type it asks.
+    # `KINDS` has nothing to derive from: it is the declaration, and the two
+    # rules above are what pin it -- one against the kinds the package
+    # constructs, one against the kinds it branches on. Deriving it in a test
+    # would leave both comparing a list against itself, which is the tautology
+    # the `AXES` commit deleted two tests for.
+    "KINDS",
+})
+
+
+def _constants_defined(source: str) -> list[tuple[str, str]]:
+    """Every SCREAMING_CASE name a module binds at its top level, with its value.
+
+    Top level by reading `body` rather than walking the tree: a name bound inside
+    a class or a function is that scope's business, and `Capabilities`' fields
+    are not module constants. Nothing in the package hides one inside a
+    module-level `if` either -- of the twenty-one, twenty are `if TYPE_CHECKING`
+    and one is `if __name__ == "__main__"`, and not one of them binds a name.
+    Counted before this leaned on it, since the shortcut is only safe if it is
+    true of the tree rather than of the tree somebody imagined.
+
+    Case is the whole test for "constant", which is not a new opinion: it is what
+    `test_no_value_is_written_down_twice` was already using, and the two rules
+    share this so they cannot come to disagree about what a constant is. It also
+    settles `__version__` without an exemption, since `"__version__".isupper()`
+    is false -- which is the right answer rather than a lucky one. A package
+    version has no reader in its own package and never will, and a rule that
+    demanded one would be teaching people to write the exemption list.
+    """
+    found: list[tuple[str, str]] = []
+    for node in ast.parse(source).body:
+        if isinstance(node, ast.AnnAssign):
+            if node.value is None:
+                continue  # `NAME: int` declares a type, not a constant
+            targets: list[ast.expr] = [node.target]
+            value = node.value
+        elif isinstance(node, ast.Assign):
+            targets = node.targets
+            value = node.value
+        else:
+            continue
+        written = ast.unparse(value)
+        found += [
+            (t.id, written) for t in targets if isinstance(t, ast.Name) and t.id.isupper()
+        ]
+    return found
+
+
+def _constants_in_package() -> dict[str, Path]:
+    """Every module-level constant in the package, at the first file defining it.
+
+    By name, like the rule above, and with the same blind spot: two files may
+    each define `EXPORT` with different values, and this reports one path for
+    both. `test_no_value_is_written_down_twice` is the rule that has an opinion
+    about a name in two places; this one only asks whether anything reads it.
+    """
+    found: dict[str, Path] = {}
+    for path in sorted(p for p in SRC.rglob("*.py") if not _is_content(p)):
+        for name, _ in _constants_defined(path.read_text(encoding="utf-8")):
+            found.setdefault(name, path)
+    return found
+
+
+def _unread(found: dict[str, Path], read: set[str], public: frozenset[str]) -> dict[str, Path]:
+    """Of the constants defined, the ones nothing outside a test reads.
+
+    A separate function rather than a comprehension inside the rule, and the
+    reason is the one `_reaches_past_the_public_api` gives: nothing in the tree
+    is unread today, so the rule passes whether this subtracts anything or
+    nothing, and `if False and ...` slipped into the comprehension would go
+    green. A rule that can be switched off in silence is decoration. Here the
+    three ways out -- read, published, exempted -- are answerable against named
+    input instead.
+    """
+    return {
+        name: path
+        for name, path in found.items()
+        if name not in read and name not in public and name not in READ_ELSEWHERE
+    }
+
+
+def test_no_constant_is_published_for_tests_alone():
+    """A constant nothing reads is a claim about the code the code does not make.
+
+    `AXES` is the instance that found this gap. It was a public tuple on
+    `domain.capabilities`, and the only things that read it were three test
+    files -- one of which had already given up and re-derived it from
+    `fields(Capabilities)` rather than importing it. Forty-nine architecture
+    rules ran over it for as long as it existed and not one of them was looking
+    at constants.
+
+    The second instance is what this caught on the way in, and it is the worse
+    of the two because it was still being maintained. `harness.backend`
+    published `SKILLS_SOURCES = [(SKILLS_ROUTE, "catalogue"),
+    (UPLOADED_SKILLS_ROUTE, "uploaded")]`, which is exactly what `skills_sources()`
+    returns when a session has no catalogue folders. The commit that let two
+    parties each ship a `lookup` replaced every production reader of the constant
+    with a call to the function, and in the same diff edited the constant --
+    "Catalogue" to "catalogue" -- so it went on looking cared for. Its comment
+    still claimed "both `agent` and `delegation` need them"; neither had
+    mentioned it for a day. One test held it up, asserting
+    `captured["skills"] == SKILLS_SOURCES` while the test beside it in
+    `test_capability_wiring` made the identical assertion against
+    `skills_sources()`. That is the fourth copy, caught at three.
+
+    The service is not counted as a reader, and that is a decision rather than an
+    inherited default. `PRODUCTION` has never included `service/src`, and for
+    constants it provably need not: `test_a_consumer_uses_the_library_only_through_its_public_api`
+    forbids the server from importing anything but `kingfisher` itself, so every
+    library constant it can legally read is in `__all__` and exempt here already.
+    Checked against the tree rather than argued -- no constant in the package is
+    read by `service/src` and unread by the library.
+    """
+    import kingfisher
+
+    read = _referenced_in_code()
+    public = frozenset(kingfisher.__all__)
+    found = _constants_in_package()
+
+    # A collector pointed at the wrong root finds nothing and reports success --
+    # the failure this file has shipped twice, once in `_modules_in` and once in
+    # the consumer collector. Named layers rather than a count, so this says
+    # which half of the package stopped being walked. All four define constants;
+    # `domain` and `infrastructure` hold sixty-seven of the seventy-three.
+    layers = {"domain", "application", "infrastructure", "presentation"}
+    walked = {path.relative_to(SRC).parts[0] for path in found.values()}
+
+    assert layers <= walked, (
+        f"no constants found under {sorted(layers - walked)} -- the walk has shrunk "
+        "and this rule is now about whatever is left"
+    )
+
+    orphans = {
+        name: str(path.relative_to(SRC))
+        for name, path in _unread(found, read, public).items()
+    }
+
+    assert not orphans, (
+        f"defined but never read outside tests: {orphans} -- delete it, export it, "
+        "or add it to READ_ELSEWHERE naming what reads it. A constant a test is "
+        "the sole reader of pins the test to itself"
+    )
+
+
+def test_the_unread_check_knows_the_three_ways_out():
+    """Every constant in the tree is read, published or exempted, so the rule
+    above passes whether `_unread` subtracts anything or nothing. This is the
+    answer `src/` cannot give: one name for each way out, and one with none.
+    """
+    here = Path("domain/result.py")
+    found = {"READ": here, "PUBLISHED": here, "KINDS": here, "ORPHAN": here}
+
+    assert _unread(found, {"READ"}, frozenset({"PUBLISHED"})) == {"ORPHAN": here}
+    # And the direction that must not fire: nothing defined is nothing to report.
+    assert _unread({}, set(), frozenset()) == {}
+
+
+def test_a_constant_is_not_counted_as_its_own_reader():
+    """The mutation the tree cannot catch, because a clean tree is silent about it.
+
+    Drop the `Load` test in `_names_read` and every constant in the package
+    reports itself read, the rule above passes over anything, and nothing goes
+    red -- which is precisely how it would ship. These are the six answers
+    `src/` cannot give: an assignment is not a read of what it assigns, but a
+    load, an attribute, either shape of import and an annotated assignment's
+    value all are, and prose is not.
+    """
+    assert _names_read("KINDS = ('token',)\n") == set()
+    assert _names_read("SOURCES = [ROUTE, OTHER]\n") == {"ROUTE", "OTHER"}
+    assert _names_read("SOURCES: list[str] = [ROUTE]\n") == {"list", "str", "ROUTE"}
+    assert _names_read("x = mod.KINDS\n") == {"mod", "KINDS"}
+    assert _names_read("from m import KINDS\nimport a.b as ROUTE\n") == {"KINDS", "ROUTE"}
+    assert _names_read('"""KINDS is named here in prose only."""\n') == set()
+
+
+def test_the_constant_reader_reads_module_level_constants():
+    """Pinned against source written for the purpose, because the real tree is
+    expected to be clean and a reader that found nothing would look identical --
+    the same reason `_kinds_branched_on` has a test of its own.
+    """
+    source = (
+        "ROUTE = '/skills/'\n"
+        "SOURCES: list[str] = [ROUTE]\n"
+        "FIRST = SECOND = 1\n"
+        "LATER: int\n"
+        "__version__ = '0.1.0'\n"
+        "lower = 1\n"
+        "class K:\n"
+        "    INNER = 2\n"
+        "def f():\n"
+        "    ALSO_INNER = 3\n"
+    )
+
+    assert _constants_defined(source) == [
+        ("ROUTE", "'/skills/'"),
+        ("SOURCES", "[ROUTE]"),
+        ("FIRST", "1"),
+        ("SECOND", "1"),
+    ]
+
+
+def test_every_named_constant_exemption_is_a_real_constant():
+    """An exemption for a name nobody defines any more silences nothing, and
+    reads as though somebody thought about it. `DISPATCHED_ELSEWHERE` has no such
+    guard and should; this table starts with one, since it exists to hold the
+    cases a reader has to take on trust.
+    """
+    defined = set(_constants_in_package())
+
+    assert defined >= READ_ELSEWHERE, (
+        f"{sorted(READ_ELSEWHERE - defined)} is exempted but no longer defined in "
+        "the package -- drop the entry"
     )
 
 
@@ -1917,20 +2177,17 @@ def test_no_value_is_written_down_twice():
 
     `assets/` is excluded like everywhere else here: those are definitions the
     agent runs, and two of them declaring the same constant is their business.
+
+    The collector moved out to `_constants_defined` when the orphan rule needed
+    the same walk. Two readings of "what is a constant" in one file is the fault
+    this rule is named for, one level up.
     """
     seen: dict[tuple[str, str], list[str]] = {}
     for path in sorted(SRC.rglob("*.py")):
         if _is_content(path):
             continue
-        for node in ast.parse(path.read_text(encoding="utf-8")).body:
-            targets = (
-                [node.target] if isinstance(node, ast.AnnAssign) else
-                getattr(node, "targets", []) if isinstance(node, ast.Assign) else []
-            )
-            for target in targets:
-                if isinstance(target, ast.Name) and target.id.isupper() and node.value:
-                    key = (target.id, ast.unparse(node.value))
-                    seen.setdefault(key, []).append(str(path.relative_to(SRC)))
+        for name, value in _constants_defined(path.read_text(encoding="utf-8")):
+            seen.setdefault((name, value), []).append(str(path.relative_to(SRC)))
 
     twice = {
         f"{name} = {value}": places

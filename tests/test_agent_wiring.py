@@ -3,7 +3,7 @@ from __future__ import annotations
 from langchain_core.messages import AIMessage
 
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import SKILLS_SOURCES
+from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.prompting import system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
 from tests.test_confinement import needs_a_real_toolchain
@@ -103,7 +103,7 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
 
-    assert captured["skills"] == SKILLS_SOURCES
+    assert captured["skills"] == skills_sources()
     assert captured["memory"] == ["/memory/AGENTS.md"]
     assert "/skills" in captured["system_prompt"]
 
