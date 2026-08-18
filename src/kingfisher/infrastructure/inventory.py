@@ -82,6 +82,15 @@ class Inventory:
     #: Subagent name -> the file it came from, where a store can say.
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
+    #: Which of them are graphs the workspace built rather than definitions
+    #: kingfisher assembles. Carried because it changes what the rest of the
+    #: listing *means* for them: deepagents runs a compiled graph as given and
+    #: never applies a tool allowlist to it, so `--tools` is not a limit on one.
+    #:
+    #: A separate tuple rather than a flag folded into `subagents`, whose values
+    #: are descriptions and are printed as such. Two facts about one name, and
+    #: the second one is about a minority.
+    compiled_subagents: tuple[str, ...] = ()
 
     #: Kept so a caller does not have to reach for `cfg` to know whether an
     #: empty skills list means "none" or "switched off".
@@ -168,13 +177,18 @@ def inventory(cfg: Config, *, catalogue: Catalogue | None = None) -> Inventory:
     subagents: Mapping[str, str] = _NOTHING
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
+    compiled_subagents: tuple[str, ...] = ()
     try:
         # Both reads, in one `try`. `sources` parses the same files `specs`
         # does, so reading it outside let the error escape from the line that
         # was only asking which file each definition came from -- and `getattr`
         # with a default does not help, because the property raises rather than
         # being absent.
-        subagents = {name: spec.description for name, spec in resolved.subagents.specs.items()}
+        specs = resolved.subagents.specs
+        subagents = {name: spec.description for name, spec in specs.items()}
+        compiled_subagents = tuple(
+            name for name, spec in specs.items() if spec.build is not None
+        )
         subagent_sources = MappingProxyType(
             dict(getattr(resolved.subagents, "sources", {}))
         )
@@ -195,5 +209,6 @@ def inventory(cfg: Config, *, catalogue: Catalogue | None = None) -> Inventory:
         subagents=MappingProxyType(dict(subagents)),
         subagent_sources=subagent_sources,
         subagents_error=subagents_error,
+        compiled_subagents=compiled_subagents,
         skills_enabled=cfg.skills_enabled,
     )

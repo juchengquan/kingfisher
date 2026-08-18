@@ -95,7 +95,22 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
         # reference; where a name is its own, the two are the same string.
         claimed, plain = split_reference(name)
         source = None if claimed else found.subagent_sources.get(name)
-        yield f"  {name}{_from(source, f'{plain}.yaml')} — {described}"
+        # Two spellings now, so the obvious filename depends on which kind this
+        # is. Getting it wrong is not cosmetic: `_from` stays silent exactly
+        # when the name already tells you the file, and comparing a `.py`
+        # definition against `<name>.yaml` would annotate every one of them
+        # with the file a reader could already see.
+        compiled = name in found.compiled_subagents
+        obvious = f"{plain}.py" if compiled else f"{plain}.yaml"
+        marker = "  [compiled]" if compiled else ""
+        yield f"  {name}{_from(source, obvious)}{marker} — {described}"
+    if found.compiled_subagents:
+        # The thing a reader would otherwise assume. deepagents runs a compiled
+        # graph as given and never applies our allowlist to it, so a tool grant
+        # is a suggestion there rather than a limit -- and nothing else in this
+        # output would say so.
+        yield "  (a compiled delegate brings its own graph: --tools and"
+        yield "   --builtin-tools do not restrict what it can call)"
     if not found.subagents:
         yield "  (none)  — try `kingfisher seed`"
 
@@ -127,6 +142,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "skills_enabled": found.skills_enabled,
         "subagents": dict(found.subagents),
         "subagent_sources": dict(found.subagent_sources),
+        "compiled_subagents": list(found.compiled_subagents),
         "subagents_error": found.subagents_error,
     }
 

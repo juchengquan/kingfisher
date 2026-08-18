@@ -1,6 +1,6 @@
 # A subagent that is code, and a model chosen rather than named
 
-**Status:** proposed.
+**Status:** implemented, all four phases.
 **Date:** 2026-08-18
 
 deepagents accepts two kinds of subagent. `SubAgent` is a spec it builds — name,
@@ -182,7 +182,36 @@ deepagents at all, and therefore no new entry in `HARNESS_EDGES`.
 | 1 | `distinct`, and `model`/`alias` accepting a list. `second-opinion` declares it. | Bind `alternate` to the deployment's own model and confirm activation is refused rather than reported. Bind two aliases and confirm the second is chosen. Mutations on the resolution order and on the refusal. No compiled subagent exists yet; this stands alone and fixes a live defect. |
 | 2 | Discovery: `.py` in `subagents/`, both shapes, `SUBAGENTS` declared, unknown extensions refused. | A package's `.yaml` still loads. A `_helper.py` never does. A `.yml` is an error. A module without `SUBAGENTS` names itself in the message. |
 | 3 | Building: static name and description, `build` called per request with a resolved model and narrowed tools. | Shape validated against `__required_keys__`, pinned by a test. Mutations on each grant that is meant to reach the delegate. |
-| 4 | Reporting: `--list` marks compiled delegates, and `registered_tools` learns to say "cannot check" apart from "none". | Run against a `create_agent` graph, where confirmation works, and against a hand-written `StateGraph` with no tool node, where it must say so rather than print an empty list. Mutate the distinction away and watch the second case start lying. |
+| 4 | Reporting: `--list` marks compiled delegates and says what that costs a reader; `registered_tools` learned to say "cannot check" apart from "none" in its own change. The comparison half is deferred — see below. | Run against a `create_agent` graph, where confirmation works, and against a hand-written `StateGraph` with no tool node, where it must say so rather than print an empty list. Mutate the distinction away and watch the second case start lying. |
+
+## S10's second half is deferred, and this is why
+
+S10 has two parts. The first — say which delegates are compiled, so a tool grant
+is not read as a guarantee — shipped, in the listing and in `--json`. The
+second — compare what the graph actually dispatches against what it was handed,
+and report a mismatch — did not, and the obstacle is a channel rather than a
+check.
+
+The comparison has to happen where the graph is created, in `compiled()`, because
+a delegate's graph is not reachable afterwards: it lives inside
+`SubAgentMiddleware` on the parent, and reaching in is exactly the kind of
+private-shape walk `registered_tools` already shows degrading. Rebuilding to
+re-derive it is worse — `build` is arbitrary workspace code.
+
+But `compiled()` returns a dict to deepagents and has nowhere to put a finding.
+The two reporting routes that exist do not reach it. `RunEvent` is assembled in
+`service.py` *after* the build, which is why `indistinct_delegates` re-resolves
+through `model_for` rather than reading anything the build left behind. And
+logging is not a route here at all: kingfisher configures none, deliberately,
+because it is a library — a warning would go nowhere by default, which is the
+silence this whole area exists to refuse.
+
+So the honest options are to invent a way to carry build-time findings out to
+the event stream, or to leave it. Inventing one is a larger change than the
+finding warrants now that the listing carries the safety message, and it would
+be a mechanism with one caller — which
+`test_nothing_is_defined_for_tests_alone` has an opinion about. Left, written
+down, and reopenable the moment a second build-time finding wants the same road.
 
 ## Still undecided
 
