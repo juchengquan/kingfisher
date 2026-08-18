@@ -230,11 +230,11 @@ def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
     waste -- it is a second read of the same directories, which is how the two
     halves came to disagree in the first place."""
     from kingfisher.application import inventory as module
-    from kingfisher.infrastructure.catalogue import resolve_catalogue
+    from kingfisher.infrastructure.catalogue import resolve_definitions
 
-    already = resolve_catalogue(cfg)
+    already = resolve_definitions(cfg)
     calls: list[object] = []
-    monkeypatch.setattr(module, "resolve_catalogue", calls.append)
+    monkeypatch.setattr(module, "resolve_definitions", calls.append)
 
     found = inventory(cfg, catalogue=already)
 

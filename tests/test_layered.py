@@ -15,7 +15,7 @@ import pytest
 
 from kingfisher.domain.ports import SkillRepository, SubagentRepository
 from kingfisher.domain.subagent import SubagentSpec
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.layered import (
     LayeredSkills,
     LayeredSubagents,
@@ -127,7 +127,7 @@ def test_the_two_halves_need_not_be_the_same_kind_of_store(cfg, session_dir):
     """
     _upload_subagent(session_dir, "uploaded")
     catalogue = replace(
-        Catalogue.from_config(cfg), subagents=InMemory({"remote": _spec("remote")})
+        Definitions.from_config(cfg), subagents=InMemory({"remote": _spec("remote")})
     )
 
     turn = for_session(catalogue, session_dir)
@@ -141,16 +141,16 @@ def test_the_two_halves_need_not_be_the_same_kind_of_store(cfg, session_dir):
 def test_a_turns_view_is_itself_a_catalogue(cfg, session_dir):
     """Which is what keeps every caller downstream unchanged: `build_agent` asks
     for `catalogue.skills.names` whether or not a session is involved."""
-    turn = for_session(Catalogue.from_config(cfg), session_dir)
+    turn = for_session(Definitions.from_config(cfg), session_dir)
 
-    assert isinstance(turn, Catalogue)
+    assert isinstance(turn, Definitions)
 
 
 def test_no_session_is_the_catalogue_itself_and_not_a_layer_over_nothing(cfg):
     """A turn with no session directory has no uploads by definition, and
     wrapping two empty repositories would cost a listing of a directory that is
     not there on every call that does not need one."""
-    catalogue = Catalogue.from_config(cfg)
+    catalogue = Definitions.from_config(cfg)
 
     assert for_session(catalogue, None) is catalogue
 
@@ -176,7 +176,9 @@ def test_the_catalogue_is_not_re_read_to_add_one_uploaded_definition(cfg, sessio
             return tuple(self.held)
 
     _upload_subagent(session_dir, "own")
-    catalogue = replace(Catalogue.from_config(cfg), subagents=Counting({"shared": _spec("shared")}))
+    catalogue = replace(
+        Definitions.from_config(cfg), subagents=Counting({"shared": _spec("shared")})
+    )
 
     turn = for_session(catalogue, session_dir)
     assert set(turn.subagents.specs) == {"shared", "own"}
@@ -190,7 +192,7 @@ def test_tools_are_not_layered(cfg, session_dir):
     `subagent_refs` and nothing else. A layer here would advertise a capability
     that does not exist.
     """
-    catalogue = Catalogue.from_config(cfg)
+    catalogue = Definitions.from_config(cfg)
 
     turn = for_session(catalogue, session_dir)
 
@@ -204,7 +206,7 @@ def test_uploads_reach_the_agents_view_of_both_kinds(cfg, session_dir):
     _upload_skill(session_dir, "session-only")
     _upload_subagent(session_dir, "session-only")
 
-    turn = for_session(Catalogue.from_config(cfg), session_dir)
+    turn = for_session(Definitions.from_config(cfg), session_dir)
 
     assert "session-only" in turn.skills.names
     assert "session-only" in turn.subagents.specs
@@ -218,7 +220,7 @@ def test_one_sessions_uploads_are_invisible_to_another(cfg, session_dir, tmp_pat
     other = tmp_path / "other-session"
     other.mkdir()
 
-    catalogue = Catalogue.from_config(cfg)
+    catalogue = Definitions.from_config(cfg)
 
     assert "mine" in for_session(catalogue, session_dir).subagents.specs
     assert "mine" not in for_session(catalogue, other).subagents.specs
@@ -228,7 +230,7 @@ def test_one_sessions_uploads_are_invisible_to_another(cfg, session_dir, tmp_pat
 def test_an_empty_session_adds_nothing(cfg, session_dir, kind):
     """The common case: most turns upload nothing, and a missing uploads
     directory reads as empty rather than as a failure."""
-    catalogue = Catalogue.from_config(cfg)
+    catalogue = Definitions.from_config(cfg)
     plain = getattr(catalogue, kind).names
 
     assert getattr(for_session(catalogue, session_dir), kind).names == plain
@@ -246,11 +248,11 @@ def test_every_implementation_offers_names_in_a_stable_order(cfg, session_dir):
     for name in ("b-second", "a-first", "c-third"):
         _upload_skill(session_dir, name)
 
-    turn = for_session(Catalogue.from_config(cfg), session_dir)
+    turn = for_session(Definitions.from_config(cfg), session_dir)
 
     assert list(turn.skills.names) == sorted(turn.skills.names)
     # and the same answer twice, which a set-backed implementation would not give
-    assert turn.skills.names == for_session(Catalogue.from_config(cfg), session_dir).skills.names
+    assert turn.skills.names == for_session(Definitions.from_config(cfg), session_dir).skills.names
 
 
 def test_a_layered_skill_prefers_the_sessions_copy_of_the_files(tmp_path):

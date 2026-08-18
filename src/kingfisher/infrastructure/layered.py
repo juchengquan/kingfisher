@@ -16,7 +16,7 @@ rebuilds, so nothing re-reads the catalogue to add one uploaded file to it.
 
 A layer is itself a repository, which is the whole reason `AssetRepository` is a
 port and not a base class. Nothing downstream can tell a layered view from a
-plain one, so `build_agent` keeps taking one `Catalogue` and knows nothing about
+plain one, so `build_agent` keeps taking one `Definitions` and knows nothing about
 sessions.
 
 Tools have no layer, and that is not an oversight. A tool is Python that gets
@@ -33,7 +33,7 @@ from typing import TYPE_CHECKING
 
 from kingfisher.domain import skill
 from kingfisher.domain.subagent import DIRECTORY as SUBAGENT_DIRECTORY
-from kingfisher.infrastructure.catalogue import Catalogue
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.skill_store import LocalSkillRepository
 from kingfisher.infrastructure.subagent_store import LocalSubagentRepository
 
@@ -118,10 +118,10 @@ class LayeredSubagents:
         return tuple(self.specs)
 
 
-def for_session(catalogue: Catalogue, session_dir: Path | None) -> Catalogue:
+def for_session(catalogue: Definitions, session_dir: Path | None) -> Definitions:
     """The catalogue as one turn sees it.
 
-    Returns a `Catalogue`, so every caller downstream is unchanged and none of
+    Returns a `Definitions`, so every caller downstream is unchanged and none of
     them learns what a session is. `build_agent` asks for `catalogue.skills.names`
     either way.
 

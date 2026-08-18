@@ -32,7 +32,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
 #: Where the catalogue example sits, as an import path rather than a filesystem
 #: one -- an installed package is not in this repo's directory tree.
@@ -119,13 +119,13 @@ def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
     deployment moves one, and seeding the workspace unconditionally is how
     `--seed-assets` used to fill a directory nothing reads.
 
-    Derived from `CATALOGUE_KINDS` rather than listed again. This was the
+    Derived from `DEFINITION_KINDS` rather than listed again. This was the
     fourth place the three kinds were written out, and the one where getting it
     wrong is quietest: a kind missing here is one a pack ships and nothing ever
     copies.
     """
     roots = cfg.catalogue_roots
-    return tuple((kind, roots[kind]) for kind in CATALOGUE_KINDS)
+    return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
 
 @dataclass(frozen=True)
@@ -185,7 +185,7 @@ def shipped_kinds() -> tuple[str, ...]:
     from", and this is the smallest honest answer to it.
     """
     with opened(ASSETS) as tree:
-        return tuple(kind for kind in CATALOGUE_KINDS if (tree / kind).is_dir())
+        return tuple(kind for kind in DEFINITION_KINDS if (tree / kind).is_dir())
 
 
 def seed(cfg: Destination, source: Path | None = None) -> Seeding:

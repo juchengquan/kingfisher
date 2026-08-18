@@ -309,8 +309,8 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
     catalogue nobody mentioned, which is why `unloadable` carries the difference
     and `--list` prints it.
     """
-    # Deferred, and the architecture test is why: `Catalogue` holds a registry
-    # and `Catalogue` is reachable from `kingfisher`'s light exports, so a
+    # Deferred, and the architecture test is why: `Definitions` holds a registry
+    # and `Definitions` is reachable from `kingfisher`'s light exports, so a
     # module-scope import here would make `from kingfisher import Config` load
     # three provider SDKs. The lister is private, which is the coupling
     # `test_skill_registry` pins -- a rename upstream fails there rather than
