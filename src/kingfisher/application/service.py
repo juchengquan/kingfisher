@@ -85,6 +85,7 @@ from kingfisher.domain.session import (
     still_held,
 )
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
+from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.agent import (
@@ -105,6 +106,8 @@ from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
+    agent_snapshot,
+    agent_started_with,
     check_placeable,
     collect_artifacts,
     ensure_layout,
@@ -112,6 +115,7 @@ from kingfisher.infrastructure.workspace_fs import (
     place_data,
     place_inputs,
     protect_data,
+    remember_agent,
     session_bytes,
 )
 
@@ -214,6 +218,13 @@ def _withheld_by_kind(
     The catalogue is passed rather than re-derived, so what a caller is told it
     did not grant is measured against the same directories the agent was built
     from.
+
+    Each "what the workspace offers" is a thunk, not a value, and that is a cost
+    rather than a style: three of the four walk a directory, and an axis left at
+    its default is skipped a line later without ever needing the answer. Written
+    eagerly, the subagent walk happened on every turn of every run -- which
+    stayed invisible only while that axis defaulted to none and this function
+    was the sole reader.
     """
     default = Capabilities()
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
@@ -225,15 +236,19 @@ def _withheld_by_kind(
         # `build_agent` made -- and if it ever does, a run report listing no
         # built-ins is a better outcome than a turn that will not start.
         # `test_a_real_build_is_readable` is what notices instead.
-        ("builtin tool", "builtin_tools", tuple(
+        ("builtin tool", "builtin_tools", lambda: tuple(
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
-        ("tool", "tools", workspace),
-        ("skill", "skills", available_skills(cfg, session_dir, catalogue=catalogue)),
-        ("subagent", "subagents", tuple(defined_subagents(cfg, session_dir, catalogue=catalogue))),
+        ("tool", "tools", lambda: workspace),
+        ("skill", "skills", lambda: available_skills(cfg, session_dir, catalogue=catalogue)),
+        (
+            "subagent",
+            "subagents",
+            lambda: tuple(defined_subagents(cfg, session_dir, catalogue=catalogue)),
+        ),
     )
     found = []
-    for what, field, names in offered:
+    for what, field, names_of in offered:
         granted = getattr(allowed, field)
         # Silent when the request left an axis alone. `subagents` defaults to
         # none, so reporting every axis at its default would put a line about
@@ -241,7 +256,7 @@ def _withheld_by_kind(
         # exists to avoid being.
         if granted == getattr(default, field):
             continue
-        if left_out := withheld(granted, offered=names):
+        if left_out := withheld(granted, offered=names_of()):
             found.append((what, left_out))
     return tuple(found)
 
@@ -691,7 +706,7 @@ class Kingfisher:
 
         return build_agent(
             self.cfg,
-            agent=self.agent_named(request.agent),
+            agent=self._agent_for(request, session_dir.name),
             capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
             run_on=request.run_on,
@@ -700,32 +715,79 @@ class Kingfisher:
             catalogue=self.catalogue,
         )
 
+    def remember_agent(self, session_id: str, name: str | None) -> None:
+        """Have this session keep the agent it opened with.
+
+        Nothing to keep for a session that named none, which is the migration
+        path, and nothing to keep when the repository cannot hand over the
+        document it parsed -- a deployment serving definitions from elsewhere
+        keeps the behaviour it had, which is to read the catalogue each turn.
+        Both are silent because both are ordinary.
+        """
+        if name is None:
+            return
+        documents = getattr(self.catalogue.agents, "documents", {})
+        if (text := documents.get(name)) is not None:
+            remember_agent(self.cfg.state_dir, session_id, text)
+
+    def _agent_for(self, request: Request, session_id: str) -> AgentSpec | None:
+        """The agent this turn runs, which is the one its session opened with.
+
+        A session is fixed to an agent for its whole life. Swapping mid-session
+        would change the system prompt under a history that already happened, so
+        the conversation would no longer match the instructions that produced it.
+
+        A later turn may name the same agent again -- a stateless caller sends
+        the same payload every time and should not have to track what it opened
+        with. Naming a *different* one is refused rather than ignored: honouring
+        it is wrong, and ignoring it silently answers a question the caller
+        thought they had asked.
+        """
+        kept = agent_started_with(self.cfg.state_dir, session_id)
+        if kept is None:
+            spec = self.agent_named(request.agent)
+            self.remember_agent(session_id, request.agent)
+            return spec
+
+        started = read_agent(kept, agent_snapshot(self.cfg.state_dir, session_id))
+        if request.agent is not None and request.agent != started.name:
+            msg = (
+                f"this session is running {started.name!r}; it was fixed when the "
+                f"session opened and cannot be changed to {request.agent!r} "
+                f"mid-conversation -- start a session to run a different agent"
+            )
+            raise CapabilityError(msg)
+        return started
+
     def agent_named(self, name: str | None) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue.
 
-        `None` for a request that named none, which is still how a caller built
-        agents before this field existed. It is refused rather than defaulted
-        once anything in `agents/` exists -- see below -- because a workspace
-        holding two agents and a request naming neither is a choice nobody made.
+        Naming one is required, and `None` is refused rather than defaulted.
+        There is no honest default: the agent decides where every prompt in the
+        session goes and what it costs, and a default would put the most
+        consequential choice a caller makes somewhere the call site never
+        mentions. It also leaves one path through `build_agent` rather than two.
 
         A name, never a definition: an agent decides which endpoint receives the
         session's prompts and whose credentials pay, so a caller picks from what
         the deployment reviewed and supplies nothing.
+
+        The return stays optional because `build_agent` still takes an optional
+        spec -- a test building a bare graph passes none, and that is a different
+        question from what a *request* may leave out.
         """
         offered = self.catalogue.agents.specs
+        listing = ", ".join(sorted(offered)) if offered else "none"
         if name is None:
-            if offered:
-                msg = (
-                    f"this request names no agent, and this workspace offers "
-                    f"{', '.join(sorted(offered))} -- name the one to run"
-                )
-                raise CapabilityError(msg)
-            return None
+            msg = (
+                f"this request names no agent; this workspace offers {listing}"
+                + ("" if offered else " -- try `kingfisher seed`")
+            )
+            raise CapabilityError(msg)
         spec = offered.get(name)
         if spec is None:
-            listed = ", ".join(sorted(offered)) if offered else "none"
             msg = (
-                f"no agent named {name!r}; this workspace offers {listed}"
+                f"no agent named {name!r}; this workspace offers {listing}"
                 + ("" if offered else " -- try `kingfisher seed`")
             )
             raise CapabilityError(msg)

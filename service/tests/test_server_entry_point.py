@@ -32,7 +32,7 @@ def client(cfg):
 
 def test_a_request_is_logged_once_with_its_route_and_status(client, caplog):
     with caplog.at_level(logging.INFO, logger="kingfisher_service"):
-        client.post("/sessions")
+        client.post("/sessions", json={"agent": "only"})
 
     (line,) = [r.getMessage() for r in caplog.records if r.name == "kingfisher_service"]
     assert line.startswith("POST /sessions 201")
@@ -43,7 +43,7 @@ def test_the_session_id_is_not_written_to_the_log(client, caplog):
     """The decision this module exists for. A session id is how a caller proves
     a session is theirs, so logging one puts a credential somewhere it is read
     by more people than the request was, and keeps it there."""
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     with caplog.at_level(logging.INFO, logger="kingfisher_service"):
         client.get(f"/sessions/{session_id}")
@@ -54,7 +54,7 @@ def test_the_session_id_is_not_written_to_the_log(client, caplog):
 
 
 def test_a_turn_logs_its_route_template_not_its_path(client, caplog):
-    session_id = client.post("/sessions").json()["session_id"]
+    session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     with caplog.at_level(logging.INFO, logger="kingfisher_service"):
         client.post(f"/sessions/{session_id}/turns", json={"task": "go"})

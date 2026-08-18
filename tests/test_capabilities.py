@@ -17,10 +17,16 @@ from kingfisher.domain.capabilities import (
 
 
 def test_the_two_ends_are_all_and_none():
-    """`ALL` and `None` are opposite ends, and the default is one of them --
-    per field, because `subagents` starts at the other."""
+    """`ALL` and `None` are opposite ends, and every field now starts at the
+    same one.
+
+    `subagents` started at `None` while a request was the only thing that could
+    say which delegates to wire, and each one costs a compiled graph. An agent
+    declares its own roster, so `"*"` means that roster -- small and deliberate
+    -- rather than whatever the workspace happens to hold.
+    """
     assert Capabilities().tools == ALL
-    assert Capabilities().subagents is None  # a delegate is wired when asked for
+    assert Capabilities().subagents == ALL
     assert Capabilities().is_unrestricted
 
     none_at_all = Capabilities(tools=None)

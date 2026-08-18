@@ -13,7 +13,7 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
-from tests.conftest import StubCheckpointer, start, subagents_dir
+from tests.conftest import StubCheckpointer, an_agent, start, subagents_dir
 from tests.test_run import StubAgent
 
 
@@ -52,7 +52,7 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     start(cfg, "s")
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
-    asked = Request("go", agent="assistant", session_id="s")
+    asked = Request("go", agent="only", session_id="s")
     turns = [service.run(asked).turn_id for _ in range(3)]
     assert turns == ["t001", "t002", "t003"]
 
@@ -89,10 +89,12 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     call of seconds is not a trade worth taking."""
     # A real checkpointer: this builds a real agent, and deepagents type-checks
     # the saver it is handed.
+    an_agent(cfg)
     service = Kingfisher(cfg)
+    asked = Request("go", agent="only")
 
-    assert service.graph_for(Request("go"), session_dir) is not service.graph_for(
-        Request("go"), session_dir
+    assert service.graph_for(asked, session_dir) is not service.graph_for(
+        asked, session_dir
     )
 
 
@@ -114,7 +116,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
 
     Path.chmod = refuse_everything
     try:
-        events = list(service.stream(Request("go", agent="assistant", session_id="s")))
+        events = list(service.stream(Request("go", agent="only", session_id="s")))
     finally:
         Path.chmod = real_chmod
 
@@ -132,7 +134,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     )
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
-    events = list(service.stream(Request("go", agent="assistant", session_id="s")))
+    events = list(service.stream(Request("go", agent="only", session_id="s")))
     (failed,) = [e for e in events if e.kind == "protect_failed"]
 
     assert "theirs.pdf" in failed.text
@@ -302,13 +304,17 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg)
+    # An agent of this test's own. `assistant` declares three delegates, and
+    # what those name is a different subject from a withheld-tool report --
+    # narrowing tools to `sql_query` refuses `profiler` before it gets here.
+    an_agent(cfg)
     service = Kingfisher(cfg)  # adds http_fetch, sql_query, sql_tables
     service.start_session("s")
 
     admitted = service._admit(
         Request(
             "go",
-            agent="assistant",
+            agent="only",
             session_id="s",
             capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
         )
@@ -330,13 +336,17 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg)
+    # An agent of this test's own. `assistant` declares three delegates, and
+    # what those name is a different subject from a withheld-tool report --
+    # narrowing tools to `sql_query` refuses `profiler` before it gets here.
+    an_agent(cfg)
     service = Kingfisher(cfg)
     service.start_session("s")
 
     admitted = service._admit(
         Request(
             "go",
-            agent="assistant",
+            agent="only",
             session_id="s",
             capabilities=Capabilities(
                 builtin_tools=("read_file",),
@@ -375,13 +385,17 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg):
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
     seeding.seed(cfg)
+    # An agent of this test's own. `assistant` declares three delegates, and
+    # what those name is a different subject from a withheld-tool report --
+    # narrowing tools to `sql_query` refuses `profiler` before it gets here.
+    an_agent(cfg)
     service = Kingfisher(cfg)
     service.start_session("s")
 
     admitted = service._admit(
         Request(
             "go",
-            agent="assistant",
+            agent="only",
             session_id="s",
             capabilities=Capabilities(builtin_tools=("read_file",)),
         )

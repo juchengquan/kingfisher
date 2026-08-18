@@ -89,5 +89,13 @@ class Request:
 
     @classmethod
     def coerce(cls, value: str | Request) -> Request:
-        """Accept a bare task string so `run("do a thing")` still reads well."""
+        """Accept a bare task string, which is now a request naming no agent.
+
+        Kept rather than removed, and it no longer runs: `run("do a thing")`
+        builds a request with no `agent` and is refused where the catalogue is
+        known, with a message listing what this workspace offers. That is the
+        useful failure -- the alternative was refusing here, where there is no
+        catalogue to name anything from, and a caller would be told only that
+        something was missing.
+        """
         return value if isinstance(value, Request) else cls(task=value)

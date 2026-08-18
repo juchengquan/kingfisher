@@ -41,6 +41,7 @@ from kingfisher import Capabilities, Request, run
 
 run(Request(
     task="Review the diff in /data/change.patch",
+    agent="assistant",
     capabilities=Capabilities(
         tools=("read_file", "ls", "glob", "grep", "execute", "task"),
         skills=("code-review",),
@@ -49,10 +50,12 @@ run(Request(
 ))
 ```
 
-Leaving a field unset means *no opinion* — everything the workspace offers.
-Passing an empty tuple means *none*. Naming something that does not exist raises
-`CapabilityError` at build time rather than running with quietly less than you
-asked for.
+`agent` is required; there is no default. Leaving a *capability* unset means
+*no opinion* — everything that agent declares, which is not the same as
+everything the workspace holds: an agent that names three tools cannot be asked
+for a fourth. Passing an empty tuple means *none*. Naming something that does
+not exist raises `CapabilityError` at build time rather than running with
+quietly less than you asked for.
 
 ### Putting one delegate on a different model
 
@@ -65,6 +68,7 @@ from kingfisher import Request, RunOn
 
 run(Request(
     task="Check these figures",
+    agent="assistant",
     capabilities=Capabilities(subagents=("reviewer", "second-opinion"), models=("MiniMax-M2.5",)),
     run_on={"second-opinion": RunOn("MiniMax-M2.5")},
 ))
@@ -90,11 +94,6 @@ is not an exemption from where a request's prompts may go.
 ---
 
 ## Agents — `/agents/<name>.yaml`, at any depth
-
-> **Half here.** These files load, validate and show up in `kingfisher list`
-> today. Naming one on a request is the next change — until then a run still
-> takes its tools and model the old way, and the design is written down in
-> [`design/2026-08-18-agents-as-definitions.md`](design/2026-08-18-agents-as-definitions.md).
 
 The agent is what a request runs, and everything else on this page is something
 an agent selects from: the tools it holds, the skills it may read, the delegates
@@ -123,16 +122,26 @@ kingfisher reads these files, so nothing outside it has an opinion about the
 layout. `agents/support/triage.yaml` is still `triage`, because `name:` is the
 identity and the path is not.
 
-**A request will have to name one.** There is to be no default agent and no
-implicit one: the agent decides where every prompt in a session goes and what it
-costs, and a default would put that choice somewhere the call site never
-mentions. A session will keep the agent it started with, resolved once and
-stored, so that editing a file mid-conversation cannot change the instructions
-under a history that already happened.
+**A request must name one.** There is no default agent and no implicit one; a
+request without `agent` is refused, and the message lists what your workspace
+has. The agent decides where every prompt in the session goes and what it costs,
+and a default would put that choice somewhere the call site never mentions.
 
-Neither is wired yet. What works today is everything above: the files load, two
-of a name are refused, and `kingfisher list` prints each agent with the
-delegates it reaches.
+**A session keeps the agent it started with.** It is resolved when the session
+opens and stored beside it, so editing the file mid-conversation does not change
+the instructions under a history that already happened — a deploy mid-session is
+ordinary, and that is exactly when a live conversation would otherwise pick up a
+different prompt from the one its own transcript was produced under. A later turn
+may name the same agent again; naming a different one is refused.
+
+Over HTTP that lands where the choice is made:
+
+```
+POST /sessions   {"agent": "surveyor"}
+```
+
+which answers with the session id *and* what it resolved to — the one moment you
+can see what you got without running a turn.
 
 ### The prompt is added to, not replaced
 

@@ -77,16 +77,18 @@ class LocalAgentRepository:
     root: Path
 
     @cached_property
-    def _defined(self) -> dict[str, tuple[AgentSpec, str]]:
-        """Every definition below `root`, parsed once, with where it came from."""
+    def _defined(self) -> dict[str, tuple[AgentSpec, str, str]]:
+        """Every definition below `root`, parsed once, with where it came from
+        and the document it was parsed from."""
         directory = Path(self.root)
         if not directory.is_dir():
             return {}
 
-        read: list[tuple[AgentSpec, str]] = []
+        read: list[tuple[AgentSpec, str, str]] = []
         for path in _definitions_in(directory):
             where = str(path.relative_to(directory))
-            read.append((read_agent(path.read_text(encoding="utf-8"), path), where))
+            text = path.read_text(encoding="utf-8")
+            read.append((read_agent(text, path), where, text))
 
         # Two of a name is refused here rather than reported, which is the one
         # place this differs from subagents. A request names exactly one agent,
@@ -94,7 +96,7 @@ class LocalAgentRepository:
         # files claiming `assistant` means a request for `assistant` gets
         # whichever the walk reached last, and nothing anywhere says which.
         seen: dict[str, str] = {}
-        for spec, where in read:
+        for spec, where, _ in read:
             if (first := seen.get(spec.name)) is not None:
                 msg = (
                     f"two agents are called {spec.name!r} -- {first} and {where}. A "
@@ -103,16 +105,36 @@ class LocalAgentRepository:
                 )
                 raise AgentError(msg)
             seen[spec.name] = where
-        return {spec.name: (spec, where) for spec, where in read}
+        return {spec.name: (spec, where, text) for spec, where, text in read}
 
     @cached_property
     def specs(self) -> dict[str, AgentSpec]:
         """Every agent defined here, by name."""
-        return {name: spec for name, (spec, _) in self._defined.items()}
+        return {name: spec for name, (spec, _, _) in self._defined.items()}
 
     @property
     def names(self) -> tuple[str, ...]:
         return tuple(self._defined)
+
+    @cached_property
+    def documents(self) -> dict[str, str]:
+        """The text each agent was parsed from, by name.
+
+        For the snapshot a session takes when it opens. A session runs one agent
+        for its whole life, and *this document* is what it runs -- so keeping the
+        text is what lets a later turn be built from what the session started
+        with rather than from whatever the file says by then.
+
+        The document rather than the parsed spec, because there is already a
+        reader for one and there would have to be a writer for the other. It is
+        also the thing a person can look at and compare with the file.
+
+        Not on `AgentRepository`, for the reason `sources` is not: a repository
+        backed by a service can answer with specs and need not have a document
+        to hand back. A deployment supplying one gets no snapshot and the
+        behaviour it had before -- see `Kingfisher._snapshot`.
+        """
+        return {name: text for name, (_, _, text) in self._defined.items()}
 
     @cached_property
     def sources(self) -> dict[str, str]:
@@ -121,4 +143,4 @@ class LocalAgentRepository:
         For `--list`, and for the reason the other loaders have one: a folder
         exists so a person can find a file, and a bare name does not help them.
         """
-        return {name: where for name, (_, where) in self._defined.items()}
+        return {name: where for name, (_, where, _) in self._defined.items()}

@@ -189,10 +189,15 @@ def test_an_empty_workspace_is_told_how_to_get_one(cfg):
         service.agent_named("analyst")
 
 
-def test_a_workspace_with_no_agents_still_runs_without_naming_one(cfg):
-    """The migration, and the reason this is not simply required everywhere yet:
-    a workspace that has never seen an `agents/` directory behaves as it did."""
-    assert Kingfisher(cfg).agent_named(None) is None
+def test_naming_one_is_required_even_where_there_is_nothing_to_name(cfg):
+    """No default, and no exemption for an empty workspace either.
+
+    The softer rule -- refuse only once `agents/` holds something -- would mean
+    a deployment's behaviour changing the moment somebody added a first agent,
+    which is the least expected time for it to change.
+    """
+    with pytest.raises(CapabilityError, match="names no agent"):
+        Kingfisher(cfg).agent_named(None)
 
 
 def test_the_request_carries_the_name_and_nothing_more(cfg):
@@ -210,3 +215,71 @@ def test_a_request_naming_no_agent_is_still_a_valid_request(cfg):
     catalogue to check against, and a rule that fires in two places disagrees in
     one of them eventually."""
     assert Request("go").agent is None
+
+
+# -- a session keeps the agent it opened with -------------------------------
+
+
+def test_a_later_turn_runs_what_the_session_opened_with(cfg):
+    """Editing an agent file mid-conversation must not change the instructions
+    under a history that already happened.
+
+    A deploy mid-session is ordinary -- the catalogue is read when a deployment
+    is wired, so a restart is exactly when a live session would otherwise pick
+    up a different prompt from the one its own transcript was produced under.
+    """
+    _agents(cfg, NARROW)
+    service = Kingfisher(cfg)
+    asked = Request("go", agent="narrow", session_id="s")
+
+    opened = service._agent_for(asked, "s")
+    _agents(cfg, NARROW.replace("Reads and nothing else.", "Reads and writes now."))
+
+    assert service._agent_for(asked, "s").description == opened.description
+
+
+def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
+    """Honouring it is wrong and ignoring it is worse: the caller asked a
+    question and would be told nothing."""
+    _agents(cfg, NARROW, CHEAP)
+    service = Kingfisher(cfg)
+    service._agent_for(Request("go", agent="narrow", session_id="s"), "s")
+
+    with pytest.raises(CapabilityError, match="running 'narrow'"):
+        service._agent_for(Request("again", agent="cheap-one", session_id="s"), "s")
+
+
+def test_naming_the_same_agent_again_is_fine(cfg):
+    """A stateless caller sends the same payload every turn and should not have
+    to remember what it opened the session with."""
+    _agents(cfg, NARROW)
+    service = Kingfisher(cfg)
+    asked = Request("go", agent="narrow", session_id="s")
+    service._agent_for(asked, "s")
+
+    assert service._agent_for(asked, "s").name == "narrow"
+
+
+def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
+    """The session decides, not the turn. A caller that named the agent when it
+    opened the conversation has said everything it needs to."""
+    _agents(cfg, NARROW)
+    service = Kingfisher(cfg)
+    service._agent_for(Request("go", agent="narrow", session_id="s"), "s")
+
+    assert service._agent_for(Request("again", session_id="s"), "s").name == "narrow"
+
+
+def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
+    """The property that makes it a snapshot rather than a cache.
+
+    Its only caller checks first, so this holds it directly: a second writer
+    added later would otherwise reintroduce exactly the thing the file exists to
+    prevent, and every test above would still pass.
+    """
+    from kingfisher.infrastructure.workspace_fs import agent_started_with, remember_agent
+
+    remember_agent(tmp_path, "s", "name: first\ndescription: One.\n")
+    remember_agent(tmp_path, "s", "name: second\ndescription: Two.\n")
+
+    assert agent_started_with(tmp_path, "s").startswith("name: first")
