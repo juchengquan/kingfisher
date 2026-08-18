@@ -193,3 +193,78 @@ def _a_model():
     from tests.conftest import FakeToolCallingModel
 
     return FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+
+# -- and end to end, through a graph that really dispatches ----------------
+
+ALWAYS_FAILS = '''
+from langchain_core.tools import tool
+
+
+@tool
+def always_fails(anything: str) -> str:
+    """Raises every time, so a test does not have to hope a model calls it."""
+    raise FileNotFoundError("/data/nothing-here.csv")
+
+
+TOOLS = [always_fails]
+'''
+
+
+def _calls(name: str, call_id: str = "call-1"):
+    """A scripted turn that calls one tool, then one that answers."""
+    from langchain_core.messages import AIMessage
+
+    return [
+        AIMessage(
+            content="",
+            tool_calls=[{"name": name, "args": {"anything": "x"}, "id": call_id}],
+        ),
+        AIMessage(content="done"),
+    ]
+
+
+def _graph_with_a_failing_tool(cfg, session_dir):
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
+    return build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=_calls("always_fails")),
+    )
+
+
+def test_a_failing_workspace_tool_does_not_stop_a_run(cfg, session_dir):
+    """The claim, through an assembled graph rather than the middleware alone.
+
+    The isolated tests prove the guard converts and that the build installs it.
+    Neither proves the two meet -- a middleware can be present and ordered
+    somewhere the exception never reaches it. This runs the graph.
+
+    Scripted rather than left to a model. Re-running the smoke after the fix
+    passed *and* showed the model had not called the failing tool at all that
+    time, so a real run is evidence of nothing in particular.
+    """
+    out = _graph_with_a_failing_tool(cfg, session_dir).invoke(
+        {"messages": [{"role": "user", "content": "go"}]}
+    )
+
+    failures = [
+        m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"
+    ]
+    assert failures, "the tool's exception never reached the model"
+    assert "FileNotFoundError" in failures[0].content
+    assert "/data/nothing-here.csv" in failures[0].content
+
+
+def test_the_run_carries_on_to_an_answer(cfg, session_dir):
+    """Not merely surviving: the turn finishes. A run that converted the error
+    and then stalled would pass the test above and help nobody."""
+    out = _graph_with_a_failing_tool(cfg, session_dir).invoke(
+        {"messages": [{"role": "user", "content": "go"}]}
+    )
+
+    assert out["messages"][-1].content == "done"
