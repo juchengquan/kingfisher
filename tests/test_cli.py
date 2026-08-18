@@ -430,3 +430,107 @@ def test_every_verb_the_parser_offers_has_something_to_run_it():
         f"offered but unwired: {sorted(offered - set(HANDLERS))}; "
         f"wired but not offered: {sorted(set(HANDLERS) - offered)}"
     )
+
+
+# -- a delegate the workspace built itself ----------------------------------
+
+
+COMPILED_MODULE = """from langchain_core.runnables import RunnableLambda
+
+
+def _build(model, tools):
+    return RunnableLambda(lambda state: state)
+
+
+SUBAGENTS = [
+    {
+        "name": "researcher",
+        "description": "Researches a topic.",
+        "build": _build,
+    }
+]
+"""
+
+PROMPTED_DEFINITION = """name: reviewer
+description: Checks figures.
+system_prompt: |
+  You check figures.
+"""
+
+
+def _subagent_catalogue(cfg):
+    directory = cfg.workspace / "subagents"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "researcher.py").write_text(COMPILED_MODULE, encoding="utf-8")
+    (directory / "reviewer.yaml").write_text(PROMPTED_DEFINITION, encoding="utf-8")
+
+
+def test_the_listing_marks_a_compiled_delegate(cfg):
+    """Marked because the rest of the listing means something different for it,
+    and nothing else in the output would say so."""
+    from kingfisher.cli.listing import render
+    from kingfisher.infrastructure.inventory import inventory
+
+    _subagent_catalogue(cfg)
+    lines = list(render(inventory(cfg), workspace=cfg.workspace))
+    named = {name: [one for one in lines if one.strip().startswith(name)]
+             for name in ("researcher", "reviewer")}
+
+    assert "[compiled]" in named["researcher"][0]
+    assert "[compiled]" not in named["reviewer"][0]
+
+
+def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
+    """The assumption a reader would otherwise make. deepagents runs the graph
+    as given and never applies our allowlist to it, so a tool grant is a
+    suggestion there rather than a limit."""
+    from kingfisher.cli.listing import render
+    from kingfisher.infrastructure.inventory import inventory
+
+    _subagent_catalogue(cfg)
+    printed = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
+
+    assert "--tools" in printed
+    assert "do not restrict what it can call" in printed
+
+
+def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
+    """The note is about a minority, so it stays absent for everyone else --
+    a caveat printed to every reader is one none of them reads."""
+    from kingfisher.cli.listing import render
+    from kingfisher.infrastructure.inventory import inventory
+
+    directory = cfg.workspace / "subagents"
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "reviewer.yaml").write_text(PROMPTED_DEFINITION, encoding="utf-8")
+
+    printed = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
+
+    assert "compiled" not in printed
+
+
+def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(cfg):
+    """`_from` stays silent when the name already tells you the file. There are
+    two spellings now, so the obvious filename depends on the kind -- comparing
+    a `.py` definition against `<name>.yaml` would annotate every one of them."""
+    from kingfisher.cli.listing import render
+    from kingfisher.infrastructure.inventory import inventory
+
+    _subagent_catalogue(cfg)
+    (line,) = [
+        one for one in render(inventory(cfg), workspace=cfg.workspace)
+        if one.strip().startswith("researcher")
+    ]
+
+    assert "(researcher.py)" not in line
+
+
+def test_the_json_listing_carries_it_too(cfg):
+    """`--json` is what a script reads, and a script deciding whether a grant
+    means anything needs the same fact the text gives a person."""
+    from kingfisher.cli.listing import as_json
+    from kingfisher.infrastructure.inventory import inventory
+
+    _subagent_catalogue(cfg)
+
+    assert as_json(inventory(cfg))["compiled_subagents"] == ["researcher"]
