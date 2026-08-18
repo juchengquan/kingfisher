@@ -56,7 +56,13 @@ _EXPORTS = {
     "shipped_kinds": "kingfisher.infrastructure.seeding",
     "Seeding": "kingfisher.infrastructure.seeding",
     "inventory": "kingfisher.application.inventory",
-    # Reached for by `kingfisher.presentation.cli`, and public because it reached. A
+    # The fifth name a consumer has forced public. A purpose-built answer
+    # rather than `model_for` itself, which the design named: `doctor` wants
+    # *which definitions cannot run*, and exporting the two calls it would
+    # need to combine would promise a recipe instead of an answer.
+    "unrunnable_delegates": "kingfisher.infrastructure.harness.agent",
+    # Reached for by `kingfisher.presentation.cli`, and public because it
+    # reached. A
     # renderer in the domain looks odd until you see what it is for: the
     # block a *refusal* prints is the block a listing prints, so a name two
     # files define reads the same in both. A consumer rendering its own
@@ -129,6 +135,7 @@ __all__ = [
     "split_reference",
     "stream",
     "system_prompt",
+    "unrunnable_delegates",
     "writable_data",
 ]
 
@@ -170,6 +177,9 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.harness.agent import build_agent as build_agent
+    from kingfisher.infrastructure.harness.agent import (
+        unrunnable_delegates as unrunnable_delegates,
+    )
     from kingfisher.infrastructure.harness.backend import build_backend as build_backend
     from kingfisher.infrastructure.harness.backend import shell_env as shell_env
     from kingfisher.infrastructure.harness.checkpointing import (

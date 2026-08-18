@@ -99,13 +99,23 @@ def build_parser() -> argparse.ArgumentParser:
     checkup = sub.add_parser(
         "doctor",
         help="check everything that stands between this install and a run",
+        # Wrapped by hand, because the raw formatter is what keeps the blank
+        # line below and it does no wrapping of its own. The paragraph break is
+        # worth the trade: the second half is a limit, and a limit buried in a
+        # justified block is one nobody reaches.
         description=(
-            "The configuration, the asset packs, the three catalogues and the "
-            "shell confinement. Nothing here calls a model, so it costs nothing "
-            "to run before a deployment rather than after its first failure -- "
-            "which also means a credential it reports as present may still be "
-            "wrong. Exits non-zero only on something that will stop a run."
+            "The configuration, the credentials it names, the three catalogues,\n"
+            "whether every definition can actually run, and what is confining the\n"
+            "shell. Exits non-zero only on something that will stop a run.\n"
+            "\n"
+            "Nothing here calls a model. That is what makes it cheap enough to run\n"
+            "before a deployment rather than after its first failure, and it is\n"
+            "also the limit: a credential reported as present may still be\n"
+            "rejected, and nothing shipped proves a call succeeds. The honest test\n"
+            "is your own task through `kingfisher.run` -- a better one than any\n"
+            "fixture of ours."
         ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
     )
     checkup.add_argument(
         "--json",

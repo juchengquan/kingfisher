@@ -198,3 +198,172 @@ def _catalogue(cfg):
         encoding="utf-8",
     )
     return path
+
+
+# -- a credential that is absent, and what it takes down -------------------
+
+TWO_ENDPOINTS = """
+endpoints:
+  gateway:
+    api: anthropic
+    base_url: https://example.invalid/anthropic
+    key_env: GATEWAY_KEY
+  elsewhere:
+    api: openai
+    base_url: https://example.invalid/v1
+    key_env: ELSEWHERE_KEY
+
+default: main-model
+
+models:
+  main-model:
+    endpoint: gateway
+  far-model:
+    endpoint: elsewhere
+
+aliases:
+  alternate: far-model
+"""
+
+
+def _half_keyed(cfg, tmp_path):
+    """A catalogue naming two endpoints with a key for one, as a fleet does."""
+    from kingfisher.infrastructure.model_catalogue import load
+
+    path = tmp_path / "half.yaml"
+    path.write_text(TWO_ENDPOINTS, encoding="utf-8")
+    from dataclasses import replace
+
+    return replace(cfg, models=load(path, {"GATEWAY_KEY": "sk-gateway"}))
+
+
+def test_an_endpoint_with_no_key_is_reported_rather_than_ticked(cfg, tmp_path):
+    """It used to be invisible. The drop is announced by a warning at load and
+    then discarded, so `doctor` counted the survivors and printed `ok` over a
+    catalogue that had lost an endpoint."""
+    checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
+
+    assert checks["credentials"].verdict == "warn"
+    assert "ELSEWHERE_KEY" in checks["credentials"].detail
+    assert "far-model" in checks["credentials"].detail
+
+
+def test_a_missing_credential_is_a_warning_not_a_failure(cfg, tmp_path):
+    """A shared catalogue naming endpoints this machine cannot reach is the
+    normal case by the loader's own account -- one reviewed file across a fleet
+    holding different subsets of keys. Failing here fails the arrangement the
+    format encourages."""
+    checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
+
+    assert checks["credentials"].verdict == "warn"
+
+
+def test_a_bound_alias_is_no_longer_called_unbound(cfg, tmp_path):
+    """The misdiagnosis this whole change began with.
+
+    `alternate` binds `far-model`, which the file defines. Its endpoint has no
+    key here, so it was reported as "named in `aliases:`, not defined under
+    `models:`" with a remedy pointing at correct YAML. The loader had already
+    decided this case was legal; the check re-derived it and got it backwards.
+    """
+    checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
+
+    assert checks["aliases"].verdict == "ok"
+
+
+def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
+    """The check nothing else does.
+
+    A delegate binding an alias to an unreachable model leaves a workspace that
+    loads, lists cleanly, and fails on the first request naming it. The build
+    refuses it then; `doctor` exists to be the before.
+    """
+    half = _half_keyed(cfg, tmp_path)
+    subagents_dir(half).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(half) / "far.yaml").write_text(
+        "name: far\ndescription: Runs somewhere this machine cannot reach.\n"
+        "alias: alternate\nsystem_prompt: |\n  Answer.\n",
+        encoding="utf-8",
+    )
+
+    checks = {check.name: check for check in examine(half)}
+
+    assert checks["definition 'far'"].verdict == "fail"
+    assert "ELSEWHERE_KEY" in checks["definition 'far'"].detail
+    assert checks["definition 'far'"].remedy
+
+
+def test_definitions_that_all_run_say_so_once(cfg, tmp_path):
+    """The negative control, and it is one line rather than one per definition:
+    a clean deployment should not scroll."""
+    half = _half_keyed(cfg, tmp_path)
+    subagents_dir(half).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(half) / "near.yaml").write_text(
+        "name: near\ndescription: Runs on what this machine has.\n"
+        "system_prompt: |\n  Answer.\n",
+        encoding="utf-8",
+    )
+
+    checks = {check.name: check for check in examine(half)}
+
+    assert checks["definitions run"].verdict == "ok"
+    assert not [name for name in checks if name.startswith("definition ")]
+
+
+def test_a_broken_catalogue_does_not_take_the_definitions_check_with_it(cfg):
+    """`unrunnable_delegates` reads the same files, so a definition that will
+    not load raises out of it. A diagnosis that stops at the first problem is
+    what this command exists to replace, and the check above already said so."""
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["subagents"].verdict == "fail"
+    assert checks["definitions run"].verdict == "warn"
+    assert checks["shell"].verdict in {"ok", "warn"}  # and the rest still ran
+
+
+def test_the_catalogue_line_says_what_it_did_not_check(cfg):
+    """A green tick that does not say so claims more than it knows: the check is
+    that a credential is *present*, never that it works."""
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert "not tested" in checks["catalogue"].detail
+
+
+def test_reaching_the_cli_stays_free_of_provider_sdks():
+    """`unrunnable_delegates` costs 868ms and 3,137 modules to import, so at the
+    top of `health` every verb would pay it -- `kingfisher help` would spend a
+    second to print text. Imported inside the check instead."""
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys\n"
+        "import kingfisher.presentation.cli.__main__\n"
+        "print(','.join(m for m in ('deepagents', 'langchain_openai',"
+        " 'langchain_anthropic') if m in sys.modules))"
+    )
+    out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+        [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+    )
+
+    assert out.stdout.strip() == ""
+
+
+def test_the_description_names_its_own_limit():
+    """A command that never calls a model has to say so where it is read.
+
+    `doctor` can report every credential present and every definition resolving
+    and still be wrong about whether a call succeeds. That hole is deliberate --
+    a probe would make this cost money, and a command that costs money comes out
+    of the pipeline -- so the honest thing is to name it and point at the test
+    that does prove it.
+    """
+    from kingfisher.presentation.cli.__main__ import _verbs, build_parser
+
+    description = _verbs(build_parser())["doctor"].description or ""
+
+    assert "may still be" in description  # present is not working
+    assert "kingfisher.run" in description  # and here is what would prove it
