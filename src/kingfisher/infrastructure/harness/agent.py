@@ -41,11 +41,8 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
     refuse_unoffered,
 )
-from kingfisher.domain.subagent import (
-    RunOn,
-    refuse_cycles,
-    refuse_two_of_a_name,
-)
+from kingfisher.domain.subagent import RunOn
+from kingfisher.domain.subagent.rules import refuse_cycles, refuse_two_of_a_name
 from kingfisher.domain.tool import Found, Offering
 from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.catalogue.layered import for_session

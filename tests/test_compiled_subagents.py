@@ -17,7 +17,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.subagent import EXPORT, NOT_COMPILED, SubagentError, declared
+from kingfisher.domain.subagent import SubagentError
+from kingfisher.domain.subagent.reading import EXPORT, NOT_COMPILED, declared
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, capture_build

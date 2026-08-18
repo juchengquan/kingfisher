@@ -1,6 +1,6 @@
 """Subagent definitions held in a directory on this host.
 
-`domain.subagent` owns the format -- what a definition means and what makes one
+`domain.subagent.reading` owns the format -- what a definition means and what makes one
 malformed -- and `documents` turns a document into one. Finding the files is a
 third job, and it is this one: nothing in either of those globs a directory.
 
@@ -16,13 +16,8 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.domain.subagent import (
-    EXPORT,
-    SUFFIX,
-    SubagentError,
-    SubagentSpec,
-    declared,
-)
+from kingfisher.domain.subagent import SubagentError, SubagentSpec
+from kingfisher.domain.subagent.reading import EXPORT, SUFFIX, declared
 from kingfisher.domain.tool import reference
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.catalogue.importing import (

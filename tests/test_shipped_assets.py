@@ -171,7 +171,7 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     It checked the one-level rule until delegation learned to nest. The rule
     that replaced it is the only thing left that a catalogue can violate here,
     so this follows it rather than being deleted."""
-    from kingfisher.domain.subagent import refuse_cycles
+    from kingfisher.domain.subagent.rules import refuse_cycles
 
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
 
