@@ -642,3 +642,68 @@ def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
 
     main._grants(cfg, _args(without_builtin_tools="execute"))
     assert len(builds) == 1
+
+
+# -- --agent, which every run that reaches a model needs -------------------
+
+
+def _intercepted(monkeypatch) -> list:
+    """Catch the `Request` the driver builds, without running a turn.
+
+    Patched on `kingfisher` itself, not on `kingfisher.application.run`. The
+    lazy export table caches: `__getattr__` resolves a name once and writes it
+    into the package globals, so patching the defining module works for the
+    first test in a session and silently hands every later one whatever the
+    first cached -- which here meant a second test appending to the first
+    test's list and finding its own empty.
+    """
+    import main as driver
+
+    seen: list = []
+
+    def _stream(request, **kwargs):
+        seen.append(request)
+        return iter(())
+
+    monkeypatch.setattr("kingfisher.stream", _stream, raising=False)
+    monkeypatch.setattr(driver, "render", lambda events, out: None)
+    return seen
+
+
+def test_the_agent_named_on_the_command_line_reaches_the_request(cfg, monkeypatch):
+    """The whole flag. `Request.agent` is refused downstream when it is absent,
+    and the driver had no way to supply it -- so every task exited 2, including
+    the smoke."""
+    driver = _driver_on(monkeypatch, cfg)
+    seen = _intercepted(monkeypatch)
+
+    driver.main(["main.py", "say ok", "--agent", "assistant", "--no-checks"])
+
+    assert seen and seen[0].agent == "assistant"
+
+
+def test_a_run_without_an_agent_is_refused_rather_than_defaulted(cfg, monkeypatch, capsys):
+    """No default, deliberately: an agent decides which endpoint a session's
+    prompts reach and whose credentials pay, so a driver picking one would put
+    that choice somewhere the command line never mentions.
+
+    The refusal comes from the service and names what the workspace offers; the
+    driver's job is only to let a caller answer it.
+    """
+    driver = _driver_on(monkeypatch, cfg)
+    seen = _intercepted(monkeypatch)
+
+    driver.main(["main.py", "say ok", "--no-checks"])
+
+    assert seen and seen[0].agent is None  # carried as absent, refused downstream
+
+
+def test_the_flag_is_offered_in_help(capsys):
+    """It is the one argument a task cannot omit, so it has to be findable
+    without reading the source."""
+    import main as driver
+
+    parser = driver.build_parser()
+    flags = {action.dest for action in parser._actions}
+
+    assert "agent" in flags

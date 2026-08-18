@@ -6,9 +6,15 @@ right for one flag and stopped being right somewhere around the fourth, because
 a request now carries a session, files, and a capability set, and none of that
 was reachable from here.
 
-    uv run main.py                              # the smoke task, checked
-    uv run main.py --no-checks                  # same run, no pass/fail gate
-    uv run main.py "Summarise /data/x.csv"      # anything else
+    uv run main.py --agent assistant            # the smoke task, checked
+    uv run main.py --agent assistant --no-checks       # no pass/fail gate
+    uv run main.py --agent assistant "Summarise /data/x.csv"
+
+`--agent` names one of the workspace's `agents/`, and every run that reaches a
+model needs one. There is no default and the refusal says so: an agent decides
+which endpoint the session's prompts go to and whose credentials pay, and a
+driver that picked for you would put that choice somewhere the command line
+never mentions. `--list` shows what this workspace offers.
 
     uv run main.py --list                       # what this workspace offers
     uv run main.py --seed-assets                # copy in what a pack ships
@@ -319,6 +325,11 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="do not read the workspace memory file on this turn",
     )
+    parser.add_argument(
+        "--agent",
+        metavar="NAME",
+        help="which agent runs this, from the workspace's agents/ (--list shows them)",
+    )
     parser.add_argument("--list", action="store_true", help="show what the workspace offers")
     parser.add_argument(
         "--seed-assets",
@@ -497,6 +508,7 @@ def main(argv: list[str]) -> int:
     )
     request = Request(
         task=task,
+        agent=args.agent,
         session_id=session_id,
         inputs=tuple(Path(p).expanduser() for p in args.input),
         data=tuple(Path(p).expanduser() for p in args.data),
