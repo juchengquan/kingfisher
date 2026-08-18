@@ -94,7 +94,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import Wanted
 
 # Imported rather than restated: both formats name a model the same way, so a
@@ -192,6 +192,33 @@ class AgentSpec:
     #: other axis, and only `False` can subtract.
     memory: bool | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+
+    @property
+    def declares(self) -> Capabilities:
+        """What this agent holds, said as the narrowing a request is clamped by.
+
+        The agent file is the baseline and a request only ever subtracts from
+        it, so the two meet through the lattice that already exists rather than
+        through a second set of rules. `agent.declares.intersect(asked)` is the
+        whole of it: `ALL` on either side is the identity, `None` on either side
+        wins outright, and a request naming what the agent did not is left with
+        the overlap -- which is empty.
+
+        `endpoints` and `models` are `ALL` because an agent has no opinion about
+        either. They are grants a *deployment* makes -- which credentials may be
+        spent, which model a caller may name for a delegate -- and an agent that
+        narrowed them here would be a definition authorising itself.
+        """
+        return Capabilities(
+            builtin_tools=self.builtin_tools,
+            tools=self.tools,
+            skills=self.skills,
+            subagents=self.subagents,
+            middleware=self.middleware,
+            endpoints=ALL,
+            models=ALL,
+            memory=self.memory,
+        )
 
 
 def parse(document: Mapping[str, object], source: Path) -> AgentSpec:

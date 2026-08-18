@@ -368,7 +368,7 @@ def test_a_delegate_that_must_differ_is_measured_against_who_summoned_it(cfg):
     assert model_for(spec, cfg) == "elsewhere-model"
 
     # Under a delegate already running that model, it is not.
-    with pytest.raises(ConfigError, match="same model as the delegate that summoned it"):
+    with pytest.raises(ConfigError, match="same model as whatever summoned it"):
         model_for(spec, cfg, caller="elsewhere-model")
 
 

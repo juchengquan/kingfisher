@@ -48,7 +48,11 @@ def _prompt_text(name: str) -> str:
     return resources.files("kingfisher.prompts").joinpath(name).read_text(encoding="utf-8")
 
 
-@lru_cache(maxsize=8)
+#: Enough for a fleet of agents rather than for one deployment. The cache is
+#: keyed on the assembled `extra`, which used to be one workspace's `PROMPT.md`
+#: and is now that plus whichever agent is running -- so the number of distinct
+#: keys is the number of agents a process serves, not one.
+@lru_cache(maxsize=32)
 def render_system_prompt(
     *,
     skills_enabled: bool = False,
@@ -122,10 +126,19 @@ def with_user_prompt(prompt: str, workspace: Path | None) -> str:
     return _joined(prompt, user_prompt(workspace))
 
 
-def system_prompt(cfg: Config | None = None) -> str:
-    """The assembled prompt for this workspace."""
+def system_prompt(cfg: Config | None = None, agent: str = "") -> str:
+    """The assembled prompt: the harness, then this workspace, then this agent.
+
+    Most specific last, which is the order every other join here uses. `agent`
+    is an agent definition's own `system_prompt`, and it is *added* rather than
+    substituted -- an agent without the harness document is not leaner, it is
+    one holding tools nobody told it about.
+
+    Empty for a build with no agent, which is what every caller passed before
+    agents existed and what a test that builds a bare graph still passes.
+    """
     return render_system_prompt(
         skills_enabled=bool(cfg and cfg.skills_enabled),
         memory_enabled=bool(cfg and cfg.memory_enabled),
-        extra=user_prompt(cfg.workspace if cfg else None),
+        extra=_joined(user_prompt(cfg.workspace if cfg else None), agent),
     )

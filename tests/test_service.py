@@ -52,7 +52,8 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
     start(cfg, "s")
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
-    turns = [service.run(Request("go", session_id="s")).turn_id for _ in range(3)]
+    asked = Request("go", agent="assistant", session_id="s")
+    turns = [service.run(asked).turn_id for _ in range(3)]
     assert turns == ["t001", "t002", "t003"]
 
 
@@ -113,7 +114,7 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
 
     Path.chmod = refuse_everything
     try:
-        events = list(service.stream(Request("go", session_id="s")))
+        events = list(service.stream(Request("go", agent="assistant", session_id="s")))
     finally:
         Path.chmod = real_chmod
 
@@ -131,7 +132,7 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
     )
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
-    events = list(service.stream(Request("go", session_id="s")))
+    events = list(service.stream(Request("go", agent="assistant", session_id="s")))
     (failed,) = [e for e in events if e.kind == "protect_failed"]
 
     assert "theirs.pdf" in failed.text
@@ -307,6 +308,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
     admitted = service._admit(
         Request(
             "go",
+            agent="assistant",
             session_id="s",
             capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
         )
@@ -334,6 +336,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     admitted = service._admit(
         Request(
             "go",
+            agent="assistant",
             session_id="s",
             capabilities=Capabilities(
                 builtin_tools=("read_file",),
@@ -376,7 +379,12 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg):
     service.start_session("s")
 
     admitted = service._admit(
-        Request("go", session_id="s", capabilities=Capabilities(builtin_tools=("read_file",)))
+        Request(
+            "go",
+            agent="assistant",
+            session_id="s",
+            capabilities=Capabilities(builtin_tools=("read_file",)),
+        )
     )
 
     assert [kind for kind, _ in admitted.withheld] == ["builtin tool"]

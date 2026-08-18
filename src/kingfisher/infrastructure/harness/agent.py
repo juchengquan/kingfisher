@@ -32,6 +32,7 @@ from langchain.agents.middleware import TodoListMiddleware
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain import skill
+from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,
@@ -779,6 +780,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
     workspace_tools: Sequence[Found] | None = None,
+    agent: AgentSpec | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
 
@@ -798,6 +800,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     only be rewritten worse.
     """
     capabilities = capabilities or Capabilities()
+    if agent is not None:
+        # The agent file is the baseline and the request only ever subtracts
+        # from it. One lattice, applied in the one direction it already goes:
+        # what a caller asks for cannot exceed what the definition declared.
+        capabilities = agent.declares.intersect(capabilities)
     roots = catalogue or Definitions.from_config(cfg)
     resolved_backend = _backend_for(cfg, session_dir, backend, roots)
     # Unconditional: the backend rejects host paths on every run, so the
@@ -852,11 +859,24 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
         interpreter_at = len(middleware)
         middleware.append(_interpreter(cfg, None))
 
+    # What this agent runs, resolved once: the id for the delegates below --
+    # `distinct` is measured against whatever summoned a delegate, and at the
+    # top that is the agent -- and the instance for the graph itself. An
+    # injected `model=` still wins, since a test handing one in has said the
+    # catalogue is not the subject.
+    agent_model_id = model_for(agent, cfg) if agent is not None else None
+    agent_model = (
+        model_object(agent, cfg, endpoints=capabilities.endpoints)
+        if agent is not None
+        else None
+    )
+    running = model or agent_model or build_model(*cfg.models.resolve())
+
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
-            model=model if model is not None else build_model(*cfg.models.resolve()),
+            model=running,
             backend=resolved_backend,
-            system_prompt=system_prompt(cfg),
+            system_prompt=system_prompt(cfg, agent.system_prompt if agent else ""),
             middleware=middleware,
             permissions=permissions,
             checkpointer=checkpointer,
@@ -988,7 +1008,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
         # A top-level delegate needs none of this -- deepagents gives it the
         # agent's own model -- but `SubAgentMiddleware` gives a nested one
         # nothing, and deepagents refuses a nested spec with no model at all.
-        root = model if model is not None else build_model(*cfg.models.resolve())
+        root = running
 
         def _with_helpers(
             name: str, *, nested: bool, inherited: Any = None, caller: str | None = None
@@ -1034,7 +1054,9 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                 )
             return compiled[key]
 
-        extras["subagents"] = [_with_helpers(n, nested=False) for n in activated]
+        extras["subagents"] = [
+            _with_helpers(n, nested=False, caller=agent_model_id) for n in activated
+        ]
 
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))

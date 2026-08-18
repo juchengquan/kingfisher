@@ -39,6 +39,15 @@ class Request:
     """
 
     task: str
+    #: Which agent runs this. A name from the workspace's `agents/`, never a
+    #: definition -- the same rule the rest of this record follows, so an
+    #: untrusted caller can activate what exists and invent nothing.
+    #:
+    #: Optional here and refused downstream rather than defaulted, because there
+    #: is no honest default: the agent decides where every prompt in the session
+    #: goes and what it costs, and a default would put that choice somewhere the
+    #: call site never mentions.
+    agent: str | None = None
     session_id: str | None = None
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()

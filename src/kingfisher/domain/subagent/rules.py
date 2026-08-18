@@ -143,7 +143,9 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
                     stack.append((helper, False))
 
 
-def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> tuple[Wanted, ...]:
+def resolved_model(
+    wanted: tuple[Wanted, ...], *, override: RunOn | None = None
+) -> tuple[Wanted, ...]:
     """What a delegate would run, in order, once the request has had its say.
 
     The override replaces wholesale, and that includes replacing an *alias* with
@@ -167,7 +169,14 @@ def resolved_model(spec: SubagentSpec, *, override: RunOn | None = None) -> tupl
     so a rule needing the catalogue belongs where the catalogue is. What is
     still a question about *names* -- may this request name this model, may it
     reach this endpoint -- stays in `capabilities`.
+
+    Takes the candidates rather than the spec that carries them, which is the
+    rule this package already states about `Config`: a domain rule that needs a
+    value takes the value. It is also what lets one rule serve both definition
+    formats -- an agent names a model exactly as a delegate does, and this
+    module cannot import `domain.agent` without a cycle, since that format is
+    written in terms of this one.
     """
     if override is not None:
         return (Wanted(model=override.model),)
-    return spec.wanted
+    return wanted

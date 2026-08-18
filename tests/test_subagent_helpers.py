@@ -564,5 +564,5 @@ def test_a_helper_that_must_differ_is_refused_beside_its_own_summoner(
     """
     _define(cfg, ELSEWHERE_REVIEWER, DISTINCT_HELPER)
 
-    with pytest.raises(ConfigError, match="same model as the delegate that summoned it"):
+    with pytest.raises(ConfigError, match="same model as whatever summoned it"):
         _build(cfg, session_dir)

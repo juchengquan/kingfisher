@@ -65,7 +65,13 @@ from uuid import uuid4
 from kingfisher.application import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
-from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities, withheld
+from kingfisher.domain.agent import AgentSpec
+from kingfisher.domain.capabilities import (
+    UNRESTRICTED,
+    Capabilities,
+    CapabilityError,
+    withheld,
+)
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.retention import SweepResult
@@ -685,6 +691,7 @@ class Kingfisher:
 
         return build_agent(
             self.cfg,
+            agent=self.agent_named(request.agent),
             capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
             run_on=request.run_on,
@@ -692,6 +699,37 @@ class Kingfisher:
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,
         )
+
+    def agent_named(self, name: str | None) -> AgentSpec | None:
+        """The agent this request asked for, out of the catalogue.
+
+        `None` for a request that named none, which is still how a caller built
+        agents before this field existed. It is refused rather than defaulted
+        once anything in `agents/` exists -- see below -- because a workspace
+        holding two agents and a request naming neither is a choice nobody made.
+
+        A name, never a definition: an agent decides which endpoint receives the
+        session's prompts and whose credentials pay, so a caller picks from what
+        the deployment reviewed and supplies nothing.
+        """
+        offered = self.catalogue.agents.specs
+        if name is None:
+            if offered:
+                msg = (
+                    f"this request names no agent, and this workspace offers "
+                    f"{', '.join(sorted(offered))} -- name the one to run"
+                )
+                raise CapabilityError(msg)
+            return None
+        spec = offered.get(name)
+        if spec is None:
+            listed = ", ".join(sorted(offered)) if offered else "none"
+            msg = (
+                f"no agent named {name!r}; this workspace offers {listed}"
+                + ("" if offered else " -- try `kingfisher seed`")
+            )
+            raise CapabilityError(msg)
+        return spec
 
     def _prepare(
         self,
