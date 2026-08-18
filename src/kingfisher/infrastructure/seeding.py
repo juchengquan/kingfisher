@@ -34,12 +34,16 @@ from typing import Protocol, runtime_checkable
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import CATALOGUE_KINDS
 
-#: Kingfisher's own package data, as an import path rather than a filesystem one
-#: -- an installed package is not in this repo's directory tree. Not called
-#: `presets`: leaving the two files that stayed in a directory named for the
-#: thing that left is how the next reader concludes assets still ship. It holds
-#: the catalogue example and the format documentation, and no definitions.
-PACKAGE = "kingfisher.reference"
+#: Where the catalogue example sits, as an import path rather than a filesystem
+#: one -- an installed package is not in this repo's directory tree.
+#:
+#: The package itself, now that the example is the only thing here that ships
+#: for the code to read. It lived in `kingfisher.reference` beside the format
+#: documentation, and that directory is gone: the documentation moved to
+#: `docs/formats.md`, since nothing in `src/` ever read it and shipping thirty
+#: kilobytes of prose to be read by nobody is not package data. A directory
+#: named `reference` holding one example would have described neither.
+PACKAGE = "kingfisher"
 
 #: The definitions that ship with kingfisher: one working tool, skill and
 #: subagent. Inside the package rather than beside it, so `pip install

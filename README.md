@@ -20,6 +20,9 @@ and it copies yours instead:
 
     kingfisher seed --from ./my-definitions
 
+The formats — tools, skills, subagents, and the catalogue they live in —
+are documented in [`docs/formats.md`](docs/formats.md).
+
 `kingfisher list` shows what a workspace offers a request — tools, skills,
 subagents — and where each one came from. `kingfisher seed` writes a starting
 workspace.
