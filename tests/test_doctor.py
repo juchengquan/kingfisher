@@ -13,8 +13,8 @@ from __future__ import annotations
 
 import json
 
-from kingfisher.cli.__main__ import main
-from kingfisher.cli.health import examine, worst
+from kingfisher.presentation.cli.__main__ import main
+from kingfisher.presentation.cli.health import examine, worst
 from tests.conftest import subagents_dir, tools_dir
 
 BROKEN_TOOL = '''
@@ -104,7 +104,7 @@ def test_no_asset_pack_warns_rather_than_failing(cfg, monkeypatch):
     # Patched where `health` bound it, not where it is defined. The module
     # imports the name at the front door, so that binding is the live one and
     # patching `seeding.shipped_kinds` would change nothing.
-    monkeypatch.setattr("kingfisher.cli.health.shipped_kinds", tuple)
+    monkeypatch.setattr("kingfisher.presentation.cli.health.shipped_kinds", tuple)
 
     checks = {check.name: check for check in examine(cfg)}
 

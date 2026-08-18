@@ -1,4 +1,4 @@
-"""`kingfisher`, and `python -m kingfisher.cli`.
+"""`kingfisher`, and `python -m kingfisher.presentation.cli`.
 
 Nothing here decides anything. It reads the configuration the library reads,
 calls the library, and prints what came back -- so running a command and calling
@@ -34,8 +34,8 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
-from kingfisher.cli.health import examine, worst
-from kingfisher.cli.listing import as_json, failed, render
+from kingfisher.presentation.cli.health import examine, worst
+from kingfisher.presentation.cli.listing import as_json, failed, render
 
 
 def build_parser() -> argparse.ArgumentParser:

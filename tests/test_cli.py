@@ -12,7 +12,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.cli.__main__ import main
+from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir
 
 
@@ -143,7 +143,7 @@ def test_both_drivers_render_through_the_same_code(cfg, capsys):
     """
     import main as driver
     from kingfisher import inventory
-    from kingfisher.cli.listing import render
+    from kingfisher.presentation.cli.listing import render
 
     _seed_something(cfg)
 
@@ -215,7 +215,7 @@ def test_help_reads_the_verbs_from_the_parser(capsys):
     thinks about. Asserted by comparing against the parser rather than against
     words in a docstring.
     """
-    from kingfisher.cli.__main__ import _verbs, build_parser
+    from kingfisher.presentation.cli.__main__ import _verbs, build_parser
 
     parser = build_parser()
     for verb in _verbs(parser):
@@ -250,7 +250,7 @@ def test_serve_is_offered_whether_or_not_the_extra_is_installed():
     and renaming the verb to `srv` left it green -- the word survives elsewhere
     on the page.
     """
-    from kingfisher.cli.__main__ import build_parser
+    from kingfisher.presentation.cli.__main__ import build_parser
 
     # Through the public `_actions`, because `_subparsers._group_actions` is
     # typed as optionally absent and reaching into it needs a cast to satisfy a
@@ -320,7 +320,7 @@ def test_serve_hands_off_rather_than_deciding_anything(monkeypatch):
     calls = []
     monkeypatch.setattr(server, "main", lambda: calls.append("served") or 0)
 
-    from kingfisher.cli.__main__ import _serve
+    from kingfisher.presentation.cli.__main__ import _serve
 
     assert _serve() == 0
     assert calls == ["served"]
@@ -339,7 +339,7 @@ def test_the_json_document_carries_every_field_the_record_has(cfg):
     from dataclasses import fields
 
     from kingfisher import inventory
-    from kingfisher.cli.listing import as_json
+    from kingfisher.presentation.cli.listing import as_json
 
     document = as_json(inventory(cfg))
 
@@ -356,7 +356,7 @@ def test_the_json_document_survives_a_round_trip(cfg):
     import json
 
     from kingfisher import inventory
-    from kingfisher.cli.listing import as_json
+    from kingfisher.presentation.cli.listing import as_json
 
     _seed_something(cfg)
 
@@ -423,7 +423,7 @@ def test_every_verb_the_parser_offers_has_something_to_run_it():
     louder and still only at runtime, in front of whoever typed the verb. This
     is what makes it neither.
     """
-    from kingfisher.cli.__main__ import HANDLERS, _verbs, build_parser
+    from kingfisher.presentation.cli.__main__ import HANDLERS, _verbs, build_parser
 
     offered = set(_verbs(build_parser()))
 
@@ -470,7 +470,7 @@ def test_the_listing_marks_a_compiled_delegate(cfg):
     """Marked because the rest of the listing means something different for it,
     and nothing else in the output would say so."""
     from kingfisher.application.inventory import inventory
-    from kingfisher.cli.listing import render
+    from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
     lines = list(render(inventory(cfg), workspace=cfg.workspace))
@@ -486,7 +486,7 @@ def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
     as given and never applies our allowlist to it, so a tool grant is a
     suggestion there rather than a limit."""
     from kingfisher.application.inventory import inventory
-    from kingfisher.cli.listing import render
+    from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
     printed = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
@@ -499,7 +499,7 @@ def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
     """The note is about a minority, so it stays absent for everyone else --
     a caveat printed to every reader is one none of them reads."""
     from kingfisher.application.inventory import inventory
-    from kingfisher.cli.listing import render
+    from kingfisher.presentation.cli.listing import render
 
     directory = cfg.workspace / "subagents"
     directory.mkdir(parents=True, exist_ok=True)
@@ -515,7 +515,7 @@ def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(
     two spellings now, so the obvious filename depends on the kind -- comparing
     a `.py` definition against `<name>.yaml` would annotate every one of them."""
     from kingfisher.application.inventory import inventory
-    from kingfisher.cli.listing import render
+    from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
     (line,) = [
@@ -530,7 +530,7 @@ def test_the_json_listing_carries_it_too(cfg):
     """`--json` is what a script reads, and a script deciding whether a grant
     means anything needs the same fact the text gives a person."""
     from kingfisher.application.inventory import inventory
-    from kingfisher.cli.listing import as_json
+    from kingfisher.presentation.cli.listing import as_json
 
     _subagent_catalogue(cfg)
 
