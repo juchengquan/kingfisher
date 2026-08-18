@@ -215,8 +215,12 @@ def _withheld_by_kind(
         # Built-ins and workspace tools are granted apart, so they are reported
         # apart: "3 tool(s) not granted" meant nothing when it could have been
         # either kind.
+        # `or ()` for the unreadable case, which cannot happen to a graph
+        # `build_agent` made -- and if it ever does, a run report listing no
+        # built-ins is a better outcome than a turn that will not start.
+        # `test_a_real_build_is_readable` is what notices instead.
         ("builtin tool", "builtin_tools", tuple(
-            n for n in registered_tools(graph) if n not in set(workspace)
+            n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
         ("tool", "tools", workspace),
         ("skill", "skills", available_skills(cfg, session_dir, catalogue=catalogue)),
