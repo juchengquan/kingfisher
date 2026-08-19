@@ -274,7 +274,8 @@ def _write_ordered(cfg) -> None:
     roots["agents"].mkdir(parents=True, exist_ok=True)
     for name in ("z-last", "a-first"):
         (roots["agents"] / f"{name}.yaml").write_text(
-            f"name: {name}\ndescription: An agent.\n", encoding="utf-8"
+            f"name: {name}\ndescription: An agent.\nsystem_prompt: |\n  Go.\n",
+            encoding="utf-8",
         )
     roots["subagents"].mkdir(parents=True, exist_ok=True)
     for name in ("z-last", "a-first"):

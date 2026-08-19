@@ -18,9 +18,13 @@ that summoned them was not.
     system_prompt: |
       You survey files before anyone trusts them.
 
-`name` and `description` are required and nothing else is. An agent defined by
-its tools and its model alone is a legitimate thing; `system.md` and `PROMPT.md`
-are already a working prompt.
+`name`, `description` and `system_prompt` are required and nothing else is. The
+prompt is required for the reason `description` is: an agent is a file somebody
+else picks from, and those are the two fields that say what it is. A definition
+without one is a list of tools with nothing anywhere saying what they are for --
+`system.md` describes the harness and `PROMPT.md` describes the workspace, and
+neither of them has ever heard of this agent. Writing one line is the cost; a
+catalogue where every agent says what it does is what it buys.
 
 **Its own folder and its own format, sharing the readers and not the fields.**
 Three fields disagree with `subagents/`, and none of the disagreements are
@@ -173,9 +177,11 @@ class AgentSpec:
 
     name: str
     description: str
-    #: Added after `system.md` and `PROMPT.md`, never instead of them. Empty is
-    #: ordinary -- an agent may be entirely described by what it holds.
-    system_prompt: str = ""
+    #: Added after `system.md` and `PROMPT.md`, never instead of them. Required,
+    #: and with no default here: `parse` refuses a definition that omits it, and
+    #: a default would leave a second way in for something the format does not
+    #: allow -- a spec built in code saying what no file may say.
+    system_prompt: str
     builtin_tools: Selection = ALL
     tools: Selection = ALL
     #: Where each `tools:` entry said its tool lives, for the entries that said.
@@ -237,7 +243,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         msg = f"{source.name}: {complaint}"
         raise AgentError(msg)
 
-    for required in ("name", "description"):
+    for required in ("name", "description", "system_prompt"):
         # Absent and blank are different mistakes and read differently: "missing"
         # sends someone looking for a line they can see they wrote.
         if required not in document:
@@ -266,7 +272,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     return AgentSpec(
         name=fields.text(document["name"]),
         description=fields.text(document["description"]),
-        system_prompt=fields.text(document.get("system_prompt")),
+        system_prompt=fields.text(document["system_prompt"]),
         builtin_tools=read.selection(
             document.get("builtin_tools"), absent=ALL, key="builtin_tools"
         ),

@@ -31,6 +31,8 @@ system_prompt: |
 CHEAP = """name: cheap-one
 description: Runs somewhere cheaper.
 alias: cheap
+system_prompt: |
+  You do the cheap half of the work.
 """
 
 
@@ -140,7 +142,7 @@ def test_a_delegate_that_must_differ_is_measured_against_the_agent(cfg, session_
     _agents(
         cfg,
         "name: elsewhere\ndescription: Runs elsewhere.\nmodel: elsewhere-model\n"
-        "subagents: [second-opinion]\n",
+        "subagents: [second-opinion]\nsystem_prompt: |\n  You answer.\n",
     )
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "second-opinion.yaml").write_text(
