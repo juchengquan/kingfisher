@@ -27,6 +27,17 @@ subagents: [extractor, reviewer, profiler]
 #
 # No `memory:` either, which means "no opinion": memory is on if your
 # deployment wired it and off if it did not.
+
+# Required, and the third of the three fields that are: `name`, `description`,
+# this. Every field above has an answer without being written -- a tool field
+# left out inherits, `skills` left out grants none -- and this one does not.
+# `system.md` describes the harness and `PROMPT.md` describes the workspace;
+# neither has heard of this agent, so a file without a prompt is a list of tools
+# with nothing anywhere saying what they are for.
+#
+# Written after `|`, a literal block, so the line breaks you wrote reach the
+# model. A folded `>` or a plain scalar joins consecutive lines into one and is
+# refused rather than quietly reflowed.
 system_prompt: |
   You work in this workspace, on whatever the caller asks for.
 
