@@ -18,6 +18,7 @@ import os
 import stat
 import sys
 from collections.abc import Awaitable, Callable
+from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -209,19 +210,80 @@ class ConfinedShell(LocalShellBackend):
         return super().execute(self.confinement.wrap(command), timeout=timeout)
 
 
+def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
+    """A result with its repeated matches dropped, first occurrence kept.
+
+    `replace` rather than assigning `result.matches`: the dataclass is
+    deepagents', and rebuilding it keeps `error` and `truncated` exactly as they
+    came back rather than reasoning about what they should be.
+
+    `None` matches mean a hard failure and are passed through untouched -- there
+    is nothing to deduplicate and an empty list would say something different.
+    """
+    if result.matches is None:
+        return result
+    seen: set[Any] = set()
+    kept = []
+    for one in result.matches:
+        identity = key(one)
+        if identity in seen:
+            continue
+        seen.add(identity)
+        kept.append(one)
+    return replace(result, matches=kept)
+
+
 class WorkspaceScopedBackend(CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
     `_get_backend_and_key` is the one place every path-addressed file operation
     resolves through — read, write, edit, delete, upload, download — so the
     check sits there rather than being repeated across a dozen overrides.
-    `ls`, `glob` and `grep` resolve separately and are left alone: they create
-    nothing, and a listing that comes back empty is self-correcting.
+    `ls` resolves separately and is left alone: it creates nothing, and a
+    listing that comes back empty is self-correcting.
+
+    `glob` and `grep` are not, and used to be. They merge every backend's
+    answer, and three of the routes here point *inside* the default backend's
+    own root -- `/data`, `/memory`, `/skills/uploaded` are all real directories
+    under the session. So each of them saw the same file twice, and said so:
+    measured, one file supplied with `--data` came back as two matches with one
+    path between them, on every pattern. `/skills` escapes it only by pointing
+    at the catalogue, which is somewhere else entirely.
+
+    A listing that comes back doubled is not self-correcting. It reads as two
+    files, and the reader is a model that was about to count them.
 
     It is a private method of a third-party class, which is a real coupling.
     `test_backend.py` pins it, so a deepagents upgrade that renames it fails the
     build rather than quietly removing the guard.
     """
+
+    def glob(self, pattern: str, path: str | None = None) -> Any:
+        """Every match, minus the ones a second backend already gave.
+
+        By path, because a file is a file: two backends reaching one produce
+        entries that agree about everything, and any that did not agree would
+        still be the same file.
+        """
+        return _once(super().glob(pattern, path), key=lambda one: one.get("path"))
+
+    def grep(
+        self,
+        pattern: str,
+        path: str | None = None,
+        glob: str | None = None,
+        *,
+        max_count: int | None = None,
+    ) -> Any:
+        """The same, keyed by the line rather than the file.
+
+        A file may match on twenty lines and each is its own result; what
+        repeats is the whole match, so that is what identifies one.
+        """
+        return _once(
+            super().grep(pattern, path, glob, max_count=max_count),
+            key=lambda one: (one.get("path"), one.get("line"), one.get("text")),
+        )
 
     def __init__(
         self,

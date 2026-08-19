@@ -348,3 +348,109 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
     build_backend(cfg, session_dir)
 
     assert agent_home(session_dir).is_dir()
+
+
+# -- one file, listed once ------------------------------------------------
+#
+# Three of the routes point *inside* the default backend's own root: `/data`,
+# `/memory` and `/skills/uploaded` are real directories under the session.
+# `CompositeBackend` merges every backend's answer, so each of those files was
+# found twice -- once by the route and once by the default walking past it.
+# `/skills` never showed it, because it points at the catalogue, somewhere else
+# entirely.
+
+def _rows(result):
+    """The matches in a listing, insisting it actually succeeded.
+
+    `matches` is `None` on a hard failure and `[]` on a search that found
+    nothing. Every test below means the second, so this refuses the first
+    rather than letting an empty comparison pass for it.
+    """
+    assert result.matches is not None, result.error
+    return result.matches
+
+
+#: Every route that lives under the session root, and so was doubled.
+INSIDE_THE_ROOT = {
+    "/data": ("data",),
+    "/memory": ("memory",),
+    "/skills/uploaded": ("skills", "uploaded"),
+}
+
+
+@pytest.mark.parametrize(("route", "parts"), INSIDE_THE_ROOT.items(), ids=INSIDE_THE_ROOT)
+def test_a_routed_file_is_globbed_once(cfg, session_dir, route, parts):
+    """Measured before this: `--data orders.csv` reached the model as
+    `['/data/orders.csv', '/data/orders.csv']`, on every pattern tried. It reads
+    as two files, and the reader is a model that was about to count them."""
+    backend = build_backend(cfg, session_dir)
+    where = session_dir.joinpath(*parts)
+    where.mkdir(parents=True, exist_ok=True)
+    (where / "probe.txt").write_text("needle\n", encoding="utf-8")
+
+    found = [one["path"] for one in _rows(backend.glob(f"{route}/probe.txt"))]
+
+    assert found == [f"{route}/probe.txt"]
+
+
+@pytest.mark.parametrize(("route", "parts"), INSIDE_THE_ROOT.items(), ids=INSIDE_THE_ROOT)
+def test_a_routed_file_is_grepped_once(cfg, session_dir, route, parts):
+    """From the root, which is where the two answers meet. Asked *at* the route
+    it was always right -- one backend answers and there is nothing to merge --
+    and a first draft of this test asserted exactly that, passed with the fix
+    reverted, and pinned nothing at all.
+    """
+    backend = build_backend(cfg, session_dir)
+    where = session_dir.joinpath(*parts)
+    where.mkdir(parents=True, exist_ok=True)
+    (where / "probe.txt").write_text("needle\n", encoding="utf-8")
+
+    found = [one["path"] for one in _rows(backend.grep("needle", path="/"))]
+
+    assert found == [f"{route}/probe.txt"]
+
+
+def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
+    """The half that says this is deduplication and not collapsing. A grep
+    match is a *line*, so one file may honestly produce several, and a key of
+    the path alone would have thrown the rest away."""
+    backend = build_backend(cfg, session_dir)
+    data = session_dir / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    (data / "probe.txt").write_text("needle one\nquiet\nneedle two\n", encoding="utf-8")
+
+    matches = _rows(backend.grep("needle", path="/data"))
+
+    assert [one["line"] for one in matches] == [1, 3]
+    assert [one["text"] for one in matches] == ["needle one", "needle two"]
+
+
+def test_two_different_files_are_both_still_listed(cfg, session_dir):
+    """The other half: nothing is dropped for being similar, only for being
+    the same thing twice."""
+    backend = build_backend(cfg, session_dir)
+    data = session_dir / "data"
+    data.mkdir(parents=True, exist_ok=True)
+    for name in ("one.txt", "two.txt"):
+        (data / name).write_text("needle\n", encoding="utf-8")
+
+    found = sorted(one["path"] for one in _rows(backend.glob("/data/*.txt")))
+
+    assert found == ["/data/one.txt", "/data/two.txt"]
+
+
+def test_a_hard_failure_is_passed_through_rather_than_emptied(cfg, session_dir):
+    """`matches` is `None` on a hard failure and `[]` on a search that found
+    nothing, and the two say different things. Deduplicating `None` into an
+    empty list would turn the first into the second."""
+    from dataclasses import dataclass
+
+    from kingfisher.infrastructure.harness.backend import _once
+
+    @dataclass
+    class Failed:
+        error: str | None = "broke"
+        matches: list | None = None
+        truncated: bool = False
+
+    assert _once(Failed(), key=lambda one: one).matches is None
