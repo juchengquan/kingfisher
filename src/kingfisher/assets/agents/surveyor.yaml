@@ -25,6 +25,11 @@ alias: cheap
 # worth remembering between sessions, and reading the memory file would put a
 # previous caller's notes into a survey that is supposed to describe the data.
 memory: false
+# Required, like `name` and `description`. The ten lines above say everything
+# this agent may *do*; this is the only one that says what it is for, and a
+# narrow agent is exactly where that gap would show -- four tools and an alias
+# describe a shape, not a job. Literal block, so the procedure below keeps the
+# lines it was written on.
 system_prompt: |
   You survey files before anyone trusts them.
 
