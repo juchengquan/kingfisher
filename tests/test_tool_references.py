@@ -14,13 +14,17 @@ from __future__ import annotations
 from pathlib import Path
 
 import pytest
+from langchain_core.tools import tool
 
-from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.tool import Found, Offering, reference, split_reference
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.domain.tool import Found, Offering, reference, split_reference, tool_name
 from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
+from kingfisher.infrastructure.harness.agent import _ToolSurface
+from kingfisher.infrastructure.harness.delegation import as_subagent
+from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
 from tests.conftest import tools_dir
 
 TOOL = """from langchain_core.tools import tool
@@ -215,3 +219,162 @@ def test_two_tools_of_one_name_both_load_and_are_told_apart(cfg):
         "a/t.py::clash",
         "b/t.py::clash",
     ]
+
+
+# -- the two spellings of one unique tool ---------------------------------
+#
+# `csv_profile::csv_columns` and `csv_columns` name the same tool, and the long
+# form is documented as buying a check rather than changing the meaning. An
+# offering does not store both: it canonicalises to the bare name wherever a
+# name is unique, keeping a reference only where two files clash. Every
+# comparison downstream is set membership against that, so the long form of a
+# unique tool matched nothing at all.
+
+
+UNIQUE = {"csv_columns": "csv_profile/"}
+#: Two files each defining `fetch`, which is the case references exist for.
+CLASHING = ("a/t.py::fetch", "b/t.py::fetch")
+
+
+@pytest.mark.parametrize(
+    ("written", "expected"),
+    [
+        ("csv_profile::csv_columns", "csv_columns"),
+        ("csv_profile/::csv_columns", "csv_columns"),
+        ("csv_columns", "csv_columns"),
+    ],
+)
+def test_either_spelling_of_a_unique_tool_reaches_the_offering(written, expected):
+    assert _offering(UNIQUE).spelt((written,)) == (expected,)
+
+
+def test_a_name_the_offering_cannot_place_comes_back_as_written():
+    """So the refusal quotes the file rather than a name it invented."""
+    assert _offering(UNIQUE).spelt(("typo::nonesuch",)) == ("typo::nonesuch",)
+
+
+@pytest.mark.parametrize("written", [ALL, None])
+def test_a_grant_that_names_nothing_is_left_alone(written):
+    assert _offering(UNIQUE).spelt(written) == written
+
+
+def test_the_long_form_of_a_unique_tool_is_not_an_unknown_tool():
+    """The refusal that stopped `surveyor` and `profiler`, both of which ship
+    written this way. Measured: `capability error: this request names unknown
+    tool(s): csv_profile::csv_profile`, from a file identical to the one in
+    `src/kingfisher/assets/`."""
+    _offering(UNIQUE).refuse_unknown(ALL, ("csv_profile::csv_columns",), subject=SUBJECT)
+
+
+def test_the_long_form_of_a_unique_tool_reaches_the_allowlist():
+    """The half that the first fix missed, and that only running it found.
+
+    Resolving the *grant* was not enough: `permitted` builds the middleware's
+    allowlist from the written form on its own, so the tool was registered on
+    the graph and then refused at the moment the model called it. The transcript
+    said `csv_profile` was granted and `Available tools:` did not list it.
+    """
+    offering = Offering(builtin=("read_file",), workspace=("csv_columns",), sources=UNIQUE)
+
+    permitted = offering.permitted(ALL, ("csv_profile::csv_columns",))
+
+    assert permitted is not None and "csv_columns" in permitted
+
+
+def test_a_clashing_name_still_has_to_be_spelt_out():
+    """The behaviour this must not change. Where two files define `fetch`, the
+    bare name is what nobody can act on -- the agent dispatches by name and
+    would keep one of the two in silence -- so it stays refused, and `spelt`
+    has nothing to place it against."""
+    offering = Offering(workspace=CLASHING, sources={})
+
+    assert offering.spelt(("fetch",)) == ("fetch",)
+    with pytest.raises(CapabilityError, match=r"write a/t\.py::fetch, b/t\.py::fetch"):
+        offering.refuse_unknown(ALL, ("fetch",), subject=SUBJECT)
+
+    offering.refuse_unknown(ALL, ("a/t.py::fetch",), subject=SUBJECT)
+
+
+def test_the_claim_is_still_checked_by_the_rule_that_checks_claims():
+    """`spelt` deliberately does not verify the path, so this has to keep
+    firing: it is the whole reason the long form is worth writing."""
+    offering = _offering(UNIQUE)
+
+    offering.refuse_unknown(ALL, ("moved/elsewhere.py::csv_columns",), subject=SUBJECT)
+    with pytest.raises(CapabilityError, match="moved"):
+        offering.refuse_moved({"csv_columns": "moved/elsewhere.py"}, subject=SUBJECT)
+
+
+# -- and where the two spellings meet the objects -------------------------
+#
+# The checks above are about a name. These are about a tool actually arriving,
+# which is a different question and was a different bug: mutation testing the
+# first fix showed `refuse_unknown` and `permitted` pinned and three other
+# sites free to stop spelling with the whole suite still green.
+
+
+@tool
+def probe(x: str) -> str:
+    """A tool called probe."""
+    return x
+
+
+PROBE = (Found(tool=probe, source="probe.py"),)
+
+
+class _Request:
+    """The one thing `ToolAllowlist` reads off a model request, and the one it
+    calls to hand back a narrowed copy."""
+
+    def __init__(self, tools):
+        self.tools = tools
+
+    def override(self, tools):
+        return _Request(tools)
+
+
+def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
+    """`granted_workspace` narrows the request's grant against what is offered,
+    and `narrowed` is set membership with no opinion about what exists -- so
+    the long form did not raise here, it silently resolved to nothing and the
+    agent carried no workspace tools at all."""
+    surface = _ToolSurface(
+        offering=Offering.of(PROBE),
+        asked=Capabilities(tools=("probe.py::probe",), builtin_tools=()),
+        found=PROBE,
+    )
+
+    assert [tool_name(one) for one in surface.carried] == ["probe"]
+
+
+def test_a_delegates_long_form_grant_reaches_the_tools_it_holds(cfg):
+    """The same question one level down, where a definition rather than a
+    request does the naming. `analysis/profiler.yaml` ships written this way."""
+    spec = _spec(tools="probe.py::probe")
+
+    built = as_subagent(
+        spec, cfg, catalogue=PROBE, tools=("probe",), builtin_tools=("read_file",)
+    )
+
+    assert [tool_name(one) for one in built["tools"]] == ["probe"]
+
+
+def test_a_delegates_long_form_grant_survives_the_ceiling(cfg):
+    """The ceiling merges the two axes into the allowlist the delegate runs
+    under, and took the written form as a name. A delegate could hold the tool
+    and still be refused the moment it called it -- which is exactly what the
+    parent did until `permitted` learned to spell."""
+    spec = _spec(tools="probe.py::probe")
+
+    built = as_subagent(
+        spec, cfg, catalogue=PROBE, tools=("probe",), builtin_tools=("read_file",)
+    )
+
+    allowlists = [one for one in built.get("middleware", ()) if isinstance(one, ToolAllowlist)]
+    assert allowlists, "a delegate naming one tool is restricted to it"
+
+    # Through the middleware rather than into its set: what matters is that the
+    # tool survives the filter the delegate actually runs under.
+    kept = allowlists[0].wrap_model_call(_Request([probe]), lambda request: request)
+
+    assert [tool_name(one) for one in kept.tools] == ["probe"]

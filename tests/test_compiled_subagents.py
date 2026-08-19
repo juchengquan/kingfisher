@@ -504,3 +504,44 @@ def test_a_request_that_withheld_a_tool_withholds_it_from_the_graph(
     )
 
     assert seen == []
+
+
+def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
+    """`build` is given the tools this delegate was granted, and the grant is
+    resolved by the same set membership everything else uses -- so a definition
+    writing the documented long form for a tool no other file defines was handed
+    an empty list, and a graph that needed it got nothing with no error at all.
+
+    The quietest of the sites this bug touched: the parent refused out loud,
+    while this one just built a delegate that could not work.
+    """
+    from langchain_core.runnables import RunnableLambda
+    from langchain_core.tools import tool
+
+    from kingfisher.domain.subagent import SubagentSpec
+    from kingfisher.domain.tool import Found, tool_name
+    from kingfisher.infrastructure.harness.delegation import compiled
+
+    @tool
+    def probe(x: str) -> str:
+        """A tool called probe."""
+        return x
+
+    handed: list = []
+
+    def build(model, tools):
+        handed.extend(tools)
+        return RunnableLambda(lambda state: state)
+
+    spec = SubagentSpec(
+        name="researcher", description="d", tools=("probe.py::probe",), build=build
+    )
+
+    compiled(
+        spec,
+        cfg,
+        catalogue=(Found(tool=probe, source="probe.py"),),
+        tools=("probe",),
+    )
+
+    assert [tool_name(one) for one in handed] == ["probe"]

@@ -19,7 +19,9 @@ import pytest
 import yaml
 
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.tool import Offering
+from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
@@ -255,3 +257,39 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(tmp_path, monkeypa
 
     # It seeds, which is the thing it claims to do.
     assert "seeded" in capsys.readouterr().out
+
+
+def test_every_preset_agent_parses(shipped):
+    """`agents/` was the one kind nothing here loaded, and two of the two
+    definitions in it could not run."""
+    specs = LocalAgentRepository(shipped / "agents").specs
+
+    assert set(specs) == {"assistant", "surveyor"}
+    for spec in specs.values():
+        assert spec.description.strip()
+        assert len(spec.system_prompt) > 200  # a real prompt, not a stub
+
+
+def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
+    """The test that was missing, and the reason two broken definitions shipped.
+
+    Every other check here reads a definition or loads a tool. None of them put
+    the two together -- and the failure was exactly in the join: `surveyor`
+    grants `csv_profile::csv_profile` and `analysis/profiler.yaml` grants
+    `csv_profile::csv_columns`, both the documented long form for a tool no
+    other file defines, and both refused as unknown by every run.
+
+    `refuse_unknown` rather than a comparison of names, because it is what a
+    build calls. A test that agreed with the loader about spelling and not with
+    the checker is how this got here.
+    """
+    offering = Offering.of(LocalToolRepository(shipped / "tools").found)
+    defined = {
+        **LocalAgentRepository(shipped / "agents").specs,
+        **LocalSubagentRepository(shipped / "subagents").specs,
+    }
+
+    assert defined, "an empty catalogue would pass every assertion below"
+    for name, spec in defined.items():
+        offering.refuse_unknown(ALL, spec.tools, subject=f"preset {name!r}")
+        offering.refuse_moved(spec.tool_sources, subject=f"preset {name!r}")

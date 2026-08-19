@@ -199,6 +199,14 @@ def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
     wanted = set(granted)
     return tuple(one for one in found if written_form(one, among=among) in wanted)
 
+def _placed(entry: str, offered: set[str]) -> str:
+    """One written entry as the offering spells it, or unchanged if it cannot."""
+    if entry in offered:
+        return entry
+    name = split_reference(entry)[1]
+    return name if name in offered else entry
+
+
 @dataclass(frozen=True)
 class Offering:
     """What tools exist to be granted, on which axis, and where each is defined.
@@ -269,6 +277,33 @@ class Offering:
         return duplicated(select(granted, found))
 
 
+    def spelt(self, selection: Selection) -> Selection:
+        """A written grant in the spelling this offering uses.
+
+        Two vocabularies meet here and used to be compared as plain strings. A
+        definition writes `csv_profile::csv_profile` or `csv_profile`, both
+        legal and documented as meaning the same thing; an offering canonicalises
+        to the *bare* name wherever a name is unique, and keeps the reference
+        only for a name two files both define. So the long form of a unique tool
+        matched nothing, and every comparison downstream is a set membership:
+        `refuse_unknown` raised "unknown tool", and `narrowed` -- which has no
+        opinion about what exists -- would have dropped it in silence.
+
+        Measured: `surveyor.yaml` and `analysis/profiler.yaml` both ship writing
+        the long form, and neither could be run. The short form works, which is
+        why a suite full of it stayed green.
+
+        The claim is deliberately not checked here. `refuse_moved` is what says
+        a tool has moved, over `tool_sources`, and it says it far better -- with
+        both references and an arrow. This only answers "which of the two
+        spellings is this", and an entry it cannot place comes back untouched so
+        that `refuse_unknown` quotes what the file actually wrote.
+        """
+        if selection in (ALL, None):
+            return selection
+        offered = set(self.workspace)
+        return tuple(_placed(one, offered) for one in selection)
+
     def refuse_unknown(
         self, builtin: Selection, tools: Selection, *, subject: str
     ) -> None:
@@ -286,7 +321,9 @@ class Offering:
         sends someone hunting for a bug in kingfisher.
         """
         for asked, own, other, here, there in (
-            (tools, self.workspace, self.builtin, "tools", "builtin_tools"),
+            # Spelt before checking, not after: a definition may write either
+            # form and only one of them is what the offering holds.
+            (self.spelt(tools), self.workspace, self.builtin, "tools", "builtin_tools"),
             (builtin, self.builtin, self.workspace, "builtin_tools", "tools"),
         ):
             if asked in (ALL, None):
@@ -355,6 +392,13 @@ class Offering:
         """
         if builtin == ALL and tools == ALL:
             return None
+        # Spelt here too, and this is the one that was missed first time: the
+        # grant resolved correctly while the *allowlist* was still built from
+        # the written form, so the tool was registered and then refused at the
+        # moment it was called. Measured, not read -- the definition loaded, the
+        # run started, and `csv_profile` was simply absent from "Available
+        # tools" when the model reached for it.
+        tools = self.spelt(tools)
         # The workspace half comes back to bare names, because that is what the
         # middleware compares against: it filters by `tool.name`, and a tool's
         # name is `fetch` however a grant spelled it. Safe to flatten precisely

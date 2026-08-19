@@ -631,7 +631,9 @@ class _ToolSurface:
         """The request's workspace grant, resolved against what was offered."""
         if self.offering is None:
             return ALL
-        return narrowed(self.asked.tools, by=self.offering.workspace) or ()
+        # `spelt` first, for the reason it exists: `narrowed` is set membership
+        # and would drop a long-form grant without a word.
+        return narrowed(self.offering.spelt(self.asked.tools), by=self.offering.workspace) or ()
 
 
 def _tool_objects(graph: Any) -> Mapping[str, Any]:

@@ -35,7 +35,7 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import resolved_model
-from kingfisher.domain.tool import Found, ceiling, select, split_reference
+from kingfisher.domain.tool import Found, Offering, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.backend import HostPathGuard, WorkspaceToolErrors
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
@@ -372,7 +372,11 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     # so `builtin_tools` is refused in the declaration and there is no second
     # axis to merge. What is left is the workspace's own, narrowed by what this
     # request granted -- which is the same rule, with nothing to fold.
-    granted = [one.tool for one in select(narrowed(spec.tools, by=tools), catalogue)]
+    # `spelt` for the same reason the parent needs it: this definition may have
+    # written `where::what` for a tool no other file defines, and `narrowed`
+    # would drop it silently rather than hand the delegate nothing loudly.
+    written = Offering.of(catalogue).spelt(spec.tools)
+    granted = [one.tool for one in select(narrowed(written, by=tools), catalogue)]
 
     runnable = spec.build(model, granted)
     # Against `Runnable`, which is what `CompiledSubAgent` declares this field
@@ -485,7 +489,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # applied here to exist at all; deciding what it *is* does not belong here.
     allowed = ceiling(
         spec.builtin_tools,
-        spec.tools,
+        Offering.of(catalogue).spelt(spec.tools),
         granted_builtin=builtin_tools,
         granted_tools=tools,
         subject=f"subagent {spec.name!r}",
