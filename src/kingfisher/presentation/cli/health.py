@@ -89,31 +89,6 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
     else:
         yield Check("credentials", "ok", "every endpoint this file names has a key")
 
-    # `models.models` and `models.unreachable` together, because the difference
-    # is the whole point: a binding whose model was dropped for want of a key is
-    # not an unbound alias, and calling it one sent its reader to edit YAML that
-    # was correct. The loader already refuses a binding naming a model the file
-    # does not define, so anything left here that is not unreachable is bound.
-    unbound = sorted(
-        f"{name} -> {target}"
-        for name, target in models.aliases.items()
-        if target not in models.models and target not in models.unreachable
-    )
-    if unbound:
-        yield Check(
-            "aliases",
-            "fail",
-            f"{', '.join(unbound)}: named in `aliases:`, not defined under `models:`",
-            "bind each alias to a model this catalogue defines",
-        )
-    elif models.aliases:
-        bound = ", ".join(sorted(models.aliases))
-        yield Check("aliases", "ok", f"{len(models.aliases)} bound: {bound}")
-    else:
-        # Not a failure. A deployment that names no alias has nothing to bind,
-        # and saying so beats an empty line somebody reads as a problem.
-        yield Check("aliases", "ok", "none defined")
-
 
 def _packs() -> Iterator[Check]:
     """Whether there are definitions to seed from.

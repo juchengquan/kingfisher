@@ -34,28 +34,6 @@ class SubagentError(ValueError):
 
 
 @dataclass(frozen=True)
-class Wanted:
-    """One thing a delegate would run, in whichever of the two ways it may say it.
-
-    Exactly one of these is ever set. `model` is a wire id and needs no
-    deployment to interpret it; `alias` is a general name and means nothing
-    until something binds it, which is `Config.bound`.
-
-    A record rather than a bare string because the two cannot be told apart by
-    looking. Returned as `"cheap"`, a caller has no way to know whether to send
-    that to an endpoint or to look it up -- and sending an alias to an endpoint
-    is a 404 at best.
-
-    Above `SubagentSpec` because a spec now holds a tuple of these. It used to
-    sit below, describing what came *out* of `resolved_model`; it describes what
-    a definition wrote as well, and those were always the same thing.
-    """
-
-    model: str | None = None
-    alias: str | None = None
-
-
-@dataclass(frozen=True)
 class RunOn:
     """Where a request wants one delegate to run, instead of what its file says.
 
@@ -134,40 +112,21 @@ class SubagentSpec:
     #: silently ignored. Each definition is built once per position it holds
     #: rather than once per route to it, which is what makes reuse affordable.
     subagents: Selection = None
-    #: What this delegate would run, in the order it would prefer, out of what
-    #: the catalogue defines. Empty means the deployment's own. Naming one
-    #: decides where the prompt goes and whose credentials pay -- the endpoint
-    #: follows from the model -- which is why it is granted rather than free.
+    #: The model this delegate runs, out of what the catalogue defines. `None`
+    #: means whatever summoned it. Naming one decides where the prompt goes and
+    #: whose credentials pay -- the endpoint follows from the model -- which is
+    #: why it is granted rather than free.
     #:
-    #: An ordered tuple rather than the `model` / `alias` pair it replaces,
-    #: which held one answer and could not hold a second choice. A file writes
-    #: either `model:` or `alias:`, never both, and either may name several;
-    #: each entry becomes one `Wanted`, so what varies between them -- a wire id
-    #: needs no deployment to interpret it, an alias means nothing until one
-    #: binds it -- stays inside the entry rather than being a fact about the
-    #: whole field.
-    #:
-    #: A candidate is passed over for one reason and no other: an alias this
-    #: deployment never bound. That is the deployment's doing, which is why a
-    #: *list* is not the definition hedging. A named model is never passed over
-    #: -- one this deployment cannot run refuses on the spot -- and that is the
-    #: difference between the two fields rather than an inconsistency.
-    #: It is a definition naming the deployments it can still be useful in.
+    #: One name rather than a list of candidates. A list meant "try these in
+    #: order", and the only thing that ever passed one over was an alias this
+    #: deployment had not bound -- so when `alias` went, every entry after the
+    #: first became unreachable. A model this deployment cannot run refuses on
+    #: the spot and always did; there is nothing for a second choice to catch.
     #:
     #: `derived`, like `tool_sources`, and for the same reason: no definition
-    #: writes `wanted:`. It is read out of `model:` and `alias:`, and a file
-    #: spelling this field's own name is refused like any other key the format
-    #: does not define.
-    wanted: tuple[Wanted, ...] = field(default=(), metadata={"derived": True})
-    #: Whether running beside the main agent defeats this delegate.
-    #:
-    #: `indistinct` has always been able to see the two crude cases -- the same
-    #: model as the deployment's default, or a different id on the same host --
-    #: and has only ever reported them, because it "cannot know that a delegate
-    #: *needs* to differ": `reviewer` deliberately runs on the same model and is
-    #: right to. This is the definition saying so, and it is what turns that
-    #: report into a refusal.
-    #:
+    #: writes `wanted:`. It is read out of `model:`, and a file spelling this
+    #: field's own name is refused like any other key the format does not define.
+    wanted: str | None = field(default=None, metadata={"derived": True})
     #: The caller's own keys, carried and never interpreted. Kingfisher reads
     #: nothing here and never will: the moment it did, this would be a field
     #: with rules, and the point of it is to be the one place a definition can

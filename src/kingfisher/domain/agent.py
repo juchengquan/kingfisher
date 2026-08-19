@@ -13,7 +13,6 @@ that summoned them was not.
     description: Reads and profiles data without changing anything.
     builtin_tools: [read_file, ls, glob, grep]
     tools: [csv_profile::csv_profile]
-    alias: cheap
     memory: false
     system_prompt: |
       You survey files before anyone trusts them.
@@ -66,11 +65,11 @@ and the reason is in the files. In a subagent file "everything" includes the
 definition doing the asking, so it is always a loop and is refused. An agent is
 not one of the subagents, so here it means every delegate the workspace offers.
 
-`model` and `alias` read exactly as they do for a delegate -- one or the other
-and never both, either may name several tried in order, an alias nobody bound
-refuses rather than falling back. Omitted, the agent runs the `default:` in
-`models.yaml`. An agent file that travels between deployments cannot portably
-name a vendor's model id, which is the whole reason the indirection exists.
+`model` reads exactly as it does for a delegate: one name, and a model this
+deployment cannot run refuses rather than falling back. Omitted, the agent runs
+the `default:` in `models.yaml`, which is what a file travelling between
+deployments should say -- a vendor's model id is portable nowhere, so the
+shipped agents name none and say in a comment what to pin them to.
 
 Model *parameters* are not here and will not be. `models.yaml` carries
 `max_tokens`, `temperature` and an `extra` bag for things like reasoning effort,
@@ -98,14 +97,13 @@ from types import MappingProxyType
 
 from kingfisher.domain import fields
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
-from kingfisher.domain.subagent import Wanted
 
 # Imported rather than restated: both formats name a model the same way, so a
 # second copy of the reader would be a second thing to keep in step, agreeing
 # by coincidence until it does not. The dependency runs this way round because
 # an agent already names delegates -- it depends on the subagent vocabulary
 # whatever happens here.
-from kingfisher.domain.subagent.reading import wanted_models
+from kingfisher.domain.subagent.reading import wanted_model
 from kingfisher.domain.tool import claimed_sources
 
 DIRECTORY = "agents"
@@ -129,7 +127,6 @@ KNOWN: frozenset[str] = frozenset(
         "subagents",
         "middleware",
         "model",
-        "alias",
         "memory",
         "metadata",
     }
@@ -187,7 +184,7 @@ class AgentSpec:
     middleware: Selection = None
     #: What this agent asked to run, in the order it would prefer. Empty means
     #: it named nothing, so it runs the deployment's `default:`.
-    wanted: tuple[Wanted, ...] = ()
+    wanted: str | None = None
     #: `False` to run without the memory file on a deployment that wired one.
     #: `None` is no opinion, which is not the same: a switch narrows like every
     #: other axis, and only `False` can subtract.
@@ -248,17 +245,6 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise AgentError(msg)
 
-    # Refused rather than ranked, as it is for a delegate: a precedence order
-    # would be invisible in the file relying on it, and whichever way round it
-    # went, half the readers would guess the other.
-    if document.get("model") and document.get("alias"):
-        msg = (
-            f"{source.name}: names both a model ({fields.text(document['model'])!r}) and "
-            f"an alias ({fields.text(document['alias'])!r}); an alias *is* a model name "
-            f"once this deployment binds it, so name one or the other"
-        )
-        raise AgentError(msg)
-
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher; where it claims to live
     # travels beside it, for whoever checks the claim.
@@ -280,7 +266,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         # the run of the place".
         subagents=read.selection(document.get("subagents"), absent=None, key="subagents"),
         middleware=read.selection(document.get("middleware"), absent=None, key="middleware"),
-        wanted=wanted_models(document),
+        wanted=wanted_model(document),
         # Absent is `None` rather than `False`, which `flag` alone cannot say:
         # a switch has three states here, and "no opinion" is not "no".
         memory=(

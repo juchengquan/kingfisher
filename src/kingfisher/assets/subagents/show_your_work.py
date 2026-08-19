@@ -146,10 +146,9 @@ SUBAGENTS = [
         # No `tools:` line on purpose -- see the module docstring. It reports on
         # whatever the request granted.
         #
-        # Reporting is cheap work, so the cheap model does it. Bound by your
-        # `models.yaml` rather than named here, for the reason `extractor.yaml`
-        # gives.
-        "alias": "cheap",
+        # No `model` key, so this runs whatever summoned it. Reporting is
+        # cheap work: add `"model": "<one your models.yaml defines>"` to pin it,
+        # left out here for the reason `extractor.yaml` gives at length.
         "build": _build,
     }
 ]

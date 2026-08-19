@@ -85,25 +85,17 @@ FAKE_MODELS = {
     ),
     #: On the *other* endpoint, and that is its whole job. A delegate written
     #: `distinct: true` refuses a model sharing a host with the default, so a
-    #: one-endpoint fixture cannot build `second-opinion` at all -- every alias
-    #: it could name resolves to the same machine.
+    #: one-endpoint fixture cannot show a delegate genuinely running elsewhere
+    #: -- every model it could name resolves to the same machine.
     "elsewhere-model": ModelProfile(model="elsewhere-model", endpoint="elsewhere"),
 }
 
-
-#: Bound here because an unbound alias refuses the build, which is the behaviour
-#: under test elsewhere -- a fixture that left them unbound would make every test
-#: naming one a test of that refusal instead. They used to be here because the
-#: shipped presets named them; the presets are a separate distribution now and
-#: bind their own, and these are kingfisher's own fixtures.
-FAKE_ALIASES = {"cheap": "cheap-model", "alternate": "elsewhere-model"}
 
 #: One record where the fixture used to set four fields on `Config`.
 FAKE_CATALOGUE = Models(
     models=FAKE_MODELS,
     endpoints={"fake": FAKE_ENDPOINT, "elsewhere": OTHER_ENDPOINT},
     default="fake-model",
-    aliases=FAKE_ALIASES,
 )
 
 

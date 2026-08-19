@@ -17,10 +17,10 @@ tools: [csv_profile::csv_profile]
 # with a procedure in its prompt does not need the skills index, which is
 # injected into that prompt and was measured at ~464 tokens for three.
 #
-# `cheap` is a name your models.yaml binds. Surveying is bulk reading, which is
-# what a cheap model is for -- and an alias rather than a model id because a
-# file that ships inside a wheel cannot portably name a vendor's model.
-alias: cheap
+# No `model:`, so this runs your `default:`. Surveying is bulk reading, which is
+# what a cheap model is for -- pin one with a `model:` line naming an entry your
+# models.yaml defines. It names none because a file shipped inside a wheel
+# cannot portably name a vendor's model.
 # Off, not "no opinion". This agent looks at files and reports; it has nothing
 # worth remembering between sessions, and reading the memory file would put a
 # previous caller's notes into a survey that is supposed to describe the data.

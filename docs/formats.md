@@ -104,7 +104,6 @@ name: surveyor
 description: Reads and profiles data without changing anything.
 builtin_tools: [read_file, ls, glob, grep]
 tools: [csv_profile::csv_profile]
-alias: cheap
 memory: false
 system_prompt: |
   You survey files before anyone trusts them.
@@ -179,7 +178,6 @@ in the workspace.
 | `subagents` | optional | Delegates it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
-| `alias` | optional | A general name your `models.yaml` binds. For an agent file that travels between deployments and cannot portably name a vendor's model id. Not with `model` |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
@@ -198,11 +196,10 @@ name in turn. The chain is worked out when the catalogue loads, and
 relationship with, and never goes stale because a file it does not own changed
 its own helpers.
 
-**The agent itself has to work.** A model your catalogue does not define, or an
-alias nobody bound, refuses. **Anything below it that cannot run is left out and
-reported** — which is what lets a freshly seeded workspace run at all, since
-`second-opinion` wants an `alternate` the example config deliberately leaves
-unbound.
+**The agent itself has to work.** A model your catalogue does not define
+refuses. **Anything below it that cannot run is left out and reported** — which
+is what lets a freshly seeded workspace run at all when one delegate names a
+model you have not set up.
 
 ### Three fields are refused
 
@@ -654,30 +651,21 @@ not checked across the whole catalogue up front: the refusal would fire before
 the override could apply.
 
 Which is why **a definition somebody else wrote should not carry a `model:`
-line.** A file you install cannot portably name a vendor's model id: `extractor`
-said `MiniMax-M2.5` and would refuse to start for anyone without a MiniMax
-entry. Say `alias:` instead and let each deployment bind it.
+line at all.** A file you install cannot portably name a vendor's model id:
+`extractor` said `MiniMax-M2.5` and would refuse to start for anyone without a
+MiniMax entry. Every shipped definition names nothing and says in a comment what
+to pin it to, which is the only form that both works on a fresh seed and admits
+that a preference was intended.
 
-They name an `alias:` instead — a general name your catalogue binds:
+There was an `alias:` for saying it portably — a general name each deployment
+bound under `aliases:` in `models.yaml` — and it is gone. Two spellings of one
+question is one more than the format needs, and a reader could not tell which
+kind of claim `cheap` was without opening another file.
 
-```yaml
-# models.yaml
-aliases:
-  cheap: MiniMax-M2.5     # extractor, profiler
-  alternate: gpt-5        # second-opinion
-```
-
-A definition writes `model:` *or* `alias:`, never both: an alias is a model name
-once bound, so a file saying both has said one thing twice with no rule for
-which wins.
-
-**An unbound alias refuses the build**, and does not fall back to the default.
-That is the whole reason the indirection is worth having. `second-opinion` exists
-in order not to be the model beside it; handing it that very model because
-nobody bound `alternate` is the answer nobody asked for, and it is invisible —
-the delegate builds, answers, and the answer is worth nothing. Refusing fires
-only when a request *activates* the delegate, so seeding definitions you have
-not bound for still costs nothing until you use them.
+The candidate *list* went with it. A list meant "try these in order", and the
+only thing that ever passed one over was an alias a deployment had not bound; a
+model this deployment cannot run refuses on the spot, and always did. So every
+entry after the first was unreachable, and `model:` takes one name.
 
 | Field | | |
 | --- | --- | --- |
@@ -689,8 +677,7 @@ not bound for still costs nothing until you use them.
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
 | `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
-| `model` | optional | An entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. May be a list, tried in order |
-| `alias` | optional | A general name your `models.yaml` binds to a model. For a definition that knows what *kind* of model it needs and cannot know its name. Not with `model`. May be a list, and an alias you never bound is passed over rather than fatal |
+| `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 ### A delegate that consults another
@@ -967,8 +954,8 @@ format has to refuse.
 | `middleware` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
-`name`, `description`, `build`, `tools`, `model`, `alias` and `metadata` are
-what remain.
+`name`, `description`, `build`, `tools`, `model` and `metadata` are what
+remain.
 
 **A tool grant is not a limit here.** deepagents runs the graph as given and
 never applies kingfisher's allowlist to it, so `--tools` narrows what `build`

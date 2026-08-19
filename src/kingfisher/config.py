@@ -231,14 +231,6 @@ class Models:
     #: -- `model_catalogue.load` refuses a file where it is not, which is what
     #: makes `resolve()` total.
     default: str
-    #: General names bound to models of this deployment's choosing, for
-    #: definitions that know what *kind* of model they want and cannot know its
-    #: name. A second namespace, kept apart from `models` on purpose.
-    #:
-    #: Not called `roles`. That word belonged to `KINGFISHER_MODEL_{role}` and
-    #: `model_for("main")`, deleted for being the wrong granularity, and reusing
-    #: it would revive the vocabulary of the thing that was removed.
-    aliases: Mapping[str, str] = field(default_factory=dict)
     #: Models this file defines that this machine cannot reach, and why -- keyed
     #: by model name, valued as the clause `resolve` drops into its refusal.
     #:
@@ -272,31 +264,6 @@ class Models:
             )
             raise ConfigError(msg)
 
-    def bound(self, alias: str) -> str:
-        """The model this deployment binds `alias` to.
-
-        Refuses rather than falling back to the default, which is the whole
-        point of the indirection. A definition writing `alias: alternate` is
-        saying it needs a model unlike the one beside it; quietly handing it
-        that very model is the failure the alias exists to prevent, and it is
-        invisible -- the delegate still builds, still answers, and the answer is
-        worth nothing.
-
-        So an unbound alias stops the build and says what to write. Loud is
-        cheap here: it fires only when a request activates the delegate, so
-        seeding a definition you have not bound for costs nothing until you use it.
-        """
-        model = self.aliases.get(alias)
-        if model is None:
-            known = tuple(sorted(self.aliases))
-            where = f" in {self.source}" if self.source else ""
-            msg = (
-                f"no model bound to alias {alias!r}{where}; this deployment binds {known}. "
-                f"Add it under 'aliases:', naming one of {tuple(sorted(self.models))}"
-            )
-            raise ConfigError(msg)
-        return model
-
     def resolve(self, name: str | None = None) -> tuple[ModelProfile, Endpoint]:
         """Which model to build, and where to send it. One question, one answer.
 
@@ -321,7 +288,7 @@ class Models:
             # Asked before "no such model", because for a model on an endpoint
             # with no key that answer is false and sends its reader to the wrong
             # file. The catalogue defines it; this machine cannot use it. Both
-            # `_aliases` and the branch below said this was how it would read,
+            # The branch below said this was how it would read,
             # and until `unreachable` existed neither could deliver it: the
             # model had already been filtered out one step earlier, so the
             # lookup failed here and answered a question nobody asked.

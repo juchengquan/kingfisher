@@ -15,10 +15,8 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-import pytest
-
 from kingfisher.application.service import opening_events
-from kingfisher.config import ConfigError, Endpoint, ModelProfile
+from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import RunOn
@@ -153,42 +151,10 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
     assert "same host" in _found(cfg, session_dir, ("cheap",))["cheap"]
 
 
-# -- only a delegate that asked ------------------------------------------
 
 
-def test_asking_by_alias_counts_as_asking(cfg, session_dir):
-    """The hole this check briefly had, and the reason aliases exist.
-
-    When the presets were stripped of their `model:` lines, `second-opinion`
-    asked for nothing -- so it ran the main agent's model *and* this said
-    nothing about it, which is the exact silence the whole check was written to
-    break. An alias is a delegate asking to be elsewhere, so it is checked like
-    one, against whatever the deployment bound it to.
-    """
-    bound = replace(
-        cfg, models=replace(cfg.models, aliases={"alternate": cfg.models.default})
-    )
-    _define(bound, ASKED_BY_ALIAS.format(alias="alternate"))
-
-    assert "same model as the main agent" in _found(bound, session_dir, ("cheap",))["cheap"]
 
 
-def test_an_alias_bound_somewhere_else_is_not_reported(cfg, session_dir):
-    """The negative control: a binding that did what it was for."""
-    base = _elsewhere(cfg, "https://api.openai.com/v1")
-    routed = replace(base, models=replace(base.models, aliases={"alternate": "gpt-5"}))
-    _define(routed, ASKED_BY_ALIAS.format(alias="alternate"))
-
-    assert _found(routed, session_dir, ("cheap",)) == {}
-
-
-def test_an_unbound_alias_is_left_to_the_build_to_refuse(cfg, session_dir):
-    """Reporting is not refusing -- the module says so. The build raises with
-    the message worth reading; saying it twice here, worded for a different
-    question, would only get in the way."""
-    _define(cfg, ASKED_BY_ALIAS.format(alias="nobody-bound-this"))
-
-    assert _found(cfg, session_dir, ("cheap",)) == {}
 
 
 def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
@@ -348,67 +314,15 @@ def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
         ELSEWHERE_BY_MODEL.format(model=cfg.models.default)
     )
 
-    assert model_for(spec, cfg) == cfg.models.default
+    assert model_for(spec) == cfg.models.default
     assert "cheap" in _found(cfg, session_dir, ("cheap",))
 
 
 
 
-def test_an_alias_nobody_bound_is_passed_over_rather_than_fatal(cfg):
-    """Fatal when it is the only candidate, which is the shipped behaviour and
-    stays. With another named after it, being unbound is exactly the case the
-    file anticipated."""
-    spec = _spec_from(
-        "name: second-opinion\n"
-        "description: d\n"
-        "alias: [never-bound, alternate]\n"
-        "system_prompt: |\n  You answer.\n"
-    )
-
-    assert model_for(spec, cfg) == "elsewhere-model"
 
 
-def test_one_unbound_alias_on_its_own_still_refuses(cfg):
-    spec = _spec_from(ELSEWHERE_BY_ALIAS.format(alias="never-bound"))
-
-    with pytest.raises(ConfigError, match="never-bound"):
-        model_for(spec, cfg)
 
 
-def test_the_refusal_names_every_candidate_and_why_each_failed(cfg):
-    """One round trip per rejected candidate is one too many: the fix is in the
-    deployment's bindings, and a reader has to know which of them to change.
-
-    Aliases, because they are the only thing passed over now. A named *model*
-    that this deployment cannot run refuses on the first one and never reaches
-    the second -- which is the difference between the two fields, and why
-    `alias` was not redundant with `model`.
-    """
-    spec = _spec_from(
-        "name: elsewhere\n"
-        "description: d\n"
-        "alias: [never-bound, also-never-bound]\n"
-        "system_prompt: |\n  You answer.\n"
-    )
-
-    with pytest.raises(ConfigError) as raised:
-        model_for(spec, cfg)
-
-    message = str(raised.value)
-    assert "never-bound" in message
-    assert "also-never-bound" in message
-    assert "2 model(s)" in message
 
 
-def test_a_request_override_replaces_the_whole_list(cfg):
-    """Not just its head. A caller naming one model has answered the question,
-    and letting the file's second choice outrank it would make the override
-    conditional on a binding the caller cannot see."""
-    spec = _spec_from(
-        "name: second-opinion\n"
-        "description: d\n"
-        "alias: [never-bound, alternate]\n"
-        "system_prompt: |\n  You answer.\n"
-    )
-
-    assert model_for(spec, cfg, override=RunOn(model="elsewhere-model")) == "elsewhere-model"

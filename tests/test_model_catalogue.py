@@ -210,73 +210,6 @@ def test_the_loader_cannot_produce_a_mismatch(tmp_path):
     assert all(name == profile.model for name, profile in catalogue.models.items())
 
 
-# -- aliases ---------------------------------------------------------------
-
-WITH_ALIASES = GOOD + """
-aliases:
-  cheap: tuned
-  alternate: main-model
-"""
-
-
-def test_aliases_bind_general_names_to_models(tmp_path):
-    aliases = loaded(tmp_path, WITH_ALIASES).aliases
-
-    assert aliases == {"cheap": "tuned", "alternate": "main-model"}
-
-
-def test_a_catalogue_without_aliases_binds_nothing(tmp_path):
-    """Optional: a deployment naming its models directly in every definition
-    never needs one."""
-    aliases = loaded(tmp_path).aliases
-
-    assert aliases == {}
-
-
-def test_an_alias_binding_an_undefined_model_is_refused(tmp_path):
-    """Both halves are in this document, so it is a plain contradiction rather
-    than a fact about the machine -- unlike a definition naming a model, which
-    is refused later and elsewhere."""
-    body = WITH_ALIASES.replace("cheap: tuned", "cheap: not-a-model")
-
-    with pytest.raises(ConfigError, match="binds 'not-a-model'"):
-        loaded(tmp_path, body)
-
-
-def test_an_alias_binding_nothing_is_refused(tmp_path):
-    body = WITH_ALIASES.replace("cheap: tuned", "cheap:")
-
-    with pytest.raises(ConfigError, match="binds nothing"):
-        loaded(tmp_path, body)
-
-
-def test_an_alias_may_not_share_a_models_name(tmp_path):
-    """It would make every message about it a lie -- "no model bound to alias
-    'tuned'" about a name that is plainly a model."""
-    body = WITH_ALIASES.replace("cheap: tuned", "tuned: main-model")
-
-    with pytest.raises(ConfigError, match="also the name of a model"):
-        loaded(tmp_path, body)
-
-
-def test_an_alias_whose_model_was_dropped_is_kept(tmp_path):
-    """A real binding this machine cannot currently follow. Kept so the refusal
-    at the point of use can name the endpoint and the variable, where refusing
-    here could only name the alias."""
-    body = WITH_ALIASES.replace(
-        "default: main-model",
-        "  other:\n    api: openai\n    base_url: https://example.invalid/v1\n"
-        "    key_env: OTHER_API_KEY\n\ndefault: main-model",
-    ).replace("  tuned:\n    endpoint: gateway", "  tuned:\n    endpoint: other")
-
-    with pytest.warns(UserWarning, match="OTHER_API_KEY"):
-        catalogue = loaded(tmp_path, body)
-        models, aliases = catalogue.models, catalogue.aliases
-
-    assert "tuned" not in models
-    assert aliases["cheap"] == "tuned"
-
-
 # -- the seam a repository would have added, which is already here ---------
 
 
@@ -335,9 +268,6 @@ models:
     endpoint: gateway
   far-model:
     endpoint: elsewhere
-
-aliases:
-  alternate: far-model
 """
 
 
@@ -374,19 +304,6 @@ def test_a_name_the_file_never_defined_still_says_so(tmp_path):
     assert "API_KEY" not in said
 
 
-def test_the_alias_path_reaches_the_same_message(tmp_path):
-    """What a definition writing `alias: alternate` actually hits.
-
-    `_aliases` keeps a binding whose model was dropped, deliberately, so that
-    "saying so at the point of use names the endpoint and the variable". This is
-    that promise, tested rather than asserted in a docstring.
-    """
-    models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
-
-    with pytest.raises(ConfigError) as refused:
-        models.resolve(models.bound("alternate"))
-
-    assert "ELSEWHERE_API_KEY" in str(refused.value)
 
 
 def test_what_cannot_run_is_kept_apart_from_what_can(tmp_path):
@@ -414,3 +331,26 @@ def test_a_catalogue_with_every_key_reaches_nothing_unreachable(tmp_path):
     assert set(models.models) == {"main-model", "far-model"}
     assert models.unreachable == {}
     assert models.resolve("far-model")[1].api == "openai"
+
+
+def test_a_removed_key_says_what_replaces_it_rather_than_looking_like_a_typo(tmp_path):
+    """`aliases:` was a table this format defined, and every deployment that used
+    one has a `models.yaml` that stops loading on upgrade.
+
+    Named individually for the reason `NOT_COMPILED` gives one layer out: the
+    generic "unknown key" reads as a misspelling and sends its reader looking for
+    the right one, when what they need is to know the key is gone and what to
+    write instead. This is the upgrade path, and it only exists if the message
+    carries it.
+    """
+    written = GOOD + "\naliases:\n  cheap: tuned\n"
+    path = tmp_path / "models.yaml"
+    path.write_text(written, encoding="utf-8")
+
+    with pytest.raises(ConfigError) as raised:
+        load(path, KEYS)
+
+    message = str(raised.value)
+    assert "no longer a table this format defines" in message
+    assert "model:" in message  # what to write instead
+    assert "did you mean" not in message  # and not offered as a typo

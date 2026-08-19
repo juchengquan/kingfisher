@@ -36,24 +36,11 @@ def test_a_healthy_workspace_passes_everything(cfg):
     checks = examine(cfg)
 
     assert {check.name for check in checks} >= {
-        "catalogue", "aliases", "definitions to seed", "tools", "subagents", "skills", "shell"
+        "catalogue", "definitions to seed", "tools", "subagents", "skills", "shell"
     }
     assert worst(checks) != "fail"
 
 
-def test_an_unbound_alias_is_a_failure(cfg):
-    """It refuses at build time, one request in -- so a deployment can start,
-    look healthy, and fail the first time somebody activates the delegate that
-    names it. That is exactly the class of problem this command is for."""
-    from dataclasses import replace
-
-    broken = replace(cfg, models=replace(cfg.models, aliases={"cheap": "a-model-nobody-defined"}))
-
-    checks = {check.name: check for check in examine(broken)}
-
-    assert checks["aliases"].verdict == "fail"
-    assert "a-model-nobody-defined" in checks["aliases"].detail
-    assert checks["aliases"].remedy
 
 
 def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
@@ -220,9 +207,6 @@ models:
     endpoint: gateway
   far-model:
     endpoint: elsewhere
-
-aliases:
-  alternate: far-model
 """
 
 
@@ -258,31 +242,20 @@ def test_a_missing_credential_is_a_warning_not_a_failure(cfg, tmp_path):
     assert checks["credentials"].verdict == "warn"
 
 
-def test_a_bound_alias_is_no_longer_called_unbound(cfg, tmp_path):
-    """The misdiagnosis this whole change began with.
-
-    `alternate` binds `far-model`, which the file defines. Its endpoint has no
-    key here, so it was reported as "named in `aliases:`, not defined under
-    `models:`" with a remedy pointing at correct YAML. The loader had already
-    decided this case was legal; the check re-derived it and got it backwards.
-    """
-    checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
-
-    assert checks["aliases"].verdict == "ok"
 
 
 def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
     """The check nothing else does.
 
-    A delegate binding an alias to an unreachable model leaves a workspace that
-    loads, lists cleanly, and fails on the first request naming it. The build
-    refuses it then; `doctor` exists to be the before.
+    A delegate naming a model this machine has no key for leaves a workspace
+    that loads, lists cleanly, and fails on the first request naming it. The
+    build refuses it then; `doctor` exists to be the before.
     """
     half = _half_keyed(cfg, tmp_path)
     subagents_dir(half).mkdir(parents=True, exist_ok=True)
     (subagents_dir(half) / "far.yaml").write_text(
         "name: far\ndescription: Runs somewhere this machine cannot reach.\n"
-        "alias: alternate\nsystem_prompt: |\n  Answer.\n",
+        "model: far-model\nsystem_prompt: |\n  Answer.\n",
         encoding="utf-8",
     )
 

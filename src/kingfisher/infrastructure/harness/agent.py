@@ -181,7 +181,7 @@ def unrunnable_delegates(
     found: list[tuple[str, str]] = []
     for name, spec in sorted(defined_subagents(cfg, None, catalogue=catalogue).items()):
         try:
-            model = model_for(spec, cfg)
+            model = model_for(spec)
             if model is not None:
                 cfg.models.resolve(model)
         except ConfigError as exc:
@@ -218,7 +218,7 @@ def indistinct_delegates(
         if spec is None:
             continue  # `build_agent` refuses this; reporting is not its job
         try:
-            model = model_for(spec, cfg, override=wanted.get(name))
+            model = model_for(spec, override=wanted.get(name))
         except ConfigError:
             # An unbound alias, or a model this deployment cannot run. The build
             # refuses it with the message worth reading; reporting is not

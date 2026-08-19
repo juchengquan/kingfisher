@@ -30,7 +30,7 @@ system_prompt: |
 
 CHEAP = """name: cheap-one
 description: Runs somewhere cheaper.
-alias: cheap
+model: cheap-model
 system_prompt: |
   You do the cheap half of the work.
 """
