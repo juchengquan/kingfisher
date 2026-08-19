@@ -17,13 +17,14 @@ from dataclasses import fields
 
 import pytest
 import yaml
-from langchain_core.messages import AIMessage, HumanMessage
+from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
+from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
@@ -53,7 +54,7 @@ def test_every_preset_subagent_parses(shipped):
         "second-opinion",
         "profiler",
         "redactor",
-        "first-look",
+        "show-your-work",
     }
     for spec in specs.values():
         assert spec.description.strip()
@@ -323,20 +324,32 @@ def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
 # -- the compiled preset ----------------------------------------------------
 
 
-def compiled(shipped, tools):
-    """The shipped `first-look` graph, built the way a run would build it.
+def compiled(shipped, tools, responses):
+    """The shipped `show-your-work` graph, built the way a run would build it.
 
     Through `LocalSubagentRepository` rather than by importing
-    `kingfisher.assets.subagents.first_look`, and the difference is not
+    `kingfisher.assets.subagents.show_your_work`, and the difference is not
     ceremony. `assets/subagents/` has no `__init__.py`, so that import resolves
     only as a namespace package -- `test_every_kingfisher_import_in_this_
     repository_names_a_module_that_exists` refuses it, correctly, and it is not
     how anything reaches an asset. The catalogue loads these by path, so a test
-    that does anything else is exercising a route no deployment has.
+    that does anything else exercises a route no deployment has.
     """
-    spec = LocalSubagentRepository(shipped / "subagents").specs["first-look"]
+    spec = LocalSubagentRepository(shipped / "subagents").specs["show-your-work"]
     assert spec.build is not None
-    return spec.build(FakeToolCallingModel(responses=[AIMessage(content="ok")]), tools)
+    return spec.build(FakeToolCallingModel(responses=responses), tools)
+
+
+def preset_module(shipped):
+    """The preset as a module, loaded the way the catalogue loads it.
+
+    `from kingfisher.assets.subagents import show_your_work` resolves only as
+    a namespace package -- `assets/subagents/` has no `__init__.py` -- and the
+    dangling-import rule refuses it. It caught this test doing exactly what
+    the preset's own docstring warns against. `importing.load` is what reads
+    a definition module for real.
+    """
+    return load(shipped / "subagents" / "show_your_work.py", declares="SUBAGENTS")
 
 
 def line_count(path: str) -> str:
@@ -344,54 +357,93 @@ def line_count(path: str) -> str:
     return f"{path}: 2 line(s)"
 
 
-def test_the_compiled_preset_builds_a_graph_that_surveys_first(shipped):
-    """A shipped asset is judged by whether it runs, so this builds the graph.
+def calling(name, args, call_id="1"):
+    """One model turn that calls a tool, then one that answers."""
+    return [
+        AIMessage(content="", tool_calls=[{"name": name, "args": args, "id": call_id}]),
+        AIMessage(content="two lines"),
+    ]
 
-    The claim the preset exists to make is structural rather than behavioural: a
-    prompt can *ask* for a profiling step and a model may skip it; a graph has no
-    edge that reaches the model without passing through the survey node. So this
-    asserts the edge, not a transcript.
+
+def test_the_compiled_preset_records_after_answering(shipped):
+    """The claim the preset exists to make is structural: there is no edge that
+    reaches the end without passing through the record node. So this asserts the
+    edge, not a transcript.
     """
-    graph = compiled(shipped, [line_count])
+    graph = compiled(shipped, [line_count], [AIMessage(content="done")])
 
-    assert {"survey", "answer"} <= set(graph.get_graph().nodes)
+    assert {"answer", "record"} <= set(graph.get_graph().nodes)
     edges = {(e.source, e.target) for e in graph.get_graph().edges}
-    assert ("__start__", "survey") in edges
-    assert ("survey", "answer") in edges
-    assert not any(source == "__start__" and target == "answer" for source, target in edges)
+    assert ("__start__", "answer") in edges
+    assert ("answer", "record") in edges
 
 
-def test_the_compiled_preset_profiles_the_file_it_was_given(shipped, tmp_path):
-    """The survey node itself: it finds the path in the request and runs what it
-    was granted over it.
-
-    "what is in rows.csv?" is the phrasing a person actually types, and the
-    trailing `?` is what the first version of the path heuristic tripped over.
+def test_the_record_names_the_tool_and_its_arguments(shipped):
+    """A model asked which tools it used gives a claim. This is computed from
+    the tool calls, so it cannot be talked out of what happened.
     """
-    target = tmp_path / "rows.csv"
-    target.write_text("a,b\n1,2\n", encoding="utf-8")
-    graph = compiled(shipped, [line_count])
+    graph = compiled(shipped, [line_count], calling("line_count", {"path": "/data/rows.csv"}))
 
-    survey = graph.get_graph().nodes["survey"].data.func
-    answer = survey({"messages": [HumanMessage(content=f"what is in {target}?")]})
+    answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
 
-    (message,) = answer["messages"]
-    assert "line_count" in message.content
-    assert "2 line(s)" in message.content
+    final = answer["messages"][-1].content
+    assert "line_count" in final
+    assert "/data/rows.csv" in final
 
 
-def test_the_compiled_preset_says_when_it_found_nothing_to_profile(shipped):
-    """The heuristic fails loudly. A delegate whose profiling step silently did
-    nothing looks identical to one that profiled a dull file, and the whole
-    point of this preset is that the step happened.
+def test_the_answer_survives_the_record(shipped):
+    """deepagents returns a delegate's result by walking back to the last
+    `AIMessage` with non-empty text. A record appended as its own message would
+    not accompany the answer -- it would replace it, and the caller would get the
+    footer and lose the reply.
     """
-    graph = compiled(shipped, [line_count])
+    graph = compiled(shipped, [line_count], calling("line_count", {"path": "x"}))
 
-    survey = graph.get_graph().nodes["survey"].data.func
-    answer = survey({"messages": [HumanMessage(content="what is in the file?")]})
+    answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
 
-    (message,) = answer["messages"]
-    assert "nothing was profiled" in message.content
+    final = answer["messages"][-1]
+    assert isinstance(final, AIMessage)
+    assert "two lines" in final.content  # the answer
+    assert "line_count" in final.content  # and the record, in one message
+
+
+def test_a_failed_call_is_recorded_as_failed(shipped):
+    """The pair a model is least reliable about: "I verified the totals" after
+    the verification tool raised. Read from `ToolMessage.status`, which is a
+    field rather than a string to sniff.
+    """
+    messages = [
+        AIMessage(content="", tool_calls=[{"name": "checker", "args": {}, "id": "7"}]),
+        ToolMessage(content="boom", tool_call_id="7", status="error"),
+        AIMessage(content="I verified the totals."),
+    ]
+
+    assert "failed" in preset_module(shipped)._record(messages)
+
+
+def test_an_answer_that_used_nothing_says_so(shipped):
+    """The most useful line this delegate ever prints. An answer produced
+    without touching the files it is about is exactly what an auditor looks for,
+    and an empty footer reads as though the question was never asked.
+    """
+    graph = compiled(shipped, [line_count], [AIMessage(content="I already knew that.")])
+
+    answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
+
+    assert "used no tools" in answer["messages"][-1].content
+
+
+def test_long_arguments_are_cut_rather_than_dropped(shipped):
+    """A display limit, not a judgement: it decides how much of a known value to
+    show, never what a value means. That is the difference from the path
+    heuristic this preset replaced.
+    """
+    module = preset_module(shipped)
+
+    written = module._arguments({"query": "x" * 500})
+
+    assert len(written) <= module.ARGUMENT_WIDTH
+    assert written.endswith("…")
 
 
 def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
@@ -404,7 +456,7 @@ def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
     """
     import ast
 
-    source = (shipped / "subagents" / "first_look.py").read_text(encoding="utf-8")
+    source = (shipped / "subagents" / "show_your_work.py").read_text(encoding="utf-8")
     module_level = {
         node.module.split(".")[0]
         for node in ast.parse(source).body
