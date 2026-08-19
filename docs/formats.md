@@ -223,6 +223,34 @@ generic one reads as *not supported yet* and sends you looking for a workaround:
 
 ---
 
+### Two agents with the same name
+
+Refused, and this is the one kind that refuses. Two files claiming `assistant`
+means a request for `assistant` gets whichever the walk reached last, with
+nothing anywhere saying which:
+
+```
+two agents are called 'assistant' -- assistant.yaml and team/assistant.yaml. A
+request names one agent and there is nothing to tell them apart, so rename one
+of them
+```
+
+Tools, subagents and skills keep both and qualify them, because a *selection*
+can be spelled `where::what` and a caller who meant one can say so. An agent is
+not selected from a set — a request names one, before there is anything to
+narrow — so there is nowhere to put the qualifier and nothing to fall back on.
+
+**`.yml` is refused too**, for agents and subagents alike. It is valid YAML
+everywhere else, so a file named that way is a definition someone wrote and
+kingfisher silently would not read:
+
+```
+reviewer.yml: kingfisher reads '.yaml' here, so this file is not loaded --
+rename it to reviewer.yaml
+```
+
+---
+
 ## Tools — `/tools/<module>.py`, at any depth
 
 Two kinds. The **built-in set** comes with the agent and you select from it by
@@ -391,6 +419,21 @@ Two things follow, and both are the point:
   is refused and the file is what tells them apart.
 - **Skills go one folder deep, not many.** See below — the difference is real
   and worth knowing before you try.
+
+### A module with no `TOOLS` is an error
+
+Not a skipped file. Quietly offering fewer tools than the workspace defines is
+the failure `CapabilityError` exists to prevent one layer down — a request names
+a tool, the name is not there, and nothing says the file that should have
+supplied it was read and ignored:
+
+```
+research/find_company.py: must define TOOLS, the tools it contributes
+```
+
+Files whose names begin with `_` are helpers and are never modules of the
+catalogue, which is how a loose file keeps something private without needing a
+folder. `SUBAGENTS` works the same way for a Python-declared subagent.
 
 ### Two tools with the same name
 
@@ -837,6 +880,32 @@ format, so an unrecognised key there is left alone.
 
 ---
 
+### Two subagents with the same name
+
+Kept, both of them, and qualified — the opposite of the agent rule above and for
+the reason given there: a delegate *is* selected from a set, so a caller who
+means one can say which.
+
+```
+subagents/surveyor.yaml            name: surveyor
+subagents/team/surveyor.yaml       name: surveyor
+```
+
+`kingfisher list` then shows them as `surveyor.yaml::surveyor` and
+`team/surveyor.yaml::surveyor`, and that is what a grant writes. Where a name is
+its own — which is every catalogue with no clash — the bare name is the key and
+nothing changes.
+
+The refusal moved to where the constraint actually lives: an agent's roster is
+keyed by name, so an *agent* granted two of a name is refused. Two definitions
+sitting in one catalogue that no single agent ever holds together are not a
+conflict, and refusing them stopped deployments over a clash nobody had asked
+for — unfixable by anyone who owned neither file.
+
+The filename is not authoritative for any of this. A subagent is named by its
+`name:` field, so `analysis/profiler.yaml` is activated as `profiler`; the path
+only appears when two files need telling apart.
+
 ### A subagent that builds itself — `/subagents/<module>.py`
 
 A subagent can be a Python module instead of a document. It exports `SUBAGENTS`,
@@ -848,18 +917,17 @@ def _build(model, tools):
     from langgraph.graph import START, MessagesState, StateGraph
 
     builder = StateGraph(MessagesState)
-    builder.add_node("survey", survey)
     builder.add_node("answer", create_agent(model, tools))
-    builder.add_edge(START, "survey")
-    builder.add_edge("survey", "answer")
+    builder.add_node("record", record)
+    builder.add_edge(START, "answer")
+    builder.add_edge("answer", "record")
     return builder.compile()
 
 
 SUBAGENTS = [
     {
-        "name": "first-look",
-        "description": "Profiles a data file, then answers questions about it.",
-        "tools": ["line_count", "csv_profile::csv_columns"],
+        "name": "show-your-work",
+        "description": "Answers, then reports exactly which tools it ran.",
         "build": _build,
     }
 ]
@@ -867,7 +935,15 @@ SUBAGENTS = [
 
 `build` is called with the model this delegate resolved to and the tool objects
 the request actually granted, and must return something runnable. `kingfisher
-seed` ships `first_look.py` as a worked example.
+seed` ships `show_your_work.py` as a worked example: it answers, then appends a
+record of the tool calls that actually happened — computed from the transcript,
+not asked of the model.
+
+**Whatever your last node emits is what the caller gets, and only that.**
+deepagents returns a delegate's result by walking back to the last `AIMessage`
+with non-empty text. So a node that appends a footer as its own message does not
+add to the answer — it *replaces* it, and the reply is lost. Emit one message
+carrying both.
 
 **Reach for this when a definition cannot say what you mean.** The example above
 guarantees an ordering: there is no edge from the start to the model that does
