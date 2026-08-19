@@ -214,12 +214,18 @@ def an_agent(cfg, name: str = "only", **fields: str) -> str:
     *request* needs a workspace holding one -- and a test about withheld tools
     or per-request builds should say that in one line rather than in a YAML
     block it does not care about.
+
+    The prompt is written for the caller unless the caller writes one, because
+    the format requires it and almost no test here is about what it says. A
+    `system_prompt=` passed through `fields` lands as a plain scalar and is
+    refused -- deliberately: a test wanting a real prompt writes the document.
     """
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     written = "".join(f"{key}: {value}\n" for key, value in fields.items())
+    prompt = "" if "system_prompt" in fields else "system_prompt: |\n  You do the task.\n"
     (directory / f"{name}.yaml").write_text(
-        f"name: {name}\ndescription: An agent.\n{written}", encoding="utf-8"
+        f"name: {name}\ndescription: An agent.\n{written}{prompt}", encoding="utf-8"
     )
     return name
 

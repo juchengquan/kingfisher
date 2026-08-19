@@ -33,9 +33,15 @@ system_prompt: |
   You survey files before anyone trusts them.
 """
 
-MINIMAL = """name: plain
-description: An agent defined by nothing but what it holds.
-"""
+#: The smallest legal definition, one field per entry so the test about a
+#: missing field can drop exactly one and leave a document that still parses.
+REQUIRED = {
+    "name": "name: plain\n",
+    "description": "description: An agent with nothing but the required fields.\n",
+    "system_prompt": "system_prompt: |\n  You do the work this workspace asks for.\n",
+}
+
+MINIMAL = "".join(REQUIRED.values())
 
 
 def _read(text: str, name: str = "surveyor.yaml"):
@@ -55,31 +61,42 @@ def test_a_whole_definition_reads_as_written():
     assert spec.system_prompt.startswith("You survey files")
 
 
-def test_two_fields_are_required_and_the_prompt_is_not():
-    """An agent described entirely by its tools and its model is a legitimate
-    thing: `system.md` and `PROMPT.md` are already a working prompt, and this
-    format only ever adds to them."""
+def test_three_fields_are_required_and_nothing_else_is():
+    """What an agent has to say about itself: what it is called, what it is for,
+    and what it is. Every other field has an answer without being written -- a
+    tool field left out inherits, `skills` left out grants none -- and the
+    prompt is the one nothing else in the catalogue can give on its behalf:
+    `system.md` describes the harness and `PROMPT.md` the workspace, and neither
+    has heard of this agent."""
     spec = _read(MINIMAL, "plain.yaml")
 
-    assert spec.system_prompt == ""
+    assert spec.system_prompt.startswith("You do the work")
     assert spec.wanted == ()
 
 
-@pytest.mark.parametrize("missing", ["name", "description"])
+@pytest.mark.parametrize("missing", sorted(REQUIRED))
 def test_a_missing_required_field_is_refused_by_name(missing):
-    written = "\n".join(
-        line for line in MINIMAL.strip().splitlines() if not line.startswith(missing)
-    )
+    written = "".join(text for field, text in REQUIRED.items() if field != missing)
 
     with pytest.raises(AgentError, match=f"missing required field '{missing}'"):
-        _read(written + "\n", "plain.yaml")
+        _read(written, "plain.yaml")
 
 
-def test_a_present_but_empty_field_says_so_rather_than_missing():
+@pytest.mark.parametrize(
+    ("field", "written"),
+    [
+        ("description", "name: plain\ndescription:\nsystem_prompt: |\n  Go.\n"),
+        # A literal block with nothing indented under it: the document is valid
+        # and the block is empty, which reads on screen as a prompt that is
+        # there.
+        ("system_prompt", "name: plain\ndescription: An agent.\nsystem_prompt: |\n"),
+    ],
+)
+def test_a_present_but_empty_field_says_so_rather_than_missing(field, written):
     """Absent and blank are different mistakes, and "missing" sends somebody
     looking for a line they can see they wrote."""
-    with pytest.raises(AgentError, match="'description' is present but empty"):
-        _read("name: plain\ndescription:\n", "plain.yaml")
+    with pytest.raises(AgentError, match=f"'{field}' is present but empty"):
+        _read(written, "plain.yaml")
 
 
 # -- omission, which is where the two formats agree -------------------------
@@ -203,8 +220,10 @@ def test_a_folded_prompt_is_refused_because_it_reflows():
     """`>` joins consecutive lines into one, so a numbered procedure reaches the
     model as a run-on line. The document is valid and the only symptom is an
     agent behaving oddly."""
+    written = REQUIRED["name"] + REQUIRED["description"] + "system_prompt: >\n  One.\n  Two.\n"
+
     with pytest.raises(AgentError, match="reflows it"):
-        _read(MINIMAL.rstrip() + "\nsystem_prompt: >\n  One.\n  Two.\n", "plain.yaml")
+        _read(written, "plain.yaml")
 
 
 def test_the_error_says_which_format_the_broken_file_is_in():
@@ -218,14 +237,18 @@ def test_the_error_says_which_format_the_broken_file_is_in():
 # -- the directory ----------------------------------------------------------
 
 
-def _write(root: Path, where: str, body: str) -> None:
+def _write(root: Path, where: str, name: str, description: str = "One.") -> None:
+    """One legal definition at a path. These tests are about *where* a file is
+    rather than what is in it, so the prompt the format requires is written for
+    them."""
     path = root / where
     path.parent.mkdir(parents=True, exist_ok=True)
+    body = f"name: {name}\ndescription: {description}\nsystem_prompt: |\n  Go.\n"
     path.write_text(body, encoding="utf-8")
 
 
 def test_a_folder_is_organisation_and_the_name_field_is_the_identity(tmp_path):
-    _write(tmp_path, "support/triage.yaml", "name: triage\ndescription: Sorts.\n")
+    _write(tmp_path, "support/triage.yaml", "triage", "Sorts.")
 
     assert LocalAgentRepository(tmp_path).names == ("triage",)
 
@@ -235,15 +258,15 @@ def test_two_agents_of_one_name_are_refused_rather_than_disambiguated(tmp_path):
     names exactly one agent, so there is no roster for a reference to pick
     within -- two files claiming `assistant` means whichever the walk reached
     last, with nothing anywhere saying which."""
-    _write(tmp_path, "a.yaml", "name: assistant\ndescription: One.\n")
-    _write(tmp_path, "nested/b.yaml", "name: assistant\ndescription: Two.\n")
+    _write(tmp_path, "a.yaml", "assistant")
+    _write(tmp_path, "nested/b.yaml", "assistant", "Two.")
 
     with pytest.raises(AgentError, match="two agents are called 'assistant'"):
         _ = LocalAgentRepository(tmp_path).names
 
 
 def test_a_yml_file_is_named_rather_than_silently_skipped(tmp_path):
-    _write(tmp_path, "assistant.yml", "name: assistant\ndescription: One.\n")
+    _write(tmp_path, "assistant.yml", "assistant")
 
     with pytest.raises(AgentError, match=r"rename it to assistant\.yaml"):
         _ = LocalAgentRepository(tmp_path).names

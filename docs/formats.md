@@ -114,7 +114,7 @@ system_prompt: |
   names its own edges.
 ```
 
-That is a whole definition: two required fields and whatever else you have an
+That is a whole definition: three required fields and whatever else you have an
 opinion about.
 
 Folders work here for the reason they work everywhere else on this page —
@@ -152,12 +152,19 @@ subagent's *is* the whole prompt. An agent's is the last of three parts:
                          loadable, where memory lives. Ships with kingfisher
     PROMPT.md            what this workspace is about. Yours, optional, and it
                          reaches your delegates too
-    system_prompt        what this agent is. Yours, optional
+    system_prompt        what this agent is. Yours, and required
 
 There is no way to replace the first, and that is not a gap. An agent without it
 is not leaner — it is one holding tools nobody told it about, discovering its
 permissions by being denied. Opening a session returns what was assembled, which
 is where to check rather than guess.
+
+The third part is required, for the reason `description` is. The two documents
+above it are written once for the whole deployment and neither has heard of this
+agent, so a file that leaves the prompt out is a list of tools with nothing
+anywhere saying what they are for. One line is enough — say what this agent is
+and what it is careful about, and leave out anything already true of every agent
+in the workspace.
 
 ### The fields
 
@@ -165,7 +172,7 @@ is where to check rather than guess.
 | --- | --- | --- |
 | `name` | required | What a request names it by. Authoritative — the filename is not |
 | `description` | required | Single line. Nothing reads it at run time; it is how somebody chooses between your agents in `kingfisher list` |
-| `system_prompt` | optional | This agent's own instruction, added after the two documents above |
+| `system_prompt` | required | This agent's own instruction, added after the two documents above. Write it as a literal block — `system_prompt: \|` — so your line breaks survive |
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table below. Unset means all of them; `[]` means none |
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
