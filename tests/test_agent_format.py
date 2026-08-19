@@ -276,3 +276,15 @@ def test_a_directory_that_is_not_there_holds_no_agents(tmp_path):
     gives before anyone seeds it. What a request gets is "no agent by that
     name", which is the message somebody can act on."""
     assert LocalAgentRepository(tmp_path / "nope").names == ()
+
+
+def test_an_agent_naming_several_models_is_refused():
+    """Its own test because the two formats keep separate readers: the subagent
+    side was the one measured, and a fix that reached only it would leave this
+    one stringifying a list with the whole suite green."""
+    with pytest.raises(AgentError, match=r"model names 2 things"):
+        _read(MINIMAL.rstrip() + "\nmodel: [gpt-5, claude-4]\n", "plain.yaml")
+
+
+def test_an_agent_naming_one_model_is_untouched():
+    assert _read(MINIMAL.rstrip() + "\nmodel: gpt-5\n", "plain.yaml").wanted == "gpt-5"

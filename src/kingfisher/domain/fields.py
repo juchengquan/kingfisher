@@ -128,6 +128,36 @@ class Reader:
     #: and a caller catching one should not be handed the other.
     error: type[Exception]
 
+    def one_name(self, value: object, *, key: str) -> str | None:
+        """One name, or `None` when the field is absent. A list is refused.
+
+        The counterpart of `selection` below, for a field that names a single
+        thing. `text` cannot do this itself: it takes a value and no error type,
+        because it is what turns `model: 4` into `"4"` for every format at once
+        -- and it is that same `str()` which turns `[gpt-5, claude-4]` into the
+        name `"['gpt-5', 'claude-4']"`, brackets and quotes included.
+
+        Measured before this: a definition writing `model: [gpt-5, claude-4]`
+        was read as a model of that spelling and refused a request later, by
+        `resolve`, with `no model "['gpt-5', 'claude-4']" defined in
+        models.yaml` -- which sends its reader off to define one. `model:` did
+        take a list once, while an `alias:` beside it could be passed over for
+        being unbound; nothing passes a candidate over now, so the shape means
+        nothing and saying so here beats saying something else later.
+        """
+        if value is None:
+            return None
+        if isinstance(value, (list, tuple, set)):
+            written = ", ".join(str(one) for one in value)
+            msg = (
+                f"{self.source}: {key} names {len(value)} things ({written}); "
+                f"it takes one. A list was legal while an unbound alias could be "
+                f"passed over and the next tried -- nothing is passed over now, "
+                f"so every name after the first was unreachable"
+            )
+            raise self.error(msg)
+        return text(value) or None
+
     def selection(
         self,
         value: object,

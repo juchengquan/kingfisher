@@ -545,19 +545,30 @@ def test_one_model_reads_as_a_list_of_one(tmp_path):
     assert spec.wanted == "gpt-5"
 
 
+def test_naming_several_models_is_refused_rather_than_stringified(tmp_path):
+    """`model:` took a list while an `alias:` beside it could be passed over for
+    being unbound, and #243 removed both -- leaving a shape that parsed and
+    meant nothing.
+
+    Measured on main before this: `model: [gpt-5, claude-4]` was read as a model
+    *named* `"['gpt-5', 'claude-4']"`, brackets and quotes included, and got as
+    far as `resolve` before failing with `no model "['gpt-5', 'claude-4']"
+    defined in models.yaml` -- one request in, naming no file, and telling its
+    reader to go and define one.
+    """
+    definition = (
+        "name: reviewer\ndescription: d\nmodel: [gpt-5, claude-4]\n"
+        "system_prompt: |\n  You review.\n"
+    )
+
+    with pytest.raises(SubagentError, match=r"model names 2 things"):
+        read_subagent(definition, tmp_path / "reviewer.yaml")
 
 
+def test_one_model_written_plainly_is_untouched(tmp_path):
+    """The half that says this refuses a *list* and not a name."""
+    definition = (
+        "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  You review.\n"
+    )
 
-
-
-
-
-
-
-
-
-
-
-
-
-
+    assert read_subagent(definition, tmp_path / "reviewer.yaml").wanted == "gpt-5"

@@ -290,7 +290,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
 
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
-    wanted = wanted_model(entry)
+    wanted = wanted_model(entry, read)
     written_tools = read.selection(entry.get("tools"), absent=ALL, key="tools")
     return SubagentSpec(
         name=fields.text(entry["name"]),
@@ -352,7 +352,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
-    wanted = wanted_model(document)
+    wanted = wanted_model(document, fields.Reader(source=source.name, error=SubagentError))
 
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
@@ -406,7 +406,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 # One reference, doing two jobs now rather than one.
 
 
-def wanted_model(document: Mapping[str, object]) -> str | None:
+def wanted_model(document: Mapping[str, object], read: fields.Reader) -> str | None:
     """The model a definition names, or `None` for whatever summoned it.
 
     One name. `model:` took a list while `alias:` existed, because an alias this
@@ -416,9 +416,15 @@ def wanted_model(document: Mapping[str, object]) -> str | None:
     spot, and always did. With `alias` gone every entry after the first was
     unreachable, so a list here would be a shape that cannot mean anything.
 
-    Read through `fields.text`, which refuses a list with the message saying so
-    rather than quietly taking the first of one.
+    Read through `Reader.one_name`, which refuses that list where the file can
+    still be named. It said `fields.text` for a while, and `fields.text` is the
+    `str()` that produced the shape rather than the check that stops it: a
+    definition writing `model: [gpt-5, claude-4]` was read as a model called
+    `"['gpt-5', 'claude-4']"`.
+
+    Takes the `Reader` both formats already build, rather than a bare error
+    type, because that is the pair -- the file's name and the format's
+    exception -- and it is bound once at each call site.
     """
-    written = document.get("model")
-    return fields.text(written) if written is not None else None
+    return read.one_name(document.get("model"), key="model")
 
