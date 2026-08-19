@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import SubagentError
@@ -31,6 +32,7 @@ from kingfisher.infrastructure.harness.backend import (
     skills_sources,
 )
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.presentation.cli.listing import _catalogue, failed
 from tests.conftest import FakeToolCallingModel, capture_build
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
@@ -572,3 +574,68 @@ def test_a_catalogue_folder_called_subagents_is_refused(cfg):
 def test_an_ordinary_catalogue_folder_is_still_a_source():
     """The other half, so the refusal above cannot quietly become "no folders"."""
     assert ("/skills/research/", "research") in skills_sources(("research",))
+
+
+# -- what a listing says ----------------------------------------------------
+
+
+def test_a_listing_prints_private_assets_under_their_owner(cfg):
+    """The one capability a listing could not otherwise reveal. An agent
+    omitting `tools:` holds every tool there is, so a bundled one is the only
+    kind it does *not* get -- and a reader has no other way to find that out.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    with_private_skill(cfg)
+
+    found = inventory(cfg)
+
+    assert found.bundled_tools["surveyor"] == ("probe",)
+    assert found.bundled_skills["surveyor"] == ("sampling",)
+    printed = "\n".join(_catalogue(found))
+    assert "probe  [private tool]" in printed
+    assert "sampling  [private skill]" in printed
+
+
+def test_a_listing_says_when_a_bundle_shadows_the_catalogue(cfg):
+    """Shadowing is only acceptable while it is visible. The delegate answers
+    `shared` with its own and the catalogue's never reaches it, and no other
+    line in this output would say so.
+    """
+    workspace_with_bundle(cfg, private="shared")
+
+    found = inventory(cfg)
+
+    assert found.shadowed["surveyor"] == ("shared",)
+    assert "shadowing the catalogue's" in "\n".join(_catalogue(found))
+
+
+def test_a_broken_private_tool_makes_the_listing_non_zero(cfg):
+    """Asserted rather than assumed, because this predicate has been wrong once:
+    `agents` was added, the section printed "cannot load", and the exit code
+    still named the two kinds that existed when it was written.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    bundle = cfg.workspace / "subagents" / "surveyor" / "tools"
+    (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
+
+    found = inventory(cfg)
+
+    assert found.bundles_error is not None
+    assert failed(found)
+
+
+def test_a_broken_bundle_does_not_hide_the_rest_of_the_listing(cfg):
+    """The other half of the same bug: one bad tool printed one section of four.
+    A listing is read *because* something is broken, so the other kinds have to
+    survive it.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    (cfg.workspace / "subagents" / "surveyor" / "tools" / "probe.py").write_text(
+        BROKEN, encoding="utf-8"
+    )
+
+    found = inventory(cfg)
+
+    assert "surveyor" in found.subagents
+    assert found.subagents_error is None
+    assert "shared" in found.tools

@@ -161,6 +161,18 @@ def _catalogue(found: Inventory) -> Iterator[str]:
         obvious = f"{plain}.py" if compiled else f"{plain}.yaml"
         marker = "  [compiled]" if compiled else ""
         yield f"  {name}{_from(source, obvious)}{marker} — {described}"
+        # Indented under their owner rather than listed with the catalogue's,
+        # because that is the fact: nothing else holds them. A reader scanning
+        # the `tools` section above has seen everything the *agent* can call,
+        # and these are the ones it cannot.
+        for kind, held in (("tools", found.bundled_tools), ("skills", found.bundled_skills)):
+            for own in held.get(name, ()):
+                yield f"      {own}  [private {kind[:-1]}]"
+        for hidden in found.shadowed.get(name, ()):
+            # Said out loud because shadowing is only acceptable while it is
+            # visible. The delegate answers `fetch` with its own; the
+            # catalogue's never reaches it, and no other line here would say so.
+            yield f"      {hidden}  [private tool, shadowing the catalogue's]"
     if found.compiled_subagents:
         # The thing a reader would otherwise assume. deepagents runs a compiled
         # graph as given and never applies our allowlist to it, so a tool grant
@@ -207,6 +219,10 @@ def as_json(found: Inventory) -> dict[str, object]:
         "subagent_sources": dict(found.subagent_sources),
         "compiled_subagents": list(found.compiled_subagents),
         "subagents_error": found.subagents_error,
+        "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
+        "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
+        "shadowed": {k: list(v) for k, v in found.shadowed.items()},
+        "bundles_error": found.bundles_error,
     }
 
 
@@ -228,5 +244,13 @@ def failed(found: Inventory) -> bool:
     """
     return any(
         error is not None
-        for error in (found.agents_error, found.tools_error, found.subagents_error)
+        for error in (
+            found.agents_error,
+            found.tools_error,
+            found.subagents_error,
+            # A bundle's tools are tools: Python that has to import, and a
+            # deployment that starts and fails on the first request activating
+            # that delegate is the shape this predicate already exists to stop.
+            found.bundles_error,
+        )
     )
