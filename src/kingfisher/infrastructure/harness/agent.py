@@ -634,6 +634,21 @@ class _ToolSurface:
         return narrowed(self.asked.tools, by=self.offering.workspace) or ()
 
 
+def _private_tools(catalogue: Definitions, name: str) -> tuple[Found, ...]:
+    """The tools a delegate brings itself, or none.
+
+    A lookup rather than a walk: `Definitions.bundled_tools` imported these at
+    startup, so a broken one has already failed by the time any of this runs and
+    what is left here cannot raise.
+
+    Empty for every delegate without a bundle, which is every delegate today --
+    so a deployment that writes none pays a dictionary lookup per activated
+    subagent and nothing else.
+    """
+    repository = catalogue.bundled_tools.get(name)
+    return tuple(repository.found) if repository is not None else ()
+
+
 def _tool_objects(graph: Any) -> Mapping[str, Any]:
     """The built tool objects a compiled graph dispatches, by name.
 
@@ -999,6 +1014,11 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                 caller=caller,
                 tool_objects=tool_objects,
                 catalogue=walked,
+                # Its own, if it has a folder named after it. Looked up by the
+                # key a grant uses, which is what `bundled_tools` is keyed by,
+                # so a qualified `analysis/surveyor.yaml::surveyor` finds its
+                # bundle and a bare `surveyor` finds its own.
+                private=_private_tools(roots, name),
                 run_on=wanted.get(name),
                 extra_middleware=subagent_middleware(
                     defined[name], registry, capabilities.middleware

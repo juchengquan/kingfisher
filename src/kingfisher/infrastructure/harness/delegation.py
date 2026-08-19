@@ -431,6 +431,12 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     default_model: Any = None,
     tool_objects: list[Any] | None = None,
     catalogue: Sequence[Found] = (),
+    #: This delegate's own tools, from the folder named after it. Held whatever
+    #: the request granted, which is the whole of what a bundle is for: the
+    #: request activated the delegate, and a delegate is made of parts. Everything
+    #: else on this signature narrows against what the caller allowed; this one
+    #: deliberately does not, and `catalogue` is the half that still does.
+    private: Sequence[Found] = (),
     skill_sources: list[Any] | None = None,
     #: Where this request wants this delegate to run, replacing its file's
     #: answer. `None` is the ordinary case: the file decides.
@@ -496,6 +502,17 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # handed that one. Measured: `SubAgent.tools` *adds* to the built-ins rather
     # than replacing them, so this costs a delegate none of its file tools.
     mine = select(allowed, catalogue)
+    # Bundle first: a catalogue tool answering a name this delegate defines
+    # itself is dropped, so exactly one candidate answers to each name and
+    # `duplicated` still holds. Nothing is silently replaced -- the order is
+    # stated here, before the lookup, rather than discovered after it -- and the
+    # reason it is this way round is that the alternative couples a bundle to
+    # every name the shared catalogue may grow later. A delegate that has had
+    # its own `fetch` for months should not break because someone else shipped
+    # one.
+    if private:
+        owned = {one.name for one in private}
+        mine = tuple(one for one in mine if one.name not in owned)
     # Unconditional, for the reason the parent gives: the backend rejects host
     # paths on every run, so the thing that turns that rejection into a
     # correction must always be here. A delegate is built with the parent's
@@ -522,8 +539,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # granted, for the reason the parent gives: a delegate that holds none of
     # them cannot reach one, and narrowing it here would mean building the guard
     # from a set that is decided afterwards.
-    if catalogue:
-        middleware.append(WorkspaceToolErrors(frozenset(entry.name for entry in catalogue)))
+    if catalogue or private:
+        middleware.append(
+            WorkspaceToolErrors(frozenset(entry.name for entry in (*catalogue, *private)))
+        )
     if allowed != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist
         # rather than an absent one -- the same split the parent makes.
@@ -533,8 +552,18 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # it. Safe here for the same reason it is safe for the parent: what this
         # delegate holds was just selected, and `refuse_ambiguous` would have
         # stopped a definition naming two of a name.
+        #
+        # Private names are added rather than filtered against, and leaving them
+        # out was a silent failure rather than a missing feature: the tool is
+        # registered on the delegate either way, so the model sees it, calls it,
+        # and this refuses -- a capability that exists and cannot be used, with
+        # nothing in the output saying why. They are held whatever the request
+        # granted, so there is nothing here for them to be narrowed by.
         middleware.append(
-            ToolAllowlist(tuple(split_reference(one)[1] for one in (allowed or ())))
+            ToolAllowlist(
+                tuple(split_reference(one)[1] for one in (allowed or ()))
+                + tuple(one.name for one in private)
+            )
         )
     # A subagent inherits none of its parent's middleware, so an index it is
     # not given is an index it has no idea exists. `SubAgent.skills` would take
@@ -581,12 +610,12 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # which made it useless for the one thing a per-delegate model is for:
     # `second-opinion` exists in order *not* to be the model beside it, and a
     # blanket override silently defeats it. The file says where it runs.
-    if mine or tool_objects is not None:
+    if mine or private or tool_objects is not None:
         # Objects, not names -- `SubAgent.tools` is what deepagents registers,
         # and handing it names raises inside `ToolNode`. Narrowing still
         # happens through `ToolAllowlist` above, which is why the whole set
         # goes in and the allowlist decides.
-        subagent["tools"] = [one.tool for one in mine] + list(tool_objects or [])
+        subagent["tools"] = [one.tool for one in (*private, *mine)] + list(tool_objects or [])
 
     built = model_object(
         spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model, caller=caller

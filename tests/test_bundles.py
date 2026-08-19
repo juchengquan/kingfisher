@@ -14,12 +14,17 @@ agent holds; a tool in a bundle reaches its own delegate and nobody else.
 from __future__ import annotations
 
 import pytest
+from langchain_core.messages import AIMessage
 
+from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.domain.tool import Offering
+from kingfisher.domain.tool import Offering, tool_name
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import ToolError
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from tests.conftest import FakeToolCallingModel, capture_build
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
 
@@ -212,7 +217,7 @@ def test_the_reserved_names_are_skipped_wherever_they_appear(tmp_path):
 TOOL = '''
 def {name}() -> str:
     "A tool."
-    return "ok"
+    return "{answer}"
 
 TOOLS = [{name}]
 '''
@@ -220,7 +225,7 @@ TOOLS = [{name}]
 BROKEN = "import a_package_that_is_not_installed\n\nTOOLS = []\n"
 
 #: The ordinary case, named once so it can be a default without a call.
-PROBE = TOOL.format(name="probe")
+PROBE = TOOL.format(name="probe", answer="ok")
 
 
 def catalogue_with_bundle(tmp_path, tool=PROBE):
@@ -231,7 +236,9 @@ def catalogue_with_bundle(tmp_path, tool=PROBE):
     tools = tmp_path / "subagents" / "surveyor" / "tools"
     tools.mkdir()
     (tools / "probe.py").write_text(tool, encoding="utf-8")
-    (tmp_path / "tools" / "shared.py").write_text(TOOL.format(name="shared"), encoding="utf-8")
+    (tmp_path / "tools" / "shared.py").write_text(
+        TOOL.format(name="shared", answer="ok"), encoding="utf-8"
+    )
     return Definitions.from_roots({kind: tmp_path / kind for kind in
                                    ("agents", "skills", "subagents", "tools")})
 
@@ -318,7 +325,7 @@ def test_a_private_tool_is_not_read_as_a_subagent_module(tmp_path):
     define(tmp_path / "surveyor", "surveyor")
     tools = tmp_path / "surveyor" / "tools"
     tools.mkdir()
-    (tools / "probe.py").write_text(TOOL.format(name="probe"), encoding="utf-8")
+    (tools / "probe.py").write_text(TOOL.format(name="probe", answer="ok"), encoding="utf-8")
 
     repository = LocalSubagentRepository(tmp_path)
 
@@ -332,6 +339,149 @@ def test_a_private_tool_written_as_a_package_is_skipped_too(tmp_path):
     define(tmp_path / "surveyor", "surveyor")
     package = tmp_path / "surveyor" / "tools" / "probe"
     package.mkdir(parents=True)
-    (package / "__init__.py").write_text(TOOL.format(name="probe"), encoding="utf-8")
+    (package / "__init__.py").write_text(TOOL.format(name="probe", answer="ok"), encoding="utf-8")
 
     assert set(LocalSubagentRepository(tmp_path).specs) == {"surveyor"}
+
+
+# -- what the delegate actually ends up holding -----------------------------
+
+
+PRIVATE_OWNER = """name: surveyor
+description: Surveys files.
+tools: [shared]
+system_prompt: |
+  You survey.
+"""
+
+NO_TOOLS_LINE = """name: surveyor
+description: Surveys files.
+system_prompt: |
+  You survey.
+"""
+
+
+def workspace_with_bundle(cfg, definition=PRIVATE_OWNER, private="probe"):
+    """A workspace whose `surveyor` brings one tool of its own."""
+    bundle = cfg.workspace / "subagents" / "surveyor"
+    bundle.mkdir(parents=True, exist_ok=True)
+    (bundle / "surveyor.yaml").write_text(definition, encoding="utf-8")
+    (bundle / "tools").mkdir(exist_ok=True)
+    # A different answer from the catalogue's, so a test can say which of two
+    # files defining one name actually reached the delegate.
+    (bundle / "tools" / f"{private}.py").write_text(
+        TOOL.format(name=private, answer="from the bundle"), encoding="utf-8"
+    )
+    tools = cfg.workspace / "tools"
+    tools.mkdir(exist_ok=True)
+    (tools / "shared.py").write_text(
+        TOOL.format(name="shared", answer="from the catalogue"), encoding="utf-8"
+    )
+
+
+def only(captured, name):
+    """The delegate we are asking about, as deepagents received it.
+
+    By name rather than by position: deepagents supplies a `general-purpose`
+    delegate of its own whenever `task` is present, so unpacking one is a test
+    that breaks for a reason that has nothing to do with it.
+    """
+    (found,) = [s for s in captured["subagents"] if s["name"] == name]
+    return found
+
+
+def built_subagent(cfg, session_dir, monkeypatch):
+    """The one delegate this workspace defines, as deepagents received it."""
+    captured = capture_build(monkeypatch)
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("surveyor",), tools=("shared",)),
+    )
+    return only(captured, "surveyor")
+
+
+def test_a_delegate_holds_the_tool_from_its_own_folder(cfg, session_dir, monkeypatch):
+    """The request granted `shared` and never heard of `probe`. The delegate
+    holds both, because it was activated and a delegate is made of parts.
+    """
+    workspace_with_bundle(cfg)
+
+    subagent = built_subagent(cfg, session_dir, monkeypatch)
+
+    assert {tool_name(t) for t in subagent["tools"]} == {"probe", "shared"}
+
+
+def test_a_private_tool_survives_a_request_that_granted_no_tools(cfg, session_dir, monkeypatch):
+    """The decision, stated as a test. Every other axis narrows against what the
+    caller allowed; this one rides on the subagent grant alone, or the caller
+    would have to name a tool they are not supposed to know about.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("surveyor",), tools=()),
+    )
+
+    subagent = only(captured, "surveyor")
+    assert {tool_name(t) for t in subagent["tools"]} == {"probe"}
+
+
+def test_a_private_tool_is_in_the_delegates_allowlist(cfg, session_dir, monkeypatch):
+    """The failure this would otherwise have been is silent rather than absent.
+
+    A delegate whose definition narrows tools gets a `ToolAllowlist`, and the
+    private tool is registered on it either way -- so leaving the name out means
+    the model sees the tool, calls it, and the allowlist refuses, with nothing
+    in the output saying why.
+    """
+    workspace_with_bundle(cfg)
+
+    subagent = built_subagent(cfg, session_dir, monkeypatch)
+
+    (allowlist,) = [m for m in subagent["middleware"] if isinstance(m, ToolAllowlist)]
+    assert "probe" in allowlist._allowed
+    assert "shared" in allowlist._allowed
+
+
+def test_the_bundle_wins_a_name_the_catalogue_also_defines(cfg, session_dir, monkeypatch):
+    """One candidate answers each name, so `duplicated` still holds and nothing
+    is silently replaced -- the order is stated before the lookup.
+
+    The reason it is this way round is breakage at a distance: refusing the
+    collision would mean the catalogue growing a `shared` breaks a delegate that
+    has had its own for months, which is the coupling a bundle removes.
+    """
+    workspace_with_bundle(cfg, private="shared")
+
+    subagent = built_subagent(cfg, session_dir, monkeypatch)
+
+    (held,) = subagent["tools"]
+    assert tool_name(held) == "shared"
+    # Which of the two files answered, since both define a `shared`.
+    assert held() == "from the bundle"
+
+
+def test_the_main_agent_never_holds_another_delegates_private_tool(
+    cfg, session_dir, monkeypatch
+):
+    """The point of the whole feature. An agent omitting `tools:` gets every
+    tool there is, so this is the only way to have one it does not get.
+    """
+    workspace_with_bundle(cfg)
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("surveyor",)),
+    )
+
+    assert "probe" not in {tool_name(t) for t in captured["tools"]}
+    assert "shared" in {tool_name(t) for t in captured["tools"]}
