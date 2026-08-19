@@ -16,6 +16,7 @@ from __future__ import annotations
 import pytest
 from langchain_core.messages import AIMessage
 
+from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import Offering, tool_name
@@ -23,7 +24,13 @@ from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import ToolError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.infrastructure.harness.backend import (
+    BUNDLED_SKILLS_ROUTE,
+    SKILLS_ROUTE,
+    build_backend,
+    skills_sources,
+)
+from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from tests.conftest import FakeToolCallingModel, capture_build
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
@@ -485,3 +492,83 @@ def test_the_main_agent_never_holds_another_delegates_private_tool(
 
     assert "probe" not in {tool_name(t) for t in captured["tools"]}
     assert "shared" in {tool_name(t) for t in captured["tools"]}
+
+
+# -- the skills half --------------------------------------------------------
+
+
+SKILL = "---\nname: {name}\ndescription: {description}\n---\n\nDo the thing.\n"
+
+
+def with_private_skill(cfg, name="sampling"):
+    """A `surveyor` whose bundle also holds a skill."""
+    bundle = cfg.workspace / "subagents" / "surveyor"
+    folder = bundle / "skills" / name
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / "SKILL.md").write_text(
+        SKILL.format(name=name, description="Samples rows before trusting a file."),
+        encoding="utf-8",
+    )
+
+
+def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir, monkeypatch):
+    """`skills:` defaults to none, so a delegate saying nothing gets no index at
+    all. A delegate that ships a skill and is told about none of it is the
+    silent emptiness this package keeps refusing, so a bundle's skills are held
+    whichever way the definition wrote the field.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    with_private_skill(cfg)
+
+    subagent = built_subagent(cfg, session_dir, monkeypatch)
+
+    (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
+    assert any(key.endswith("sampling") for key in narrowed._allowed)
+
+
+def test_a_bundles_skill_is_mounted_read_only(cfg, session_dir):
+    """The route sits under `/skills/` for exactly this reason. Both things that
+    make the catalogue read-only -- the tool permission and the sandbox profile
+    -- are scoped to that prefix, so a route beside it would have reopened the
+    hole `test_skills_read_only` was written after measuring.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    with_private_skill(cfg)
+
+    backend = build_backend(cfg, session_dir)
+
+    mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
+    assert mounted == ["/skills/subagents/surveyor/"]
+    assert all(route.startswith(SKILLS_ROUTE) for route in mounted)
+
+
+def test_a_bundles_skill_is_not_in_the_shared_registry(cfg, session_dir, monkeypatch):
+    """The skills counterpart of keeping bundle tools out of `Offering`: a
+    private skill in the shared registry would be one any request could grant
+    and any agent could be told about.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    with_private_skill(cfg)
+
+    catalogue = Definitions.from_config(cfg)
+
+    assert not any("sampling" in key for key in catalogue.registry.offered)
+    assert any("sampling" in key for key in catalogue.bundled_skills["surveyor"].offered)
+
+
+def test_a_catalogue_folder_called_subagents_is_refused(cfg):
+    """Refused rather than skipped, which is deliberately not the answer
+    `uploaded` gets. A folder of that name under the skills root would shadow
+    every bundle at once, so the skills of every delegate that has any would
+    silently stop being found.
+    """
+    with pytest.raises(ConfigError) as raised:
+        skills_sources(("research", "subagents"))
+
+    assert "subagents" in str(raised.value)
+    assert "hide every bundled skill" in str(raised.value)
+
+
+def test_an_ordinary_catalogue_folder_is_still_a_source():
+    """The other half, so the refusal above cannot quietly become "no folders"."""
+    assert ("/skills/research/", "research") in skills_sources(("research",))

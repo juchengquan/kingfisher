@@ -26,6 +26,7 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
 from kingfisher.config import Config, ConfigError
+from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.harness.skills_backend import skills_backend
@@ -296,6 +297,58 @@ MEMORY_ROUTE = "/memory/"
 #: nest underneath it rather than forcing it to be renamed.
 UPLOADED_SKILLS_ROUTE = "/skills/uploaded/"
 
+#: Where a subagent's own skills are mounted, one folder per bundle, keyed by
+#: the bundle's path under the catalogue so two folders may each hold a
+#: `surveyor`.
+#:
+#: **Under `/skills/` rather than beside it, and that is the whole of why this
+#: path and not a shorter one.** Two things make the catalogue read-only -- the
+#: `SKILLS_ARE_READ_ONLY` tool permission and the sandbox profile -- and both
+#: are scoped to this prefix. A route at `/subagent-skills/` would have been a
+#: writable skills mount: the exact hole measured in `test_skills_read_only`,
+#: where `backend.write("/skills/demo/PWNED.md")` created a file and
+#: `backend.edit` tampered with one, reopened for the newest kind of skill.
+#:
+#: Longer than `SKILLS_ROUTE`, so `CompositeBackend` matches it first, the same
+#: way uploads nest underneath rather than forcing a rename.
+BUNDLED_SKILLS_ROUTE = "/skills/subagents/"
+
+#: The folder name a catalogue may not use for its own skills, because
+#: `BUNDLED_SKILLS_ROUTE` already means something under this root.
+RESERVED_SKILL_FOLDER = "subagents"
+
+
+def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
+    """Every bundle that has skills to mount, or none.
+
+    Asked of the repository rather than required of the port, the way
+    `catalogue_root` asks for a root: a catalogue served over the wire has no
+    folders and therefore no bundles, correctly rather than as a gap.
+    """
+    try:
+        bundles = getattr(catalogue.subagents, "bundles", None) or {}
+    except SubagentError:
+        # A catalogue that will not parse has no bundles to mount, and this is
+        # not the place that says so. `--list` exists to be run *because*
+        # something is broken -- it catches the loader error and prints it over
+        # the rest of the inventory -- and it builds a backend on the way.
+        # Raising here took that listing down with it, which is the same shape
+        # as warming inside `resolve_definitions`, and a test caught that one
+        # too. `warm()` still refuses at startup, so nothing is being excused.
+        return ()
+    return tuple(bundle for bundle in bundles.values() if bundle.skills is not None)
+
+
+def bundled_skills_route(where: str) -> str:
+    """The route one bundle's skills are mounted at.
+
+    Keyed on the bundle's path under the subagent catalogue rather than on the
+    delegate's name, because two folders may each define a `surveyor` and a
+    route has to tell them apart. `analysis/surveyor` and `surveyor` are
+    different paths and stay different routes.
+    """
+    return f"{BUNDLED_SKILLS_ROUTE}{where}/"
+
 
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Every place the agent should look for skills, labelled.
@@ -316,6 +369,21 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     it, because `uploads` refuses a name a catalogue already offers -- a request
     may not stand its own text in for a reviewed skill.
     """
+    if RESERVED_SKILL_FOLDER in folders:
+        # Refused rather than skipped, which is the other half of the `uploaded`
+        # decision below and deliberately not the same answer. `uploaded` is
+        # skipped because a session's route existed first and a catalogue folder
+        # of that name is merely confusing; `subagents/` under the skills root
+        # would shadow *every* bundle at once, so the skills of every delegate
+        # that has any would silently stop being found. A folder that vanishes
+        # is the failure this package keeps naming, and the fix is one rename.
+        msg = (
+            f"the skills catalogue has a folder called {RESERVED_SKILL_FOLDER!r}, "
+            f"which is where each subagent's own skills are mounted "
+            f"({BUNDLED_SKILLS_ROUTE}). Rename it -- left as it is, it would hide "
+            "every bundled skill in the deployment"
+        )
+        raise ConfigError(msg)
     catalogue = [(SKILLS_ROUTE, "catalogue")]
     catalogue += [
         (f"{SKILLS_ROUTE}{name}/", name)
@@ -403,6 +471,16 @@ def build_backend(
             ),
             MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
             UPLOADED_SKILLS_ROUTE: FilesystemBackend(root_dir=str(uploaded)),
+            # One per bundle, so a delegate's own skills are readable by the
+            # file tools that read every other skill -- and read-only for the
+            # same two reasons, since both enforcement points are scoped to
+            # `/skills/` and this sits underneath it.
+            **{
+                bundled_skills_route(bundle.where): FilesystemBackend(
+                    root_dir=str(bundle.skills)
+                )
+                for bundle in _bundles_with_skills(catalogue or Definitions.from_config(cfg))
+            },
         },
         workspace=session_dir,
     )

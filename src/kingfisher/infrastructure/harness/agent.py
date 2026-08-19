@@ -54,6 +54,7 @@ from kingfisher.infrastructure.harness.backend import (
     HostPathGuard,
     WorkspaceToolErrors,
     build_backend,
+    bundled_skills_route,
     skills_sources,
 )
 from kingfisher.infrastructure.harness.delegation import (
@@ -634,6 +635,27 @@ class _ToolSurface:
         return narrowed(self.asked.tools, by=self.offering.workspace) or ()
 
 
+def _private_skills(
+    catalogue: Definitions, name: str
+) -> tuple[tuple[str, ...], tuple[str, str]] | None:
+    """The skills a delegate brings itself, and where they are mounted.
+
+    Answered from `bundled_skills`, which asked deepagents what it will actually
+    load rather than listing directories -- the distinction `skill_registry`
+    exists for, and the reason a delegate is never told about a skill that will
+    not load.
+
+    `None` when there are none, which is every delegate without a bundle, so the
+    branch that folds these in never runs for them.
+    """
+    registry = catalogue.bundled_skills.get(name)
+    if registry is None or not registry.offered:
+        return None
+    bundles = getattr(catalogue.subagents, "bundles", None) or {}
+    where = bundles[name].where
+    return tuple(registry.offered), (bundled_skills_route(where), where)
+
+
 def _private_tools(catalogue: Definitions, name: str) -> tuple[Found, ...]:
     """The tools a delegate brings itself, or none.
 
@@ -1019,6 +1041,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                 # so a qualified `analysis/surveyor.yaml::surveyor` finds its
                 # bundle and a bare `surveyor` finds its own.
                 private=_private_tools(roots, name),
+                private_skills=_private_skills(roots, name),
                 run_on=wanted.get(name),
                 extra_middleware=subagent_middleware(
                     defined[name], registry, capabilities.middleware

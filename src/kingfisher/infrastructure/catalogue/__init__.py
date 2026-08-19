@@ -144,6 +144,35 @@ class Definitions:
             if bundle.tools is not None
         }
 
+    @cached_property
+    def bundled_skills(self) -> Mapping[str, SkillRegistry]:
+        """Each subagent's own skills, as deepagents will actually load them.
+
+        A registry rather than a repository, which is the opposite choice from
+        `bundled_tools` and made for the reason `skill_registry` exists at all:
+        kingfisher does not parse skills, so "what is on disk" and "what the
+        agent will be told about" are different questions, and running them
+        together is what once advertised four skills while three loaded.
+
+        Keyed like `bundled_tools`, so one subagent name reaches both halves of
+        what it brings.
+
+        Not merged into `registry`. That one is the shared catalogue, and a
+        bundled skill appearing in it would be a skill any request could grant
+        and any agent could be told about -- the same reason bundle tools stay
+        out of `Offering`.
+        """
+        bundles = getattr(self.subagents, "bundles", None)
+        if not bundles:
+            return {}
+        return {
+            name: skill_registry.read(
+                LocalSkillRepository(bundle.skills), root=bundle.skills
+            )
+            for name, bundle in bundles.items()
+            if bundle.skills is not None
+        }
+
     def warm(self) -> Definitions:
         """Read all three now, so a broken definition fails here.
 
@@ -180,6 +209,12 @@ class Definitions:
         # who may *call* a tool, not whether it is allowed to be broken.
         for repository in self.bundled_tools.values():
             _ = repository.found
+        # Skills are read here too, and the difference from tools is what
+        # happens next rather than whether it happens: a skill that will not
+        # load is reported by `unloadable` and never fatal, which is the rule
+        # `list` already follows -- a broken tool exits 1, a broken skill does
+        # not, because a run works without it.
+        _ = self.bundled_skills
         # A definition saying where its tools live is checked here for the same
         # reason the reading happens here: it is a claim about this catalogue,
         # both halves are now in hand, and a stale path found on the first turn
