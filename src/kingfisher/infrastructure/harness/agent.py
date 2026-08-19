@@ -813,8 +813,8 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     `session_dir` is where the backend roots, so an agent belongs to one
     session and cannot be reused across them.
 
-    `catalogue` is where the shared skills, subagents and tools are read from,
-    as `{"skills": …, "subagents": …, "tools": …}`. Omitted, it is derived from
+    `catalogue` is where the shared agents, skills, subagents and tools are read
+    from, as `{"agents": …, "skills": …, …}`. Omitted, it is derived from
     `cfg`, which is what it has always been -- the same fallback `model=` takes,
     and for the same reason: derive from `cfg`, or raise, but never invent. A
     deployment staging its definitions somewhere else resolves them once at
