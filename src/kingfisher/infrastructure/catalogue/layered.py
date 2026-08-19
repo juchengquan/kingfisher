@@ -29,7 +29,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import skill
 from kingfisher.domain.subagent.reading import DIRECTORY as SUBAGENT_DIRECTORY
@@ -116,6 +116,31 @@ class LayeredSubagents:
     @property
     def names(self) -> tuple[str, ...]:
         return tuple(self.specs)
+
+    @property
+    def bundles(self) -> Mapping[str, Any]:
+        """The catalogue's, never the session's, whatever the session holds.
+
+        Stated rather than left to `getattr` missing it, and that difference is
+        the whole reason this exists. A bundle holds *tools* -- Python imported
+        into this process and called in it -- and `NOT_UPLOADABLE` already says
+        why a caller may not supply one: "code, imported into this process --
+        never caller-supplied". A session that could contribute a bundle would
+        be a caller running its own code, reached through the one kind it *may*
+        upload.
+
+        Today no caller can, because the overlay is a `LocalSubagentRepository`
+        pointed at the session and nothing asks it for bundles: `build_agent`
+        reads them off the deployment's catalogue, not off the layered view. So
+        this property changes no behaviour. What it changes is what happens the
+        day somebody makes the obvious edit -- merging both halves the way
+        `specs` does, which is the shape one line above and the wrong answer
+        here. That edit now has to delete a docstring saying so.
+        """
+        # `getattr`, because `SubagentRepository` is a port and only a store
+        # backed by a filesystem has folders to find a bundle in -- the same
+        # question `catalogue_root` asks about a root.
+        return getattr(self.base, "bundles", {})
 
 
 def for_session(catalogue: Definitions, session_dir: Path | None) -> Definitions:

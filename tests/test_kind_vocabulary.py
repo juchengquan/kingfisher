@@ -18,6 +18,7 @@ from dataclasses import fields
 import main as driver
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.catalogue.subagents import ASSET_DIRECTORIES
 from kingfisher.infrastructure.uploads import Brought
 
 #: The vocabulary, derived here rather than imported. It was a constant on
@@ -47,6 +48,46 @@ NOT_ON_DISK = {
     "models": "settings, not assets",
     "memory": "a switch, not names",
 }
+
+#: Why a kind is not something a subagent may keep privately in its own folder.
+#: A bundle is `subagents/<name>/tools/` and `subagents/<name>/skills/`, and the
+#: two names it may use are reserved wherever they appear under `subagents/` --
+#: so what a bundle can hold is a closed list, and this is the other half of it.
+NOT_BUNDLED = {
+    "builtin_tools": "deepagents brings them; there is no folder to put one in",
+    "subagents": "a bundle is one subagent's own, so nesting makes 'whose' unanswerable",
+    "middleware": "registered in the process, not staged as files",
+    "endpoints": "settings, not assets",
+    "models": "settings, not assets",
+    "memory": "a switch, not names",
+}
+
+
+def test_what_a_subagent_may_bring_privately_is_accounted_for():
+    """`ASSET_DIRECTORIES` is two names. The other six are refusals.
+
+    Here rather than beside the loader because that is what this file is for: a
+    kind is either handled or written down as deliberately absent, in one place,
+    with a reason. A seventh directory name added to a bundle without deciding
+    what it means would otherwise be a feature that silently half-exists --
+    which is the failure the whole file was written after measuring.
+    """
+    covered = set(ASSET_DIRECTORIES)
+
+    assert covered | set(NOT_BUNDLED) == set(AXES)
+    assert not covered & set(NOT_BUNDLED), "a kind cannot be both bundled and refused"
+
+
+def test_a_bundle_holds_only_kinds_the_catalogue_reads():
+    """A directory name a bundle used that the catalogue does not read would be
+    a folder nothing ever looks in -- the same shape as
+    `test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads`, one
+    level down.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    assert set(ASSET_DIRECTORIES) <= set(DEFINITION_KINDS)
+
 
 #: Why something the catalogue holds is not an axis a request narrows.
 #:

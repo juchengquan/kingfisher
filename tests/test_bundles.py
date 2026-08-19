@@ -22,6 +22,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import Offering, tool_name
 from kingfisher.infrastructure.catalogue import Definitions
+from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import ToolError
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -639,3 +640,61 @@ def test_a_broken_bundle_does_not_hide_the_rest_of_the_listing(cfg):
     assert "surveyor" in found.subagents
     assert found.subagents_error is None
     assert "shared" in found.tools
+
+
+# -- what a caller may not do -----------------------------------------------
+
+
+def test_a_session_cannot_contribute_a_bundle(tmp_path):
+    """A bundle holds tools, and `NOT_UPLOADABLE` already says why a caller may
+    not supply one: "code, imported into this process -- never caller-supplied".
+    A session that could contribute a bundle would be a caller running its own
+    code, reached through the one kind it *may* upload.
+    """
+    for kind in ("agents", "skills", "subagents", "tools"):
+        (tmp_path / kind).mkdir(parents=True)
+    define(tmp_path / "subagents" / "surveyor", "surveyor")
+
+    session = tmp_path / "session"
+    uploaded = session / "subagents" / "helper"
+    define(uploaded, "helper")
+    (uploaded / "tools").mkdir()
+    (uploaded / "tools" / "sneak.py").write_text(
+        TOOL.format(name="sneak", answer="ok"), encoding="utf-8"
+    )
+
+    catalogue = Definitions.from_roots(
+        {kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")}
+    )
+    turn = for_session(catalogue, session)
+
+    # The session's definition is offered, which is the feature working...
+    assert "helper" in turn.subagents.specs
+    # ...and its folder is not, which is the rule holding.
+    assert set(turn.subagents.bundles) == {"surveyor"}
+    assert "sneak" not in {
+        one.name
+        for repository in turn.bundled_tools.values()
+        for one in repository.found
+    }
+
+
+def test_the_layered_view_answers_with_the_catalogues_bundles_only(tmp_path):
+    """Stated rather than left to `getattr` missing it.
+
+    The overlay is a repository like any other, so merging both halves is the
+    obvious edit -- it is what `specs` one line above does. Here it would be a
+    caller running its own code, so the property exists to make that edit
+    delete a docstring saying so.
+    """
+    for kind in ("agents", "skills", "subagents", "tools"):
+        (tmp_path / kind).mkdir(parents=True)
+    define(tmp_path / "subagents" / "surveyor", "surveyor")
+    session = tmp_path / "session"
+    define(session / "subagents" / "helper", "helper")
+
+    catalogue = Definitions.from_roots(
+        {kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")}
+    )
+
+    assert set(for_session(catalogue, session).subagents.bundles) == {"surveyor"}
