@@ -650,3 +650,54 @@ def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
     printed = capsys.readouterr().err
     assert str(tmp_path / ".env") in printed
     assert "not found" in printed
+
+
+def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys):
+    """The kind that arrived last, and the one `failed` did not name.
+
+    The field was added, the section printed "cannot load", and the predicate
+    still listed the two kinds that existed when it was written -- so a
+    workspace whose agents will not load reported the failure and exited 0.
+    Which is the exact sentence in that function's own docstring: "a caller
+    could report a broken catalogue and exit 0 -- which is how a listing gets
+    read by a script that then carries on".
+    """
+    import json
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "broken.yaml").write_text("name: broken\ndescription: d\nnope: 1\n", encoding="utf-8")
+
+    assert main(["list", "--json"]) == 1
+
+    assert json.loads(capsys.readouterr().out)["agents_error"]
+
+
+def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatch, capsys):
+    """One unloadable catalogue must not take the others down with it, which is
+    this record's own rule and was not true of tools.
+
+    A single unparseable `.py` returned early and hid the skills and subagents
+    sections entirely -- from the person who by definition is looking at a
+    broken workspace, which is the worst moment to be shown less of it.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (subagents_dir(cfg) / "helper.yaml").write_text(
+        "name: helper\ndescription: A delegate.\nsystem_prompt: |\n  x\n", encoding="utf-8"
+    )
+    tools = cfg.catalogue_roots["tools"]
+    tools.mkdir(parents=True, exist_ok=True)
+    (tools / "broken.py").write_text("this is not python(\n", encoding="utf-8")
+
+    assert main(["list"]) == 1
+    printed = capsys.readouterr().out
+
+    assert "cannot load" in printed
+    assert "\nskills" in printed, "the skills section went with the tools"
+    assert "helper" in printed, "so did the subagents"
