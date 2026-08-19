@@ -80,6 +80,30 @@ def tool_name(tool: Any) -> str:
     return getattr(tool, "name", None) or getattr(tool, "__name__", None) or repr(tool)
 
 
+def named(tool: Any) -> bool:
+    """Whether this is something `tool_name` can name, rather than describe.
+
+    The two halves of `tool_name` above are the two shapes a tool comes in --
+    `BaseTool` carries `.name`, a bare callable carries `.__name__` -- and the
+    `repr` beyond them is a last resort so that *naming* never raises. A listing
+    needs that; a loader must not lean on it. Measured: a workspace writing
+    `TOOLS = ["line_count"]` for the name of its tool got one advertised as
+    `'line_count'`, quotes and all, and a build that died with `AttributeError:
+    'function' object has no attribute 'name'` naming neither the file nor the
+    entry.
+
+    The two attributes are langchain's rule as much as this one's: measured
+    against `convert_to_openai_tool`, a plain function is named by `__name__`
+    and anything carrying neither -- a `functools.partial`, an instance with
+    `__call__` -- raises there. So the fallback stays for naming and this says
+    when it was reached, which is the point a loader can still name the file.
+
+    A class is named by `__name__` and passes here, which is correct: it is
+    refused a rule earlier, with a message about the parentheses it is missing.
+    """
+    return bool(getattr(tool, "name", None) or getattr(tool, "__name__", None))
+
+
 @dataclass(frozen=True)
 class Found:
     """One tool and the file it came from, relative to the catalogue.

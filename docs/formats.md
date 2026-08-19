@@ -436,13 +436,15 @@ controls both — this is for when nobody does.
 Modules starting with `_` are still skipped, which is now mostly a way to park
 a file you have not finished. Inside a package you do not need it.
 
-Five things the loader will refuse, all for the same reason: an agent quietly
+Seven things the loader will refuse, all for the same reason: an agent quietly
 holding different tools than the workspace defines is worse than a run that
 stops.
 
 | Refused | Why |
 | --- | --- |
 | A module with no `TOOLS` | Scanning for callables would guess at intent |
+| An entry that is not a tool | `TOOLS = ["line_count"]` — the *name* of the tool, where the tool goes, by analogy with every other format here, which is data. It was offered to the model under the name `'line_count'`, quotes and all, and the build died later naming no file |
+| A class where an instance was meant | `TOOLS = [Shout]` for `[Shout()]`. See [the note below](#or-a-class-when-you-want-to-declare-the-schema) — the one mistake here that produced a *successful* wrong answer |
 | A module that will not import | Skipping it gives the agent silently fewer tools |
 | Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence. Checked across folders, so two people cannot each add a `find_company` |
 | A tool named like a built-in | Same, except the thing that vanishes is `read_file` |

@@ -52,7 +52,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain.tool import Found, tool_name
+from kingfisher.domain.tool import Found, named, tool_name
 from kingfisher.infrastructure.catalogue.importing import (
     PACKAGE_MARKER,
     LoadError,
@@ -173,6 +173,48 @@ class LocalToolRepository:
                         f"than a tool -- write {tool.__name__}() to build one. A class "
                         f"loads and is offered to the model, and calling it returns a "
                         f"new instance as if it were an answer"
+                    )
+                    raise ToolError(msg)
+                # And an entry that is not a tool in any of the three shapes the
+                # format documents: a `BaseTool` from `@tool`, an instantiated
+                # `BaseTool` subclass, or a plain function. Anything else was
+                # accepted and named by its `repr` -- measured, a workspace
+                # writing `TOOLS = ["line_count"]` for the *name* of its tool got
+                # one advertised as `'line_count'`, quotes included, and a build
+                # that died with `AttributeError: 'function' object has no
+                # attribute 'name'` naming neither the file nor the entry.
+                #
+                # Asked as `named`, which is the domain's own rule rather than
+                # a second copy of it: `tool_name` is `.name or .__name__ or
+                # repr(tool)`, and that last fallback is the hole. It is there so
+                # naming never raises, which a listing needs -- and it means
+                # anything at all gets *a* name instead of a refusal.
+                #
+                # It is also langchain's rule, which is why it is the right one
+                # and not just the one available here. Measured against
+                # `convert_to_openai_tool`: a plain function is named `shout`, a
+                # lambda `<lambda>`, and everything without one of those two
+                # attributes -- a `functools.partial`, an instance with
+                # `__call__` -- dies there with the same `AttributeError` this
+                # refuses, only later and naming no file. So `callable` would
+                # have been wrong twice over: a `BaseTool` is *not* callable and
+                # would be refused, a `partial` is and would be let through.
+                #
+                # Not `isinstance(tool, BaseTool)`, the first attempt: this area
+                # may import `yaml` and nothing else, because a catalogue reads
+                # files and `Found.tool` is `Any` on purpose. The architecture
+                # rule caught it and was right to.
+                #
+                # A class passes this check -- it has `__name__` -- so the class
+                # refusal above is not made redundant by it and neither ordering
+                # would change what either one says.
+                if not named(tool):
+                    msg = (
+                        f"{where}: {EXPORT} holds {type(tool).__name__} "
+                        f"{tool!r}, which is not a tool and has no name -- write "
+                        f"the tool itself, not its name. A tool is what `@tool` "
+                        f"returns, an instance of a `BaseTool` subclass, or a "
+                        f"plain function"
                     )
                     raise ToolError(msg)
                 name = tool_name(tool)
