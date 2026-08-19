@@ -107,10 +107,24 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
     A module without `SUBAGENTS` is an error rather than a skipped file, for the
     reason the tool loader gives: quietly offering fewer than the workspace
     defines is the failure `CapabilityError` exists to prevent, one layer down.
+
+    Which is exactly why a bundle's own `tools/` must be kept out of this walk:
+    every module in it declares `TOOLS` and none declares `SUBAGENTS`, so a
+    subagent that grew one private tool would fail the whole catalogue with a
+    message about the wrong export.
     """
     found: list[tuple[SubagentSpec, str]] = []
     for path in modules_in(directory):
-        where = str(path.relative_to(directory)) + ("/" if path.is_dir() else "")
+        relative = path.relative_to(directory)
+        # The Python half of what `_definitions_in` skips, and it has to be here
+        # rather than in `modules_in`: that walk is shared with the tool
+        # catalogue, where a folder called `tools` is ordinary organisation.
+        # Filtered after the walk rather than during it because the walk imports
+        # nothing -- `load` does, further down -- so a module under a bundle's
+        # `tools/` is dropped before anything executes it.
+        if ASSET_DIRECTORIES & set(relative.parts):
+            continue
+        where = str(relative) + ("/" if path.is_dir() else "")
         module = load(path, declares=EXPORT, error=SubagentError)
         exported = getattr(module, EXPORT, None)
         if exported is None:

@@ -112,6 +112,38 @@ class Definitions:
         """
         return skill_registry.read(self.skills, root=catalogue_root(self.skills))
 
+    @cached_property
+    def bundled_tools(self) -> Mapping[str, ToolRepository]:
+        """Each subagent's own tools, by the name a grant would use.
+
+        Deliberately not folded into `tools`. That repository is the shared
+        catalogue and `Offering.of` is built from it, so anything added here
+        would become a name any request could grant and any agent could hold --
+        which is the one thing a bundle exists to prevent. An agent omitting
+        `tools:` gets every tool there is; the way to have one it does not get
+        is to keep that tool out of this offering entirely.
+
+        Asked of the repository rather than required of the port, the same way
+        `_root_of` asks for a root. Only a store backed by a filesystem has
+        folders to find a bundle in; a catalogue served over the wire hands over
+        subagents by name, and a name has no folder in it. That is not a gap --
+        such a deployment has no bundles, correctly.
+
+        One `LocalToolRepository` per bundle rather than a second loader. A
+        bundle's tools are tools: the same `TOOLS` export, the same refusal for
+        a module that will not import, the same relative sources -- and now
+        relative to the bundle, so `probe.py::probe` reads the same whether it
+        is written in the catalogue or in `surveyor/tools/`.
+        """
+        bundles = getattr(self.subagents, "bundles", None)
+        if not bundles:
+            return {}
+        return {
+            name: LocalToolRepository(bundle.tools)
+            for name, bundle in bundles.items()
+            if bundle.tools is not None
+        }
+
     def warm(self) -> Definitions:
         """Read all three now, so a broken definition fails here.
 
@@ -139,6 +171,15 @@ class Definitions:
         """
         _ = self.agents.specs, self.skills.names, self.subagents.specs, self.tools.found
         _ = self.registry
+        # A bundle's tools are imported here for the reason every other kind is,
+        # and the reason survives the fact that only one delegate can call them:
+        # a private tool is still Python that has to import, and a deployment
+        # that starts, reports itself fine, and fails on the first request that
+        # happens to activate `surveyor` is the shape of the bug `list` exiting
+        # zero over a broken agent catalogue already was. Encapsulation decides
+        # who may *call* a tool, not whether it is allowed to be broken.
+        for repository in self.bundled_tools.values():
+            _ = repository.found
         # A definition saying where its tools live is checked here for the same
         # reason the reading happens here: it is a claim about this catalogue,
         # both halves are now in hand, and a stale path found on the first turn
