@@ -333,6 +333,96 @@ def test_a_build_that_returns_nothing_is_refused(cfg, monkeypatch, session_dir):
         )
 
 
+A_CLASS = """
+class Assembler:
+    \"\"\"Callable, and not a factory. Constructing it yields no graph.\"\"\"
+
+    def __init__(self, model, tools):
+        self.model = model
+
+
+SUBAGENTS = [
+    {"name": "researcher", "description": "d", "build": Assembler}
+]
+"""
+
+
+def test_a_class_under_build_is_refused_rather_than_constructed(
+    cfg, monkeypatch, session_dir
+):
+    """`callable()` accepts a class, so this loaded and was *constructed*.
+
+    `Assembler(model, tools)` is a plain object with no `invoke`, which reached
+    deepagents and failed somewhere with nothing pointing back at the
+    declaration. Only `None` was caught here, and `None` is the least likely of
+    the two mistakes: nobody writes `build` meaning to return nothing, and
+    naming a class is an easy thing to reach for.
+    """
+    _write(cfg.workspace / "subagents", "researcher.py", A_CLASS)
+
+    capture_build(monkeypatch)
+    with pytest.raises(SubagentError, match="not a graph"):
+        build_agent(
+            cfg,
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(subagents=("researcher",)),
+        )
+
+
+def test_the_refusal_names_what_was_returned_and_the_class_trap(
+    cfg, monkeypatch, session_dir
+):
+    """A reader has to know which of the two mistakes they made. The type they
+    got back says it, and the class case gets said outright because nothing
+    about `callable()` accepting a class is obvious from a declaration."""
+    _write(cfg.workspace / "subagents", "researcher.py", A_CLASS)
+
+    capture_build(monkeypatch)
+    with pytest.raises(SubagentError) as refused:
+        build_agent(
+            cfg,
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            capabilities=Capabilities(subagents=("researcher",)),
+        )
+
+    said = str(refused.value)
+    assert "Assembler" in said  # what came back
+    assert "class is callable" in said  # and why it got that far
+
+
+def test_the_check_is_by_shape_not_by_type(cfg):
+    """Duck-typed on purpose, asserted by behaviour rather than by grepping.
+
+    `isinstance(runnable, CompiledStateGraph)` would break the day upstream
+    renames that class, taking down every compiled delegate to enforce a
+    spelling -- the same reason `registered_tools` reads a graph by shape. So an
+    object that is merely graph-*shaped* gets through.
+
+    Which makes it a screen, not a protocol check, and that is worth saying:
+    deepagents also calls `with_config`, so this same `Stub` fails later in a
+    real build. What this catches is the mistake somebody actually makes -- a
+    class, which `callable()` accepts -- not every way a return can be wrong.
+    """
+    from kingfisher.domain.subagent import SubagentSpec
+    from kingfisher.infrastructure.harness.delegation import compiled
+
+    class Stub:
+        def invoke(self, *a, **k):
+            return {}
+
+    spec = SubagentSpec(
+        name="researcher",
+        description="d",
+        build=lambda model, tools: Stub(),
+    )
+
+    delegate = compiled(spec, cfg)
+
+    assert delegate["runnable"].__class__.__name__ == "Stub"
+
+
 PROBE = """from langchain_core.tools import tool
 
 
