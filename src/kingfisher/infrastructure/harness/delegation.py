@@ -21,6 +21,7 @@ from typing import TYPE_CHECKING, Any
 from urllib.parse import urlsplit
 
 from deepagents.middleware import SubAgentMiddleware
+from langchain_core.runnables import Runnable
 
 from kingfisher.config import ConfigError
 from kingfisher.domain.agent import AgentSpec
@@ -374,17 +375,28 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     granted = [one.tool for one in select(narrowed(spec.tools, by=tools), catalogue)]
 
     runnable = spec.build(model, granted)
-    # Shape, not type. `None` was the only thing caught here, and it is the
-    # least likely mistake: `callable()` accepts a *class*, so declaring
-    # `"build": Assembler` loads, gets constructed as `Assembler(model, tools)`,
-    # and hands deepagents an object with no `invoke` -- which then fails
-    # somewhere with nothing pointing back at the declaration that caused it.
+    # Against `Runnable`, which is what `CompiledSubAgent` declares this field
+    # to be -- the same reason `test_the_compiled_shape_is_deepagents_own` pins
+    # the *keys* against their declaration rather than a copy of it.
     #
-    # Duck-typed rather than `isinstance(runnable, CompiledStateGraph)`, the way
-    # `registered_tools` reads a graph: the concrete class is upstream's to
-    # rename, and a rule that broke on a rename would take down every compiled
-    # delegate to enforce a spelling.
-    if not callable(getattr(runnable, "invoke", None)):
+    # This was a duck-type on `invoke`, which was too loose in a way the tests
+    # had to admit: deepagents also calls `with_config`, so an object with only
+    # `invoke` got past here and failed there. Measured against the four cases
+    # that matter -- a compiled graph, an `invoke`-only stub, whatever a class
+    # constructs to, and `None` -- `Runnable` is the only one of the three
+    # candidate checks that separates the first from the other three.
+    #
+    # Not `isinstance(runnable, CompiledStateGraph)`, which was the objection
+    # that produced the duck-type and is still right: that is an implementation
+    # class upstream may rename, and a rule broken by a rename would take every
+    # compiled delegate down to enforce a spelling. `Runnable` is the published
+    # interface, and a rename there is a breaking change we should hear about.
+    #
+    # `None` is caught by the same line rather than separately: it was the only
+    # thing caught here once, and it is the least likely mistake -- nobody
+    # writes `build` meaning to return nothing, where naming a class is an easy
+    # reach and `callable()` accepts one.
+    if not isinstance(runnable, Runnable):
         made = "None" if runnable is None else type(runnable).__name__
         msg = (
             f"subagent {spec.name!r}: 'build' returned {made}, which is not a graph -- "
