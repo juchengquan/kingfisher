@@ -16,11 +16,14 @@ instance was meant.
 
 from __future__ import annotations
 
+import functools
+
+import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.tool import tool_name
-from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
+from kingfisher.domain.tool import named, tool_name
+from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, ToolError
 from kingfisher.infrastructure.harness.agent import build_agent, registered_tools
 from tests.conftest import FakeToolCallingModel, tools_dir
 
@@ -28,6 +31,19 @@ BARE = '''
 def shout(text: str) -> str:
     """Return the text in capitals. Use when a caller asks to shout something,
     or wants a heading rendered loudly."""
+    return text.upper()
+
+
+TOOLS = [shout]
+'''
+
+DECORATED = '''
+from langchain_core.tools import tool
+
+
+@tool
+def shout(text: str) -> str:
+    """Return the text in capitals. Use when a caller asks to shout something."""
     return text.upper()
 
 
@@ -191,10 +207,6 @@ def test_the_class_itself_is_refused_rather_than_offered(cfg):
     The same family as `TOOLS = add`, which the container check refuses one
     level up: both pass a duck test, and neither says anything.
     """
-    import pytest
-
-    from kingfisher.infrastructure.catalogue.tools import ToolError
-
     _install(cfg, "shout", SUBCLASS.format(export="Shout"))
 
     with pytest.raises(ToolError, match=r"write Shout\(\) to build one"):
@@ -208,3 +220,88 @@ def test_a_function_is_not_caught_by_that_refusal(cfg):
     _install(cfg, "shout", BARE)
 
     assert [tool_name(f.tool) for f in LocalToolRepository(tools_dir(cfg)).found] == ["shout"]
+
+
+# Not a near miss like the class above -- an entry that is not a tool in any
+# sense, which the loader took and named by its `repr`. `TOOLS = ["line_count"]`
+# is the one a person actually writes: the *name* of the tool, where the tool
+# goes, by analogy with every other format in this package, which is data and
+# does name things by string.
+NOT_TOOLS = {
+    "a name where the tool goes": ('TOOLS = ["line_count"]', "str", "'line_count'"),
+    "a number": ("TOOLS = [42]", "int", "42"),
+    "a declaration, as the other formats take": (
+        'TOOLS = [{"name": "line_count"}]',
+        "dict",
+        "{'name': 'line_count'}",
+    ),
+    "a gap in the list": ("TOOLS = [None]", "NoneType", "None"),
+}
+
+SHAPES = {
+    "a plain function": BARE,
+    "@tool": DECORATED,
+    "an instance": SUBCLASS.format(export="Shout()"),
+}
+
+
+@pytest.mark.parametrize(("body", "kind", "shown"), NOT_TOOLS.values(), ids=NOT_TOOLS)
+def test_an_entry_that_is_not_a_tool_is_refused(cfg, body, kind, shown):
+    """Measured before this: every one of them loaded. The string was offered to
+    the model as a tool named `'line_count'`, quotes and all; the dict as
+    `{'name': 'line_count'}`. `tool_name` fell through to its `repr` fallback,
+    which exists so that naming never raises, and so gave junk a name.
+
+    The build then died at `AttributeError: 'function' object has no attribute
+    'name'`, from inside deepagents, naming neither the file nor the entry.
+    """
+    _install(cfg, "probe", body)
+
+    with pytest.raises(ToolError) as caught:
+        _ = LocalToolRepository(tools_dir(cfg)).found
+
+    said = str(caught.value)
+    assert "probe.py" in said, "the refusal has to name the file to beat the crash it replaces"
+    assert kind in said, f"and say what it found rather than only that it was wrong: {said}"
+    assert shown in said, f"and show the entry, which is what makes it findable: {said}"
+
+
+@pytest.mark.parametrize("body", SHAPES.values(), ids=SHAPES)
+def test_the_three_documented_shapes_are_not_caught_by_that_refusal(cfg, body):
+    """The refusal asks `named`, not `callable`, and this is the half that pins
+    the difference: a `BaseTool` is not callable at all -- measured, `@tool`
+    returns a `StructuredTool` whose `callable()` is False -- so a callable-only
+    check would refuse two of the three shapes this file exists to guarantee.
+    """
+    _install(cfg, "probe", body)
+
+    assert [tool_name(f.tool) for f in LocalToolRepository(tools_dir(cfg)).found] == ["shout"]
+
+
+def test_the_rule_is_the_one_langchain_itself_applies():
+    """Why `named` is the right rule and not merely the one this layer can reach.
+
+    A catalogue may import `yaml` and nothing else, so `isinstance(tool,
+    BaseTool)` is not available there -- but it would not have been better.
+    Measured against `convert_to_openai_tool`: langchain names a bare callable
+    by `__name__` and raises on anything carrying neither that nor `.name`.
+    Everything refused above is something langchain would have died on anyway;
+    the check only moves the failure to where the file can still be named.
+
+    A `functools.partial` is the case that separates the two rules -- callable,
+    unusable, and accepted by any check that asks only whether it can be called.
+    """
+    from langchain_core.utils.function_calling import convert_to_openai_tool
+
+    def line_count(text: str) -> int:
+        """Count the lines. Use when asked."""
+        return len(text.splitlines())
+
+    assert named(line_count)
+    assert convert_to_openai_tool(line_count)["function"]["name"] == "line_count"
+
+    wrapped = functools.partial(line_count)
+    assert callable(wrapped), "the shape a callable-only check would let through"
+    assert not named(wrapped)
+    with pytest.raises(AttributeError, match="__name__"):
+        convert_to_openai_tool(wrapped)
