@@ -76,6 +76,8 @@ def csv_columns(path: str) -> str:
 
     The cheap half of `csv_profile`, for when the question is only what the
     file contains and not what state it is in.
+
+    `path` is a host path, not one of the agent's virtual paths.
     """
     header, _, _ = _read(path)
     return "\n".join(header) if header else f"{path}: empty"

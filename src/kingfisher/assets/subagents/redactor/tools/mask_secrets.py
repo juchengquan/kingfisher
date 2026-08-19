@@ -40,6 +40,8 @@ def mask_secrets(path: str, max_lines: int = 200) -> str:
     """Read a text file with credentials, emails and IP addresses masked. Use
     when you must quote from a file that may carry secrets.
 
+    `path` is a host path, not one of the agent's virtual paths.
+
     Reports how many lines were returned and how many were masked, so the caller
     can tell "nothing sensitive here" from "the interesting part was removed" --
     two very different answers that look identical once the text is clean.

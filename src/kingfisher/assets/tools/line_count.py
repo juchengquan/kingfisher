@@ -38,6 +38,8 @@ def line_count(path: str) -> str:
     """Count the lines in a text file. Use before reading a file you expect to
     be long, so you can ask `read_file` for the part you want.
 
+    `path` is a host path, not one of the agent's virtual paths.
+
     Reports the count and whether the last line ends in a newline, because a
     file's final line is the one a range read is most likely to get wrong.
     """
