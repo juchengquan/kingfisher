@@ -1,12 +1,19 @@
 """Saying where a tool lives, in the definition that names it.
 
-A `tools:` entry may be written `where::what`. The name is what reaches
-everything else -- a grant, an allowlist, the dictionary the agent dispatches
-through -- and the path beside it is a claim about location that gets checked.
+A `tools:` entry may be written `where::what`. The path beside the name is a
+claim about location, and `refuse_moved` checks it.
 
-It is never a choice between tools. Two of one name cannot both load, so there
-is never a second candidate to pick out; `test_two_tools_of_one_name_never_both_load`
-is the reason the whole feature is a label rather than a selector.
+It began as a label and became a selector, which is what this file is mostly
+about. Two files may each define a `fetch` -- vendors do not coordinate -- and
+both load now: the loader used to refuse the pair, and stopped a deployment
+over a clash no single agent would ever see. So where a name is its own, a
+definition may still write it plainly; where two files answer to one, the
+reference is the only thing that picks between them, and the bare name is
+refused rather than resolved by a guess. `test_two_tools_of_one_name_both_load_and_are_told_apart`
+is that whole story in one test.
+
+The bare name is what an allowlist and the agent's dispatch table key on
+either way: a tool is called `fetch` however a definition spelled it.
 """
 
 from __future__ import annotations
