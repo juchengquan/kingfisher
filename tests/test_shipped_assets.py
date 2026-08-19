@@ -160,13 +160,7 @@ def test_no_preset_names_a_model(shipped):
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
 
-    named = {
-        name
-        for name, s in specs.items()
-        for candidate in s.wanted
-        if candidate.model is not None
-    }
-    assert named == set()
+    assert {name for name, s in specs.items() if s.wanted is not None} == set()
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 

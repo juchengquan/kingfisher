@@ -224,9 +224,9 @@ def test_the_three_required_keys_are_required(missing):
 
 
 def test_the_model_fields_mean_what_they_mean_in_yaml():
-    spec = declared(_entry(alias="cheap"), "researcher.py")
+    spec = declared(_entry(model="cheap-model"), "researcher.py")
 
-    assert spec.wanted[0].alias == "cheap"
+    assert spec.wanted == "cheap-model"
 
 
 
@@ -286,29 +286,6 @@ def test_the_compiled_shape_is_deepagents_own(cfg, monkeypatch, session_dir):
     assert set(delegate) == set(CompiledSubAgent.__required_keys__)
 
 
-def test_the_graph_is_handed_the_model_the_deployment_bound(cfg, session_dir, monkeypatch):
-    """The file names an alias; kingfisher binds it and passes the built model
-    in. A file reaching for its own would work on one machine and no other."""
-    _write(
-        cfg.workspace / "subagents",
-        "researcher.py",
-        RECORDING.format(extra='        "alias": "cheap",\n'),
-    )
-
-    capture_build(monkeypatch)
-    build_agent(
-        cfg,
-        session_dir=session_dir,
-        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-        capabilities=Capabilities(subagents=("researcher",)),
-    )
-
-    import kingfisher.infrastructure.catalogue.subagents as store
-
-    model, tools = store.SEEN
-    del store.SEEN
-    assert getattr(model, "model", None) == "cheap-model"
-    assert tools == []
 
 
 def test_a_build_that_returns_nothing_is_refused(cfg, monkeypatch, session_dir):

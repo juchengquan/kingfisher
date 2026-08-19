@@ -23,9 +23,9 @@ builtin_tools: [read_file, ls, glob]
 tools:
   - csv_profile::csv_profile
   - csv_profile::csv_columns
-# Profiling is cheap-model work too -- see extractor.yaml for why this is an
-# alias your models.yaml binds rather than a model id written here.
-alias: cheap
+# Profiling is cheap-model work too, and this names nothing for the reason
+# extractor.yaml explains at length: a file inside a wheel cannot portably name
+# a model. Pin it with a `model:` line naming one your models.yaml defines.
 system_prompt: |
   You look at a dataset before anyone trusts it.
 

@@ -151,57 +151,27 @@ def _subject(spec: SubagentSpec | AgentSpec) -> str:
 
 
 def model_for(
-    spec: SubagentSpec | AgentSpec,
-    cfg: Config,
-    *,
-    override: RunOn | None = None,
+    spec: SubagentSpec | AgentSpec, *, override: RunOn | None = None
 ) -> str | None:
     """The model this delegate will actually run, or `None` for the deployment's.
 
     One function because two callers must not disagree: `as_subagent` builds
     from it and `indistinct_delegates` reports from it, and a report about where
     a delegate ended up is worthless if it is computed by a second copy of the
-    rule. `indistinct_delegates` said so already -- "it re-resolves through the
-    same call the build makes" -- and binding an alias is a second step that
-    would otherwise have to be written twice to keep that true.
+    rule.
 
-    The refusal wears the subagent's name. `bound` knows the alias and the
-    catalogue and not who asked, so a reader is otherwise told `alternate` is
-    unbound and left to grep for whoever wanted it -- and this is the one
-    refusal that fires on a file they may not own.
+    Barely a function now, and that is the shape of what `alias` was. This held
+    a loop over candidates, trying each and passing over the ones this
+    deployment had not bound; a definition could name several and say which
+    deployments it was still useful in. With one kind of name there is nothing
+    to try in turn -- a model this deployment cannot run refuses, and always did
+    -- so what is left is the override rule and a lookup. Kept as a function
+    rather than inlined at the two call sites, because "the build and the report
+    resolve identically" is the property, not the number of lines. It takes no
+    `Config` any more either: binding an alias was the only thing here that
+    needed one.
     """
-    candidates = resolved_model(spec.wanted, override=override)
-    if not candidates:
-        return None  # it asked for nothing: run whatever the deployment runs
-
-    passed_over: list[str] = []
-    for wanted in candidates:
-        if wanted.model is not None:
-            model = wanted.model
-        else:
-            assert wanted.alias is not None  # noqa: S101 -- Wanted sets exactly one
-            try:
-                model = cfg.models.bound(wanted.alias)
-            except ConfigError as exc:
-                # Not fatal while another candidate is left, and now the only
-                # way a candidate is passed over at all -- `distinct` was the
-                # other, and went with `second-opinion`. A file naming several
-                # has said which deployments it can still be useful in, and an
-                # alias nobody bound is precisely one it anticipated.
-                passed_over.append(f"alias {wanted.alias!r}: {exc}")
-                continue
-        return model
-
-    # Every candidate was passed over, so there is nothing left to run. The
-    # message carries each one and why, because the fix is in the deployment's
-    # bindings and a reader has to know which of them to change -- and because
-    # this is the one refusal that fires on a file they may not own.
-    reasons = "; ".join(passed_over)
-    msg = (
-        f"{_subject(spec)}: none of the {len(candidates)} model(s) it names "
-        f"can be used here -- {reasons}"
-    )
-    raise ConfigError(msg)
+    return resolved_model(spec.wanted, override=override)
 
 
 def model_object(  # five things decide which model a delegate
@@ -234,7 +204,7 @@ def model_object(  # five things decide which model a delegate
     all, which is how a top-level delegate keeps deepagents' own inheritance
     from the agent that holds it.
     """
-    model_id = model_for(spec, cfg, override=run_on)
+    model_id = model_for(spec, override=run_on)
     if model_id is None:
         return inherited
     # A lookup, where this used to `replace` four fields of the `Config` and

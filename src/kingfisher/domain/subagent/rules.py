@@ -16,7 +16,7 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec, Wanted
+from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.tool import split_reference
 
 
@@ -144,8 +144,8 @@ def refuse_cycles(specs: Mapping[str, SubagentSpec]) -> None:
 
 
 def resolved_model(
-    wanted: tuple[Wanted, ...], *, override: RunOn | None = None
-) -> tuple[Wanted, ...]:
+    wanted: str | None, *, override: RunOn | None = None
+) -> str | None:
     """What a delegate would run, in order, once the request has had its say.
 
     The override replaces wholesale, and that includes replacing an *alias* with
@@ -178,5 +178,5 @@ def resolved_model(
     written in terms of this one.
     """
     if override is not None:
-        return (Wanted(model=override.model),)
+        return override.model
     return wanted

@@ -27,7 +27,7 @@ WHOLE = """name: surveyor
 description: Reads and profiles data without changing anything.
 builtin_tools: [read_file, ls, glob, grep]
 tools: [csv_profile::csv_profile]
-alias: cheap
+model: cheap-model
 memory: false
 system_prompt: |
   You survey files before anyone trusts them.
@@ -71,7 +71,7 @@ def test_three_fields_are_required_and_nothing_else_is():
     spec = _read(MINIMAL, "plain.yaml")
 
     assert spec.system_prompt.startswith("You do the work")
-    assert spec.wanted == ()
+    assert spec.wanted is None
 
 
 @pytest.mark.parametrize("missing", sorted(REQUIRED))
@@ -171,20 +171,8 @@ def test_an_unknown_field_is_refused_and_a_near_miss_is_named():
         _read(MINIMAL.rstrip() + "\ntolls: []\n", "plain.yaml")
 
 
-# -- the model, and the switch ----------------------------------------------
 
 
-def test_naming_both_a_model_and_an_alias_is_refused():
-    written = MINIMAL.rstrip() + "\nmodel: gpt-5\nalias: cheap\n"
-
-    with pytest.raises(AgentError, match="name one or the other"):
-        _read(written, "plain.yaml")
-
-
-def test_the_model_may_name_several_tried_in_order():
-    spec = _read(MINIMAL.rstrip() + "\nalias: [alternate, cheap]\n", "plain.yaml")
-
-    assert [w.alias for w in spec.wanted] == ["alternate", "cheap"]
 
 
 def test_memory_has_three_states_and_absent_is_not_off():

@@ -99,39 +99,18 @@ models:
     extra:
       reasoning_effort: high
 
-# --- aliases: general names for models this deployment chose ----------------
-#
-# A second namespace, kept apart from `models:` on purpose -- a definition
-# writes `model:` or `alias:` and never one meaning the other, so nobody has to
-# know which keys of a single table are wire ids and which stand for them.
-#
-# It exists because a definition can know what *kind* of model it needs and not
-# know its name. That is true of every definition kingfisher ships: `extractor`
-# and `profiler` want a cheap model and cannot spell that as a vendor's model id
-# without refusing to start everywhere else. So they name a kind, and you say
-# what it is.
-#
-# The names are yours; `cheap` is what the presets reference. An alias a
-# definition names and you have not bound **refuses the build** rather than
-# falling back to the default -- a delegate quietly running a model it was
-# written to avoid is the answer nobody asked for, and nothing in the output
-# would look wrong. It fires only when a request activates that delegate.
-aliases:
-  cheap: MiniMax-M2.5
-
 # --- pointing a delegate at one of these ------------------------------------
 #
-# A subagent names a model from this table, or an alias from the one above:
+# A subagent or an agent names a model from this table:
 #
 #     # subagents/extractor.yaml
-#     alias: cheap            # your catalogue says which model that is
-#     model: MiniMax-M2.5     # or name one outright -- never both
+#     model: MiniMax-M2.5
 #
 # The endpoint follows from the model, so there is no second line to keep in
 # step with it. A name this table does not define is refused at startup, naming
 # the file that asked for it.
 #
 # This is where cost routing lives: reading-heavy delegation on a cheap model,
-# the second opinion somewhere else entirely. The presets ship without `model:`
+# and the work that matters on a better one. The presets ship without `model:`
 # lines because a file inside the wheel cannot portably name a vendor's model
 # id -- see presets/README.md.

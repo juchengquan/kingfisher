@@ -28,7 +28,9 @@ builtin_tools: [ls, glob, grep]
 #
 # The same goes for `skills:`, which usually defaults to none. `redaction/` is
 # in this folder, so this delegate is told about it.
-alias: cheap
+#
+# No `model:` either, so it runs your deployment's default. Masking is cheap
+# work; pin it to a cheap model if you have one.
 system_prompt: |
   You quote from files that may contain credentials.
 

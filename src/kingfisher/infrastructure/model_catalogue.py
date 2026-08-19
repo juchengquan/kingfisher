@@ -26,6 +26,7 @@ parse, be dropped, and hand back the default with no error anywhere.
 from __future__ import annotations
 
 import warnings
+from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 import yaml
@@ -38,9 +39,8 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
     from pathlib import Path
 
-#: Top-level keys. `default` names a model, `aliases` binds general names to
-#: models, and the other two are the tables.
-KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default", "aliases"})
+#: Top-level keys. `default` names a model; the other two are the tables.
+KNOWN_TOP: frozenset[str] = frozenset({"endpoints", "models", "default"})
 
 #: What an endpoint entry may say. `api` picks a wire format from
 #: `models.ADAPTERS`; `base_url` is literal because it is topology, not a
@@ -57,6 +57,28 @@ KNOWN_MODEL: frozenset[str] = frozenset(
 )
 
 
+#: Keys this format used to define, named individually rather than folded into
+#: "unknown key" for the reason `NOT_COMPILED` gives one layer out: the generic
+#: message reads as a typo and sends its reader looking for the right spelling,
+#: when what they need is to know the key is gone and what replaces it.
+#:
+#: This one is the upgrade path. A deployment that bound aliases has a
+#: `models.yaml` that stopped loading, and the fix is two lines of editing --
+#: but only if the message says so.
+REMOVED: Mapping[str, str] = MappingProxyType(
+    {
+        "aliases": (
+            "is no longer a table this format defines. It bound general names -- "
+            "`cheap`, `alternate` -- for definitions to write as `alias:`, and that "
+            "field is gone too: a definition names a model from `models:` or names "
+            "nothing and runs whatever summoned it. Delete this block, and replace "
+            "any `alias: <name>` in your definitions with `model: <the model it was "
+            "bound to>`"
+        ),
+    }
+)
+
+
 def _refuse_unknown(document: Mapping[str, Any], known: frozenset[str], where: str) -> None:
     """Refuse every key this format does not define, and guess at the typos.
 
@@ -69,6 +91,10 @@ def _refuse_unknown(document: Mapping[str, Any], known: frozenset[str], where: s
     What stays here is the raising. A malformed catalogue is a `ConfigError`,
     not a `SubagentError`, and `where` is a path plus which entry it was in.
     """
+    for gone, reason in REMOVED.items():
+        if gone in document:
+            msg = f"{where}: {gone!r} {reason}"
+            raise ConfigError(msg)
     complaint = fields.unrecognised(document, known=known, noun="key")
     if complaint is not None:
         msg = f"{where}: {complaint}"
@@ -190,49 +216,6 @@ def _models(
     )
 
 
-def _aliases(
-    document: Mapping[str, Any], models: Mapping[str, ModelProfile], source: Path
-) -> dict[str, str]:
-    """General names bound to models of this deployment's own choosing.
-
-    A second namespace beside `models`, kept apart on purpose: a definition
-    writes `alias:` or `model:` and never one meaning the other, so nobody has
-    to know which keys of a single table are wire ids and which stand for them.
-
-    A binding naming a model this file does not define is refused -- both halves
-    are in this document, so it is a plain contradiction rather than a fact
-    about the machine. A binding whose model was *dropped* for want of a key is
-    kept: it is a real binding this machine cannot currently follow, and saying
-    so at the point of use names the endpoint and the variable, where refusing
-    here could only name the alias.
-    """
-    declared = set(_mapping(document.get("models"), f"{source}: models"))
-    bindings: dict[str, str] = {}
-    for alias, raw in _mapping(document.get("aliases"), f"{source}: aliases").items():
-        model = str(raw or "").strip()
-        if not model:
-            msg = f"{source}: alias {alias!r} binds nothing; name a model or drop the line"
-            raise ConfigError(msg)
-        if model not in declared:
-            msg = (
-                f"{source}: alias {alias!r} binds {model!r}, which this file does not "
-                f"define; it defines {tuple(sorted(declared))}"
-            )
-            raise ConfigError(msg)
-        if alias in models:
-            # The one collision worth refusing across the two namespaces. An
-            # alias sharing a model's name makes the error messages lie -- "no
-            # model bound to alias 'gpt-5'" about a name that is plainly a model
-            # -- and there is no reason to write it.
-            msg = (
-                f"{source}: alias {alias!r} is also the name of a model; aliases stand "
-                f"for model names and cannot be one"
-            )
-            raise ConfigError(msg)
-        bindings[alias] = model
-    return bindings
-
-
 def load(path: Path, environ: Mapping[str, str]) -> Models:
     """Read `path` into what this deployment can run, where, and under which names.
 
@@ -259,7 +242,7 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
             f"      MiniMax-M3:\n"
             f"        endpoint: minimax\n\n"
             # The minimal one above is enough to start; the annotated example
-            # is the one that explains `aliases`, `extra`, and why an omitted
+            # is the one that explains `extra` and why an omitted
             # `temperature` is not a defaulted one. It ships with the framework
             # rather than with an asset pack, so this can promise it even to a
             # deployment that installed no pack.
@@ -326,7 +309,6 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
         models=models,
         endpoints=endpoints,
         default=default,
-        aliases=_aliases(document, models, path),
         unreachable=unreachable,
         source=path,
     )

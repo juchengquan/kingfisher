@@ -54,34 +54,25 @@ defines. Omitted, it runs whatever the deployment runs. It is granted like
 `middleware` and for a stronger reason: the model decides which endpoint
 receives this delegate's prompts and whose credentials pay for them.
 
-`alias` says the same thing generally: a name the *deployment* binds to a model
-of its own, under `aliases:` in `models.yaml`. It exists because a definition
-can know what *kind* of model it needs and not know its name -- which is true of
-every definition shipped inside the wheel, since a vendor's model id is portable
-nowhere. `extractor` wants a cheap model; `second-opinion` wants one unlike the
-main agent's. Neither can spell that as `MiniMax-M2.5` without refusing to start
-for everyone else.
+**One name, and no list.** There was an `alias:` beside `model:` -- a general
+name the deployment bound under `aliases:` in `models.yaml` -- so that a
+definition could know what *kind* of model it needed without knowing its name,
+which is what a file shipped inside a wheel is in. It is gone: two spellings for
+one idea, and the shipped definitions name nothing at all now and say in a
+comment what to pin them to.
 
-An unbound alias stops the build. Falling back to the deployment's own model
-would hand `second-opinion` the very model it exists not to be, and that failure
-is silent -- the delegate builds, answers, and the answer is worth nothing.
+The list went with it, and that is worth understanding rather than noticing. A
+list meant "try these in order", and the only thing that ever passed a candidate
+over was an alias this deployment had not bound. Nothing passes over a *model*:
+one this deployment cannot run refuses on the spot, and always did. So every
+entry after the first was already unreachable, and keeping the shape would have
+been keeping a promise nothing could honour.
 
-Name one or the other, never both: an alias *is* a model name once bound, so a
-file saying both has said one thing twice with no rule for which wins.
-
-**Either may name several, tried in order.** A candidate is passed over for one
-reason and no other: an alias this deployment never bound. That is the
-deployment's doing, so a list is not the definition hedging; it is the
-definition naming the deployments it can still be useful in. If every candidate
-is passed over there is nothing left to run, and that refuses, naming each one
-and why.
-
-There was a `distinct: true` here, saying that running beside the main agent
+There was a `distinct: true` too, saying that running beside the main agent
 defeated the delegate, and turning `indistinct`'s report into a refusal. It went
-with `second-opinion`, its only user: a field with no definition to demonstrate
-it is a capability nobody meets. `indistinct` still reports -- it fires for any
-definition that named a model and did not end up anywhere different, which never
-depended on the field -- so the disappointment is still named, just not refused.
+with `second-opinion`, its only user. `indistinct` still reports -- it fires for
+any definition that named a model and did not end up anywhere different -- so
+the disappointment is still named, just not refused.
 
 There was a `provider:` beside `model:`, naming an endpoint by style, and a rule
 that the two moved together -- a model name sent to an endpoint that has never
@@ -137,7 +128,7 @@ from types import MappingProxyType
 
 from kingfisher.domain import fields
 from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.subagent import SubagentError, SubagentSpec, Wanted
+from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.tool import claimed_sources
 
 DIRECTORY = "subagents"
@@ -163,7 +154,6 @@ KNOWN: frozenset[str] = frozenset(
         "middleware",
         "subagents",
         "model",
-        "alias",
         "metadata",
     }
 )
@@ -210,7 +200,6 @@ DECLARED: frozenset[str] = frozenset(
         "build",
         "tools",
         "model",
-        "alias",
         "metadata",
     }
 )
@@ -253,7 +242,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
 
     The Python sibling of `parse`, and it reads the same fields by the same
-    rules: `tools` narrows the same way, `alias` binds the same way, `metadata`
+    rules: `tools` narrows the same way, `model` resolves the same way, `metadata`
     refuses the same way. What differs is one key -- `build` where a document
     writes `system_prompt` -- and four the other format has that this one
     cannot honour.
@@ -299,16 +288,9 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    if entry.get("model") and entry.get("alias"):
-        msg = (
-            f"{source}: names both a model and an alias; an alias *is* a model "
-            f"name once this deployment binds it, so name one or the other"
-        )
-        raise SubagentError(msg)
-
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
-    wanted = wanted_models(entry)
+    wanted = wanted_model(entry)
     written_tools = read.selection(entry.get("tools"), absent=ALL, key="tools")
     return SubagentSpec(
         name=fields.text(entry["name"]),
@@ -370,19 +352,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
-    # Two ways to say what a delegate runs, and a file saying both has said one
-    # thing twice with no rule for which wins. Refused rather than ranked: a
-    # precedence order here would be invisible in the file that relies on it,
-    # and whichever way round it went, half the readers would guess the other.
-    if document.get("model") and document.get("alias"):
-        msg = (
-            f"{source.name}: names both a model ({fields.text(document['model'])!r}) and "
-            f"an alias ({fields.text(document['alias'])!r}); an alias *is* a model name "
-            f"once this deployment binds it, so name one or the other"
-        )
-        raise SubagentError(msg)
-
-    wanted = wanted_models(document)
+    wanted = wanted_model(document)
 
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
@@ -436,28 +406,19 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 # One reference, doing two jobs now rather than one.
 
 
-def wanted_models(document: Mapping[str, object]) -> tuple[Wanted, ...]:
-    """What a definition would run, in the order it would prefer.
+def wanted_model(document: Mapping[str, object]) -> str | None:
+    """The model a definition names, or `None` for whatever summoned it.
 
-    `model:` and `alias:` are mutually exclusive and checked as such above, so
-    at most one of these loops runs. Each accepts a scalar or a list through
-    `fields.names`, which is the same reader every other name-list field uses --
-    a single unbracketed name stays legal because that is what every definition
-    written so far says.
+    One name. `model:` took a list while `alias:` existed, because an alias this
+    deployment had not bound was passed over and the next candidate tried -- so
+    a list was a definition naming the deployments it could still be useful in.
+    Nothing passes over a *model*: one this deployment cannot run refuses on the
+    spot, and always did. With `alias` gone every entry after the first was
+    unreachable, so a list here would be a shape that cannot mean anything.
 
-    Order is the file's, and is kept. A candidate is only ever passed over for a
-    reason the deployment caused, so second place means "if you did not bind the
-    first" rather than "if the first were unavailable for any reason at all".
-
-    Duplicates are dropped rather than refused. A repeat can only be reached by
-    the rule that already passed over the first one, so it changes nothing, and
-    refusing it would fail a file over a line that was merely redundant.
+    Read through `fields.text`, which refuses a list with the message saying so
+    rather than quietly taking the first of one.
     """
-    written = fields.names(document.get("model"))
-    if written:
-        return tuple(dict.fromkeys(Wanted(model=name) for name in written))
-    written = fields.names(document.get("alias"))
-    if written:
-        return tuple(dict.fromkeys(Wanted(alias=name) for name in written))
-    return ()
+    written = document.get("model")
+    return fields.text(written) if written is not None else None
 
