@@ -262,7 +262,7 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
         assert hasattr(found, name), name
 
 
-def test_the_whole_job_is_reachable_through_the_front_door(cfg):
+def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
     """What phase 2 is for, and what the CLI will be held to.
 
     A consumer -- the server today, the shipped command next -- may write
@@ -276,7 +276,7 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg):
     """
     from kingfisher import Inventory, Seeding, inventory, seed, shipped_kinds
 
-    written = seed(cfg)
+    written = seed(cfg, shipped)
     found = inventory(cfg)
 
     assert isinstance(written, Seeding)

@@ -540,7 +540,7 @@ def test_no_flags_leaves_every_kind_unrestricted(cfg):
     assert main._grants(cfg, _args()) == {}
 
 
-def test_a_subtraction_becomes_the_enumerated_rest(cfg):
+def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
     """And each subtraction is taken from its *own* axis.
 
     `execute` and `delete` are built-ins, so they are subtracted from the
@@ -551,7 +551,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
     """
     from kingfisher.infrastructure import seeding
 
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
 
     granted = main._grants(cfg, _args(without_builtin_tools="execute,delete"))
 
@@ -566,11 +566,11 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg):
     assert "http_fetch" not in builtin, "a workspace tool leaked onto the builtin axis"
 
 
-def test_the_two_tool_axes_subtract_independently(cfg):
+def test_the_two_tool_axes_subtract_independently(cfg, shipped):
     """A workspace tool is subtracted from the workspace set, and only that."""
     from kingfisher.infrastructure import seeding
 
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
 
     tools = main._grants(cfg, _args(without_tools="http_fetch"))["tools"]
 
@@ -580,7 +580,7 @@ def test_the_two_tool_axes_subtract_independently(cfg):
     assert "read_file" not in tools, "a builtin leaked onto the workspace axis"
 
 
-def test_subtracting_skills_and_subagents_too(cfg):
+def test_subtracting_skills_and_subagents_too(cfg, shipped):
     """The rest is asked of the catalogue, not named here.
 
     Naming it made this a test about how many presets ship: it asserted
@@ -591,7 +591,7 @@ def test_subtracting_skills_and_subagents_too(cfg):
     """
     from kingfisher.infrastructure import seeding
 
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
     seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
@@ -607,7 +607,7 @@ def test_subtracting_skills_and_subagents_too(cfg):
     assert "builtin_tools" not in grants
 
 
-def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg):
+def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg, shipped):
     """The mistake someone arrives with, because it used to be the advice.
 
     `--without-tools execute` is what this driver's docstring advertised before
@@ -617,7 +617,7 @@ def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg):
     """
     from kingfisher.infrastructure import seeding
 
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
 
     with pytest.raises(CapabilityError, match=r"subtract it with --without-builtin-tools"):
         main._grants(cfg, _args(without_tools="execute"))

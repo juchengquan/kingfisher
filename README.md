@@ -8,17 +8,20 @@ pip install kingfisher
 ```
 
 ```python
-from kingfisher import paths_from_env, seed
+from kingfisher import definitions_source, paths_from_env, seed
 
-for name in seed(paths_from_env()).written:
+paths = paths_from_env()
+for name in seed(paths, definitions_source(paths)).written:
     print(f"seeded {name}")
 ```
 
-`seed` takes a directory to copy from and defaults to the definitions that ship
-with kingfisher — one working tool, skill and subagent. Point it somewhere else
-and it copies yours instead:
+`seed` requires a directory to copy from — it will not invent one.
+`definitions_source` is what turns configuration into that directory: it reads
+`KINGFISHER_ASSETS`, and takes a path that overrides it. On the command, the
+same two:
 
-    kingfisher seed --from ./my-definitions
+    kingfisher seed                          # from KINGFISHER_ASSETS
+    kingfisher seed --from ./my-definitions  # from here instead
 
 The formats — tools, skills, subagents, and the catalogue they live in —
 are documented in [`docs/formats.md`](docs/formats.md).

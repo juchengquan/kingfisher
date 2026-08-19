@@ -30,7 +30,7 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Iterator
-from contextlib import ExitStack, contextmanager
+from contextlib import contextmanager
 from dataclasses import dataclass
 from importlib import resources
 from pathlib import Path
@@ -95,6 +95,25 @@ class Destination(Protocol):
 
     @property
     def catalogue_roots(self) -> dict[str, Path]: ...
+
+
+@runtime_checkable
+class Source(Protocol):
+    """Where definitions are copied *from*, as a deployment configured it.
+
+    A second protocol rather than a field on `Destination`, and the names are
+    the argument: a destination that also knew its source would have stopped
+    being one thing. `Destination` is narrow on purpose -- that narrowness is
+    what lets seeding run before a workspace has a model catalogue to read --
+    and widening it for the first thing that asked would have undone it.
+
+    `WorkspacePaths` and `Config` both satisfy this by shape, which is the same
+    arrangement `Destination` has and for the same reason: a first run can
+    answer "which directories?" long before it can answer "which models?".
+    """
+
+    @property
+    def assets(self) -> Path | None: ...
 
 
 def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
@@ -173,13 +192,50 @@ def shipped_kinds() -> tuple[str, ...]:
         return tuple(kind for kind in DEFINITION_KINDS if (tree / kind).is_dir())
 
 
-def seed(cfg: Destination, source: Path | None = None) -> Seeding:
+def definitions_source(paths: Source, override: str | Path | None = None) -> Path:
+    """The directory `seed` should copy from, or a refusal saying how to name one.
+
+    Two callers need this and must agree: `kingfisher seed`, and the driver's
+    auto-seed on a fresh workspace. Written once because the alternative is two
+    messages, of which the one seen daily is the one nobody reviews -- `main.py`
+    printed an instruction naming `--seed-assets` long after that had become the
+    wrong advice.
+
+    Public for the same reason `seed` is. The shipped command is held to being a
+    consumer of the library rather than an insider, so a private helper would be
+    unreachable from the one place that most needs it.
+
+    `override` wins over the environment, which is the ordinary shape of a flag
+    against a variable and the one `__main__` already documents for `.env`: an
+    explicit argument must not be quietly replaced by something a caller may not
+    have known was set.
+    """
+    if override is not None:
+        return Path(override).expanduser()
+    if paths.assets is not None:
+        return paths.assets
+
+    # Transitional, and deleted in the commit that moves the definitions out of
+    # the wheel. Until then an unset variable means the set that still ships, so
+    # this change is an API change and nothing else -- every existing deployment
+    # seeds exactly what it seeded before.
+    #
+    # `resources.files` directly rather than `opened`, because a context manager
+    # cannot hand back a path that outlives it. That drops the zip-import
+    # ceremony `opened` exists for, which is safe here and only here: this
+    # package is installed as an ordinary wheel or read from a source tree, and
+    # the branch is about to go.
+    return Path(str(resources.files(ASSETS)))
+
+
+def seed(cfg: Destination, source: Path) -> Seeding:
     """Copy definitions into this deployment's catalogues, and say what changed.
 
-    `source` is a directory holding `tools/`, `skills/` and `subagents/`. Left
-    out, it is the set that ships with kingfisher -- so a fresh install seeds a
-    workspace that already works, and a deployment with its own definitions
-    points here instead and needs no package, no metadata and no publish step.
+    `source` is a directory holding `agents/`, `tools/`, `skills/` and
+    `subagents/`. Required, with no default: seeding cannot invent where
+    definitions come from, and a signature that let it try is one a caller can
+    get wrong at runtime rather than at check time. `definitions_source` is what
+    turns a flag and a variable into one of these.
 
     Copied rather than read in place: they are the deployment's content once
     seeded, and the entire point is that you edit your copy. A definition that
@@ -195,14 +251,10 @@ def seed(cfg: Destination, source: Path | None = None) -> Seeding:
     impossible, and that is the same trade `place_data` makes for caller files.
     Replacing silently is the part that was wrong.
     """
-    written: list[str] = []
-    overwritten: list[str] = []
-    with ExitStack() as stack:
-        tree = stack.enter_context(opened(ASSETS)) if source is None else source
-        if not tree.is_dir():
-            msg = f"nothing to seed from: {tree} is not a directory"
-            raise ConfigError(msg)
-        written, overwritten = _copy(cfg, tree)
+    if not source.is_dir():
+        msg = f"nothing to seed from: {source} is not a directory"
+        raise ConfigError(msg)
+    written, overwritten = _copy(cfg, source)
 
     return Seeding(tuple(written), tuple(overwritten))
 

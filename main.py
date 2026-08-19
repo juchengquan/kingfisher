@@ -463,7 +463,7 @@ def main(argv: list[str]) -> int:
     # Here and never in `Kingfisher.__init__`: constructing a library object
     # must not write to somebody's disk.
     if fresh or args.seed_assets:
-        result = seeding.seed(paths)
+        result = seeding.seed(paths, seeding.definitions_source(paths))
         for name in result.written:
             print(f"seeded {name}")
         for name in result.overwritten:

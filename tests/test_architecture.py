@@ -1068,7 +1068,7 @@ LIGHT_EXPORTS = frozenset({
     # `inventory` is light to *reach*, not to call: answering builds an agent,
     # so `harness.agent` is imported inside the function. That is the shape
     # this classification is about -- what a name costs to touch.
-    "seed", "shipped_kinds", "Seeding", "inventory", "Inventory",
+    "seed", "definitions_source", "shipped_kinds", "Seeding", "inventory", "Inventory",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "split_reference",

@@ -40,6 +40,7 @@ from dotenv import load_dotenv
 
 from kingfisher import (
     ConfigError,
+    definitions_source,
     ensure_layout,
     from_env,
     inventory,
@@ -168,9 +169,14 @@ def _seed(source: str | None = None) -> int:
     paths = paths_from_env()
     # The destination has to exist before anything is copied into it, and this
     # is idempotent -- an already-laid-out workspace is untouched.
+    #
+    # Before the source is resolved, deliberately. Laying out a workspace writes
+    # `models.yaml.example`, and that has to happen even when there is nothing
+    # to seed: a deployment told to write `models.yaml` and given no example of
+    # one is the dead end this ordering exists to avoid.
     ensure_layout(paths.workspace)
 
-    written = seed(paths, Path(source) if source else None)
+    written = seed(paths, definitions_source(paths, source))
     for name in written.written:
         print(f"seeded {name}")
     for name in written.overwritten:

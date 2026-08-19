@@ -98,6 +98,11 @@ def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
         subagents_root=_optional_path("KINGFISHER_SUBAGENTS_DIR"),
         tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
         agents_root=_optional_path("KINGFISHER_AGENTS_DIR"),
+        # Read here rather than at the command that uses it, so that
+        # `test_every_variable_read_is_documented` can see it: that rule finds
+        # variables by scanning this module alone, and one read at a CLI edge
+        # would go undocumented with nothing to notice.
+        assets=_optional_path("KINGFISHER_ASSETS"),
     )
 
 
@@ -147,6 +152,7 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
         subagents_root=paths.subagents_root,
         tools_root=paths.tools_root,
         agents_root=paths.agents_root,
+        assets=paths.assets,
         skills_enabled=_bool(env, "KINGFISHER_SKILLS"),
         memory_enabled=_bool(env, "KINGFISHER_MEMORY"),
         interpreter_enabled=_bool(env, "KINGFISHER_INTERPRETER"),

@@ -51,6 +51,7 @@ _EXPORTS = {
     "build_backend": "kingfisher.infrastructure.harness.backend",
     "build_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     "build_model": "kingfisher.infrastructure.harness.models",
+    "definitions_source": "kingfisher.infrastructure.seeding",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
     "seed": "kingfisher.infrastructure.seeding",
     "shipped_kinds": "kingfisher.infrastructure.seeding",
@@ -120,6 +121,7 @@ __all__ = [
     "build_backend",
     "build_checkpointer",
     "build_model",
+    "definitions_source",
     "ensure_layout",
     "from_env",
     "inventory",
@@ -192,6 +194,9 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.harness.models import build_model as build_model
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.seeding import Seeding as Seeding
+    from kingfisher.infrastructure.seeding import (
+        definitions_source as definitions_source,
+    )
     from kingfisher.infrastructure.seeding import seed as seed
     from kingfisher.infrastructure.seeding import shipped_kinds as shipped_kinds
     from kingfisher.infrastructure.uploads import UploadError as UploadError

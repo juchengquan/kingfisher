@@ -162,6 +162,14 @@ class WorkspacePaths:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
+    #: Where definitions are *copied from*, which is the opposite direction to
+    #: the four above — those say where a catalogue is read, this says what
+    #: seeding hands it. Deliberately not beside them for that reason.
+    #:
+    #: `None` when the deployment named none, which is a normal state and not an
+    #: error: a workspace seeded once runs for years without this being set.
+    #: Only the act of seeding needs it, so only seeding refuses without it.
+    assets: Path | None = None
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
@@ -385,6 +393,12 @@ class Config:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
+    # Where definitions are copied *from*, which is the opposite direction to
+    # the four above. Carried here as well as on `WorkspacePaths` because
+    # `doctor` is handed a whole `Config` and has to report on it -- an unset,
+    # mistyped or emptied source is the likeliest thing standing between an
+    # install and a run once the definitions stop arriving with the wheel.
+    assets: Path | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix

@@ -300,7 +300,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
 
-def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypatch):
+def test_seeding_never_carries_bytecode_into_a_workspace(cfg, shipped, tmp_path, monkeypatch):
     """The guard that only had to hold one level deep until a preset tool could
     be a package.
 
@@ -331,7 +331,7 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
         yield source
 
     monkeypatch.setattr(seeding, "opened", _fixture)
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
 
     carried = [str(p.relative_to(tools_dir(cfg))) for p in tools_dir(cfg).rglob("__pycache__")]
     assert not carried, f"seeding carried bytecode into the workspace: {carried}"

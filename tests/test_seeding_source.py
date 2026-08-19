@@ -51,8 +51,8 @@ def test_the_definitions_ship_with_the_library():
     assert seeding.shipped_kinds() == ("agents", "skills", "subagents", "tools")
 
 
-def test_seeding_without_a_source_writes_the_shipped_definitions(cfg):
-    written = seeding.seed(cfg).written
+def test_seeding_without_a_source_writes_the_shipped_definitions(cfg, shipped):
+    written = seeding.seed(cfg, shipped).written
 
     assert any(entry.startswith("skills/") for entry in written), written
     assert any(entry.startswith("subagents/") for entry in written), written
@@ -75,6 +75,75 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
 
     assert (cfg.workspace / EXAMPLE).is_file()
     assert EXAMPLE not in seeding.seed(cfg, mine).written
+
+
+# -- resolving one source from a flag and a variable -----------------------
+
+
+def test_seed_will_not_invent_a_source(cfg):
+    """The parameter is required, with no default and no `None` branch.
+
+    Stated in the signature rather than checked at runtime, so a caller who
+    forgets is caught by the type checker instead of by an empty workspace an
+    hour later. Asserted here because the type checker does not run in this
+    suite, and a default reappearing would otherwise be silent.
+    """
+    import inspect
+
+    parameter = inspect.signature(seeding.seed).parameters["source"]
+
+    assert parameter.default is inspect.Parameter.empty
+
+
+def test_an_explicit_directory_beats_the_variable(cfg, tmp_path):
+    """The ordinary shape of a flag against a variable, and the one
+    `__main__` already documents for `.env`: an explicit argument must not be
+    quietly replaced by something the caller may not have known was set."""
+    from dataclasses import replace
+
+    configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
+    asked_for = _definitions(tmp_path / "asked-for", "skills/mine/SKILL.md")
+
+    resolved = seeding.definitions_source(replace(cfg, assets=configured), asked_for)
+
+    assert resolved == asked_for
+
+
+def test_the_variable_is_used_when_nothing_was_asked_for(cfg, tmp_path):
+    """`kingfisher seed` with no `--from`, which is the common invocation."""
+    from dataclasses import replace
+
+    configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
+
+    assert seeding.definitions_source(replace(cfg, assets=configured)) == configured
+
+
+def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
+    """On `WorkspacePaths`, not only on `Config`.
+
+    Seeding a fresh workspace runs before a model catalogue can be read -- the
+    catalogue is a file inside the workspace -- so a source reachable only from
+    a whole `Config` would be unreachable exactly when seeding happens.
+    """
+    from kingfisher.application.config import paths_from_env
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "mine"))
+
+    assert paths_from_env().assets == tmp_path / "mine"
+
+
+def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
+    """A workspace seeded once runs for years without this being set. Only the
+    act of seeding needs it, so `paths_from_env` must not refuse -- that is the
+    difference between this and `KINGFISHER_WORKSPACE`, which is required
+    because no default can supply it."""
+    from kingfisher.application.config import paths_from_env
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
+
+    assert paths_from_env().assets is None
 
 
 # -- a source of your own --------------------------------------------------

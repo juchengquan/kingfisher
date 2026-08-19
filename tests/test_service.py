@@ -295,7 +295,7 @@ def test_an_unrestricted_request_is_told_nothing(cfg):
     assert [e.kind for e in events] == ["run_start"]
 
 
-def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
+def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     """Not off a list kept somewhere. The tool surface includes whatever the
     workspace defined, so the only honest answer is what was actually wired --
     which is also what makes a grant go stale when a workspace gains a tool."""
@@ -303,7 +303,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
     # An agent of this test's own. `assistant` declares three delegates, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
@@ -328,14 +328,14 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg):
     assert "read_file" not in by_kind["builtin tool"]  # granted, so not withheld
 
 
-def test_every_kind_a_request_can_narrow_is_reported(cfg):
+def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     """Every axis narrows the same way and every one of them went silent the
     same way. One line per kind, and only for kinds that lost something."""
     from kingfisher.infrastructure import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
     # An agent of this test's own. `assistant` declares three delegates, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
@@ -378,13 +378,13 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg):
     assert by_kind["subagent"] == tuple(sorted(seeded_subagents - {"reviewer"}))
 
 
-def test_a_kind_that_lost_nothing_says_nothing(cfg):
+def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     """Narrowing tools should not produce a line about skills."""
     from kingfisher.infrastructure import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
     # An agent of this test's own. `assistant` declares three delegates, and
     # what those name is a different subject from a withheld-tool report --
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
