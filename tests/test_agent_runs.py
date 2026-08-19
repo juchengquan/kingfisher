@@ -132,32 +132,6 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir, monkeypatch):
     assert captured["model"].model == "cheap-model"
 
 
-def test_a_delegate_that_must_differ_is_measured_against_the_agent(cfg, session_dir):
-    """The top of the chain the last change built. `second-opinion` is elsewhere
-    from the deployment's default and *not* from an agent pinned to the same
-    model -- and judged against the default it would look fine."""
-    from kingfisher.config import ConfigError
-    from tests.conftest import subagents_dir
-
-    _agents(
-        cfg,
-        "name: elsewhere\ndescription: Runs elsewhere.\nmodel: elsewhere-model\n"
-        "subagents: [second-opinion]\nsystem_prompt: |\n  You answer.\n",
-    )
-    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (subagents_dir(cfg) / "second-opinion.yaml").write_text(
-        "name: second-opinion\ndescription: Answers again.\nalias: alternate\n"
-        "distinct: true\nsystem_prompt: |\n  You answer on your own.\n",
-        encoding="utf-8",
-    )
-
-    with pytest.raises(ConfigError, match="same model as whatever summoned it"):
-        build_agent(
-            cfg,
-            session_dir=session_dir,
-            agent=_spec(cfg, "elsewhere"),
-            capabilities=Capabilities(subagents=("second-opinion",)),
-        )
 
 
 # -- naming one -------------------------------------------------------------

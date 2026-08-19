@@ -187,7 +187,7 @@ class Reader:
     def flag(self, value: object, *, key: str) -> bool:
         """A yes/no field, refusing the spellings YAML would quietly accept.
 
-        `distinct: "false"` is a non-empty string and truthy in Python, which is
+        `memory: "false"` is a non-empty string and truthy in Python, which is
         the reading that says the opposite of what the file says. YAML already
         turns `true`, `yes` and `on` into `True` before this sees them, so what
         is left here arrived as something other than a bool -- and there is no

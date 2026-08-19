@@ -84,11 +84,11 @@ def subagent_helpers(
     the definition -- so it is dropped, and reported as withheld rather than
     refused.
 
-    That second half matters more here than anywhere else. `second-opinion`
-    runs on another company's servers, so a caller declining it is often
-    declining *that*, and refusing the whole request would mean they cannot use
-    `reviewer` at all without also accepting OpenAI. The delegate runs alone
-    and the report says so.
+    That second half matters more here than anywhere else. A helper may run on
+    another company's servers, so a caller declining it is often declining
+    *that*, and refusing the whole request would mean they cannot use the
+    delegate that names it without also accepting the vendor. The delegate runs
+    alone and the report says so.
 
     Which is why a definition naming a helper should say what to do without
     one: the prompt has to work both ways, because the caller decides.
@@ -139,17 +139,6 @@ def _host(url: str) -> str:
     return urlsplit(url).netloc
 
 
-def _must_differ(spec: SubagentSpec | AgentSpec) -> bool:
-    """Whether this definition refuses to run the model that summoned it.
-
-    Only a delegate can. `distinct` is refused in an agent file because nothing
-    summons an agent, so there is nothing for it to differ from -- which makes
-    this the one line the two formats need between them, rather than a second
-    copy of the resolution below.
-    """
-    return isinstance(spec, SubagentSpec) and spec.distinct
-
-
 def _subject(spec: SubagentSpec | AgentSpec) -> str:
     """How a refusal names the file it is about.
 
@@ -166,7 +155,6 @@ def model_for(
     cfg: Config,
     *,
     override: RunOn | None = None,
-    caller: str | None = None,
 ) -> str | None:
     """The model this delegate will actually run, or `None` for the deployment's.
 
@@ -195,14 +183,13 @@ def model_for(
             try:
                 model = cfg.models.bound(wanted.alias)
             except ConfigError as exc:
-                # Not fatal while another candidate is left. A file naming
-                # several has said which deployments it can still be useful in,
-                # and an alias nobody bound is precisely one it anticipated.
+                # Not fatal while another candidate is left, and now the only
+                # way a candidate is passed over at all -- `distinct` was the
+                # other, and went with `second-opinion`. A file naming several
+                # has said which deployments it can still be useful in, and an
+                # alias nobody bound is precisely one it anticipated.
                 passed_over.append(f"alias {wanted.alias!r}: {exc}")
                 continue
-        if _must_differ(spec) and (why := indistinct(spec, cfg, model=model, caller=caller)):
-            passed_over.append(f"{model!r} {why}")
-            continue
         return model
 
     # Every candidate was passed over, so there is nothing left to run. The
@@ -217,18 +204,19 @@ def model_for(
     raise ConfigError(msg)
 
 
-def model_object(  # noqa: PLR0913 -- six things decide which model a delegate
+def model_object(  # five things decide which model a delegate
     # runs, and each is a separate rule: what the file names, what the deployment
     # binds, which endpoints this request may reach, what the request overrode,
-    # what it inherits when it names nothing, and what it may not match. Folding
-    # any pair together would hide which of the six produced the answer.
+    # and what it inherits when it names nothing. Folding any pair together would
+    # hide which of the five produced the answer. It was six until `distinct`
+    # went, and the sixth -- what it may not match -- took the caller chain with
+    # it.
     spec: SubagentSpec | AgentSpec,
     cfg: Config,
     *,
     endpoints: Selection = ALL,
     run_on: RunOn | None = None,
     inherited: Any = None,
-    caller: str | None = None,
 ) -> Any | None:
     """The model instance this delegate runs, or `None` to leave it inheriting.
 
@@ -246,7 +234,7 @@ def model_object(  # noqa: PLR0913 -- six things decide which model a delegate
     all, which is how a top-level delegate keeps deepagents' own inheritance
     from the agent that holds it.
     """
-    model_id = model_for(spec, cfg, override=run_on, caller=caller)
+    model_id = model_for(spec, cfg, override=run_on)
     if model_id is None:
         return inherited
     # A lookup, where this used to `replace` four fields of the `Config` and
@@ -272,7 +260,6 @@ def indistinct(
     cfg: Config,
     *,
     model: str | None,
-    caller: str | None = None,
 ) -> str | None:
     """Why this delegate is not running anywhere different, or `None`.
 
@@ -302,22 +289,20 @@ def indistinct(
     # pinned to `gpt-5` summoning a helper bound to `gpt-5` compared it against
     # a MiniMax default, found a difference, and let the two run side by side.
     # Which is the answer this whole function exists to catch.
-    against = cfg.models.default if caller is None else caller
+    against = cfg.models.default
     # "whatever", not "the delegate". A summoner used to be one, because only a
     # delegate could name a model above another; an agent can now, so naming the
     # kind here would be wrong exactly when the agent is the one that pinned it.
     # `None` still means the main agent on the deployment's own model, which is
     # the one case this can name precisely.
-    whose = "the main agent" if caller is None else "whatever summoned it"
     if model == against:
-        return f"runs {model!r}, the same model as {whose}"
+        return f"runs {model!r}, the same model as the main agent"
     profile, endpoint = cfg.models.resolve(model)
     summoner = _host(cfg.models.resolve(against)[1].base_url)
     if _host(endpoint.base_url) == summoner:
-        named = "the default" if caller is None else f"{against!r}"
         return (
             f"runs {model!r} on endpoint {profile.endpoint!r}, which points at the "
-            f"same host as {named} ({summoner})"
+            f"same host as the default ({summoner})"
         )
     return None
 
@@ -334,7 +319,6 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     catalogue: Sequence[Found] = (),
     run_on: RunOn | None = None,
     default_model: Any = None,
-    caller: str | None = None,
 ) -> dict[str, Any]:
     """A delegate the workspace built itself, wrapped the way deepagents takes one.
 
@@ -356,7 +340,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     instead of arriving as something confusing much later.
     """
     model = model_object(
-        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model, caller=caller
+        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )
     if model is None:
         # It named nothing and inherited nothing, so it runs what the deployment
@@ -453,8 +437,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: The model whoever summoned this delegate is running, by name. `None`
     #: means the main agent on the deployment's own model, which is what a
     #: top-level delegate under an unpinned agent has. It is what a definition
-    #: naming no model inherits, and what `distinct` refuses to match.
-    caller: str | None = None,
+    #: naming no model inherits, and what `indistinct` compares against.
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
 
@@ -479,7 +462,6 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             catalogue=catalogue,
             run_on=run_on,
             default_model=default_model,
-            caller=caller,
         )
 
     subagent: dict[str, Any] = {
@@ -626,9 +608,9 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # pair -- `KINGFISHER_MODEL_SUBAGENT` / `KINGFISHER_PROVIDER_SUBAGENT` --
     # used to win over this, on the theory that cost is an operator's call and
     # should not need editing content. It said "every delegate" or nothing,
-    # which made it useless for the one thing a per-delegate model is for:
-    # `second-opinion` exists in order *not* to be the model beside it, and a
-    # blanket override silently defeats it. The file says where it runs.
+    # which made it useless for the one thing a per-delegate model is for: a
+    # delegate that exists in order *not* to be the model beside it, which a
+    # blanket override silently defeats. The file says where it runs.
     if mine or private or tool_objects is not None:
         # Objects, not names -- `SubAgent.tools` is what deepagents registers,
         # and handing it names raises inside `ToolNode`. Narrowing still
@@ -637,7 +619,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         subagent["tools"] = [one.tool for one in (*private, *mine)] + list(tool_objects or [])
 
     built = model_object(
-        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model, caller=caller
+        spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )
     if built is not None:
         subagent["model"] = built

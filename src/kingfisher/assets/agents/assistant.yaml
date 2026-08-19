@@ -18,8 +18,8 @@ skills: ["*"]
 # turn whether or not the task needs it -- so drop a name you never use rather
 # than keeping the list tidy for its own sake.
 #
-# `second-opinion` is deliberately absent and still reachable: `reviewer` names
-# it, and a helper arrives with the delegate that wants it.
+# A delegate that names helpers of its own brings them with it: grant the
+# delegate and its helpers arrive, without the agent listing them here.
 subagents: [extractor, reviewer, profiler]
 # No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships

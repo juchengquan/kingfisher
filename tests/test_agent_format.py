@@ -148,12 +148,6 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
         read_subagent(delegate, Path("d.yaml"))
 
 
-def test_distinct_is_refused_with_the_reason_rather_than_as_an_unknown_field():
-    """`distinct` says "not the model that summoned me", and nothing summons an
-    agent. The generic message would read as "not supported yet" and send
-    somebody looking for a workaround."""
-    with pytest.raises(AgentError, match="nothing summons an agent"):
-        _read(MINIMAL.rstrip() + "\ndistinct: true\n", "plain.yaml")
 
 
 @pytest.mark.parametrize(
@@ -202,9 +196,26 @@ def test_memory_has_three_states_and_absent_is_not_off():
     assert _read(MINIMAL.rstrip() + "\nmemory: false\n", "plain.yaml").memory is False
 
 
-def test_a_quoted_false_is_refused_rather_than_read_as_true():
+@pytest.mark.parametrize("written", ["'false'", '"no"', "0", "maybe"])
+def test_a_flag_that_is_not_a_bool_is_refused(written):
+    """`memory: "false"` is a non-empty string, and every non-empty string is
+    true -- so the reading Python would take says the opposite of what the file
+    says.
+
+    Written against `memory` because it is the only field left that reads a
+    flag. It was `distinct` on a subagent, and moved here with that field's
+    removal rather than going with it: what is under test is
+    `fields.Reader.flag`, which both formats share.
+    """
     with pytest.raises(AgentError, match="write true or false"):
-        _read(MINIMAL.rstrip() + '\nmemory: "false"\n', "plain.yaml")
+        _read(MINIMAL.rstrip() + f"\nmemory: {written}\n", "plain.yaml")
+
+
+def test_yaml_spellings_of_true_are_accepted():
+    """`yes` and `on` arrive here already a bool, so there is nothing to refuse
+    and nothing to special-case."""
+    for written in ("true", "True", "yes", "on"):
+        assert _read(MINIMAL.rstrip() + f"\nmemory: {written}\n", "plain.yaml").memory is True
 
 
 def test_metadata_is_carried_and_a_bag_with_no_shape_is_refused():

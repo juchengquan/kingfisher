@@ -301,116 +301,57 @@ def test_the_message_names_the_delegate(cfg, session_dir):
     assert "second-opinion" in rendered
 
 
-# -- when the definition says being elsewhere is the point -------------------
+# -- a definition naming several, and what passes one over --------------------
 #
-# Everything above reports. A definition that writes `distinct: true` has said
-# the thing kingfisher could not know, and from there the same computation is a
-# refusal. The half-built version of this was already shipping: an *unbound*
-# alias stopped the build, because falling back to the default "would hand this
-# delegate the one model it exists not to be, and nothing in the output would
-# look wrong" -- while a bound alias resolving to that same model went through
-# with a note.
+# Everything above reports, which is now all there is to do. A `distinct: true`
+# turned the same computation into a refusal and went with `second-opinion`, its
+# only user. What survives it is the other reason a candidate is passed over:
+# an alias this deployment never bound, which is the case a file naming several
+# anticipated -- it is saying which deployments it can still be useful in.
 
 
-DISTINCT_BY_MODEL = """name: second-opinion
+ELSEWHERE_BY_MODEL = """name: elsewhere
 description: Answers again, elsewhere.
 model: {model}
-distinct: true
 system_prompt: |
   You answer on your own.
 """
 
-DISTINCT_BY_ALIAS = """name: second-opinion
+ELSEWHERE_BY_ALIAS = """name: elsewhere
 description: Answers again, elsewhere.
 alias: {alias}
-distinct: true
 system_prompt: |
   You answer on your own.
 """
 
 
 def _spec_from(text):
-    return read_subagent(text, Path("second-opinion.yaml"))
+    return read_subagent(text, Path("elsewhere.yaml"))
 
 
-def test_a_delegate_that_must_differ_refuses_the_deployments_own_model(cfg):
-    """The gap this closes. It used to build, answer, and be worth nothing."""
-    spec = _spec_from(DISTINCT_BY_MODEL.format(model=cfg.models.default))
-
-    with pytest.raises(ConfigError) as raised:
-        model_for(spec, cfg)
-
-    message = str(raised.value)
-    assert "second-opinion" in message
-    assert cfg.models.default in message
-    assert "same model as the main agent" in message
 
 
-def test_a_delegate_that_must_differ_refuses_a_second_endpoint_on_one_host(cfg):
-    """Hosts, not endpoint names -- two catalogue entries may serve one machine,
-    and a second opinion from the same gateway is the disappointment."""
-    same_host = _elsewhere(cfg, cfg.models.endpoints["fake"].base_url)
-    spec = _spec_from(DISTINCT_BY_MODEL.format(model="gpt-5"))
-
-    with pytest.raises(ConfigError, match="same host"):
-        model_for(spec, same_host)
 
 
-def test_a_delegate_that_must_differ_is_content_when_it_does(cfg):
-    spec = _spec_from(DISTINCT_BY_ALIAS.format(alias="alternate"))
-
-    assert model_for(spec, cfg) == "elsewhere-model"
 
 
-def test_a_delegate_that_must_differ_is_measured_against_who_summoned_it(cfg):
-    """"Elsewhere" is relative to the thing that asked, not to the deployment.
-
-    The two agreed while only the deployment could name a model. They part the
-    moment anything between the agent and this delegate names one of its own: a
-    parent already running `elsewhere-model` summoning a helper bound to
-    `elsewhere-model` is two of the same model side by side, and measured
-    against the deployment's default it looks like a difference.
-
-    Which is the failure this flag exists for, arriving through the one door it
-    was not watching -- the delegate still builds, still answers, and the answer
-    is worth nothing.
-    """
-    spec = _spec_from(DISTINCT_BY_ALIAS.format(alias="alternate"))
-
-    # Under the main agent, which runs the deployment's own model, it genuinely
-    # is somewhere else.
-    assert model_for(spec, cfg) == "elsewhere-model"
-
-    # Under a delegate already running that model, it is not.
-    with pytest.raises(ConfigError, match="same model as whatever summoned it"):
-        model_for(spec, cfg, caller="elsewhere-model")
 
 
-def test_without_the_flag_the_same_model_is_still_only_reported(cfg, session_dir):
-    """The default is unchanged, and has to be: `reviewer` names the
-    deployment's own model on purpose."""
+def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
+    """Kingfisher cannot know that a delegate needs to differ, so this is only
+    ever a report: `reviewer` names the deployment's own model on purpose.
+
+    There was a `distinct: true` that turned it into a refusal. It went with
+    `second-opinion`, its only user, and the report is what is left."""
     _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
     spec = _spec_from(
-        DISTINCT_BY_MODEL.format(model=cfg.models.default).replace("distinct: true\n", "")
+        ELSEWHERE_BY_MODEL.format(model=cfg.models.default)
     )
 
     assert model_for(spec, cfg) == cfg.models.default
     assert "cheap" in _found(cfg, session_dir, ("cheap",))
 
 
-def test_the_second_candidate_is_used_when_the_first_is_the_wrong_model(cfg):
-    """What a list is for. The first is the deployment's own model, so it is
-    passed over -- not because the file hedged, but because this deployment made
-    it useless."""
-    spec = _spec_from(
-        "name: second-opinion\n"
-        "description: d\n"
-        f"model: [{cfg.models.default}, elsewhere-model]\n"
-        "distinct: true\n"
-        "system_prompt: |\n  You answer.\n"
-    )
-
-    assert model_for(spec, cfg) == "elsewhere-model"
 
 
 def test_an_alias_nobody_bound_is_passed_over_rather_than_fatal(cfg):
@@ -421,7 +362,6 @@ def test_an_alias_nobody_bound_is_passed_over_rather_than_fatal(cfg):
         "name: second-opinion\n"
         "description: d\n"
         "alias: [never-bound, alternate]\n"
-        "distinct: true\n"
         "system_prompt: |\n  You answer.\n"
     )
 
@@ -429,7 +369,7 @@ def test_an_alias_nobody_bound_is_passed_over_rather_than_fatal(cfg):
 
 
 def test_one_unbound_alias_on_its_own_still_refuses(cfg):
-    spec = _spec_from(DISTINCT_BY_ALIAS.format(alias="never-bound"))
+    spec = _spec_from(ELSEWHERE_BY_ALIAS.format(alias="never-bound"))
 
     with pytest.raises(ConfigError, match="never-bound"):
         model_for(spec, cfg)
@@ -437,12 +377,17 @@ def test_one_unbound_alias_on_its_own_still_refuses(cfg):
 
 def test_the_refusal_names_every_candidate_and_why_each_failed(cfg):
     """One round trip per rejected candidate is one too many: the fix is in the
-    deployment's bindings, and a reader has to know which of them to change."""
+    deployment's bindings, and a reader has to know which of them to change.
+
+    Aliases, because they are the only thing passed over now. A named *model*
+    that this deployment cannot run refuses on the first one and never reaches
+    the second -- which is the difference between the two fields, and why
+    `alias` was not redundant with `model`.
+    """
     spec = _spec_from(
-        "name: second-opinion\n"
+        "name: elsewhere\n"
         "description: d\n"
-        f"model: [{cfg.models.default}, cheap-model]\n"
-        "distinct: true\n"
+        "alias: [never-bound, also-never-bound]\n"
         "system_prompt: |\n  You answer.\n"
     )
 
@@ -450,10 +395,9 @@ def test_the_refusal_names_every_candidate_and_why_each_failed(cfg):
         model_for(spec, cfg)
 
     message = str(raised.value)
-    assert cfg.models.default in message
-    assert "cheap-model" in message
-    assert "same model as the main agent" in message
-    assert "same host" in message
+    assert "never-bound" in message
+    assert "also-never-bound" in message
+    assert "2 model(s)" in message
 
 
 def test_a_request_override_replaces_the_whole_list(cfg):
@@ -464,7 +408,6 @@ def test_a_request_override_replaces_the_whole_list(cfg):
         "name: second-opinion\n"
         "description: d\n"
         "alias: [never-bound, alternate]\n"
-        "distinct: true\n"
         "system_prompt: |\n  You answer.\n"
     )
 

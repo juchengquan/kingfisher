@@ -204,12 +204,11 @@ reported** — which is what lets a freshly seeded workspace run at all, since
 `second-opinion` wants an `alternate` the example config deliberately leaves
 unbound.
 
-### Four fields are refused
+### Three fields are refused
 
 Each with its own message rather than a generic "unknown field", because the
 generic one reads as *not supported yet* and sends you looking for a workaround:
 
-- **`distinct`** — there is nothing above an agent for it to differ from.
 - **`permissions`** — deepagents' permissions *replace* the parent's rather than
   narrowing them, so writing this here would drop `/data` being read-only along
   with everything else it inherits.
@@ -621,8 +620,14 @@ delegate that called this one. That is the usual case, and `reviewer` is the
 shipped example of it: re-checking a figure is work for the same model that
 produced it, whichever one that turned out to be.
 
-Which makes the two settings opposites, and they are. Say nothing and you match
-your caller. Say `distinct: true` and you must not.
+A delegate that names a model and ends up on the caller's anyway is reported in
+the run — `indistinct` names it, and the two crude cases it can see are the same
+model as the deployment's default and a different id on the same host. Reported,
+never refused: kingfisher cannot know that a delegate *needs* to differ, and
+`reviewer` deliberately runs on the same model and is right to.
+
+There was a `distinct: true` for saying it did need to differ, which turned that
+report into a refusal. It went with `second-opinion`, its only user.
 
 There was a `provider:` beside it, naming an endpoint by style, and a rule that
 the two moved together. Both are gone. An endpoint is a property of the model —
@@ -686,7 +691,6 @@ not bound for still costs nothing until you use them.
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | An entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. May be a list, tried in order |
 | `alias` | optional | A general name your `models.yaml` binds to a model. For a definition that knows what *kind* of model it needs and cannot know its name. Not with `model`. May be a list, and an alias you never bound is passed over rather than fatal |
-| `distinct` | optional | `true` when running on the same model as whatever summoned it defeats this delegate. Turns "ended up on the same model" from a note in the run report into a refusal, and is what makes a list of candidates worth writing |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 
 ### A delegate that consults another
@@ -963,8 +967,8 @@ format has to refuse.
 | `middleware` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
-`name`, `description`, `build`, `tools`, `model`, `alias`, `distinct` and
-`metadata` are what remain.
+`name`, `description`, `build`, `tools`, `model`, `alias` and `metadata` are
+what remain.
 
 **A tool grant is not a limit here.** deepagents runs the graph as given and
 never applies kingfisher's allowlist to it, so `--tools` narrows what `build`

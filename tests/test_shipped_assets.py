@@ -7,20 +7,19 @@ reach the files the way an installed pack is reached — through
 
 They live here rather than in kingfisher because they describe *content*. The
 framework's own tests are about seeding, discovery and the formats; whether
-`reviewer` consults `second-opinion` is this package's business, and a preset
-added here should not turn a test red over there.
+`reviewer` reaches for a helper is this package's business, and a preset added
+here should not turn a test red over there.
 """
 
 from __future__ import annotations
 
 from dataclasses import fields
 
-import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
@@ -28,7 +27,6 @@ from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
-from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel
 
 
@@ -51,7 +49,6 @@ def test_every_preset_subagent_parses(shipped):
     assert set(specs) == {
         "reviewer",
         "extractor",
-        "second-opinion",
         "profiler",
         "redactor",
         "show-your-work",
@@ -145,33 +142,14 @@ def test_every_preset_tool_describes_itself_to_the_model(shipped):
         assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
 
 
-def test_the_second_opinion_preset_insists_on_differing(shipped):
-    """The one definition whose whole reason is to be a different model, and the
-    one that could silently stop being one.
-
-    Bind `alternate` to whatever the main agent runs and, without this, the
-    delegate builds, answers, and the answer is worth nothing -- with a line in
-    the run report as the only sign. `distinct: true` is what turns that into a
-    refusal, so a preset that quietly lost the line would be back to the defect
-    this shipped to fix.
-
-    Asserted here rather than trusted, because it is one line in a file nobody
-    reads twice. Its neighbours deliberately do *not* set it: `reviewer` runs on
-    the deployment's own model on purpose, and `extractor` wants a cheap model
-    rather than a different one.
-    """
-    specs = LocalSubagentRepository(shipped / "subagents").specs
-
-    assert specs["second-opinion"].distinct is True
-    assert specs["second-opinion"].wanted, "it must name what it may run instead"
-    assert {name for name, s in specs.items() if s.distinct} == {"second-opinion"}
 
 
 def test_no_preset_names_a_model(shipped):
     """A file inside the wheel cannot portably name a vendor's model id.
 
-    `extractor` and `profiler` said `MiniMax-M2.5` and `second-opinion` said
-    `gpt-5`. The catalogue is closed now, so any of those would refuse to start
+    `extractor` and `profiler` said `MiniMax-M2.5` once, and a delegate that
+    has since gone said `gpt-5`. The catalogue is closed now, so any of those
+    would refuse to start
     for a deployment whose `models.yaml` lacks the entry -- and before it was
     closed they were worse, reaching whatever endpoint was configured and
     failing as a 404 mid-run.
@@ -192,18 +170,6 @@ def test_no_preset_names_a_model(shipped):
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 
-def test_the_reviewer_preset_consults_the_second_opinion(shipped):
-    """The README describes this pairing, so a preset had better demonstrate it.
-
-    It is also the shape the field exists for: `reviewer` runs out of road in a
-    specific place -- two defensible readings and nothing in the file to choose
-    between them -- which is where a *different model* beats more care from the
-    same one.
-    """
-    specs = LocalSubagentRepository(shipped / "subagents").specs
-
-    assert specs["reviewer"].subagents == ("second-opinion",)
-    assert specs["second-opinion"].subagents is None  # a helper works alone
 
 
 def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
@@ -218,32 +184,6 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
 
 
-@pytest.mark.parametrize(
-    "granted",
-    [("reviewer",), ("reviewer", "second-opinion")],
-    ids=["helper withheld", "helper granted"],
-)
-def test_the_reviewer_preset_builds_with_and_without_its_helper(
-    workspace_with_presets, session_dir, fake_model, granted
-):
-    """Both grants, because `reviewer` names a delegate of its own.
-
-    Withheld is the path most callers take, and the reason the prompt says "if
-    you have one": granting `second-opinion` is a choice, and declining it must
-    not cost anyone the reviewer. Granted is the shape the pairing exists to
-    demonstrate. A definition that only builds one way is a broken preset --
-    copied, failing on first contact, with the format blamed.
-
-    That the withheld build has no `task` tool and the granted one does is
-    kingfisher's rule, tested there against its own fixtures. This is about
-    these files.
-    """
-    build_agent(
-        workspace_with_presets,
-        session_dir=session_dir,
-        model=fake_model,
-        capabilities=Capabilities(subagents=granted),
-    )
 
 
 def test_the_readme_snippet_runs_and_uses_only_the_public_api(tmp_path, monkeypatch, capsys):
