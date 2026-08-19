@@ -74,6 +74,13 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
     if found.tools_error is not None:
         yield "tools"
         yield f"  cannot load: {found.tools_error}"
+        # And on to the rest. This used to return, so one unparseable `.py` in
+        # `tools/` hid the skills and subagents listings entirely -- against
+        # this record's own rule that "one unloadable catalogue must not take
+        # the other two down with it", and worst for the person most likely to
+        # be running the command, who is looking at a broken workspace.
+        yield ""
+        yield from _catalogue(found)
         return
 
     # Two headings, because they are two grants. Printed as one pile, this
@@ -90,6 +97,18 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
     yield "\nworkspace tools — grant with --tools"
     yield offered(dict(found.tool_sources), found.tools)
 
+    yield from _catalogue(found)
+
+
+def _catalogue(found: Inventory) -> Iterator[str]:
+    """The skills and subagents sections, which are the same whether or not
+    the tools catalogue loaded.
+
+    Its own generator so the tools failure can fall through to it. That path
+    used to `return`, so one unparseable `.py` hid these two entirely -- and
+    the person seeing it is by definition looking at a broken workspace, which
+    is the worst moment to be shown less of it.
+    """
     yield "\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)"
     # A description each, which subagents have always had here and skills never
     # did -- it is what deepagents will actually put in front of the model.
@@ -197,5 +216,17 @@ def failed(found: Inventory) -> bool:
     The exit code, decided in one place. Printed and returned apart, a caller
     could report a broken catalogue and exit 0 -- which is how a listing gets
     read by a script that then carries on.
+
+    That is exactly what happened to `agents` for a while: the field was added,
+    the section printed "cannot load", and this predicate still named the two
+    kinds that existed when it was written. Read as "any of them" now, so the
+    next kind is a line in the tuple rather than a silent exit 0.
+
+    A skill that will not load is deliberately not here. One bad directory is
+    reported inline and the run still works without it, which is "worth
+    knowing" rather than "will not run" -- the split the exit codes are for.
     """
-    return found.tools_error is not None or found.subagents_error is not None
+    return any(
+        error is not None
+        for error in (found.agents_error, found.tools_error, found.subagents_error)
+    )
