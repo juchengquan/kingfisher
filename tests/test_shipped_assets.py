@@ -33,7 +33,13 @@ def test_every_preset_subagent_parses(shipped):
     # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the
     # same: a subagent is named by its `name:` field, so a folder cannot reach
     # it. Its presence in this flat set is the assertion that nesting works.
-    assert set(specs) == {"reviewer", "extractor", "second-opinion", "profiler"}
+    #
+    # `redactor` ships in a folder too, and in the other kind: `subagents/
+    # redactor/` holds the definition it is named after, which makes it that
+    # delegate's bundle. It is named `redactor` here for the same reason
+    # `profiler` is named `profiler` -- the folder decides what a definition
+    # *brings*, never what it is called.
+    assert set(specs) == {"reviewer", "extractor", "second-opinion", "profiler", "redactor"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub

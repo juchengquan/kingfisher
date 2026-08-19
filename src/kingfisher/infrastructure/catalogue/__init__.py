@@ -1,14 +1,25 @@
 """Where a deployment's definitions are read from.
 
-A package, and the three kinds are the point of it: `skills`, `subagents` and
-`tools` are one module each, so the layer's top level names the concepts rather
-than the mechanisms it used to spell them with -- `skill_store`,
-`subagent_store`, `tool_store`. `documents` reads one definition document,
-`layered` puts a session's own definitions over the deployment's, and
-`importing` loads a module from a path for the two kinds that need one. Nothing
-else in the codebase reaches past this front door: outside these files,
-`documents` and `importing` have no callers at all, `layered` has one, and the
-three repositories are reached for `ToolError`, `SKILL_LAYOUT` and one function.
+A package, and the kinds are the point of it: `agents`, `skills`, `subagents`
+and `tools` are one module each, so the layer's top level names the concepts
+rather than the mechanisms it used to spell them with -- `skill_store`,
+`subagent_store`, `tool_store`. It said "the three kinds" until `agents` became
+one; `test_the_catalogue_holds_one_module_per_kind` binds the modules to
+`DEFINITION_KINDS` and would have refused a missing module, but a count written
+out in prose is not something any rule here reads.
+
+`documents` reads one definition document, `layered` puts a session's own
+definitions over the deployment's, and `importing` loads a module from a path
+for the kinds that need one. Nothing else in the codebase reaches past this
+front door: outside these files, `documents` and `importing` have no callers at
+all, `layered` has one, and the repositories are reached for `ToolError`,
+`SKILL_LAYOUT` and one function.
+
+A subagent may keep tools and skills of its own in a folder named after it, and
+those are read here too -- `bundled_tools` and `bundled_skills`, kept apart from
+`tools` and `registry` on purpose. An agent that omits `tools:` holds every tool
+the shared offering has, so a bundle is the only place a capability can sit that
+the top-level agent cannot reach.
 
 Two things that belong to this subject are deliberately elsewhere.
 `infrastructure.harness.skill_registry` answers which skills deepagents actually
@@ -112,6 +123,67 @@ class Definitions:
         """
         return skill_registry.read(self.skills, root=catalogue_root(self.skills))
 
+    @cached_property
+    def bundled_tools(self) -> Mapping[str, ToolRepository]:
+        """Each subagent's own tools, by the name a grant would use.
+
+        Deliberately not folded into `tools`. That repository is the shared
+        catalogue and `Offering.of` is built from it, so anything added here
+        would become a name any request could grant and any agent could hold --
+        which is the one thing a bundle exists to prevent. An agent omitting
+        `tools:` gets every tool there is; the way to have one it does not get
+        is to keep that tool out of this offering entirely.
+
+        Asked of the repository rather than required of the port, the same way
+        `_root_of` asks for a root. Only a store backed by a filesystem has
+        folders to find a bundle in; a catalogue served over the wire hands over
+        subagents by name, and a name has no folder in it. That is not a gap --
+        such a deployment has no bundles, correctly.
+
+        One `LocalToolRepository` per bundle rather than a second loader. A
+        bundle's tools are tools: the same `TOOLS` export, the same refusal for
+        a module that will not import, the same relative sources -- and now
+        relative to the bundle, so `probe.py::probe` reads the same whether it
+        is written in the catalogue or in `surveyor/tools/`.
+        """
+        bundles = getattr(self.subagents, "bundles", None)
+        if not bundles:
+            return {}
+        return {
+            name: LocalToolRepository(bundle.tools)
+            for name, bundle in bundles.items()
+            if bundle.tools is not None
+        }
+
+    @cached_property
+    def bundled_skills(self) -> Mapping[str, SkillRegistry]:
+        """Each subagent's own skills, as deepagents will actually load them.
+
+        A registry rather than a repository, which is the opposite choice from
+        `bundled_tools` and made for the reason `skill_registry` exists at all:
+        kingfisher does not parse skills, so "what is on disk" and "what the
+        agent will be told about" are different questions, and running them
+        together is what once advertised four skills while three loaded.
+
+        Keyed like `bundled_tools`, so one subagent name reaches both halves of
+        what it brings.
+
+        Not merged into `registry`. That one is the shared catalogue, and a
+        bundled skill appearing in it would be a skill any request could grant
+        and any agent could be told about -- the same reason bundle tools stay
+        out of `Offering`.
+        """
+        bundles = getattr(self.subagents, "bundles", None)
+        if not bundles:
+            return {}
+        return {
+            name: skill_registry.read(
+                LocalSkillRepository(bundle.skills), root=bundle.skills
+            )
+            for name, bundle in bundles.items()
+            if bundle.skills is not None
+        }
+
     def warm(self) -> Definitions:
         """Read all three now, so a broken definition fails here.
 
@@ -139,6 +211,21 @@ class Definitions:
         """
         _ = self.agents.specs, self.skills.names, self.subagents.specs, self.tools.found
         _ = self.registry
+        # A bundle's tools are imported here for the reason every other kind is,
+        # and the reason survives the fact that only one delegate can call them:
+        # a private tool is still Python that has to import, and a deployment
+        # that starts, reports itself fine, and fails on the first request that
+        # happens to activate `surveyor` is the shape of the bug `list` exiting
+        # zero over a broken agent catalogue already was. Encapsulation decides
+        # who may *call* a tool, not whether it is allowed to be broken.
+        for repository in self.bundled_tools.values():
+            _ = repository.found
+        # Skills are read here too, and the difference from tools is what
+        # happens next rather than whether it happens: a skill that will not
+        # load is reported by `unloadable` and never fatal, which is the rule
+        # `list` already follows -- a broken tool exits 1, a broken skill does
+        # not, because a run works without it.
+        _ = self.bundled_skills
         # A definition saying where its tools live is checked here for the same
         # reason the reading happens here: it is a claim about this catalogue,
         # both halves are now in hand, and a stale path found on the first turn

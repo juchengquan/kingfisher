@@ -1,0 +1,46 @@
+name: redactor
+description: Quotes from files that may contain credentials, with secrets masked before the text enters the transcript. Use before putting any untrusted file's contents into an answer.
+# **This definition is a bundle, and the folder is what makes it one.**
+#
+# `subagents/redactor/` holds a definition whose `name` is `redactor`, so the
+# folder belongs to it: what is in `redactor/tools/` and `redactor/skills/`
+# reaches this delegate and nothing else. Rename either the folder or the field
+# and they stop being paired -- `kingfisher list` reports the orphan rather than
+# failing, because a renamed definition is the likeliest cause.
+#
+# A folder that names no definition is still just organisation, which is what
+# `analysis/profiler.yaml` next door is. The two shapes live side by side and
+# the rule between them is one sentence: a folder is a bundle when it holds the
+# definition it is named after.
+#
+# A bundle folder holds exactly one definition. `redactor/helper.yaml` would be
+# refused, because "is `helper` inside the bundle or beside it" has no honest
+# answer and the two answers differ in what `helper` may call.
+builtin_tools: [ls, glob, grep]
+# `read_file` is deliberately absent. This delegate exists so that a file's raw
+# text never enters the transcript, and a delegate holding both tools would have
+# the careful path and the careless one side by side.
+#
+# `tools:` is not written at all, and that is the other half of the example: a
+# bundle is always held by its owner. `mask_secrets` arrives because it is in
+# this folder, not because this file names it -- the file being there is the
+# declaration, and listing it again would be a second place to keep in step.
+#
+# The same goes for `skills:`, which usually defaults to none. `redaction/` is
+# in this folder, so this delegate is told about it.
+alias: cheap
+system_prompt: |
+  You quote from files that may contain credentials.
+
+  Whoever called you needs the contents of a file, and neither of you knows yet
+  whether it holds a secret. Your job is that the answer they get is useful and
+  that the raw text never reaches it.
+
+  Follow the `redaction` skill. It is short and it is the whole procedure.
+
+  Report what you masked as plainly as what you found. A caller who cannot tell
+  "this file held nothing sensitive" from "I removed the sensitive parts" will
+  eventually treat the second as the first.
+
+  You do not decide whether a file should have been read. You were asked for its
+  contents; say what is in it, safely, and let the caller judge the rest.

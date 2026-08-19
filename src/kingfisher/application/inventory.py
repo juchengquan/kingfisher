@@ -108,6 +108,23 @@ class Inventory:
     #: Subagent name -> the file it came from, where a store can say.
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
+
+    #: What each subagent brings itself, by name: the tools and skills in the
+    #: folder named after it. Reported because they are the one capability a
+    #: listing could not otherwise reveal -- an agent omitting `tools:` holds
+    #: every tool there is, so a bundled one is the only kind the top-level
+    #: agent does *not* get, and a reader has no other way to find that out.
+    bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Catalogue tools a bundle answers for instead, by subagent. Printed
+    #: because shadowing is only acceptable while it is visible: the delegate
+    #: gets its own and the shared one never reaches it, and nothing else in
+    #: this output would say so.
+    shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: A bundle whose tools will not import. Its own field rather than
+    #: `tools_error`, so a listing says which delegate to go and look at.
+    bundles_error: str | None = None
+
     #: Which of them are graphs the workspace built rather than definitions
     #: kingfisher assembles. Carried because it changes what the rest of the
     #: listing *means* for them: deepagents runs a compiled graph as given and
@@ -163,6 +180,57 @@ def reached(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str,
             continue
         frontier.extend(defined if spec.subagents == ALL else spec.subagents)
     return tuple(sorted(seen))
+
+
+def _bundled(
+    resolved: Definitions,
+) -> tuple[
+    Mapping[str, tuple[str, ...]],
+    Mapping[str, tuple[str, ...]],
+    Mapping[str, tuple[str, ...]],
+    str | None,
+]:
+    """What each subagent brings itself, for a listing: tools, skills, shadowed.
+
+    Its own function because `inventory` was at the statement limit, and because
+    what it does is one thing: the three answers come from one pair of reads and
+    are only ever wanted together.
+
+    The tool half is in a `try` and the skill half is not, which is the split
+    `list` already makes between the two kinds -- a tool that will not import is
+    a broken catalogue and exits 1, a skill that will not load is reported and
+    the run works without it.
+    """
+    tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    error: str | None = None
+    try:
+        # Imported here for the reason `tools` is: a listing is where someone
+        # goes *because* something is broken, so the error is carried and
+        # printed over the rest of the output rather than raised through it.
+        tools = MappingProxyType(
+            {
+                name: tuple(sorted(one.name for one in repository.found))
+                for name, repository in resolved.bundled_tools.items()
+            }
+        )
+        catalogue = {one.name for one in resolved.tools.found}
+        shadowed = MappingProxyType(
+            {
+                name: found
+                for name, names in tools.items()
+                if (found := tuple(sorted(catalogue.intersection(names))))
+            }
+        )
+    except ToolError as exc:
+        error = str(exc)
+    skills = MappingProxyType(
+        {
+            name: tuple(sorted(registry.names))
+            for name, registry in resolved.bundled_skills.items()
+        }
+    )
+    return tools, skills, shadowed, error
 
 
 def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory:
@@ -266,6 +334,10 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
     except SubagentError as exc:
         subagents_error = str(exc)
 
+    bundled_tools, bundled_skills, shadowed, bundles_error = (
+        _bundled(resolved) if subagents_error is None else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None)
+    )
+
     agents: Mapping[str, str] = _NOTHING
     agent_sources: Mapping[str, str] = _NOTHING
     agent_delegates: Mapping[str, tuple[str, ...]] = _NO_NAMES
@@ -309,6 +381,10 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
         subagents=MappingProxyType(dict(subagents)),
         subagent_sources=subagent_sources,
         subagents_error=subagents_error,
+        bundled_tools=bundled_tools,
+        bundled_skills=bundled_skills,
+        shadowed=shadowed,
+        bundles_error=bundles_error,
         compiled_subagents=compiled_subagents,
         skills_enabled=cfg.skills_enabled,
     )
