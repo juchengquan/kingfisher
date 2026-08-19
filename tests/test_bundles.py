@@ -703,38 +703,33 @@ def test_the_layered_view_answers_with_the_catalogues_bundles_only(tmp_path):
 # -- the one that ships -----------------------------------------------------
 
 
-def test_the_shipped_bundle_is_a_bundle(tmp_path):
+def test_the_shipped_bundle_is_a_bundle(shipped):
     """`kingfisher seed` should produce a working example of every shape the
     formats doc describes, and this is the one a reader copies.
 
-    Asserted against the definitions that ship rather than a fixture, for the
+    Asserted against this repository's worked set rather than a fixture, for the
     reason `test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads`
-    gives: a tree can hold anything, and the seeder uses this one.
+    gives: a tree can hold anything, and this is the one a reader is pointed at.
     """
-    from kingfisher.infrastructure import seeding
+    repository = LocalSubagentRepository(shipped / "subagents")
+    bundles = repository.bundles
 
-    with seeding.opened(seeding.ASSETS) as root:
-        repository = LocalSubagentRepository(root / "subagents")
-        bundles = repository.bundles
-
-        assert set(bundles) == {"redactor"}
-        assert bundles["redactor"].tools is not None
-        assert bundles["redactor"].skills is not None
-        # The neighbour that is *not* one, shipped beside it on purpose: a
-        # folder naming no definition is organisation and stays so.
-        assert "profiler" in repository.specs
-        assert repository.orphaned_assets == ()
+    assert set(bundles) == {"redactor"}
+    assert bundles["redactor"].tools is not None
+    assert bundles["redactor"].skills is not None
+    # The neighbour that is *not* one, shipped beside it on purpose: a
+    # folder naming no definition is organisation and stays so.
+    assert "profiler" in repository.specs
+    assert repository.orphaned_assets == ()
 
 
-def test_the_shipped_bundles_tool_loads_and_masks(tmp_path):
-    """A shipped asset is judged by whether an agent can run it, not by this
-    package's layering -- so the example is imported and called.
+def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):
+    """An example is judged by whether an agent can run it, not by this
+    package's layering -- so it is imported and called.
     """
-    from kingfisher.infrastructure import seeding
     from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 
-    with seeding.opened(seeding.ASSETS) as root:
-        found = LocalToolRepository(root / "subagents" / "redactor" / "tools").found
+    found = LocalToolRepository(shipped / "subagents" / "redactor" / "tools").found
 
     (tool,) = found
     assert tool.name == "mask_secrets"

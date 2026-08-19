@@ -24,12 +24,13 @@ from dataclasses import dataclass
 from typing import Literal
 
 from kingfisher import (
+    DEFINITION_KINDS,
     Config,
     ConfigError,
     Inventory,
     inventory,
+    kinds_at,
     shell_confinement,
-    shipped_kinds,
 )
 
 #: `fail` means this deployment will not run. `warn` means it will, and
@@ -90,27 +91,54 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
         yield Check("credentials", "ok", "every endpoint this file names has a key")
 
 
-def _packs() -> Iterator[Check]:
-    """Whether there are definitions to seed from.
+def _packs(cfg: Config) -> Iterator[Check]:
+    """Whether there is anywhere to seed definitions from.
 
-    They ship with kingfisher, so this is only ever wrong if an install is
-    damaged -- but that is exactly the case worth naming, since an empty
-    workspace and a broken install look identical from the outside.
+    This asked whether they had arrived inside the install, which was only ever
+    wrong if an install was damaged -- a check that could realistically only
+    pass. Nothing ships them now, so the question is about a configured
+    directory, and a configured directory has four ordinary ways to be wrong:
+    unset, mistyped, deleted, or named one level too high. Before, there was one
+    exotic way.
 
-    It reported which asset *packs* were installed until the definitions stopped
-    being a separate distribution. There is nothing to enumerate now: one
-    directory either came with the install or did not.
+    `warn` and never `fail`, in all four. A deployment that seeded its workspace
+    six months ago runs perfectly well with nothing set here, and `doctor` exits
+    non-zero on any failure -- so failing would turn a working install red for a
+    setting it does not need. That is the trap `worst` already names, using the
+    unconfined shell as its example.
+
+    Four separate details rather than one, because the remedies differ and a
+    diagnosis that cannot be acted on is a line people scroll past. "Holds none
+    of them" is the one worth spelling out: pointing one level off is the
+    easiest mistake to make with a path, and naming what was looked for is what
+    turns it from a puzzle into a fix.
     """
-    kinds = shipped_kinds()
-    if kinds:
-        yield Check("definitions to seed", "ok", ", ".join(kinds))
-    else:
+    if cfg.assets is None:
         yield Check(
             "definitions to seed",
             "warn",
-            "the definitions that ship with kingfisher are missing",
-            "reinstall kingfisher, or seed from your own directory",
+            "KINGFISHER_ASSETS is not set",
+            "set it to a directory of definitions, or pass `kingfisher seed --from DIR`",
         )
+        return
+    if not cfg.assets.is_dir():
+        yield Check(
+            "definitions to seed",
+            "warn",
+            f"{cfg.assets} does not exist",
+            "check the path, or fetch the definitions into it",
+        )
+        return
+    kinds = kinds_at(cfg.assets)
+    if not kinds:
+        yield Check(
+            "definitions to seed",
+            "warn",
+            f"{cfg.assets} holds none of {', '.join(DEFINITION_KINDS)}",
+            "point at the directory holding those, not at one inside it",
+        )
+        return
+    yield Check("definitions to seed", "ok", f"{', '.join(kinds)} — from {cfg.assets}")
 
 
 def _catalogues(found: Inventory) -> Iterator[Check]:
@@ -236,7 +264,7 @@ def examine(cfg: Config) -> tuple[Check, ...]:
     checks: list[Check] = []
     try:
         checks += _catalogue(cfg)
-        checks += _packs()
+        checks += _packs(cfg)
         found = inventory(cfg)
         checks += _catalogues(found)
         checks += _definitions(cfg, found)

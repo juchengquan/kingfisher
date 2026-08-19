@@ -225,3 +225,10 @@ __marimo__/
 
 # Claude Code worktrees are local scratch, not project content.
 .claude/worktrees/
+
+# Definitions fetched from elsewhere, which arrive with their own licences.
+# Ignored rather than absent so the directory can explain itself: `assets/` is
+# where a deployment puts content it did not write, and this rule is what stops
+# a stray `git add -A` committing somebody else's terms into an MIT repository.
+assets/*
+!assets/README.md

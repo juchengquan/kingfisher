@@ -180,7 +180,9 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
 
 
 
-def test_the_readme_snippet_runs_and_uses_only_the_public_api(tmp_path, monkeypatch, capsys):
+def test_the_readme_snippet_runs_and_uses_only_the_public_api(
+    tmp_path, monkeypatch, capsys, shipped
+):
     """The README's Python block, executed rather than eyeballed.
 
     It is a promise about the front door now -- `from kingfisher import
@@ -213,6 +215,10 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(tmp_path, monkeypa
                 assert imported in kingfisher.__all__, imported
 
         monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+        # The snippet resolves its source the way any caller does, so the
+        # variable it reads has to be set -- which is itself part of what the
+        # README now claims.
+        monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
         exec(compile(source, "README.md", "exec"), {})  # noqa: S102 -- our own file
 
     # It seeds, which is the thing it claims to do.

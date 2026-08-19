@@ -282,18 +282,13 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
     """
     from dataclasses import replace
 
-    import main as driver
-
     catalogue = tmp_path / "catalogue"
     relocated = replace(
         cfg, skills_root=catalogue / "skills", subagents_root=catalogue / "subagents"
     )
-    monkeypatch.setattr(driver, "from_env", lambda: relocated)
-    # And the paths seam, which is what seeding runs on now -- a `Config`
-    # satisfies `Destination` by shape, so the same record answers both.
-    monkeypatch.setattr(driver, "paths_from_env", lambda: relocated)
+    driver = _driver_on(monkeypatch, relocated)
 
-    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed", "--list"]) == 0
 
     assert LocalSkillRepository(relocated.skills_dir).names  # the catalogue was filled
     assert not LocalSkillRepository(relocated.workspace / "skills").names  # and not the workspace
@@ -307,16 +302,11 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
 def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, monkeypatch):
     """The default, and the case the old code got right -- worth keeping, or
     the fix above could quietly break the ordinary setup."""
-    import main as driver
-
-    monkeypatch.setattr(driver, "from_env", lambda: cfg)
-    # And the paths seam, which is what seeding runs on now -- a `Config`
-    # satisfies `Destination` by shape, so the same record answers both.
-    monkeypatch.setattr(driver, "paths_from_env", lambda: cfg)
+    driver = _driver_on(monkeypatch, cfg)
 
     # `--list` so it returns after seeding; without it the driver falls
     # through to running the task, which wants a model.
-    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed", "--list"]) == 0
     assert LocalSkillRepository(cfg.skills_dir).names
 
 
@@ -329,17 +319,13 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     """
     from dataclasses import replace
 
-    import main as driver
     from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 
     catalogue = tmp_path / "catalogue"
     relocated = replace(cfg, tools_root=catalogue / "tools")
-    monkeypatch.setattr(driver, "from_env", lambda: relocated)
-    # And the paths seam, which is what seeding runs on now -- a `Config`
-    # satisfies `Destination` by shape, so the same record answers both.
-    monkeypatch.setattr(driver, "paths_from_env", lambda: relocated)
+    driver = _driver_on(monkeypatch, relocated)
 
-    assert driver.main(["main.py", "--seed-assets", "--list"]) == 0
+    assert driver.main(["main.py", "--seed", "--list"]) == 0
 
     assert "http_fetch" in LocalToolRepository(tools_dir(relocated)).names
     # `ensure_layout` still makes the workspace directory, so the place to put
@@ -362,17 +348,26 @@ def _unused(cfg, tmp_path):
     return replace(cfg, workspace=tmp_path / "brand-new")
 
 
-def _driver_on(monkeypatch, target):
-    """Point the driver at one record for both seams.
+def _driver_on(monkeypatch, target, source=None):
+    """Point the driver at one record for all three seams.
 
-    `from_env` serves the run and `paths_from_env` decides where seeding goes.
-    A `Config` satisfies `Destination` by shape, so one record answers both --
-    which is the point of the protocol and not a shortcut for the test.
+    `from_env` serves the run, `paths_from_env` decides where seeding goes, and
+    the same record now says where seeding copies *from*. A `Config` satisfies
+    `Destination` and `Source` by shape, so one record answers all three --
+    which is the point of the protocols and not a shortcut for the test.
+
+    `assets` is filled in because it has to be: nothing ships definitions, so a
+    record carrying `None` makes the driver refuse rather than seed. Set here
+    rather than in each caller so that a test about seeding is about seeding.
     """
-    import main as driver
+    from dataclasses import replace
 
-    monkeypatch.setattr(driver, "from_env", lambda: target)
-    monkeypatch.setattr(driver, "paths_from_env", lambda: target)
+    import main as driver
+    from tests.conftest import repository_root
+
+    configured = replace(target, assets=source or repository_root() / "examples")
+    monkeypatch.setattr(driver, "from_env", lambda: configured)
+    monkeypatch.setattr(driver, "paths_from_env", lambda: configured)
     return driver
 
 
@@ -441,11 +436,17 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
     way. A first run could not reach seeding at all -- precisely the run seeding
     is for. Measured on a workspace with no catalogue: it still seeds, and still
     exits 2 for the missing file.
+
+    Through the environment rather than the `_driver_on` seam, because the
+    ordering under test is what `paths_from_env` makes possible -- patching it
+    away would leave nothing to assert.
     """
     import main as driver
+    from tests.conftest import repository_root
 
     workspace = tmp_path / "brand-new"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(repository_root() / "examples"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
     assert driver.main(["main.py", "--list"]) == 2  # no catalogue, as expected
@@ -478,7 +479,7 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
     assert "`kingfisher seed` writes" not in str(with_example.value)
     # The command, not the flag. `--seed-assets` is on `main.py`, which is not
     # in the wheel, so it names nothing a pip-installed reader has.
-    assert "--seed-assets" not in str(without.value)
+    assert "--seed" not in str(without.value)
 
 
 def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkeypatch):

@@ -36,7 +36,14 @@ workspace.
 distribution, so `pip install kingfisher` puts no web framework on disk, which
 is checked against the built wheel rather than asserted.
 
-The definitions are *not* separate. They were their own distribution, found
-through an entry point so that anyone could publish a pack; a directory covers
-the same ground without a wheel, and they ship inside this one so a fresh
-install seeds something that works.
+**The definitions ship nowhere.** They were their own distribution once, found
+through an entry point so anyone could publish a pack, and then a set inside
+this wheel. Both are gone: where a deployment gets its definitions is a setting,
+`KINGFISHER_ASSETS`, and a directory needs no wheel, no metadata and no publish
+step.
+
+The cost is real and is not hidden. A fresh install seeds nothing, and since a
+request must name an agent, it cannot run until definitions arrive from
+somewhere. This repository keeps a worked set in `examples/` — one agent, skill,
+subagent and tool, each demonstrating a distinct feature — and `assets/` is
+where a deployment puts content it fetched from elsewhere.

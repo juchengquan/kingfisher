@@ -84,27 +84,76 @@ def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
     assert worst(tuple(checks.values())) == "warn"
 
 
-def test_no_asset_pack_warns_rather_than_failing(cfg, monkeypatch):
-    """The definitions ship with kingfisher, so this only happens to a damaged
-    install -- which is exactly the case worth naming, since a broken install
-    and an empty workspace look identical from outside."""
-    # Patched where `health` bound it, not where it is defined. The module
-    # imports the name at the front door, so that binding is the live one and
-    # patching `seeding.shipped_kinds` would change nothing.
-    monkeypatch.setattr("kingfisher.presentation.cli.health.shipped_kinds", tuple)
+def test_every_way_a_source_can_be_wrong_warns_and_says_something_different(
+    cfg, tmp_path, shipped
+):
+    """Four states, four remedies, and never a failure.
 
-    checks = {check.name: check for check in examine(cfg)}
+    This asked whether the definitions had arrived inside the install, which was
+    only ever wrong if an install was damaged -- a check that could realistically
+    only pass. A configured directory can be unset, mistyped, deleted, or named
+    one level too high, so there is something to answer now.
 
-    assert checks["definitions to seed"].verdict == "warn"
-    assert checks["definitions to seed"].remedy
+    Each detail is asserted apart because the remedies differ, and a diagnosis
+    a reader cannot act on is a line they scroll past. The "holds none of them"
+    case names the four kinds: pointing one level off is the easiest mistake to
+    make with a path, and without them a reader is left guessing which
+    direction.
+
+    `warn` in all four, never `fail`. A deployment that seeded six months ago
+    runs perfectly well with nothing set here, and `doctor` exits non-zero on
+    any failure -- so failing would turn a working install red over a setting it
+    does not need.
+    """
+    from dataclasses import replace
+
+    empty = tmp_path / "nothing-of-the-kind"
+    empty.mkdir()
+    cases = {
+        "unset": (replace(cfg, assets=None), "KINGFISHER_ASSETS is not set"),
+        "missing": (replace(cfg, assets=tmp_path / "gone"), "does not exist"),
+        "empty": (replace(cfg, assets=empty), "holds none of"),
+    }
+    for label, (record, expected) in cases.items():
+        check = {c.name: c for c in examine(record)}["definitions to seed"]
+        assert check.verdict == "warn", label
+        assert expected in check.detail, (label, check.detail)
+        assert check.remedy, label
+
+    # And the one that is fine, so the three above are not simply unreachable.
+    fine = {c.name: c for c in examine(replace(cfg, assets=shipped))}["definitions to seed"]
+    assert fine.verdict == "ok"
+    assert str(shipped) in fine.detail, "an ok detail that does not say where it looked"
 
 
-def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatch):
-    """One place decides it, and this is what it decides."""
+def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
+    """Separately asserted, because "holds none of them" without the list is
+    the puzzle this message exists to stop being."""
+    from dataclasses import replace
+
+    from kingfisher import DEFINITION_KINDS
+
+    empty = tmp_path / "empty"
+    empty.mkdir()
+
+    check = {c.name: c for c in examine(replace(cfg, assets=empty))}["definitions to seed"]
+
+    for kind in DEFINITION_KINDS:
+        assert kind in check.detail, kind
+
+
+def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatch, shipped):
+    """One place decides it, and this is what it decides.
+
+    `assets` is set on the "ok" record because an unset source is now one of the
+    things `doctor` warns about -- so a fixture leaving it out would make the
+    all-clear case unreachable and this test about nothing.
+    """
     from dataclasses import replace
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setattr("main.from_env", lambda: cfg, raising=False)
+    cfg = replace(cfg, assets=shipped)
 
     ok = examine(cfg)
     warned = examine(replace(cfg, shell_sandbox="off"))

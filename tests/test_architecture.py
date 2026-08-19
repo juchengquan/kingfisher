@@ -130,22 +130,6 @@ def _imported_modules(path: Path) -> set[str]:
     return modules
 
 
-#: Content, not code. `assets/` holds the definitions `kingfisher seed` copies
-#: into a workspace: tools the *agent* imports and this package never calls,
-#: skills that are markdown, subagent definitions that are yaml. They ship
-#: inside the wheel so a fresh install seeds something that works, and they are
-#: excluded from every rule in this file for the reason `presets/` used to be --
-#: a tool written for an agent is judged by whether the agent can run it, not by
-#: this package's layering.
-#:
-#: Excluded here rather than at each rule, so a rule added later cannot forget.
-CONTENT = "assets"
-
-
-def _is_content(path: Path) -> bool:
-    return CONTENT in path.relative_to(SRC).parts
-
-
 def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     """Every module in a layer, subpackages included.
 
@@ -166,7 +150,7 @@ def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     return sorted(
         p
         for p in (root / layer).rglob("*.py")
-        if "__pycache__" not in p.parts and CONTENT not in p.parts
+        if "__pycache__" not in p.parts
     )
 
 
@@ -670,7 +654,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
 
 def _package_modules() -> list[Path]:
     return sorted(
-        p for p in SRC.rglob("*.py") if "__pycache__" not in p.parts and not _is_content(p)
+        p for p in SRC.rglob("*.py") if "__pycache__" not in p.parts
     )
 
 
@@ -1068,10 +1052,10 @@ LIGHT_EXPORTS = frozenset({
     # `inventory` is light to *reach*, not to call: answering builds an agent,
     # so `harness.agent` is imported inside the function. That is the shape
     # this classification is about -- what a name costs to touch.
-    "seed", "definitions_source", "shipped_kinds", "Seeding", "inventory", "Inventory",
+    "seed", "definitions_source", "kinds_at", "Seeding", "inventory", "Inventory",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
-    "offered", "SKILL_LAYOUT", "split_reference",
+    "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
     # Reaching it costs nothing; calling it may write a sandbox profile,
     # which is the same light-to-reach / heavy-to-call split `inventory` has.
     "shell_confinement", "Confinement",
@@ -1319,60 +1303,63 @@ def test_only_one_module_decides_what_a_skill_is():
     )
 
 
-def test_the_shipped_definitions_live_only_under_assets():
-    """The package ships definitions, and ships them in one place.
+def test_no_definitions_live_inside_the_package():
+    """The package ships code. Definitions are content and ship nowhere.
 
-    This asserted the opposite twice, and the second time outlived its subject.
-    It began as "the framework supplies none": true while they were a
-    distribution of their own behind a `kingfisher.assets` entry point. D1 of
-    *the definitions ship with the library* reversed that -- they live in
-    `src/kingfisher/assets/` and ship in the wheel -- and the rule was left
-    asserting that `src/kingfisher/reference/<kind>/` does not exist. Then #187
-    moved the last file out of `reference/` and deleted the directory, at which
-    point the assertion could no longer fail for any reason at all.
+    This assertion has now been three things, and the first two were each true
+    for about a month. It began as "the framework supplies none", while they
+    were a distribution of their own behind a `kingfisher.assets` entry point.
+    Then D1 of *the definitions ship with the library* reversed it, and it
+    became "they live under `assets/` and nowhere else" -- at which point the
+    package carried content and this file needed a `CONTENT` exclusion to keep
+    every other rule off it.
 
-    It passed a 41-mutation audit on the way, because the mutation created
-    `reference/skills/` to match what the rule *checked* rather than what it
-    *claimed*. Measuring the assertion instead of the claim is the failure this
-    file keeps finding, and it found it here in the test of the test.
+    Now they are `examples/`, outside the wheel, and the rule can be the simple
+    one it never could be before: **no definition kind exists under `src/`**.
+    Easier to state, impossible to satisfy by accident, and it needs no
+    exclusion anywhere -- the separation stopped being a rule and became the
+    layout, which is the best argument the move had.
 
-    What is left worth holding is D3's other half: assets are excluded from
-    every rule in this file because they are content, so a definition that
-    escapes `assets/` is content being read as code -- shipped, unreviewed by
-    any rule here, and invisible for exactly that reason.
+    It is also what stops the move regressing. A `skills/` reappearing under
+    `src/` would be content read as code: shipped, and skipped by nothing here
+    because there is no longer anything to skip.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
-    shipped = {
-        path
+    stray = sorted(
+        str(path.relative_to(SRC))
         for kind in DEFINITION_KINDS
         for path in SRC.rglob(kind)
         if path.is_dir() and "__pycache__" not in path.parts
-    }
-    # A bundle's own `tools/` and `skills/` sit under
-    # `assets/subagents/<name>/`, which is a second legitimate parent and not a
-    # loophole: they are still content under `assets/`, still skipped by every
-    # rule here for that reason, and the subagent store reserves those two names
-    # wherever they appear so nothing else can claim them. What the rule is
-    # about -- a definition escaping `assets/` entirely -- is unchanged.
-    stray = sorted(
-        str(p.relative_to(SRC))
-        for p in shipped
-        if p.parent != SRC / CONTENT and (SRC / CONTENT / "subagents") not in p.parents
     )
-    missing = sorted(k for k in DEFINITION_KINDS if not (SRC / CONTENT / k).is_dir())
 
-    # Named per kind, not counted. `assert shipped` passed with two of the three
-    # gone, which is the same "at most N" weakness the harness-edge table avoids:
-    # what matters is *which* one stopped shipping, and seeding a workspace
-    # without subagents is not a smaller version of seeding one.
-    assert not missing, (
-        f"{CONTENT}/ ships no {', '.join(missing)} — D1 says the definitions ship "
-        "in the wheel, and `kingfisher seed` hands out what is here"
-    )
     assert not stray, (
-        f"{stray} hold definitions outside {CONTENT}/ — every rule in this file skips "
-        f"{CONTENT}/ as content, so a kind that escapes it ships unread by any of them"
+        f"{stray} hold definitions inside the package — they ship in the wheel "
+        f"and are read by no rule in this file, which is what made the old "
+        f"`CONTENT` exclusion necessary. Definitions belong in examples/."
+    )
+
+
+def test_this_repository_still_has_a_worked_set(shipped):
+    """The other half, and it fails separately.
+
+    Nothing ships definitions, and that is the point -- but a repository that
+    kept none would be teaching the formats with nothing to read. The four
+    hundred lines of tests in `test_shipped_assets` are about the files this
+    names; without it they would pass by having no subject.
+
+    Named per kind rather than counted. `assert shipped.is_dir()` passed with
+    two of the four gone, and seeding a workspace without agents is not a
+    smaller version of seeding one -- a request must name an agent, so a set
+    without that kind produces something that cannot run.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    missing = sorted(kind for kind in DEFINITION_KINDS if not (shipped / kind).is_dir())
+
+    assert not missing, (
+        f"examples/ holds no {', '.join(missing)} — this is the set the format "
+        "tests read and the one a reader learns from"
     )
 
 
@@ -1419,11 +1406,13 @@ def test_the_package_ships_the_catalogue_example():
     fail separately: the first catches it moving back out of the package, the
     second catches it not being reachable the way an install reaches it.
     """
-    from kingfisher.infrastructure import seeding, workspace_fs
+    from importlib import resources
+
+    from kingfisher.infrastructure import workspace_fs
 
     assert (SRC / workspace_fs.EXAMPLE).is_file()
-    with seeding.opened(workspace_fs.PACKAGE) as root:
-        assert (root / workspace_fs.EXAMPLE).is_file()
+    installed = resources.files(workspace_fs.PACKAGE).joinpath(workspace_fs.EXAMPLE)
+    assert installed.is_file()
 
 
 # -- who caused it ---------------------------------------------------------
@@ -1461,7 +1450,7 @@ DEPLOYMENT_ERRORS = frozenset({
 
 def _error_classes() -> set[str]:
     found = set()
-    for path in sorted(p for p in SRC.rglob("*.py") if not _is_content(p)):
+    for path in sorted(SRC.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         found |= {
             node.name
@@ -1685,7 +1674,7 @@ def test_the_event_kinds_are_what_the_package_emits():
     from kingfisher.domain.result import KINDS
 
     emitted = set()
-    for path in sorted(p for p in SRC.rglob("*.py") if not _is_content(p)):
+    for path in sorted(SRC.rglob("*.py")):
         tree = ast.parse(path.read_text(encoding="utf-8"))
         for node in ast.walk(tree):
             if not (isinstance(node, ast.Call) and isinstance(node.func, ast.Name)):
@@ -1882,7 +1871,7 @@ def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
     what publishing them meant.
     """
     found: dict[str, Path] = {}
-    for path in sorted(p for p in SRC.rglob("*.py") if not _is_content(p)):
+    for path in sorted(SRC.rglob("*.py")):
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
             if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef):
                 if not node.decorator_list and not node.name.startswith("__"):
@@ -2002,7 +1991,7 @@ def _constants_in_package() -> dict[str, Path]:
     about a name in two places; this one only asks whether anything reads it.
     """
     found: dict[str, Path] = {}
-    for path in sorted(p for p in SRC.rglob("*.py") if not _is_content(p)):
+    for path in sorted(SRC.rglob("*.py")):
         for name, _ in _constants_defined(path.read_text(encoding="utf-8")):
             found.setdefault(name, path)
     return found
@@ -2307,8 +2296,8 @@ def test_no_value_is_written_down_twice():
     asset module declares for itself. Those are three formats each naming their
     own thing, which is the opposite of this.
 
-    `assets/` is excluded like everywhere else here: those are definitions the
-    agent runs, and two of them declaring the same constant is their business.
+    No exclusion for content any more: there is none under `src/` to exclude,
+    which `test_no_definitions_live_inside_the_package` is what guarantees.
 
     The collector moved out to `_constants_defined` when the orphan rule needed
     the same walk. Two readings of "what is a constant" in one file is the fault
@@ -2316,8 +2305,6 @@ def test_no_value_is_written_down_twice():
     """
     seen: dict[tuple[str, str], list[str]] = {}
     for path in sorted(SRC.rglob("*.py")):
-        if _is_content(path):
-            continue
         for name, value in _constants_defined(path.read_text(encoding="utf-8")):
             seen.setdefault((name, value), []).append(str(path.relative_to(SRC)))
 

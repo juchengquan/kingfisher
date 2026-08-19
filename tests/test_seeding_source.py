@@ -39,19 +39,27 @@ def _definitions(root: Path, *entries: str) -> Path:
 # -- the default: what ships ----------------------------------------------
 
 
-def test_the_definitions_ship_with_the_library():
-    """The point of folding them in. `pip install kingfisher` then
-    `kingfisher seed` has to write a workspace that already works -- content a
-    reader must go and find teaches nobody.
+def test_nothing_ships_to_seed_from(shipped):
+    """This asserted the opposite until the definitions left the wheel.
+
+    `kinds_at` answers about a directory now, because that is the only kind of
+    answer there is: no set arrives with the install, so the question "did they
+    come with it" has no subject. It is `examples/` this reads, which is where
+    a reader is pointed.
 
     Agents come first, and the order is `Definitions`' field order rather than
     anything chosen here. It happens to be the useful one: the agent is what a
     request names, and the other three are what it selects from.
     """
-    assert seeding.shipped_kinds() == ("agents", "skills", "subagents", "tools")
+    assert seeding.kinds_at(shipped) == ("agents", "skills", "subagents", "tools")
+    # What the claim actually is, rather than "no such directory". A stale
+    # `__pycache__` left by a checkout from before the move would fail that
+    # spelling for a reason the rule is not about, and `kinds_at` asks the
+    # question directly: does the installed package provide any kind to seed?
+    assert seeding.kinds_at(Path(seeding.__file__).parent.parent) == ()
 
 
-def test_seeding_without_a_source_writes_the_shipped_definitions(cfg, shipped):
+def test_seeding_from_the_worked_set_writes_all_of_it(cfg, shipped):
     written = seeding.seed(cfg, shipped).written
 
     assert any(entry.startswith("skills/") for entry in written), written
@@ -144,6 +152,50 @@ def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
     monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
 
     assert paths_from_env().assets is None
+
+
+def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, monkeypatch):
+    """The advice has to be true from where the reader is standing.
+
+    `./examples` exists in a checkout and nowhere else, and the reader most
+    likely to hit this refusal is the one who installed the package -- who has
+    none. Naming it unconditionally would repeat the fault the four "try
+    `kingfisher seed`" messages were rewritten to stop making: advice that fails
+    the same way the thing it is advising about failed.
+
+    Both halves, because they fail separately -- a suffix that never appears is
+    as wrong as one that always does.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.seeding import SUGGESTION
+
+    nowhere = replace(cfg, assets=None)
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ConfigError) as bare:
+        seeding.definitions_source(nowhere)
+
+    (tmp_path / SUGGESTION).mkdir()
+    with pytest.raises(ConfigError) as beside_one:
+        seeding.definitions_source(nowhere)
+
+    assert "KINGFISHER_ASSETS" in str(bare.value)
+    assert str(SUGGESTION) not in str(bare.value), "named a directory that is not there"
+    assert str(SUGGESTION) in str(beside_one.value), "did not name the one that is"
+
+
+def test_the_refusal_says_both_ways_of_answering_it(cfg, tmp_path, monkeypatch):
+    """A variable and a flag. Naming only one leaves a reader who cannot set
+    environment variables -- a CI step, a container -- with no way through."""
+    from dataclasses import replace
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ConfigError) as refused:
+        seeding.definitions_source(replace(cfg, assets=None))
+
+    assert "KINGFISHER_ASSETS" in str(refused.value)
+    assert "--from" in str(refused.value)
 
 
 # -- a source of your own --------------------------------------------------

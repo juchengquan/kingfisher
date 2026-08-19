@@ -39,6 +39,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 from kingfisher import (
+    DEFINITION_KINDS,
     ConfigError,
     definitions_source,
     ensure_layout,
@@ -73,21 +74,22 @@ def build_parser() -> argparse.ArgumentParser:
         "seed",
         help="copy definitions into the workspace",
         description=(
-            "Copies definitions into this deployment's catalogues -- the ones "
-            "that ship with kingfisher, or a directory of your own. Overwrites, "
-            "which is how you take an upgrade and is why it has to be asked for. "
-            "A workspace that has never been used seeds itself on its first run "
-            "without this."
+            "Copies definitions into this deployment's catalogues, from the "
+            "directory KINGFISHER_ASSETS names or the one you pass. Nothing "
+            "ships with kingfisher, so one of the two has to say where. "
+            "Overwrites, which is how you take an upgrade and is why it has to "
+            "be asked for."
         ),
     )
-    # A directory rather than a package. Definitions used to arrive as installed
-    # packs found through an entry point; a path needs no wheel, no metadata and
-    # no publish step, which is the whole of what a deployment wanted from that.
+    # A directory rather than a package. Definitions arrived as installed packs
+    # found through an entry point once, then as a set inside the wheel; a path
+    # needs no wheel, no metadata and no publish step, which is the whole of
+    # what a deployment ever wanted from either.
     seeding.add_argument(
         "--from",
         dest="source",
         metavar="DIR",
-        help="seed from this directory instead of the definitions that ship with kingfisher",
+        help="seed from this directory instead of the one KINGFISHER_ASSETS names",
     )
     explain = sub.add_parser(
         "help",
@@ -176,15 +178,30 @@ def _seed(source: str | None = None) -> int:
     # one is the dead end this ordering exists to avoid.
     ensure_layout(paths.workspace)
 
-    written = seed(paths, definitions_source(paths, source))
+    tree = definitions_source(paths, source)
+    written = seed(paths, tree)
     for name in written.written:
         print(f"seeded {name}")
     for name in written.overwritten:
         # After the list, not beside each entry: the point is that you edit your
         # copy, so losing one is the line that has to survive being skimmed.
         print(f"warning: overwrote your edited {name}")
+
+    # Non-zero, and this changed with the definitions leaving the wheel. It was
+    # nearly unreachable before -- the shipped set always held all four kinds --
+    # and is now one of the likelier mistakes: `--from ./examples/skills` names
+    # a directory that exists, is readable, and holds none of them.
+    #
+    # `doctor` only warns about the same state, and that is not an
+    # inconsistency. It reports on a deployment, which runs fine on a workspace
+    # seeded months ago. This is an action, and the action did not happen.
+    #
+    # The four kinds are named because the mistake is almost always one
+    # directory level in the wrong direction, and "holds no definitions" leaves
+    # a reader guessing which direction.
     if not written.written:
-        print("nothing to seed — the directory holds no definitions")
+        print(f"nothing to seed — {tree} holds none of {', '.join(DEFINITION_KINDS)}")
+        return 1
     return 0
 
 

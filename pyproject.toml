@@ -91,10 +91,16 @@ kingfisher = "kingfisher.presentation.cli.__main__:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/kingfisher"]
 
-# `src/kingfisher/assets` rides along, and that is the point of it: `kingfisher
-# seed` writes a workspace that already works, from files that came with the
-# install rather than from somewhere a reader has to find. It is 14 files and
-# about 20KB against a wheel of 228KB.
+# Definitions do not ride along. They lived at `src/kingfisher/assets` so that
+# `pip install kingfisher` followed by `kingfisher seed` wrote a workspace that
+# already worked; they are content, and where a deployment gets its content is a
+# setting now -- `KINGFISHER_ASSETS`. This repository keeps a worked set in
+# `examples/`, outside this list and outside the wheel.
+#
+# What that costs is real and is written down rather than glossed: a fresh
+# install seeds nothing, and since a request must name an agent, it cannot run
+# until definitions arrive from somewhere. See
+# docs/design/2026-08-19-examples-are-ours-assets-are-yours.md.
 
 [tool.uv.workspace]
 members = ["service"]
@@ -206,7 +212,11 @@ python-version = "3.12"
 python = ".venv"
 
 [tool.ty.src]
-include = ["src", "tests", "main.py", "spikes"]
+# `examples` is here because it holds Python -- shipped-looking tools that an
+# agent imports. Under `src/` it was checked by accident; at the root it would
+# fall out of this list silently, which is the kind of check that stops running
+# without ever going red.
+include = ["src", "tests", "examples", "main.py", "spikes"]
 
 [tool.ty.terminal]
 output-format = "concise"

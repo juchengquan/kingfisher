@@ -8,7 +8,6 @@ definitions the way an installed kingfisher would.
 from __future__ import annotations
 
 import shutil
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -38,7 +37,7 @@ from tests.conftest import subagents_dir, tools_dir
 #: rather than from the installed package.
 REPO = Path(__file__).resolve().parent.parent
 
-FIXTURE = Path(__file__).resolve().parent / "assets"
+FIXTURE = Path(__file__).resolve().parent / "seed_source"
 
 
 @pytest.fixture
@@ -300,7 +299,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
 
-def test_seeding_never_carries_bytecode_into_a_workspace(cfg, shipped, tmp_path, monkeypatch):
+def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
     """The guard that only had to hold one level deep until a preset tool could
     be a package.
 
@@ -323,15 +322,10 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, shipped, tmp_path,
     (source / "tools" / "__pycache__").mkdir(parents=True)
     (source / "tools" / "__pycache__" / "flat.pyc").write_bytes(b"\x00")
 
-    @contextmanager
-    def _fixture(_package=None):
-        # Takes the argument `opened` now takes: the seeder asks each installed
-        # pack for its own tree, so the source is a parameter rather than a
-        # constant. This stand-in ignores it and yields the planted one.
-        yield source
-
-    monkeypatch.setattr(seeding, "opened", _fixture)
-    seeding.seed(cfg, shipped)
+    # The planted tree directly. This used to stand in for `opened`, which
+    # materialised an installed package; `seed` takes a plain directory now, so
+    # there is nothing left to patch and the planted tree can just be passed.
+    seeding.seed(cfg, source)
 
     carried = [str(p.relative_to(tools_dir(cfg))) for p in tools_dir(cfg).rglob("__pycache__")]
     assert not carried, f"seeding carried bytecode into the workspace: {carried}"

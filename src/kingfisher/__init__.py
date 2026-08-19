@@ -53,8 +53,8 @@ _EXPORTS = {
     "build_model": "kingfisher.infrastructure.harness.models",
     "definitions_source": "kingfisher.infrastructure.seeding",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
+    "kinds_at": "kingfisher.infrastructure.seeding",
     "seed": "kingfisher.infrastructure.seeding",
-    "shipped_kinds": "kingfisher.infrastructure.seeding",
     "Seeding": "kingfisher.infrastructure.seeding",
     "inventory": "kingfisher.application.inventory",
     # The fifth name a consumer has forced public. A purpose-built answer
@@ -78,6 +78,8 @@ _EXPORTS = {
     # themselves", by its own comment. It was `skill_store.LAYOUT` with one
     # caller; renamed because a bare `LAYOUT` at the top level sits next to
     # `LAYOUT_DIRS` and means something else.
+    "DEFINITION_KINDS": "kingfisher.infrastructure.catalogue",
+    "SEED_HINT": "kingfisher.infrastructure.seeding",
     "SKILL_LAYOUT": "kingfisher.infrastructure.catalogue.skills",
     "Inventory": "kingfisher.application.inventory",
     "from_env": "kingfisher.application.config",
@@ -92,6 +94,8 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "DEFINITION_KINDS",
+    "SEED_HINT",
     "SKILL_LAYOUT",
     "Capabilities",
     "CapabilityError",
@@ -125,6 +129,7 @@ __all__ = [
     "ensure_layout",
     "from_env",
     "inventory",
+    "kinds_at",
     "normalize_answer",
     "offered",
     "paths_from_env",
@@ -133,7 +138,6 @@ __all__ = [
     "seed",
     "shell_confinement",
     "shell_env",
-    "shipped_kinds",
     "split_reference",
     "stream",
     "system_prompt",
@@ -173,6 +177,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
     from kingfisher.domain.tool import split_reference as split_reference
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.confinement import Confinement as Confinement
     from kingfisher.infrastructure.confinement import (
@@ -193,12 +198,13 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.harness.models import build_model as build_model
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
+    from kingfisher.infrastructure.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.seeding import Seeding as Seeding
     from kingfisher.infrastructure.seeding import (
         definitions_source as definitions_source,
     )
+    from kingfisher.infrastructure.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.seeding import seed as seed
-    from kingfisher.infrastructure.seeding import shipped_kinds as shipped_kinds
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data
