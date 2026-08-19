@@ -69,27 +69,19 @@ is silent -- the delegate builds, answers, and the answer is worth nothing.
 Name one or the other, never both: an alias *is* a model name once bound, so a
 file saying both has said one thing twice with no rule for which wins.
 
-**Either may name several, tried in order.** A candidate is passed over for two
-reasons and no others -- an alias this deployment never bound, and, when
-`distinct` is set, a model that turns out to be the one this delegate exists not
-to be. Both are the deployment's doing, so a list is not the definition hedging;
-it is the definition naming the deployments it can still be useful in. If every
-candidate is passed over there is nothing left to run, and that refuses, naming
-each one and why.
+**Either may name several, tried in order.** A candidate is passed over for one
+reason and no other: an alias this deployment never bound. That is the
+deployment's doing, so a list is not the definition hedging; it is the
+definition naming the deployments it can still be useful in. If every candidate
+is passed over there is nothing left to run, and that refuses, naming each one
+and why.
 
-`distinct: true` says that running beside the main agent defeats this delegate.
-`indistinct` has always been able to see the two crude cases -- the same model as
-the default, or a different id on the same host -- and has only ever reported
-them, because nothing in a file could say whether being elsewhere was the point:
-`reviewer` deliberately runs on the same model and is right to. This is how a
-definition says it, and it is what turns that report into a refusal.
-
-That refusal is less new than it looks. `second-opinion` already depends on one
-for the other half of the same problem: an *unbound* alias stops the build, for
-exactly the reason two paragraphs up. A bound alias that resolves to the default
-is the identical sentence with the identical ending, and until now it fell
-through. `distinct: true` with nothing named is refused at the file, since a
-delegate running the deployment's own model is precisely what it rules out.
+There was a `distinct: true` here, saying that running beside the main agent
+defeated the delegate, and turning `indistinct`'s report into a refusal. It went
+with `second-opinion`, its only user: a field with no definition to demonstrate
+it is a capability nobody meets. `indistinct` still reports -- it fires for any
+definition that named a model and did not end up anywhere different, which never
+depended on the field -- so the disappointment is still named, just not refused.
 
 There was a `provider:` beside `model:`, naming an endpoint by style, and a rule
 that the two moved together -- a model name sent to an endpoint that has never
@@ -172,7 +164,6 @@ KNOWN: frozenset[str] = frozenset(
         "subagents",
         "model",
         "alias",
-        "distinct",
         "metadata",
     }
 )
@@ -220,7 +211,6 @@ DECLARED: frozenset[str] = frozenset(
         "tools",
         "model",
         "alias",
-        "distinct",
         "metadata",
     }
 )
@@ -263,7 +253,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
 
     The Python sibling of `parse`, and it reads the same fields by the same
-    rules: `tools` narrows the same way, `alias` binds the same way, `distinct`
+    rules: `tools` narrows the same way, `alias` binds the same way, `metadata`
     refuses the same way. What differs is one key -- `build` where a document
     writes `system_prompt` -- and four the other format has that this one
     cannot honour.
@@ -319,15 +309,6 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
     wanted = wanted_models(entry)
-    distinct = read.flag(entry.get("distinct"), key="distinct")
-    if distinct and not wanted:
-        msg = (
-            f"{source}: 'distinct: True' with no model or alias -- with nothing named, "
-            f"this delegate runs the deployment's own model, which is exactly what "
-            f"'distinct' refuses; name what it may run instead"
-        )
-        raise SubagentError(msg)
-
     written_tools = read.selection(entry.get("tools"), absent=ALL, key="tools")
     return SubagentSpec(
         name=fields.text(entry["name"]),
@@ -342,7 +323,6 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
         wanted=wanted,
-        distinct=distinct,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
     )
 
@@ -403,19 +383,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         raise SubagentError(msg)
 
     wanted = wanted_models(document)
-    distinct = read.flag(document.get("distinct"), key="distinct")
-    # A definition that must differ and named nothing to differ *with* runs the
-    # deployment's own model, which is the one thing `distinct` exists to
-    # refuse -- so it could never start, and would say so per activation rather
-    # than once, at the file. Refused here, where a reader can see both halves
-    # of the contradiction on the same screen.
-    if distinct and not wanted:
-        msg = (
-            f"{source.name}: 'distinct: true' with no model or alias -- with nothing "
-            f"named, this delegate runs the deployment's own model, which is exactly "
-            f"what 'distinct' refuses; name what it may run instead"
-        )
-        raise SubagentError(msg)
 
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
@@ -453,7 +420,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             ),
         ),
         wanted=wanted,
-        distinct=distinct,
         metadata=read.mapping(document.get("metadata"), key="metadata"),
     )
 

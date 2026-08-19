@@ -224,15 +224,11 @@ def test_the_three_required_keys_are_required(missing):
 
 
 def test_the_model_fields_mean_what_they_mean_in_yaml():
-    spec = declared(_entry(alias="cheap", distinct=True), "researcher.py")
+    spec = declared(_entry(alias="cheap"), "researcher.py")
 
     assert spec.wanted[0].alias == "cheap"
-    assert spec.distinct is True
 
 
-def test_distinct_with_nothing_named_is_refused_here_too():
-    with pytest.raises(SubagentError, match="no model or alias"):
-        declared(_entry(distinct=True), "researcher.py")
 
 
 def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():

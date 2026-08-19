@@ -27,10 +27,9 @@ neither of them has ever heard of this agent. Writing one line is the cost; a
 catalogue where every agent says what it does is what it buys.
 
 **Its own folder and its own format, sharing the readers and not the fields.**
-Three fields disagree with `subagents/`, and none of the disagreements are
-cosmetic. `distinct` says "not the model above me" and there is nothing above an
-agent, so it is unwritable here. `memory` is a switch a delegate has no use for.
-And `system_prompt` means the opposite thing -- see below. A shared folder would
+Two fields disagree with `subagents/`, and neither disagreement is cosmetic.
+`memory` is a switch a delegate has no use for. And `system_prompt` means the
+opposite thing -- see below. A shared folder would
 have made a field's meaning depend on the request that read it rather than on
 the file, which is exactly what nobody could then check by reading.
 
@@ -142,10 +141,6 @@ KNOWN: frozenset[str] = frozenset(
 #: honouring it would be wrong, or that it is a different piece of work.
 REFUSED: Mapping[str, str] = MappingProxyType(
     {
-        "distinct": (
-            "it says 'not the model that summoned me', and nothing summons an "
-            "agent -- a delegate is where this belongs"
-        ),
         "permissions": (
             "deepagents' permissions *replace* rather than narrow, so writing this "
             "here would drop the rules an agent already has -- including the ones "

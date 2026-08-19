@@ -807,13 +807,14 @@ def _resolve_tools(
 
 def _running(
     agent: AgentSpec | None, cfg: Config, endpoints: Selection, injected: Any
-) -> tuple[str | None, Any]:
-    """What this agent runs: its model id, and the instance to build the graph on.
+) -> Any:
+    """The model instance this agent's graph is built on.
 
-    Both, from one place, because the two must not disagree. The instance is
-    what the graph calls; the id is what a delegate's `distinct` is measured
-    against, since a delegate compares itself with whatever summoned it and at
-    the top that is the agent.
+    It returned the model *id* beside the instance until `distinct` went. The id
+    was what a delegate refusing to match its caller was measured against, and
+    nothing tracks the caller chain any more -- `indistinct` still reports, and
+    has always compared against the deployment's default rather than the
+    caller.
 
     An injected model still wins. A caller handing one in has said the catalogue
     is not the subject -- but the *id* is still the agent's, because what the
@@ -824,10 +825,9 @@ def _running(
     the graph, and this was three working out one value between them.
     """
     if agent is None:
-        return None, injected or build_model(*cfg.models.resolve())
-    wanted = model_for(agent, cfg)
+        return injected or build_model(*cfg.models.resolve())
     mine = model_object(agent, cfg, endpoints=endpoints)
-    return wanted, injected or mine or build_model(*cfg.models.resolve())
+    return injected or mine or build_model(*cfg.models.resolve())
 
 
 def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argument
@@ -928,7 +928,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
         interpreter_at = len(middleware)
         middleware.append(_interpreter(cfg, None))
 
-    agent_model_id, running = _running(agent, cfg, capabilities.endpoints, model)
+    running = _running(agent, cfg, capabilities.endpoints, model)
 
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
@@ -1005,7 +1005,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
             helpers: list[Any] | None = None,
             default_model: Any = None,
             tool_objects: list[Any] | None = None,
-            caller: str | None = None,
         ) -> dict[str, Any]:
             """One delegate, with the request's ceiling on every axis.
 
@@ -1020,9 +1019,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
             *request* granted rather than by the delegate that reached it. The
             caller had to name it too, so the caller has already seen it.
 
-            `caller` is the one thing it does take from above: the model the
-            delegate that summoned it is running, which is what it inherits when
-            it names none and what `distinct` refuses to match.
             """
             return as_subagent(
                 defined[name],
@@ -1035,7 +1031,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                 skill_sources=skills_sources(roots.registry.folders),
                 helpers=helpers,
                 default_model=default_model,
-                caller=caller,
                 tool_objects=tool_objects,
                 catalogue=walked,
                 # Its own, if it has a folder named after it. Looked up by the
@@ -1070,13 +1065,20 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
         # model and tools to a top-level delegate instead would work and would
         # cost it the inheritance: it would stop tracking a parent that changed.
         #
-        # The summoner's model is part of the key for the same reason position
-        # is: a definition naming no model runs whatever reached it, so `checker`
-        # under a cheap parent and `checker` under an expensive one are two
-        # different agents wearing one name. Bounded by definitions times the
-        # models above them, which is a catalogue's own shape rather than the
-        # number of paths through it.
-        compiled: dict[tuple[str, bool, str | None], Any] = {}
+        # What it inherits is part of the key for the same reason position is: a
+        # definition naming no model runs whatever reached it, so `checker` under
+        # a cheap parent and `checker` under an expensive one are two different
+        # agents wearing one name. Bounded by definitions times the models above
+        # them, which is a catalogue's own shape rather than the number of paths
+        # through it.
+        #
+        # By identity, and that is the whole of what changed when `distinct`
+        # went. The key held the summoner's model *id*, which `model_for` was
+        # called early to obtain -- a call that existed for `distinct` and went
+        # with it. The object is what actually distinguishes two delegates here:
+        # one is built per parent, so two parents are two objects, and a
+        # top-level delegate inherits `None` every time.
+        compiled: dict[tuple[str, bool, int], Any] = {}
 
         # What the main agent itself runs, as an object a helper can be handed.
         # A top-level delegate needs none of this -- deepagents gives it the
@@ -1084,25 +1086,16 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
         # nothing, and deepagents refuses a nested spec with no model at all.
         root = running
 
-        def _with_helpers(
-            name: str, *, nested: bool, inherited: Any = None, caller: str | None = None
-        ) -> Any:
-            key = (name, nested, caller)
+        def _with_helpers(name: str, *, nested: bool, inherited: Any = None) -> Any:
+            key = (name, nested, id(inherited))
             if key not in compiled:
-                # This delegate's own model, before its helpers rather than
-                # after, because they inherit it. `model_for` is the same call
-                # `as_subagent` makes below and answers identically; asking here
-                # only moves *when* an unusable model is refused, from part-way
-                # through building a tree to before it starts.
                 override = wanted.get(name)
-                own = model_for(defined[name], cfg, override=override, caller=caller)
                 mine = model_object(
                     defined[name],
                     cfg,
                     endpoints=capabilities.endpoints,
                     run_on=override,
                     inherited=inherited,
-                    caller=caller,
                 )
                 helpers = [
                     _with_helpers(
@@ -1113,7 +1106,6 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                         # agent's, so a helper under a delegate pinned to the
                         # cheap model quietly ran the expensive one.
                         inherited=mine if mine is not None else root,
-                        caller=own if own is not None else caller,
                     )
                     for helper in subagent_helpers(
                         defined[name], defined, capabilities.subagents
@@ -1123,13 +1115,12 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
                     name,
                     helpers=helpers or None,
                     default_model=inherited if nested else None,
-                    caller=caller,
                     tool_objects=list(surface.objects.values()) if nested else None,
                 )
             return compiled[key]
 
         extras["subagents"] = [
-            _with_helpers(n, nested=False, caller=agent_model_id) for n in activated
+            _with_helpers(n, nested=False) for n in activated
         ]
 
     if permitted is not None:

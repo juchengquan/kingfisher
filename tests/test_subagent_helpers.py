@@ -20,7 +20,6 @@ from pathlib import Path
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import refuse_cycles
@@ -59,14 +58,10 @@ NESTING_HELPER = HELPER.replace("system_prompt:", "subagents: [checker]\nsystem_
 #: the whole question of what "no model" means one level down.
 CHEAP_REVIEWER = REVIEWER.replace("subagents:", "model: cheap-model\nsubagents:")
 
-#: The same pairing, where the helper is the one that asked to be elsewhere.
-#: `alternate` binds to `elsewhere-model`, and so does the parent -- so the two
-#: are the same model, which is exactly what `distinct` rules out.
-ELSEWHERE_REVIEWER = REVIEWER.replace(
+#: A second parent naming the same helper, on a different model. The pair is
+#: what makes a helper's identity more than its name.
+ELSEWHERE_REVIEWER = REVIEWER.replace("name: reviewer", "name: auditor").replace(
     "subagents:", "model: elsewhere-model\nsubagents:"
-)
-DISTINCT_HELPER = HELPER.replace(
-    "system_prompt:", "alias: alternate\ndistinct: true\nsystem_prompt:"
 )
 
 
@@ -527,6 +522,36 @@ def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(
     assert helper["model"].model == "cheap-model"
 
 
+def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir, monkeypatch):
+    """A helper naming no model runs whatever reached it, so the same name under
+    two differently-pinned parents is two different agents.
+
+    The build caches compiled delegates, and what that cache is keyed on is the
+    whole of this. It held the summoner's model *id*, obtained by a `model_for`
+    call that existed for `distinct`; when that field went the call went with it
+    and the key briefly became `(name, nested)` -- at which point the second
+    parent would have been handed the first one's helper, running the wrong
+    model with nothing to notice. `ty` caught the type, and this catches the
+    behaviour: nothing in the suite covered two parents.
+    """
+    _define(cfg, CHEAP_REVIEWER, ELSEWHERE_REVIEWER, HELPER)
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("reviewer", "auditor", "second-opinion")),
+    )
+
+    built = {spec["name"]: spec for spec in captured["subagents"]}
+    under_cheap = _helper_specs(built["reviewer"])["second-opinion"]
+    under_elsewhere = _helper_specs(built["auditor"])["second-opinion"]
+
+    assert under_cheap["model"].model == "cheap-model"
+    assert under_elsewhere["model"].model == "elsewhere-model"
+
+
 def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
     cfg, session_dir, monkeypatch
 ):
@@ -551,18 +576,3 @@ def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
     assert _helper_specs(parent)["second-opinion"]["model"] is main
 
 
-def test_a_helper_that_must_differ_is_refused_beside_its_own_summoner(
-    cfg, session_dir
-):
-    """The build is where the summoner is known, so the build is where this has
-    to be measured.
-
-    `second-opinion` is genuinely elsewhere from the main agent and not from
-    `reviewer`, which pinned the same model. Judged against the deployment's
-    default it looks fine; judged against what summoned it, it is the one thing
-    it was written to refuse.
-    """
-    _define(cfg, ELSEWHERE_REVIEWER, DISTINCT_HELPER)
-
-    with pytest.raises(ConfigError, match="same model as whatever summoned it"):
-        _build(cfg, session_dir)

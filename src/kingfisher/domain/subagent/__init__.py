@@ -147,10 +147,11 @@ class SubagentSpec:
     #: binds it -- stays inside the entry rather than being a fact about the
     #: whole field.
     #:
-    #: A candidate is passed over for two reasons and no others: an alias this
-    #: deployment never bound, and -- when `distinct` is set -- a model that
-    #: turns out to be the one this delegate exists not to be. Both are the
-    #: deployment's doing, which is why a *list* is not the definition hedging.
+    #: A candidate is passed over for one reason and no other: an alias this
+    #: deployment never bound. That is the deployment's doing, which is why a
+    #: *list* is not the definition hedging. A named model is never passed over
+    #: -- one this deployment cannot run refuses on the spot -- and that is the
+    #: difference between the two fields rather than an inconsistency.
     #: It is a definition naming the deployments it can still be useful in.
     #:
     #: `derived`, like `tool_sources`, and for the same reason: no definition
@@ -167,13 +168,6 @@ class SubagentSpec:
     #: right to. This is the definition saying so, and it is what turns that
     #: report into a refusal.
     #:
-    #: The refusal is not new so much as completed. `second-opinion` already
-    #: relies on one for the other half of this: an *unbound* alias refuses,
-    #: because falling back to the default "would hand this delegate the one
-    #: model it exists not to be, and nothing in the output would look wrong".
-    #: A bound alias resolving to that same model is the identical sentence with
-    #: the identical ending, and it fell through.
-    distinct: bool = False
     #: The caller's own keys, carried and never interpreted. Kingfisher reads
     #: nothing here and never will: the moment it did, this would be a field
     #: with rules, and the point of it is to be the one place a definition can

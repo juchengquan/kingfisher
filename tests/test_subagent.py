@@ -389,13 +389,12 @@ def test_the_description_may_still_be_folded(tmp_path):
 # already enforces for the record itself.
 
 
-def _spec(*models: str, distinct: bool = False) -> SubagentSpec:
+def _spec(*models: str) -> SubagentSpec:
     return SubagentSpec(
         name="reviewer",
         description="d",
         system_prompt="Go.",
         wanted=tuple(Wanted(model=name) for name in models),
-        distinct=distinct,
     )
 
 
@@ -589,7 +588,6 @@ def test_one_model_reads_as_a_list_of_one(tmp_path):
     spec = read_subagent(_runs("model: gpt-5"), tmp_path / "r.yaml")
 
     assert spec.wanted == (Wanted(model="gpt-5"),)
-    assert spec.distinct is False
 
 
 def test_several_models_keep_the_order_the_file_wrote(tmp_path):
@@ -619,40 +617,11 @@ def test_naming_both_a_model_and_an_alias_is_still_refused(tmp_path):
         read_subagent(_runs("model: [gpt-5]", "alias: [cheap]"), tmp_path / "r.yaml")
 
 
-def test_distinct_parses_as_a_flag(tmp_path):
-    spec = read_subagent(_runs("model: gpt-5", "distinct: true"), tmp_path / "r.yaml")
-
-    assert spec.distinct is True
 
 
-def test_distinct_with_nothing_named_is_refused_at_the_file(tmp_path):
-    """With nothing named it runs the deployment's own model, which is exactly
-    what the flag rules out -- so it could never start, and would say so once per
-    activation instead of once, here, where both halves are on one screen."""
-    with pytest.raises(SubagentError, match="no model or alias") as raised:
-        read_subagent(_runs("distinct: true"), tmp_path / "r.yaml")
-
-    assert "distinct" in str(raised.value)
 
 
-@pytest.mark.parametrize("written", ["'false'", '"no"', "0", "maybe"])
-def test_a_flag_that_is_not_a_bool_is_refused(tmp_path, written):
-    """`distinct: "false"` is a non-empty string, and every non-empty string is
-    true -- so the reading Python would take says the opposite of what the file
-    says."""
-    with pytest.raises(SubagentError, match="write true or false"):
-        read_subagent(_runs("model: gpt-5", f"distinct: {written}"), tmp_path / "r.yaml")
 
 
-def test_yaml_spellings_of_true_are_accepted(tmp_path):
-    """`yes` and `on` arrive here already a bool, so there is nothing to refuse
-    and nothing to special-case."""
-    for written in ("true", "True", "yes", "on"):
-        spec = read_subagent(
-            _runs("model: gpt-5", f"distinct: {written}"), tmp_path / "r.yaml"
-        )
-        assert spec.distinct is True, written
 
 
-def test_distinct_left_out_is_false(tmp_path):
-    assert read_subagent(_runs("model: gpt-5"), tmp_path / "r.yaml").distinct is False
