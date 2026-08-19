@@ -153,6 +153,28 @@ class LocalToolRepository:
                 raise ToolError(msg)
 
             for tool in exported:
+                # A class is never a tool, and this is the one mistake in this
+                # area that produces a *successful* wrong answer rather than an
+                # error. `TOOLS = [Shout]` instead of `[Shout()]` loads, is
+                # advertised under the class name rather than its own `name`
+                # field -- on a pydantic model that field is not a class
+                # attribute, so `tool_name` falls through to `__name__` -- and
+                # then calling it *instantiates* it. Measured: the model gets
+                # `status="success"` and the repr of a `CallbackManager`, and
+                # the run carries on.
+                #
+                # The same family as the container check above, one level in:
+                # there the whole export was a pydantic model that iterated,
+                # here one entry is a class that instantiates. Both pass a duck
+                # test and neither says anything.
+                if isinstance(tool, type):
+                    msg = (
+                        f"{where}: {EXPORT} names the class {tool.__name__!r} rather "
+                        f"than a tool -- write {tool.__name__}() to build one. A class "
+                        f"loads and is offered to the model, and calling it returns a "
+                        f"new instance as if it were an answer"
+                    )
+                    raise ToolError(msg)
                 name = tool_name(tool)
                 if name in claimed and claimed[name] == where:
                     # Within one file it is a plain mistake: the same module

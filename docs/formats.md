@@ -317,6 +317,37 @@ options.
 `.args` to read back. For most tools that is simpler; for one whose schema you
 want to assert, reach for the decorator.
 
+#### Or a class, when you want to declare the schema
+
+The third shape, and the one to reach for when the arguments deserve describing
+one by one, or when the tool needs state or an `_arun`:
+
+```python
+class Shout(BaseTool):
+    name: str = "shout"
+    description: str = "Return the text in capitals. Use when asked to shout."
+    args_schema: Type[BaseModel] = ShoutInput
+
+    def _run(self, text: str) -> str:
+        return text.upper()
+
+
+TOOLS = [Shout()]
+```
+
+**Note the `()`.** `TOOLS` holds tools, not classes, and the class is the one
+mistake here that used to produce a *successful* wrong answer: it loaded, was
+offered to the model under the class name `Shout` rather than the `shout` it
+declares — on a pydantic model that field is not a class attribute — and calling
+it built a new instance and handed that back as the result. It is refused now,
+naming what to write:
+
+```
+shout.py: TOOLS names the class 'Shout' rather than a tool -- write Shout() to
+build one. A class loads and is offered to the model, and calling it returns a
+new instance as if it were an answer
+```
+
 #### Folders, when one file stops being enough
 
 `tools/` may be as deep as you like, and `__init__.py` decides what a folder is:
