@@ -244,15 +244,55 @@ def test_every_implementation_offers_names_in_a_stable_order(cfg, session_dir):
     while there was a single implementation to sort. There are three now -- the
     local one, the layer, and whatever a deployment supplies -- so the guarantee
     had to move into the contract.
+
+    "Every implementation" meant skills, which were the case in hand when this
+    was written. There are four kinds, each walking the directory its own way,
+    and only one of them was held to the sentence above.
     """
     for name in ("b-second", "a-first", "c-third"):
         _upload_skill(session_dir, name)
+    _write_ordered(cfg)
 
     turn = for_session(Definitions.from_config(cfg), session_dir)
+    again = for_session(Definitions.from_config(cfg), session_dir)
+
+    for kind in ("agents", "skills", "subagents", "tools"):
+        names = getattr(turn, kind).names
+        assert names, f"{kind} offered nothing, so this checks nothing for it"
+        # The same answer twice, which a set-backed implementation would not
+        # give. Stability is the contract; sorted-by-name is not, and three of
+        # these are ordered by the path they were found at.
+        assert names == getattr(again, kind).names, kind
 
     assert list(turn.skills.names) == sorted(turn.skills.names)
-    # and the same answer twice, which a set-backed implementation would not give
-    assert turn.skills.names == for_session(Definitions.from_config(cfg), session_dir).skills.names
+
+
+def _write_ordered(cfg) -> None:
+    """One definition of each other kind, named so a filesystem that answered in
+    creation order would be caught out."""
+    roots = cfg.catalogue_roots
+    roots["agents"].mkdir(parents=True, exist_ok=True)
+    for name in ("z-last", "a-first"):
+        (roots["agents"] / f"{name}.yaml").write_text(
+            f"name: {name}\ndescription: An agent.\n", encoding="utf-8"
+        )
+    roots["subagents"].mkdir(parents=True, exist_ok=True)
+    for name in ("z-last", "a-first"):
+        (roots["subagents"] / f"{name}.yaml").write_text(
+            f"name: {name}\ndescription: A delegate.\nsystem_prompt: |\n  Go.\n",
+            encoding="utf-8",
+        )
+    roots["tools"].mkdir(parents=True, exist_ok=True)
+    for name in ("z_last", "a_first"):
+        (roots["tools"] / f"{name}.py").write_text(
+            "from langchain_core.tools import tool\n\n\n"
+            "@tool\n"
+            f"def {name}(text: str) -> str:\n"
+            f'    """Does {name}. Use when a test needs a tool with a known name."""\n'
+            "    return text\n\n\n"
+            f"TOOLS = [{name}]\n",
+            encoding="utf-8",
+        )
 
 
 def test_a_layered_skill_prefers_the_sessions_copy_of_the_files(tmp_path):
