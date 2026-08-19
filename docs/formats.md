@@ -286,6 +286,37 @@ The docstring is not decoration — it is what the model reads when deciding
 whether to call the tool, exactly like a skill's `description`. Write it as a
 trigger condition and say what the arguments mean in a caller's words.
 
+#### The decorator is optional
+
+`@tool` makes a `BaseTool`. A plain function works too, and `TOOLS` may hold
+either:
+
+```python
+def line_count(path: str) -> str:
+    """Count the lines in a text file. Use before reading a file you expect to
+    be long, so you can ask `read_file` for the part you want."""
+    ...
+
+
+TOOLS = [line_count]
+```
+
+Kingfisher names a tool by `.name` where there is one and by `__name__` where
+there is not, so everything downstream — a grant, an allowlist, the failure
+guard — keys on the same string either way. The shipped `line_count` is written
+this way on purpose.
+
+**You give up none of what the model sees.** The docstring becomes the
+description and the annotations become the argument schema, exactly as they do
+under the decorator. What `@tool` buys is *control* over those: a name that is
+not the function's, a description that is not the docstring, and its other
+options.
+
+**What you give up is on your side of the fence.** A plain function is not a
+`BaseTool`, so your own tests call it rather than `.invoke` it, and there is no
+`.args` to read back. For most tools that is simpler; for one whose schema you
+want to assert, reach for the decorator.
+
 #### Folders, when one file stops being enough
 
 `tools/` may be as deep as you like, and `__init__.py` decides what a folder is:
