@@ -400,7 +400,14 @@ def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
 
     printed = capsys.readouterr().out
     assert "created a new workspace" in printed
-    for name in LocalSkillRepository(fresh.skills_dir).names:
+
+    # The half this test is named for -- what it *wrote* -- is a loop, and an
+    # empty one passes. Seeding writing no skills at all is exactly the failure
+    # this would otherwise report as success.
+    seeded = LocalSkillRepository(fresh.skills_dir).names
+    assert seeded, "seeding wrote no skills, so the loop below checks nothing"
+
+    for name in seeded:
         assert f"seeded skills/{name}" in printed
 
 

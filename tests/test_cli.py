@@ -389,6 +389,11 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, c
     assert main(["list", "--json"]) == 0
     document = json.loads(capsys.readouterr().out)
 
+    # The workspace was seeded above, so both are populated -- asserted rather
+    # than assumed, because two empty loops agree with each other perfectly and
+    # this test's whole claim is that the two formats say the same thing.
+    assert document["subagents"] and document["skills"]
+
     for name in document["subagents"]:
         assert name in printed
     for name in document["skills"]:
