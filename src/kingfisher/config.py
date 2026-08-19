@@ -462,6 +462,38 @@ class Config:
     conversation_enabled: bool = True
 
     @property
+    def claim_stale_after(self) -> float:
+        """How old a session's claim must be before another turn may take it.
+
+        Longer than `turn_timeout_s`, and that gap is the whole point. A claim
+        is taken over so a process that *died* cannot lock a session out
+        forever; it must never be taken from a turn that is merely stopping.
+
+        The two were the same number, so the claim became takeable at the exact
+        instant the run's deadline passed -- and a run stops *between stream
+        chunks*, then still has to emit its result, collect what the turn left
+        behind, and let go. Measured in that window: a second caller took the
+        session while the first turn was still running, and the first turn then
+        finished. Two turns in one session is what the claim exists to prevent,
+        and what `SessionBusyError` records having seen once already, where "a
+        turn simply vanished".
+
+        The grace is the longest a single model call may take, because that is
+        exactly what a stopping turn is waiting on: it is inside one chunk, and
+        a chunk ends when the call does. Derived rather than chosen -- a fixed
+        number would be a guess that a deployment raising a model's `timeout_s`
+        would quietly invalidate. What follows the chunk is filesystem work and
+        is not bounded here; it is also milliseconds against a bound in minutes.
+        """
+        return self.turn_timeout_s + max(
+            (profile.timeout_s for profile in self.models.models.values()),
+            # A catalogue with no models cannot run a turn at all, so nothing
+            # can be mid-chunk; the grace is the timeout a profile would have
+            # defaulted to rather than zero, which would restore the overlap.
+            default=ModelProfile.timeout_s,
+        )
+
+    @property
     def state_dir(self) -> Path:
         """Where harness state lives: run logs and the thread database.
 
