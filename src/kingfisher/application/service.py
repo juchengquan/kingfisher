@@ -628,7 +628,7 @@ class Kingfisher:
             now,
             busy=still_held(
                 self.dirs.listing(self._claims),
-                stale_after=self.cfg.turn_timeout_s,
+                stale_after=self.cfg.claim_stale_after,
                 now=now,
             ),
         )
@@ -912,7 +912,7 @@ class Kingfisher:
         dirs.mark_used(session.directory)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
-        session.claim(dirs, self._claims, stale_after=cfg.turn_timeout_s, now=time())
+        session.claim(dirs, self._claims, stale_after=cfg.claim_stale_after, now=time())
         try:
             return self._admitted(request, session, cfg, checkpointer)
         except BaseException:

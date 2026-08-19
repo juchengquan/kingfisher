@@ -578,7 +578,13 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
 
 def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
     """One rule, so they cannot drift. Just inside the window the session is
-    spared; just outside it, both let go."""
+    spared; just outside it, both let go.
+
+    Asked in terms of `claim_stale_after` rather than the turn timeout, which is
+    the same "one rule" point one level up: the window is deliberately longer
+    than a turn is allowed to run, and a test written against the timeout would
+    pin the two together again.
+    """
     import time
 
     kf = service(cfg)
@@ -586,11 +592,54 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
     (cfg.state_dir / "claims" / held).mkdir(parents=True, exist_ok=True)
     now = time.time()
 
-    inside = kf.reap(older_than_seconds=0.0, now=now + cfg.turn_timeout_s - 60)
+    inside = kf.reap(older_than_seconds=0.0, now=now + cfg.claim_stale_after - 60)
     assert inside.removed == ()
 
-    outside = kf.reap(older_than_seconds=0.0, now=now + cfg.turn_timeout_s + 60)
+    outside = kf.reap(older_than_seconds=0.0, now=now + cfg.claim_stale_after + 60)
     assert held in outside.removed
+
+
+def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
+    """The window a turn stops *in*, which the claim used to be taken during.
+
+    A run's deadline and the claim's staleness were the same number, so the
+    claim became takeable at the instant the deadline passed -- and a run stops
+    between stream chunks, then still has to emit its result, collect what the
+    turn left behind, and let go. Reproduced before this: a second caller took
+    the session while the first turn was still running, and the first turn then
+    finished. Two turns in one session is the thing the claim exists to prevent.
+
+    So the claim has to outlive the deadline by however long a turn can take to
+    notice it -- one model call, which is what a stopping turn is inside.
+    """
+    import time
+
+    from kingfisher.domain.session import Session, still_held
+
+    kf = service(cfg)
+    held = kf.start_session()
+    claims = cfg.state_dir / "claims"
+    session = Session(id=held, directory=cfg.workspace / "sessions" / held)
+    taken = time.time()
+    session.claim(kf.dirs, claims, stale_after=cfg.claim_stale_after, now=taken)
+
+    # The instant the turn runs out of time, and a little after.
+    at_deadline = taken + cfg.turn_timeout_s
+    assert still_held(
+        ((held, taken),), stale_after=cfg.claim_stale_after, now=at_deadline
+    ) == (held,)
+
+    # And a second caller is refused for the whole of that window.
+    with pytest.raises(SessionBusyError):
+        Session(id=held, directory=session.directory).claim(
+            kf.dirs, claims, stale_after=cfg.claim_stale_after, now=at_deadline
+        )
+
+    # Long enough after, the slot is takeable again -- a holder that died must
+    # not lock the session out for good.
+    assert (
+        still_held(((held, taken),), stale_after=cfg.claim_stale_after, now=taken + 1e6) == ()
+    )
 
 
 def test_a_sweep_leaves_no_claim_behind(cfg):
