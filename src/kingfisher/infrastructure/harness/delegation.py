@@ -374,10 +374,24 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     granted = [one.tool for one in select(narrowed(spec.tools, by=tools), catalogue)]
 
     runnable = spec.build(model, granted)
-    if runnable is None:
+    # Shape, not type. `None` was the only thing caught here, and it is the
+    # least likely mistake: `callable()` accepts a *class*, so declaring
+    # `"build": Assembler` loads, gets constructed as `Assembler(model, tools)`,
+    # and hands deepagents an object with no `invoke` -- which then fails
+    # somewhere with nothing pointing back at the declaration that caused it.
+    #
+    # Duck-typed rather than `isinstance(runnable, CompiledStateGraph)`, the way
+    # `registered_tools` reads a graph: the concrete class is upstream's to
+    # rename, and a rule that broke on a rename would take down every compiled
+    # delegate to enforce a spelling.
+    if not callable(getattr(runnable, "invoke", None)):
+        made = "None" if runnable is None else type(runnable).__name__
         msg = (
-            f"subagent {spec.name!r}: 'build' returned None. It is given a model and "
-            f"the tools this delegate was granted, and returns the graph to run"
+            f"subagent {spec.name!r}: 'build' returned {made}, which is not a graph -- "
+            f"nothing to run it with. It is given a model and the tools this delegate "
+            f"was granted, and returns the graph to run. A class is callable, so "
+            f"`\'build\': YourClass` gets constructed rather than called for a graph; "
+            f"name a function that builds one"
         )
         raise SubagentError(msg)
     return {"name": spec.name, "description": spec.description, "runnable": runnable}
