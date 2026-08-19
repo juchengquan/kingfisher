@@ -19,7 +19,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
-from kingfisher.infrastructure import seeding
+from kingfisher.infrastructure import workspace_fs
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness import agent as main_agent_module
@@ -451,7 +451,7 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
     assert driver.main(["main.py", "--list"]) == 2  # no catalogue, as expected
 
     assert LocalSkillRepository(workspace / "skills").names
-    assert (workspace / seeding.EXAMPLE).is_file()
+    assert (workspace / workspace_fs.EXAMPLE).is_file()
 
 
 def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
@@ -469,7 +469,7 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
 
     with pytest.raises(ConfigError) as without:
         model_catalogue.load(absent, {})
-    (tmp_path / seeding.EXAMPLE).write_text("# annotated\n", encoding="utf-8")
+    (tmp_path / workspace_fs.EXAMPLE).write_text("# annotated\n", encoding="utf-8")
     with pytest.raises(ConfigError) as with_example:
         model_catalogue.load(absent, {})
 
@@ -483,8 +483,13 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
 
 def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkeypatch):
     """A damaged install, where the shipped definitions are missing. Not an
-    error, and not silence either: the catalogue example is the one thing a
-    first run always needs.
+    error: the catalogue example is the one thing a first run always needs, and
+    it arrives with the layout rather than with the copy.
+
+    That is the change this asserts. The example used to be reported as seeded,
+    so a run with no definitions still printed one line and looked productive.
+    It is placed by `ensure_layout` now, before seeding is reached at all --
+    which is what lets seeding refuse without taking the example with it.
 
     Reached by pointing the seeder at an empty directory, which is the only way
     to produce this state now that the definitions ride inside the wheel."""
@@ -498,8 +503,9 @@ def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkey
     driver.main(["main.py", "--list"])
 
     printed = capsys.readouterr().out
-    assert f"seeded {seeding.EXAMPLE}" in printed
+    assert f"seeded {workspace_fs.EXAMPLE}" not in printed
     assert "seeded skills/" not in printed
+    assert (fresh.workspace / workspace_fs.EXAMPLE).is_file()
 
 
 # -- --without-tools and friends ------------------------------------------

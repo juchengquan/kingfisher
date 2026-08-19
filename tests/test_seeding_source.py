@@ -59,15 +59,22 @@ def test_seeding_without_a_source_writes_the_shipped_definitions(cfg):
     assert any(entry.startswith("tools/") for entry in written), written
 
 
-def test_the_catalogue_example_is_written_either_way(cfg, tmp_path):
+def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tmp_path):
     """It is kingfisher's own, not a definition, so it does not come from the
-    source -- and a caller's own directory has no reason to hold one."""
-    from kingfisher.infrastructure.seeding import EXAMPLE
+    source -- and a caller's own directory has no reason to hold one.
+
+    It arrives with the *layout* now rather than with the copy. The distinction
+    matters because seeding can decline: a deployment naming no definitions
+    still has to be told where to write `models.yaml`, and that instruction is
+    this file.
+    """
+    from kingfisher.infrastructure.workspace_fs import EXAMPLE, ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
+    ensure_layout(cfg.workspace)
 
-    assert EXAMPLE in seeding.seed(cfg).written
-    assert EXAMPLE in seeding.seed(cfg, mine).overwritten + seeding.seed(cfg, mine).written
+    assert (cfg.workspace / EXAMPLE).is_file()
+    assert EXAMPLE not in seeding.seed(cfg, mine).written
 
 
 # -- a source of your own --------------------------------------------------

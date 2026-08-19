@@ -1419,11 +1419,11 @@ def test_the_package_ships_the_catalogue_example():
     fail separately: the first catches it moving back out of the package, the
     second catches it not being reachable the way an install reaches it.
     """
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure import seeding, workspace_fs
 
-    assert (SRC / seeding.EXAMPLE).is_file()
-    with seeding.opened(seeding.PACKAGE) as root:
-        assert (root / seeding.EXAMPLE).is_file()
+    assert (SRC / workspace_fs.EXAMPLE).is_file()
+    with seeding.opened(workspace_fs.PACKAGE) as root:
+        assert (root / workspace_fs.EXAMPLE).is_file()
 
 
 # -- who caused it ---------------------------------------------------------

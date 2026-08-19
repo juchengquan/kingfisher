@@ -265,16 +265,22 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
     assert result.overwritten == ()
 
 
-def test_seeding_leaves_the_catalogue_example_where_models_yaml_goes(cfg):
-    """Beside the file it is an example *of*, which is where someone looks.
+def test_seeding_does_not_claim_the_catalogue_example(cfg):
+    """It is not a definition, and it is no longer seeding's to write.
 
-    Not into one of the three catalogues: it is not a definition, and the
-    directory kingfisher reads `models.yaml` from is the workspace root.
+    `ensure_layout` places it, because it must arrive whether or not a
+    deployment has definitions at all -- and seeding is now able to refuse when
+    it has no source. A file that a refusal would take with it cannot be the
+    one worked example of a mandatory configuration file.
+
+    Asserted as absence from the *report*, not from the disk. The example is
+    beside `models.yaml` either way; what changed is who put it there, and a
+    test reading only the filesystem could not tell the difference.
     """
     result = seeding.seed(cfg, FIXTURE)
 
-    assert seeding.EXAMPLE in result.written
-    assert (cfg.workspace / seeding.EXAMPLE).is_file()
+    assert not [entry for entry in result.written if entry.endswith(".example")]
+    assert not [entry for entry in result.overwritten if entry.endswith(".example")]
 
 
 def test_seeding_never_writes_the_catalogue_itself(cfg):

@@ -66,12 +66,9 @@ def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(tmp_path, monkey
 def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_path):
     """A caller pointing `--from` at a directory with nothing in it. Silence
     would read as success."""
-    from kingfisher.infrastructure import seeding
-
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setattr(seeding, "EXAMPLE", "nothing-here.example")
     monkeypatch.setattr("sys.argv", ["kingfisher", "seed", "--from", str(empty)])
 
     assert main(["seed", "--from", str(empty)]) == 0

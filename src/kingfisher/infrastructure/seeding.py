@@ -15,11 +15,12 @@ enumerates publishers any more, so there is no loop and no question of who is
 installed. A deployment with its own definitions points `seed` at a directory
 and needs no wheel, no metadata and no publish step.
 
-`models.yaml.example` ships too, and is the one thing here that is not content:
-`models.yaml` is required and has no fallback, and the error a deployment
-without one hits names that file as the place to look, so it has to arrive with
-the thing that demands it. `_copy_example` is why it is seeded apart from the
-definitions rather than beside them.
+`models.yaml.example` used to be seeded here too, apart from the definitions,
+because it is the one thing that is not content: `models.yaml` is required and
+has no fallback, and the error a deployment without one hits names that file as
+the place to look. It is written by `ensure_layout` now, which is the honest
+owner of a file that must arrive whether or not a deployment has definitions --
+and this function is about to become able to refuse.
 
 Everything is read through `importlib.resources`, the way `kingfisher.prompts`
 is, so the same code finds a source tree and an installed wheel.
@@ -38,17 +39,6 @@ from typing import Protocol, runtime_checkable
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
-#: Where the catalogue example sits, as an import path rather than a filesystem
-#: one -- an installed package is not in this repo's directory tree.
-#:
-#: The package itself, now that the example is the only thing here that ships
-#: for the code to read. It lived in `kingfisher.reference` beside the format
-#: documentation, and that directory is gone: the documentation moved to
-#: `docs/formats.md`, since nothing in `src/` ever read it and shipping thirty
-#: kilobytes of prose to be read by nobody is not package data. A directory
-#: named `reference` holding one example would have described neither.
-PACKAGE = "kingfisher"
-
 #: The definitions that ship with kingfisher: one working tool, skill and
 #: subagent. Inside the package rather than beside it, so `pip install
 #: kingfisher` followed by `kingfisher seed` writes a workspace that already
@@ -61,15 +51,6 @@ PACKAGE = "kingfisher"
 #: metadata, which covers the same ground more simply. Rebuilding the plugin
 #: group is a small change if a second publisher ever wants one.
 ASSETS = "kingfisher.assets"
-
-#: The worked example of the one file a deployment *must* write. It lived at the
-#: repo root, which meant it existed only in a checkout: `packages =
-#: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
-#: mistake `test_the_package_ships_the_catalogue_example` now guards against,
-#: made for the file a new deployment needs first: `models.yaml` is required and
-#: has no fallback.
-EXAMPLE = "models.yaml.example"
-
 
 
 @contextmanager
@@ -84,11 +65,11 @@ def opened(package: str) -> Iterator[Path]:
     and cleans up afterwards. In a source tree and an ordinary wheel this hands
     back the real directory and costs nothing.
 
-    `package` is required, though `PACKAGE` was its default until the assets
-    left. A default meaning *kingfisher's own tree* is the wrong shape for a
-    reader who wants the definitions: code written `opened()` while meaning the
-    assets would silently read the framework's two files and copy nothing, which
-    is a failure with no error in it. Every caller says which package it wants.
+    `package` is required and has never had a default. One meaning *kingfisher's
+    own tree* was the wrong shape for a reader who wants the definitions: code
+    written `opened()` while meaning the assets would silently read the
+    framework's own files and copy nothing, which is a failure with no error in
+    it. Every caller says which package it wants.
     """
     with resources.as_file(resources.files(package)) as root:
         yield Path(root)
@@ -223,12 +204,6 @@ def seed(cfg: Destination, source: Path | None = None) -> Seeding:
             raise ConfigError(msg)
         written, overwritten = _copy(cfg, tree)
 
-    # Outside the copy: the example is kingfisher's own, so it is written
-    # whatever the definitions were seeded from -- including a caller's own
-    # directory, which has no reason to carry it.
-    example_written, example_overwritten = _copy_example(cfg)
-    written += example_written
-    overwritten += example_overwritten
     return Seeding(tuple(written), tuple(overwritten))
 
 
@@ -263,31 +238,3 @@ def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
             written.append(label)
 
     return written, overwritten
-
-
-def _copy_example(cfg: Destination) -> tuple[list[str], list[str]]:
-    """Put the catalogue example beside where `models.yaml` is read from.
-
-    Which is where someone would look for the thing they are about to write.
-    Not into one of the three catalogues: it is not a definition.
-
-    Not out of the definitions, either, and not conditional on a deployment
-    having any. `models.yaml` is required and has no fallback, and the error a deployment
-    without one hits names this file as the place to look -- so it is the
-    worked example of a mandatory *configuration* file rather than content, and
-    it arrives with the thing that demands it.
-
-    As `.example`, never as `models.yaml` itself. Seeding overwrites by design
-    -- that is what makes re-seeding after an upgrade possible -- and the one
-    file it must never overwrite is the one naming every endpoint this
-    deployment reaches and whose credentials pay.
-    """
-    with opened(PACKAGE) as reference:
-        example = reference / EXAMPLE
-        if not example.is_file():  # a packaging fault, caught by a test
-            return [], []
-        target = cfg.workspace / EXAMPLE
-        overwritten = _overwritten(example, target, EXAMPLE)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(example, target)
-        return [EXAMPLE], overwritten

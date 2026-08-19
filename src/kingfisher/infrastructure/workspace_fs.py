@@ -13,6 +13,7 @@ import shutil
 from collections.abc import Callable, Iterator, Mapping
 from contextlib import contextmanager, suppress
 from dataclasses import dataclass
+from importlib import resources
 from pathlib import Path
 
 from kingfisher.domain.layout import (
@@ -23,6 +24,22 @@ from kingfisher.domain.layout import (
     SESSION_DIRS,
 )
 from kingfisher.domain.references import within
+
+#: Where the catalogue example sits, as an import path rather than a filesystem
+#: one -- an installed package is not in this repository's directory tree.
+PACKAGE = "kingfisher"
+
+#: The worked example of the one file a deployment *must* write. It lived at the
+#: repository root once, which meant it existed only in a checkout: `packages =
+#: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
+#: mistake `test_the_package_ships_the_catalogue_example` guards against, made
+#: for the file a new deployment needs first.
+#:
+#: Read from here by `model_catalogue`, which names it in the error a deployment
+#: without a `models.yaml` hits. It moved out of `seeding` with the code that
+#: writes it: the example is workspace furniture, and seeding is about to become
+#: able to refuse.
+EXAMPLE = "models.yaml.example"
 
 
 #: What a catalogue is made of, named once so a caller can quote it in an error
@@ -111,7 +128,43 @@ def ensure_layout(workspace: Path) -> Path:
     if not marker.exists():
         marker.write_text("kingfisher workspace\n", encoding="utf-8")
 
+    _place_example(workspace)
     return workspace
+
+
+def _place_example(workspace: Path) -> None:
+    """Put the catalogue example where `models.yaml` is read from.
+
+    Here rather than in `seed`, which is where it lived. Seeding is about to
+    become able to *refuse* -- a deployment that names no definitions has
+    nothing to copy -- and this file must arrive anyway: `models.yaml` is
+    required and has no fallback, and the error a deployment without one hits
+    names this file as the place to look. Seeding's own comment said as much,
+    that it is written "not conditional on a deployment having any", and that
+    stops being true the moment seeding can decline.
+
+    Laying out a workspace is the right owner because this is furniture rather
+    than content. Nothing chooses it, nothing seeds it from somewhere else, and
+    a workspace without it is missing a part of itself.
+
+    Written when absent *or different*, which is neither of the two obvious
+    rules. Always writing would touch the disk on every run for nothing. Only
+    when absent would mean an upgrade never refreshed the example, so a
+    deployment would keep reading last year's annotations for a file that had
+    grown fields -- and re-seeding used to be what refreshed it.
+
+    As `.example`, never as `models.yaml` itself: the one file that must not be
+    overwritten is the one naming every endpoint this deployment reaches and
+    whose credentials pay.
+    """
+    source = resources.files(PACKAGE).joinpath(EXAMPLE)
+    if not source.is_file():  # a packaging fault, caught by a test
+        return
+    target = workspace / EXAMPLE
+    text = source.read_text(encoding="utf-8")
+    if target.is_file() and target.read_text(encoding="utf-8") == text:
+        return
+    target.write_text(text, encoding="utf-8")
 
 
 def ensure_session_layout(session_dir: Path) -> Path:
