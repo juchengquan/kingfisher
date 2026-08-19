@@ -93,14 +93,28 @@ def test_every_preset_tool_loads(shipped):
 
     assert {tool_name(t) for t in tools} == {
         "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
+        # A plain function rather than a `BaseTool`, which is the other thing
+        # this set is here to show: kingfisher takes either, and a definition
+        # should not have to know which one deepagents prefers this month.
+        "line_count",
     }
 
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
     """The docstring is what the model reads when deciding whether to call it.
-    An example without a real one teaches the wrong shape."""
+    An example without a real one teaches the wrong shape.
+
+    Read as `.description` or as `__doc__`, because the shipped set holds both
+    kinds now and the first version of this test assumed one. A `BaseTool` puts
+    the docstring on `.description` when it is built; a plain function still has
+    it on `__doc__`, and deepagents reads it from there when it wraps the
+    function. The model sees the same sentence either way -- which is the whole
+    claim `line_count` exists to make -- so a test about what the model reads
+    should not care which kind it was handed.
+    """
     for tool in LocalToolRepository(shipped / "tools").tools:
-        assert len(tool.description.strip()) > 60  # a trigger, not a title
+        described = getattr(tool, "description", None) or (tool.__doc__ or "")
+        assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
 
 
 def test_the_second_opinion_preset_insists_on_differing(shipped):
