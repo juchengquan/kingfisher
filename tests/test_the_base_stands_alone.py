@@ -143,6 +143,11 @@ def test_every_public_name_resolves_without_the_service(monkeypatch):
             monkeypatch.delitem(sys.modules, name)
     monkeypatch.setattr(sys, "meta_path", [Absent(), *sys.meta_path])
 
+    # Before the loop, because a loop with no cases passes -- which is the scar
+    # the test below this one exists to hold, and this had the same shape.
+    # Demonstrated rather than argued: emptied and unguarded, this test passed.
+    assert len(kingfisher._EXPORTS) > 10, "the export list stopped being the export list"
+
     for name in kingfisher._EXPORTS:
         getattr(kingfisher, name)
 
