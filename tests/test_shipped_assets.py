@@ -17,6 +17,7 @@ from dataclasses import fields
 
 import pytest
 import yaml
+from langchain_core.messages import AIMessage, HumanMessage
 
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import ALL, Capabilities
@@ -27,6 +28,7 @@ from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
 from kingfisher.infrastructure.harness.agent import build_agent
+from tests.conftest import FakeToolCallingModel
 
 
 def test_every_preset_subagent_parses(shipped):
@@ -41,10 +43,27 @@ def test_every_preset_subagent_parses(shipped):
     # delegate's bundle. It is named `redactor` here for the same reason
     # `profiler` is named `profiler` -- the folder decides what a definition
     # *brings*, never what it is called.
-    assert set(specs) == {"reviewer", "extractor", "second-opinion", "profiler", "redactor"}
+    # `first-look` is the third shape: a Python module that assembles its own
+    # graph and exports it as `SUBAGENTS`. It has no `system_prompt` and cannot
+    # -- whatever prompt it uses is inside the graph -- which is why the loop
+    # below asks each spec for the half it actually has.
+    assert set(specs) == {
+        "reviewer",
+        "extractor",
+        "second-opinion",
+        "profiler",
+        "redactor",
+        "first-look",
+    }
     for spec in specs.values():
         assert spec.description.strip()
-        assert len(spec.system_prompt) > 200  # a real prompt, not a stub
+        if spec.build is None:
+            assert len(spec.system_prompt) > 200  # a real prompt, not a stub
+        else:
+            # The invariant `SubagentSpec` enforces: exactly one of the two, so
+            # a compiled delegate having no prompt is the format working rather
+            # than a preset half-written.
+            assert not spec.system_prompt
 
 
 def test_every_preset_skill_parses(shipped):
@@ -299,3 +318,97 @@ def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
     for name, spec in defined.items():
         offering.refuse_unknown(ALL, spec.tools, subject=f"preset {name!r}")
         offering.refuse_moved(spec.tool_sources, subject=f"preset {name!r}")
+
+
+# -- the compiled preset ----------------------------------------------------
+
+
+def compiled(shipped, tools):
+    """The shipped `first-look` graph, built the way a run would build it.
+
+    Through `LocalSubagentRepository` rather than by importing
+    `kingfisher.assets.subagents.first_look`, and the difference is not
+    ceremony. `assets/subagents/` has no `__init__.py`, so that import resolves
+    only as a namespace package -- `test_every_kingfisher_import_in_this_
+    repository_names_a_module_that_exists` refuses it, correctly, and it is not
+    how anything reaches an asset. The catalogue loads these by path, so a test
+    that does anything else is exercising a route no deployment has.
+    """
+    spec = LocalSubagentRepository(shipped / "subagents").specs["first-look"]
+    assert spec.build is not None
+    return spec.build(FakeToolCallingModel(responses=[AIMessage(content="ok")]), tools)
+
+
+def line_count(path: str) -> str:
+    "Count the lines."
+    return f"{path}: 2 line(s)"
+
+
+def test_the_compiled_preset_builds_a_graph_that_surveys_first(shipped):
+    """A shipped asset is judged by whether it runs, so this builds the graph.
+
+    The claim the preset exists to make is structural rather than behavioural: a
+    prompt can *ask* for a profiling step and a model may skip it; a graph has no
+    edge that reaches the model without passing through the survey node. So this
+    asserts the edge, not a transcript.
+    """
+    graph = compiled(shipped, [line_count])
+
+    assert {"survey", "answer"} <= set(graph.get_graph().nodes)
+    edges = {(e.source, e.target) for e in graph.get_graph().edges}
+    assert ("__start__", "survey") in edges
+    assert ("survey", "answer") in edges
+    assert not any(source == "__start__" and target == "answer" for source, target in edges)
+
+
+def test_the_compiled_preset_profiles_the_file_it_was_given(shipped, tmp_path):
+    """The survey node itself: it finds the path in the request and runs what it
+    was granted over it.
+
+    "what is in rows.csv?" is the phrasing a person actually types, and the
+    trailing `?` is what the first version of the path heuristic tripped over.
+    """
+    target = tmp_path / "rows.csv"
+    target.write_text("a,b\n1,2\n", encoding="utf-8")
+    graph = compiled(shipped, [line_count])
+
+    survey = graph.get_graph().nodes["survey"].data.func
+    answer = survey({"messages": [HumanMessage(content=f"what is in {target}?")]})
+
+    (message,) = answer["messages"]
+    assert "line_count" in message.content
+    assert "2 line(s)" in message.content
+
+
+def test_the_compiled_preset_says_when_it_found_nothing_to_profile(shipped):
+    """The heuristic fails loudly. A delegate whose profiling step silently did
+    nothing looks identical to one that profiled a dull file, and the whole
+    point of this preset is that the step happened.
+    """
+    graph = compiled(shipped, [line_count])
+
+    survey = graph.get_graph().nodes["survey"].data.func
+    answer = survey({"messages": [HumanMessage(content="what is in the file?")]})
+
+    (message,) = answer["messages"]
+    assert "nothing was profiled" in message.content
+
+
+def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
+    """Measured rather than trusted: this module is imported whenever the
+    subagent catalogue is read, `kingfisher list` included, and
+    `from langchain.agents import create_agent` costs about 370 ms.
+
+    Read as source rather than by timing, because a timing test would pass on a
+    warm interpreter -- every other test here has already imported langchain.
+    """
+    import ast
+
+    source = (shipped / "subagents" / "first_look.py").read_text(encoding="utf-8")
+    module_level = {
+        node.module.split(".")[0]
+        for node in ast.parse(source).body
+        if isinstance(node, ast.ImportFrom) and node.module
+    }
+
+    assert not module_level & {"langchain", "langchain_core", "langgraph", "deepagents"}

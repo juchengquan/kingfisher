@@ -837,6 +837,75 @@ format, so an unrecognised key there is left alone.
 
 ---
 
+### A subagent that builds itself — `/subagents/<module>.py`
+
+A subagent can be a Python module instead of a document. It exports `SUBAGENTS`,
+a list of mappings, and each one hands over a graph it built:
+
+```python
+def _build(model, tools):
+    from langchain.agents import create_agent   # deferred — see below
+    from langgraph.graph import START, MessagesState, StateGraph
+
+    builder = StateGraph(MessagesState)
+    builder.add_node("survey", survey)
+    builder.add_node("answer", create_agent(model, tools))
+    builder.add_edge(START, "survey")
+    builder.add_edge("survey", "answer")
+    return builder.compile()
+
+
+SUBAGENTS = [
+    {
+        "name": "first-look",
+        "description": "Profiles a data file, then answers questions about it.",
+        "tools": ["line_count", "csv_profile::csv_columns"],
+        "build": _build,
+    }
+]
+```
+
+`build` is called with the model this delegate resolved to and the tool objects
+the request actually granted, and must return something runnable. `kingfisher
+seed` ships `first_look.py` as a worked example.
+
+**Reach for this when a definition cannot say what you mean.** The example above
+guarantees an ordering: there is no edge from the start to the model that does
+not pass through the survey node. A prompt can *ask* for that step and a model
+may skip it — occasionally, and most often on the input where skipping costs the
+most. That is a real reason. "The same delegate, in Python" is not: a document
+is reviewable by people who do not read Python, and it gets four fields this
+format has to refuse.
+
+**Five fields are refused, each because it would do nothing.**
+
+| field | why not |
+|---|---|
+| `system_prompt` | the graph brings its own; write the prompt where the graph is built |
+| `builtin_tools` | deepagents' own tools do not exist as objects when a delegate is assembled |
+| `skills` | deepagents mounts skills for a delegate *it* builds, never for a compiled one |
+| `middleware` | middleware wraps a graph deepagents builds; this one is already built |
+| `subagents` | delegation arrives through middleware, which a compiled graph is not given |
+
+`name`, `description`, `build`, `tools`, `model`, `alias`, `distinct` and
+`metadata` are what remain.
+
+**A tool grant is not a limit here.** deepagents runs the graph as given and
+never applies kingfisher's allowlist to it, so `--tools` narrows what `build`
+*receives* and nothing stops the graph calling something it closed over.
+`kingfisher list` marks these `[compiled]` and says so underneath.
+
+**Defer the heavy imports into `build`.** Every `.py` file under `subagents/` is
+imported whenever the catalogue is read — `kingfisher list` included — and
+`from langchain.agents import create_agent` costs about 370 ms. At module scope
+that is paid on every listing, for a delegate the request may never activate.
+
+**A module with no `SUBAGENTS` is an error**, not a skipped file, for the reason
+a tool module without `TOOLS` is: quietly offering fewer delegates than the
+workspace defines is worse than saying so.
+
+---
+
 ### Tools and skills of its own — `/subagents/<name>/`
 
 A subagent can keep tools and skills that belong to it alone. Put them in a
