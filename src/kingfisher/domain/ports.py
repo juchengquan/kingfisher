@@ -39,9 +39,10 @@ from kingfisher.domain.tool import Found
 class AssetRepository(Protocol):
     """Something a deployment's definitions can be read from.
 
-    One member, because one is all three kinds have in common. The capability
-    layer filters skills, subagents and tools by *name* and by nothing else, so
-    `names` is the entire shared vocabulary; what a kind is actually made of --
+    One member, because one is all four kinds have in common. The capability
+    layer filters skills, subagents and tools by *name* and by nothing else --
+    and an agent is *chosen* by name rather than filtered, which wants the same
+    listing -- so `names` is the whole shared vocabulary; what a kind is made of --
     a directory listing, parsed documents, imported Python -- differs so
     completely that a shared `load` would unify the word and none of the
     meaning.

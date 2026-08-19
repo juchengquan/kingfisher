@@ -7,12 +7,13 @@ layout real is `infrastructure.workspace_fs`, and this is what it is told to mak
 The split matters because the tiers are a decision that wants reviewing, and it
 was previously buried among mkdir calls and subprocess invocations.
 
-  shared by all     /skills /subagents        definitions, authored by a person
+  shared by all     /agents /skills           definitions, authored by a person
+                    /subagents /tools
   per-session       sessions/<id>/            /data /derived /memory /runs
   per-turn          sessions/<id>/runs/<turn>/
   harness-owned     .kingfisher/
 
-  authored          /skills, /subagents, /tools, PROMPT.md
+  authored          /agents, /skills, /subagents, /tools, PROMPT.md
   harness-owned     /.kingfisher
   disposable        everything under sessions/
 

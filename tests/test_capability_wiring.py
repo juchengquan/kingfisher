@@ -592,3 +592,46 @@ def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch
     assert found.builtin_tools == ()
     assert found.tools_error is not None
     assert "unknown" in found.tools_error
+
+
+BARE_TOOL = '''
+def shout(text: str) -> str:
+    """Return the text in capitals. Use when asked to shout."""
+    return text.upper()
+
+
+TOOLS = [shout]
+'''
+
+
+def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_dir):
+    """The grant is the security boundary, and it matches on a name.
+
+    `ToolAllowlist` reads `.name` and *keeps* anything it cannot identify --
+    deliberately, since silently dropping an unrecognised tool would be the
+    worse failure of the two. A plain function has `__name__` and no `.name`,
+    so whether a withheld one is really withheld rests on deepagents wrapping
+    it before the allowlist ever sees it.
+
+    It does. That is upstream behaviour rather than something kingfisher
+    guarantees, which is why it is asserted rather than assumed now that a
+    plain function is a documented way to write a tool.
+    """
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shout.py").write_text(BARE_TOOL, encoding="utf-8")
+
+    model = RecordingModel(responses=[AIMessage(content="ok")])
+    graph = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=model,
+        capabilities=Capabilities(tools=None),  # every built-in, none of ours
+    )
+    graph.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 4}
+    )
+
+    assert "read_file" in model.offered, "the built-ins should be untouched"
+    assert "shout" not in model.offered

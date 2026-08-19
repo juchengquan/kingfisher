@@ -183,10 +183,10 @@ class Definitions:
 
 #: The kinds, taken from the type that already has one field per kind.
 #:
-#: It was written out again here, six lines above a `Definitions` whose three
-#: fields have exactly these names, with nothing holding the two together. The
-#: folder made it three: `skills.py`, `subagents.py` and `tools.py` are the same
-#: vocabulary a third time, and the one with no type behind it --
+#: It was written out again here, six lines above a `Definitions` whose fields
+#: have exactly these names, with nothing holding the two together. The folder
+#: made it worse: `agents.py`, `skills.py`, `subagents.py` and `tools.py` are the
+#: same vocabulary again, and the one with no type behind it --
 #: `test_the_catalogue_holds_one_module_per_kind` is what binds those.
 #:
 #: Field order is load-bearing now rather than by coincidence: `seeding` walks
