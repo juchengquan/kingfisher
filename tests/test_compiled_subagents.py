@@ -392,35 +392,52 @@ def test_the_refusal_names_what_was_returned_and_the_class_trap(
     assert "class is callable" in said  # and why it got that far
 
 
-def test_the_check_is_by_shape_not_by_type(cfg):
-    """Duck-typed on purpose, asserted by behaviour rather than by grepping.
+def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
+    """The looseness the first version of this check had, and admitted to.
 
-    `isinstance(runnable, CompiledStateGraph)` would break the day upstream
-    renames that class, taking down every compiled delegate to enforce a
-    spelling -- the same reason `registered_tools` reads a graph by shape. So an
-    object that is merely graph-*shaped* gets through.
-
-    Which makes it a screen, not a protocol check, and that is worth saying:
-    deepagents also calls `with_config`, so this same `Stub` fails later in a
-    real build. What this catches is the mistake somebody actually makes -- a
-    class, which `callable()` accepts -- not every way a return can be wrong.
+    It duck-typed on `invoke`, so an object with that one method got through and
+    failed later inside deepagents, which also calls `with_config`. Measured
+    across the cases that matter -- a compiled graph, this stub, whatever a
+    class constructs to, and `None` -- `Runnable` is what separates the first
+    from the rest.
     """
     from kingfisher.domain.subagent import SubagentSpec
     from kingfisher.infrastructure.harness.delegation import compiled
 
-    class Stub:
+    class OnlyInvoke:
         def invoke(self, *a, **k):
             return {}
 
     spec = SubagentSpec(
-        name="researcher",
-        description="d",
-        build=lambda model, tools: Stub(),
+        name="researcher", description="d", build=lambda model, tools: OnlyInvoke()
+    )
+
+    with pytest.raises(SubagentError, match="not a graph"):
+        compiled(spec, cfg)
+
+
+def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
+    """Against `Runnable`, which is what `CompiledSubAgent` declares -- not
+    against `CompiledStateGraph`, which is an implementation class upstream may
+    rename and which would take every compiled delegate down to enforce a
+    spelling.
+
+    Asserted with a `Runnable` that is emphatically not a graph: it passes
+    because it implements the published interface, which is the whole claim.
+    """
+    from langchain_core.runnables import RunnableLambda
+
+    from kingfisher.domain.subagent import SubagentSpec
+    from kingfisher.infrastructure.harness.delegation import compiled
+
+    not_a_graph = RunnableLambda(lambda state: state)
+    spec = SubagentSpec(
+        name="researcher", description="d", build=lambda model, tools: not_a_graph
     )
 
     delegate = compiled(spec, cfg)
 
-    assert delegate["runnable"].__class__.__name__ == "Stub"
+    assert delegate["runnable"] is not_a_graph
 
 
 PROBE = """from langchain_core.tools import tool
