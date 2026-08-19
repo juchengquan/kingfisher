@@ -1,14 +1,25 @@
 """Where a deployment's definitions are read from.
 
-A package, and the three kinds are the point of it: `skills`, `subagents` and
-`tools` are one module each, so the layer's top level names the concepts rather
-than the mechanisms it used to spell them with -- `skill_store`,
-`subagent_store`, `tool_store`. `documents` reads one definition document,
-`layered` puts a session's own definitions over the deployment's, and
-`importing` loads a module from a path for the two kinds that need one. Nothing
-else in the codebase reaches past this front door: outside these files,
-`documents` and `importing` have no callers at all, `layered` has one, and the
-three repositories are reached for `ToolError`, `SKILL_LAYOUT` and one function.
+A package, and the kinds are the point of it: `agents`, `skills`, `subagents`
+and `tools` are one module each, so the layer's top level names the concepts
+rather than the mechanisms it used to spell them with -- `skill_store`,
+`subagent_store`, `tool_store`. It said "the three kinds" until `agents` became
+one; `test_the_catalogue_holds_one_module_per_kind` binds the modules to
+`DEFINITION_KINDS` and would have refused a missing module, but a count written
+out in prose is not something any rule here reads.
+
+`documents` reads one definition document, `layered` puts a session's own
+definitions over the deployment's, and `importing` loads a module from a path
+for the kinds that need one. Nothing else in the codebase reaches past this
+front door: outside these files, `documents` and `importing` have no callers at
+all, `layered` has one, and the repositories are reached for `ToolError`,
+`SKILL_LAYOUT` and one function.
+
+A subagent may keep tools and skills of its own in a folder named after it, and
+those are read here too -- `bundled_tools` and `bundled_skills`, kept apart from
+`tools` and `registry` on purpose. An agent that omits `tools:` holds every tool
+the shared offering has, so a bundle is the only place a capability can sit that
+the top-level agent cannot reach.
 
 Two things that belong to this subject are deliberately elsewhere.
 `infrastructure.harness.skill_registry` answers which skills deepagents actually

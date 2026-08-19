@@ -1349,7 +1349,17 @@ def test_the_shipped_definitions_live_only_under_assets():
         for path in SRC.rglob(kind)
         if path.is_dir() and "__pycache__" not in path.parts
     }
-    stray = sorted(str(p.relative_to(SRC)) for p in shipped if p.parent != SRC / CONTENT)
+    # A bundle's own `tools/` and `skills/` sit under
+    # `assets/subagents/<name>/`, which is a second legitimate parent and not a
+    # loophole: they are still content under `assets/`, still skipped by every
+    # rule here for that reason, and the subagent store reserves those two names
+    # wherever they appear so nothing else can claim them. What the rule is
+    # about -- a definition escaping `assets/` entirely -- is unchanged.
+    stray = sorted(
+        str(p.relative_to(SRC))
+        for p in shipped
+        if p.parent != SRC / CONTENT and (SRC / CONTENT / "subagents") not in p.parents
+    )
     missing = sorted(k for k in DEFINITION_KINDS if not (SRC / CONTENT / k).is_dir())
 
     # Named per kind, not counted. `assert shipped` passed with two of the three

@@ -830,6 +830,87 @@ format, so an unrecognised key there is left alone.
 
 ---
 
+### Tools and skills of its own — `/subagents/<name>/`
+
+A subagent can keep tools and skills that belong to it alone. Put them in a
+folder named after it:
+
+```
+subagents/
+  redactor/
+    redactor.yaml          name: redactor  — the folder is named after this
+    tools/
+      mask_secrets.py
+    skills/
+      redaction/SKILL.md
+```
+
+That is the whole rule: **a folder is a bundle when it holds a definition whose
+`name` matches the folder.** A folder that names no definition is ordinary
+grouping and stays exactly what it was — `subagents/analysis/profiler.yaml` is
+unchanged by any of this. Both shapes ship, side by side, in the definitions
+`kingfisher seed` writes.
+
+**Why you would.** An agent that omits `tools:` gets *every* tool the catalogue
+holds, so anything in `tools/` is something the top-level agent can call. A
+bundle is the only place a capability can sit that it cannot. It is how a
+delegate comes to be trusted with something its caller is not.
+
+**The delegate holds them whatever the request granted.** Activating `redactor`
+is what grants its parts — a caller never names them, which is the point, since
+naming them would mean knowing they exist. `--without-subagents redactor`
+declines the whole delegate; there is no finer lever, deliberately.
+
+**They come automatically.** `redactor.yaml` above writes no `tools:` and no
+`skills:` line, and still holds both. The file being in the folder is the
+declaration; listing it again in the definition would be a second place to keep
+in step with the first. A `tools:` line still governs which *catalogue* tools it
+also gets.
+
+**A bundle wins a name the catalogue also uses.** If `redactor/tools/` defines a
+`fetch` and so does `tools/`, the delegate gets its own — permanently, whatever
+the catalogue grows later. `kingfisher list` prints that as
+`fetch  [private tool, shadowing the catalogue's]`, because shadowing is only
+acceptable while it is visible.
+
+**One definition per bundle folder.** `redactor/helper.yaml` beside
+`redactor/redactor.yaml` is refused: whether `helper` is inside the bundle has
+no honest answer, and the two answers differ in what `helper` may call.
+
+**`tools` and `skills` are reserved directory names** anywhere under
+`subagents/`, so a skill's own `config.yaml` is never read as a subagent
+definition. A grouping folder cannot be called either of them.
+
+**What a listing shows.** Private assets appear indented under their owner:
+
+```
+subagents
+  redactor  (redactor/redactor.yaml) — Quotes from files that may contain credentials…
+      mask_secrets  [private tool]
+      redaction  [private skill]
+```
+
+**Two limits, stated rather than discovered.**
+
+*A private skill is unadvertised, not unreadable.* Skills are mounted read-only
+under `/skills/`, and anything holding `read_file` can open anything there —
+which is already true of every skill a request did not activate. What a bundle
+buys for a skill is that no other delegate is *told* about it. A private tool is
+stronger: an ungranted tool is never bound into an agent, so it cannot be
+called at all. Do not put in a bundled skill anything you would mind another
+delegate reading.
+
+*A bundled skill's scripts are not runnable.* A skill's scripts are executed by
+the shell against `$KINGFISHER_SKILLS`, and the sandbox grants the shell the
+skills catalogue only. A bundle sits under `subagents/`, so its skills can be
+read and listed but not run. Keep executable skills in the shared catalogue.
+
+**A caller cannot upload one.** Uploads may carry a skill or a subagent, never a
+tool — a bundle holds code that runs in this process, so bundles come from the
+deployment's catalogue and nowhere else.
+
+---
+
 ## Skills — `/skills/<name>/SKILL.md`, or one folder deep
 
 deepagents' format, unchanged. A directory per skill, `SKILL.md` with `name` and

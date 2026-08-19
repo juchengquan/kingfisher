@@ -698,3 +698,50 @@ def test_the_layered_view_answers_with_the_catalogues_bundles_only(tmp_path):
     )
 
     assert set(for_session(catalogue, session).subagents.bundles) == {"surveyor"}
+
+
+# -- the one that ships -----------------------------------------------------
+
+
+def test_the_shipped_bundle_is_a_bundle(tmp_path):
+    """`kingfisher seed` should produce a working example of every shape the
+    formats doc describes, and this is the one a reader copies.
+
+    Asserted against the definitions that ship rather than a fixture, for the
+    reason `test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads`
+    gives: a tree can hold anything, and the seeder uses this one.
+    """
+    from kingfisher.infrastructure import seeding
+
+    with seeding.opened(seeding.ASSETS) as root:
+        repository = LocalSubagentRepository(root / "subagents")
+        bundles = repository.bundles
+
+        assert set(bundles) == {"redactor"}
+        assert bundles["redactor"].tools is not None
+        assert bundles["redactor"].skills is not None
+        # The neighbour that is *not* one, shipped beside it on purpose: a
+        # folder naming no definition is organisation and stays so.
+        assert "profiler" in repository.specs
+        assert repository.orphaned_assets == ()
+
+
+def test_the_shipped_bundles_tool_loads_and_masks(tmp_path):
+    """A shipped asset is judged by whether an agent can run it, not by this
+    package's layering -- so the example is imported and called.
+    """
+    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
+
+    with seeding.opened(seeding.ASSETS) as root:
+        found = LocalToolRepository(root / "subagents" / "redactor" / "tools").found
+
+    (tool,) = found
+    assert tool.name == "mask_secrets"
+
+    target = tmp_path / "config.ini"
+    target.write_text("api_key = sk-live-123\nhost = example.com\n", encoding="utf-8")
+    answer = tool.tool(str(target))
+
+    assert "sk-live-123" not in answer
+    assert "1 masked" in answer
