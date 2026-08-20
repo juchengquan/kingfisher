@@ -77,10 +77,27 @@ class ToolAllowlist(AgentMiddleware):
     An unnamed tool is kept: the allowlist governs kingfisher's named tool
     surface, and silently dropping something it cannot identify would be a
     worse failure than passing it through.
+
+    `subject` names *whose* surface this is, which on a delegate is not the
+    request. A delegate's allowlist is its own definition narrowed by the
+    request, and "this request" on a delegate names the one layer that is
+    usually innocent: `extractor` ships `builtin_tools: [read_file, ls, glob,
+    grep]`, so a run that narrowed nothing still read `execute is not available
+    for this request` -- and the flags on the command line were the first place
+    looked. Same lesson as the `subagent_type` typo below: naming the wrong
+    cause costs more than naming none.
+
+    Who, and deliberately not why. The allowlist is the intersection of two
+    layers by the time it arrives here, and a name can be missing from either
+    or both -- the middleware holds the result, not the two sides, and cannot
+    tell which one dropped it without knowing whether the name is a built-in or
+    a workspace tool, which it also does not know. So it names the wall rather
+    than guessing at who built it, and that sentence is true in both cases.
     """
 
-    def __init__(self, allowed: tuple[str, ...]) -> None:
+    def __init__(self, allowed: tuple[str, ...], *, subject: str = "this request") -> None:
         self._allowed = set(allowed)
+        self._subject = subject
         super().__init__()
 
     def _filter(self, request: Any) -> Any:
@@ -114,7 +131,7 @@ class ToolAllowlist(AgentMiddleware):
             return None
         return ToolMessage(
             content=(
-                f"Error: {name} is not available for this request. "
+                f"Error: {name} is not available for {self._subject}. "
                 f"Available tools: {', '.join(sorted(self._allowed))}."
             ),
             tool_call_id=call.get("id", ""),

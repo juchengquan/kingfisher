@@ -124,7 +124,62 @@ def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
     transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
 
     assert "escaped" not in transcript, "the delegate ran a command its caller could not"
-    assert "not available for this request" in transcript
+    # Named for the delegate, not for the request, even though the request is
+    # what withheld it here. A delegate's allowlist is two layers intersected
+    # and the refusal cannot tell them apart, so it says whose surface the tool
+    # is missing from rather than guessing at which layer removed it. Blaming
+    # the request is right in this test and was wrong in the one that prompted
+    # the change -- see `ToolAllowlist`.
+    assert "not available for the 'helper' subagent" in transcript
+
+
+READ_ONLY = """name: reader
+description: Declares its own tools, so it holds less than its caller.
+builtin_tools: [read_file, ls]
+tools: []
+system_prompt: |
+  You read.
+
+"""
+
+
+def test_a_delegate_that_withheld_a_tool_itself_is_the_one_named(cfg, session_dir):
+    """The other direction, and the one that reads wrong: the request granted
+    everything and the delegate's own definition is what is missing the tool.
+
+    `extractor` ships `builtin_tools: [read_file, ls, glob, grep]`. An
+    unrestricted run reached it, asked for `execute`, and was told `execute is
+    not available for this request` -- which sent the reader to the command
+    line, where nothing was narrowed and nothing was wrong. It asked a second
+    time before giving up on the shell.
+    """
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[{"name": "execute", "args": {"command": "echo escaped"}, "id": "c1"}],
+        ),
+        AIMessage(content="done"),
+    ]
+
+    graph = build_agent(
+        _with_helper(cfg, READ_ONLY, "reader.yaml"),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses),
+        capabilities=Capabilities(subagents=("reader",)),
+    )
+
+    delegate = _subagent_graphs(graph).get("reader")
+    assert delegate is not None, "the declared subagent was not compiled"
+
+    out = delegate.invoke(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={"recursion_limit": 6},
+    )
+    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+
+    assert "escaped" not in transcript, "the delegate ran what its definition withheld"
+    assert "not available for the 'reader' subagent" in transcript
+    assert "this request" not in transcript, "the request granted execute -- it is not the wall"
 
 
 def test_the_builtin_delegate_arrives_with_the_ceiling_on(cfg, session_dir):
