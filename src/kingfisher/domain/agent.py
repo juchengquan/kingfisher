@@ -266,7 +266,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         # the run of the place".
         subagents=read.selection(document.get("subagents"), absent=None, key="subagents"),
         middleware=read.selection(document.get("middleware"), absent=None, key="middleware"),
-        wanted=wanted_model(document),
+        wanted=wanted_model(document, read),
         # Absent is `None` rather than `False`, which `flag` alone cannot say:
         # a switch has three states here, and "no opinion" is not "no".
         memory=(
