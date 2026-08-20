@@ -120,6 +120,41 @@ dev = [
     "ty>=0.0.72",
 ]
 
+# Not this library's dependencies -- the *agent's*. Nothing under `src/` imports
+# any of them, and the wheel does not carry them.
+#
+# They are here because of where the shell's `python3` comes from. `shell_env`
+# puts `dirname(sys.executable)` first on the agent's PATH, so the interpreter
+# the agent reaches is this venv's, and it is the only one it can reach: the
+# venv is deliberately unwritable, so `pip install` is refused, and a second
+# environment named in `KINGFISHER_SHELL_PATH_EXTRA` is shadowed by this one.
+# So a library the agent needs is a library this project installs.
+#
+# What made that concrete: the `pdf` skill prescribes pypdf and pdfplumber, and
+# on a run against two annual reports the agent spent ten commands looking for
+# an interpreter that had them -- pip, uv, `find / -name python3.14` -- before
+# settling on a Homebrew Cellar path where its own `--break-system-packages`
+# install had landed. The skill said what to use and the environment did not
+# have it.
+#
+# The CLI half of that skill is not pip-installable and is not here: `pdftotext`
+# and `qpdf` come from Homebrew, and reaching them is what
+# `KINGFISHER_SHELL_PATH_EXTRA=/opt/homebrew/bin` is for. Nor are the `docx` and
+# `pptx` skills' libraries, which no run has needed yet -- this list follows
+# what a workspace's skills actually prescribe, and grows when one does.
+agent = [
+    "pypdf>=6.0",
+    "pdfplumber>=0.11",
+]
+
+[tool.uv]
+# `agent` alongside `dev`, so `uv run` installs it without a flag. The point is
+# that the toolchain is there for the driver and for anything else that starts a
+# run; a group you have to remember to ask for is a group the agent finds
+# missing.
+default-groups = ["dev", "agent"]
+
+
 [tool.ruff]
 line-length = 100
 target-version = "py312"
