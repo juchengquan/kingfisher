@@ -22,6 +22,7 @@ caller of either.
 from __future__ import annotations
 
 import logging
+from contextlib import suppress
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -440,6 +441,55 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
         max_snapshot_bytes=1,
         timeout=float(cfg.execution_timeout_s),
     )
+
+
+def release_interpreter(cfg: Config, graph: Any) -> None:
+    """Close the QuickJS runtime a turn started, before anything else can.
+
+    The interpreter's own teardown is `after_agent`, and langgraph does not run
+    `after_agent` when the graph raises. So a turn that ended by exception left
+    the runtime open, and `CodeInterpreterMiddleware.__del__` was then the only
+    thing that would ever close it -- which it attempts, and which is exactly
+    the wrong moment.
+
+    What that costs is not a leaked handle. `quickjs_rs` pins its Runtime and
+    Context to one worker thread because they are `!Send`, and closing them
+    means a `gc.collect()` *on that thread*; its own docstring says a later
+    sweep from anywhere else "would hit the `!Send` drop check". At interpreter
+    shutdown that sweep is `Py_FinalizeEx`, on the main thread, and the
+    finalizer does not panic -- it deadlocks. Measured on a real run: the turn
+    hit `recursion_limit`, printed its traceback, and the process then sat
+    there for as long as it was left. An unattended run does not fail, it
+    stops. That is worse than the exception it followed.
+
+    So the close moves to where the turn ends, beside the session slot and the
+    checkpointer connection, and runs however the turn ended.
+
+    Found by walking the compiled graph rather than being handed down, because
+    a middleware is not on `build_agent`'s way out and threading one through
+    every caller to reach a teardown would put the plumbing in nine signatures.
+    Each hook a middleware declares becomes a node whose callable is bound to
+    it, which is a shape the same as the one `registered_tools` reads and just
+    as unpublished -- so this is best-effort the same way, and
+    `test_a_real_build_is_releasable` is what notices a rename upstream.
+
+    `_registry` is private and there is no public equivalent: the class exposes
+    `before_agent`/`after_agent` and nothing to call from outside a graph run.
+    `after_agent` is not usable here even so -- it resolves its `thread_id` from
+    langgraph's context, which is gone by the time a turn is being torn down,
+    so it would evict a slot that never existed and leave the real one open.
+    """
+    if not cfg.interpreter_enabled:
+        return
+    from langchain_quickjs import CodeInterpreterMiddleware  # noqa: PLC0415
+
+    for node in getattr(getattr(graph, "nodes", None), "values", tuple)():
+        owner = getattr(getattr(getattr(node, "bound", None), "func", None), "__self__", None)
+        if isinstance(owner, CodeInterpreterMiddleware):
+            with suppress(Exception):
+                # Private, and the only handle there is -- see the docstring.
+                owner._registry.close()
+            return
 
 
 def _denied_path(read_at: str) -> str:
