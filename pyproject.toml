@@ -83,9 +83,9 @@ service = ["kingfisher-service"]
 # Seeding a workspace and looking at one, which are the two things the
 # library cannot do for itself: running a task is `kingfisher.run`, and
 # serving one is the script above. Deliberately not a general CLI --
-# `main.py` stays the development driver, keeps its flags, and keeps a bare
-# invocation that runs the eval smoke, which is a fine default for a driver
-# and a wrong one for a stranger's first command.
+# `tests/integration/driver.py` stays the development driver, keeps its
+# flags, and keeps a bare invocation that runs the eval smoke, which is a
+# fine default for a driver and a wrong one for a stranger's first command.
 kingfisher = "kingfisher.presentation.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
@@ -161,7 +161,12 @@ ignore = ["ANN401"]
 [tool.ruff.lint.per-file-ignores]
 # A driver whose whole job is printing, with the branchiness that implies --
 # and one exit code per way a run can end, which is the clearer shape here.
-"main.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
+#
+# Listed before `tests/**` below and therefore overridden by it, which is fine:
+# the test ignores are a superset of these four. It stays spelled out because
+# the reasons differ -- a test may print because it is a test, and this prints
+# because printing is its output.
+"tests/integration/driver.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
 # The shipped command, for the first of those reasons only: it prints what the
 # library returned and decides nothing, so it is short and flat. `T201` is the
 # whole exemption -- if this ever needs the other three it has stopped being a
@@ -186,7 +191,7 @@ ignore = ["ANN401"]
 # Not a test: a report you run by hand, so printing is its entire output. It
 # lives beside the tests because the AST tooling does -- `test_architecture`
 # reads the same trees -- and pytest does not collect it.
-"tests/audit_duplication.py" = ["T201"]
+"tests/unit/audit_duplication.py" = ["T201"]
 # Throwaway probes, kept as a record of what was verified against the live
 # gateway rather than as maintained code.
 "spikes/**" = ["T201", "ANN", "PLC0415"]
@@ -195,13 +200,20 @@ ignore = ["ANN401"]
 known-first-party = ["kingfisher"]
 
 [tool.pytest.ini_options]
-# Both distributions in this workspace. The pack's tests are about its content
-# and kingfisher's are about the framework, but one command has to run both or a
+# Both distributions in this workspace, and both shelves of this one: `tests`
+# covers `tests/unit` and `tests/integration` without naming either, so adding a
+# third shelf needs no change here. The service's tests are about its surface and
+# kingfisher's are about the framework, but one command has to run both or a
 # preset breaks with nothing red.
+#
+# `tests/integration/driver.py` is *in* this tree and is not collected: pytest
+# takes `test_*.py`, and a module whose job is to call a real model must never
+# be run by a bare `pytest`. Asserted rather than assumed --
+# `test_the_driver_is_not_collected`.
 testpaths = ["tests", "service/tests"]
-# The repository root, so `main.py` is importable, and the library's own
-# test directory, so the other two packages can reach the fixtures that
-# describe a workspace -- `packages/service/tests/conftest.py` says why.
+# The repository root, so `tests.integration.driver` and `evals` are importable,
+# and the library's own test directory, so the other package can reach the
+# fixtures that describe a workspace -- `service/tests/conftest.py` says why.
 pythonpath = ["."]
 
 [tool.ty.environment]
@@ -216,7 +228,7 @@ python = ".venv"
 # agent imports. Under `src/` it was checked by accident; at the root it would
 # fall out of this list silently, which is the kind of check that stops running
 # without ever going red.
-include = ["src", "tests", "examples", "main.py", "spikes"]
+include = ["src", "tests", "examples", "spikes"]
 
 [tool.ty.terminal]
 output-format = "concise"

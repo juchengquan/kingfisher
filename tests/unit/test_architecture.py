@@ -315,8 +315,10 @@ def _everything_that_imports_kingfisher() -> list[Path]:
         for p in (REPO / area).rglob("*.py")
         if "__pycache__" not in p.parts
     ]
-    if (REPO / "main.py").exists():
-        found.append(REPO / "main.py")
+    # No special case for the driver any more: it is `tests/integration/driver.py`
+    # and arrives with `tests`. It needed one while it sat at the root, and the
+    # rule this feeds exists *because* a stale import in a tree nobody walked went
+    # unnoticed -- so an area dropping out here has form.
     return sorted(found)
 
 
@@ -409,7 +411,7 @@ PROSE_GONE: dict[str, frozenset[str]] = {
     # The file that owns the rules is the one place a gone module is named on
     # purpose -- in the docstring of the rule that renaming broke, and in the
     # negatives below, which are asserted gone rather than merely absent.
-    "tests/test_architecture.py": frozenset({
+    "tests/unit/test_architecture.py": frozenset({
         "infrastructure.agent",
         "infrastructure.backend",
         "infrastructure.backend.prepare_scratch",
@@ -502,6 +504,56 @@ def test_prose_naming_a_module_names_one_that_exists():
         f"{stale} name kingfisher modules that do not exist — something moved "
         "and the comment about it did not"
     )
+
+
+def test_the_driver_is_not_collected():
+    """The one module here that spends money must never be run by `pytest`.
+
+    It lives under `tests/` and is reached by `testpaths`, so nothing keeps it
+    out except its name: pytest collects `test_*.py` and `*_test.py`, and
+    `driver.py` is deliberately neither. Rename it to `test_driver.py` and a
+    bare `pytest` starts making real model calls against whatever key the
+    machine holds.
+
+    Checked by the naming rule rather than by running a collector, because that
+    *is* the rule -- a collector would only agree with it, and slowly.
+
+    The whole directory, not just the one file. What is dangerous here is the
+    shelf, and a second live driver added beside this one would arrive with the
+    same hazard and no test looking for it.
+    """
+    live = sorted(
+        path.name
+        for path in (REPO / "tests" / "integration").rglob("*.py")
+        if path.name.startswith("test_") or path.name.endswith("_test.py")
+    )
+
+    assert not live, (
+        f"{live} under tests/integration/ will be collected by a bare `pytest` — "
+        "everything on this shelf reaches a real model and spends real money"
+    )
+
+
+def test_the_two_shelves_hold_what_they_say():
+    """`tests/` itself holds the shared fixtures and nothing else.
+
+    The split is by what a test *costs to run*, not by what it is about: 1,669
+    offline tests finishing in eleven seconds on one shelf, and on the other the
+    single thing that reaches a live model. A test file left at the top level
+    belongs to neither and says nothing about which it is -- which is the state
+    this rule exists to keep the tree out of.
+
+    `conftest` stays at the top because both shelves use it, and pytest only
+    shares a conftest downward.
+    """
+    loose = sorted(p.name for p in (REPO / "tests").glob("*.py") if p.name != "conftest.py")
+
+    assert not loose, (
+        f"{loose} sit between the two shelves — a test belongs under unit/ if it "
+        "is offline and fast, or integration/ if it costs money to run"
+    )
+    assert (REPO / "tests" / "unit").is_dir()
+    assert (REPO / "tests" / "integration").is_dir()
 
 
 def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
@@ -1288,7 +1340,7 @@ def test_only_one_module_decides_what_a_skill_is():
 
     searched = [
         *SRC.rglob("*.py"),
-        repo / "main.py",
+        repo / "tests" / "integration" / "driver.py",
         *(repo / "evals").glob("*.py"),
     ]
     offenders = [
@@ -1791,7 +1843,19 @@ def test_the_branch_reader_reads_branches():
 
 #: Where a caller may live. Tests deliberately do not count -- a test is what
 #: kept every instance of this alive.
-PRODUCTION = ("src/kingfisher", "main.py", "evals")
+#:
+#: `tests/integration/driver.py` is in this list while living under `tests/`,
+#: which reads like a contradiction and is not. The rule is about *calls*: the
+#: driver calls `seed` in order to seed a workspace, where a test constructs a
+#: call in order to observe one. That difference is the whole subject here, and
+#: it does not depend on which directory the caller sits in.
+#:
+#: Named rather than derived, because getting this wrong is silent in the
+#: direction that matters. It was `main.py` at the repository root; when the
+#: library moved under `packages/` and this walk lost it, three live helpers were
+#: reported as defined for tests alone. Moving the driver into `tests/` did it
+#: again, to the same three.
+PRODUCTION = ("src/kingfisher", "tests/integration/driver.py", "evals")
 
 #: Names dispatched by something other than a call in this repository. Each is a
 #: framework contract rather than a convenience nobody got round to using, and
@@ -1806,9 +1870,9 @@ DISPATCHED_ELSEWHERE = frozenset({
 
 
 def _production_files() -> list[Path]:
-    # The repository, not this package -- `main.py` and `evals/` live beside
-    # `src/`. Named rather than recomputed, so that when the library last moved
-    # this was one line to change instead of a silent walk over the wrong tree.
+    # The repository, not this package -- the driver and `evals/` live outside
+    # `src/`. Named rather than recomputed, so that when the tree last moved this
+    # was one line to change instead of a silent walk over the wrong one.
     root = REPO
     files: list[Path] = []
     for name in PRODUCTION:
@@ -1926,7 +1990,7 @@ def test_nothing_is_defined_for_tests_alone():
 #: the rule already exempts, and reaching for this table instead would be the way
 #: to publish something without saying so.
 READ_ELSEWHERE = frozenset({
-    # The SSE event names. Nothing in `src/`, `main.py`, `evals/` or
+    # The SSE event names. Nothing in `src/`, the driver, `evals/` or
     # `service/src/` reads it -- `payloads.frame` puts `event.kind` on the wire
     # straight from the event and only *mentions* `KINDS` in prose -- so its
     # readers are the clients subscribing to those event names, and they are not
@@ -2182,7 +2246,7 @@ def test_only_the_confinement_module_calls_resolve_directly():
     assemblies of one fact is how they come to disagree, and disagreeing here
     means warning about a confinement other than the one in force.
 
-    Nothing caught that: replacing the helper call in `main.py` with a
+    Nothing caught that: replacing the helper call in the driver with a
     hand-assembled `resolve` left the whole suite green, which is the shape of a
     rule that exists only in a docstring.
     """

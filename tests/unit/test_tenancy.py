@@ -18,7 +18,7 @@ from kingfisher.domain.session import (
     still_held,
 )
 from tests.conftest import StubCheckpointer
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 def service(cfg, **kwargs):

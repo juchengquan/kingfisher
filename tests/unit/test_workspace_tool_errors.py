@@ -290,7 +290,7 @@ def _delegate_with_a_failing_tool(cfg, session_dir):
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-    from tests.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")
@@ -366,7 +366,7 @@ def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-    from tests.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "always_fails.py").write_text(ALWAYS_FAILS, encoding="utf-8")

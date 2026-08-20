@@ -52,7 +52,7 @@ jobs:
       # bar as the library: it is code that ships, and a tool nobody lints is a
       # tool whose example teaches whatever slipped through.
       - name: ruff
-        run: uv run ruff check src/ main.py tests/ service/ examples/
+        run: uv run ruff check src/ tests/ service/ examples/
 
       - name: ty
         run: uv run ty check
@@ -62,7 +62,7 @@ jobs:
 
   # A second job, and the only thing that proves the claim the split is for.
   # The job above installs every extra, so it cannot tell whether the library
-  # needs the service -- it always has it. `tests/test_the_base_stands_alone.py`
+  # needs the service -- it always has it. `tests/unit/test_the_base_stands_alone.py`
   # reads the source and catches the ordinary mistake; this runs the install,
   # which is the only way to notice a package that arrived through somebody
   # else's dependencies.

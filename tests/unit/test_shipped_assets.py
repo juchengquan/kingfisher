@@ -27,7 +27,7 @@ from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, repository_root
 
 
 def test_every_preset_subagent_parses(shipped):
@@ -196,11 +196,10 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(
     nothing deeper catches the reach coming back.
     """
     import re
-    from pathlib import Path
 
     import kingfisher
 
-    readme = (Path(__file__).resolve().parent.parent / "README.md").read_text(encoding="utf-8")
+    readme = (repository_root() / "README.md").read_text(encoding="utf-8")
     blocks = re.findall(r"```python\n(.*?)```", readme, re.DOTALL)
     assert blocks, "the README stopped carrying a Python example"
 

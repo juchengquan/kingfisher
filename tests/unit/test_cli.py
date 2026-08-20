@@ -1,7 +1,7 @@
 """`kingfisher seed` and `kingfisher list`, and the rule they are held to.
 
 The command exists because a pip-installed kingfisher had the definitions and no
-way to put them anywhere: both operations lived behind flags in `main.py`, which
+way to put them anywhere: both operations lived behind flags in `the driver`, which
 is a development driver and is not in the wheel.
 
 Held to the front door, like `kingfisher_service`. `test_architecture`
@@ -21,7 +21,7 @@ from tests.conftest import subagents_dir
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
     """The safe default a shipped command needs.
 
-    `main.py` with no arguments runs the eval smoke -- a real model call against
+    `the driver` with no arguments runs the eval smoke -- a real model call against
     whatever key the deployment holds. Right for a driver you type daily, and
     the wrong first contact for someone who just installed this. Nothing is read
     and nothing is written: help does not need a workspace.
@@ -120,7 +120,7 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
     printed = capsys.readouterr().err
     assert "configuration error" in printed
     # Where the answer would have come from. It said `.env` is never read, which
-    # was true and was the reason this failed where `main.py` worked; now the
+    # was true and was the reason this failed where `the driver` worked; now the
     # useful thing is *which* file was read, since a caller one directory from
     # theirs is told about a variable that is set, just not here.
     assert "the environment and" in printed
@@ -161,9 +161,9 @@ def test_both_drivers_render_through_the_same_code(cfg, capsys):
     So the fixture has one now. A comparison is only worth the cases it covers,
     and the case it did not cover is the one that broke.
     """
-    import main as driver
     from kingfisher import inventory
     from kingfisher.presentation.cli.listing import render
+    from tests.integration import driver
 
     _seed_something(cfg)
 
@@ -594,7 +594,7 @@ def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped)
     """The failure this was written for.
 
     A checkout keeps its keys in `.env`, and reading the environment alone left
-    `kingfisher list` failing on a deployment where `main.py --list` worked --
+    `kingfisher list` failing on a deployment where `tests/integration/driver.py --list` worked --
     with the key three lines away in a file.
     """
     monkeypatch.chdir(tmp_path)

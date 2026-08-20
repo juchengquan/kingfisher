@@ -1,6 +1,6 @@
 """The driver's rendering, which had no tests at all.
 
-Nothing imported main.py, so the one file whose entire job is what the user
+Nothing imported tests/integration/driver.py, so the one file whose entire job is what the user
 sees was the one file nobody checked. Every way this fails is silent and
 textual -- a line jammed onto the end of a sentence, an unbounded argument, a
 tool result leaking through as prose -- which is exactly what "run it and
@@ -14,7 +14,6 @@ from pathlib import Path
 
 import pytest
 
-import main
 from kingfisher.config import ConfigError
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import CapabilityError
@@ -24,6 +23,7 @@ from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness import agent as main_agent_module
 from tests.conftest import subagents_dir, tools_dir
+from tests.integration import driver as main
 
 
 def _render(events: list[RunEvent]) -> tuple[str, RunResult | None]:
@@ -288,7 +288,7 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys,
     )
     driver = _driver_on(monkeypatch, relocated)
 
-    assert driver.main(["main.py", "--seed", "--list"]) == 0
+    assert driver.main(["driver.py", "--seed", "--list"]) == 0
 
     assert LocalSkillRepository(relocated.skills_dir).names  # the catalogue was filled
     assert not LocalSkillRepository(relocated.workspace / "skills").names  # and not the workspace
@@ -306,7 +306,7 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, mo
 
     # `--list` so it returns after seeding; without it the driver falls
     # through to running the task, which wants a model.
-    assert driver.main(["main.py", "--seed", "--list"]) == 0
+    assert driver.main(["driver.py", "--seed", "--list"]) == 0
     assert LocalSkillRepository(cfg.skills_dir).names
 
 
@@ -325,7 +325,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
     relocated = replace(cfg, tools_root=catalogue / "tools")
     driver = _driver_on(monkeypatch, relocated)
 
-    assert driver.main(["main.py", "--seed", "--list"]) == 0
+    assert driver.main(["driver.py", "--seed", "--list"]) == 0
 
     assert "http_fetch" in LocalToolRepository(tools_dir(relocated)).names
     # `ensure_layout` still makes the workspace directory, so the place to put
@@ -362,8 +362,8 @@ def _driver_on(monkeypatch, target, source=None):
     """
     from dataclasses import replace
 
-    import main as driver
     from tests.conftest import repository_root
+    from tests.integration import driver
 
     configured = replace(target, assets=source or repository_root() / "examples")
     monkeypatch.setattr(driver, "from_env", lambda: configured)
@@ -378,7 +378,7 @@ def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
 
-    assert driver.main(["main.py", "--list"]) == 0
+    assert driver.main(["driver.py", "--list"]) == 0
 
     assert LocalSkillRepository(fresh.skills_dir).names
 
@@ -391,7 +391,7 @@ def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
 
-    driver.main(["main.py", "--list"])
+    driver.main(["driver.py", "--list"])
 
     printed = capsys.readouterr().out
     assert "created a new workspace" in printed
@@ -416,12 +416,12 @@ def test_a_workspace_that_already_exists_does_not_reseed(cfg, tmp_path, capsys, 
     """
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
-    driver.main(["main.py", "--list"])  # the first run, which seeds
+    driver.main(["driver.py", "--list"])  # the first run, which seeds
     edited = fresh.skills_dir / "code-review" / skill.FILENAME
     edited.write_text("---\nname: code-review\ndescription: mine\n---\nmine\n", encoding="utf-8")
     capsys.readouterr()
 
-    driver.main(["main.py", "--list"])
+    driver.main(["driver.py", "--list"])
 
     assert "seeded" not in capsys.readouterr().out
     assert edited.read_text(encoding="utf-8").endswith("mine\n")
@@ -441,15 +441,15 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
     ordering under test is what `paths_from_env` makes possible -- patching it
     away would leave nothing to assert.
     """
-    import main as driver
     from tests.conftest import repository_root
+    from tests.integration import driver
 
     workspace = tmp_path / "brand-new"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(repository_root() / "examples"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
-    assert driver.main(["main.py", "--list"]) == 2  # no catalogue, as expected
+    assert driver.main(["driver.py", "--list"]) == 2  # no catalogue, as expected
 
     assert LocalSkillRepository(workspace / "skills").names
     assert (workspace / workspace_fs.EXAMPLE).is_file()
@@ -477,7 +477,7 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
     assert "`kingfisher seed` writes" in str(without.value)
     assert "is next to it" in str(with_example.value)
     assert "`kingfisher seed` writes" not in str(with_example.value)
-    # The command, not the flag. `--seed-assets` is on `main.py`, which is not
+    # The command, not the flag. `--seed-assets` is on `the driver`, which is not
     # in the wheel, so it names nothing a pip-installed reader has.
     assert "--seed" not in str(without.value)
 
@@ -501,7 +501,7 @@ def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkey
     real_seed = driver.seeding.seed
     monkeypatch.setattr(driver.seeding, "seed", lambda cfg, source=None: real_seed(cfg, empty))
 
-    driver.main(["main.py", "--list"])
+    driver.main(["driver.py", "--list"])
 
     printed = capsys.readouterr().out
     assert f"seeded {workspace_fs.EXAMPLE}" not in printed
@@ -530,7 +530,7 @@ def test_no_flags_leaves_every_kind_unrestricted(cfg):
     handing it a `None` per kind is a request for an agent with no tools and
     no skills at all.
 
-    Which is what `main.py "task"` was quietly sending. Measured against a real
+    Which is what `tests/integration/driver.py "task"` was quietly sending. Measured against a real
     run: every workspace tool and every skill came back as withheld on a
     command line carrying no capability flags, while this file's own docstring
     promised that omitting a flag means everything the workspace offers.
@@ -671,7 +671,7 @@ def _intercepted(monkeypatch) -> list:
     first cached -- which here meant a second test appending to the first
     test's list and finding its own empty.
     """
-    import main as driver
+    from tests.integration import driver
 
     seen: list = []
 
@@ -691,7 +691,7 @@ def test_the_agent_named_on_the_command_line_reaches_the_request(cfg, monkeypatc
     driver = _driver_on(monkeypatch, cfg)
     seen = _intercepted(monkeypatch)
 
-    driver.main(["main.py", "say ok", "--agent", "assistant", "--no-checks"])
+    driver.main(["driver.py", "say ok", "--agent", "assistant", "--no-checks"])
 
     assert seen and seen[0].agent == "assistant"
 
@@ -707,7 +707,7 @@ def test_a_run_without_an_agent_is_refused_rather_than_defaulted(cfg, monkeypatc
     driver = _driver_on(monkeypatch, cfg)
     seen = _intercepted(monkeypatch)
 
-    driver.main(["main.py", "say ok", "--no-checks"])
+    driver.main(["driver.py", "say ok", "--no-checks"])
 
     assert seen and seen[0].agent is None  # carried as absent, refused downstream
 
@@ -715,7 +715,7 @@ def test_a_run_without_an_agent_is_refused_rather_than_defaulted(cfg, monkeypatc
 def test_the_flag_is_offered_in_help(capsys):
     """It is the one argument a task cannot omit, so it has to be findable
     without reading the source."""
-    import main as driver
+    from tests.integration import driver
 
     parser = driver.build_parser()
     flags = {action.dest for action in parser._actions}

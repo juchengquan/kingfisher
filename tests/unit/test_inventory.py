@@ -85,11 +85,11 @@ def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):
 def test_the_driver_and_the_record_agree_about_what_is_offered(cfg, capsys):
     """The two callers, against each other rather than against a literal.
 
-    `main.py` prints one and subtracts from the other. Asserting both against
+    `the driver` prints one and subtracts from the other. Asserting both against
     the same record is what says the split into printer and computation did not
     quietly change either.
     """
-    import main as driver
+    from tests.integration import driver
 
     _populate(cfg)
 

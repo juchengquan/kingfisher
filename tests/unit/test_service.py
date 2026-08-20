@@ -14,7 +14,7 @@ from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
 from tests.conftest import StubCheckpointer, an_agent, start, subagents_dir
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 class CountingCheckpointer(StubCheckpointer):

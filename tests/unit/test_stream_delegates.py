@@ -23,7 +23,7 @@ from kingfisher.application.run import Request, stream
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.backend import build_backend
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, start
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 class StreamingFake(GenericFakeChatModel):

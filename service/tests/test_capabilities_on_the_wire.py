@@ -23,7 +23,7 @@ from kingfisher_service.turns import TurnBody, turn_for
 
 from kingfisher import Capabilities, Kingfisher
 from tests.conftest import StubCheckpointer
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 AXES = [field.name for field in dataclasses.fields(Capabilities)]
 WIDE = [name for name in AXES if getattr(Capabilities(), name) == "*"]

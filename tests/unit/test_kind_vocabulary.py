@@ -15,11 +15,11 @@ from __future__ import annotations
 
 from dataclasses import fields
 
-import main as driver
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.subagents import ASSET_DIRECTORIES
 from kingfisher.infrastructure.uploads import Brought
+from tests.integration import driver
 
 #: The vocabulary, derived here rather than imported. It was a constant on
 #: `domain.capabilities`, and nothing in the package ever read it -- only

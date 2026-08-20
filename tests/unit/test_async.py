@@ -16,7 +16,7 @@ import pytest
 from kingfisher import Kingfisher
 from kingfisher.domain.request import Request
 from tests.conftest import StubCheckpointer
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 class AsyncStubAgent(StubAgent):
@@ -176,7 +176,7 @@ def test_the_turn_bound_holds_on_the_async_path_too(cfg):
     """
     from dataclasses import replace
 
-    from tests.test_quotas import SlowAgent
+    from tests.unit.test_quotas import SlowAgent
 
     class SlowAsyncAgent(SlowAgent):
         async def astream(self, state, config, stream_mode=None, subgraphs=False):

@@ -27,7 +27,7 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.uploads import UploadError, materialise_skills
 from tests.conftest import FakeToolCallingModel
-from tests.test_uploads import FakeStore
+from tests.unit.test_uploads import FakeStore
 
 GOOD = b"---\nname: mine\ndescription: A skill this request brought along.\n---\nBody.\n"
 NODESC = b"---\nname: nodesc\n---\nBody.\n"
