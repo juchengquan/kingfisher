@@ -25,7 +25,7 @@ from kingfisher import (
 from kingfisher.domain.references import within
 from kingfisher.infrastructure.files import MissingStoreError, fetch_refs
 from tests.conftest import StubCheckpointer
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 @pytest.fixture

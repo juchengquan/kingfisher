@@ -45,7 +45,9 @@ import hashlib
 import pathlib
 import sys
 
-SRC = pathlib.Path(__file__).resolve().parent.parent / "src" / "kingfisher"
+from tests.conftest import repository_root
+
+SRC = repository_root() / "src" / "kingfisher"
 
 #: Short enough that a rule transcribed as a couple of lines is still visible.
 MIN_STATEMENTS = 2

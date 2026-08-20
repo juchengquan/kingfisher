@@ -249,7 +249,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir
-    from tests.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "writer.yaml").write_text(

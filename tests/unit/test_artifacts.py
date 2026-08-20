@@ -5,7 +5,7 @@ from __future__ import annotations
 from kingfisher.application.run import Request, run
 from kingfisher.infrastructure.workspace_fs import collect_artifacts
 from tests.conftest import StubCheckpointer, start
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 def test_what_the_turn_left_in_derived_comes_back(cfg):

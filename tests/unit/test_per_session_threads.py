@@ -25,8 +25,8 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.checkpointing import session_db_path
 from kingfisher.infrastructure.workspace_fs import session_bytes
 from tests.conftest import StubCheckpointer
-from tests.test_async import AsyncStubAgent
-from tests.test_run import StubAgent
+from tests.unit.test_async import AsyncStubAgent
+from tests.unit.test_run import StubAgent
 
 
 def _session_dir(cfg: Config, session_id: str):

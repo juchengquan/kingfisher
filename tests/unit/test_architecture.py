@@ -411,7 +411,7 @@ PROSE_GONE: dict[str, frozenset[str]] = {
     # The file that owns the rules is the one place a gone module is named on
     # purpose -- in the docstring of the rule that renaming broke, and in the
     # negatives below, which are asserted gone rather than merely absent.
-    "tests/test_architecture.py": frozenset({
+    "tests/unit/test_architecture.py": frozenset({
         "infrastructure.agent",
         "infrastructure.backend",
         "infrastructure.backend.prepare_scratch",
@@ -504,6 +504,56 @@ def test_prose_naming_a_module_names_one_that_exists():
         f"{stale} name kingfisher modules that do not exist — something moved "
         "and the comment about it did not"
     )
+
+
+def test_the_driver_is_not_collected():
+    """The one module here that spends money must never be run by `pytest`.
+
+    It lives under `tests/` and is reached by `testpaths`, so nothing keeps it
+    out except its name: pytest collects `test_*.py` and `*_test.py`, and
+    `driver.py` is deliberately neither. Rename it to `test_driver.py` and a
+    bare `pytest` starts making real model calls against whatever key the
+    machine holds.
+
+    Checked by the naming rule rather than by running a collector, because that
+    *is* the rule -- a collector would only agree with it, and slowly.
+
+    The whole directory, not just the one file. What is dangerous here is the
+    shelf, and a second live driver added beside this one would arrive with the
+    same hazard and no test looking for it.
+    """
+    live = sorted(
+        path.name
+        for path in (REPO / "tests" / "integration").rglob("*.py")
+        if path.name.startswith("test_") or path.name.endswith("_test.py")
+    )
+
+    assert not live, (
+        f"{live} under tests/integration/ will be collected by a bare `pytest` — "
+        "everything on this shelf reaches a real model and spends real money"
+    )
+
+
+def test_the_two_shelves_hold_what_they_say():
+    """`tests/` itself holds the shared fixtures and nothing else.
+
+    The split is by what a test *costs to run*, not by what it is about: 1,669
+    offline tests finishing in eleven seconds on one shelf, and on the other the
+    single thing that reaches a live model. A test file left at the top level
+    belongs to neither and says nothing about which it is -- which is the state
+    this rule exists to keep the tree out of.
+
+    `conftest` stays at the top because both shelves use it, and pytest only
+    shares a conftest downward.
+    """
+    loose = sorted(p.name for p in (REPO / "tests").glob("*.py") if p.name != "conftest.py")
+
+    assert not loose, (
+        f"{loose} sit between the two shelves — a test belongs under unit/ if it "
+        "is offline and fast, or integration/ if it costs money to run"
+    )
+    assert (REPO / "tests" / "unit").is_dir()
+    assert (REPO / "tests" / "integration").is_dir()
 
 
 def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
