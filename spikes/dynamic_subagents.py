@@ -28,12 +28,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# The repo root, so `main` imports. A spike is run as a script, so `sys.path`
+# The repository root, so the driver imports. A spike is run as a script, so `sys.path`
 # starts at `spikes/` -- `kingfisher` resolves because the package is
-# installed, and `main.py` is not part of it.
+# installed, and the driver is not part of it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from main import Progress
+from tests.integration.driver import Progress
 
 WORDS = ("sea", "grass", "sun")
 

@@ -315,8 +315,10 @@ def _everything_that_imports_kingfisher() -> list[Path]:
         for p in (REPO / area).rglob("*.py")
         if "__pycache__" not in p.parts
     ]
-    if (REPO / "main.py").exists():
-        found.append(REPO / "main.py")
+    # No special case for the driver any more: it is `tests/integration/driver.py`
+    # and arrives with `tests`. It needed one while it sat at the root, and the
+    # rule this feeds exists *because* a stale import in a tree nobody walked went
+    # unnoticed -- so an area dropping out here has form.
     return sorted(found)
 
 
@@ -1288,7 +1290,7 @@ def test_only_one_module_decides_what_a_skill_is():
 
     searched = [
         *SRC.rglob("*.py"),
-        repo / "main.py",
+        repo / "tests" / "integration" / "driver.py",
         *(repo / "evals").glob("*.py"),
     ]
     offenders = [
@@ -1791,7 +1793,19 @@ def test_the_branch_reader_reads_branches():
 
 #: Where a caller may live. Tests deliberately do not count -- a test is what
 #: kept every instance of this alive.
-PRODUCTION = ("src/kingfisher", "main.py", "evals")
+#:
+#: `tests/integration/driver.py` is in this list while living under `tests/`,
+#: which reads like a contradiction and is not. The rule is about *calls*: the
+#: driver calls `seed` in order to seed a workspace, where a test constructs a
+#: call in order to observe one. That difference is the whole subject here, and
+#: it does not depend on which directory the caller sits in.
+#:
+#: Named rather than derived, because getting this wrong is silent in the
+#: direction that matters. It was `main.py` at the repository root; when the
+#: library moved under `packages/` and this walk lost it, three live helpers were
+#: reported as defined for tests alone. Moving the driver into `tests/` did it
+#: again, to the same three.
+PRODUCTION = ("src/kingfisher", "tests/integration/driver.py", "evals")
 
 #: Names dispatched by something other than a call in this repository. Each is a
 #: framework contract rather than a convenience nobody got round to using, and
@@ -1806,9 +1820,9 @@ DISPATCHED_ELSEWHERE = frozenset({
 
 
 def _production_files() -> list[Path]:
-    # The repository, not this package -- `main.py` and `evals/` live beside
-    # `src/`. Named rather than recomputed, so that when the library last moved
-    # this was one line to change instead of a silent walk over the wrong tree.
+    # The repository, not this package -- the driver and `evals/` live outside
+    # `src/`. Named rather than recomputed, so that when the tree last moved this
+    # was one line to change instead of a silent walk over the wrong one.
     root = REPO
     files: list[Path] = []
     for name in PRODUCTION:
@@ -1926,7 +1940,7 @@ def test_nothing_is_defined_for_tests_alone():
 #: the rule already exempts, and reaching for this table instead would be the way
 #: to publish something without saying so.
 READ_ELSEWHERE = frozenset({
-    # The SSE event names. Nothing in `src/`, `main.py`, `evals/` or
+    # The SSE event names. Nothing in `src/`, the driver, `evals/` or
     # `service/src/` reads it -- `payloads.frame` puts `event.kind` on the wire
     # straight from the event and only *mentions* `KINDS` in prose -- so its
     # readers are the clients subscribing to those event names, and they are not
@@ -2182,7 +2196,7 @@ def test_only_the_confinement_module_calls_resolve_directly():
     assemblies of one fact is how they come to disagree, and disagreeing here
     means warning about a confinement other than the one in force.
 
-    Nothing caught that: replacing the helper call in `main.py` with a
+    Nothing caught that: replacing the helper call in the driver with a
     hand-assembled `resolve` left the whole suite green, which is the shape of a
     rule that exists only in a docstring.
     """

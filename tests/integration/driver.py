@@ -1,4 +1,19 @@
-"""Thin driver for a kingfisher run.
+"""Thin driver for a kingfisher run. Not shipped, and not a unit test.
+
+Under `tests/integration/` because that is what it is: the one thing here that
+reaches a real model and spends real money, where the 1,600 tests beside it are
+offline and finish in eleven seconds. It is not collected -- pytest takes
+`test_*.py`, and this is deliberately not that, because a module whose job is to
+call a model must never be run by a bare `pytest`.
+
+It is still a driver rather than a test. You type it to *run a task*, and its
+`--list`, `--session`, `--input` and `--data` have nothing to do with asserting
+anything. What makes it belong here is the axis it sits on, not the noun.
+
+`test_architecture` counts it as production despite the directory, and says why:
+this file *calls* `seed` in order to seed a workspace, where a test constructs a
+call in order to observe one. Three live helpers were reported as dead the last
+two times that distinction was lost.
 
 Still not a CLI in the sense that matters -- kingfisher is a library and this
 just drives it -- but the hand-matched argument list is gone. That approach was
@@ -6,9 +21,9 @@ right for one flag and stopped being right somewhere around the fourth, because
 a request now carries a session, files, and a capability set, and none of that
 was reachable from here.
 
-    uv run main.py --agent assistant            # the smoke task, checked
-    uv run main.py --agent assistant --no-checks       # no pass/fail gate
-    uv run main.py --agent assistant "Summarise /data/x.csv"
+    uv run tests/integration/driver.py --agent assistant            # the smoke task, checked
+    uv run tests/integration/driver.py --agent assistant --no-checks       # no pass/fail gate
+    uv run tests/integration/driver.py --agent assistant "Summarise /data/x.csv"
 
 `--agent` names one of the workspace's `agents/`, and every run that reaches a
 model needs one. There is no default and the refusal says so: an agent decides
@@ -16,24 +31,25 @@ which endpoint the session's prompts go to and whose credentials pay, and a
 driver that picked for you would put that choice somewhere the command line
 never mentions. `--list` shows what this workspace offers.
 
-    uv run main.py --list                       # what this workspace offers
-    uv run main.py --seed-assets                # copy in what a pack ships
+    uv run tests/integration/driver.py --list          # what this workspace offers
+    uv run tests/integration/driver.py --seed          # copy definitions in
+    uv run tests/integration/driver.py --seed --from ./examples
 
 A workspace that has never been used seeds itself on its first run and prints
-what it wrote, so `--seed-assets` is for re-seeding an existing one after
-installing or upgrading a pack. That overwrites, which is the point of asking.
+what it wrote, so `--seed` is for re-seeding an existing one after the
+definitions change. That overwrites, which is the point of asking.
 
 Both have a shipped equivalent -- `kingfisher list` and `kingfisher seed` --
 which is what an installed kingfisher has, since this file is not in the wheel.
 They print through the same code; these flags stay because this is the driver
 you already have open.
 
-    uv run main.py "Review it" --skills code-review --subagents reviewer
-    uv run main.py "Count the rows" --tools read_file,write_file
-    uv run main.py "Just this once" --no-memory
-    uv run main.py "And now?" --session 7f3a91c2b4e0
-    uv run main.py "Profile this" --input ~/data.csv
-    uv run main.py "Analyse these" --data ~/a.pdf --data ~/b.pdf
+    uv run tests/integration/driver.py "Review it" --skills code-review --subagents reviewer
+    uv run tests/integration/driver.py "Count the rows" --tools read_file,write_file
+    uv run tests/integration/driver.py "Just this once" --no-memory
+    uv run tests/integration/driver.py "And now?" --session 7f3a91c2b4e0
+    uv run tests/integration/driver.py "Profile this" --input ~/data.csv
+    uv run tests/integration/driver.py "Analyse these" --data ~/a.pdf --data ~/b.pdf
 
 `--input` and `--data` differ only in how long the file lives, which is the
 only reason there are two. `--input` puts it in this turn's `/runs/<turn>/input`
@@ -57,7 +73,7 @@ agent ships with (`read_file`, `execute`); `--tools` names what this workspace
 defines in `tools/`. Naming one under the other is refused rather than resolved,
 and `--list` prints them under separate headings for exactly that reason.
 
-    uv run main.py "Review it" --without-builtin-tools execute,delete
+    uv run tests/integration/driver.py "Review it" --without-builtin-tools execute,delete
 
 `--without-builtin-tools` and its three siblings say the same thing by
 subtraction, which is usually what you mean: "not the shell" rather than the
@@ -99,6 +115,17 @@ if TYPE_CHECKING:
     from typing import TextIO
 
     from kingfisher.domain.result import RunEvent, RunResult
+
+# The repository root, so `evals` imports when this is run by path. Python puts
+# the *script's* directory on `sys.path`, which was the root while this file was
+# `main.py` and is `tests/integration/` now -- so `uv run
+# tests/integration/driver.py` would fail on an import that has not changed.
+#
+# `python -m tests.integration.driver` needs none of this, and neither does
+# importing it from a test. But the path is what anyone will type, and a driver
+# that only works when invoked the less obvious way is a trap. The spikes carry
+# the same three lines for the same reason.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from evals.artifacts import load_result, promote_report
 from evals.checks import check_result
@@ -195,8 +222,8 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     would have cost 23 edits across 8 files to buy something this import already
     gives.
     """
-    from kingfisher.application.inventory import inventory  # noqa: PLC0415
-    from kingfisher.presentation.cli.listing import failed, render  # noqa: PLC0415
+    from kingfisher.application.inventory import inventory
+    from kingfisher.presentation.cli.listing import failed, render
 
     found = inventory(cfg)
     for line in render(found, workspace=workspace):
@@ -366,7 +393,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
     Only called when a `--without-*` flag asked, so a run that does not subtract
     still pays nothing for it.
     """
-    from kingfisher.application.inventory import inventory  # noqa: PLC0415
+    from kingfisher.application.inventory import inventory
 
     return inventory(cfg).offered
 
@@ -577,7 +604,7 @@ def main(argv: list[str]) -> int:
     # printed again after the summary -- it arrived as it was written.
     # Deferred: this is the first thing that needs deepagents, and paths
     # that never get here (--help, --list, a bad .env) should not pay for it.
-    from kingfisher import stream  # noqa: PLC0415
+    from kingfisher import stream
 
     result = None
     try:
@@ -613,7 +640,10 @@ def main(argv: list[str]) -> int:
             print(f"{name:<12}: MISSING  {path}")
 
     # Continuing this session is the next thing you will want, so say how.
-    print(f"\ncontinue with: uv run main.py --session {result.session_id} \"...\"")
+    print(
+        f"\ncontinue with: uv run tests/integration/driver.py "
+        f'--session {result.session_id} "..."'
+    )
 
     if not is_smoke:
         return 0

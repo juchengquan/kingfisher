@@ -83,9 +83,9 @@ service = ["kingfisher-service"]
 # Seeding a workspace and looking at one, which are the two things the
 # library cannot do for itself: running a task is `kingfisher.run`, and
 # serving one is the script above. Deliberately not a general CLI --
-# `main.py` stays the development driver, keeps its flags, and keeps a bare
-# invocation that runs the eval smoke, which is a fine default for a driver
-# and a wrong one for a stranger's first command.
+# `tests/integration/driver.py` stays the development driver, keeps its
+# flags, and keeps a bare invocation that runs the eval smoke, which is a
+# fine default for a driver and a wrong one for a stranger's first command.
 kingfisher = "kingfisher.presentation.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
@@ -161,7 +161,12 @@ ignore = ["ANN401"]
 [tool.ruff.lint.per-file-ignores]
 # A driver whose whole job is printing, with the branchiness that implies --
 # and one exit code per way a run can end, which is the clearer shape here.
-"main.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
+#
+# Listed before `tests/**` below and therefore overridden by it, which is fine:
+# the test ignores are a superset of these four. It stays spelled out because
+# the reasons differ -- a test may print because it is a test, and this prints
+# because printing is its output.
+"tests/integration/driver.py" = ["T201", "PLR0911", "PLR0912", "PLR0915"]
 # The shipped command, for the first of those reasons only: it prints what the
 # library returned and decides nothing, so it is short and flat. `T201` is the
 # whole exemption -- if this ever needs the other three it has stopped being a
@@ -199,9 +204,9 @@ known-first-party = ["kingfisher"]
 # and kingfisher's are about the framework, but one command has to run both or a
 # preset breaks with nothing red.
 testpaths = ["tests", "service/tests"]
-# The repository root, so `main.py` is importable, and the library's own
-# test directory, so the other two packages can reach the fixtures that
-# describe a workspace -- `packages/service/tests/conftest.py` says why.
+# The repository root, so `tests.integration.driver` and `evals` are importable,
+# and the library's own test directory, so the other package can reach the
+# fixtures that describe a workspace -- `service/tests/conftest.py` says why.
 pythonpath = ["."]
 
 [tool.ty.environment]
@@ -216,7 +221,7 @@ python = ".venv"
 # agent imports. Under `src/` it was checked by accident; at the root it would
 # fall out of this list silently, which is the kind of check that stops running
 # without ever going red.
-include = ["src", "tests", "examples", "main.py", "spikes"]
+include = ["src", "tests", "examples", "spikes"]
 
 [tool.ty.terminal]
 output-format = "concise"

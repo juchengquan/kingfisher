@@ -366,7 +366,7 @@ def test_a_workspace_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir)
 
 def _subtractable(cfg):
     """What `--without-tools` measures a name against, as the driver builds it."""
-    import main
+    from tests.integration import driver as main
 
     return main._offered(cfg)["tools"]
 

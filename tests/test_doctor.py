@@ -152,7 +152,7 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
     from dataclasses import replace
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setattr("main.from_env", lambda: cfg, raising=False)
+    monkeypatch.setattr("tests.integration.driver.from_env", lambda: cfg, raising=False)
     cfg = replace(cfg, assets=shipped)
 
     ok = examine(cfg)
