@@ -27,9 +27,20 @@ from dataclasses import replace
 from typing import Any
 
 from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
+from langgraph.errors import GraphRecursionError
 from langgraph.types import StreamMode
 
 from kingfisher.domain.result import RunEvent
+
+#: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
+#:
+#: Re-exported rather than imported where it is caught, because the layer that
+#: catches it is `application` and only `infrastructure/harness` may name
+#: langgraph -- the same reason `STREAM_MODES` lives here. It is an exception
+#: type rather than a shape, so there is nothing to translate: what the ACL
+#: adds is the import, and the guarantee that swapping the runtime changes one
+#: line here rather than one in the orchestration.
+OutOfSteps = GraphRecursionError
 
 #: How much of a tool result or message to keep on an event.
 PREVIEW = 300

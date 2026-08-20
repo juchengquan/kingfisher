@@ -94,6 +94,7 @@ from kingfisher.infrastructure.harness.agent import (
     defined_subagents,
     indistinct_delegates,
     registered_tools,
+    release_interpreter,
     workspace_tool_names,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
@@ -404,6 +405,33 @@ def _overrun(prepared: _Prepared) -> RunEvent | None:
     if monotonic() <= prepared.deadline:
         return None
     return RunEvent(kind="cut_short", text=f"turn stopped after {prepared.timeout_s}s")
+
+
+def _out_of_steps(cfg: Config) -> RunEvent:
+    """The same event for the other bound on a turn.
+
+    Two bounds, and until this they behaved nothing alike. `turn_timeout_s` is
+    checked between chunks and ends the turn as a `RunResult` with `cut_short`
+    set; `recursion_limit` is enforced inside langgraph's own loop and came out
+    as a `GraphRecursionError` through every caller -- the driver printed a
+    stack trace, and the HTTP surface had no mapping for it at all.
+
+    Observed on a run that had already written its report and validated the
+    markup: the file was on disk, and what the caller got was a traceback with
+    no path in it. Nothing about running out of steps is less ordinary than
+    running out of seconds, so it is reported the same way and the work
+    survives the same way.
+
+    Names the setting because the two bounds are raised in different places and
+    "turn stopped" alone sends the reader to the wrong one.
+    """
+    return RunEvent(
+        kind="cut_short",
+        text=(
+            f"turn stopped after {cfg.recursion_limit} steps "
+            f"(raise KINGFISHER_RECURSION_LIMIT)"
+        ),
+    )
 
 
 class Kingfisher:
@@ -1107,6 +1135,14 @@ class Kingfisher:
                     break
             answer = normalize_answer(answer)
             ok = True
+        except runtime.OutOfSteps:
+            # The other bound, reported like the first. `ok` stays true: the
+            # turn ended in a way the caller was told about, which is what that
+            # flag records -- not that every step it wanted happened.
+            answer = normalize_answer(answer)
+            cut_short = True
+            ok = True
+            yield _out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # The slot goes back however the turn ended -- answered, refused
@@ -1116,6 +1152,9 @@ class Kingfisher:
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.
             release_checkpointer(prepared.release)
+            # And the QuickJS runtime, which is the one of the three that hangs
+            # the process rather than leaking a handle. See `release_interpreter`.
+            release_interpreter(self.cfg, prepared.graph)
 
         yield self._finished(prepared, answer, cut_short=cut_short)
 
@@ -1177,6 +1216,14 @@ class Kingfisher:
                     break
             answer = normalize_answer(answer)
             ok = True
+        except runtime.OutOfSteps:
+            # See the same branch in `stream`. Written twice rather than shared,
+            # like the loop above it: the two differ only in `async for`, and
+            # factoring three lines out of a generator costs more than it saves.
+            answer = normalize_answer(answer)
+            cut_short = True
+            ok = True
+            yield _out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # The slot goes back however the turn ended -- answered, refused
@@ -1186,6 +1233,9 @@ class Kingfisher:
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.
             release_checkpointer(prepared.release)
+            # And the QuickJS runtime, which is the one of the three that hangs
+            # the process rather than leaking a handle. See `release_interpreter`.
+            release_interpreter(self.cfg, prepared.graph)
 
         yield self._finished(prepared, answer, cut_short=cut_short)
 

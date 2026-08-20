@@ -11,6 +11,7 @@ from dataclasses import replace
 
 import pytest
 from langchain_core.messages import AIMessage
+from langgraph.errors import GraphRecursionError
 
 from kingfisher import Kingfisher
 from kingfisher.domain.request import Request
@@ -78,6 +79,55 @@ def test_an_ordinary_turn_is_untouched(cfg):
 
     assert not result.cut_short
     assert result.answer == "ok"
+
+
+# -- the step bound -------------------------------------------------------
+
+
+class RunawayAgent:
+    """A graph that never stops, as langgraph reports it: by raising.
+
+    `recursion_limit` is enforced inside `Pregel.stream`, so a turn that hits it
+    does not return -- it raises out of the generator the service is draining.
+    """
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        yield ((), "updates", {"agent": {"messages": [AIMessage(content="working")]}})
+        msg = "Recursion limit of 150 reached without hitting a stop condition."
+        raise GraphRecursionError(msg)
+
+
+def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
+    """The other bound on a turn, and it behaved nothing like the first.
+
+    `turn_timeout_s` ends a turn as a `RunResult` with `cut_short` set;
+    `recursion_limit` ended it as a `GraphRecursionError` out of `stream`, so
+    the caller got a langgraph traceback instead of the work. Observed on a run
+    that had already written its report and validated it -- the file was on
+    disk, and the driver printed a stack trace and no path to it.
+
+    Two bounds on one turn should read the same way to whoever called it.
+    """
+    kf = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer())
+
+    result = kf.run(Request("go"))
+
+    assert result.cut_short
+    assert result.run_dir.is_dir(), "the turn's work went with the error"
+
+
+def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):
+    """A cut-short that does not say which of the two bounds it hit sends the
+    reader to the wrong setting."""
+    kf = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer())
+
+    events = list(kf.stream(Request("go")))
+    stopped = [e for e in events if e.kind == "cut_short"]
+
+    assert stopped, "no cut_short event"
+    assert "KINGFISHER_RECURSION_LIMIT" in stopped[0].text
+    assert str(cfg.recursion_limit) in stopped[0].text
+    assert events[-1].kind == "finished"
 
 
 # -- the disk bound -------------------------------------------------------
