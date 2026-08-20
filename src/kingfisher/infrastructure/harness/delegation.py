@@ -519,10 +519,15 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # and this refuses -- a capability that exists and cannot be used, with
         # nothing in the output saying why. They are held whatever the request
         # granted, so there is nothing here for them to be narrowed by.
+        # Named, because this allowlist is mostly the definition's doing and a
+        # refusal that said "this request" pointed at the wrong file. `ceiling`
+        # above already says whose narrowing it is applying; this says it to the
+        # model that hits the wall.
         middleware.append(
             ToolAllowlist(
                 tuple(split_reference(one)[1] for one in (allowed or ()))
-                + tuple(one.name for one in private)
+                + tuple(one.name for one in private),
+                subject=f"the {spec.name!r} subagent",
             )
         )
     # A subagent inherits none of its parent's middleware, so an index it is
