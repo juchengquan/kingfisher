@@ -14,6 +14,7 @@ import asyncio
 import os
 import platform
 import shutil
+import tempfile
 from dataclasses import replace
 from pathlib import Path
 
@@ -21,6 +22,7 @@ import pytest
 
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -364,3 +366,75 @@ def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_
         assert "from-the-catalogue" in str(result.output)
     finally:
         shutil.rmtree(Path.home() / "kingfisher-catalogue-probe", ignore_errors=True)
+
+
+# -- getting *to* the workspace, not just reading it ----------------------
+
+
+@pytest.fixture
+def workspace_in_the_home():
+    """A workspace where a workspace normally is: inside the operator's home.
+
+    Every other test here builds one under `tmp_path`, which on macOS is
+    `/private/var/folders/...` -- outside the one directory this profile denies.
+    That is why nothing caught the bug below: the fixture put the workspace on
+    the safe side of the only rule that matters.
+    """
+    root = Path(tempfile.mkdtemp(prefix="kingfisher-home-probe-", dir=Path.home()))
+    try:
+        yield ensure_layout(root / "ws")
+    finally:
+        shutil.rmtree(root, ignore_errors=True)
+
+
+@macos
+def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspace_in_the_home):
+    """Denying the home as a subpath denies the way *in* to the workspace too.
+
+    Re-allowing the workspace re-opens the destination and not the path to it:
+    `~/x/ws` is readable while `~` and `~/x` stay denied. Anything that resolves
+    a path in one kernel call never notices -- `chdir` and `open` both work --
+    but anything that walks it component by component gets refused on the first
+    denied one, and reports it as `ENOTDIR` rather than as a permission error.
+
+    `/bin/sh`'s `cd` builtin walks it, and `/bin/sh` is the shell every command
+    runs in. In one observed run `cd runs/t001/input` came back "Not a
+    directory" against a directory `ls` had just listed, and it was not that
+    path: every `cd` in the workspace failed, so the agent spent four commands
+    concluding its own run directory was broken. `uv` fails the same way on the
+    venv's `python3` ("failed to canonicalize path"), which cost another six.
+    """
+    session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
+    (session / "runs" / "t001").mkdir(parents=True)
+    backend = build_backend(replace(cfg, workspace=workspace_in_the_home), session)
+
+    result = backend.execute("cd runs/t001 && pwd")
+
+    assert result.exit_code == 0, f"the shell cannot walk into the workspace: {result.output}"
+    assert str(session / "runs" / "t001") in str(result.output)
+
+
+@macos
+def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_the_home):
+    """The way in is metadata only: the directories on it can be `stat`ed and
+    nothing more.
+
+    This is the rule the fix could plausibly have broken, and the reason it
+    grants `file-read-metadata` on exact paths rather than re-allowing reads on
+    a subpath. `~` and `~/x` are on the way to `~/x/ws`, and re-opening either
+    one as a subpath would hand back the whole home -- which is the hole this
+    profile exists to close.
+    """
+    session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
+    secret = Path.home() / ".kingfisher-traversal-probe"
+    secret.write_text("token", encoding="utf-8")
+    backend = build_backend(replace(cfg, workspace=workspace_in_the_home), session)
+    try:
+        read = backend.execute(f"cat {secret}")
+        listing = backend.execute(f"ls {Path.home()}")
+
+        assert "token" not in str(read.output), "the shell read a file in the home"
+        assert "not permitted" in str(read.output).lower()
+        assert "not permitted" in str(listing.output).lower(), "the home is listable"
+    finally:
+        secret.unlink(missing_ok=True)

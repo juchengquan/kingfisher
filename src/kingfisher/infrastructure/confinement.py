@@ -160,6 +160,14 @@ def profile(
         f"(deny file-read* (subpath {_sb(home)}))",
     ]
     lines += [f"(allow file-read* (subpath {_sb(p)}))" for p in readable]
+    # Re-allowing a directory inside the home re-opens the destination and not
+    # the way to it, and something has to say the way is walkable. Metadata on
+    # the exact directories in between, never a subpath: that is `stat`, which
+    # is all a walk needs, and it leaks nothing -- the home stays unlistable and
+    # every file in it stays unreadable. See `traversable`.
+    lines += [
+        f"(allow file-read-metadata (path {_sb(p)}))" for p in traversable(home, readable)
+    ]
     lines.append('(deny file-write* (subpath "/"))')
     lines += [f"(allow file-write* (subpath {_sb(p)}))" for p in writable]
     # `2>/dev/null` is in half the commands an agent writes, and stdout and
@@ -178,6 +186,45 @@ def profile(
 def _sb(path: Path) -> str:
     """A path as a sandbox-profile string literal."""
     return '"' + str(path).replace("\\", "\\\\").replace('"', '\\"') + '"'
+
+
+def traversable(home: Path, readable: tuple[Path, ...]) -> tuple[Path, ...]:
+    """The directories between the denied home and each root re-allowed inside it.
+
+    `deny (subpath ~)` followed by `allow (subpath ~/x/ws)` describes a
+    destination with no route: `~` and `~/x` are still denied, and they are what
+    a path to the workspace goes through. Whether that matters depends entirely
+    on how a program asks. `chdir` and `open` hand the whole path to the kernel
+    and resolve in one operation, so they succeed -- which is most things, and
+    why this survived so long. A program that canonicalises component by
+    component gets refused on the first denied one.
+
+    Two do it, and both are in the hot path. `/bin/sh` is the shell every
+    command runs in, and its `cd` builtin walks the path: `cd runs/t001` came
+    back "Not a directory" for every directory in the workspace, which reads as
+    a broken run directory rather than as a permission rule. `uv` walks it too,
+    and reports "failed to canonicalize path" for the venv's own `python3` --
+    so the agent could run Python but nothing could inspect or extend it.
+
+    Only the directories, and only `file-read-metadata`. The alternative was to
+    stop denying the home as a subpath and deny its contents individually, which
+    is a list nobody can keep complete. This adds `stat` on a handful of exact
+    paths -- not their contents, not their entries -- so the home stays
+    unlistable and every file in it stays unreadable.
+
+    Roots outside the home contribute nothing: `/opt/homebrew/bin` was never
+    denied, so nothing has to be said about `/opt`.
+    """
+    home = Path(home)
+    found: dict[Path, None] = {}
+    for root in readable:
+        if root == home or not root.is_relative_to(home):
+            continue
+        for parent in root.parents:
+            found.setdefault(parent, None)
+            if parent == home:
+                break
+    return tuple(found)
 
 
 def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
