@@ -398,3 +398,38 @@ def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
     }
 
     assert not module_level & {"langchain", "langchain_core", "langgraph", "deepagents"}
+
+
+def test_every_shipped_tool_taking_a_path_says_which_kind(shipped):
+    """A tool's docstring is the description the model reads, so a convention
+    stated anywhere else is one the caller of the tool never sees.
+
+    `system.md` says the two views do not mix and `csv_profile` says `path` is a
+    host path -- but `line_count` and `mask_secrets` said neither, and a real run
+    caught it: the model passed `/data/config.ini`, which is a *virtual* path,
+    and the tool raised `FileNotFoundError` from inside the process. The delegate
+    reported that it could not read the file and offered to work around it.
+
+    Checked against the definitions that ship, because a tree can hold anything.
+    """
+    import ast
+
+    missing = []
+    for module in sorted(shipped.rglob("*.py")):
+        if "__pycache__" in module.parts:
+            continue
+        tree = ast.parse(module.read_text(encoding="utf-8"))
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            if node.name.startswith("_") or "path" not in {a.arg for a in node.args.args}:
+                continue
+            doc = ast.get_docstring(node) or ""
+            if "host path" not in doc:
+                missing.append(f"{module.relative_to(shipped)}:{node.name}")
+
+    assert not missing, (
+        f"{missing} take a `path` and do not say it is a host path. The model reads "
+        "the docstring, so a tool that does not say gets handed a virtual path and "
+        "raises FileNotFoundError inside the process"
+    )
