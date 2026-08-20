@@ -1,97 +1,59 @@
-"""Copying a set of definitions into a workspace, so a fresh install works.
+"""Copying a set of definitions into a workspace.
 
-Kingfisher does not *read* the definitions it ships. Its job is to find,
-validate and compose definitions held as static files, and it does all three
-against files it did not write — every asset is content a workspace rewrites on
-first contact with a real task, which is a different kind of thing from the code
-that reads it. Shipping a working set and copying it out keeps that true: what
-lands in the workspace is yours the moment it arrives.
+Kingfisher does not *read* the definitions a deployment runs. Its job is to
+find, validate and compose definitions held as static files, and it does all
+three against files it did not write -- content a workspace rewrites on first
+contact with a real task, which is a different kind of thing from the code that
+reads it.
 
-One directory, `kingfisher.assets`, inside this wheel. That is the whole
-discovery story now, and it used to be longer -- definitions were their own
-distribution, found through an entry point so anyone could publish a pack. The
-constants below say what went and why; what matters here is that nothing
-enumerates publishers any more, so there is no loop and no question of who is
-installed. A deployment with its own definitions points `seed` at a directory
-and needs no wheel, no metadata and no publish step.
+Nothing ships. The definitions used to live inside this wheel, and before that
+they were their own distribution found through a `kingfisher.assets` entry
+point so anyone could publish a pack. Both are gone: where a deployment gets
+its definitions is a setting now, `KINGFISHER_ASSETS`, and a directory needs no
+wheel, no metadata and no publish step. This repository keeps a worked set in
+`examples/` for the same reason it keeps documentation.
 
-`models.yaml.example` ships too, and is the one thing here that is not content:
-`models.yaml` is required and has no fallback, and the error a deployment
-without one hits names that file as the place to look, so it has to arrive with
-the thing that demands it. `_copy_example` is why it is seeded apart from the
-definitions rather than beside them.
+What that costs is written down rather than glossed: `pip install kingfisher`
+followed by `kingfisher seed` no longer produces a working workspace, and since
+a request must name an agent, it produces a library that cannot run. See
+docs/design/2026-08-19-examples-are-ours-assets-are-yours.md.
 
-Everything is read through `importlib.resources`, the way `kingfisher.prompts`
-is, so the same code finds a source tree and an installed wheel.
+`models.yaml.example` used to be seeded here too, apart from the definitions,
+because it is the one thing that was never content. `ensure_layout` writes it
+now -- it must arrive whether or not a deployment has definitions, and this
+module can refuse.
 """
 
 from __future__ import annotations
 
 import shutil
-from collections.abc import Iterator
-from contextlib import ExitStack, contextmanager
 from dataclasses import dataclass
-from importlib import resources
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
-#: Where the catalogue example sits, as an import path rather than a filesystem
-#: one -- an installed package is not in this repo's directory tree.
+#: Named in the refusal below, and only when it is really there.
 #:
-#: The package itself, now that the example is the only thing here that ships
-#: for the code to read. It lived in `kingfisher.reference` beside the format
-#: documentation, and that directory is gone: the documentation moved to
-#: `docs/formats.md`, since nothing in `src/` ever read it and shipping thirty
-#: kilobytes of prose to be read by nobody is not package data. A directory
-#: named `reference` holding one example would have described neither.
-PACKAGE = "kingfisher"
+#: A path inside this repository is true for someone standing in a checkout and
+#: false for everyone else, and the reader most likely to hit that refusal is the
+#: one who installed the package -- who has no `examples/` anywhere. Advice that
+#: fails the way the thing it is advising about failed is the fault four other
+#: messages here were rewritten to stop making.
+SUGGESTION = Path("examples")
 
-#: The definitions that ship with kingfisher: one working tool, skill and
-#: subagent. Inside the package rather than beside it, so `pip install
-#: kingfisher` followed by `kingfisher seed` writes a workspace that already
-#: works -- content a reader has to go and find teaches nobody.
+#: How the four "this workspace is empty" messages tell a reader to fill it.
 #:
-#: They were their own distribution, discovered through a
-#: `kingfisher.assets` entry point, so that a team could publish a pack and have
-#: it seed alongside. That went when the seeding source became a plain path: a
-#: deployment pointing `seed` at its own directory needs no wheel and no
-#: metadata, which covers the same ground more simply. Rebuilding the plugin
-#: group is a small change if a second publisher ever wants one.
-ASSETS = "kingfisher.assets"
-
-#: The worked example of the one file a deployment *must* write. It lived at the
-#: repo root, which meant it existed only in a checkout: `packages =
-#: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
-#: mistake `test_the_package_ships_the_catalogue_example` now guards against,
-#: made for the file a new deployment needs first: `models.yaml` is required and
-#: has no fallback.
-EXAMPLE = "models.yaml.example"
-
-
-
-@contextmanager
-def opened(package: str) -> Iterator[Path]:
-    """A package's files as real files, wherever it was installed.
-
-        with opened(ASSETS) as root:
-            shutil.copytree(root / "skills" / "tabular-qa", target)
-
-    A context manager because `importlib.resources` does not promise the files
-    exist on disk — a zip-imported package materialises them for the duration
-    and cleans up afterwards. In a source tree and an ordinary wheel this hands
-    back the real directory and costs nothing.
-
-    `package` is required, though `PACKAGE` was its default until the assets
-    left. A default meaning *kingfisher's own tree* is the wrong shape for a
-    reader who wants the definitions: code written `opened()` while meaning the
-    assets would silently read the framework's two files and copy nothing, which
-    is a failure with no error in it. Every caller says which package it wants.
-    """
-    with resources.as_file(resources.files(package)) as root:
-        yield Path(root)
+#: One string, because four wordings drift and the one seen daily is the one
+#: nobody reviews. It said `kingfisher seed`, which was true while a set shipped
+#: and became a dead end when it stopped: a reader with an empty workspace would
+#: follow it and hit a refusal for a source that was never configured.
+#:
+#: `--from DIR` rather than the bare verb, because that form works whether or
+#: not `KINGFISHER_ASSETS` is set -- which is the whole property these messages
+#: need and the bare verb no longer has.
+SEED_HINT = "`kingfisher seed --from DIR`"
 
 
 @runtime_checkable
@@ -114,6 +76,25 @@ class Destination(Protocol):
 
     @property
     def catalogue_roots(self) -> dict[str, Path]: ...
+
+
+@runtime_checkable
+class Source(Protocol):
+    """Where definitions are copied *from*, as a deployment configured it.
+
+    A second protocol rather than a field on `Destination`, and the names are
+    the argument: a destination that also knew its source would have stopped
+    being one thing. `Destination` is narrow on purpose -- that narrowness is
+    what lets seeding run before a workspace has a model catalogue to read --
+    and widening it for the first thing that asked would have undone it.
+
+    `WorkspacePaths` and `Config` both satisfy this by shape, which is the same
+    arrangement `Destination` has and for the same reason: a first run can
+    answer "which directories?" long before it can answer "which models?".
+    """
+
+    @property
+    def assets(self) -> Path | None: ...
 
 
 def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
@@ -180,25 +161,68 @@ def _overwritten(source: Path, target: Path, label: str) -> list[str]:
     return found
 
 
-def shipped_kinds() -> tuple[str, ...]:
-    """Which catalogue kinds the definitions that ship with kingfisher provide.
+def kinds_at(source: Path) -> tuple[str, ...]:
+    """Which of the four kinds a directory actually provides.
 
-    For `kingfisher doctor`, which used to enumerate installed asset packs.
-    There is nothing to enumerate now -- one directory either came with the
-    install or did not -- so the question became "is there anything to seed
-    from", and this is the smallest honest answer to it.
+    For `kingfisher doctor`. It asked whether the definitions had arrived inside
+    the install, which its own comment admitted was "only ever wrong if an
+    install is damaged" -- a check that could realistically only pass. A
+    configured directory can be unset, mistyped, deleted, or named one level too
+    high, so there is something to answer now.
+
+    Empty for a directory that is missing as well as for one holding none of
+    them. `doctor` tells those two apart before asking, because the remedies
+    differ: a path that is wrong, against a path that points one level off.
     """
-    with opened(ASSETS) as tree:
-        return tuple(kind for kind in DEFINITION_KINDS if (tree / kind).is_dir())
+    return tuple(kind for kind in DEFINITION_KINDS if (source / kind).is_dir())
 
 
-def seed(cfg: Destination, source: Path | None = None) -> Seeding:
+def definitions_source(paths: Source, override: str | Path | None = None) -> Path:
+    """The directory `seed` should copy from, or a refusal saying how to name one.
+
+    Two callers need this and must agree: `kingfisher seed`, and the driver's
+    auto-seed on a fresh workspace. Written once because the alternative is two
+    messages, of which the one seen daily is the one nobody reviews -- `main.py`
+    printed an instruction naming `--seed-assets` long after that had become the
+    wrong advice.
+
+    Public for the same reason `seed` is. The shipped command is held to being a
+    consumer of the library rather than an insider, so a private helper would be
+    unreachable from the one place that most needs it.
+
+    `override` wins over the environment, which is the ordinary shape of a flag
+    against a variable and the one `__main__` already documents for `.env`: an
+    explicit argument must not be quietly replaced by something a caller may not
+    have known was set.
+
+    Neither given is a refusal rather than a guess. Nothing ships definitions
+    any more, so there is no set to fall back to, and inventing one would mean
+    seeding a workspace from somewhere the caller never named.
+
+    The refusal names `./examples` only when there is one. See `SUGGESTION`.
+    """
+    if override is not None:
+        return Path(override).expanduser()
+    if paths.assets is not None:
+        return paths.assets
+
+    msg = (
+        "no definitions to seed from: set KINGFISHER_ASSETS to a directory "
+        "holding agents/, skills/, subagents/ or tools/, or pass --from DIR"
+    )
+    if SUGGESTION.is_dir():
+        msg += f" -- ./{SUGGESTION} is one"
+    raise ConfigError(msg)
+
+
+def seed(cfg: Destination, source: Path) -> Seeding:
     """Copy definitions into this deployment's catalogues, and say what changed.
 
-    `source` is a directory holding `tools/`, `skills/` and `subagents/`. Left
-    out, it is the set that ships with kingfisher -- so a fresh install seeds a
-    workspace that already works, and a deployment with its own definitions
-    points here instead and needs no package, no metadata and no publish step.
+    `source` is a directory holding `agents/`, `tools/`, `skills/` and
+    `subagents/`. Required, with no default: seeding cannot invent where
+    definitions come from, and a signature that let it try is one a caller can
+    get wrong at runtime rather than at check time. `definitions_source` is what
+    turns a flag and a variable into one of these.
 
     Copied rather than read in place: they are the deployment's content once
     seeded, and the entire point is that you edit your copy. A definition that
@@ -214,21 +238,11 @@ def seed(cfg: Destination, source: Path | None = None) -> Seeding:
     impossible, and that is the same trade `place_data` makes for caller files.
     Replacing silently is the part that was wrong.
     """
-    written: list[str] = []
-    overwritten: list[str] = []
-    with ExitStack() as stack:
-        tree = stack.enter_context(opened(ASSETS)) if source is None else source
-        if not tree.is_dir():
-            msg = f"nothing to seed from: {tree} is not a directory"
-            raise ConfigError(msg)
-        written, overwritten = _copy(cfg, tree)
+    if not source.is_dir():
+        msg = f"nothing to seed from: {source} is not a directory"
+        raise ConfigError(msg)
+    written, overwritten = _copy(cfg, source)
 
-    # Outside the copy: the example is kingfisher's own, so it is written
-    # whatever the definitions were seeded from -- including a caller's own
-    # directory, which has no reason to carry it.
-    example_written, example_overwritten = _copy_example(cfg)
-    written += example_written
-    overwritten += example_overwritten
     return Seeding(tuple(written), tuple(overwritten))
 
 
@@ -263,31 +277,3 @@ def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
             written.append(label)
 
     return written, overwritten
-
-
-def _copy_example(cfg: Destination) -> tuple[list[str], list[str]]:
-    """Put the catalogue example beside where `models.yaml` is read from.
-
-    Which is where someone would look for the thing they are about to write.
-    Not into one of the three catalogues: it is not a definition.
-
-    Not out of the definitions, either, and not conditional on a deployment
-    having any. `models.yaml` is required and has no fallback, and the error a deployment
-    without one hits names this file as the place to look -- so it is the
-    worked example of a mandatory *configuration* file rather than content, and
-    it arrives with the thing that demands it.
-
-    As `.example`, never as `models.yaml` itself. Seeding overwrites by design
-    -- that is what makes re-seeding after an upgrade possible -- and the one
-    file it must never overwrite is the one naming every endpoint this
-    deployment reaches and whose credentials pay.
-    """
-    with opened(PACKAGE) as reference:
-        example = reference / EXAMPLE
-        if not example.is_file():  # a packaging fault, caught by a test
-            return [], []
-        target = cfg.workspace / EXAMPLE
-        overwritten = _overwritten(example, target, EXAMPLE)
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(example, target)
-        return [EXAMPLE], overwritten

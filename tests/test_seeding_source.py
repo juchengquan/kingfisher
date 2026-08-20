@@ -39,35 +39,163 @@ def _definitions(root: Path, *entries: str) -> Path:
 # -- the default: what ships ----------------------------------------------
 
 
-def test_the_definitions_ship_with_the_library():
-    """The point of folding them in. `pip install kingfisher` then
-    `kingfisher seed` has to write a workspace that already works -- content a
-    reader must go and find teaches nobody.
+def test_nothing_ships_to_seed_from(shipped):
+    """This asserted the opposite until the definitions left the wheel.
+
+    `kinds_at` answers about a directory now, because that is the only kind of
+    answer there is: no set arrives with the install, so the question "did they
+    come with it" has no subject. It is `examples/` this reads, which is where
+    a reader is pointed.
 
     Agents come first, and the order is `Definitions`' field order rather than
     anything chosen here. It happens to be the useful one: the agent is what a
     request names, and the other three are what it selects from.
     """
-    assert seeding.shipped_kinds() == ("agents", "skills", "subagents", "tools")
+    assert seeding.kinds_at(shipped) == ("agents", "skills", "subagents", "tools")
+    # What the claim actually is, rather than "no such directory". A stale
+    # `__pycache__` left by a checkout from before the move would fail that
+    # spelling for a reason the rule is not about, and `kinds_at` asks the
+    # question directly: does the installed package provide any kind to seed?
+    assert seeding.kinds_at(Path(seeding.__file__).parent.parent) == ()
 
 
-def test_seeding_without_a_source_writes_the_shipped_definitions(cfg):
-    written = seeding.seed(cfg).written
+def test_seeding_from_the_worked_set_writes_all_of_it(cfg, shipped):
+    written = seeding.seed(cfg, shipped).written
 
     assert any(entry.startswith("skills/") for entry in written), written
     assert any(entry.startswith("subagents/") for entry in written), written
     assert any(entry.startswith("tools/") for entry in written), written
 
 
-def test_the_catalogue_example_is_written_either_way(cfg, tmp_path):
+def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tmp_path):
     """It is kingfisher's own, not a definition, so it does not come from the
-    source -- and a caller's own directory has no reason to hold one."""
-    from kingfisher.infrastructure.seeding import EXAMPLE
+    source -- and a caller's own directory has no reason to hold one.
+
+    It arrives with the *layout* now rather than with the copy. The distinction
+    matters because seeding can decline: a deployment naming no definitions
+    still has to be told where to write `models.yaml`, and that instruction is
+    this file.
+    """
+    from kingfisher.infrastructure.workspace_fs import EXAMPLE, ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
+    ensure_layout(cfg.workspace)
 
-    assert EXAMPLE in seeding.seed(cfg).written
-    assert EXAMPLE in seeding.seed(cfg, mine).overwritten + seeding.seed(cfg, mine).written
+    assert (cfg.workspace / EXAMPLE).is_file()
+    assert EXAMPLE not in seeding.seed(cfg, mine).written
+
+
+# -- resolving one source from a flag and a variable -----------------------
+
+
+def test_seed_will_not_invent_a_source(cfg):
+    """The parameter is required, with no default and no `None` branch.
+
+    Stated in the signature rather than checked at runtime, so a caller who
+    forgets is caught by the type checker instead of by an empty workspace an
+    hour later. Asserted here because the type checker does not run in this
+    suite, and a default reappearing would otherwise be silent.
+    """
+    import inspect
+
+    parameter = inspect.signature(seeding.seed).parameters["source"]
+
+    assert parameter.default is inspect.Parameter.empty
+
+
+def test_an_explicit_directory_beats_the_variable(cfg, tmp_path):
+    """The ordinary shape of a flag against a variable, and the one
+    `__main__` already documents for `.env`: an explicit argument must not be
+    quietly replaced by something the caller may not have known was set."""
+    from dataclasses import replace
+
+    configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
+    asked_for = _definitions(tmp_path / "asked-for", "skills/mine/SKILL.md")
+
+    resolved = seeding.definitions_source(replace(cfg, assets=configured), asked_for)
+
+    assert resolved == asked_for
+
+
+def test_the_variable_is_used_when_nothing_was_asked_for(cfg, tmp_path):
+    """`kingfisher seed` with no `--from`, which is the common invocation."""
+    from dataclasses import replace
+
+    configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
+
+    assert seeding.definitions_source(replace(cfg, assets=configured)) == configured
+
+
+def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
+    """On `WorkspacePaths`, not only on `Config`.
+
+    Seeding a fresh workspace runs before a model catalogue can be read -- the
+    catalogue is a file inside the workspace -- so a source reachable only from
+    a whole `Config` would be unreachable exactly when seeding happens.
+    """
+    from kingfisher.application.config import paths_from_env
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "mine"))
+
+    assert paths_from_env().assets == tmp_path / "mine"
+
+
+def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
+    """A workspace seeded once runs for years without this being set. Only the
+    act of seeding needs it, so `paths_from_env` must not refuse -- that is the
+    difference between this and `KINGFISHER_WORKSPACE`, which is required
+    because no default can supply it."""
+    from kingfisher.application.config import paths_from_env
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
+
+    assert paths_from_env().assets is None
+
+
+def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, monkeypatch):
+    """The advice has to be true from where the reader is standing.
+
+    `./examples` exists in a checkout and nowhere else, and the reader most
+    likely to hit this refusal is the one who installed the package -- who has
+    none. Naming it unconditionally would repeat the fault the four "try
+    `kingfisher seed`" messages were rewritten to stop making: advice that fails
+    the same way the thing it is advising about failed.
+
+    Both halves, because they fail separately -- a suffix that never appears is
+    as wrong as one that always does.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.seeding import SUGGESTION
+
+    nowhere = replace(cfg, assets=None)
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ConfigError) as bare:
+        seeding.definitions_source(nowhere)
+
+    (tmp_path / SUGGESTION).mkdir()
+    with pytest.raises(ConfigError) as beside_one:
+        seeding.definitions_source(nowhere)
+
+    assert "KINGFISHER_ASSETS" in str(bare.value)
+    assert str(SUGGESTION) not in str(bare.value), "named a directory that is not there"
+    assert str(SUGGESTION) in str(beside_one.value), "did not name the one that is"
+
+
+def test_the_refusal_says_both_ways_of_answering_it(cfg, tmp_path, monkeypatch):
+    """A variable and a flag. Naming only one leaves a reader who cannot set
+    environment variables -- a CI step, a container -- with no way through."""
+    from dataclasses import replace
+
+    monkeypatch.chdir(tmp_path)
+    with pytest.raises(ConfigError) as refused:
+        seeding.definitions_source(replace(cfg, assets=None))
+
+    assert "KINGFISHER_ASSETS" in str(refused.value)
+    assert "--from" in str(refused.value)
 
 
 # -- a source of your own --------------------------------------------------

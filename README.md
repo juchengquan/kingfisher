@@ -8,17 +8,20 @@ pip install kingfisher
 ```
 
 ```python
-from kingfisher import paths_from_env, seed
+from kingfisher import definitions_source, paths_from_env, seed
 
-for name in seed(paths_from_env()).written:
+paths = paths_from_env()
+for name in seed(paths, definitions_source(paths)).written:
     print(f"seeded {name}")
 ```
 
-`seed` takes a directory to copy from and defaults to the definitions that ship
-with kingfisher — one working tool, skill and subagent. Point it somewhere else
-and it copies yours instead:
+`seed` requires a directory to copy from — it will not invent one.
+`definitions_source` is what turns configuration into that directory: it reads
+`KINGFISHER_ASSETS`, and takes a path that overrides it. On the command, the
+same two:
 
-    kingfisher seed --from ./my-definitions
+    kingfisher seed                          # from KINGFISHER_ASSETS
+    kingfisher seed --from ./my-definitions  # from here instead
 
 The formats — tools, skills, subagents, and the catalogue they live in —
 are documented in [`docs/formats.md`](docs/formats.md).
@@ -33,7 +36,14 @@ workspace.
 distribution, so `pip install kingfisher` puts no web framework on disk, which
 is checked against the built wheel rather than asserted.
 
-The definitions are *not* separate. They were their own distribution, found
-through an entry point so that anyone could publish a pack; a directory covers
-the same ground without a wheel, and they ship inside this one so a fresh
-install seeds something that works.
+**The definitions ship nowhere.** They were their own distribution once, found
+through an entry point so anyone could publish a pack, and then a set inside
+this wheel. Both are gone: where a deployment gets its definitions is a setting,
+`KINGFISHER_ASSETS`, and a directory needs no wheel, no metadata and no publish
+step.
+
+The cost is real and is not hidden. A fresh install seeds nothing, and since a
+request must name an agent, it cannot run until definitions arrive from
+somewhere. This repository keeps a worked set in `examples/` — one agent, skill,
+subagent and tool, each demonstrating a distinct feature — and `assets/` is
+where a deployment puts content it fetched from elsewhere.

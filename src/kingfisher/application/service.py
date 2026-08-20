@@ -103,6 +103,7 @@ from kingfisher.infrastructure.harness.checkpointing import (
     thread_ids,
 )
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
+from kingfisher.infrastructure.seeding import SEED_HINT
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
@@ -781,14 +782,14 @@ class Kingfisher:
         if name is None:
             msg = (
                 f"this request names no agent; this workspace offers {listing}"
-                + ("" if offered else " -- try `kingfisher seed`")
+                + ("" if offered else f" -- try {SEED_HINT}")
             )
             raise CapabilityError(msg)
         spec = offered.get(name)
         if spec is None:
             msg = (
                 f"no agent named {name!r}; this workspace offers {listing}"
-                + ("" if offered else " -- try `kingfisher seed`")
+                + ("" if offered else f" -- try {SEED_HINT}")
             )
             raise CapabilityError(msg)
         return spec

@@ -29,9 +29,11 @@ To seed from your own set instead, point at a directory holding `agents/`,
     kingfisher seed --from ./my-definitions
 
 They were their own distribution for a while, found through a
-`kingfisher.assets` entry point so that anyone could publish a pack. A directory
-covers the same ground without a wheel, a publish step or metadata, so the group
-went; if a second publisher ever wants one it comes back.
+`kingfisher.assets` entry point so that anyone could publish a pack, and then a
+set inside the wheel. A directory covers the same ground without a wheel, a
+publish step or metadata, so both went; if a second publisher ever wants a group
+it comes back. `KINGFISHER_ASSETS` names the directory, and `--from` overrides
+it for one run.
 
 
 A request then names what it wants:

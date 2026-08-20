@@ -158,7 +158,7 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
 
 
-def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads():
+def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
     """A kind the catalogue does not read would be copied where nothing looks.
 
     Asserted against the definitions that ship, which is where they come from.
@@ -172,15 +172,13 @@ def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads():
     directly. This checks the other side of that, which the seeder cannot -- a
     tree can hold anything.
     """
-    from kingfisher.infrastructure import seeding
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
-    with seeding.opened(seeding.ASSETS) as root:
-        found = {p.name for p in root.iterdir() if p.is_dir() and not p.name.startswith("_")}
+    found = {p.name for p in shipped.iterdir() if p.is_dir() and not p.name.startswith("_")}
 
-    assert found, "the shipped definitions are empty -- this asserts nothing"
+    assert found, "this repository's worked set is empty -- this asserts nothing"
     assert found <= set(DEFINITION_KINDS), (
-        f"kingfisher ships {sorted(found - set(DEFINITION_KINDS))}, which is not a "
+        f"examples/ holds {sorted(found - set(DEFINITION_KINDS))}, which is not a "
         "catalogue kind and would be copied where nothing looks"
     )
 

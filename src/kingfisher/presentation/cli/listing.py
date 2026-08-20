@@ -13,7 +13,7 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from kingfisher import SKILL_LAYOUT, Inventory, offered, split_reference
+from kingfisher import SEED_HINT, SKILL_LAYOUT, Inventory, offered, split_reference
 
 
 def _from(source: str | None, expected: str) -> str:
@@ -51,7 +51,7 @@ def _agents(found: Inventory) -> Iterator[str]:
         if reached := found.agent_delegates.get(name):
             yield f"      delegates: {', '.join(reached)}"
     if not found.agents:
-        yield "  (none)  — a request must name one; try `kingfisher seed`"
+        yield f"  (none)  — a request must name one; try {SEED_HINT}"
     yield ""
 
 
@@ -181,7 +181,7 @@ def _catalogue(found: Inventory) -> Iterator[str]:
         yield "  (a compiled delegate brings its own graph: --tools and"
         yield "   --builtin-tools do not restrict what it can call)"
     if not found.subagents:
-        yield "  (none)  — try `kingfisher seed`"
+        yield f"  (none)  — try {SEED_HINT}"
 
 
 def as_json(found: Inventory) -> dict[str, object]:

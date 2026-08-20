@@ -262,7 +262,7 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
         assert hasattr(found, name), name
 
 
-def test_the_whole_job_is_reachable_through_the_front_door(cfg):
+def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
     """What phase 2 is for, and what the CLI will be held to.
 
     A consumer -- the server today, the shipped command next -- may write
@@ -274,14 +274,14 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg):
     them, so a name quietly dropped from `_EXPORTS` fails this rather than
     passing on the module import.
     """
-    from kingfisher import Inventory, Seeding, inventory, seed, shipped_kinds
+    from kingfisher import Inventory, Seeding, inventory, kinds_at, seed
 
-    written = seed(cfg)
+    written = seed(cfg, shipped)
     found = inventory(cfg)
 
     assert isinstance(written, Seeding)
     assert isinstance(found, Inventory)
-    assert all(isinstance(kind, str) for kind in shipped_kinds())
+    assert all(isinstance(kind, str) for kind in kinds_at(shipped))
     # And it did something, so this cannot pass by every call being a no-op.
     assert written.written
     assert found.builtin_tools
@@ -300,7 +300,7 @@ def test_the_public_names_cost_no_provider_sdk_to_reach(cfg):
 
     probe = (
         "import sys\n"
-        "from kingfisher import seed, shipped_kinds, inventory, Inventory\n"
+        "from kingfisher import seed, kinds_at, definitions_source, inventory, Inventory\n"
         "print(','.join(m for m in ('deepagents', 'langchain_openai',"
         " 'langchain_anthropic') if m in sys.modules))"
     )

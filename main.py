@@ -331,10 +331,26 @@ def build_parser() -> argparse.ArgumentParser:
         help="which agent runs this, from the workspace's agents/ (--list shows them)",
     )
     parser.add_argument("--list", action="store_true", help="show what the workspace offers")
+    # Two flags rather than one taking an optional argument, which is what this
+    # wanted to be. `task` is `nargs="*"` and greedy, so `--seed summarise the
+    # pdf` parses as `seed='summarise'` with the rest as the task -- measured,
+    # not feared. Neither of these can collide with a positional.
+    #
+    # `--seed` rather than `--seed-assets`: "assets" now means content fetched
+    # from elsewhere, and what this usually copies is `examples/`.
     parser.add_argument(
-        "--seed-assets",
+        "--seed",
+        dest="seed_assets",
         action="store_true",
-        help="copy the definitions from installed asset packs into the workspace",
+        help="copy definitions into the workspace, from KINGFISHER_ASSETS or --from",
+    )
+    # The same name the shipped command uses, so the word means one thing on the
+    # driver and on `kingfisher seed`.
+    parser.add_argument(
+        "--from",
+        dest="source",
+        metavar="DIR",
+        help="seed from this directory instead of the one KINGFISHER_ASSETS names",
     )
     return parser
 
@@ -448,22 +464,39 @@ def main(argv: list[str]) -> int:
         print("copy .env.example to .env and fill it in", file=sys.stderr)
         return 2
 
+    # `--from` is only meaningful with `--seed`, and silently ignoring it would
+    # let someone believe they had seeded from somewhere they had not.
+    if args.source and not args.seed_assets:
+        print("--from does nothing without --seed", file=sys.stderr)
+        return 2
+
     fresh = is_new_workspace(paths.workspace)
     workspace = ensure_layout(paths.workspace)
     if fresh:
         print(f"created a new workspace at {workspace}")
 
-    # A new workspace seeds itself. Nothing is copied unless a pack was
-    # installed, which is somebody's explicit choice; a new workspace is empty
-    # by definition, so nothing can be overwritten; and this is the first moment
-    # the destination exists. It says what it wrote, because `is_new_workspace`
-    # also fires on a *misconfigured* one -- a wrong path holding ten files
-    # reads more like success than an empty one does.
+    # A new workspace seeds itself. It is empty by definition, so nothing can be
+    # overwritten, and this is the first moment the destination exists. It says
+    # what it wrote, because `is_new_workspace` also fires on a *misconfigured*
+    # one -- a wrong path holding ten files reads more like success than an
+    # empty one does.
     #
     # Here and never in `Kingfisher.__init__`: constructing a library object
     # must not write to somebody's disk.
+    #
+    # Stops rather than warns when no source is configured. Warning and carrying
+    # on was the alternative, and the smoke would even have run -- it copies its
+    # own sample skill. But that warning fires once per workspace, in the middle
+    # of "created a new workspace at ...", and is the one line saying something
+    # did *not* happen. An error nobody can walk past is the right shape for a
+    # condition hit once whose fix is a line in `.env`.
     if fresh or args.seed_assets:
-        result = seeding.seed(paths)
+        try:
+            source = seeding.definitions_source(paths, args.source)
+        except ConfigError as exc:
+            print(f"configuration error: {exc}", file=sys.stderr)
+            return 2
+        result = seeding.seed(paths, source)
         for name in result.written:
             print(f"seeded {name}")
         for name in result.overwritten:

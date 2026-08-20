@@ -61,3 +61,31 @@ instead; and a path that is not a directory exits 2 saying so.
 1363 tests, ruff and ty clean. Five mutations, each caught — including one that
 made the shipped tools be judged as library code, which is the rule D3 exists
 for.
+
+## Superseded
+
+D1 is reversed by *examples are ours, assets are yours* (2026-08-19). The
+definitions leave the wheel: `src/kingfisher/assets/` becomes `examples/` at the
+repository root, and where a deployment gets its definitions is a setting,
+`KINGFISHER_ASSETS`, rather than a fact about the install.
+
+D1's argument still stands and is simply outweighed. *"Content a reader has to
+go and find teaches nobody"* is true; it is accepted because kingfisher is not
+published, so the reader it protects does not exist yet. The full cost is
+recorded there rather than here, including one this document did not have to
+face: a request must name an agent, so a fresh install now produces a library
+that cannot run at all.
+
+What survived:
+
+- **D2 held, and hardened.** `seed` still takes a directory. It is required now,
+  with no default -- the default meant "the set that ships", and nothing ships.
+- **D3 is retired rather than reversed.** `src/kingfisher/assets/` was excluded
+  from every rule in `test_architecture` because the package carried content.
+  It no longer does, so `CONTENT` and `_is_content` are gone: the separation
+  stopped being a rule and became the layout.
+- **D4 became `kinds_at(path)`.** `shipped_kinds` asked whether the definitions
+  had arrived with the install, which could realistically only pass. A
+  configured directory has four ordinary ways to be wrong.
+- **D5 held.** `src/`, `tests/` and `service/` at the root, now with `examples/`
+  and `assets/` beside them.

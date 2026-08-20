@@ -8,7 +8,7 @@ from kingfisher.domain.layout import (
     LAYOUT_DIRS,
     SESSION_DIRS,
 )
-from kingfisher.infrastructure.workspace_fs import LocalSessionDirs, ensure_layout
+from kingfisher.infrastructure.workspace_fs import EXAMPLE, LocalSessionDirs, ensure_layout
 from tests.conftest import StubCheckpointer
 
 
@@ -18,6 +18,46 @@ def test_layout_is_created_and_idempotent(tmp_path):
     for name in LAYOUT_DIRS:
         assert (ws / name).is_dir()
     assert (ws / ".kingfisher" / "WORKSPACE").exists()
+
+
+def test_the_layout_carries_the_catalogue_example(tmp_path):
+    """`models.yaml` is required and has no fallback, so its worked example is
+    the one document a new deployment cannot start without reading -- and the
+    error it hits without one names this file as the place to look.
+
+    Laid out rather than seeded. It was seeded until seeding gained the ability
+    to refuse, at which point a deployment naming no definitions would have been
+    told to write `models.yaml` and given nothing to write it from.
+    """
+    ws = ensure_layout(tmp_path / "ws")
+
+    assert (ws / EXAMPLE).is_file()
+    assert "models" in (ws / EXAMPLE).read_text(encoding="utf-8")
+
+
+def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
+    """Neither of the two obvious rules.
+
+    Writing every time would touch the disk on every run for nothing --
+    `ensure_layout` is called on each invocation, not only on a first one.
+    Writing only when absent would mean an upgrade never refreshed the example,
+    so a deployment would keep reading last year's annotations for a file that
+    had grown fields; re-seeding used to be what refreshed it.
+
+    Both halves are asserted because they fail separately: the first catches a
+    write that should not have happened, the second an upgrade that never
+    arrives.
+    """
+    ws = ensure_layout(tmp_path / "ws")
+    example = ws / EXAMPLE
+    untouched = example.stat().st_mtime_ns
+
+    ensure_layout(ws)
+    assert example.stat().st_mtime_ns == untouched, "rewrote an identical file"
+
+    example.write_text("# stale\n", encoding="utf-8")
+    ensure_layout(ws)
+    assert example.read_text(encoding="utf-8") != "# stale\n", "never refreshed"
 
 
 def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):

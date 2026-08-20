@@ -146,22 +146,50 @@ def capture_build(monkeypatch) -> dict:
     return captured
 
 
+def repository_root(start: Path | None = None) -> Path:
+    """The checkout this file is in, found rather than counted.
+
+    Counting levels is correct until the tree moves, and this tree moves: it
+    broke twice in one month, and neither time did it *fail* -- the paths simply
+    pointed somewhere that no longer held what they were about.
+
+    A marker only helps if it cannot match elsewhere. An earlier one looked for
+    `pyproject.toml` beside `packages/`; when `packages/` went, nothing here
+    matched, the walk climbed out of the checkout entirely and found the parent
+    clone, and every rule then read a different repository and passed. So this
+    stops with a real message rather than climbing past.
+    """
+    here = (start or Path(__file__)).resolve()
+    for candidate in here.parents:
+        if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "kingfisher").is_dir():
+            return candidate
+    msg = (
+        f"no repository root above {here}: expected a directory holding both "
+        f"pyproject.toml and src/kingfisher. Tests that read files by path would "
+        f"otherwise scan the wrong tree, or nothing, and report success."
+    )
+    raise AssertionError(msg)
+
+
 @pytest.fixture(scope="session")
 def shipped():
-    """The definitions that ship with kingfisher, reached as an install would.
+    """This repository's worked definitions, found in this repository.
 
-    A fixture rather than a module constant because `importlib.resources` does
-    not promise the files sit on disk -- a zip-imported package materialises
-    them for the duration of the context and cleans up after.
+    Nothing ships them any more, so "reached as an install would" -- which is
+    what this said, through `importlib.resources` -- describes a route that no
+    longer exists.
 
-    In `conftest` rather than in one test module because two files want it: the
-    tests for the definitions themselves, and the seeding tests that check the
-    README describes them accurately.
+    Found by marker rather than by counting levels, and deliberately **not** by
+    reading `KINGFISHER_ASSETS`. The whole point of that variable is that it can
+    name somewhere else; a fixture that read it would mean four hundred lines of
+    tests quietly stop checking this repository's examples the first time a
+    developer uses the feature, and go green or red for reasons unrelated to the
+    commit under test.
+
+    A test about the examples in *this* repository has to find this repository.
+    A deployment setting is the wrong thing to ask.
     """
-    from kingfisher.infrastructure import seeding
-
-    with seeding.opened(seeding.ASSETS) as root:
-        yield root
+    return repository_root() / "examples"
 
 
 @pytest.fixture

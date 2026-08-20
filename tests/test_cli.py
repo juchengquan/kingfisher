@@ -33,7 +33,7 @@ def test_bare_invocation_prints_help_and_does_nothing(capsys):
     assert "list" in printed
 
 
-def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys):
+def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys, shipped):
     """The point of running on the paths half of the configuration.
 
     `models.yaml` lives *inside* the workspace, so a first run has none --
@@ -41,6 +41,7 @@ def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys):
     against a workspace with no catalogue at all.
     """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
     assert not (cfg.workspace / "models.yaml").exists()
 
@@ -51,11 +52,14 @@ def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys):
     assert (cfg.workspace / "models.yaml.example").is_file()
 
 
-def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(tmp_path, monkeypatch, capsys):
+def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(
+    tmp_path, monkeypatch, capsys, shipped
+):
     """`ensure_layout` before the copy. A destination has to exist before
     anything lands in it, and this is the command someone runs first."""
     workspace = tmp_path / "brand-new"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
@@ -64,19 +68,28 @@ def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(tmp_path, monkey
 
 
 def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_path):
-    """A caller pointing `--from` at a directory with nothing in it. Silence
-    would read as success."""
-    from kingfisher.infrastructure import seeding
+    """A caller pointing `--from` at a directory with nothing in it.
 
+    Non-zero, which it was not. This was nearly unreachable while a set shipped
+    -- it always held all four kinds -- and is now among the likelier mistakes,
+    since `--from ./examples/skills` names a directory that exists, is readable
+    and holds none of them. Exiting 0 after copying nothing is indistinguishable
+    from success to the script that ran it.
+
+    The message names the four kinds, because the mistake is almost always one
+    directory level in the wrong direction.
+    """
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setattr(seeding, "EXAMPLE", "nothing-here.example")
     monkeypatch.setattr("sys.argv", ["kingfisher", "seed", "--from", str(empty)])
 
-    assert main(["seed", "--from", str(empty)]) == 0
+    assert main(["seed", "--from", str(empty)]) == 1
 
-    assert "nothing to seed" in capsys.readouterr().out
+    printed = capsys.readouterr().out
+    assert "nothing to seed" in printed
+    for kind in ("agents", "skills", "subagents", "tools"):
+        assert kind in printed
 
 
 def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys):
@@ -294,7 +307,9 @@ def test_serve_without_the_extra_says_what_to_install(monkeypatch, capsys):
     assert "kingfisher[service]" in printed
 
 
-def test_a_missing_server_extra_does_not_take_the_other_verbs_down(monkeypatch, capsys, cfg):
+def test_a_missing_server_extra_does_not_take_the_other_verbs_down(
+    monkeypatch, capsys, cfg, shipped
+):
     """The reason the import is inside the function.
 
     `kingfisher_service` reaches fastapi as it loads. Imported at module
@@ -312,6 +327,7 @@ def test_a_missing_server_extra_does_not_take_the_other_verbs_down(monkeypatch, 
 
     monkeypatch.setattr(builtins, "__import__", _no_server)
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
@@ -574,7 +590,7 @@ def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeyp
 # -- `./.env`, and nowhere else --------------------------------------------
 
 
-def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys):
+def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped):
     """The failure this was written for.
 
     A checkout keeps its keys in `.env`, and reading the environment alone left
@@ -586,6 +602,7 @@ def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys):
         f"KINGFISHER_WORKSPACE={tmp_path / 'ws'}\n", encoding="utf-8"
     )
     monkeypatch.delenv("KINGFISHER_WORKSPACE", raising=False)
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
@@ -611,7 +628,7 @@ def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
     assert not Path("/should/never/be/read").exists()
 
 
-def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys):
+def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys, shipped):
     """`override=False`, and it matters.
 
     Somebody writing `KINGFISHER_WORKSPACE=... kingfisher seed` has said exactly
@@ -623,6 +640,7 @@ def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys):
         f"KINGFISHER_WORKSPACE={tmp_path / 'from-the-file'}\n", encoding="utf-8"
     )
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "from-the-shell"))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
     assert main(["seed"]) == 0
 
@@ -630,11 +648,12 @@ def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys):
     assert not (tmp_path / "from-the-file").exists()
 
 
-def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys):
+def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys, shipped):
     """An installed kingfisher usually has none, so absent must be silent and
     must not stop the command reaching the environment."""
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     assert not (tmp_path / ".env").exists()
 
     assert main(["seed"]) == 0

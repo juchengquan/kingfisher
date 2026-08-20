@@ -8,7 +8,6 @@ definitions the way an installed kingfisher would.
 from __future__ import annotations
 
 import shutil
-from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -38,7 +37,7 @@ from tests.conftest import subagents_dir, tools_dir
 #: rather than from the installed package.
 REPO = Path(__file__).resolve().parent.parent
 
-FIXTURE = Path(__file__).resolve().parent / "assets"
+FIXTURE = Path(__file__).resolve().parent / "seed_source"
 
 
 @pytest.fixture
@@ -265,16 +264,22 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
     assert result.overwritten == ()
 
 
-def test_seeding_leaves_the_catalogue_example_where_models_yaml_goes(cfg):
-    """Beside the file it is an example *of*, which is where someone looks.
+def test_seeding_does_not_claim_the_catalogue_example(cfg):
+    """It is not a definition, and it is no longer seeding's to write.
 
-    Not into one of the three catalogues: it is not a definition, and the
-    directory kingfisher reads `models.yaml` from is the workspace root.
+    `ensure_layout` places it, because it must arrive whether or not a
+    deployment has definitions at all -- and seeding is now able to refuse when
+    it has no source. A file that a refusal would take with it cannot be the
+    one worked example of a mandatory configuration file.
+
+    Asserted as absence from the *report*, not from the disk. The example is
+    beside `models.yaml` either way; what changed is who put it there, and a
+    test reading only the filesystem could not tell the difference.
     """
     result = seeding.seed(cfg, FIXTURE)
 
-    assert seeding.EXAMPLE in result.written
-    assert (cfg.workspace / seeding.EXAMPLE).is_file()
+    assert not [entry for entry in result.written if entry.endswith(".example")]
+    assert not [entry for entry in result.overwritten if entry.endswith(".example")]
 
 
 def test_seeding_never_writes_the_catalogue_itself(cfg):
@@ -294,7 +299,7 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
     assert catalogue.read_text(encoding="utf-8") == "mine: do not touch\n"
 
 
-def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypatch):
+def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
     """The guard that only had to hold one level deep until a preset tool could
     be a package.
 
@@ -317,15 +322,10 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path, monkeypa
     (source / "tools" / "__pycache__").mkdir(parents=True)
     (source / "tools" / "__pycache__" / "flat.pyc").write_bytes(b"\x00")
 
-    @contextmanager
-    def _fixture(_package=None):
-        # Takes the argument `opened` now takes: the seeder asks each installed
-        # pack for its own tree, so the source is a parameter rather than a
-        # constant. This stand-in ignores it and yields the planted one.
-        yield source
-
-    monkeypatch.setattr(seeding, "opened", _fixture)
-    seeding.seed(cfg)
+    # The planted tree directly. This used to stand in for `opened`, which
+    # materialised an installed package; `seed` takes a plain directory now, so
+    # there is nothing left to patch and the planted tree can just be passed.
+    seeding.seed(cfg, source)
 
     carried = [str(p.relative_to(tools_dir(cfg))) for p in tools_dir(cfg).rglob("__pycache__")]
     assert not carried, f"seeding carried bytecode into the workspace: {carried}"

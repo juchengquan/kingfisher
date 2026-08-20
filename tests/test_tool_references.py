@@ -184,22 +184,22 @@ def test_a_name_nothing_offers_is_left_to_the_other_refusal():
 # -- where it fires --------------------------------------------------------
 
 
-def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg):
+def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg, shipped):
     """`warm()` reads all three so a broken definition fails at startup. A path
     that no longer resolves is the same mistake one layer in -- and finding it
     when someone finally activates that one delegate means a deployment that
     started while broken."""
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
     (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
 
     with pytest.raises(CapabilityError, match="have moved"):
         Definitions.from_config(cfg).warm()
 
 
-def test_an_untouched_catalogue_warms_cleanly(cfg):
+def test_an_untouched_catalogue_warms_cleanly(cfg, shipped):
     """The negative control: the shipped presets use the long form, so this
     would fail if the check were wrong about the layout it ships with."""
-    seeding.seed(cfg)
+    seeding.seed(cfg, shipped)
 
     Definitions.from_config(cfg).warm()
 
