@@ -17,7 +17,7 @@ from kingfisher_service import ServiceConfig, create_app
 
 from kingfisher import Kingfisher, Request
 from tests.conftest import StubCheckpointer
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 @pytest.fixture

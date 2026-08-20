@@ -4,7 +4,7 @@ from langchain_core.messages import AIMessage, AIMessageChunk, ToolMessage
 
 from kingfisher.application.run import Request, stream
 from tests.conftest import StubCheckpointer, start
-from tests.test_run import StubAgent
+from tests.unit.test_run import StubAgent
 
 
 def _agent_with_a_tool_call() -> StubAgent:

@@ -6,7 +6,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.prompting import system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
-from tests.test_confinement import needs_a_real_toolchain
+from tests.unit.test_confinement import needs_a_real_toolchain
 
 
 def _all_text(messages) -> str:

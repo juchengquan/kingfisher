@@ -345,7 +345,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     from kingfisher.infrastructure import catalogue as catalogue_module
     from kingfisher.infrastructure.catalogue import layered as layered_module
     from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
-    from tests.test_run import StubAgent
+    from tests.unit.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)
@@ -380,7 +380,7 @@ def test_a_definition_written_after_wiring_is_not_this_deployments(cfg):
     """The cost of reading once, stated as behaviour rather than left to be
     discovered. A dev loop gets the old behaviour by building a new service,
     which is what `--seed-assets` then running already does."""
-    from tests.test_run import StubAgent
+    from tests.unit.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):
         (cfg.workspace / kind).mkdir(parents=True, exist_ok=True)

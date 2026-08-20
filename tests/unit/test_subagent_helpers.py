@@ -84,7 +84,7 @@ def _build(cfg, session_dir, *, subagents=("reviewer", "second-opinion")):
 
 def _delegate(graph, name: str):
     """One of the agent's own delegates, compiled."""
-    from tests.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     return _subagent_graphs(graph)[name]
 
@@ -98,7 +98,7 @@ def _helper(graph, delegate: str, name: str):
     no `task` either, so asserting against it proves nothing. A mutation that
     handed every helper the parent's `task` went undetected until this existed.
     """
-    from tests.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     return _subagent_graphs(_delegate(graph, delegate))[name]
 
@@ -110,7 +110,7 @@ def _delegates_of(graph) -> set[str]:
     spec carrying `middleware` proves what was requested, and the whole question
     at depth is whether the level below was actually built.
     """
-    from tests.test_delegation_ceiling import _subagent_graphs
+    from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     return set(_subagent_graphs(graph))
 

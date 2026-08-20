@@ -238,7 +238,7 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, 
     rather than running ahead of it".
     """
     from tests.conftest import tools_dir
-    from tests.test_subagent_skills import offer_skills
+    from tests.unit.test_subagent_skills import offer_skills
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "always_fails.py").write_text(A_TOOL, encoding="utf-8")

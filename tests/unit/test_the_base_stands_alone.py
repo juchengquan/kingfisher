@@ -18,7 +18,18 @@ from pathlib import Path
 
 import pytest
 
-SRC = Path(__file__).resolve().parents[1] / "src" / "kingfisher"
+from tests.conftest import repository_root
+
+SRC = repository_root() / "src" / "kingfisher"
+
+#: Every module the rule below walks, collected once so the collection itself can
+#: be checked.
+#:
+#: An empty parametrize does not fail -- pytest *skips* it, and a skip in a wall
+#: of dots is indistinguishable from a pass. That is not hypothetical: `SRC` was
+#: counted as `parents[1]`, the tests moved one level down into `tests/unit/`, and
+#: this file went green with nothing walked at all.
+MODULES = sorted(SRC.rglob("*.py"))
 
 #: What this distribution must not need. `kingfisher_service` is a separate
 #: wheel; `fastapi` and `uvicorn` are its dependencies and no longer anything
@@ -94,7 +105,7 @@ def _needs_absent(path: Path, name: str) -> list[str]:
     return complaints
 
 
-@pytest.mark.parametrize("path", sorted(SRC.rglob("*.py")), ids=_relative)
+@pytest.mark.parametrize("path", MODULES, ids=_relative)
 def test_no_module_needs_the_service_or_its_dependencies(path):
     """Anywhere in the import graph, at module scope or inside a function.
 
@@ -187,4 +198,19 @@ def test_the_module_scope_rule_can_actually_fire(tmp_path):
     )
     assert _needs_absent(deferred, "somewhere/else.py"), (
         "and any other file naming it at all is still refused"
+    )
+
+
+def test_the_rule_above_walks_something():
+    """The guard the skip needed.
+
+    `SRC` is found by marker rather than counted, which is what stops it
+    pointing at the wrong tree -- but a marker can be wrong too, and the failure
+    mode of this file is silence rather than red. So the collection is asserted
+    directly: the package has many modules, and any answer near zero means the
+    walk is looking somewhere that is not the package.
+    """
+    assert len(MODULES) > 20, (
+        f"{len(MODULES)} modules found under {SRC} — the rule above parametrizes "
+        "over this list, and an empty one skips rather than fails"
     )

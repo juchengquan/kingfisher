@@ -191,7 +191,7 @@ ignore = ["ANN401"]
 # Not a test: a report you run by hand, so printing is its entire output. It
 # lives beside the tests because the AST tooling does -- `test_architecture`
 # reads the same trees -- and pytest does not collect it.
-"tests/audit_duplication.py" = ["T201"]
+"tests/unit/audit_duplication.py" = ["T201"]
 # Throwaway probes, kept as a record of what was verified against the live
 # gateway rather than as maintained code.
 "spikes/**" = ["T201", "ANN", "PLC0415"]
@@ -200,9 +200,16 @@ ignore = ["ANN401"]
 known-first-party = ["kingfisher"]
 
 [tool.pytest.ini_options]
-# Both distributions in this workspace. The pack's tests are about its content
-# and kingfisher's are about the framework, but one command has to run both or a
+# Both distributions in this workspace, and both shelves of this one: `tests`
+# covers `tests/unit` and `tests/integration` without naming either, so adding a
+# third shelf needs no change here. The service's tests are about its surface and
+# kingfisher's are about the framework, but one command has to run both or a
 # preset breaks with nothing red.
+#
+# `tests/integration/driver.py` is *in* this tree and is not collected: pytest
+# takes `test_*.py`, and a module whose job is to call a real model must never
+# be run by a bare `pytest`. Asserted rather than assumed --
+# `test_the_driver_is_not_collected`.
 testpaths = ["tests", "service/tests"]
 # The repository root, so `tests.integration.driver` and `evals` are importable,
 # and the library's own test directory, so the other package can reach the

@@ -20,7 +20,7 @@ from kingfisher.infrastructure.harness.agent import (
     available_skills,
     build_agent,
 )
-from tests.conftest import subagents_dir, tools_dir
+from tests.conftest import repository_root, subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped
 #: pack is reached -- `opened()` through `importlib.resources` -- so those tests
@@ -35,7 +35,7 @@ from tests.conftest import subagents_dir, tools_dir
 #: of what the pack machinery was for here.
 #: The checkout, for the one file these tests read from the repository
 #: rather than from the installed package.
-REPO = Path(__file__).resolve().parent.parent
+REPO = repository_root()
 
 FIXTURE = Path(__file__).resolve().parent / "seed_source"
 

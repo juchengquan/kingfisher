@@ -23,7 +23,7 @@ from kingfisher.domain.capabilities import Capabilities, CapabilityError, all_bu
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
-from tests.test_delegation_ceiling import _subagent_graphs
+from tests.unit.test_delegation_ceiling import _subagent_graphs
 
 TOOL = """
 from langchain_core.tools import tool
