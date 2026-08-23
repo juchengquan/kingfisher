@@ -221,6 +221,83 @@ class DefinitionStore(Protocol):
         ...
 
 
+class SessionStore(Protocol):
+    """Where a session's files live when the machine may not keep them.
+
+    The missing half of a symmetry this package already commits to. `FileStore`
+    and `DefinitionStore` are how bytes arrive: *"a remote caller has no host
+    paths... a store the deployment wired resolves it."* Bytes leaving had no
+    such door -- `artifacts()` hands back a list of paths and the caller opens
+    them off the host, which only works for a caller sharing that host.
+
+    That asymmetry is invisible while a deployment may keep files on its own
+    disk. It is the whole problem when it may not: a session's directory is
+    gone when the process is, and what a turn produced has to be somewhere the
+    next turn can find it.
+
+    **A local directory is a perfectly good implementation of this port.** That
+    is the point rather than a concession -- what the constraint forbids is
+    kingfisher *assuming* a local disk, not a deployment choosing one. The same
+    interface fronts a bucket, a database, or a directory, and kingfisher does
+    not know which.
+
+    Keys are paths relative to the session root, the same vocabulary
+    `artifacts()` already returns and for the same reason: a caller diffing two
+    turns needs names it can compare, and an absolute path names a machine.
+
+    Ids stop here, as they do for the other two. What the agent sees is
+    `/derived/report.md`; how a store spells that is its own business.
+    """
+
+    def fetch(self, session_id: str) -> Mapping[str, bytes]:
+        """Everything this session kept, keyed by path relative to its root.
+
+        Empty for a session the store has never seen, which is not an error: a
+        first turn has nothing to restore, and refusing here would make the
+        common case the exceptional one.
+        """
+        ...
+
+    def save(self, session_id: str, files: Mapping[str, bytes]) -> None:
+        """Keep these files against this session, replacing any it already had.
+
+        The *changed* ones, not all of them. A caller that sends everything each
+        time is correct and pays for the whole session on every call; the
+        interface does not police that, because which files changed is something
+        only the caller can know cheaply.
+
+        Deleting is `save` with the key absent from a later `fetch`, which this
+        port deliberately cannot express -- see `forget`.
+        """
+        ...
+
+    def knows(self, session_id: str) -> bool:
+        """Whether this store holds anything for this session.
+
+        Existence, asked cheaply. `fetch` answers the same question by handing
+        back every byte, which is the wrong price for a boolean when the store
+        is somewhere else.
+
+        It is a *security* question rather than a convenience one. A supplied
+        session id may resume and may not create — *"the id is what proves a
+        session is the caller's, and it is proof only because it cannot be
+        chosen"* — and that proof used to be a directory. Where the machine may
+        not keep directories, this is what is left to ask, and it holds for the
+        same reason: a caller cannot make a store know an id it never saved.
+        """
+        ...
+
+    def forget(self, session_id: str) -> None:
+        """Drop everything kept for this session. Idempotent.
+
+        Separate from `save` because deletion is the one operation a caller must
+        be unable to perform by accident. `save` merges; only this removes, and
+        it removes a whole session rather than a file, which is the only
+        granularity `reap` ever needs.
+        """
+        ...
+
+
 class FileStore(Protocol):
     """Where a request's files are fetched from, by id.
 

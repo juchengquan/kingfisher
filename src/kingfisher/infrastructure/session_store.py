@@ -1,0 +1,145 @@
+"""A `SessionStore` over a directory.
+
+The implementation a deployment gets when it wires nothing, and the one that
+makes the port's claim checkable: *a local directory is a perfectly good
+implementation of this*. What the constraint forbids is kingfisher assuming a
+local disk, not a deployment choosing one — so the default has to be a
+directory, or the port would be a promise nobody had ever kept.
+
+Deliberately dull. It walks, it writes, it deletes. Everything interesting about
+this design is in *when* a caller reaches for it, not in what happens when they
+do, and a first implementation that was clever about batching or streaming would
+be optimising a cost nobody has measured yet.
+
+Bytes rather than handles, matching `LocalFileStore`. That means a session's
+files are held whole in memory during a transfer, which is a real cost on a
+large upload and is the shape both other stores already have — one vocabulary is
+worth more here than one saved copy, and the port can grow a streaming twin the
+day something measures the need for it.
+"""
+
+from __future__ import annotations
+
+import shutil
+from collections.abc import Mapping, Sequence
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+from kingfisher.domain.references import within
+
+if TYPE_CHECKING:
+    from kingfisher.domain.ports import SessionStore
+
+
+class LocalSessionStore:
+    """Sessions kept as directories under `root`, one per session id.
+
+    `root` is somewhere the *deployment* chose. If that is a mounted volume, a
+    network filesystem or a directory on the same disk as everything else, this
+    class neither knows nor cares — which is the property the port exists for.
+    """
+
+    def __init__(self, root: Path) -> None:
+        self.root = Path(root).expanduser().resolve()
+
+    def _held(self, session_id: str) -> Path:
+        """Where one session's files sit, refusing an id that would escape.
+
+        `within` rather than a plain join. A session id is kingfisher's own
+        today and this is still checked, because "the caller cannot reach this
+        argument" is a claim about every call site rather than about this one,
+        and a store handed an id from a request later would be checked by
+        nobody. `FileStore`'s refs are checked for the same reason and that one
+        *is* caller-supplied.
+        """
+        return within(self.root, session_id)
+
+    def fetch(self, session_id: str) -> dict[str, bytes]:
+        """Everything kept for this session, keyed by path relative to its root."""
+        held = self._held(session_id)
+        if not held.is_dir():
+            return {}
+        return {
+            str(path.relative_to(held)): path.read_bytes()
+            for path in sorted(held.rglob("*"))
+            if path.is_file()
+        }
+
+    def save(self, session_id: str, files: Mapping[str, bytes]) -> None:
+        """Keep these files, replacing any of the same name.
+
+        Merges rather than mirrors: a file the store holds and this call does
+        not mention survives. That is what lets a caller send only what changed,
+        and it is why `forget` exists — without it there would be no way to
+        remove anything at all.
+        """
+        held = self._held(session_id)
+        for name, content in files.items():
+            target = within(held, name)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            target.write_bytes(content)
+
+    def knows(self, session_id: str) -> bool:
+        """Whether anything is held for this session, without reading it."""
+        return self._held(session_id).is_dir()
+
+    def forget(self, session_id: str) -> None:
+        """Drop everything kept for this session. Idempotent."""
+        shutil.rmtree(self._held(session_id), ignore_errors=True)
+
+
+def restore_into(store: SessionStore, session_id: str, directory: Path) -> tuple[str, ...]:
+    """Write back what the store kept, for a directory that has lost it.
+
+    Here rather than in `service.py` because the application layer decides what
+    happens and an adapter makes it happen —
+    `test_the_application_layer_does_not_write_to_disk_itself` enforces that, and
+    it was written after two sets of caller-supplied files ended up with
+    different guarantees precisely because one path did its own I/O.
+
+    Only files that are *absent*. On a host keeping its own disk, that is every
+    turn after the first finding nothing to do, which is the case that has to
+    stay cheap; on a fresh container it is the whole session, which is the case
+    that has to work at all.
+
+    Absent rather than differing, and the distinction is deliberate: a file
+    present locally and different in the store means a turn was interrupted
+    between writing and saving. Nothing here can tell that from a file the
+    current turn has simply not saved yet, so the local copy wins and the store
+    catches up when this turn ends.
+
+    Returns what it wrote, so a caller can say so rather than guess.
+    """
+    written: list[str] = []
+    for name, content in store.fetch(session_id).items():
+        target = within(directory, name)
+        if target.exists():
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(content)
+        written.append(name)
+    return tuple(written)
+
+
+def keep_from(store: SessionStore, session_id: str, directory: Path, names: Sequence[str]) -> None:
+    """Hand the named files to the store, reading them from `directory`.
+
+    `names` rather than a walk, because the caller has just done one:
+    `collect_artifacts` lists everything under `/derived` and `/memory` at the
+    end of a turn, which is exactly what has to outlive the machine. `/data` is
+    re-fetched per request through `FileStore`, and `/runs` is scratch the
+    prompt itself calls disposable.
+
+    A name that no longer resolves to a file is skipped rather than refused. The
+    list was taken a moment ago and the shell can delete between then and now;
+    failing a turn's persistence over a file that has gone is a worse answer
+    than keeping the rest.
+    """
+    store.save(
+        session_id,
+        {
+            name: within(directory, name).read_bytes()
+            for name in names
+            if within(directory, name).is_file()
+        },
+    )

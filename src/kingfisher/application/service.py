@@ -105,6 +105,7 @@ from kingfisher.infrastructure.harness.checkpointing import (
 )
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.seeding import SEED_HINT
+from kingfisher.infrastructure.session_store import keep_from, restore_into
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
@@ -128,6 +129,7 @@ if TYPE_CHECKING:
         DefinitionStore,
         FileStore,
         SessionDirs,
+        SessionStore,
         ThreadStore,
     )
 
@@ -467,6 +469,11 @@ class Kingfisher:
         threads: ThreadStore | Callable[[Path], Any] | None = None,
         definitions: DefinitionStore | None = None,
         files: FileStore | None = None,
+        # Where a session's files go when the machine may not keep them. `None`
+        # means the session directory is the only copy, which is what every
+        # deployment has had until now and stays correct wherever the host is
+        # allowed to hold data.
+        sessions: SessionStore | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
@@ -491,6 +498,7 @@ class Kingfisher:
         # to say so. `--list` deliberately does not do this -- see `warm`.
         self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
 
+        self.sessions_store: SessionStore | None = sessions
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the
         # agent's own root -- a claim kept there would be something `execute`
@@ -542,10 +550,28 @@ class Kingfisher:
         """
         if request.session_id is None:
             return uuid4().hex
-        if request.session_id not in self.dirs.children(root):
+        if not self._exists(request.session_id, root):
             msg = f"no session {request.session_id!r}; omit session_id to start one"
             raise UnknownSessionError(msg)
         return request.session_id
+
+    def _exists(self, session_id: str, root: Path) -> bool:
+        """Whether this id names a session, by directory or by store.
+
+        A directory alone was the answer while the machine was allowed to keep
+        one. Where it is not, a session that outlived its container has no
+        directory and is not gone -- refusing it here would make the constraint
+        and resumption mutually exclusive, which is the whole thing the store
+        exists to prevent.
+
+        The proof the check exists for is unchanged. It refuses an id the caller
+        invented, and a caller can no more make a store hold an id than make a
+        directory appear: both answer only for sessions kingfisher itself
+        created.
+        """
+        if session_id in self.dirs.children(root):
+            return True
+        return self.sessions_store is not None and self.sessions_store.knows(session_id)
 
     def _refuse_if_over_budget(self, session: Session) -> None:
         """Stop a session that is already too large from growing further.
@@ -631,6 +657,11 @@ class Kingfisher:
         session = Session(id=session_id, directory=root / session_id)
         failure = session.discard(self.dirs, self._shared)
         session.release(self.dirs, self._claims)
+        # And what the store kept, or a deleted session outlives its deletion
+        # everywhere that matters. The directory going is the visible half; on a
+        # host that may not hold data, the store is the only half that was ever
+        # durable.
+        self._forget(session_id)
         return failure
 
     def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
@@ -664,7 +695,25 @@ class Kingfisher:
         result = retention.apply(plan, root, self.dirs, self._shared)
         result = self._reconcile_threads(root, result)
         self._discard_dead_claims(root)
+        # Named by the sweep rather than re-derived. `removed` is what actually
+        # went, which is not the same as what the plan asked for -- a session
+        # whose directory refused to delete is still there and its store copy
+        # has to stay with it, or the next turn would find a directory with no
+        # history behind it.
+        for gone in result.removed:
+            self._forget(gone)
         return result
+
+    def _forget(self, session_id: str) -> None:
+        """Drop this session from the store, if a deployment wired one.
+
+        Deliberately not part of `Session.discard`: that removes a directory and
+        a thread, which are things this process owns. A store is somebody
+        else's, reached through a port, and a domain object should not know one
+        exists.
+        """
+        if self.sessions_store is not None:
+            self.sessions_store.forget(session_id)
 
     def _discard_dead_claims(self, root: Path) -> None:
         """Drop claims whose session no longer exists.
@@ -917,6 +966,11 @@ class Kingfisher:
         # it.
         session = Session.open(self.workspace, session_id, self.dirs)
         ensure_session_layout(session.directory)
+        # After the layout and before anything reads it. The agent's backend is
+        # rooted at this directory, so a restore any later would arrive after
+        # the thing that reads it.
+        if self.sessions_store is not None:
+            restore_into(self.sessions_store, session.id, session.directory)
         return session
 
     def _admit(
@@ -1089,7 +1143,20 @@ class Kingfisher:
         )
 
     def _finished(self, prepared: _Prepared, answer: str, *, cut_short: bool) -> RunEvent:
-        """The terminal event, built the same way whichever loop produced it."""
+        """The terminal event, built the same way whichever loop produced it.
+
+        And the one place both loops converge, which is why the session is kept
+        here rather than beside each `yield`: two call sites that must both
+        remember to persist is one a third path could omit.
+
+        At the end of the turn rather than after each tool call. The narrower
+        window is better and costs a directory walk per call, which is
+        unmeasured -- and what has to be proven first is that a session survives
+        the machine, for which a turn-end save is enough. Measure, then narrow.
+        """
+        kept = collect_artifacts(prepared.session.directory)
+        if self.sessions_store is not None:
+            keep_from(self.sessions_store, prepared.session.id, prepared.session.directory, kept)
         return RunEvent(
             kind="finished",
             text=answer,
@@ -1103,7 +1170,7 @@ class Kingfisher:
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.
-                artifacts=collect_artifacts(prepared.session.directory),
+                artifacts=kept,
                 cut_short=cut_short,
             ),
         )

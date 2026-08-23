@@ -30,6 +30,7 @@ _EXPORTS = {
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalFileStore": "kingfisher.infrastructure.files",
+    "LocalSessionStore": "kingfisher.infrastructure.session_store",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.uploads",
     "async_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
@@ -105,6 +106,7 @@ __all__ = [
     "Inventory",
     "Kingfisher",
     "LocalFileStore",
+    "LocalSessionStore",
     "QuotaExceededError",
     "Request",
     "RunEvent",
@@ -205,6 +207,9 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.seeding import seed as seed
+    from kingfisher.infrastructure.session_store import (
+        LocalSessionStore as LocalSessionStore,
+    )
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import protect_data as protect_data
