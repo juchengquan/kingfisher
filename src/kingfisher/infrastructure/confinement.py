@@ -59,9 +59,20 @@ class Confinement:
     #: Empty when the shell is confined, or when a deployment has said it is
     #: confined elsewhere. Non-empty text is printed once at startup.
     warning: str = ""
+    #: The deployment asserted a boundary this code cannot see -- a container
+    #: mounting only the workspace. Nothing is wrapped and nothing is wrong.
+    #:
+    #: A field rather than an inference, because the inference is exactly what
+    #: `EXTERNAL` was invented to remove: "nothing wraps the shell" has two
+    #: causes and one of them is fine. Without this, a reader downstream sees
+    #: `confined = False` for both and reports the reassuring case as the
+    #: alarming one -- which `doctor` did until this was added.
+    elsewhere: bool = False
 
     @property
     def confined(self) -> bool:
+        """Whether *this* process wraps the command. See `elsewhere` for the
+        other way a shell can be safe."""
         return self.warning == "" and self.wrap is not _unwrapped
 
 
@@ -290,7 +301,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
     edit is not a boundary.
     """
     if mode == EXTERNAL:
-        return Confinement(wrap=_unwrapped)
+        return Confinement(wrap=_unwrapped, elsewhere=True)
     if mode == OFF:
         return Confinement(
             wrap=_unwrapped,

@@ -105,7 +105,11 @@ from kingfisher.infrastructure.harness.checkpointing import (
 )
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.seeding import SEED_HINT
-from kingfisher.infrastructure.session_store import keep_from, restore_into
+from kingfisher.infrastructure.session_store import (
+    LocalSessionStore,
+    keep_from,
+    restore_into,
+)
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
@@ -498,7 +502,14 @@ class Kingfisher:
         # to say so. `--list` deliberately does not do this -- see `warm`.
         self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
 
-        self.sessions_store: SessionStore | None = sessions
+        # Injected, or derived from configuration, or nothing -- the same
+        # order `catalogue` follows and for the same reason: derive from `cfg`,
+        # never invent. A deployment keeping sessions somewhere that is not a
+        # directory passes the object; one keeping them in a directory names it
+        # and this builds the adapter.
+        self.sessions_store: SessionStore | None = sessions or (
+            LocalSessionStore(self.cfg.session_store) if self.cfg.session_store else None
+        )
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Host-side, beside the run logs, because the session directory is the
         # agent's own root -- a claim kept there would be something `execute`
