@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+from types import SimpleNamespace
 
 import pytest
 from langchain_core.messages import AIMessage
@@ -45,6 +46,19 @@ class StubAgent:
         for update in self.updates:
             yield (self.delegate, "updates", update)
         yield ((), "values", {"messages": [AIMessage(content=self.answer)]})
+
+    def get_state(self, config):
+        """What a real graph holds when the turn ends.
+
+        A stub that could not answer this would make every test about the
+        transcript pass for the wrong reason -- the turn would write nothing and
+        the assertion would be about a stub's silence rather than a graph's
+        state. It answers with what it was sent plus what it said, which is what
+        a real conversation is.
+        """
+        del config
+        sent = list((self.state or {}).get("messages", []))
+        return SimpleNamespace(values={"messages": [*sent, AIMessage(content=self.answer)]})
 
 
 @pytest.mark.parametrize(

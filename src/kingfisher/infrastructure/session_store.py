@@ -26,6 +26,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.domain.references import within
+from kingfisher.domain.transcript import Message, as_json, from_json
 
 if TYPE_CHECKING:
     from kingfisher.domain.ports import SessionStore
@@ -143,3 +144,32 @@ def keep_from(store: SessionStore, session_id: str, directory: Path, names: Sequ
             if within(directory, name).is_file()
         },
     )
+
+
+#: Where a session's conversation is kept. Dotted and not in `SESSION_DIRS`,
+#: for the reason `.home` is not: those are the names the agent addresses, and
+#: this is plumbing. It sits at the session root so it is deleted with the
+#: session, counted by `session_bytes`, and carried by whatever keeps the rest.
+TRANSCRIPT = ".transcript.jsonl"
+
+
+def read_transcript(directory: Path) -> tuple[Message, ...]:
+    """What was said in this session before now, or nothing for a first turn."""
+    held = Path(directory) / TRANSCRIPT
+    if not held.is_file():
+        return ()
+    return from_json(held.read_text(encoding="utf-8"))
+
+
+def write_transcript(directory: Path, messages: tuple[Message, ...]) -> None:
+    """Replace this session's transcript with what it now holds.
+
+    Whole rather than appended, which is the honest first version and the one
+    that cannot go wrong: the graph hands back a full conversation, and writing
+    the part that is new means knowing which part that is. It costs the whole
+    history per turn, which grows with the session -- the format is
+    line-oriented precisely so that appending is a change of one function rather
+    than a migration, the day something measures the need.
+    """
+    Path(directory).mkdir(parents=True, exist_ok=True)
+    (Path(directory) / TRANSCRIPT).write_text(as_json(messages), encoding="utf-8")

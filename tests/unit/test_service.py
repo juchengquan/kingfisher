@@ -504,3 +504,45 @@ def test_wiring_no_store_leaves_everything_as_it_was(cfg):
 
     assert service.sessions_store is None
     assert (cfg.workspace / "sessions" / result.session_id).is_dir()
+
+
+def test_a_conversation_survives_losing_its_directory(cfg, tmp_path):
+    """The transcript's claim, and the reason it is not the checkpointer.
+
+    A checkpointer holds a conversation in whatever the framework chose. This
+    holds it in records kingfisher owns, in a file inside the session, so the
+    same store that carries results carries the history — and a machine that
+    keeps nothing loses neither.
+    """
+    import shutil
+
+    service, _ = _wired_to_a_store(cfg, tmp_path)
+    first = service.run(Request(task="remember the number forty"))
+    service.run(Request(task="and the colour blue", session_id=first.session_id))
+
+    directory = cfg.workspace / "sessions" / first.session_id
+    before = (directory / ".transcript.jsonl").read_text(encoding="utf-8")
+    assert "forty" in before and "blue" in before
+
+    # The machine goes.
+    shutil.rmtree(directory)
+    service.run(Request(task="what did I say?", session_id=first.session_id))
+
+    after = (directory / ".transcript.jsonl").read_text(encoding="utf-8")
+    assert "forty" in after, "the first turn is gone from the conversation"
+    assert "blue" in after
+    assert "what did I say?" in after
+
+
+def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg, tmp_path):
+    """Where history comes from now. The checkpointer holds one turn and nothing
+    after it, so a second turn that saw only its own question would be a session
+    with no memory at all."""
+    service, _ = _wired_to_a_store(cfg, tmp_path)
+    first = service.run(Request(task="the number is forty"))
+    service.run(Request(task="and now?", session_id=first.session_id))
+
+    sent = service._graph.state["messages"]
+
+    assert len(sent) > 1, "only the new question reached the graph"
+    assert any("forty" in str(getattr(m, "content", m)) for m in sent)

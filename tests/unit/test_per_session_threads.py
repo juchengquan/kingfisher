@@ -7,14 +7,17 @@ every session. Everything that went wrong with retention came from that seam --
 removed left their threads behind, and a directory deleted any other way
 orphaned its thread forever, 132 of them in one real workspace.
 
-Here the database is a file in the session directory, so the seam is gone
-rather than swept.
+The file is a *transcript* now rather than a checkpoint database, and every
+claim below survived that: it is still one file in the session directory, still
+deleted with it, still counted by the quota, still separate per session. What
+changed is what is in it — kingfisher's own message records rather than
+langgraph's resumable graph state, because a graph is never resumed here. See
+`domain.transcript`.
 """
 
 from __future__ import annotations
 
 import asyncio
-import sqlite3
 from typing import Any
 
 import pytest
@@ -22,7 +25,7 @@ import pytest
 from kingfisher import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.harness.checkpointing import session_db_path
+from kingfisher.infrastructure.session_store import TRANSCRIPT
 from kingfisher.infrastructure.workspace_fs import session_bytes
 from tests.conftest import StubCheckpointer
 from tests.unit.test_async import AsyncStubAgent
@@ -41,7 +44,7 @@ def test_the_conversation_is_a_file_inside_the_session(cfg):
 
     result = kf.run(Request("go"))
 
-    assert session_db_path(_session_dir(cfg, result.session_id)).is_file()
+    assert (_session_dir(cfg, result.session_id) / TRANSCRIPT).is_file()
 
 
 def test_nothing_is_written_to_a_workspace_wide_database(cfg):
@@ -64,7 +67,7 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
     directory = _session_dir(cfg, result.session_id)
     counted = session_bytes(directory)
 
-    assert counted >= session_db_path(directory).stat().st_size > 0
+    assert counted >= (directory / TRANSCRIPT).stat().st_size > 0
 
 
 # -- what it has to keep doing -------------------------------------------
@@ -99,11 +102,9 @@ def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
     # The second turn saw the first: continuity is what the store buys.
     assert len(second["messages"]) > 2, "the conversation did not carry"
 
-    db = session_db_path(session_dir)
-    conn = sqlite3.connect(f"file:{db}?mode=ro", uri=True)
-    rows = conn.execute("select count(*) from checkpoints").fetchone()[0]
-    conn.close()
-    assert rows > 0, "nothing was written to the session's own database"
+    # Within one turn the saver is what carries the conversation between
+    # supersteps, and that is all it now has to do -- across turns the transcript
+    # carries it, and nothing here outlives the turn that made it.
 
 
 def test_two_sessions_keep_separate_conversations(cfg):
@@ -113,8 +114,8 @@ def test_two_sessions_keep_separate_conversations(cfg):
     one, two = kf.run(Request("a")), kf.run(Request("b"))
 
     assert one.session_id != two.session_id
-    assert session_db_path(_session_dir(cfg, one.session_id)) != session_db_path(
-        _session_dir(cfg, two.session_id)
+    assert (_session_dir(cfg, one.session_id) / TRANSCRIPT) != (
+        _session_dir(cfg, two.session_id) / TRANSCRIPT
     )
 
 
@@ -125,7 +126,7 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg):
     kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
-    assert session_db_path(directory).is_file()
+    assert (directory / TRANSCRIPT).is_file()
 
     assert kf.delete_session(result.session_id) is None
 
@@ -153,7 +154,7 @@ def test_astream_works_with_nothing_injected(cfg):
     session_id = asyncio.run(go())
 
     assert session_id is not None
-    assert session_db_path(_session_dir(cfg, session_id)).is_file()
+    assert (_session_dir(cfg, session_id) / TRANSCRIPT).is_file()
 
 
 def test_the_async_saver_actually_supports_async(cfg, session_dir):
@@ -194,7 +195,9 @@ def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
     kf.run(Request("go"))
 
     assert kf.threads is store
-    assert not any(session_db_path(p).exists() for p in (cfg.workspace / "sessions").iterdir())
+    # The injected store is what the graph ran on; the transcript is written
+    # regardless, because it is kingfisher's record rather than the saver's.
+    assert all((p / TRANSCRIPT).is_file() for p in (cfg.workspace / "sessions").iterdir())
 
 
 def test_a_factory_is_asked_once_per_session(cfg):
@@ -276,7 +279,9 @@ def test_conversation_can_be_turned_off_entirely(cfg):
     result = kf.run(Request("go"))
 
     assert result.answer == "ok"
-    assert not session_db_path(_session_dir(cfg, result.session_id)).exists()
+    # Conversation off means nothing is remembered between turns, so there is
+    # no transcript either -- the file and the flag say the same thing.
+    assert not (_session_dir(cfg, result.session_id) / TRANSCRIPT).exists()
     assert not any((cfg.workspace / "sessions").rglob("*threads.db*"))
 
 

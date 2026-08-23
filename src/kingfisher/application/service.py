@@ -84,6 +84,7 @@ from kingfisher.domain.session import (
     sessions_root,
     still_held,
 )
+from kingfisher.domain.transcript import Message
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
@@ -106,9 +107,12 @@ from kingfisher.infrastructure.harness.checkpointing import (
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.seeding import SEED_HINT
 from kingfisher.infrastructure.session_store import (
+    TRANSCRIPT,
     LocalSessionStore,
     keep_from,
+    read_transcript,
     restore_into,
+    write_transcript,
 )
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
@@ -208,6 +212,9 @@ class _Prepared:
     timeout_s: float
     #: Closed when the turn ends. See `_checkpointer_for`.
     release: Any = None
+    #: What was said in this session before now. The graph's saver holds one
+    #: turn and nothing after it, so this is where a conversation comes from.
+    history: tuple[Message, ...] = ()
 
 
 def _withheld_by_kind(
@@ -1124,6 +1131,7 @@ class Kingfisher:
         return _Prepared(
             graph=admitted.graph,
             release=admitted.release,
+            history=read_transcript(session.directory),
             message=turn_message(
                 request.task,
                 turn,
@@ -1165,9 +1173,24 @@ class Kingfisher:
         unmeasured -- and what has to be proven first is that a session survives
         the machine, for which a turn-end save is enough. Measure, then narrow.
         """
+        self._record(prepared)
         kept = collect_artifacts(prepared.session.directory)
         if self.sessions_store is not None:
-            keep_from(self.sessions_store, prepared.session.id, prepared.session.directory, kept)
+            # The transcript is named separately rather than collected. It sits
+            # at the session root, and `collect_artifacts` walks `/derived` and
+            # `/memory` -- so a first draft wrote it and never kept it, and a
+            # session that outlived its machine came back with its files and no
+            # conversation.
+            #
+            # And it stays out of `kept`, which is what the caller is handed:
+            # `artifacts` is what a turn *produced*, and a transcript is
+            # plumbing for the same reason `.home` is.
+            keep_from(
+                self.sessions_store,
+                prepared.session.id,
+                prepared.session.directory,
+                (*kept, TRANSCRIPT),
+            )
         return RunEvent(
             kind="finished",
             text=answer,
@@ -1186,6 +1209,44 @@ class Kingfisher:
             ),
         )
 
+    def _record(self, prepared: _Prepared) -> None:
+        """Write what was said this turn, as records this package owns.
+
+        Read back out of the graph rather than accumulated from the stream: the
+        stream carries chunks and tool events shaped for a reader, and the state
+        is the one place holding the conversation as messages. `get_state` works
+        because the turn's saver is still alive here -- it holds this turn and
+        nothing after it.
+
+        A turn that produced no state leaves the transcript alone rather than
+        truncating it. A refused turn, or one that died before the first
+        superstep, has nothing to add and must not take the previous
+        conversation with it.
+
+        Nothing is suppressed. A first draft wrapped this in `suppress`, which
+        hid the fact that it was writing nothing at all -- and a conversation
+        lost without an error is precisely the failure this design exists to
+        prevent. A graph with no `get_state` is the one case that is not an
+        error: a deployment with conversation turned off has no state to read,
+        and neither does a caller who injected something simpler than a graph.
+        """
+        if not self.cfg.conversation_enabled:
+            return
+        read = getattr(prepared.graph, "get_state", None)
+        if read is None:
+            return
+        try:
+            messages = read(prepared.config).values.get("messages")
+        except ValueError:
+            # `No checkpointer set` -- an injected graph that keeps no state
+            # between supersteps. Structural, like the missing method above, and
+            # not a conversation that failed to be read. Caught by name rather
+            # than by suppressing everything, so a graph that genuinely cannot
+            # answer still says so.
+            return
+        if messages:
+            write_transcript(prepared.session.directory, runtime.as_transcript(messages))
+
     def stream(self, request: str | Request) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens.
 
@@ -1200,7 +1261,7 @@ class Kingfisher:
         delegates = runtime.Delegates()
         try:
             for namespace, mode, chunk in prepared.graph.stream(
-                runtime.user_payload(prepared.message),
+                runtime.user_payload(prepared.message, prepared.history),
                 config=prepared.config,
                 stream_mode=runtime.STREAM_MODES,
                 subgraphs=True,
@@ -1280,7 +1341,7 @@ class Kingfisher:
         delegates = runtime.Delegates()
         try:
             async for namespace, mode, chunk in prepared.graph.astream(
-                runtime.user_payload(prepared.message),
+                runtime.user_payload(prepared.message, prepared.history),
                 config=prepared.config,
                 stream_mode=runtime.STREAM_MODES,
                 subgraphs=True,
