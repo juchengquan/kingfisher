@@ -1286,10 +1286,10 @@ class Kingfisher:
         kept: tuple[str, ...] = ()
         delegates = runtime.Delegates()
         try:
-        # Inside the `try`, not before it. A caller that stops reading during
-        # these -- a withheld-capability notice is the common one -- used to
-        # leave the turn with no end at all: the claim stayed taken, the
-        # checkpointer stayed open, and nothing was persisted.
+            # Inside the `try`, not before it. A caller that stops reading
+            # during these -- `run_start` is the first -- used to leave the turn
+            # with no end at all: the claim stayed taken, the checkpointer
+            # stayed open, and nothing was persisted.
             yield from prepared.events
             for namespace, mode, chunk in prepared.graph.stream(
                 runtime.user_payload(prepared.message, prepared.history),
@@ -1376,10 +1376,10 @@ class Kingfisher:
         kept: tuple[str, ...] = ()
         delegates = runtime.Delegates()
         try:
-        # Inside the `try`, not before it. A caller that stops reading during
-        # these -- a withheld-capability notice is the common one -- used to
-        # leave the turn with no end at all: the claim stayed taken, the
-        # checkpointer stayed open, and nothing was persisted.
+            # Inside the `try`, not before it. A caller that stops reading
+            # during these -- `run_start` is the first -- used to leave the turn
+            # with no end at all: the claim stayed taken, the checkpointer
+            # stayed open, and nothing was persisted.
             for event in prepared.events:
                 yield event
             async for namespace, mode, chunk in prepared.graph.astream(
