@@ -27,6 +27,7 @@ Two kinds of port live here, and the rule above is only about the first.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
@@ -324,5 +325,48 @@ class FileStore(Protocol):
         was not allowed to. Part of the contract rather than each adapter's own
         choice: a bare `FileNotFoundError` cannot be told from the deployment's
         own disk being wrong, and would answer 500 to a caller's typo.
+        """
+        ...
+
+
+@dataclass(frozen=True)
+class CommandResult:
+    """What running one command produced.
+
+    Kingfisher's own vocabulary rather than the harness's. The framework has a
+    type of the same shape, and using it here would put the framework into a
+    contract a deployment implements -- which is the whole reason only *running*
+    a command is delegated and file access is not.
+
+    `exit_code` is not optional. The harness's equivalent allows `None`, and a
+    caller deciding whether a command worked has nothing to do with that but
+    guess.
+    """
+
+    output: str
+    exit_code: int
+    #: Set when `output` is not all of it. A runner that cuts long output says
+    #: so, because a caller cannot tell a truncated result from a short one.
+    truncated: bool = False
+
+
+class CommandRunner(Protocol):
+    """How a shell command is run, for a deployment that runs them elsewhere.
+
+    One method, and no path in it. The shell backend it sits behind is also the
+    filesystem for everything unrouted -- ten operations it inherits -- so
+    handing over "the shell" would hand over file access with it, which belongs
+    to whoever supplies the session directory instead.
+
+    `command` arrives already confined: applying the confinement is the caller's
+    job, so a runner that ships the command to another machine cannot forget to.
+    """
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        """Run `command`, giving up after `timeout` seconds if one is given.
+
+        A timeout is a result, not an exception: `exit_code` 124, the shell's
+        own, with output saying so. Raising would make every runner's failure
+        the model's problem rather than a tool result it can read and retry.
         """
         ...
