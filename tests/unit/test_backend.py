@@ -42,6 +42,33 @@ def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
     assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
 
+def test_a_session_that_was_never_made_is_refused(cfg, tmp_path):
+    """This function used to create what it needed, and that is why `.home` and
+    `skills/uploaded` were made in one file and listed in none.
+
+    It refuses now rather than creating, because the directory it is handed may
+    not have come from a local disk. Loudly, because the quiet version costs a
+    turn: a missing `/memory` is a route resolving to nothing, and the first
+    sign is a tool error the model tries to work around.
+    """
+    bare = tmp_path / "never-made"
+    bare.mkdir()
+
+    with pytest.raises(ValueError, match="ensure_session_layout"):
+        build_backend(cfg, bare)
+
+
+def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
+    """A message saying only "missing layout" would send a reader to the source
+    to find out which names it meant."""
+    bare = tmp_path / "never-made"
+    bare.mkdir()
+    (bare / "data").mkdir()
+
+    with pytest.raises(ValueError, match=r"missing derived, memory, runs, \.home, skills/uploaded"):
+        build_backend(cfg, bare)
+
+
 def test_backend_is_rooted_at_the_session(cfg, session_dir):
     """One session is one root: virtual paths anchor there, so /data means
     this session's data and no path leads to another session's."""

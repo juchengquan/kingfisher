@@ -5,10 +5,17 @@ import shutil
 
 from kingfisher.domain import retention
 from kingfisher.domain.layout import (
+    AGENT_HOME,
     LAYOUT_DIRS,
     SESSION_DIRS,
+    SESSION_PLUMBING,
 )
-from kingfisher.infrastructure.workspace_fs import EXAMPLE, LocalSessionDirs, ensure_layout
+from kingfisher.infrastructure.workspace_fs import (
+    EXAMPLE,
+    LocalSessionDirs,
+    ensure_layout,
+    ensure_session_layout,
+)
 from tests.conftest import StubCheckpointer
 
 
@@ -188,6 +195,30 @@ def test_the_layout_names_no_genre_of_output():
     assert "reports" not in LAYOUT_DIRS
     assert "reports" not in SESSION_DIRS
     assert "derived" in SESSION_DIRS
+
+
+def test_one_pass_makes_a_whole_session(tmp_path):
+    """What `build_backend` used to finish off, and the reason this exists.
+
+    A session's names lived in two places: four in `SESSION_DIRS`, and `.home`
+    and `skills/uploaded` in a line of `build_backend` -- which also re-made
+    `data` and `memory`, so nothing created a whole session and the two halves
+    could disagree. A backend is now built against a session that exists.
+    """
+    session = ensure_session_layout(tmp_path / "s")
+
+    for name in (*SESSION_DIRS, *SESSION_PLUMBING):
+        assert (session / name).is_dir(), name
+
+
+def test_the_plumbing_is_listed_apart_from_what_the_agent_addresses():
+    """`SESSION_DIRS` means "the names a prompt can refer to", which is why
+    `.home` was left out of it rather than forgotten. Keeping the two lists
+    separate is what lets that stay a single meaning -- a reader asking what the
+    agent can name should not have to filter the answer."""
+    assert not set(SESSION_DIRS) & set(SESSION_PLUMBING)
+    assert AGENT_HOME in SESSION_PLUMBING
+    assert AGENT_HOME.startswith("."), "the agent's home is plumbing, not a name it types"
 
 
 

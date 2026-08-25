@@ -22,6 +22,7 @@ from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.domain.tool import Offering, offered
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.workspace_fs import ensure_session_layout
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 TOOL = """from langchain_core.tools import tool
@@ -89,7 +90,7 @@ def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
 
     build_agent(
         cfg,
-        session_dir=cfg.workspace / "s",
+        session_dir=ensure_session_layout(cfg.workspace / "s"),
         model=FakeToolCallingModel(responses=[]),
         workspace_tools=found,
     )
@@ -112,7 +113,7 @@ def test_a_request_naming_an_unknown_tool_is_told_where_the_real_ones_live(cfg):
     with pytest.raises(CapabilityError) as raised:
         build_agent(
             cfg,
-            session_dir=cfg.workspace / "s",
+            session_dir=ensure_session_layout(cfg.workspace / "s"),
             model=FakeToolCallingModel(responses=[]),
             capabilities=Capabilities(tools=("find_compny",)),
         )

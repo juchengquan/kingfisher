@@ -22,6 +22,7 @@ from kingfisher.domain.layout import (
     LAYOUT_DIRS,
     MARKER,
     SESSION_DIRS,
+    SESSION_PLUMBING,
 )
 from kingfisher.domain.references import within
 
@@ -173,9 +174,15 @@ def ensure_session_layout(session_dir: Path) -> Path:
     This directory is the backend root, so it carries the names the agent
     addresses. Two sessions share a parent and nothing else, which is what
     makes isolation structural rather than a matter of path checking.
+
+    Both lists, because a session needs its plumbing as much as its addressed
+    names and only one of the two was written down. `build_backend` used to make
+    `.home` and `skills/uploaded` itself, and `data` and `memory` a second time
+    -- so nothing created a whole session in one pass, and the names lived in
+    two places that could disagree.
     """
     session_dir = Path(session_dir).expanduser().resolve()
-    for name in SESSION_DIRS:
+    for name in (*SESSION_DIRS, *SESSION_PLUMBING):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
 
     # Scaffolded rather than empty: the memory prompt directs the agent to save

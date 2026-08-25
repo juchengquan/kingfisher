@@ -27,6 +27,12 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
 from kingfisher.config import Config, ConfigError
+from kingfisher.domain.layout import (
+    AGENT_HOME,
+    SESSION_DIRS,
+    SESSION_PLUMBING,
+    UPLOADED_SKILLS,
+)
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
@@ -58,8 +64,12 @@ def agent_home(session_dir: Path) -> Path:
     Dotted, and not in `SESSION_DIRS`, because those are "the names the agent
     addresses" and this is plumbing. It is reachable at `/.home` -- the shell
     backend roots at the session -- which is harmless and not worth a route.
+
+    The name is `layout.AGENT_HOME`, beside the rest of a session's names.
+    Spelling it here as well is how this directory came to be created in one
+    file and listed in none.
     """
-    return Path(session_dir) / ".home"
+    return Path(session_dir) / AGENT_HOME
 
 
 def shell_env(
@@ -463,6 +473,32 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
 MEMORY_SOURCES = [f"{MEMORY_ROUTE}AGENTS.md"]
 
 
+def _require_layout(session_dir: Path) -> None:
+    """Refuse a session directory that has not been made yet.
+
+    This function used to create what it needed, which is why the names lived
+    in two places. Now `ensure_session_layout` is the only thing that makes a
+    session, and the point of that is a directory this builder does not have to
+    have come from a local disk -- so creating one here would put the assumption
+    straight back.
+
+    Loudly, because the quiet version is worse than it looks: a missing
+    `/memory` is a backend whose route resolves to nothing, and the first sign
+    is a tool error the model tries to work around mid-turn.
+    """
+    missing = [
+        name
+        for name in (*SESSION_DIRS, *SESSION_PLUMBING)
+        if not (session_dir / name).is_dir()
+    ]
+    if missing:
+        msg = (
+            f"session directory {session_dir} is missing {', '.join(missing)}; "
+            "call ensure_session_layout on it before building a backend"
+        )
+        raise ValueError(msg)
+
+
 def build_backend(
     cfg: Config, session_dir: Path, *, catalogue: Definitions | None = None
 ) -> BackendProtocol:
@@ -504,11 +540,8 @@ def build_backend(
     skills_dir = catalogue_root(skills)
 
     prepare_scratch(cfg)
-    for routed in ("data", "memory"):
-        (session_dir / routed).mkdir(parents=True, exist_ok=True)
-    agent_home(session_dir).mkdir(parents=True, exist_ok=True)
-    uploaded = session_dir / "skills" / "uploaded"
-    uploaded.mkdir(parents=True, exist_ok=True)
+    _require_layout(session_dir)
+    uploaded = session_dir / UPLOADED_SKILLS
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
     # already refused by `resolve_definitions` if it did not, so this only ever
     # creates a derived one -- and stays here for the callers that build a

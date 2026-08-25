@@ -20,6 +20,7 @@ from kingfisher.infrastructure.harness.agent import (
     available_skills,
     build_agent,
 )
+from kingfisher.infrastructure.workspace_fs import ensure_session_layout
 from tests.conftest import repository_root, subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped
@@ -223,7 +224,7 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
 
     shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
 
-    tools = dispatched(build_agent(cfg, session_dir=cfg.workspace / "s"))
+    tools = dispatched(build_agent(cfg, session_dir=ensure_session_layout(cfg.workspace / "s")))
 
     assert "probe" in tools
     assert "read_file" in tools  # and the built-ins are still there
@@ -244,7 +245,7 @@ def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
     )
 
     with pytest.raises(CapabilityError, match="read_file"):
-        build_agent(cfg, session_dir=cfg.workspace / "s")
+        build_agent(cfg, session_dir=ensure_session_layout(cfg.workspace / "s"))
 
 
 # -- seeding says what it took away ---------------------------------------

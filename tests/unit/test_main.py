@@ -264,13 +264,22 @@ def test_the_smoke_never_creates_a_workspace_level_data_directory(cfg):
 
 def test_skills_stay_shared_across_sessions(cfg):
     """Only `data` moved under the session. Skills are workspace-level, which
-    is where the backend's `/skills` route still points."""
+    is where the backend's `/skills` route still points.
+
+    A session does hold `skills/uploaded`, and always did -- it used to appear
+    on the first backend build and now arrives with the rest of the layout. So
+    the claim is that the *catalogue* is not copied in, not that the directory
+    is absent: an empty slot for a caller's own skills is not a second copy of
+    the shared ones.
+    """
     from dataclasses import replace
 
     main.prepare_smoke(replace(cfg, skills_enabled=True), cfg.workspace, "smoke3")
+    session = cfg.workspace / "sessions" / "smoke3"
 
     assert (cfg.workspace / "skills" / "tabular-qa" / "SKILL.md").is_file()
-    assert not (cfg.workspace / "sessions" / "smoke3" / "skills").exists()
+    assert not (session / "skills" / "tabular-qa").exists()
+    assert list((session / "skills" / "uploaded").iterdir()) == []
 
 
 def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys, monkeypatch):
