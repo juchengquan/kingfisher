@@ -14,6 +14,7 @@ from kingfisher import Kingfisher
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.workspace_fs import ensure_session_layout
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, capture_build
 
 
@@ -32,7 +33,7 @@ def build(cfg, monkeypatch, registry=None, **caps):
     captured = capture_build(monkeypatch)
     build_agent(
         cfg,
-        session_dir=cfg.workspace / "sessions" / "s",
+        session_dir=ensure_session_layout(cfg.workspace / "sessions" / "s"),
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         middleware_registry=registry,
         capabilities=Capabilities(**caps),

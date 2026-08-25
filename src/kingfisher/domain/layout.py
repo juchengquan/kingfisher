@@ -33,6 +33,9 @@ authored tier is an operator's business, best done wherever
 
 from __future__ import annotations
 
+from kingfisher.domain.skill import DIRECTORY as SKILLS
+from kingfisher.domain.skill import UPLOADED
+
 #: Created once in the workspace. What remains here is what a session does not
 #: own: the definitions the sessions share, and the harness's own directory.
 LAYOUT_DIRS: tuple[str, ...] = (
@@ -59,6 +62,25 @@ SESSION_DIRS: tuple[str, ...] = (
     "derived",
     "memory",
     "runs",
+)
+
+#: The agent's HOME, and where a caller's uploaded skills land. Created inside
+#: every session like `SESSION_DIRS`, and kept apart from it because that tuple
+#: means "the names the agent addresses" and these are plumbing: `.home` exists
+#: so a pip cache lands inside the session that caused it and counts toward its
+#: quota, and uploads are reached through a route rather than by this path.
+#: Folding them in would make one name mean two things, and a reader asking what
+#: a prompt can refer to would have to filter the answer.
+#:
+#: Composed from `domain.skill` rather than spelled again: the leaf names are
+#: already declared there, and a second spelling is how the two halves of this
+#: layout drifted apart in the first place.
+AGENT_HOME = ".home"
+UPLOADED_SKILLS = f"{SKILLS}/{UPLOADED}"
+
+SESSION_PLUMBING: tuple[str, ...] = (
+    AGENT_HOME,
+    UPLOADED_SKILLS,
 )
 
 #: What a run produces and would lose. `/data` is read-only and came from the

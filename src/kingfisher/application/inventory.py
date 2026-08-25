@@ -33,6 +33,7 @@ from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions, source_of
 from kingfisher.infrastructure.catalogue.tools import ToolError
+from kingfisher.infrastructure.workspace_fs import ensure_session_layout
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
@@ -270,11 +271,14 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
         # backend at, but what a workspace *offers* is a question about the
         # workspace, and answering it must not leave a session behind for
         # `keep_runs` to reap.
+        # Given its layout, because a backend is built against a session that
+        # exists rather than one it makes for itself -- `ensure_session_layout`
+        # is the only thing that makes a session now.
         with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
             introspected = registered_tools(
                 build_agent(
                     cfg,
-                    session_dir=Path(scratch),
+                    session_dir=ensure_session_layout(Path(scratch)),
                     catalogue=resolved,
                     workspace_tools=found,
                     # No delegates. What a workspace *offers* is answered from
