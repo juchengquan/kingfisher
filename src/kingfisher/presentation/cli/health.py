@@ -30,6 +30,7 @@ from kingfisher import (
     Inventory,
     inventory,
     kinds_at,
+    memory_backing,
     shell_confinement,
 )
 
@@ -141,6 +142,103 @@ def _packs(cfg: Config) -> Iterator[Check]:
     yield Check("definitions to seed", "ok", f"{', '.join(kinds)} — from {cfg.assets}")
 
 
+def _at_rest(cfg: Config) -> Iterator[Check]:
+    """Whether a workspace kept in memory can actually keep nothing.
+
+    Silent on a workspace that is not in memory, because then there is nothing
+    to promise and nothing to check: a deployment allowed to hold data on its
+    own disk is not misconfigured for doing so.
+
+    Where it *is* in memory, this is the one check here that can fail on
+    something which appears to work. Measured, and it is not what the obvious
+    reading predicts:
+
+    - A memory filesystem **larger** than the container's memory limit does not
+      refuse when it fills. The kernel swaps its pages out — data at rest, the
+      write succeeding, no error anywhere. That is exactly the guarantee such a
+      deployment has asserted, broken invisibly.
+    - With swap disabled the same overrun becomes an **OOM kill**, which takes
+      every session in the container rather than one.
+    - Only a filesystem **smaller** than the limit gives a clean `ENOSPC` on a
+      full one, which is a thing kingfisher can refuse on.
+
+    `fail` rather than `warn`, and it stretches the word. A deployment in this
+    state runs; what it cannot do is keep the promise it was configured for, and
+    a check that shrugged at silent data-at-rest would be a check nobody should
+    have trusted. Better a deploy that stops.
+    """
+    backing = memory_backing(cfg.workspace)
+    if not backing.in_memory:
+        return
+
+    if backing.swap_enabled:
+        yield Check(
+            "nothing at rest",
+            "fail",
+            f"{cfg.workspace} is on {backing.filesystem} and this cgroup permits swapping",
+            "disable swap for the container (`--memory-swap` equal to `--memory`)",
+        )
+    if backing.fits is False:
+        yield Check(
+            "nothing at rest",
+            "fail",
+            f"{backing.filesystem} holds {_mb(backing.size_bytes)} and the memory limit is "
+            f"{_mb(backing.limit_bytes)} — filling it swaps to disk, or kills the container",
+            "size the filesystem below the limit, leaving room for this process",
+        )
+    elif backing.fits is None:
+        yield Check(
+            "nothing at rest",
+            "warn",
+            f"{cfg.workspace} is on {backing.filesystem}, and this process has no memory limit",
+            "set one, so a full filesystem fails rather than exhausting the host",
+        )
+    elif not backing.swap_enabled:
+        yield Check(
+            "nothing at rest",
+            "ok",
+            f"{backing.filesystem} holds {_mb(backing.size_bytes)} under a "
+            f"{_mb(backing.limit_bytes)} limit, no swap",
+        )
+
+    # Two things that only matter once the workspace is in memory, and both are
+    # silent until the moment they are expensive.
+    if cfg.session_store is None:
+        yield Check(
+            "sessions survive",
+            "fail",
+            f"{cfg.workspace} is on {backing.filesystem} and nothing is configured to keep "
+            "sessions — everything a session produced goes with the process",
+            "set KINGFISHER_SESSION_STORE, or wire a SessionStore",
+        )
+    else:
+        yield Check("sessions survive", "ok", f"kept at {cfg.session_store}")
+
+    if cfg.session_max_bytes is None:
+        yield Check(
+            "session quota",
+            "fail",
+            f"no KINGFISHER_SESSION_MAX_BYTES, and sessions share {_mb(backing.size_bytes)} "
+            "of memory — one can starve every other in this container",
+            "set it below the filesystem size divided by the sessions you expect",
+        )
+    elif backing.size_bytes is not None and cfg.session_max_bytes > backing.size_bytes:
+        yield Check(
+            "session quota",
+            "warn",
+            f"one session may reach {_mb(cfg.session_max_bytes)} and the filesystem holds "
+            f"{_mb(backing.size_bytes)} — the quota can never bind",
+            "lower it, or the limit is the filesystem and it arrives as a write failure",
+        )
+    else:
+        yield Check("session quota", "ok", f"{_mb(cfg.session_max_bytes)} per session")
+
+
+def _mb(value: int | None) -> str:
+    """Bytes as megabytes, because these numbers are read by people."""
+    return "unknown" if value is None else f"{value // (1024 * 1024)}MB"
+
+
 def _catalogues(found: Inventory) -> Iterator[Check]:
     """The three definition directories, each of which can fail on its own."""
     if found.tools_error is not None:
@@ -243,6 +341,12 @@ def _shell(cfg: Config) -> Iterator[Check]:
     confined = shell_confinement(cfg)
     if confined.confined:
         yield Check("shell", "ok", "confined")
+    elif confined.elsewhere:
+        # The case `EXTERNAL` exists for, and reporting it as the warning below
+        # would recreate the confusion it was invented to remove: a container
+        # that mounts only the workspace looked exactly like nobody having
+        # thought about it.
+        yield Check("shell", "ok", "confined by the runtime, not by this process")
     else:
         yield Check(
             "shell",
@@ -265,6 +369,7 @@ def examine(cfg: Config) -> tuple[Check, ...]:
     try:
         checks += _catalogue(cfg)
         checks += _packs(cfg)
+        checks += _at_rest(cfg)
         found = inventory(cfg)
         checks += _catalogues(found)
         checks += _definitions(cfg, found)

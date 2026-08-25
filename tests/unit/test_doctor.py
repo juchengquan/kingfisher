@@ -389,3 +389,162 @@ def test_the_description_names_its_own_limit():
 
     assert "may still be" in description  # present is not working
     assert "kingfisher.run" in description  # and here is what would prove it
+
+
+# -- a workspace that must keep nothing --------------------------------------
+
+
+def _backing(monkeypatch, **fields):
+    """Answer as a given machine would, without needing to be one."""
+    from kingfisher.infrastructure.workspace_fs import MemoryBacking
+
+    monkeypatch.setattr(
+        "kingfisher.presentation.cli.health.memory_backing",
+        lambda _workspace: MemoryBacking(**fields),
+    )
+
+
+def test_an_ordinary_disk_says_nothing_at_all(cfg, monkeypatch):
+    """A deployment allowed to hold data on its own disk is not misconfigured
+    for doing so, and a check that fired anyway would be one people learn to
+    scroll past."""
+    _backing(monkeypatch, filesystem="ext4", size_bytes=10**12)
+
+    assert "nothing at rest" not in {check.name for check in examine(cfg)}
+
+
+def test_swapping_fails_because_it_is_the_silent_one(cfg, monkeypatch):
+    """The measured behaviour, and the reason this check exists at all: a
+    memory filesystem larger than the limit does not refuse when it fills, it
+    swaps -- the write succeeds, no error appears, and the bytes are on a disk.
+
+    `fail` rather than `warn`. The deployment runs; what it cannot do is keep
+    the promise it was configured for.
+    """
+    _backing(
+        monkeypatch, filesystem="tmpfs", size_bytes=512 * 1024**2,
+        limit_bytes=1024 * 1024**2, swap_enabled=True,
+    )
+
+    check = {c.name: c for c in examine(cfg)}["nothing at rest"]
+
+    assert check.verdict == "fail"
+    assert "swap" in check.detail
+    assert check.remedy
+
+
+def test_a_filesystem_larger_than_the_limit_fails(cfg, monkeypatch):
+    """The other half of the same trap. With swap off this is not silent -- it
+    is an OOM kill, which takes every session in the container rather than the
+    one that overran."""
+    _backing(
+        monkeypatch, filesystem="tmpfs", size_bytes=2048 * 1024**2,
+        limit_bytes=400 * 1024**2, swap_enabled=False,
+    )
+
+    check = {c.name: c for c in examine(cfg)}["nothing at rest"]
+
+    assert check.verdict == "fail"
+    assert "2048MB" in check.detail and "400MB" in check.detail
+
+
+def test_no_memory_limit_at_all_warns(cfg, monkeypatch):
+    """Not a failure: a memory filesystem on a host with no cgroup limit is what
+    a developer's machine looks like, and it runs. It is worth saying, because a
+    full one then exhausts the host rather than failing."""
+    _backing(monkeypatch, filesystem="tmpfs", size_bytes=512 * 1024**2, swap_enabled=False)
+
+    check = {c.name: c for c in examine(cfg)}["nothing at rest"]
+
+    assert check.verdict == "warn"
+
+
+def test_the_arrangement_that_works_says_so(cfg, monkeypatch):
+    """Smaller than the limit, swap off. A full filesystem then gives a clean
+    ENOSPC, which is a thing kingfisher can refuse on rather than die of."""
+    _backing(
+        monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
+        limit_bytes=400 * 1024**2, swap_enabled=False,
+    )
+
+    check = {c.name: c for c in examine(cfg)}["nothing at rest"]
+
+    assert check.verdict == "ok"
+    assert "no swap" in check.detail
+
+
+def test_a_memory_workspace_with_nowhere_to_keep_sessions_fails(cfg, monkeypatch):
+    """The combination that loses everything and says nothing.
+
+    A workspace in memory and no store is not a slow leak — it is every session
+    gone the moment the process restarts, discovered by a caller whose
+    conversation has forgotten itself.
+    """
+    _backing(
+        monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
+        limit_bytes=400 * 1024**2, swap_enabled=False,
+    )
+
+    check = {c.name: c for c in examine(cfg)}["sessions survive"]
+
+    assert check.verdict == "fail"
+    assert "KINGFISHER_SESSION_STORE" in check.remedy
+
+
+def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
+    """Unset means unbounded, which is survivable on a disk and is not
+    survivable in memory every session in the container shares."""
+    from dataclasses import replace
+
+    _backing(
+        monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
+        limit_bytes=400 * 1024**2, swap_enabled=False,
+    )
+    wired = replace(cfg, session_store=tmp_path / "kept", session_max_bytes=None)
+
+    check = {c.name: c for c in examine(wired)}["session quota"]
+
+    assert check.verdict == "fail"
+
+
+def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monkeypatch, tmp_path):
+    """A number that can never be reached is not a limit. The real limit is then
+    the filesystem, and it arrives as a write failure rather than a refusal."""
+    from dataclasses import replace
+
+    _backing(
+        monkeypatch, filesystem="tmpfs", size_bytes=100 * 1024**2,
+        limit_bytes=400 * 1024**2, swap_enabled=False,
+    )
+    wired = replace(cfg, session_store=tmp_path / "kept", session_max_bytes=1024 * 1024**2)
+
+    check = {c.name: c for c in examine(wired)}["session quota"]
+
+    assert check.verdict == "warn"
+
+
+def test_none_of_this_fires_on_an_ordinary_disk(cfg, monkeypatch):
+    """Neither check has an opinion about a deployment allowed to hold data.
+
+    Asserted because both would otherwise fail every existing install the moment
+    they shipped -- `session_store` and the quota are both unset by default.
+    """
+    _backing(monkeypatch, filesystem="ext4", size_bytes=10**12)
+
+    names = {check.name for check in examine(cfg)}
+
+    assert "sessions survive" not in names
+    assert "session quota" not in names
+
+
+def test_a_runtime_confined_shell_reads_as_ok_rather_than_a_warning(cfg, monkeypatch):
+    """`KINGFISHER_SHELL_SANDBOX=external` is a deployment saying a container
+    already mounts only the workspace. Reported as a warning it is
+    indistinguishable from nobody having thought about it, which is the confusion
+    `EXTERNAL` was invented to remove."""
+    from dataclasses import replace
+
+    check = {c.name: c for c in examine(replace(cfg, shell_sandbox="external"))}["shell"]
+
+    assert check.verdict == "ok"
+    assert "runtime" in check.detail

@@ -414,3 +414,135 @@ def test_each_kind_gets_its_own_line(cfg):
 
     said = [e.text for e in events if e.kind == "withheld"]
     assert said == ["1 tool(s) not granted: execute", "1 subagent(s) not granted: extractor"]
+
+
+# -- a session that outlives its directory ----------------------------------
+
+
+def _wired_to_a_store(cfg, tmp_path):
+    """A service whose sessions are kept somewhere the workspace is not."""
+    from kingfisher import LocalSessionStore
+
+    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
+    return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept), kept
+
+
+def test_a_turn_hands_what_it_produced_to_the_store(cfg, tmp_path):
+    """`/derived` and `/memory` at the end of a turn, which is what
+    `collect_artifacts` already names and what has to outlive the machine.
+
+    `/memory/AGENTS.md` comes along, and that is correct rather than noise:
+    `ensure_session_layout` writes the scaffold there, `/memory` is an artifact
+    directory, and a restored session that had lost its project-memory file
+    would be missing something a turn can edit.
+    """
+    service, kept = _wired_to_a_store(cfg, tmp_path)
+    result = service.run(Request(task="anything"))
+
+    directory = cfg.workspace / "sessions" / result.session_id
+    (directory / "derived").mkdir(parents=True, exist_ok=True)
+    (directory / "derived" / "report.md").write_text("forty rows", encoding="utf-8")
+    service.run(Request(task="again", session_id=result.session_id))
+
+    held = kept.fetch(result.session_id)
+    assert held["derived/report.md"] == b"forty rows"
+    assert "memory/AGENTS.md" in held
+    assert not any(name.startswith(("runs/", "data/")) for name in held), (
+        "scratch and uploads are not the store's to keep -- see `keep_from`"
+    )
+
+
+def test_a_session_whose_directory_is_gone_gets_its_files_back(cfg, tmp_path):
+    """The prototype's claim, at the level a deployment sees it.
+
+    A container holds a session's files in memory; the container goes; a later
+    turn lands on a directory with nothing in it. If the files do not come back
+    here, the session has forgotten its own work and every guarantee above it is
+    decoration.
+    """
+    import shutil
+
+    service, _ = _wired_to_a_store(cfg, tmp_path)
+    first = service.run(Request(task="anything"))
+    directory = cfg.workspace / "sessions" / first.session_id
+    (directory / "memory").mkdir(parents=True, exist_ok=True)
+    (directory / "memory" / "notes.md").write_text("remember this", encoding="utf-8")
+    service.run(Request(task="save it", session_id=first.session_id))
+
+    # The machine goes. The store is the only thing that carried over.
+    shutil.rmtree(directory)
+    assert not directory.exists()
+
+    service.run(Request(task="and now?", session_id=first.session_id))
+
+    assert (directory / "memory" / "notes.md").read_text(encoding="utf-8") == "remember this"
+
+
+def test_deleting_a_session_drops_it_from_the_store_too(cfg, tmp_path):
+    """Or a deleted session outlives its deletion everywhere that matters. The
+    directory going is the visible half; on a host that may not hold data, the
+    store is the only half that was ever durable."""
+    service, kept = _wired_to_a_store(cfg, tmp_path)
+    result = service.run(Request(task="anything"))
+    directory = cfg.workspace / "sessions" / result.session_id
+    (directory / "derived").mkdir(parents=True, exist_ok=True)
+    (directory / "derived" / "a.md").write_text("one", encoding="utf-8")
+    service.run(Request(task="again", session_id=result.session_id))
+    assert kept.fetch(result.session_id)
+
+    service.delete_session(result.session_id)
+
+    assert kept.fetch(result.session_id) == {}
+
+
+def test_wiring_no_store_leaves_everything_as_it_was(cfg):
+    """The default, and it must stay the default: a deployment allowed to hold
+    data on its own disk should notice none of this."""
+    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+
+    result = service.run(Request(task="anything"))
+
+    assert service.sessions_store is None
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
+
+
+def test_a_conversation_survives_losing_its_directory(cfg, tmp_path):
+    """The transcript's claim, and the reason it is not the checkpointer.
+
+    A checkpointer holds a conversation in whatever the framework chose. This
+    holds it in records kingfisher owns, in a file inside the session, so the
+    same store that carries results carries the history — and a machine that
+    keeps nothing loses neither.
+    """
+    import shutil
+
+    service, _ = _wired_to_a_store(cfg, tmp_path)
+    first = service.run(Request(task="remember the number forty"))
+    service.run(Request(task="and the colour blue", session_id=first.session_id))
+
+    directory = cfg.workspace / "sessions" / first.session_id
+    before = (directory / ".transcript.jsonl").read_text(encoding="utf-8")
+    assert "forty" in before and "blue" in before
+
+    # The machine goes.
+    shutil.rmtree(directory)
+    service.run(Request(task="what did I say?", session_id=first.session_id))
+
+    after = (directory / ".transcript.jsonl").read_text(encoding="utf-8")
+    assert "forty" in after, "the first turn is gone from the conversation"
+    assert "blue" in after
+    assert "what did I say?" in after
+
+
+def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg, tmp_path):
+    """Where history comes from now. The checkpointer holds one turn and nothing
+    after it, so a second turn that saw only its own question would be a session
+    with no memory at all."""
+    service, _ = _wired_to_a_store(cfg, tmp_path)
+    first = service.run(Request(task="the number is forty"))
+    service.run(Request(task="and now?", session_id=first.session_id))
+
+    sent = service._graph.state["messages"]
+
+    assert len(sent) > 1, "only the new question reached the graph"
+    assert any("forty" in str(getattr(m, "content", m)) for m in sent)

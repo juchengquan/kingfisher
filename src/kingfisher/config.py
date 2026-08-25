@@ -399,6 +399,15 @@ class Config:
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.
     assets: Path | None = None
+    # Where a session's files are kept when the machine may not keep them. Unset
+    # means the session directory is the only copy, which is right wherever the
+    # host is allowed to hold data and is a silent disaster where it is not --
+    # `doctor` says so when the workspace turns out to be in memory.
+    #
+    # A directory, because that is what a deployment can name in an environment
+    # variable. Somewhere else entirely is what `SessionStore` is for, and a
+    # deployment reaching for that passes an object rather than a path.
+    session_store: Path | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix

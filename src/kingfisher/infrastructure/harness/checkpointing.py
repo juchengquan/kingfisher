@@ -37,6 +37,7 @@ from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.checkpoint.sqlite import SqliteSaver
 
 from kingfisher.config import Config
@@ -55,16 +56,6 @@ BUSY_TIMEOUT_MS = 30_000
 
 def checkpoint_db_path(cfg: Config) -> Path:
     return cfg.state_dir / "threads.db"
-
-
-#: One session's conversation, beside the files it belongs to. Dotted and not in
-#: `SESSION_DIRS` for the same reason as `.home`: those are the names the agent
-#: addresses, and this is plumbing.
-SESSION_DB = ".threads.db"
-
-
-def session_db_path(session_dir: Path) -> Path:
-    return Path(session_dir) / SESSION_DB
 
 
 def _tuned(db: Path) -> sqlite3.Connection:
@@ -89,37 +80,40 @@ def _tuned(db: Path) -> sqlite3.Connection:
 
 
 def build_session_checkpointer(session_dir: Path) -> BaseCheckpointSaver:
-    """This session's conversation, stored inside this session.
+    """The saver this turn runs on, which holds nothing after it.
 
-    The default when a deployment injects nothing. One database per session
-    rather than one per workspace, which buys three things and costs two.
+    In memory, and that is a change in what a checkpointer is *for* here rather
+    than a cheaper way to do the same job. A checkpoint preserves resumable
+    graph state — pending writes, channel versions, a position in the graph —
+    and kingfisher never resumes a graph: `service.py` passes `{"thread_id":
+    session_id}` with no `checkpoint_id`, and there is no `interrupt()`
+    anywhere. A turn runs to completion or fails, and the next one continues a
+    *conversation*, which is now carried by `domain.transcript` and restored as
+    the graph's input.
 
-    It removes a whole class of bug rather than managing it. A session was one
-    logical thing kept in two stores keyed by the same id with no link between
-    them -- the directory and a row set in a shared database -- so a directory
-    removed any other way orphaned its thread forever. One real workspace held
-    132 such threads. Here the conversation is inside the directory, so deleting
-    the directory deletes it, and `Session.discard` needs no `ThreadStore` at
-    all.
+    So what is left for a saver is one turn's supersteps, and nothing needs to
+    outlive the turn that made them.
 
-    It also makes the conversation visible to `session_bytes`, and so to
-    `session_max_bytes`, which measures a directory. Checkpoint state was
-    previously invisible to the quota for the same reason the tool caches were
-    before they moved into the session.
+    **What this gives up, and it was measured rather than assumed.** The default
+    was one sqlite database per session, inside the session directory, and that
+    bought three things: a conversation deleted with its directory (one real
+    workspace held 132 orphaned threads after every session had been reaped); a
+    conversation visible to `session_bytes` and so to the quota; and no
+    cross-session contention, where at 32 concurrent writers the slowest single
+    writer went from 363ms on a shared file to 80ms on its own.
 
-    And it removes cross-session contention. Measured at 8, 16 and 32 concurrent
-    writers, wall clock improved a flat ~1.3x, but the slowest single writer went
-    from 363ms to 80ms at 32 -- on a shared file one session queues behind every
-    other session's writes, and that gap widens with load rather than settling.
+    All three survive, by a different route. The transcript is a file in the
+    session, so it is deleted with the directory and counted by the quota. And
+    nothing is shared, so there is nothing to contend for. What is genuinely
+    gone is the ~20KB of empty database per session, which was the cost rather
+    than the benefit.
 
-    The costs, both small and both measured: about 0.6ms more on a session's
-    first turn (0.85ms against 0.24ms; a resumed turn is 0.22ms, marginally
-    faster than the shared file), and roughly 20KB of empty database per
-    session, so 20MB per thousand idle ones.
+    `session_dir` is unused and stays in the signature: it is what a deployment
+    injecting a *factory* is handed, and a parameter dropped here would change
+    that contract for a saver that no longer needs it.
     """
-    saver = SqliteSaver(_tuned(session_db_path(session_dir)))
-    saver.setup()
-    return saver
+    del session_dir
+    return InMemorySaver()
 
 
 def thread_ids(store: Any) -> tuple[str, ...] | None:
@@ -226,38 +220,20 @@ async def async_checkpointer(cfg: Config) -> AsyncIterator[BaseCheckpointSaver]:
 
 @asynccontextmanager
 async def async_session_checkpointer(session_dir: Path) -> AsyncIterator[BaseCheckpointSaver]:
-    """This session's conversation, opened for an event loop.
+    """The async twin, and there is now nothing asynchronous about it.
 
-    The async twin of `build_session_checkpointer`, and the reason the per-session
-    shape reaches the deployments that most want it. `astream` refuses a sync
-    saver outright -- `SqliteSaver.aget_tuple` raises `NotImplementedError` -- so
-    an async deployment has always had to inject its own. Injecting an instance
-    means one database shared by every session, which is exactly the contention
-    the measurements above are about; injecting this as a *factory* gives each
-    session its own.
+    `InMemorySaver` implements both halves of the protocol, so `astream` no
+    longer needs a different saver from `stream` — which it did, because
+    `SqliteSaver.aget_tuple` raises `NotImplementedError` and an async
+    deployment had to inject its own.
 
-    A context manager for the same reason as `async_checkpointer`: it holds an
-    aiosqlite connection and the worker thread serving it, and leaving both to be
-    collected raised `RuntimeError: Event loop is closed` out of an exit nobody
-    could catch.
+    Still a context manager, and still separate. Both are contracts a deployment
+    may already depend on: a factory wired for the async path is called through
+    this, and collapsing the two would change how an injected one is reached.
+    There is simply nothing to close now, which is the point.
     """
-    import aiosqlite  # noqa: PLC0415 -- only an async deployment pays for this
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # noqa: PLC0415
-
-    db = session_db_path(session_dir)
-    db.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = await aiosqlite.connect(db, timeout=BUSY_TIMEOUT_MS / 1000)
-    await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-    with suppress(sqlite3.OperationalError):
-        await conn.execute("PRAGMA journal_mode=WAL")
-
-    saver = AsyncSqliteSaver(conn)
-    await saver.setup()
-    try:
-        yield saver
-    finally:
-        await conn.close()
+    del session_dir
+    yield InMemorySaver()
 
 
 def release_checkpointer(saver: Any) -> None:

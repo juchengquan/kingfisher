@@ -1,0 +1,58 @@
+# The prototype's deployment, and the sizing rule is the whole point of it.
+#
+# Measured (Docker 29.5.3, cgroup v2), because the arrangement is not what the
+# obvious reading predicts:
+#
+#   tmpfs LARGER than the memory limit, swap on   ->  pages swap to disk,
+#                                                     silently, write succeeds
+#   tmpfs LARGER than the memory limit, swap off  ->  OOM kill, taking every
+#                                                     session in the container
+#   tmpfs SMALLER than the limit, swap off        ->  clean ENOSPC, survivable
+#
+# So: `size` below must stay under `mem_limit`, with room left for the process
+# itself -- tmpfs pages count against the same budget. `kingfisher doctor`
+# refuses the other two arrangements rather than letting a deployment find out.
+
+services:
+  kingfisher:
+    build: .
+    # 1 GiB for everything: the Python process, its dependencies, and the
+    # sessions. The tmpfs below takes 512MB of it.
+    mem_limit: 1g
+    # Equal to `mem_limit` disables swap for this container. Without it a full
+    # tmpfs writes to disk instead of failing, which is the one thing this
+    # deployment must not do.
+    memswap_limit: 1g
+    tmpfs:
+      # `noexec` is Docker's default here and is kept deliberately. Measured:
+      # a script written into the workspace and `chmod +x`-ed fails with
+      # `Permission denied`, and so would a downloaded binary — but
+      # `sh script.sh` and `python script.py` still work, because the
+      # interpreter reads the file rather than exec'ing it.
+      #
+      # So it is a partial barrier, not a boundary, and it is worth having for
+      # what it does stop: a fetched executable. Inside a container the shell is
+      # otherwise unconfined by design (`KINGFISHER_SHELL_SANDBOX=external`), so
+      # this is the only thing standing between the agent and running an
+      # arbitrary binary it downloaded.
+      #
+      # Watch for one consequence: anything that builds a venv under the
+      # session's `.home` and then runs its binaries — `uv run`, say — is
+      # exec'ing from here. If that turns out to be needed, add `exec` and lose
+      # the barrier; do not add it pre-emptively.
+      - /workspace:size=512m,mode=1777
+    environment:
+      # Required rather than optional here. Unset means unbounded, which is
+      # survivable on a disk and is not survivable in memory shared by every
+      # session in this container.
+      KINGFISHER_SESSION_MAX_BYTES: "134217728"
+      KINGFISHER_MODELS_FILE: /config/models.yaml
+    volumes:
+      # Where sessions are kept when the container is not. A named volume today
+      # and a bucket tomorrow: `SessionStore` is the seam, and this side of it
+      # is the deployment's business.
+      - kept:/kept
+      - ./models.yaml:/config/models.yaml:ro
+
+volumes:
+  kept:

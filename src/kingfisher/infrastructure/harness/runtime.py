@@ -22,7 +22,7 @@ vocabulary, not wherever a foreign name appears.
 
 from __future__ import annotations
 
-from collections.abc import Iterator, Mapping
+from collections.abc import Iterable, Iterator, Mapping
 from dataclasses import replace
 from typing import Any
 
@@ -31,6 +31,7 @@ from langgraph.errors import GraphRecursionError
 from langgraph.types import StreamMode
 
 from kingfisher.domain.result import RunEvent
+from kingfisher.domain.transcript import Message, Role, ToolCall
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
 #:
@@ -61,9 +62,121 @@ TOKEN_CHUNK_PARTS = 2
 STREAM_MODES: list[StreamMode] = ["updates", "values", "messages"]
 
 
-def user_payload(text: str) -> dict[str, Any]:
-    """The graph's input shape for a single user turn."""
-    return {"messages": [{"role": "user", "content": text}]}
+def user_payload(text: str, history: tuple[Message, ...] = ()) -> dict[str, Any]:
+    """The graph's input: what was said before, then what is being asked now.
+
+    The history used to arrive from a checkpointer keyed by `thread_id`, and
+    this sent only the new turn. It is passed in now, because a transcript this
+    package owns is what survives a machine that may keep nothing — see
+    `domain.transcript`. The graph gets a whole conversation and a fresh
+    checkpointer each turn, which is the same conversation by a route that does
+    not depend on a framework's storage.
+    """
+    return {"messages": [*(_as_langchain(message) for message in history),
+                         {"role": "user", "content": text}]}
+
+
+def _as_langchain(message: Message) -> Any:
+    """One of kingfisher's records, in the shape LangChain expects.
+
+    Dicts rather than message classes wherever a dict will do: langchain coerces
+    them, and a record that never becomes a `HumanMessage` is one less thing to
+    keep in step with a library.
+
+    A tool result has to be a `ToolMessage`, because `tool_call_id` has no dict
+    spelling that survives coercion -- and losing it would break the pairing
+    that makes a tool result mean anything.
+    """
+    if message.role == "tool":
+        return ToolMessage(
+            content=message.content, tool_call_id=message.call_id, name=message.name or None
+        )
+    if message.role == "assistant" and message.tool_calls:
+        return AIMessage(
+            content=message.content,
+            tool_calls=[
+                {"name": call.name, "args": call.args, "id": call.id}
+                for call in message.tool_calls
+            ],
+        )
+    return {"role": message.role, "content": message.content}
+
+
+def as_transcript(messages: Iterable[Any]) -> tuple[Message, ...]:
+    """What the graph ended up holding, as records this package owns.
+
+    The other direction, and the only place that knows how LangChain spells a
+    conversation. A message whose type is not one of the four roles is dropped
+    rather than guessed at: a framework that grows a fifth kind should make this
+    lose information visibly rather than invent a role for it.
+    """
+    read: list[Message] = []
+    for raw in messages:
+        # Both shapes, because both occur. `_as_langchain` emits plain dicts
+        # wherever one will do, and a graph may hand back what it was given
+        # rather than a coerced object -- reading only one shape meant a
+        # conversation that lost every message this module had just written.
+        role = (
+            _CANONICAL.get(str(raw.get("role", "")))
+            if isinstance(raw, dict)
+            else _ROLES.get(getattr(raw, "type", ""))
+        )
+        if role is None:
+            continue
+        if isinstance(raw, dict):
+            read.append(Message(role=role, content=_text(raw.get("content", ""))))
+            continue
+        read.append(
+            Message(
+                role=role,
+                content=_text(getattr(raw, "content", "")),
+                tool_calls=tuple(
+                    ToolCall(name=call["name"], args=dict(call.get("args") or {}),
+                             id=str(call.get("id") or ""))
+                    for call in (getattr(raw, "tool_calls", None) or ())
+                ),
+                call_id=str(getattr(raw, "tool_call_id", "") or ""),
+                name=str(getattr(raw, "name", "") or ""),
+            )
+        )
+    return tuple(read)
+
+
+#: A role that is already kingfisher's, for a message handed back as a plain
+#: dict rather than a coerced object. Spelled out rather than derived, so the
+#: only way in is a role this vocabulary actually has.
+_CANONICAL: dict[str, Role] = {
+    "system": "system",
+    "user": "user",
+    "assistant": "assistant",
+    "tool": "tool",
+}
+
+
+#: LangChain's `.type` for each role kingfisher records. `system` is here for
+#: completeness and does not normally appear: the system prompt is the cached
+#: prefix and is rebuilt per turn rather than stored.
+_ROLES: dict[str, Role] = {
+    "human": "user",
+    "ai": "assistant",
+    "tool": "tool",
+    "system": "system",
+}
+
+
+def _text(content: Any) -> str:
+    """A message's text, whatever shape the provider used.
+
+    Anthropic returns a list of blocks where OpenAI returns a string, and a
+    transcript that stored one shape would be unreadable by the other.
+    """
+    if isinstance(content, str):
+        return content
+    if isinstance(content, list):
+        return "".join(
+            part.get("text", "") if isinstance(part, dict) else str(part) for part in content
+        )
+    return str(content)
 
 
 def usage_of(message: Any) -> dict[str, int]:

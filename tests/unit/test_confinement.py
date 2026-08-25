@@ -438,3 +438,30 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
         assert "not permitted" in str(listing.output).lower(), "the home is listable"
     finally:
         secret.unlink(missing_ok=True)
+
+
+def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
+    """The distinction `EXTERNAL` exists for, made readable downstream.
+
+    Nothing wraps the command either way, so `confined` is false for both this
+    and a deployment that configured nothing — and a reader with only that flag
+    reports a container mounting only the workspace as an exposure. `doctor` did
+    exactly that until `elsewhere` existed.
+    """
+    chosen = confinement.resolve(
+        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+    )
+
+    assert chosen.elsewhere
+    assert not chosen.confined, "nothing is wrapped -- that is the point of it"
+    assert chosen.warning == "", "the deployment asserted the boundary; there is nothing to warn"
+    assert chosen.wrap("ls") == "ls"
+
+
+def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
+    """The other side, or the flag would say yes to everything."""
+    chosen = confinement.resolve(
+        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+    )
+
+    assert not chosen.elsewhere

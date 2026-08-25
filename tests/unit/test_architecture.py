@@ -1105,6 +1105,12 @@ LIGHT_EXPORTS = frozenset({
     # so `harness.agent` is imported inside the function. That is the shape
     # this classification is about -- what a name costs to touch.
     "seed", "definitions_source", "kinds_at", "Seeding", "inventory", "Inventory",
+    # A directory of sessions, and the port it satisfies. Neither imports
+    # anything a deployment does not already have -- see `session_store`.
+    "LocalSessionStore",
+    # Reads `/proc/mounts` and two cgroup files. Nothing imported, and
+    # all-`None` off Linux rather than an error.
+    "memory_backing",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
