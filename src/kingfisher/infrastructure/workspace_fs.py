@@ -26,6 +26,7 @@ from kingfisher.domain.layout import (
     SESSION_PLUMBING,
 )
 from kingfisher.domain.references import within
+from kingfisher.domain.session import sessions_root
 
 #: Where the catalogue example sits, as an import path rather than a filesystem
 #: one -- an installed package is not in this repository's directory tree.
@@ -194,6 +195,26 @@ def ensure_session_layout(session_dir: Path) -> Path:
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
 
     return session_dir
+
+
+class LocalSessionTrees:
+    """A session's directory, on this machine, staying where it is.
+
+    What kingfisher did before there was a port for it, written down so that
+    the port has an implementation rather than only a promise. `hold` creates
+    nothing and releases nothing: the directory outlives the turn, and the
+    session store is what makes that survivable rather than required.
+
+    A provider whose tree really is per-turn -- a mount, a volume -- does its
+    work in the two halves this one leaves empty.
+    """
+
+    def __init__(self, workspace: Path) -> None:
+        self.workspace = Path(workspace)
+
+    @contextmanager
+    def hold(self, session_id: str) -> Iterator[Path]:
+        yield sessions_root(self.workspace) / session_id
 
 
 def collect_artifacts(session_dir: Path) -> tuple[str, ...]:

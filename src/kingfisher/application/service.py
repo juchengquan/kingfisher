@@ -55,7 +55,7 @@ from __future__ import annotations
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
-from contextlib import AsyncExitStack, suppress
+from contextlib import AsyncExitStack, contextmanager, suppress
 from dataclasses import dataclass, replace
 from pathlib import Path
 from time import monotonic, time
@@ -117,6 +117,7 @@ from kingfisher.infrastructure.session_store import (
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
+    LocalSessionTrees,
     agent_snapshot,
     agent_started_with,
     check_placeable,
@@ -138,6 +139,7 @@ if TYPE_CHECKING:
         FileStore,
         SessionDirs,
         SessionStore,
+        SessionTrees,
         ThreadStore,
     )
 
@@ -485,6 +487,7 @@ class Kingfisher:
         # deployment has had until now and stays correct wherever the host is
         # allowed to hold data.
         sessions: SessionStore | None = None,
+        trees: SessionTrees | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
@@ -518,6 +521,21 @@ class Kingfisher:
             LocalSessionStore(self.cfg.session_store) if self.cfg.session_store else None
         )
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
+        # Where a session's files are for the length of a turn. The default
+        # keeps them under the workspace and leaves them there, which is what
+        # this did before there was a port for it; a deployment whose tree
+        # exists only while a turn runs supplies its own and gets the release
+        # for free, because the turn is what closes it.
+        #
+        # This governs the *turn*, and only the turn. `sessions()`, `reap` and
+        # `session_bytes` still read `sessions_root(workspace)`, so a provider
+        # that puts its trees elsewhere gets an inventory that reports nothing
+        # and a janitor with nothing to sweep. That is survivable for a tree
+        # whose whole point is not to outlive the turn -- there is nothing to
+        # inventory -- and wrong for one that does. Whichever it is, the store
+        # is what a caller should be asking, and that is not what those three
+        # ask today.
+        self.trees: SessionTrees = trees or LocalSessionTrees(self.workspace)
         # Host-side, beside the run logs, because the session directory is the
         # agent's own root -- a claim kept there would be something `execute`
         # could delete. `state_dir` is the one place the agent never addresses.
@@ -982,14 +1000,36 @@ class Kingfisher:
         # anything before the request is known to be valid, and an empty session
         # directory left by a rejected request is idempotent -- the retry reuses
         # it.
-        session = Session.open(self.workspace, session_id, self.dirs)
+        return self._ready(Session.open(self.workspace, session_id, self.dirs))
+
+    def _ready(self, session: Session) -> Session:
+        """A session with its layout made and its files back, wherever it is.
+
+        The two halves that have to happen inside a held tree, so they are one
+        method rather than repeated beside each way of getting a directory.
+        Restoring comes after the layout and before anything reads it: the
+        agent's backend is rooted here, so a restore any later would arrive
+        after the thing that reads it.
+        """
         ensure_session_layout(session.directory)
-        # After the layout and before anything reads it. The agent's backend is
-        # rooted at this directory, so a restore any later would arrive after
-        # the thing that reads it.
         if self.sessions_store is not None:
             restore_into(self.sessions_store, session.id, session.directory)
         return session
+
+    @contextmanager
+    def _held_session(self, request: Request) -> Iterator[Session]:
+        """This turn's session, in a directory held for exactly as long.
+
+        The bracket is wider than the agent on both sides, and that is the whole
+        reason it lives here rather than where the backend is built: restoring
+        from the store writes into this directory before the turn, and keeping
+        from it reads the directory afterwards. A provider that mounts something
+        would otherwise be asked to mount it after the restore and unmount it
+        before the save.
+        """
+        session_id = self._session_id_for(request, sessions_root(self.workspace))
+        with self.trees.hold(session_id) as directory:
+            yield self._ready(Session.at(session_id, directory, self.dirs))
 
     def _admit(
         self,
@@ -1279,7 +1319,21 @@ class Kingfisher:
 
         The terminal event has `kind == "finished"` and carries the `RunResult`.
         """
-        prepared = self._prepare(request)
+        # Coerced here rather than only in `_prepare`, because holding the
+        # session now happens first and a bare task string has no session id to
+        # read.
+        request = Request.coerce(request)
+        with self._held_session(request) as session:
+            yield from self._stream_turn(request, session)
+
+    def _stream_turn(self, request: Request, session: Session) -> Iterator[RunEvent]:
+        """One turn, with its directory already held.
+
+        Split from `stream` for the reason `_astream_turn` is split from
+        `astream`: so what holds the session wraps the whole turn without
+        indenting the loop that matters.
+        """
+        prepared = self._prepare(request, session)
         answer = ""
         ok = False
         cut_short = False
@@ -1356,7 +1410,13 @@ class Kingfisher:
         """
         request = Request.coerce(request)
         async with AsyncExitStack() as stack:
-            session = await asyncio.to_thread(self.open_session_for, request)
+            # On the worker thread and into the stack that already wraps this
+            # turn, so the tree is released the same way the saver is -- and so
+            # that holding it, which for a mount is real work, does not block
+            # every other turn sharing this loop.
+            session = await asyncio.to_thread(
+                stack.enter_context, self._held_session(Request.coerce(request))
+            )
             saver = await self._async_checkpointer_for(stack, session.directory)
             async for event in self._astream_turn(request, session, saver):
                 yield event

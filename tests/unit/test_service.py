@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import shutil
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
@@ -425,6 +427,122 @@ def _wired_to_a_store(cfg, tmp_path):
 
     kept = LocalSessionStore(tmp_path / "kept-elsewhere")
     return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept), kept
+
+
+class FreshEachTurn:
+    """A provider whose tree exists for one turn and then does not.
+
+    The deployment this seam is for, made testable: nothing survives between
+    turns except the store, so a session that remembers anything remembers it
+    because it was persisted and restored rather than because a directory
+    happened to still be there.
+    """
+
+    def __init__(self, root) -> None:
+        self.root = Path(root)
+        self.turns = 0
+        self.log: list[tuple[str, tuple[str, ...]]] = []
+
+    def _contents(self, directory) -> tuple[str, ...]:
+        return tuple(sorted(p.name for p in directory.rglob("*") if p.is_file()))
+
+    @contextmanager
+    def hold(self, session_id: str):
+        self.turns += 1
+        directory = self.root / f"{session_id}-turn{self.turns}"
+        directory.mkdir(parents=True)
+        self.log.append(("held", self._contents(directory)))
+        try:
+            yield directory
+        finally:
+            self.log.append(("released", self._contents(directory)))
+            shutil.rmtree(directory)
+
+
+def _wired_to_a_tree(cfg, tmp_path):
+    from kingfisher import LocalSessionStore
+
+    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
+    trees = FreshEachTurn(tmp_path / "for-one-turn")
+    service = Kingfisher(
+        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept, trees=trees
+    )
+    return service, kept, trees
+
+
+def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
+    """The seam itself: kingfisher asks where this session's files are rather
+    than deciding, and builds the layout inside whatever it is given."""
+    service, _, trees = _wired_to_a_tree(cfg, tmp_path)
+
+    result = service.run(Request(task="anything"))
+
+    assert result.run_dir.is_relative_to(trees.root)
+    assert not (cfg.workspace / "sessions" / result.session_id).exists()
+
+
+def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
+    """The whole design, end to end, with nothing left on the machine.
+
+    Turn one writes a file. Its directory is destroyed. Turn two gets a
+    brand-new empty one -- and the file is there, which it can only be because
+    the store was written before the tree went and read after the next one
+    arrived. If the bracket were narrower than the turn on either side, this is
+    the test that would say so.
+    """
+    service, kept, trees = _wired_to_a_tree(cfg, tmp_path)
+    first = service.run(Request(task="anything"))
+    kept.save(first.session_id, {"derived/report.md": b"forty rows"})
+
+    service.run(Request(task="again", session_id=first.session_id))
+
+    arrived, at_the_end = trees.log[-2], trees.log[-1]
+    assert arrived == ("held", ()), "the second turn started with nothing on the machine"
+    assert "report.md" in at_the_end[1], "and had the work back before it ended"
+
+
+def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
+    """A mount left behind after every failed turn is an accumulating pile of
+    other tenants' trees, in the box this design exists to make safe."""
+
+    class Fails:
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            msg = "the model went away"
+            raise RuntimeError(msg)
+
+        def get_state(self, config):
+            return None
+
+    from kingfisher import LocalSessionStore
+
+    trees = FreshEachTurn(tmp_path / "for-one-turn")
+    service = Kingfisher(
+        cfg,
+        graph=Fails(),
+        threads=StubCheckpointer(),
+        sessions=LocalSessionStore(tmp_path / "kept"),
+        trees=trees,
+    )
+
+    with pytest.raises(RuntimeError, match="went away"):
+        service.run(Request(task="anything"))
+
+    assert [kind for kind, _ in trees.log] == ["held", "released"]
+
+
+def test_the_tree_is_released_when_a_caller_walks_away(cfg, tmp_path):
+    """The same claim for the other way a turn ends without finishing. A tree
+    released only by the garbage collector is one held for as long as the
+    caller keeps the generator, which in a shared box is somebody else's
+    problem."""
+    service, _, trees = _wired_to_a_tree(cfg, tmp_path)
+
+    events = service.stream(Request(task="anything"))
+    next(events)
+    events.close()
+
+    assert [kind for kind, _ in trees.log] == ["held", "released"]
 
 
 def _with_a_derived_file(cfg, service, session_id, name, text):
