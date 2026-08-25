@@ -1,7 +1,9 @@
 # A folder handed in, a command handed off
 
-**Status:** designed. Not implemented. Measurements are marked as such;
-everything else is a decision or an open question.
+**Status:** built. All four slices merged -- #256, #258, #257, #259 -- and what
+building them changed is recorded at the end rather than edited into the
+decisions above. Measurements are marked as such; everything else is a decision
+or an open question.
 **Date:** 2026-08-26
 
 Two pieces of work are queued against the same code and neither can start
@@ -97,7 +99,7 @@ already has; Landlock is a branch inside `AUTO` on Linux, not a new mechanism.
 
 | # | Question | How |
 |---|---|---|
-| O1 | What the port is called. `SessionTrees` beside `SessionDirs` is two ports whose names both say "session directories" | Name for the difference: one is *policy on paths* (create exclusively, mark used, list children), the other *provides* the tree |
+| O1 | Whether `sessions()`, `reap` and `session_bytes` should ask the store rather than the workspace | They read `sessions_root(workspace)`, so a provider putting trees elsewhere gets an inventory reporting nothing and a janitor with nothing to sweep. Harmless for a tree not meant to outlive the turn, wrong for one that is -- and in both cases the store is what a caller should be asking |
 | O2 | Whether a caller holding an unexhausted generator open indefinitely is worth defending against | D10 releases the tree when the generator is collected, which is the collector's timing, not ours. A `stream()` that must be closed explicitly would be exact and would change every caller |
 | O3 | What a mount and unmount per turn costs | Unmeasured. Only bites an out-of-tree FUSE provider; the earlier measurement mounted once and stayed |
 | O4 | Whether `build_agent(backend=...)` should survive once both seams exist | It is the remaining way to bypass every decision here |
@@ -154,3 +156,37 @@ The other three buy no speed and no safety on their own. What they buy is that
 two queued pieces of work -- a fence and a filesystem -- stop being edits to the
 same function, so they can be built, tested and reverted independently by people
 who are not both in this repository.
+
+## What building it changed
+
+Four slices, four PRs, nothing above rewritten. Where the plan was wrong it was
+wrong in a way worth keeping visible.
+
+**Slice 2 was a live bug, and worse than described.** The plan said a caller who
+stops reading never persists. It also never *ends the turn*: `yield from
+prepared.events` sat outside the `try`, and `run_start` is the first of those --
+so stopping at the first event left the claim taken, the checkpointer open and
+the interpreter running. Not an exotic path, the common one.
+
+**`_record` promised something it did not do.** *"A turn that died before the
+first superstep has nothing to add"* was prose; the code read `.values` off
+whatever `get_state` returned. Unreachable while persistence only ran after a
+completed turn, reachable the moment it ran on every turn.
+
+**The async path needed a second spelling, not the same one.** `stack.push`
+after entering, rather than `enter_context`: `ty` cannot resolve the type
+variable through `asyncio.to_thread`, and `push` is better anyway, because it
+leaves the turn's exception reaching a provider's `__exit__` where a callback
+would have swallowed which way the turn ended.
+
+**One test passes for a reason that is not the code.** With nothing releasing
+the tree at all, an ordinary async turn still releases it -- the suspended
+generator is collected as soon as the last reference goes, and its `finally`
+runs then. Only a turn that *raises* pins the release, because its frames stay
+alive in the traceback. Both tests are kept and the weaker one says so.
+
+**S3's warning applies to test doubles too.** Every guard here was checked by
+breaking it: disabling the layout refusal, moving persistence back to the end,
+putting the pre-run events back outside the `try`, narrowing the tree bracket,
+removing the async release. A guard whose test still passes when the guard is
+gone is the same failure as a policy that grants `/tmp`.
