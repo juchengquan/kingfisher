@@ -427,6 +427,69 @@ def _wired_to_a_store(cfg, tmp_path):
     return Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept), kept
 
 
+def _with_a_derived_file(cfg, service, session_id, name, text):
+    """A file this turn produced, written where `collect_artifacts` looks."""
+    directory = cfg.workspace / "sessions" / session_id
+    (directory / "derived").mkdir(parents=True, exist_ok=True)
+    (directory / "derived" / name).write_text(text, encoding="utf-8")
+
+
+def test_a_caller_who_stops_reading_still_has_their_work_kept(cfg, tmp_path):
+    """The bug this split exists for, and it was live rather than theoretical.
+
+    `stream` is a generator whose last act is `yield self._finished(...)`, and
+    persistence used to live inside that call. A caller who takes the answer and
+    stops iterating never advances the body that far, so the turn's files were
+    never written to the store -- and the session came back from another machine
+    without them, with nothing anywhere saying so.
+    """
+    service, kept = _wired_to_a_store(cfg, tmp_path)
+    opened = service.run(Request(task="anything"))
+    _with_a_derived_file(cfg, service, opened.session_id, "half.md", "half a turn")
+
+    events = service.stream(Request(task="again", session_id=opened.session_id))
+    first = next(events)
+    events.close()
+
+    assert first.kind == "run_start", "the caller stopped before the model, which is the point"
+    assert kept.fetch(opened.session_id)["derived/half.md"] == b"half a turn"
+    # And the turn ended in every other sense too. `run_start` is yielded before
+    # the graph is reached, and that yield used to sit outside the `try` -- so
+    # stopping here left the session claimed, the checkpointer open and the
+    # interpreter running. A later turn on the same session proves the slot
+    # went back.
+    assert service.run(Request(task="third", session_id=opened.session_id)).answer == "ok"
+
+
+def test_a_turn_that_fails_keeps_what_it_made(cfg, tmp_path):
+    """A behaviour change, and the one this direction implies.
+
+    A turn used to leave its files in a directory and write nothing, which was
+    survivable while the directory was the truth. Once the store is the truth,
+    half a turn's work is worth more than none of it -- and the alternative is
+    that the way to lose work is for the turn to go wrong.
+    """
+
+    class Fails:
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            msg = "the model went away"
+            raise RuntimeError(msg)
+
+        def get_state(self, config):
+            return None
+
+    service, kept = _wired_to_a_store(cfg, tmp_path)
+    opened = service.run(Request(task="anything"))
+    _with_a_derived_file(cfg, service, opened.session_id, "partial.md", "as far as it got")
+
+    broken = Kingfisher(cfg, graph=Fails(), threads=StubCheckpointer(), sessions=kept)
+    with pytest.raises(RuntimeError, match="went away"):
+        broken.run(Request(task="again", session_id=opened.session_id))
+
+    assert kept.fetch(opened.session_id)["derived/partial.md"] == b"as far as it got"
+
+
 def test_a_turn_hands_what_it_produced_to_the_store(cfg, tmp_path):
     """`/derived` and `/memory` at the end of a turn, which is what
     `collect_artifacts` already names and what has to outlive the machine.

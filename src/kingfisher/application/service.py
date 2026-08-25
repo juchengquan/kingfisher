@@ -1161,12 +1161,21 @@ class Kingfisher:
             timeout_s=cfg.turn_timeout_s,
         )
 
-    def _finished(self, prepared: _Prepared, answer: str, *, cut_short: bool) -> RunEvent:
-        """The terminal event, built the same way whichever loop produced it.
+    def _keep(self, prepared: _Prepared) -> tuple[str, ...]:
+        """Persist what this turn produced, and name it.
 
-        And the one place both loops converge, which is why the session is kept
-        here rather than beside each `yield`: two call sites that must both
-        remember to persist is one a third path could omit.
+        In the turn's `finally` rather than beside the terminal event, and that
+        is the whole point of it being a separate method. `stream` is a
+        generator whose last act is `yield self._finished(...)`, so a caller
+        that stops reading early never advances the body that far -- the turn's
+        files were never written to the store at all, and a session that moved
+        to another machine came back without them. Nothing said so, because from
+        the caller's side it had the answer it wanted.
+
+        Moving the save a few lines earlier would not have helped: a generator
+        only runs when someone pulls, so "after the graph loop, before the final
+        yield" is the same `next()` call. Ending the turn is the only place that
+        runs whether the caller listened or not.
 
         At the end of the turn rather than after each tool call. The narrower
         window is better and costs a directory walk per call, which is
@@ -1191,6 +1200,16 @@ class Kingfisher:
                 prepared.session.directory,
                 (*kept, TRANSCRIPT),
             )
+        return kept
+
+    def _finished(
+        self, prepared: _Prepared, answer: str, kept: tuple[str, ...], *, cut_short: bool
+    ) -> RunEvent:
+        """The terminal event, built the same way whichever loop produced it.
+
+        Takes what `_keep` saved rather than saving anything itself, so that a
+        caller who never reads this event has still had their work kept.
+        """
         return RunEvent(
             kind="finished",
             text=answer,
@@ -1236,7 +1255,7 @@ class Kingfisher:
         if read is None:
             return
         try:
-            messages = read(prepared.config).values.get("messages")
+            snapshot = read(prepared.config)
         except ValueError:
             # `No checkpointer set` -- an injected graph that keeps no state
             # between supersteps. Structural, like the missing method above, and
@@ -1244,6 +1263,14 @@ class Kingfisher:
             # than by suppressing everything, so a graph that genuinely cannot
             # answer still says so.
             return
+        if snapshot is None:
+            # What the paragraph above describes, now that persistence runs at
+            # the end of *every* turn rather than only a completed one: a graph
+            # that died before its first superstep has no state to hand back.
+            # Reading `.values` off it raised, which turned "nothing to add"
+            # into a second failure on top of the first.
+            return
+        messages = snapshot.values.get("messages")
         if messages:
             write_transcript(prepared.session.directory, runtime.as_transcript(messages))
 
@@ -1253,13 +1280,17 @@ class Kingfisher:
         The terminal event has `kind == "finished"` and carries the `RunResult`.
         """
         prepared = self._prepare(request)
-        yield from prepared.events
-
         answer = ""
         ok = False
         cut_short = False
+        kept: tuple[str, ...] = ()
         delegates = runtime.Delegates()
         try:
+            # Inside the `try`, not before it. A caller that stops reading
+            # during these -- `run_start` is the first -- used to leave the turn
+            # with no end at all: the claim stayed taken, the checkpointer
+            # stayed open, and nothing was persisted.
+            yield from prepared.events
             for namespace, mode, chunk in prepared.graph.stream(
                 runtime.user_payload(prepared.message, prepared.history),
                 config=prepared.config,
@@ -1284,9 +1315,16 @@ class Kingfisher:
             yield _out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
-            # The slot goes back however the turn ended -- answered, refused
-            # mid-stream, or cut short by its deadline.
-            prepared.session.release(self.dirs, self._claims)
+            # Before the slot goes back, and inside its own `finally` so that a
+            # store which is unreachable does not also leak the claim. Ending
+            # the turn is the only moment that happens whether the caller read
+            # the last event or walked away after the answer.
+            try:
+                kept = self._keep(prepared)
+            finally:
+                # The slot goes back however the turn ended -- answered, refused
+                # mid-stream, or cut short by its deadline.
+                prepared.session.release(self.dirs, self._claims)
             # And so does the connection, when this service opened one. A
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.
@@ -1295,7 +1333,7 @@ class Kingfisher:
             # the process rather than leaking a handle. See `release_interpreter`.
             release_interpreter(self.cfg, prepared.graph)
 
-        yield self._finished(prepared, answer, cut_short=cut_short)
+        yield self._finished(prepared, answer, kept, cut_short=cut_short)
 
     async def astream(self, request: str | Request) -> AsyncIterator[RunEvent]:
         """`stream`, on an event loop.
@@ -1332,14 +1370,18 @@ class Kingfisher:
         whole turn without indenting the loop that matters.
         """
         prepared = await asyncio.to_thread(self._prepare, request, session, saver)
-        for event in prepared.events:
-            yield event
-
         answer = ""
         ok = False
         cut_short = False
+        kept: tuple[str, ...] = ()
         delegates = runtime.Delegates()
         try:
+            # Inside the `try`, not before it. A caller that stops reading
+            # during these -- `run_start` is the first -- used to leave the turn
+            # with no end at all: the claim stayed taken, the checkpointer
+            # stayed open, and nothing was persisted.
+            for event in prepared.events:
+                yield event
             async for namespace, mode, chunk in prepared.graph.astream(
                 runtime.user_payload(prepared.message, prepared.history),
                 config=prepared.config,
@@ -1365,9 +1407,15 @@ class Kingfisher:
             yield _out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
-            # The slot goes back however the turn ended -- answered, refused
-            # mid-stream, or cut short by its deadline.
-            prepared.session.release(self.dirs, self._claims)
+            # As in `stream`, and on a worker thread for the same reason
+            # `_prepare` is: a directory walk and a store write would otherwise
+            # block every other turn sharing this loop.
+            try:
+                kept = await asyncio.to_thread(self._keep, prepared)
+            finally:
+                # The slot goes back however the turn ended -- answered, refused
+                # mid-stream, or cut short by its deadline.
+                prepared.session.release(self.dirs, self._claims)
             # And so does the connection, when this service opened one. A
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.
@@ -1376,7 +1424,7 @@ class Kingfisher:
             # the process rather than leaking a handle. See `release_interpreter`.
             release_interpreter(self.cfg, prepared.graph)
 
-        yield self._finished(prepared, answer, cut_short=cut_short)
+        yield self._finished(prepared, answer, kept, cut_short=cut_short)
 
     async def arun(self, request: str | Request) -> RunResult:
         """Run one task to completion on an event loop. A drain of `astream`."""
