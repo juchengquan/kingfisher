@@ -8,8 +8,11 @@ faster. What it buys is turns overlapping, which is the shape a service needs.
 from __future__ import annotations
 
 import asyncio
+import shutil
 import threading
 import time
+from contextlib import contextmanager
+from pathlib import Path
 
 import pytest
 
@@ -223,3 +226,70 @@ def test_the_async_saver_is_reachable_from_outside_the_package(cfg):
             return await saver.aget_tuple({"configurable": {"thread_id": "nobody"}})
 
     assert asyncio.run(open_and_ask()) is None
+
+
+class RecordingTrees:
+    """A provider that hands back a fresh directory and remembers the bracket."""
+
+    def __init__(self, root) -> None:
+        self.root = Path(root)
+        self.turns = 0
+        self.log: list[str] = []
+
+    @contextmanager
+    def hold(self, session_id: str):
+        self.turns += 1
+        directory = self.root / f"{session_id}-turn{self.turns}"
+        directory.mkdir(parents=True)
+        self.log.append("held")
+        try:
+            yield directory
+        finally:
+            self.log.append("released")
+            shutil.rmtree(directory)
+
+
+def test_the_async_path_holds_and_releases_the_tree(cfg, tmp_path):
+    """The bracket is symmetric on an ordinary turn.
+
+    Weaker than it looks, and named here rather than left as a trap: with
+    nothing releasing the tree at all this still passes, because the suspended
+    generator is collected the moment the last reference goes and its `finally`
+    runs then. The test below is the one that pins the release.
+    """
+    trees = RecordingTrees(tmp_path / "for-one-turn")
+    service = Kingfisher(
+        cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer(), trees=trees
+    )
+
+    asyncio.run(service.arun(Request(task="anything")))
+
+    assert trees.log == ["held", "released"]
+
+
+def test_the_async_path_releases_the_tree_when_the_turn_fails(cfg, tmp_path):
+    """The release is the stack's, and this is where that becomes checkable.
+
+    A turn that raises keeps its frames alive in the traceback, so the holder is
+    *not* collected and nothing runs its `finally` for free. Only an explicit
+    release does -- which is why removing `stack.push` fails this test and not
+    the one above, and why a leaked mount would show up first on the turns that
+    went wrong.
+    """
+
+    class Fails(AsyncStubAgent):
+        async def astream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            msg = "the model went away"
+            raise RuntimeError(msg)
+
+        def get_state(self, config):
+            return None
+
+    trees = RecordingTrees(tmp_path / "for-one-turn")
+    service = Kingfisher(cfg, graph=Fails("ok"), threads=StubCheckpointer(), trees=trees)
+
+    with pytest.raises(RuntimeError, match="went away"):
+        asyncio.run(service.arun(Request(task="anything")))
+
+    assert trees.log == ["held", "released"]

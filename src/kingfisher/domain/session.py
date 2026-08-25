@@ -181,7 +181,18 @@ class Session:
         — `data`, `derived`, `memory` and `runs` — rather than only that
         session's turns.
         """
-        directory = sessions_root(workspace) / session_id
+        return cls.at(session_id, sessions_root(workspace) / session_id, dirs)
+
+    @classmethod
+    def at(cls, session_id: str, directory: Path, dirs: SessionDirs) -> Session:
+        """The same, for a directory chosen by something other than a workspace.
+
+        A deployment may hold a session's files somewhere this process does not
+        pick -- a mount that exists for one turn, a volume attached per pod --
+        and the id stays kingfisher's either way. Splitting the two apart is
+        what lets that be a choice made outside without the rest of the session
+        rules moving with it.
+        """
         dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
 

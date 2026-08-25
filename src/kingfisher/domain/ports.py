@@ -27,6 +27,7 @@ Two kinds of port live here, and the rule above is only about the first.
 from __future__ import annotations
 
 from collections.abc import Mapping
+from contextlib import AbstractContextManager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
@@ -368,5 +369,40 @@ class CommandRunner(Protocol):
         A timeout is a result, not an exception: `exit_code` 124, the shell's
         own, with output saying so. Raising would make every runner's failure
         the model's problem rather than a tool result it can read and retry.
+        """
+        ...
+
+
+class SessionTrees(Protocol):
+    """Where one session's files are, for the length of one turn.
+
+    A directory, not a backend. The file tools and the shell are two views of
+    one tree -- `/data/x.csv` through a tool and `data/x.csv` through `cat` are
+    the same bytes -- and the harness cannot tell a plain directory from a
+    mount: it resolves the root once and checks containment per access. So a
+    provider returns a path and never imports the harness at all.
+
+    The one rule that follows: **a symlink out of the tree is refused**, because
+    that containment check resolves before it compares. A session cannot be
+    composed out of links to shared content; it has to be a real directory, or
+    a mount that presents as one.
+
+    One turn, because a session here deliberately spans machines -- that is what
+    the store is for -- and a mount held between turns assumes the process that
+    made it is still there for the next one. Held as a context manager so that
+    what was mounted is released when the turn ends, including when it ends
+    badly.
+
+    Kingfisher creates the layout inside what it is handed. A provider that had
+    to create `data`, `memory` and the rest would be a provider that breaks
+    every time this repository adds a directory.
+    """
+
+    def hold(self, session_id: str) -> AbstractContextManager[Path]:
+        """The directory this session's turn runs in, for as long as it runs.
+
+        Called once per turn, before anything reads or writes the session --
+        restoring from the store writes into it, and keeping from it reads it
+        afterwards, so both happen inside.
         """
         ...
