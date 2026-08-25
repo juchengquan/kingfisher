@@ -1414,9 +1414,14 @@ class Kingfisher:
             # turn, so the tree is released the same way the saver is -- and so
             # that holding it, which for a mount is real work, does not block
             # every other turn sharing this loop.
-            session = await asyncio.to_thread(
-                stack.enter_context, self._held_session(Request.coerce(request))
-            )
+            holding = self._held_session(Request.coerce(request))
+            session = await asyncio.to_thread(holding.__enter__)
+            # Pushed rather than entered through the stack, for two reasons.
+            # `enter_context` loses the session's type through `to_thread`, and
+            # `push` leaves the turn's exception reaching a provider's
+            # `__exit__` -- a callback would swallow which way the turn ended.
+            # After entering, so a hold that failed is not then released.
+            stack.push(holding)
             saver = await self._async_checkpointer_for(stack, session.directory)
             async for event in self._astream_turn(request, session, saver):
                 yield event
