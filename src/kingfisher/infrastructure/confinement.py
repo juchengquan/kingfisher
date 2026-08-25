@@ -27,6 +27,7 @@ being indistinguishable from nobody having thought about it.
 
 from __future__ import annotations
 
+import ctypes
 import platform
 import shlex
 import shutil
@@ -36,6 +37,42 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from kingfisher.config import Config
+
+#: `landlock_create_ruleset`, which is 444 on every architecture that has it --
+#: the three Landlock calls were added to the syscall table in one go rather
+#: than per-architecture, so there is no table to carry here.
+_LANDLOCK_CREATE_RULESET = 444
+#: Ask for the ABI version instead of creating anything. With this flag the call
+#: takes a NULL attribute pointer and a zero size, and returns the version.
+_LANDLOCK_ABI_QUERY = 1
+
+
+def landlock_abi() -> int | None:
+    """The Landlock ABI this kernel supports, or `None` where there is none.
+
+    Asked of the kernel rather than inferred from a version string. A release
+    number says what the kernel was built from and not what it will do: a
+    distribution can ship Landlock disabled, a container runtime can block the
+    syscall, and both look like a modern kernel from `platform.release()`.
+
+    Free of `sandlock`, deliberately. This runs on hosts where the fence is not
+    installed and its whole purpose is to say whether installing it would help,
+    so a probe that needed it could never answer the question that matters.
+
+    Every failure is `None`. There is no ABI worth distinguishing from another
+    when the call did not work -- an old kernel, a blocked syscall and a
+    platform with no `syscall` symbol are one answer here, which is that this
+    host cannot be fenced this way.
+    """
+    if platform.system() != "Linux":
+        return None
+    try:
+        libc = ctypes.CDLL(None, use_errno=True)
+        version = libc.syscall(_LANDLOCK_CREATE_RULESET, None, 0, _LANDLOCK_ABI_QUERY)
+    except (OSError, AttributeError):  # pragma: no cover -- not reachable on Linux
+        return None
+    return version if version > 0 else None
+
 
 #: Pick whatever the platform offers, and say so when it offers nothing.
 AUTO = "auto"

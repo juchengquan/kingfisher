@@ -39,6 +39,7 @@ _EXPORTS = {
     # that improved the library on its own: `resolve` takes six arguments
     # and two callers were assembling them from the same `Config`.
     "Confinement": "kingfisher.infrastructure.confinement",
+    "landlock_abi": "kingfisher.infrastructure.confinement",
     "shell_confinement": "kingfisher.infrastructure.confinement",
     "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
@@ -133,6 +134,7 @@ __all__ = [
     "from_env",
     "inventory",
     "kinds_at",
+    "landlock_abi",
     "memory_backing",
     "normalize_answer",
     "offered",
@@ -184,6 +186,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.confinement import Confinement as Confinement
+    from kingfisher.infrastructure.confinement import landlock_abi as landlock_abi
     from kingfisher.infrastructure.confinement import (
         shell_confinement as shell_confinement,
     )

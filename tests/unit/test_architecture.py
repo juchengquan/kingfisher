@@ -1091,6 +1091,11 @@ LIGHT_EXPORTS = frozenset({
     "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
     "build_checkpointer", "build_model", "ensure_layout", "from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
+    # Asking the kernel what it can fence with. `ctypes` and a syscall, no
+    # dependency at all -- and it has to stay that way, because it runs on
+    # hosts where the fence is not installed to say whether installing one
+    # would help.
+    "landlock_abi",
     # The directory half of a configuration, and the record it returns. Light
     # because seeding a fresh workspace runs on them before anything is loaded
     # -- paying for three provider SDKs to find out where `skills/` goes would
