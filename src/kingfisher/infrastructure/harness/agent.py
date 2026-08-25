@@ -43,6 +43,7 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
     refuse_unoffered,
 )
+from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.subagent import RunOn
 from kingfisher.domain.subagent.rules import refuse_cycles, refuse_two_of_a_name
 from kingfisher.domain.tool import Found, Offering
@@ -532,7 +533,11 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
 
 
 def _backend_for(
-    cfg: Config, session_dir: Path | None, backend: Any | None, catalogue: Definitions
+    cfg: Config,
+    session_dir: Path | None,
+    backend: Any | None,
+    catalogue: Definitions,
+    runner: CommandRunner | None = None,
 ) -> Any:
     """The filesystem an agent sees: rooted at a session, or supplied ready-made.
 
@@ -548,7 +553,7 @@ def _backend_for(
     if backend is not None:
         return backend
     if session_dir is not None:
-        return build_backend(cfg, session_dir, catalogue=catalogue)
+        return build_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
     msg = "build_agent needs either a session_dir to root a backend at, or a backend"
     raise ValueError(msg)
 
@@ -891,6 +896,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     middleware_registry: Mapping[str, Callable[[], Any]] | None = None,
     model: Any | None = None,
     backend: Any | None = None,
+    runner: CommandRunner | None = None,
     checkpointer: Any | None = None,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
@@ -925,7 +931,7 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     asked = capabilities or Capabilities()
     capabilities = agent.declares.intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
-    resolved_backend = _backend_for(cfg, session_dir, backend, roots)
+    resolved_backend = _backend_for(cfg, session_dir, backend, roots, runner)
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]

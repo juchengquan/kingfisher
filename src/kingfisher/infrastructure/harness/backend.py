@@ -23,6 +23,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
+from deepagents.backends.protocol import ExecuteResponse
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
@@ -33,6 +34,7 @@ from kingfisher.domain.layout import (
     SESSION_PLUMBING,
     UPLOADED_SKILLS,
 )
+from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
@@ -210,14 +212,43 @@ class ConfinedShell(LocalShellBackend):
     `test_the_async_path_still_routes_through_execute` pins it. If a deepagents
     release gives `aexecute` its own implementation, that test fails rather than
     the boundary quietly going missing on one path.
+
+    A `runner` moves the last step -- actually running the command -- out of
+    this process, without moving file access with it. The two are one object
+    upstream: `LocalShellBackend` *is* a `FilesystemBackend`, adding only
+    `execute` and `id` to the ten file operations it inherits, and this object
+    sits in the composite's default slot where those ten serve every path no
+    route matches. So a deployment that supplied "the shell" would be supplying
+    `/derived` as well, and a session's files belong to whoever supplies the
+    directory.
+
+    `None` means run it here, which is what upstream already does -- a default
+    runner would be 110 lines of upstream's truncation, timeout and exit-code
+    shaping, copied to be kept in step. The confinement is applied either way,
+    before the runner sees the command, so a runner cannot forget to.
     """
 
-    def __init__(self, confined: confinement.Confinement, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        confined: confinement.Confinement,
+        *,
+        runner: CommandRunner | None = None,
+        **kwargs: Any,
+    ) -> None:
         self.confinement = confined
+        self.runner = runner
         super().__init__(**kwargs)
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
-        return super().execute(self.confinement.wrap(command), timeout=timeout)
+        confined = self.confinement.wrap(command)
+        if self.runner is None:
+            return super().execute(confined, timeout=timeout)
+        outcome = self.runner.run(confined, timeout=timeout)
+        return ExecuteResponse(
+            output=outcome.output,
+            exit_code=outcome.exit_code,
+            truncated=outcome.truncated,
+        )
 
 
 def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
@@ -500,7 +531,11 @@ def _require_layout(session_dir: Path) -> None:
 
 
 def build_backend(
-    cfg: Config, session_dir: Path, *, catalogue: Definitions | None = None
+    cfg: Config,
+    session_dir: Path,
+    *,
+    catalogue: Definitions | None = None,
+    runner: CommandRunner | None = None,
 ) -> BackendProtocol:
     """Build the backend rooted at one session.
 
@@ -551,6 +586,7 @@ def build_backend(
 
     shell = ConfinedShell(
         confinement.shell_confinement(cfg, skills=skills_dir),
+        runner=runner,
         root_dir=str(session_dir),
         env=shell_env(cfg, session_dir, catalogue=catalogue),
         timeout=cfg.execution_timeout_s,

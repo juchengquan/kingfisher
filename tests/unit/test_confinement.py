@@ -20,6 +20,7 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.domain.ports import CommandResult
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.harness.backend import build_backend
 from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
@@ -162,6 +163,76 @@ def test_the_async_path_is_confined_too(cfg, session_dir):
         assert "token" not in str(result.output), "aexecute read a file in the home"
     finally:
         secret.unlink(missing_ok=True)
+
+
+class Recorder:
+    """A runner that runs nothing, for tests about what reaches one."""
+
+    def __init__(self, output: str = "ran", exit_code: int = 0) -> None:
+        self.seen: list[tuple[str, int | None]] = []
+        self.result = CommandResult(output=output, exit_code=exit_code)
+
+    def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
+        self.seen.append((command, timeout))
+        return self.result
+
+
+def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
+    """Applying the confinement stays on this side of the seam.
+
+    A runner that ships the command to another machine cannot forget a step it
+    is never asked to perform, and the alternative -- handing over the raw
+    command and the `Confinement` with it -- makes every implementation
+    responsible for the boundary rather than for running things.
+    """
+    runner = Recorder()
+    backend = build_backend(cfg, session_dir, runner=runner)
+    backend.default.confinement = replace(
+        backend.default.confinement, wrap=lambda c: f"fenced({c})"
+    )
+
+    backend.execute("echo hi", timeout=7)
+
+    assert runner.seen == [("fenced(echo hi)", 7)]
+
+
+def test_what_a_runner_returns_reaches_the_model(cfg, session_dir):
+    """The seam is only useful if the result travels. Kingfisher's own type
+    goes in and the harness's comes out, which is the conversion that keeps
+    the framework out of a contract a deployment implements."""
+    backend = build_backend(cfg, session_dir, runner=Recorder(output="elsewhere", exit_code=3))
+
+    result = backend.execute("whoami")
+
+    assert result.output == "elsewhere"
+    assert result.exit_code == 3
+
+
+def test_no_runner_runs_the_command_here(cfg, session_dir):
+    """`None` is not "do nothing" -- it is upstream's own execution, unchanged.
+
+    A default runner would be 110 lines of upstream's truncation, timeout and
+    exit-code handling copied into this repository to be kept in step.
+    """
+    backend = build_backend(cfg, session_dir)
+
+    assert backend.default.runner is None
+    assert backend.execute("echo hi").output.strip() == "hi"
+
+
+def test_the_async_path_reaches_a_runner_too(cfg, session_dir):
+    """The same delegation the test below pins, seen from the other side: a
+    deployment running commands elsewhere must not have an async path that
+    quietly runs them here instead."""
+    runner = Recorder()
+    backend = build_backend(cfg, session_dir, runner=runner)
+
+    asyncio.run(backend.aexecute("echo hi"))
+
+    # Once, and confined -- on a host with a confinement the command the runner
+    # sees is the wrapped one, which is the point of the test above.
+    assert len(runner.seen) == 1
+    assert "echo hi" in runner.seen[0][0]
 
 
 def test_the_async_path_still_routes_through_execute(cfg, session_dir):
