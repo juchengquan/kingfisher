@@ -19,6 +19,7 @@ answers in a different shape.
 
 from __future__ import annotations
 
+import platform
 from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Literal
@@ -30,6 +31,7 @@ from kingfisher import (
     Inventory,
     inventory,
     kinds_at,
+    landlock_abi,
     memory_backing,
     shell_confinement,
 )
@@ -329,6 +331,53 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
         )
 
 
+#: What `sandlock` wants for its full ruleset. Below this it offers to run
+#: degraded, which S6 of `2026-08-25-a-fence-for-the-shell.md` says to report
+#: rather than accept quietly.
+FULL_LANDLOCK_ABI = 6
+
+
+def _mechanism() -> str:
+    """What is doing the confining, named rather than implied.
+
+    "confined" was true and unhelpful: two deployments reading it had no way to
+    tell a `sandbox-exec` profile from a container someone remembered to set up,
+    and the answer decides what an operator has to check when it stops working.
+    """
+    return "sandbox-exec" if platform.system() == "Darwin" else "the platform's sandbox"
+
+
+def _what_this_host_could_do() -> str:
+    """The remedy, from what the kernel actually answers rather than its name.
+
+    A release number says what the kernel was built from, not what it will do --
+    a distribution can ship Landlock off and a runtime can block the syscall,
+    and both look modern from `platform.release()`. So this asks, and a host
+    that could be fenced is told so by ABI rather than by version.
+    """
+    if platform.system() != "Linux":
+        return "set KINGFISHER_SHELL_SANDBOX, or confine the process itself"
+    abi = landlock_abi()
+    if abi is None:
+        return (
+            f"this kernel ({platform.release()}) offers no Landlock, so nothing here can "
+            "fence `execute`: run it in a container that mounts only the workspace and "
+            "set KINGFISHER_SHELL_SANDBOX=external"
+        )
+    if abi < FULL_LANDLOCK_ABI:
+        return (
+            f"this kernel ({platform.release()}) has Landlock ABI {abi}, below the "
+            f"{FULL_LANDLOCK_ABI} a full ruleset needs -- a fence here would be weaker "
+            "than one on a newer node, "
+            "so set KINGFISHER_SHELL_SANDBOX=external until it is upgraded"
+        )
+    return (
+        f"this kernel ({platform.release()}) has Landlock ABI {abi}, which is enough to fence "
+        "`execute` -- until that is wired, set KINGFISHER_SHELL_SANDBOX=external and run it in "
+        "a container that mounts only the workspace"
+    )
+
+
 def _shell(cfg: Config) -> Iterator[Check]:
     """What is keeping `execute` off the host, if anything.
 
@@ -340,7 +389,7 @@ def _shell(cfg: Config) -> Iterator[Check]:
     """
     confined = shell_confinement(cfg)
     if confined.confined:
-        yield Check("shell", "ok", "confined")
+        yield Check("shell", "ok", f"confined by {_mechanism()}")
     elif confined.elsewhere:
         # The case `EXTERNAL` exists for, and reporting it as the warning below
         # would recreate the confusion it was invented to remove: a container
@@ -352,7 +401,7 @@ def _shell(cfg: Config) -> Iterator[Check]:
             "shell",
             "warn",
             confined.warning or "nothing is confining `execute` to the workspace",
-            "set KINGFISHER_SHELL_SANDBOX, or confine the process itself",
+            _what_this_host_could_do(),
         )
 
 

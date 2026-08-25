@@ -12,7 +12,9 @@ goes unrun in exactly the deployments most worth checking.
 from __future__ import annotations
 
 import json
+import platform
 
+from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
 from tests.conftest import subagents_dir, tools_dir
@@ -548,3 +550,82 @@ def test_a_runtime_confined_shell_reads_as_ok_rather_than_a_warning(cfg, monkeyp
 
     assert check.verdict == "ok"
     assert "runtime" in check.detail
+
+
+# -- what could fence the shell, and on what kernel -------------------------
+
+
+def test_the_probe_answers_nothing_where_there_is_no_landlock():
+    """Landlock is a Linux thing, and asking anywhere else must not raise --
+    this runs inside `doctor`, whose whole job is to survive a host that is
+    wrong in some way and report it."""
+    from kingfisher.infrastructure.confinement import landlock_abi
+
+    assert landlock_abi() is None or platform.system() == "Linux"
+
+
+def test_an_unconfined_shell_is_told_what_this_kernel_could_do(cfg, monkeypatch):
+    """The point of step 1: an operator learns where they stand rather than
+    only that they are somewhere bad.
+
+    Asked of the kernel rather than read off its version, because a
+    distribution can ship Landlock disabled and a runtime can block the
+    syscall, and both look modern from `platform.release()`.
+    """
+    from dataclasses import replace
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health, "landlock_abi", lambda: 6)
+
+    check = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"]
+
+    assert check.verdict == "warn"
+    assert "6.12.0" in check.remedy and "ABI 6" in check.remedy
+
+
+def test_a_kernel_below_the_full_ruleset_is_told_it_is_below(cfg, monkeypatch):
+    """S6: a fence that quietly becomes weaker on a different node is worse
+    than one that says so. EKS nodes are commonly on 6.1, which is not enough
+    for the full ruleset, and nothing about the release number says that."""
+    from dataclasses import replace
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health.platform, "release", lambda: "6.1.0")
+    monkeypatch.setattr(health, "landlock_abi", lambda: 4)
+
+    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+
+    assert "ABI 4" in remedy
+    assert "below" in remedy and "weaker" in remedy
+
+
+def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
+    """The answer that changes what an operator should do: no fence is coming
+    on this host, so the container is the only boundary available."""
+    from dataclasses import replace
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health.platform, "release", lambda: "5.10.0")
+    monkeypatch.setattr(health, "landlock_abi", lambda: None)
+
+    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+
+    assert "no Landlock" in remedy
+    assert "external" in remedy
+
+
+def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
+    """"confined" was true and unhelpful. Two deployments reading it could not
+    tell a `sandbox-exec` profile from a container someone set up, and which one
+    it is decides what an operator checks when it stops working.
+
+    Asserted against `_mechanism` rather than a real `examine`, because the
+    confined branch is only reachable on a host with `sandbox-exec` -- and a
+    test that quietly asserts nothing on the CI runner is worse than no test.
+    """
+    monkeypatch.setattr(health.platform, "system", lambda: "Darwin")
+    assert health._mechanism() == "sandbox-exec"
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    assert health._mechanism() != "sandbox-exec"
