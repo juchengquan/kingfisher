@@ -677,8 +677,12 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
         "langgraph",
     }),
     # The rest of the layer adapts the disk, the OS and the environment, and
-    # needs one parser to do it.
-    "infrastructure": frozenset({"yaml"}),
+    # needs one parser to do it -- plus the Linux shell fence, which is the OS
+    # in the most literal sense this table holds: Landlock, applied to a process
+    # before it execs. Optional and Linux-only, so both imports of it are inside
+    # functions behind an `ImportError` or a platform check, and a macOS install
+    # never sees it.
+    "infrastructure": frozenset({"sandlock", "yaml"}),
     # The one consumer still in this distribution. `presentation` was the other
     # and is now `kingfisher-service`, a package of its own with its own rules --
     # so fastapi and uvicorn are no longer anything this table has an opinion

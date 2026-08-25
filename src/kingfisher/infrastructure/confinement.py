@@ -105,16 +105,77 @@ class Confinement:
     #: `confined = False` for both and reports the reassuring case as the
     #: alarming one -- which `doctor` did until this was added.
     elsewhere: bool = False
+    #: What is doing the confining, named. Empty when nothing is.
+    #:
+    #: Needed once a confinement stopped being spelled as a command prefix.
+    #: `sandbox-exec` is one, so "does `wrap` do anything" answered the question
+    #: on macOS; Landlock is applied to the process rather than to the string,
+    #: so on Linux that test reports a fenced shell as unfenced. Naming it also
+    #: fixes the report: "confined" could not tell an operator whether to go
+    #: looking at a profile or at a container.
+    mechanism: str = ""
 
     @property
     def confined(self) -> bool:
-        """Whether *this* process wraps the command. See `elsewhere` for the
+        """Whether *this* process confines the command. See `elsewhere` for the
         other way a shell can be safe."""
-        return self.warning == "" and self.wrap is not _unwrapped
+        return self.warning == "" and (self.mechanism != "" or self.wrap is not _unwrapped)
 
 
 def _unwrapped(command: str) -> str:
     return command
+
+
+#: What `sandlock` requires for its full ruleset -- its README says 6, and
+#: `min_landlock_abi()` says so at runtime once it is installed. Kept as a number
+#: here because the check has to answer on hosts where it is *not* installed,
+#: which is the case the answer matters most in.
+REQUIRED_LANDLOCK_ABI = 6
+
+
+def landlock_ready() -> bool:
+    """Whether this host can actually fence a command, asked rather than assumed.
+
+    Three things have to hold and any one of them fails quietly on its own: the
+    kernel supports Landlock at a high enough ABI, the package is installed, and
+    the platform is Linux. A deployment that got two of the three would otherwise
+    run unfenced while `doctor` said it was fine.
+
+    The ABI is read without `sandlock`, so this answers the same on a host that
+    has not installed it -- which is exactly the host asking whether to.
+    """
+    if landlock_abi() is None or (landlock_abi() or 0) < REQUIRED_LANDLOCK_ABI:
+        return False
+    try:
+        import sandlock  # noqa: F401, PLC0415  # ty: ignore[unresolved-import]
+    except ImportError:
+        return False
+    return True
+
+
+def _no_landlock_here() -> str:
+    """Why this Linux host is unfenced, in the terms that decide what to do.
+
+    "No confinement is wired for Linux" was true before there was one and is now
+    misleading: it is wired, and this host cannot use it. Which of the two
+    reasons applies changes the remedy -- one is an upgrade, the other is an
+    install.
+    """
+    abi = landlock_abi()
+    if abi is None:
+        reason = f"this kernel ({platform.release()}) offers no Landlock"
+    elif abi < REQUIRED_LANDLOCK_ABI:
+        reason = (
+            f"this kernel ({platform.release()}) has Landlock ABI {abi}, below the "
+            f"{REQUIRED_LANDLOCK_ABI} a full ruleset needs"
+        )
+    else:
+        reason = "`sandlock` is not installed (pip install 'kingfisher[fence]')"
+    return (
+        f"the agent's shell is unconfined: {reason}, so it can read this host's "
+        "files, including other sessions'. Run it in a container that mounts only "
+        "the workspace and set KINGFISHER_SHELL_SANDBOX=external."
+    )
 
 
 def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement:
@@ -349,6 +410,20 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         msg = f"unknown shell sandbox mode {mode!r}; expected one of {MODES}"
         raise ValueError(msg)
 
+    if platform.system() == "Linux":
+        # Landlock is applied to the process between fork and exec rather than
+        # wrapped round the command, so nothing is spelled here: the fence lives
+        # in the `CommandRunner` that `shell_runner` builds, and this says
+        # whether there will be one. Two answers rather than one, because a
+        # kernel that cannot be fenced needs a different remedy from one that
+        # can.
+        if landlock_ready():
+            return Confinement(wrap=_unwrapped, mechanism="Landlock")
+        return Confinement(
+            wrap=_unwrapped,
+            warning=_no_landlock_here(),
+        )
+
     if platform.system() != "Darwin" or not shutil.which("sandbox-exec"):
         return Confinement(
             wrap=_unwrapped,
@@ -376,4 +451,4 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         ),
         encoding="utf-8",
     )
-    return Confinement(wrap=_sandbox_exec(path))
+    return Confinement(wrap=_sandbox_exec(path), mechanism="sandbox-exec")
