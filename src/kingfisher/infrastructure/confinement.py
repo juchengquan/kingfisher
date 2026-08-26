@@ -33,7 +33,7 @@ import shlex
 import shutil
 import sys
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from pathlib import Path
 
 from kingfisher.config import Config
@@ -122,12 +122,43 @@ class Confinement:
     #: fixes the report: "confined" could not tell an operator whether to go
     #: looking at a profile or at a container.
     mechanism: str = ""
+    #: A deployment provided the `CommandRunner`, so what actually runs a command
+    #: is code this process cannot inspect.
+    #:
+    #: Separate from `elsewhere` because the two answer different questions. A
+    #: supplied runner that is `local` still has kingfisher's confinement applied
+    #: to the command, so `mechanism` stays true -- it is just no longer the
+    #: whole story, and an operator asking "what runs my commands" deserves the
+    #: rest of it. A supplied runner that is *not* local has none of it applied,
+    #: and that case sets `elsewhere` as well.
+    supplied: bool = False
 
     @property
     def confined(self) -> bool:
         """Whether *this* process confines the command. See `elsewhere` for the
         other way a shell can be safe."""
         return self.warning == "" and (self.mechanism != "" or self.wrap is not _unwrapped)
+
+
+def with_supplied_runner(confined: Confinement, *, local: bool) -> Confinement:
+    """What is confining the shell, once a deployment supplies the runner.
+
+    Measured before this existed: a runner declaring `local = False` ran the
+    command with no wrap applied, and the `Confinement` still reported
+    `mechanism='sandbox-exec'` and `confined=True`. The claim was false inside
+    the process, not merely invisible to `doctor` -- anything reading it got a
+    wrong answer, and a check that reports a fence which is not running is worse
+    than one that reports nothing.
+
+    Two cases, because they are not the same fact. A local runner still receives
+    the confined command, so the mechanism holds and only gains company. A
+    non-local one receives the command as the model wrote it -- so nothing this
+    process applies reaches it, which is exactly what `elsewhere` means: a
+    boundary the deployment asserted and this code cannot see.
+    """
+    if local:
+        return replace(confined, supplied=True)
+    return Confinement(wrap=_unwrapped, elsewhere=True, supplied=True)
 
 
 def _unwrapped(command: str) -> str:

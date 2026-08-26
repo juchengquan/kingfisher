@@ -660,13 +660,20 @@ def build_backend(
 
     confined = confinement.shell_confinement(cfg, skills=skills_dir)
     env = shell_env(cfg, session_dir, catalogue=catalogue)
+    if runner is None:
+        chosen = _fence_for(cfg, session_dir, confined, skills_dir, env)
+    else:
+        # Said once, here, rather than left for a reader to work out from two
+        # places. What confines the shell depends on what runs the command, and
+        # a supplied runner that is not local receives nothing this process
+        # applied -- so the confinement has to stop claiming otherwise.
+        chosen = runner
+        confined = confinement.with_supplied_runner(
+            confined, local=getattr(runner, "local", True)
+        )
     shell = ConfinedLocalShellBackend(
         confined,
-        runner=(
-            runner
-            if runner is not None
-            else _fence_for(cfg, session_dir, confined, skills_dir, env)
-        ),
+        runner=chosen,
         root_dir=str(session_dir),
         env=env,
         timeout=cfg.execution_timeout_s,

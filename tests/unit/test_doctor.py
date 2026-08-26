@@ -637,3 +637,32 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     said = health._mechanism(Confinement(wrap=_unwrapped, mechanism="bubblewrap"))
     assert "bubblewrap" in said
     assert "no network" in said
+
+
+def test_the_doctor_says_which_answer_it_is_giving(cfg):
+    """It builds a `Config` from the environment and never sees a `Kingfisher`,
+    so a deployment supplying its own runner or session root is invisible to it.
+
+    Describing the built-in path as though it were the running one is the
+    failure this file exists to prevent, and the cheapest honest fix is to say
+    which one is being described -- rather than plumb a service into a command
+    that does not have one.
+    """
+    check = {c.name: c for c in examine(cfg)}["shell"]
+
+    assert "from configuration" in check.detail
+    assert "not visible here" in check.detail
+
+
+def test_a_supplied_local_runner_is_named_beside_the_mechanism():
+    """It still receives the confined command, so the mechanism holds and has
+    only gained company. An operator asking what runs their commands is asking
+    about the runner, not only about the fence."""
+    from kingfisher import Confinement
+
+    said = health._mechanism(
+        Confinement(wrap=lambda c: c, mechanism="sandbox-exec", supplied=True)
+    )
+
+    assert "sandbox-exec" in said
+    assert "supplied runner" in said
