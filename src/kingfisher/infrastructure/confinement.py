@@ -80,11 +80,19 @@ AUTO = "auto"
 #: workspace. Nothing is wrapped and nothing is warned about, because the
 #: deployment has asserted the boundary exists somewhere this code cannot see.
 EXTERNAL = "external"
+#: bubblewrap: a mount namespace with no network, for kernels Landlock cannot
+#: reach. Named explicitly and never chosen by `AUTO`, for the same reason
+#: `EXTERNAL` is: it depends on the container having been started with its
+#: syscall filter relaxed, which is a fact about the deployment and not about
+#: this host. `AUTO` selecting it would mean kingfisher betting on something it
+#: cannot check, and losing that bet looks like a shell that reports confined
+#: and fails at its first command. See `infrastructure/bubblewrap.py`.
+BUBBLEWRAP = "bubblewrap"
 #: Deliberately unconfined. Warned about on every start, because an exposure
 #: nobody is reminded of is one nobody fixes.
 OFF = "off"
 
-MODES = (AUTO, EXTERNAL, OFF)
+MODES = (AUTO, BUBBLEWRAP, EXTERNAL, OFF)
 
 
 @dataclass(frozen=True)
@@ -151,6 +159,38 @@ def landlock_ready() -> bool:
     except ImportError:
         return False
     return True
+
+
+def _bubblewrap() -> Confinement:
+    """The bubblewrap mode, probed rather than trusted.
+
+    The binary can be missing, or present and unable to make a namespace --
+    which is the normal state of a container nobody relaxed, and the state an
+    operator naming this mode has most likely not noticed.
+    """
+    from kingfisher.infrastructure.bubblewrap import bubblewrap_available  # noqa: PLC0415
+
+    if bubblewrap_available():
+        return Confinement(wrap=_unwrapped, mechanism="bubblewrap")
+    return Confinement(
+        wrap=_unwrapped,
+        warning=(
+            "KINGFISHER_SHELL_SANDBOX=bubblewrap was asked for and cannot be used "
+            "here: either `bwrap` is not installed, or this container cannot create "
+            "a user namespace -- which needs `--security-opt seccomp=unconfined`. "
+            "The agent's shell is unconfined until one of those is fixed."
+        ),
+    )
+
+
+def _landlock() -> Confinement:
+    """The Linux default. Applied to the process between fork and exec rather
+    than wrapped round the command, so nothing is spelled here: the fence lives
+    in the `CommandRunner` that `build_backend` builds, and this says whether
+    there will be one."""
+    if landlock_ready():
+        return Confinement(wrap=_unwrapped, mechanism="Landlock")
+    return Confinement(wrap=_unwrapped, warning=_no_landlock_here())
 
 
 def _no_landlock_here() -> str:
@@ -398,6 +438,9 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
     the workspace: it is host-side configuration, and a file the agent could
     edit is not a boundary.
     """
+    if mode == BUBBLEWRAP:
+        return _bubblewrap()
+
     if mode == EXTERNAL:
         return Confinement(wrap=_unwrapped, elsewhere=True)
     if mode == OFF:
@@ -411,18 +454,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         raise ValueError(msg)
 
     if platform.system() == "Linux":
-        # Landlock is applied to the process between fork and exec rather than
-        # wrapped round the command, so nothing is spelled here: the fence lives
-        # in the `CommandRunner` that `shell_runner` builds, and this says
-        # whether there will be one. Two answers rather than one, because a
-        # kernel that cannot be fenced needs a different remedy from one that
-        # can.
-        if landlock_ready():
-            return Confinement(wrap=_unwrapped, mechanism="Landlock")
-        return Confinement(
-            wrap=_unwrapped,
-            warning=_no_landlock_here(),
-        )
+        return _landlock()
 
     if platform.system() != "Darwin" or not shutil.which("sandbox-exec"):
         return Confinement(

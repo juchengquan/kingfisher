@@ -39,6 +39,7 @@ _EXPORTS = {
     # that improved the library on its own: `resolve` takes six arguments
     # and two callers were assembling them from the same `Config`.
     "Confinement": "kingfisher.infrastructure.confinement",
+    "bubblewrap_available": "kingfisher.infrastructure.bubblewrap",
     "landlock_abi": "kingfisher.infrastructure.confinement",
     "shell_confinement": "kingfisher.infrastructure.confinement",
     "WorkspacePaths": "kingfisher.config",
@@ -125,6 +126,7 @@ __all__ = [
     "UploadError",
     "WorkspacePaths",
     "async_checkpointer",
+    "bubblewrap_available",
     "build_agent",
     "build_backend",
     "build_checkpointer",
@@ -183,6 +185,9 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
     from kingfisher.domain.tool import split_reference as split_reference
+    from kingfisher.infrastructure.bubblewrap import (
+        bubblewrap_available as bubblewrap_available,
+    )
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.confinement import Confinement as Confinement
