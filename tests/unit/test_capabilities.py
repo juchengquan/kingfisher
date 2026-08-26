@@ -362,3 +362,55 @@ def test_every_unknown_name_is_listed_not_just_the_first():
     typo."""
     with pytest.raises(CapabilityError, match="a, b"):
         refuse_unoffered(("a", "b"), offered=("c",), kind="subagent", subject="x")
+
+
+# -- and the third branch, which behaves nothing like those two --------------
+
+
+def test_a_wildcard_takes_everything_registered_when_nothing_narrowed_it():
+    """`["*"]` is a definition asking for whatever this deployment has, which
+    is a different sentence from naming one."""
+    approved = approved_middleware(
+        ALL, registered=("audit", "ratelimit"), granted=ALL, subject="agent 'a'"
+    )
+
+    assert set(approved) == {"audit", "ratelimit"}
+
+
+def test_a_wildcard_narrowed_by_the_request_drops_quietly():
+    """The case the two refusals above do not cover, and the one a reader is
+    most likely to assume they do.
+
+    A *named* middleware the request did not grant raises. A wildcard just
+    resolves smaller, silently. Both are defensible and they are not the same
+    rule: `["*"]` asks for a set rather than for names, so there is no
+    particular name to refuse on behalf of.
+
+    Written down because the alternative reading is worse. If a wildcard
+    refused whenever anything was withheld, no deployment could keep a hook
+    from one caller without breaking every definition that wrote a star.
+    """
+    approved = approved_middleware(
+        ALL, registered=("audit", "ratelimit"), granted=("audit",), subject="agent 'a'"
+    )
+
+    assert approved == ("audit",)
+
+
+def test_a_wildcard_can_resolve_to_nothing_and_says_nothing():
+    """The end of that road, and the reason this branch is worth three tests.
+
+    A definition that asked for every hook this deployment has runs with none
+    of them, and no refusal is raised -- reachable from a definition, since
+    `middleware: ["*"]` parses to `ALL` in both formats, and reachable from
+    outside, since the HTTP surface lets a client narrow this axis.
+
+    Deliberate, on the same argument as the test above: a star asked for
+    whatever there was, and nothing is what there was. Not reported back
+    either -- the withheld report is for what a caller could have asked for
+    differently, and a caller cannot register a middleware. See
+    `_withheld_by_kind`.
+    """
+    assert approved_middleware(
+        ALL, registered=("audit",), granted=(), subject="agent 'a'"
+    ) == ()
