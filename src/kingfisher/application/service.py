@@ -135,6 +135,7 @@ if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
     from kingfisher.domain.ports import (
+        CommandRunner,
         DefinitionStore,
         FileStore,
         SessionDirs,
@@ -488,6 +489,7 @@ class Kingfisher:
         # allowed to hold data.
         sessions: SessionStore | None = None,
         session_root: SessionRoot | None = None,
+        runner: Callable[[Path], CommandRunner] | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
@@ -536,6 +538,22 @@ class Kingfisher:
         # is what a caller should be asking, and that is not what those three
         # ask today.
         self.session_root: SessionRoot = session_root or LocalSessionRoot(self.workspace)
+        # A callable, and only a callable. A runner is built for one turn --
+        # kingfisher's own Landlock fence is, because its policy is generated
+        # from the session -- and a shared instance could not know which session
+        # it was running for, would be one fence for every tenant where the
+        # runner *is* the isolation, and would be called from several threads at
+        # once because turns overlap. A deployment with one to share writes
+        # `lambda session_dir: shared`: a line at the call site rather than a
+        # second shape here forever. `threads` takes both and needed a second
+        # attribute to remember which it was given.
+        if runner is not None and not callable(runner):
+            msg = (
+                "runner is built per turn, so it takes a callable: pass "
+                "`lambda session_dir: your_runner` if you have one to share"
+            )
+            raise TypeError(msg)
+        self._runner = runner
         # Host-side, beside the run logs, because the session directory is the
         # agent's own root -- a claim kept there would be something `execute`
         # could delete. `state_dir` is the one place the agent never addresses.
@@ -821,6 +839,12 @@ class Kingfisher:
         return build_agent(
             self.cfg,
             agent=self._agent_for(request, session_dir.name),
+            # Called here rather than passed down. This is where a turn first
+            # has a session directory, and `build_agent` is where one is already
+            # known -- so the harness keeps taking a runner, and only the
+            # service, which does not know the session until now, takes a way to
+            # make one.
+            runner=self._runner(session_dir) if self._runner is not None else None,
             capabilities=capabilities if capabilities is not None else request.capabilities,
             session_dir=session_dir,
             run_on=request.run_on,

@@ -240,10 +240,18 @@ class ConfinedShell(LocalShellBackend):
         super().__init__(**kwargs)
 
     def execute(self, command: str, *, timeout: int | None = None) -> Any:
-        confined = self.confinement.wrap(command)
         if self.runner is None:
-            return super().execute(confined, timeout=timeout)
-        outcome = self.runner.run(confined, timeout=timeout)
+            return super().execute(self.confinement.wrap(command), timeout=timeout)
+        # A confinement is a command prefix naming paths on *this* host, so
+        # applying it to something that runs elsewhere produces a
+        # `sandbox-exec -f /Users/.../shell.sb` shipped to a machine with no
+        # such file -- which fails looking like a broken remote shell rather
+        # than like a wrong prefix. `local` defaults to True so a runner that
+        # says nothing keeps the fence.
+        outcome = self.runner.run(
+            self.confinement.wrap(command) if getattr(self.runner, "local", True) else command,
+            timeout=timeout,
+        )
         return ExecuteResponse(
             output=outcome.output,
             exit_code=outcome.exit_code,

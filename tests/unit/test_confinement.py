@@ -168,6 +168,9 @@ def test_the_async_path_is_confined_too(cfg, session_dir):
 class Recorder:
     """A runner that runs nothing, for tests about what reaches one."""
 
+    #: This one is local, so the confinement should reach it.
+    local = True
+
     def __init__(self, output: str = "ran", exit_code: int = 0) -> None:
         self.seen: list[tuple[str, int | None]] = []
         self.result = CommandResult(output=output, exit_code=exit_code)
@@ -175,6 +178,59 @@ class Recorder:
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         self.seen.append((command, timeout))
         return self.result
+
+
+class Elsewhere(Recorder):
+    """A runner whose machine has none of this host's paths."""
+
+    local = False
+
+
+def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
+    """A confinement is a command prefix naming paths on *this* host.
+
+    Applied to something that runs elsewhere it produces
+    `sandbox-exec -f /Users/.../shell.sb ...` shipped to a machine with no such
+    file -- which fails looking like a broken remote shell rather than like a
+    wrong prefix, so the fix is a long way from the symptom.
+    """
+    runner = Elsewhere()
+    backend = build_backend(cfg, session_dir, runner=runner)
+    backend.default.confinement = replace(
+        backend.default.confinement, wrap=lambda c: f"fenced({c})"
+    )
+
+    backend.execute("echo hi")
+
+    assert runner.seen == [("echo hi", None)], "the local prefix must not travel"
+
+
+def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
+    """The default is the safe one on purpose. A runner added to gain something
+    else -- resource limits, another user, timings -- is still here, and losing
+    `sandbox-exec` without being asked is the failure this seam is about."""
+
+    class SaysNothing:
+        def __init__(self):
+            self.seen = []
+
+        def run(self, command, *, timeout=None):
+            self.seen.append(command)
+            return CommandResult(output="", exit_code=0)
+
+    runner = SaysNothing()
+    # `ty: ignore` is the test. `local` is required of anything type-checked
+    # against the protocol, so an object without it is exactly the duck-typed
+    # case the safe default exists for -- and the only way to reach that case is
+    # to pass something the checker refuses.
+    backend = build_backend(cfg, session_dir, runner=runner)  # ty: ignore[invalid-argument-type]
+    backend.default.confinement = replace(
+        backend.default.confinement, wrap=lambda c: f"fenced({c})"
+    )
+
+    backend.execute("echo hi")
+
+    assert runner.seen == ["fenced(echo hi)"]
 
 
 def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
