@@ -197,7 +197,7 @@ def ensure_session_layout(session_dir: Path) -> Path:
     return session_dir
 
 
-class LocalSessionTrees:
+class LocalSessionRoot:
     """A session's directory, on this machine, staying where it is.
 
     What kingfisher did before there was a port for it, written down so that
@@ -205,7 +205,7 @@ class LocalSessionTrees:
     nothing and releases nothing: the directory outlives the turn, and the
     session store is what makes that survivable rather than required.
 
-    A provider whose tree really is per-turn -- a mount, a volume -- does its
+    A provider whose root really is per-turn -- a mount, a volume -- does its
     work in the two halves this one leaves empty.
     """
 

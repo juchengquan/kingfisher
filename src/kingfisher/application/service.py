@@ -117,7 +117,7 @@ from kingfisher.infrastructure.session_store import (
 from kingfisher.infrastructure.uploads import provision
 from kingfisher.infrastructure.workspace_fs import (
     LocalSessionDirs,
-    LocalSessionTrees,
+    LocalSessionRoot,
     agent_snapshot,
     agent_started_with,
     check_placeable,
@@ -138,8 +138,8 @@ if TYPE_CHECKING:
         DefinitionStore,
         FileStore,
         SessionDirs,
+        SessionRoot,
         SessionStore,
-        SessionTrees,
         ThreadStore,
     )
 
@@ -487,7 +487,7 @@ class Kingfisher:
         # deployment has had until now and stays correct wherever the host is
         # allowed to hold data.
         sessions: SessionStore | None = None,
-        trees: SessionTrees | None = None,
+        session_root: SessionRoot | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, Callable[[], Any]] | None = None,
@@ -529,13 +529,13 @@ class Kingfisher:
         #
         # This governs the *turn*, and only the turn. `sessions()`, `reap` and
         # `session_bytes` still read `sessions_root(workspace)`, so a provider
-        # that puts its trees elsewhere gets an inventory that reports nothing
+        # that puts its sessions elsewhere gets an inventory that reports nothing
         # and a janitor with nothing to sweep. That is survivable for a tree
         # whose whole point is not to outlive the turn -- there is nothing to
         # inventory -- and wrong for one that does. Whichever it is, the store
         # is what a caller should be asking, and that is not what those three
         # ask today.
-        self.trees: SessionTrees = trees or LocalSessionTrees(self.workspace)
+        self.session_root: SessionRoot = session_root or LocalSessionRoot(self.workspace)
         # Host-side, beside the run logs, because the session directory is the
         # agent's own root -- a claim kept there would be something `execute`
         # could delete. `state_dir` is the one place the agent never addresses.
@@ -1028,7 +1028,7 @@ class Kingfisher:
         before the save.
         """
         session_id = self._session_id_for(request, sessions_root(self.workspace))
-        with self.trees.hold(session_id) as directory:
+        with self.session_root.hold(session_id) as directory:
             yield self._ready(Session.at(session_id, directory, self.dirs))
 
     def _admit(
@@ -1411,7 +1411,7 @@ class Kingfisher:
         request = Request.coerce(request)
         async with AsyncExitStack() as stack:
             # On the worker thread and into the stack that already wraps this
-            # turn, so the tree is released the same way the saver is -- and so
+            # turn, so the root is released the same way the saver is -- and so
             # that holding it, which for a mount is real work, does not block
             # every other turn sharing this loop.
             holding = self._held_session(Request.coerce(request))

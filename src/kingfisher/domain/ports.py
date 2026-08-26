@@ -373,16 +373,24 @@ class CommandRunner(Protocol):
         ...
 
 
-class SessionTrees(Protocol):
+class SessionRoot(Protocol):
     """Where one session's files are, for the length of one turn.
 
+    Named for what `build_backend` already calls it -- *"a session directory is
+    the backend root"* -- because that is the whole of what this hands back: the
+    one directory the agent addresses everything from. `SessionDirs` is the
+    neighbour it is easy to confuse this with, and the difference is worth
+    holding: that one is the *rules* about session directories (create one
+    exclusively so two turns cannot claim it, mark it used, list what is
+    inside), and this one is *where the directory is*.
+
     A directory, not a backend. The file tools and the shell are two views of
-    one tree -- `/data/x.csv` through a tool and `data/x.csv` through `cat` are
+    one directory -- `/data/x.csv` through a tool and `data/x.csv` through `cat` are
     the same bytes -- and the harness cannot tell a plain directory from a
     mount: it resolves the root once and checks containment per access. So a
     provider returns a path and never imports the harness at all.
 
-    The one rule that follows: **a symlink out of the tree is refused**, because
+    The one rule that follows: **a symlink out of the root is refused**, because
     that containment check resolves before it compares. A session cannot be
     composed out of links to shared content; it has to be a real directory, or
     a mount that presents as one.
@@ -396,6 +404,19 @@ class SessionTrees(Protocol):
     Kingfisher creates the layout inside what it is handed. A provider that had
     to create `data`, `memory` and the rest would be a provider that breaks
     every time this repository adds a directory.
+
+    **Nothing here is ever closed by kingfisher.** Whoever constructs one owns
+    shutting it down, which is the rule `threads` already states -- *"an instance
+    is a shared store the deployment made and manages"* -- and it applies for the
+    same reason: kingfisher does not decide when the service stops, so it cannot
+    be the one that decides when a connection to the storage does. Two owners of
+    one lifetime is what that rule exists to prevent.
+
+    Two lifetimes, then, and only one of them is kingfisher's. Anything set up
+    per *turn* belongs inside `hold`, which closes on the way out however the
+    turn ended. Anything set up when the provider was *built* -- a connection
+    pool, a thread, a mount made once at startup -- is released by the
+    deployment that built it, or by the process exiting.
     """
 
     def hold(self, session_id: str) -> AbstractContextManager[Path]:

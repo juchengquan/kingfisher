@@ -185,6 +185,16 @@ generator is collected as soon as the last reference goes, and its `finally`
 runs then. Only a turn that *raises* pins the release, because its frames stay
 alive in the traceback. Both tests are kept and the weaker one says so.
 
+**The port is `SessionRoot`, not `SessionTrees`.** O1 asked what to call it and
+was closed by picking a name; the evidence it was closed wrong is that the first
+person to read it asked what a "tree" was. `build_backend` already said the word
+-- *"a session directory is the backend root"* -- so it was in the codebase,
+meaning exactly this, while the port went and invented one. The neighbour it is
+confused with is `SessionDirs`, and the difference is worth holding: that one is
+the *rules* about session directories, this one is *where the directory is*.
+Everything above still says "tree" and is left saying it, because renaming a
+decision after the fact hides that the name was wrong once.
+
 **S3's warning applies to test doubles too.** Every guard here was checked by
 breaking it: disabling the layout refusal, moving persistence back to the end,
 putting the pre-run events back outside the `try`, narrowing the tree bracket,

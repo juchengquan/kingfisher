@@ -228,7 +228,7 @@ def test_the_async_saver_is_reachable_from_outside_the_package(cfg):
     assert asyncio.run(open_and_ask()) is None
 
 
-class RecordingTrees:
+class RecordingRoot:
     """A provider that hands back a fresh directory and remembers the bracket."""
 
     def __init__(self, root) -> None:
@@ -257,14 +257,14 @@ def test_the_async_path_holds_and_releases_the_tree(cfg, tmp_path):
     generator is collected the moment the last reference goes and its `finally`
     runs then. The test below is the one that pins the release.
     """
-    trees = RecordingTrees(tmp_path / "for-one-turn")
+    roots = RecordingRoot(tmp_path / "for-one-turn")
     service = Kingfisher(
-        cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer(), trees=trees
+        cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer(), session_root=roots
     )
 
     asyncio.run(service.arun(Request(task="anything")))
 
-    assert trees.log == ["held", "released"]
+    assert roots.log == ["held", "released"]
 
 
 def test_the_async_path_releases_the_tree_when_the_turn_fails(cfg, tmp_path):
@@ -286,10 +286,10 @@ def test_the_async_path_releases_the_tree_when_the_turn_fails(cfg, tmp_path):
         def get_state(self, config):
             return None
 
-    trees = RecordingTrees(tmp_path / "for-one-turn")
-    service = Kingfisher(cfg, graph=Fails("ok"), threads=StubCheckpointer(), trees=trees)
+    roots = RecordingRoot(tmp_path / "for-one-turn")
+    service = Kingfisher(cfg, graph=Fails("ok"), threads=StubCheckpointer(), session_root=roots)
 
     with pytest.raises(RuntimeError, match="went away"):
         asyncio.run(service.arun(Request(task="anything")))
 
-    assert trees.log == ["held", "released"]
+    assert roots.log == ["held", "released"]

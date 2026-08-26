@@ -459,25 +459,25 @@ class FreshEachTurn:
             shutil.rmtree(directory)
 
 
-def _wired_to_a_tree(cfg, tmp_path):
+def _wired_to_a_root(cfg, tmp_path):
     from kingfisher import LocalSessionStore
 
     kept = LocalSessionStore(tmp_path / "kept-elsewhere")
-    trees = FreshEachTurn(tmp_path / "for-one-turn")
+    roots = FreshEachTurn(tmp_path / "for-one-turn")
     service = Kingfisher(
-        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept, trees=trees
+        cfg, graph=StubAgent("ok"), threads=StubCheckpointer(), sessions=kept, session_root=roots
     )
-    return service, kept, trees
+    return service, kept, roots
 
 
 def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
     """The seam itself: kingfisher asks where this session's files are rather
     than deciding, and builds the layout inside whatever it is given."""
-    service, _, trees = _wired_to_a_tree(cfg, tmp_path)
+    service, _, roots = _wired_to_a_root(cfg, tmp_path)
 
     result = service.run(Request(task="anything"))
 
-    assert result.run_dir.is_relative_to(trees.root)
+    assert result.run_dir.is_relative_to(roots.root)
     assert not (cfg.workspace / "sessions" / result.session_id).exists()
 
 
@@ -490,20 +490,21 @@ def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
     arrived. If the bracket were narrower than the turn on either side, this is
     the test that would say so.
     """
-    service, kept, trees = _wired_to_a_tree(cfg, tmp_path)
+    service, kept, roots = _wired_to_a_root(cfg, tmp_path)
     first = service.run(Request(task="anything"))
     kept.save(first.session_id, {"derived/report.md": b"forty rows"})
 
     service.run(Request(task="again", session_id=first.session_id))
 
-    arrived, at_the_end = trees.log[-2], trees.log[-1]
+    arrived, at_the_end = roots.log[-2], roots.log[-1]
     assert arrived == ("held", ()), "the second turn started with nothing on the machine"
     assert "report.md" in at_the_end[1], "and had the work back before it ended"
 
 
 def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
     """A mount left behind after every failed turn is an accumulating pile of
-    other tenants' trees, in the box this design exists to make safe."""
+    other tenants' session directories, in the box this design exists to
+    make safe."""
 
     class Fails:
         def stream(self, state, config, stream_mode=None, subgraphs=False):
@@ -516,19 +517,19 @@ def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
 
     from kingfisher import LocalSessionStore
 
-    trees = FreshEachTurn(tmp_path / "for-one-turn")
+    roots = FreshEachTurn(tmp_path / "for-one-turn")
     service = Kingfisher(
         cfg,
         graph=Fails(),
         threads=StubCheckpointer(),
         sessions=LocalSessionStore(tmp_path / "kept"),
-        trees=trees,
+        session_root=roots,
     )
 
     with pytest.raises(RuntimeError, match="went away"):
         service.run(Request(task="anything"))
 
-    assert [kind for kind, _ in trees.log] == ["held", "released"]
+    assert [kind for kind, _ in roots.log] == ["held", "released"]
 
 
 def test_the_tree_is_released_when_a_caller_walks_away(cfg, tmp_path):
@@ -536,13 +537,13 @@ def test_the_tree_is_released_when_a_caller_walks_away(cfg, tmp_path):
     released only by the garbage collector is one held for as long as the
     caller keeps the generator, which in a shared box is somebody else's
     problem."""
-    service, _, trees = _wired_to_a_tree(cfg, tmp_path)
+    service, _, roots = _wired_to_a_root(cfg, tmp_path)
 
     events = service.stream(Request(task="anything"))
     next(events)
     events.close()
 
-    assert [kind for kind, _ in trees.log] == ["held", "released"]
+    assert [kind for kind, _ in roots.log] == ["held", "released"]
 
 
 def _with_a_derived_file(cfg, service, session_id, name, text):
