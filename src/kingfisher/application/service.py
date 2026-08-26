@@ -229,6 +229,19 @@ def _withheld_by_kind(
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
+    **`middleware` is deliberately not among them**, and the reason is about
+    this report rather than about that axis. What goes here is what a caller
+    could have asked for differently -- a tool, a skill, a delegate they may
+    grant next time. A caller cannot register a middleware: the names come from
+    whatever constructed `Kingfisher`, so telling them one was withheld names
+    something they have no way to act on.
+
+    It is the one axis where a shortfall can pass unremarked --
+    `approved_middleware` raises for a name a request withheld, but a
+    definition that wrote `middleware: ["*"]` resolves quietly smaller, and
+    quietly to nothing. That is the trade this absence accepts, written here
+    because this is where the next reader will come looking for it.
+
     Three axes, one rule. Each differs only in where "what the workspace offers"
     comes from, and none of the three is knowable without asking the thing that
     assembled the agent -- which is why a grant goes stale in the first place.

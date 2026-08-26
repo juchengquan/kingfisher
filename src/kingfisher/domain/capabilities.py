@@ -502,12 +502,30 @@ def approved_middleware(
 ) -> tuple[str, ...]:
     """Which of the middleware a definition names it may actually have.
 
-    Two refusals, and both raise -- neither is the "caller was narrower" case
-    that quietly drops a skill. A name nothing registered is a mistake in the
-    definition. A name the deployment registered but did not *grant* is an
-    escalation attempt or a misconfiguration, and running with silently less
-    middleware than the definition specified could mean running without the
-    rate limit or the audit hook it was written to have.
+    Two refusals, and both raise, **for a definition that named names**. A name
+    nothing registered is a mistake in the definition. A name the deployment
+    registered but did not *grant* is an escalation attempt or a
+    misconfiguration, and running with silently less middleware than the
+    definition specified could mean running without the rate limit or the audit
+    hook it was written to have.
+
+    A wildcard is the third branch and behaves like neither, which is worth
+    saying because this paragraph used to claim otherwise -- that nothing here
+    is ever the "caller was narrower" case that quietly drops a skill. That is
+    true of names and false of `["*"]`, which resolves smaller when the request
+    narrowed the axis, and resolves to *nothing* when the request withheld it.
+    No refusal either way, and `middleware: ["*"]` parses to `ALL` in both the
+    agent and subagent formats, so a definition can reach this.
+
+    Deliberate rather than an oversight, on an argument that does not carry to
+    the named case: a star asks for a set, not for particular names, so there
+    is nothing in particular to refuse on behalf of -- and a star that refused
+    whenever anything was withheld would stop any deployment keeping a hook
+    from one caller without breaking every definition that wrote one.
+
+    Nor is the shortfall reported back. That is a decision about what the
+    withheld report is for rather than about this axis; `_withheld_by_kind`
+    carries it.
 
     Checked identically for a catalogue definition and an uploaded one.
     `Capabilities.including` widens skills and subagents for an upload because
