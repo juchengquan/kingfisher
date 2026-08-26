@@ -29,6 +29,7 @@ from kingfisher import (
     Config,
     ConfigError,
     Inventory,
+    bubblewrap_available,
     inventory,
     kinds_at,
     landlock_abi,
@@ -347,6 +348,27 @@ def _mechanism() -> str:
     return "sandbox-exec" if platform.system() == "Darwin" else "the platform's sandbox"
 
 
+def _or_bubblewrap() -> str:
+    """What is left when Landlock is not an option, which is the case that
+    matters: EKS nodes are commonly on 6.1, where a full ruleset is unavailable
+    and kingfisher would otherwise have nothing to suggest but a container.
+
+    Probed rather than described, because "install bubblewrap" is useless advice
+    to a host that has it and cannot use it -- which is every container nobody
+    relaxed the syscall filter for.
+    """
+    if bubblewrap_available():
+        return (
+            "bubblewrap works here, so set KINGFISHER_SHELL_SANDBOX=bubblewrap -- it "
+            "closes the shell's network too, and note it needs the container's syscall "
+            "filter relaxed, which this host already has"
+        )
+    return (
+        "bubblewrap cannot be used here either, so run it in a container that mounts "
+        "only the workspace and set KINGFISHER_SHELL_SANDBOX=external"
+    )
+
+
 def _what_this_host_could_do() -> str:
     """The remedy, from what the kernel actually answers rather than its name.
 
@@ -360,16 +382,13 @@ def _what_this_host_could_do() -> str:
     abi = landlock_abi()
     if abi is None:
         return (
-            f"this kernel ({platform.release()}) offers no Landlock, so nothing here can "
-            "fence `execute`: run it in a container that mounts only the workspace and "
-            "set KINGFISHER_SHELL_SANDBOX=external"
+            f"this kernel ({platform.release()}) offers no Landlock. {_or_bubblewrap()}"
         )
     if abi < FULL_LANDLOCK_ABI:
         return (
             f"this kernel ({platform.release()}) has Landlock ABI {abi}, below the "
             f"{FULL_LANDLOCK_ABI} a full ruleset needs -- a fence here would be weaker "
-            "than one on a newer node, "
-            "so set KINGFISHER_SHELL_SANDBOX=external until it is upgraded"
+            f"than one on a newer node. {_or_bubblewrap()}"
         )
     return (
         f"this kernel ({platform.release()}) has Landlock ABI {abi}, which is enough to fence "

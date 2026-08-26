@@ -544,6 +544,21 @@ def _fence_for(
     shared catalogue. A deployment never writes one -- see `fence.py` for the
     hand-written policy that failed open and why that is the rule.
     """
+    if confined.mechanism == "bubblewrap":
+        from kingfisher.infrastructure.bubblewrap import (  # noqa: PLC0415
+            BubblewrapRunner,
+            argv_for,
+        )
+
+        return BubblewrapRunner(
+            argv_for(
+                session_dir,
+                readable=[skills_dir] if skills_dir is not None else [],
+                writable=[cfg.scratch_dir],
+            ),
+            env=env,
+        )
+
     if confined.mechanism != "Landlock":
         return None
     # Imported here for the reason the module explains: `sandlock` is a
