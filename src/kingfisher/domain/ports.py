@@ -359,9 +359,28 @@ class CommandRunner(Protocol):
     handing over "the shell" would hand over file access with it, which belongs
     to whoever supplies the session directory instead.
 
-    `command` arrives already confined: applying the confinement is the caller's
-    job, so a runner that ships the command to another machine cannot forget to.
+    `command` arrives already confined **when the runner is local**, which is the
+    default. Applying the confinement stays on kingfisher's side so a runner
+    cannot forget to -- but the confinement names paths on *this* host, so a
+    runner that ships the command elsewhere must say so by setting `local` to
+    False, and then receives the command as the model wrote it.
     """
+
+    #: Whether the command runs on this machine.
+    #:
+    #: Declared rather than inferred, and required of anything type-checked
+    #: against this protocol -- which is the right way round for a flag that
+    #: decides whether a fence is applied. Saying where your commands run is a
+    #: sentence worth writing. An object that never meets a type checker still
+    #: gets the safe answer: this is read with a default of True, so forgetting
+    #: it yields *more* confinement than needed, never less.
+    #:
+    #: The case this exists for is not the remote one. A runner that adds
+    #: resource limits, or runs as another user, or records timings, is still
+    #: here -- and under a rule of "a supplied runner means no local fence" every
+    #: one of those would quietly lose `sandbox-exec` on macOS. Losing a fence
+    #: without being asked is the failure this whole seam is about.
+    local: bool = True
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         """Run `command`, giving up after `timeout` seconds if one is given.

@@ -11,6 +11,7 @@ import pytest
 from kingfisher import Kingfisher
 from kingfisher.application.service import opening_events, turn_message
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
@@ -728,3 +729,77 @@ def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg, tmp
 
     assert len(sent) > 1, "only the new question reached the graph"
     assert any("forty" in str(getattr(m, "content", m)) for m in sent)
+
+
+# -- a fence a deployment brings --------------------------------------------
+
+
+def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, monkeypatch):
+    """The reason this takes a callable rather than an object.
+
+    A shared runner has no way to know which session it is running for --
+    `run(command, timeout)` carries nothing -- so anything that fences *by*
+    session, which is the reason to supply one, could not work. Kingfisher's own
+    Landlock fence has the same shape for the same reason: its policy is
+    generated from the session.
+
+    Asserted where the runner is handed over rather than through a turn,
+    because a turn that reached a real `build_agent` would need a model, and an
+    injected graph skips the call this is about.
+    """
+    import kingfisher.application.service as service_module
+
+    asked: list[Path] = []
+    handed: list[object] = []
+
+    class Runner:
+        local = True
+
+        def run(self, command, *, timeout=None):
+            del timeout
+            return CommandResult(output=f"ran {command}", exit_code=0)
+
+    def build(session_dir: Path):
+        asked.append(session_dir)
+        return Runner()
+
+    def fake_build_agent(*args, **kwargs):
+        handed.append(kwargs.get("runner"))
+        return StubAgent("ok")
+
+    named = an_agent(cfg, "worker")
+    monkeypatch.setattr(service_module, "build_agent", fake_build_agent)
+    service = Kingfisher(cfg, threads=StubCheckpointer(), runner=build)
+
+    first = service.run(Request(task="anything", agent=named))
+    service.run(Request(task="again", agent=named, session_id=first.session_id))
+
+    assert len(asked) == 2, "built per turn, not once"
+    assert {path.name for path in asked} == {first.session_id}
+    assert all(isinstance(runner, Runner) for runner in handed)
+
+
+def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
+    """With the sentence that says what to type instead. A shared instance is a
+    line at the call site; the alternative is a second shape in this
+    constructor forever, which is what `threads` carries."""
+
+    class Runner:
+        local = True
+
+        def run(self, command, *, timeout=None):
+            return CommandResult(output="", exit_code=0)
+
+    with pytest.raises(TypeError, match="lambda session_dir"):
+        # The type checker refuses this too, which is the point: the runtime
+        # check is for callers who never run one.
+        Kingfisher(
+            cfg, threads=StubCheckpointer(), runner=Runner()  # ty: ignore[invalid-argument-type]
+        )
+
+
+def test_no_runner_leaves_the_platform_to_decide(cfg):
+    """The default, and the case every existing deployment is in."""
+    service = Kingfisher(cfg, threads=StubCheckpointer())
+
+    assert service._runner is None
