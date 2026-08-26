@@ -221,3 +221,84 @@ def test_another_sessions_file_is_not_reachable_through_a_tool(cfg, session_dir)
     assert "exists=False" in transcript
     assert "TENANT-A-PRIVATE" not in transcript
     assert transcript.count(str(session_dir)) >= 1, "resolved under this session"
+
+
+A_READER = '''
+"""A tool that reads what it was handed."""
+
+
+def peek(path: str) -> str:
+    """Read it.
+
+    `path` is the same virtual path the file tools take, rooted at this session.
+    """
+    from pathlib import Path
+
+    p = Path(path)
+    return f"exists={p.exists()} content={p.read_text().strip() if p.exists() else '-'}"
+
+
+TOOLS = [peek]
+'''
+
+
+def test_a_link_inside_the_session_does_not_widen_it(cfg, session_dir):
+    """The check `within` tells adapters to do, and the reason it is not optional.
+
+    `within` is lexical on purpose -- the domain may not touch the filesystem --
+    and a session directory is one the agent can write to. `execute` is rooted
+    there, so it can make a symlink pointing at another session, hand a tool the
+    virtual path to it, and be read the target.
+
+    Measured before the second check existed: this returned
+    `content=TENANT-A-PRIVATE` through a tool, while `read_file` refused the very
+    same path. The bridge was weaker than the tools it was built to match.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "peek.py").write_text(A_READER, encoding="utf-8")
+    other = session_dir.parent / "another-tenant" / "derived"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "secret.txt").write_text("TENANT-A-PRIVATE", encoding="utf-8")
+    (session_dir / "derived").mkdir(parents=True, exist_ok=True)
+    (session_dir / "derived" / "link.txt").symlink_to(other / "secret.txt")
+
+    agent = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(
+            responses=[
+                AIMessage(
+                    content="",
+                    tool_calls=[
+                        {"name": "peek", "args": {"path": "/derived/link.txt"}, "id": "c1"}
+                    ],
+                ),
+                AIMessage(content="done"),
+            ]
+        ),
+    )
+    out = agent.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
+    )
+    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+
+    assert "TENANT-A-PRIVATE" not in transcript
+    assert "resolves outside this session" in transcript
+
+
+def test_a_link_that_stays_inside_still_works(session, bridge):
+    """The other half, so the check refuses escapes rather than symlinks. A
+    session that could hold no links at all would be a surprising place to run a
+    shell in."""
+    (session / "derived").mkdir(parents=True, exist_ok=True)
+    (session / "data" / "real.csv").write_text("a\n", encoding="utf-8")
+    (session / "derived" / "near.csv").symlink_to(session / "data" / "real.csv")
+
+    args = handed(bridge, a_call(path="/derived/near.csv"))
+
+    assert args["path"] == str((session / "data" / "real.csv").resolve())

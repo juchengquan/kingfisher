@@ -784,7 +784,29 @@ class WorkspaceToolPaths(AgentMiddleware):
         """
         if not isinstance(value, str) or not value.strip():
             return value
-        return str(within(self.session_dir, value.lstrip("/")))
+        landed = within(self.session_dir, value.lstrip("/"))
+        # The second check `within` tells adapters to do, and it is not optional
+        # here: that one is lexical, on purpose, because the domain may not touch
+        # the filesystem -- and a session directory is one the agent can write
+        # to. `execute` is rooted there, so it can make a symlink pointing out,
+        # hand a tool the virtual path to it, and be read the target.
+        #
+        # Measured before this existed: a link at `/derived/link.txt` pointing at
+        # another session returned `TENANT-A-PRIVATE` through a tool, while
+        # `read_file` refused the same path. deepagents resolves and compares;
+        # this had only half of that.
+        #
+        # Both sides resolved, since a workspace can itself sit under a symlink
+        # -- `/tmp` is `/private/tmp` on macOS -- and comparing one resolved path
+        # to one unresolved root refuses everything.
+        real = landed.resolve()
+        if not real.is_relative_to(self.session_dir.resolve()):
+            msg = (
+                f"reference {value!r} resolves outside this session; a link inside it "
+                "does not widen it"
+            )
+            raise UnsafeReferenceError(msg)
+        return str(real)
 
     def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
         try:
