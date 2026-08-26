@@ -373,16 +373,24 @@ class CommandRunner(Protocol):
         ...
 
 
-class SessionTrees(Protocol):
+class SessionRoot(Protocol):
     """Where one session's files are, for the length of one turn.
 
+    Named for what `build_backend` already calls it -- *"a session directory is
+    the backend root"* -- because that is the whole of what this hands back: the
+    one directory the agent addresses everything from. `SessionDirs` is the
+    neighbour it is easy to confuse this with, and the difference is worth
+    holding: that one is the *rules* about session directories (create one
+    exclusively so two turns cannot claim it, mark it used, list what is
+    inside), and this one is *where the directory is*.
+
     A directory, not a backend. The file tools and the shell are two views of
-    one tree -- `/data/x.csv` through a tool and `data/x.csv` through `cat` are
+    one directory -- `/data/x.csv` through a tool and `data/x.csv` through `cat` are
     the same bytes -- and the harness cannot tell a plain directory from a
     mount: it resolves the root once and checks containment per access. So a
     provider returns a path and never imports the harness at all.
 
-    The one rule that follows: **a symlink out of the tree is refused**, because
+    The one rule that follows: **a symlink out of the root is refused**, because
     that containment check resolves before it compares. A session cannot be
     composed out of links to shared content; it has to be a real directory, or
     a mount that presents as one.
