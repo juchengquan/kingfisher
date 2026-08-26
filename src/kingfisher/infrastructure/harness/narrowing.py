@@ -176,7 +176,7 @@ class NarrowedSkills(SkillsMiddleware):
     the async path would keep silently dropping one. `LocalShellBackend` is the
     opposite case and worth not confusing with this one; its `aexecute` is the
     protocol default, `await asyncio.to_thread(self.execute, ...)`, so
-    `ConfinedShell` overriding `execute` alone genuinely covers both.
+    `ConfinedLocalShellBackend` overriding `execute` alone genuinely covers both.
     """
 
     def __init__(self, *, allowed: tuple[str, ...], **kwargs: Any) -> None:

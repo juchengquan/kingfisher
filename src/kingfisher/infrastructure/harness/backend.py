@@ -192,8 +192,20 @@ def reject_host_path(key: str, workspace: Path) -> None:
         raise HostPathError(msg)
 
 
-class ConfinedShell(LocalShellBackend):
+class ConfinedLocalShellBackend(LocalShellBackend):
     """`LocalShellBackend` with every command run through a confinement.
+
+    Named for what it is rather than for what it does, because what it *is* is
+    the part that constrains callers: a `LocalShellBackend`, which is also a
+    `FilesystemBackend`, sitting in the composite's default slot where its ten
+    inherited file operations serve every path no route matches. "Shell" alone
+    hid all of that behind a word that sounds like one method.
+
+    "Local" describes this object, not necessarily where the command ends up. A
+    `runner` with `local = False` runs it somewhere else entirely -- and that is
+    the point of the seam rather than a contradiction: the *backend* is local,
+    serving this host's files, while only the last step of running a command may
+    not be.
 
     Wrapping the command is the whole mechanism, which is why it subclasses
     rather than composes: `CompositeBackend` delegates execution to its default
@@ -632,7 +644,7 @@ def build_backend(
 
     confined = confinement.shell_confinement(cfg, skills=skills_dir)
     env = shell_env(cfg, session_dir, catalogue=catalogue)
-    shell = ConfinedShell(
+    shell = ConfinedLocalShellBackend(
         confined,
         runner=(
             runner
