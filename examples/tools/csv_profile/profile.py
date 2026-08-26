@@ -59,7 +59,8 @@ def csv_profile(path: str) -> str:
     Use before analysing a file you have not seen. Cheaper and more reliable
     than reading it, and the answer does not grow with the file.
 
-    `path` is a host path, not one of the agent's virtual paths.
+    `path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session. Kingfisher resolves it before this runs.
     """
     header, gathered, seen = _read(path)
     if not header:
@@ -77,7 +78,8 @@ def csv_columns(path: str) -> str:
     The cheap half of `csv_profile`, for when the question is only what the
     file contains and not what state it is in.
 
-    `path` is a host path, not one of the agent's virtual paths.
+    `path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session. Kingfisher resolves it before this runs.
     """
     header, _, _ = _read(path)
     return "\n".join(header) if header else f"{path}: empty"

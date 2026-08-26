@@ -36,7 +36,11 @@ from kingfisher.domain.capabilities import (
 from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.domain.tool import Found, Offering, ceiling, select, split_reference
-from kingfisher.infrastructure.harness.backend import HostPathGuard, WorkspaceToolErrors
+from kingfisher.infrastructure.harness.backend import (
+    HostPathGuard,
+    WorkspaceToolErrors,
+    WorkspaceToolPaths,
+)
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
@@ -500,9 +504,21 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     # them cannot reach one, and narrowing it here would mean building the guard
     # from a set that is decided afterwards.
     if catalogue or private:
-        middleware.append(
-            WorkspaceToolErrors(frozenset(entry.name for entry in (*catalogue, *private)))
-        )
+        names = frozenset(entry.name for entry in (*catalogue, *private))
+        middleware.append(WorkspaceToolErrors(names))
+        # And the same translation the parent gets, from the backend it was
+        # handed -- a delegate has no `session_dir` of its own, and the backend
+        # is rooted at one.
+        #
+        # This matters more here than for the parent. A delegate is built with
+        # its own prompt and none of `system.md`, so it never learns that host
+        # paths exist and cannot be told one except by its caller. #245 left
+        # that open in as many words: "a design question about what a delegate
+        # is told". This is the answer -- it is told the same paths as everyone
+        # else, because there is no other kind.
+        root = getattr(backend, "workspace", None)
+        if root is not None:
+            middleware.append(WorkspaceToolPaths(names, root))
     if allowed != ALL:
         # `None` is a delegate permitted nothing, which is an empty allowlist
         # rather than an absent one -- the same split the parent makes.
