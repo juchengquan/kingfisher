@@ -5,8 +5,8 @@ paths, bubblewrap does not put them in the namespace. The escapes are the same
 because the agent is the same.
 
 Skipped where bubblewrap cannot build a sandbox -- which includes the machine
-this is written on, both CI runners, and any container nobody relaxed the
-syscall filter for. To run them:
+this is written on, both CI runners, and any container whose seccomp profile
+denies `clone` with CLONE_NEWUSER, as Docker's default does. To run them:
 
     docker run --rm --security-opt seccomp=unconfined ... \\
         sh -c "pip install -e . && python -m pytest tests/linux -v"

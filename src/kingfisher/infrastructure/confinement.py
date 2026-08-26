@@ -176,8 +176,10 @@ def _bubblewrap() -> Confinement:
         wrap=_unwrapped,
         warning=(
             "KINGFISHER_SHELL_SANDBOX=bubblewrap was asked for and cannot be used "
-            "here: either `bwrap` is not installed, or this container cannot create "
-            "a user namespace -- which needs `--security-opt seccomp=unconfined`. "
+            "here: either `bwrap` is not installed, or this container's seccomp "
+            "profile denies `clone` with CLONE_NEWUSER, which is what Docker's "
+            "default does. It needs a profile permitting that one rule; "
+            "`--security-opt seccomp=unconfined` also works and gives up far more. "
             "The agent's shell is unconfined until one of those is fixed."
         ),
     )

@@ -20,12 +20,27 @@ Which is also the honest limit. The exfiltration path the fence design names --
 runs through that tool and is **not** closed by this. What is closed is a script
 the agent writes and runs reaching out on its own.
 
-**The price is the container's syscall filter.** Measured: bubblewrap cannot
-create a namespace under Docker's default seccomp, with or without `SYS_ADMIN`.
-It needs `--security-opt seccomp=unconfined`, which is a property of the whole
-container -- so relaxing it to isolate the shell also relaxes it for this
-process and every registered tool. That is why `AUTO` never picks this and an
-operator has to name it: the container fact is one kingfisher cannot see.
+**The price is one seccomp rule, and it is worth naming precisely.** Measured
+under `strace`, the denial is a single call::
+
+    clone(flags=...|CLONE_NEWUSER|...) = -1 EPERM
+
+Docker's default profile does not block `clone`; it blocks it *when the flags
+include `CLONE_NEWUSER`*. So what bubblewrap needs is a profile permitting that
+one argument-filtered rule -- Docker's default with it removed, keeping the
+other syscalls it denies. `--security-opt seccomp=unconfined` also works and is
+the blunt way: it turns off the whole filter for the *entire container*,
+including this process and every registered tool. Prefer the narrow profile;
+this document said "unconfined" first and that was advice to give up far more
+than the job needs.
+
+What is being enabled either way is the thing Docker blocks on purpose:
+unprivileged user namespaces are a known amplifier for kernel bugs, letting a
+process hold capabilities in a namespace and reach code paths otherwise closed
+to it. That is the trade -- narrower than "the whole filter", identical in kind.
+
+It is also why `AUTO` never picks this and an operator has to name it: whether
+the container was started with such a profile is a fact kingfisher cannot see.
 
 **No `/proc`, deliberately.** A fresh `proc` cannot be mounted here -- Docker's
 masked paths inside `/proc` are locked mounts, and the kernel refuses a new one
