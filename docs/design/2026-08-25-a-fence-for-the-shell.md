@@ -1,7 +1,9 @@
 # A fence for the shell, and the doors it does not cover
 
-**Status:** designed. Not implemented. The measurements are real and are marked;
-everything else is marked too.
+**Status:** built. Steps 1-3 merged -- #261, #257, #264 -- and the fence is
+verified against a kernel rather than reasoned about. What building it changed
+is recorded at the end rather than edited into the decisions above. The
+measurements are real and are marked; everything else is marked too.
 **Date:** 2026-08-25
 
 Kingfisher has no shell confinement on Linux. `confinement.py:315` checks for
@@ -215,3 +217,50 @@ boundary that does is a pod per tenant, which that platform makes cheap.
 
 If tenants are mutually distrusting, do S7 *first* and treat 1–5 as depth. If
 they are one organisation's, 1–3 is the fix and the rest is judgement.
+
+
+## What building it changed
+
+The escape list held. In a container on Linux 6.12, ABI 6, with `SYS_ADMIN`
+available, every case in the table above is denied, and the four that need no
+capability are confirmed to *succeed unfenced* -- so a denial can be told from a
+typo. What follows is what the container knew that reading did not.
+
+**`Sandbox.run` does not work under Docker's default seccomp.** `sandlock`'s own
+quick-start example returns `sandlock_create failed`; it needs more than
+Landlock. `confine` in the same container works both directions. So the fence
+goes on between fork and exec and kingfisher owns the process launch -- which
+answers O5 of `2026-08-26-a-folder-handed-in-a-command-handed-off.md` by
+measurement rather than by preference, and is why `preexec_fn`'s hazard in a
+threaded program is named in the class instead of discovered later.
+
+**A policy naming a path that does not exist fences nothing.** `/lib64` is
+absent on arm64 Debian, and naming it made `sandlock_create` fail outright: the
+fence never built, every command returned an empty result, and **every escape
+test passed** -- because a command that cannot run reads another tenant's file no
+better than a fenced one does. The test that caught it was the one asserting the
+session stays *usable*. A security suite without that test is a suite that
+passes hardest when it is most broken.
+
+**A fence that fails to apply is nearly silent.** `subprocess` discards the
+child's exception and reports "Exception occurred in preexec_fn." with no
+detail. It fails closed -- the child is dead, so there is no unfenced run -- but
+the message now says which side failed rather than inventing a reason it was not
+given.
+
+**S3 was right for a reason its author supplied twice.** The hand-written policy
+that failed open is in the decision. The generated one then failed *closed* on a
+platform nobody had run it on. Both are the same mistake -- a path list is a
+claim about every machine this will ever run on -- and only one of them was
+visible without a container.
+
+**S2 is superseded and S1 is not.** `Confinement` never learned a `preexec`:
+`LocalShellBackend.execute` is 110 lines around a `subprocess.run` with no hook.
+The seam moved up to `CommandRunner` (#257), and a deployment can now supply one
+of its own (#263) -- so "run this tenant's commands in this tenant's pod", which
+S7 names as the boundary that actually works, is one implementation of one
+method rather than a rewrite.
+
+**One gap this work added.** `kingfisher doctor` takes only a `Config`, so it
+cannot see an injected runner and reports the built-in path only. Same shape as
+the problem `elsewhere` solved for containers, and unsolved here.
