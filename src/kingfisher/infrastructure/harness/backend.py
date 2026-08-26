@@ -17,7 +17,7 @@ from __future__ import annotations
 import os
 import stat
 import sys
-from collections.abc import Awaitable, Callable
+from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -512,6 +512,44 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
 MEMORY_SOURCES = [f"{MEMORY_ROUTE}AGENTS.md"]
 
 
+def _fence_for(
+    cfg: Config,
+    session_dir: Path,
+    confined: confinement.Confinement,
+    skills_dir: Path | None,
+    env: Mapping[str, str],
+) -> CommandRunner | None:
+    """The Linux fence, when the confinement says there is one.
+
+    Derived from the `Confinement` rather than deciding again. Whether to fence
+    depends on the mode, the platform, the kernel's Landlock ABI and whether
+    `sandlock` is installed, and two places answering that would eventually
+    answer it differently -- with the failure being a shell that runs unfenced
+    while `doctor` reports it confined.
+
+    The policy is generated here from what this session already has: writable is
+    the session and the scratch directory `TMPDIR` points at, readable is the
+    shared catalogue. A deployment never writes one -- see `fence.py` for the
+    hand-written policy that failed open and why that is the rule.
+    """
+    if confined.mechanism != "Landlock":
+        return None
+    # Imported here for the reason the module explains: `sandlock` is a
+    # Linux-only optional install, and this function is called on every turn on
+    # every platform.
+    from kingfisher.infrastructure.fence import LandlockRunner, policy_for  # noqa: PLC0415
+
+    return LandlockRunner(
+        policy_for(
+            session_dir,
+            readable=[skills_dir] if skills_dir is not None else [],
+            writable=[cfg.scratch_dir],
+        ),
+        cwd=session_dir,
+        env=env,
+    )
+
+
 def _require_layout(session_dir: Path) -> None:
     """Refuse a session directory that has not been made yet.
 
@@ -592,11 +630,17 @@ def build_backend(
     if skills_dir is not None:
         skills_dir.mkdir(parents=True, exist_ok=True)
 
+    confined = confinement.shell_confinement(cfg, skills=skills_dir)
+    env = shell_env(cfg, session_dir, catalogue=catalogue)
     shell = ConfinedShell(
-        confinement.shell_confinement(cfg, skills=skills_dir),
-        runner=runner,
+        confined,
+        runner=(
+            runner
+            if runner is not None
+            else _fence_for(cfg, session_dir, confined, skills_dir, env)
+        ),
         root_dir=str(session_dir),
-        env=shell_env(cfg, session_dir, catalogue=catalogue),
+        env=env,
         timeout=cfg.execution_timeout_s,
     )
     return WorkspaceScopedBackend(

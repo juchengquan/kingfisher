@@ -711,6 +711,9 @@ dependencies = [
 ]
 
 [package.optional-dependencies]
+fence = [
+    { name = "sandlock", marker = "sys_platform == 'linux'" },
+]
 service = [
     { name = "kingfisher-service" },
 ]
@@ -739,8 +742,9 @@ requires-dist = [
     { name = "langgraph-checkpoint-sqlite", specifier = ">=3.1.1" },
     { name = "python-dotenv", specifier = ">=1.2.2" },
     { name = "pyyaml", specifier = ">=6.0" },
+    { name = "sandlock", marker = "sys_platform == 'linux' and extra == 'fence'", specifier = ">=0.8.6" },
 ]
-provides-extras = ["service"]
+provides-extras = ["service", "fence"]
 
 [package.metadata.requires-dev]
 agent = [
@@ -1592,6 +1596,20 @@ wheels = [
     { url = "https://files.pythonhosted.org/packages/78/9b/475b927cf27a5cbbda3c7bafb69ed6ff77e1d7923d5d85f17c2749d7ae32/ruff-0.16.3-py3-none-win32.whl", hash = "sha256:388cdf2166642bd9b13d52b5932d3170f34f8abed7e8d9a855f1d84b83645a0a", size = 10931415, upload-time = "2026-08-13T15:17:05.726Z" },
     { url = "https://files.pythonhosted.org/packages/b2/99/e2a2bfc4fbf0a1e8a916bc9ebe6fe6c58cc34c28e0ffc6ce281d572d1c2e/ruff-0.16.3-py3-none-win_amd64.whl", hash = "sha256:e80a7d69ca2a6d1c4d352ec91458cdca6e56c83cdbcabd93e4abe1e53591d948", size = 11445993, upload-time = "2026-08-13T15:17:08.353Z" },
     { url = "https://files.pythonhosted.org/packages/69/3e/4132e539aed78c148854d4997a2685b0ed4dc4e87110b59ce528564e184e/ruff-0.16.3-py3-none-win_arm64.whl", hash = "sha256:b8ca152da82c1acc1fa8d5874b15951935f0eef46f10e6954c83859011b6178a", size = 11399302, upload-time = "2026-08-13T15:17:10.908Z" },
+]
+
+[[package]]
+name = "sandlock"
+version = "0.8.6"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/22/14/4b37dc8e813c93e73ab1ff4faa76d8922c9d01d397fee97bd2691519468a/sandlock-0.8.6.tar.gz", hash = "sha256:9a9994714fb68c962346e8f2684c41b8f930ec60aaafd702db9defe2b3ebe117", size = 127535, upload-time = "2026-08-08T06:01:28.546Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/2e/c9/fcb45cec2d4e10ebe2e262b3c6b10aa792764203781cf7bb8b71d3945d37/sandlock-0.8.6-cp312-cp312-manylinux_2_28_aarch64.whl", hash = "sha256:07e8ea05c452e08c5232decc41b579da9eb643c3a8e17db4a36b3d037868fcc3", size = 3025542, upload-time = "2026-08-08T06:01:18.856Z" },
+    { url = "https://files.pythonhosted.org/packages/fc/2c/9772fec5d7c7329868d70cb5196bbeb1db4bf32ee1f07908c53ac9d3204f/sandlock-0.8.6-cp312-cp312-manylinux_2_28_x86_64.whl", hash = "sha256:b1f310a86ed9501e88fb45995af930bdd1c3b0aadc114f37a644e45a7509d56d", size = 3086197, upload-time = "2026-08-08T06:01:20.498Z" },
+    { url = "https://files.pythonhosted.org/packages/e2/b6/c6f1fe9deeaa9db96095da04a5b3387c19bf6c47a85b361e5d8ae4d66152/sandlock-0.8.6-cp313-cp313-manylinux_2_28_aarch64.whl", hash = "sha256:6eca8a1362fb76b55ccf7b176bdaf615ed80b3e41a45688fb6dd3d69174f8793", size = 3025541, upload-time = "2026-08-08T06:01:21.993Z" },
+    { url = "https://files.pythonhosted.org/packages/fb/be/7ced6cd342b67ee412b5e1ec4cb5e4c68040337c38711eba245e4992ee17/sandlock-0.8.6-cp313-cp313-manylinux_2_28_x86_64.whl", hash = "sha256:f631a528bc268325b781625fc02ffe23fecf0c437f55292f7940fa5707eb55f5", size = 3086196, upload-time = "2026-08-08T06:01:23.569Z" },
+    { url = "https://files.pythonhosted.org/packages/e8/6b/2951c95554a258af80d83f864f782baf98cbb7d1631b22f7547062dcfdb9/sandlock-0.8.6-cp314-cp314-manylinux_2_28_aarch64.whl", hash = "sha256:b5c29bb41add14ad129ae254e9974cf38b7210e1f302b50ae557e4da47dd4495", size = 3025544, upload-time = "2026-08-08T06:01:25.18Z" },
+    { url = "https://files.pythonhosted.org/packages/f7/7b/d8ce4e3bab87c7a64c85e36b28ca5a9824f837094d74f8ba50d1a6d50800/sandlock-0.8.6-cp314-cp314-manylinux_2_28_x86_64.whl", hash = "sha256:2f76ff19c1dd938373197043da3d3a5206c47d0ff936ed8f34182d0d2769aa76", size = 3086197, upload-time = "2026-08-08T06:01:26.825Z" },
 ]
 
 [[package]]

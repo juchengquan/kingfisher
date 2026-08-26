@@ -69,6 +69,13 @@ dependencies = [
 # "pip probably handles it" is not a thing to find out in a release.
 service = ["kingfisher-service"]
 
+# The Linux shell fence. An extra rather than a dependency because `sandlock`
+# ships Linux-only wheels: a hard dependency would make `pip install kingfisher`
+# fail on macOS, where the fence is `sandbox-exec` and this is not wanted at all.
+# The marker means `pip install kingfisher[fence]` is a no-op elsewhere rather
+# than an error, so one requirements file can serve every platform.
+fence = ["sandlock>=0.8.6; sys_platform == 'linux'"]
+
 [project.scripts]
 # No `kingfisher-service` here, deliberately. The service ships its own command
 # of that name, and two distributions declaring one script is not an override --
