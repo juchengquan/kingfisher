@@ -257,6 +257,10 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, 
     assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == [
         "HostPathGuard",
         "WorkspaceToolErrors",
+        # Beside the errors guard rather than anywhere else: both are about a
+        # workspace tool call, and this one rewrites the arguments before the
+        # entries below decide anything about them.
+        "WorkspaceToolPaths",
         "ToolAllowlist",
         "NarrowedSkills",
         "SubAgentMiddleware",
@@ -289,5 +293,6 @@ def test_a_bare_definition_carries_three_of_them(cfg, session_dir, monkeypatch):
     assert [type(m).__name__ for m in middleware_of(captured, "reviewer")] == [
         "HostPathGuard",
         "WorkspaceToolErrors",
+        "WorkspaceToolPaths",
         "ToolAllowlist",
     ]

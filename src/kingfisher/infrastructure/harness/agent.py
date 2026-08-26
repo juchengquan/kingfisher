@@ -55,6 +55,7 @@ from kingfisher.infrastructure.harness.backend import (
     SKILLS_ROUTE,
     HostPathGuard,
     WorkspaceToolErrors,
+    WorkspaceToolPaths,
     build_backend,
     bundled_skills_route,
     skills_sources,
@@ -885,7 +886,8 @@ def _running(
     return injected or mine or build_model(*cfg.models.resolve())
 
 
-def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argument
+def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; each
+    # branch is one collaborator being absent, counted a different way
     # is one injectable collaborator, and the body is the wiring itself: every
     # statement attaches one thing to the graph, so splitting it would move the
     # wiring somewhere a reader has to go and find rather than shortening it.
@@ -1011,6 +1013,14 @@ def build_agent(  # noqa: PLR0913, PLR0915 -- the composition root; each argumen
     # the guard from a set that is computed after it.
     if walked:
         middleware.append(WorkspaceToolErrors(frozenset(entry.name for entry in walked)))
+        # And the same set gets its paths translated, when there is a session to
+        # translate against. A build with no session -- `inventory` reading the
+        # built-in tool set off a compiled graph -- has no root to resolve to and
+        # no turn to protect.
+        if session_dir is not None:
+            middleware.append(
+                WorkspaceToolPaths(frozenset(entry.name for entry in walked), session_dir)
+            )
 
     defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
     surface = _resolve_tools(

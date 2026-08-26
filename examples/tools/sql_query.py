@@ -21,8 +21,11 @@ from pathlib import Path
 from langchain_core.tools import tool
 
 #: The one database this deployment exposes. Point it wherever yours lives --
-#: an absolute host path, because a tool runs in the kingfisher process and
-#: does not see the agent's `/data` routing.
+#: an absolute host path, and still a host path after tool *arguments* stopped
+#: being ones. That is the line: an argument comes from the model and is
+#: resolved against the session, and a constant like this comes from whoever
+#: deployed the tool and is not. A tool that must read something outside a
+#: session says so here, where a person chose it.
 DATABASE = Path("~/kingfisher-example.db").expanduser()
 
 MAX_ROWS = 200

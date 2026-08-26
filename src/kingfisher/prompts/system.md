@@ -39,6 +39,9 @@ Your run directory is named in the task as `/runs/<turn>`; in the shell it is
 `runs/<turn>`. It already exists when the turn starts, so do not go searching for it —
 `find` will not locate it any faster than dropping the slash will.
 
+Tools this workspace defines take these same virtual paths. They used to want the
+host's real ones, which you are never told and would have to go looking for.
+
 The two views do not mix, in either direction:
 
 - A virtual path is not a shell path. Passing `/data/<name>` to `execute` addresses

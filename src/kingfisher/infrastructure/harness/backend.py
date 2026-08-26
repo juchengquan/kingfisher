@@ -35,6 +35,7 @@ from kingfisher.domain.layout import (
     UPLOADED_SKILLS,
 )
 from kingfisher.domain.ports import CommandRunner
+from kingfisher.domain.references import UnsafeReferenceError, within
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
@@ -702,6 +703,143 @@ def build_backend(
 # like its neighbours there -- but that file is about applying a request's
 # capabilities, and this applies none. It turns an error into something the
 # model can act on, and the error is raised twenty lines up.
+
+
+#: Which arguments name a file. The convention this repository already keeps --
+#: `test_every_shipped_tool_taking_a_path_says_which_kind` walks the shipped
+#: tools looking for exactly this parameter name -- so widening it is a line
+#: here and a test, rather than a design question.
+#:
+#: A tool calling it `input_file` is missed, and that is visible rather than
+#: silent: the translation does not happen, the tool gets the agent's own name,
+#: and it fails to find the file on the first call. The failure that matters is
+#: the other direction, and it cannot happen -- a name that is *not* translated
+#: cannot reach outside the session, because nothing gave it a way to.
+PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
+
+
+class WorkspaceToolPaths(AgentMiddleware):
+    """Translate the agent's own paths into real ones, per session.
+
+    A workspace tool is an ordinary Python function. It runs inside this
+    process, receives whatever the model produced, and opens files with the
+    operating system -- so `/data/config.ini` means `/data/config.ini` on this
+    machine, which is not there. The built-in file tools do not have that problem
+    because they are defined *inside* deepagents' filesystem middleware, closing
+    over the backend that roots them at a session; nothing hands that backend to
+    a tool the caller supplied, and `ToolRuntime` does not carry one.
+
+    So there were two routes to the filesystem and the session was only on one
+    of them. This is the bridge.
+
+    **It closes a leak and a usability bug with one change, and the second is how
+    the first was found.** `system.md` teaches virtual paths and says the two
+    views do not mix; the tools wanted host paths and the agent is never told
+    one. Measured in a real run: the model passed `/data/config.ini` and the tool
+    raised `FileNotFoundError`. The only way it could succeed was to go looking
+    -- `pwd` in the shell, learn the layout -- and from there it can name *any*
+    session: `line_count('/workspace/sessions/<other>/secret.txt')` returned an
+    answer.
+
+    After this, that argument resolves under *this* session and finds nothing,
+    for the same reason `/etc/passwd` does. Not by refusing it -- by there being
+    no way to say it.
+
+    Rewriting the call rather than wrapping each tool, because the tools are not
+    alike: some are `BaseTool`s from `@tool` and some are plain functions. The
+    call is the one shape they share, and langgraph documents the rewrite --
+    `{**request.tool_call, "args": {...}}`.
+    """
+
+    def __init__(self, names: frozenset[str], session_dir: Path) -> None:
+        self.names = names
+        self.session_dir = Path(session_dir)
+        super().__init__()
+
+    def _translated(self, request: Any) -> Any:
+        """The same call with its path arguments made real, or the request
+        unchanged when it names no tool of ours and no path."""
+        call = request.tool_call
+        if call.get("name") not in self.names:
+            return request
+        args = call.get("args") or {}
+        wanted = {key: args[key] for key in args if key in PATH_ARGUMENTS}
+        if not wanted:
+            return request
+        return replace(
+            request,
+            tool_call={
+                **call,
+                "args": {**args, **{key: self._real(value) for key, value in wanted.items()}},
+            },
+        )
+
+    def _real(self, value: Any) -> Any:
+        """One argument, resolved against the session the way a file tool would.
+
+        A leading slash means the session root, exactly as it does for
+        `read_file`, so the agent has one vocabulary rather than two. Anything
+        that is not a string is handed back untouched: a tool may take a number
+        called `path` and this is not the place to have an opinion about that.
+        """
+        if not isinstance(value, str) or not value.strip():
+            return value
+        landed = within(self.session_dir, value.lstrip("/"))
+        # The second check `within` tells adapters to do, and it is not optional
+        # here: that one is lexical, on purpose, because the domain may not touch
+        # the filesystem -- and a session directory is one the agent can write
+        # to. `execute` is rooted there, so it can make a symlink pointing out,
+        # hand a tool the virtual path to it, and be read the target.
+        #
+        # Measured before this existed: a link at `/derived/link.txt` pointing at
+        # another session returned `TENANT-A-PRIVATE` through a tool, while
+        # `read_file` refused the same path. deepagents resolves and compares;
+        # this had only half of that.
+        #
+        # Both sides resolved, since a workspace can itself sit under a symlink
+        # -- `/tmp` is `/private/tmp` on macOS -- and comparing one resolved path
+        # to one unresolved root refuses everything.
+        real = landed.resolve()
+        if not real.is_relative_to(self.session_dir.resolve()):
+            msg = (
+                f"reference {value!r} resolves outside this session; a link inside it "
+                "does not widen it"
+            )
+            raise UnsafeReferenceError(msg)
+        return str(real)
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        try:
+            return handler(self._translated(request))
+        except UnsafeReferenceError as escaped:
+            return self._refused(request, escaped)
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        try:
+            return await handler(self._translated(request))
+        except UnsafeReferenceError as escaped:
+            return self._refused(request, escaped)
+
+    def _refused(self, request: Any, escaped: UnsafeReferenceError) -> ToolMessage:
+        """A path that climbs out, reported the way `reject_host_path` reports one.
+
+        Raising would end the turn on a mistake the model can correct; a tool
+        error names the rule and lets it try again with a path inside the
+        session.
+        """
+        call = request.tool_call
+        return ToolMessage(
+            content=(
+                f"Error: {escaped}. Tool paths are the same virtual paths the file "
+                "tools take, rooted at this session -- `/data/<name>`, "
+                "`/derived/<name>` -- and cannot climb out of it."
+            ),
+            tool_call_id=call.get("id", ""),
+            name=call.get("name"),
+            status="error",
+        )
 
 
 class WorkspaceToolErrors(AgentMiddleware):
