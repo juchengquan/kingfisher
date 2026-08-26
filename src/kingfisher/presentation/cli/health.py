@@ -339,6 +339,17 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
 FULL_LANDLOCK_ABI = 6
 
 
+#: Appended to every answer this check gives, because it qualifies all of them.
+#:
+#: `doctor` builds a `Config` from the environment and never sees a
+#: `Kingfisher`, so a deployment that supplied its own `CommandRunner` or
+#: `SessionRoot` is invisible here. Reporting the built-in path as though it
+#: were the running one is the failure this file exists to prevent, and the
+#: cheapest honest fix is to say which one is being described rather than to
+#: plumb a service into a command that does not have one.
+FROM_CONFIG = " (from configuration; an injected runner is not visible here)"
+
+
 def _mechanism(confined: Confinement) -> str:
     """What is doing the confining, named rather than implied.
 
@@ -357,9 +368,15 @@ def _mechanism(confined: Confinement) -> str:
     download anything should find the reason in `doctor` rather than in a
     stack trace.
     """
-    if confined.mechanism == "bubblewrap":
-        return "bubblewrap (Landlock is unavailable here, and the shell has no network)"
-    return confined.mechanism or "the platform's sandbox"
+    named = (
+        "bubblewrap (Landlock is unavailable here, and the shell has no network)"
+        if confined.mechanism == "bubblewrap"
+        else confined.mechanism or "the platform's sandbox"
+    )
+    # A supplied runner that is *local* still receives the confined command, so
+    # the mechanism above holds -- it is just no longer the whole story, and an
+    # operator asking what runs their commands deserves the rest of it.
+    return f"{named}, with commands run by a supplied runner" if confined.supplied else named
 
 
 def _or_bubblewrap() -> str:
@@ -424,13 +441,15 @@ def _shell(cfg: Config) -> Iterator[Check]:
     """
     confined = shell_confinement(cfg)
     if confined.confined:
-        yield Check("shell", "ok", f"confined by {_mechanism(confined)}")
+        yield Check("shell", "ok", f"confined by {_mechanism(confined)}{FROM_CONFIG}")
     elif confined.elsewhere:
         # The case `EXTERNAL` exists for, and reporting it as the warning below
         # would recreate the confusion it was invented to remove: a container
         # that mounts only the workspace looked exactly like nobody having
         # thought about it.
-        yield Check("shell", "ok", "confined by the runtime, not by this process")
+        yield Check(
+            "shell", "ok", f"confined by the runtime, not by this process{FROM_CONFIG}"
+        )
     else:
         yield Check(
             "shell",

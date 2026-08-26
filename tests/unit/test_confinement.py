@@ -592,3 +592,39 @@ def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
     )
 
     assert not chosen.elsewhere
+
+
+# -- what runs a command, said once ------------------------------------------
+
+
+def test_a_supplied_runner_that_is_not_here_stops_the_confinement_claiming(cfg, session_dir):
+    """Measured before this existed: a runner declaring `local = False` ran the
+    command with no wrap applied, and the `Confinement` still reported
+    `mechanism='sandbox-exec'` and `confined=True`.
+
+    The claim was false *inside the process*, not merely invisible to `doctor` --
+    and a check reporting a fence that is not running is worse than one
+    reporting nothing.
+    """
+    backend = build_backend(cfg, session_dir, runner=Elsewhere())
+    confined = backend.default.confinement
+
+    assert not confined.confined, "nothing this process applies reaches the command"
+    assert confined.mechanism == ""
+    assert confined.elsewhere, "which is exactly what EXTERNAL means"
+    assert confined.supplied
+
+
+def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg, session_dir):
+    """The other case, and it is not the same fact. A local runner still receives
+    the confined command, so the mechanism holds -- it has only gained company."""
+    backend = build_backend(cfg, session_dir, runner=Recorder())
+    confined = backend.default.confinement
+
+    assert confined.supplied
+    assert confined.mechanism == confinement.shell_confinement(cfg).mechanism
+
+
+def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
+    """The case every existing deployment is in."""
+    assert not build_backend(cfg, session_dir).default.confinement.supplied
