@@ -360,12 +360,14 @@ def _or_bubblewrap() -> str:
     if bubblewrap_available():
         return (
             "bubblewrap works here, so set KINGFISHER_SHELL_SANDBOX=bubblewrap -- it "
-            "closes the shell's network too, and note it needs the container's syscall "
-            "filter relaxed, which this host already has"
+            "closes the shell's network too, and this container already permits the "
+            "one seccomp rule it needs"
         )
     return (
-        "bubblewrap cannot be used here either, so run it in a container that mounts "
-        "only the workspace and set KINGFISHER_SHELL_SANDBOX=external"
+        "bubblewrap cannot be used here either -- it needs a seccomp profile "
+        "permitting `clone` with CLONE_NEWUSER, which Docker's default denies -- so "
+        "run it in a container that mounts only the workspace and set "
+        "KINGFISHER_SHELL_SANDBOX=external"
     )
 
 
