@@ -292,7 +292,7 @@ def test_the_async_path_reaches_a_runner_too(cfg, session_dir):
 
 
 def test_the_async_path_still_routes_through_execute(cfg, session_dir):
-    """`ConfinedShell` overrides only `execute`, because upstream's `aexecute`
+    """`ConfinedLocalShellBackend` overrides only `execute`, because upstream's `aexecute`
     is `asyncio.to_thread(self.execute, ...)`. Overriding both wrapped every
     async command twice, nesting one sandbox inside another -- which still
     confined, so nothing failed and only the command string showed it.

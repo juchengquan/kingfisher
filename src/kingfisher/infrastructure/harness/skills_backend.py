@@ -68,7 +68,7 @@ class ReadOnlyStoreBackend(StoreBackend):
     when any one is removed.
 
     Overriding a method upstream only delegates is how the `aexecute` bug
-    happened one module over: `ConfinedShell` wrapped both halves and nested the
+    happened one module over: `ConfinedLocalShellBackend` wrapped both halves and nested the
     sandbox twice, and thirteen tests still passed. The lesson taken there was to
     override the sync half and *pin the delegation with a test* so an upstream
     change fails loudly rather than silently. Same lesson, same shape, here.

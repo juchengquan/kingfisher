@@ -195,6 +195,15 @@ the *rules* about session directories, this one is *where the directory is*.
 Everything above still says "tree" and is left saying it, because renaming a
 decision after the fact hides that the name was wrong once.
 
+**`ConfinedShell` is `ConfinedLocalShellBackend`.** The old name said "shell",
+which sounds like one method, and hid the thing that actually constrains callers:
+it is a `LocalShellBackend`, which is also a `FilesystemBackend`, sitting in the
+composite's default slot where ten inherited file operations serve every unrouted
+path. That is D6's whole argument, and the name was working against it. "Local"
+describes the object rather than where a command ends up -- a runner with
+`local = False` sends it elsewhere, which is the seam working rather than a
+contradiction.
+
 **S3's warning applies to test doubles too.** Every guard here was checked by
 breaking it: disabling the layout refusal, moving persistence back to the end,
 putting the pre-run events back outside the `try`, narrowing the tree bracket,
