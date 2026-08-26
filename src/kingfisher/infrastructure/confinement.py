@@ -185,13 +185,38 @@ def _bubblewrap() -> Confinement:
     )
 
 
-def _landlock() -> Confinement:
-    """The Linux default. Applied to the process between fork and exec rather
-    than wrapped round the command, so nothing is spelled here: the fence lives
-    in the `CommandRunner` that `build_backend` builds, and this says whether
-    there will be one."""
+def _linux() -> Confinement:
+    """The Linux chain: Landlock, then bubblewrap, then a warning.
+
+    Landlock first because it costs nothing -- no capability, no container
+    change, no relaxed syscall filter -- and because it fails in the right
+    direction: measured, it denies the path resolution `mount(2)` needs, so a
+    fenced process cannot spend `SYS_ADMIN` even where the container has it.
+    A fence that requires the operator to do something is a fence that is off
+    in most deployments.
+
+    bubblewrap second, and only when Landlock cannot run at all. That is kernels
+    below the ABI a full ruleset needs -- 6.12, where EKS nodes are commonly on
+    6.1 -- and on exactly those nodes the alternative was *nothing*: the shell
+    read every session's files and `doctor` said so. Something beats that.
+
+    Not the other way round, and not bubblewrap first anywhere. It cannot run on
+    a container nobody changed, so preferring it would fall through here anyway;
+    and where both work it trades escape surface for network reach, which is a
+    trade rather than an upgrade -- it hands the sandboxed process `SYS_ADMIN`
+    inside its own user namespace, which is the capability Landlock takes away.
+
+    Nothing is spelled here either way: both fences live in the `CommandRunner`
+    that `build_backend` builds, and this says which there will be.
+    """
     if landlock_ready():
         return Confinement(wrap=_unwrapped, mechanism="Landlock")
+    # Through `_bubblewrap` rather than probing again, so there is one place
+    # that decides whether bubblewrap works here. Two would eventually disagree,
+    # and the disagreement would be `doctor` naming a fence that is not running.
+    fallen_back = _bubblewrap()
+    if fallen_back.confined:
+        return fallen_back
     return Confinement(wrap=_unwrapped, warning=_no_landlock_here())
 
 
@@ -456,7 +481,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         raise ValueError(msg)
 
     if platform.system() == "Linux":
-        return _landlock()
+        return _linux()
 
     if platform.system() != "Darwin" or not shutil.which("sandbox-exec"):
         return Confinement(

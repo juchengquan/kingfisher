@@ -146,3 +146,48 @@ def test_the_runner_says_it_is_local(session):
     applies beforehand. On Linux that wrap is the identity, which is why nothing
     is applied twice."""
     assert BubblewrapRunner(["bwrap"]).local is True
+
+
+# -- when `auto` reaches for it ---------------------------------------------
+
+
+def a_linux_host(monkeypatch, *, landlock: bool, bwrap: bool):
+    """A Linux host with either fence available, or neither."""
+    import kingfisher.infrastructure.bubblewrap as bwrap_module
+    from kingfisher.infrastructure import confinement
+
+    monkeypatch.setattr(confinement.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(confinement, "landlock_ready", lambda: landlock)
+    monkeypatch.setattr(bwrap_module, "bubblewrap_available", lambda: bwrap)
+    return confinement
+
+
+def test_landlock_is_preferred_where_it_runs(monkeypatch):
+    """It costs nothing -- no capability, no container change, no relaxed
+    syscall filter -- and it denies the path resolution `mount(2)` needs, so a
+    fenced process cannot spend `SYS_ADMIN`. bubblewrap grants that same
+    capability inside its own user namespace, which is the opposite trade."""
+    confinement = a_linux_host(monkeypatch, landlock=True, bwrap=True)
+
+    assert confinement._linux().mechanism == "Landlock"
+
+
+def test_bubblewrap_takes_over_where_landlock_cannot_run(monkeypatch):
+    """The gap this closes, and it is not a small one: below the ABI a full
+    ruleset needs -- 6.12, where EKS nodes are commonly on 6.1 -- the shell read
+    every session's files and `doctor` said so. Something beats that."""
+    confinement = a_linux_host(monkeypatch, landlock=False, bwrap=True)
+    confined = confinement._linux()
+
+    assert confined.mechanism == "bubblewrap"
+    assert confined.confined
+
+
+def test_neither_available_still_warns_rather_than_pretending(monkeypatch):
+    """The case a fallback must not swallow. Two fences that both cannot run is
+    an unconfined shell, and saying so is the whole reason the check exists."""
+    confinement = a_linux_host(monkeypatch, landlock=False, bwrap=False)
+    confined = confinement._linux()
+
+    assert not confined.confined
+    assert confined.warning

@@ -624,8 +624,16 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     confined branch is only reachable on a host with `sandbox-exec` -- and a
     test that quietly asserts nothing on the CI runner is worse than no test.
     """
-    monkeypatch.setattr(health.platform, "system", lambda: "Darwin")
-    assert health._mechanism() == "sandbox-exec"
+    from kingfisher import Confinement
+    from kingfisher.infrastructure.confinement import _unwrapped
 
-    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
-    assert health._mechanism() != "sandbox-exec"
+    assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
+        "sandbox-exec"
+    )
+
+    # And bubblewrap says more than its name, because `auto` reaching it means
+    # the shell lost its network as well as its reach. An operator whose skill
+    # suddenly cannot download anything should find the reason here.
+    said = health._mechanism(Confinement(wrap=_unwrapped, mechanism="bubblewrap"))
+    assert "bubblewrap" in said
+    assert "no network" in said

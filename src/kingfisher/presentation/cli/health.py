@@ -28,6 +28,7 @@ from kingfisher import (
     DEFINITION_KINDS,
     Config,
     ConfigError,
+    Confinement,
     Inventory,
     bubblewrap_available,
     inventory,
@@ -338,14 +339,27 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
 FULL_LANDLOCK_ABI = 6
 
 
-def _mechanism() -> str:
+def _mechanism(confined: Confinement) -> str:
     """What is doing the confining, named rather than implied.
 
     "confined" was true and unhelpful: two deployments reading it had no way to
     tell a `sandbox-exec` profile from a container someone remembered to set up,
     and the answer decides what an operator has to check when it stops working.
+
+    Read off the `Confinement` rather than guessed from the platform, which is
+    what this did and what stopped being right the moment Linux had two fences
+    to choose between. Guessing would have reported "the platform's sandbox" for
+    either -- and one of them switches the shell's network off.
+
+    That last part is said out loud. `auto` reaching bubblewrap means Landlock
+    could not run here, and the fence that took its place changes what the agent
+    *can do*, not only what it can reach. An operator whose skill suddenly cannot
+    download anything should find the reason in `doctor` rather than in a
+    stack trace.
     """
-    return "sandbox-exec" if platform.system() == "Darwin" else "the platform's sandbox"
+    if confined.mechanism == "bubblewrap":
+        return "bubblewrap (Landlock is unavailable here, and the shell has no network)"
+    return confined.mechanism or "the platform's sandbox"
 
 
 def _or_bubblewrap() -> str:
@@ -410,7 +424,7 @@ def _shell(cfg: Config) -> Iterator[Check]:
     """
     confined = shell_confinement(cfg)
     if confined.confined:
-        yield Check("shell", "ok", f"confined by {_mechanism()}")
+        yield Check("shell", "ok", f"confined by {_mechanism(confined)}")
     elif confined.elsewhere:
         # The case `EXTERNAL` exists for, and reporting it as the warning below
         # would recreate the confusion it was invented to remove: a container
