@@ -39,6 +39,7 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
     Selection,
+    approved_middleware,
     narrowed,
     refuse_ungranted_models,
     refuse_unoffered,
@@ -66,7 +67,6 @@ from kingfisher.infrastructure.harness.delegation import (
     model_for,
     model_object,
     subagent_helpers,
-    subagent_middleware,
     subagent_skills,
 )
 from kingfisher.infrastructure.harness.models import build_model
@@ -232,6 +232,47 @@ def indistinct_delegates(
         if why := indistinct(spec, cfg, model=model):
             found.append((name, why))
     return tuple(found)
+
+
+def declared_middleware(
+    spec: Any,
+    registry: Mapping[str, Callable[[], Any]],
+    allowed: Selection,
+    *,
+    kind: str,
+) -> list[Any]:
+    """Build the middleware a definition asked for, agent or delegate.
+
+    Which names it may have is `approved_middleware`, and that is the whole of
+    the rule -- two refusals, both raising, neither the "caller was narrower"
+    case that quietly drops a skill. This half is the part that needs the
+    registry: an approved name is still only a name until something calls the
+    factory behind it.
+
+    Split that way because the decision is expressible in kingfisher's own
+    vocabulary and the construction is not. `Capabilities.middleware`,
+    `AgentSpec.middleware` and `SubagentSpec.middleware` are all name lists;
+    only the objects are ours.
+
+    Duck-typed on `.name` and `.middleware` rather than taking a union, because
+    the two specs share those two fields and nothing else here reads any other.
+    `kind` is required and has no default: it is the word the refusal uses, and
+    a delegate's refusal that said "agent" would send the reader to the wrong
+    file.
+
+    It was `subagent_middleware` in `delegation.py`, which was the right home
+    while delegates were the only definitions whose middleware was ever built.
+    An agent file has carried the field since `agents-as-definitions` and it
+    reached nothing -- so the function moved to the module that assembles both,
+    rather than an agent's wiring reaching into the delegates'.
+    """
+    approved = approved_middleware(
+        spec.middleware,
+        registered=registry,
+        granted=allowed,
+        subject=f"{kind} {spec.name!r}",
+    )
+    return [registry[name]() for name in approved]
 
 
 def registered_tools(graph: Any) -> tuple[str, ...] | None:
@@ -1049,9 +1090,13 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         # yet. A caller that withheld the shell must not reach it from code.
         middleware[interpreter_at] = _interpreter(cfg, permitted)
 
+    # Both kinds read it, so it is resolved before either branch. It used to
+    # be bound inside the delegates' block, which meant an agent with no
+    # delegates never reached a registry at all.
+    registry = middleware_registry or {}
+
     if capabilities.subagents is not None:
         offered = available_skills(cfg, session_dir, catalogue=roots)
-        registry = middleware_registry or {}
         for name in activated:
             subject = f"subagent {name!r}"
             surface.offers.refuse_unknown(
@@ -1106,8 +1151,8 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 private=_private_tools(roots, name),
                 private_skills=_private_skills(roots, name),
                 run_on=wanted.get(name),
-                extra_middleware=subagent_middleware(
-                    defined[name], registry, capabilities.middleware
+                extra_middleware=declared_middleware(
+                    defined[name], registry, capabilities.middleware, kind="subagent"
                 ),
             )
 
@@ -1189,24 +1234,65 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
             _with_helpers(n, nested=False) for n in activated
         ]
 
+    def deployment_middleware() -> list[Any]:
+        """What this deployment's registry owes one graph, freshly built.
+
+        Called once per graph rather than shared, which is what `as_subagent`
+        already does for a declared delegate -- the factory runs again for each
+        one. It is a real choice and the other reading is defensible: one shared
+        rate limiter bounds a whole turn where one per graph bounds each. This
+        follows the delegates; changing it should change it for them too.
+        """
+        if agent is None:
+            return []
+        return declared_middleware(agent, registry, capabilities.middleware, kind="agent")
+
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))
-        # deepagents supplies a `general-purpose` delegate with "the same
-        # capabilities as the main agent" and none of our middleware, present
-        # whenever `task` is. Supplying one by the same name *replaces* it --
-        # the specs are keyed by name -- so it keeps working and arrives with
-        # the caller's ceiling on it, rather than being withheld.
-        #
-        # Their spec, our middleware: the description and prompt are tuned and
-        # there is no reason to reinvent either.
-        supplied = list(extras.get("subagents", ()))
-        supplied.append(
-            {**GENERAL_PURPOSE_SUBAGENT, "middleware": [ToolAllowlist(permitted)]}
-        )
-        extras["subagents"] = supplied
-        # Backstop. Only these names are reachable, so a delegate deepagents
-        # adds in some future version does not silently arrive unrestricted.
-        reachable = tuple(spec["name"] for spec in supplied)
-        middleware.append(DeclaredDelegatesOnly(reachable))
+
+    # deepagents supplies a `general-purpose` delegate with "the same
+    # capabilities as the main agent" and none of our middleware, present
+    # whenever `task` is. Supplying one by the same name *replaces* it -- the
+    # specs are keyed by name -- so it keeps working and arrives with the
+    # caller's ceiling on it, rather than being withheld.
+    #
+    # Their spec, our middleware: the description and prompt are tuned and there
+    # is no reason to reinvent either.
+    #
+    # Unconditional now, where it used to happen only for a request that
+    # narrowed something. That was right while the ceiling was the only thing
+    # being attached -- an unrestricted request has no ceiling to attach. It
+    # stopped being right when the deployment's own middleware went on too:
+    # that is owed to every run, and left as it was, the way to run unaudited
+    # was to ask for nothing in particular. `DeclaredDelegatesOnly` moves with
+    # it for a reason of its own, written below.
+    supplied = list(extras.get("subagents", ()))
+    supplied.append(
+        {
+            **GENERAL_PURPOSE_SUBAGENT,
+            "middleware": (
+                ([ToolAllowlist(permitted)] if permitted is not None else [])
+                + deployment_middleware()
+            ),
+        }
+    )
+    extras["subagents"] = supplied
+    # Backstop. Only these names are reachable, so a delegate deepagents adds in
+    # some future version does not silently arrive unrestricted -- a reason that
+    # has nothing to do with whether this caller narrowed anything, though it
+    # was wired only when they had.
+    reachable = tuple(spec["name"] for spec in supplied)
+    middleware.append(DeclaredDelegatesOnly(reachable))
+
+    # The agent's own, and last -- the same placement `as_subagent` gives a
+    # delegate's, for the same reason: a deployment's middleware should see the
+    # tool and skill narrowing kingfisher applied rather than run ahead of it.
+    #
+    # `capabilities.middleware` is already this agent's names narrowed by the
+    # request, since `declares` folded them in above. Passing both halves is
+    # not circular: `approved_middleware` refuses a name the request subtracted
+    # rather than running with less than the definition asked for, which is the
+    # difference between an audit hook that is off and one nobody knows is off.
+    middleware.extend(deployment_middleware())
 
     return assemble(surface.carried)

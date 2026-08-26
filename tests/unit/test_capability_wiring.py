@@ -20,7 +20,13 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
-from tests.conftest import FakeToolCallingModel, capture_build, dispatched, subagents_dir
+from tests.conftest import (
+    FakeToolCallingModel,
+    capture_build,
+    declared_subagents,
+    dispatched,
+    subagents_dir,
+)
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -63,6 +69,10 @@ def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
     `"*"` now, and `"*"` means whatever the agent declares. A workspace with no
     delegates in it still hands the build none, which is what this asserts;
     filtering is the thing that must not appear.
+
+    "None" is read past `general-purpose`, which is supplied on every build and
+    is not something a request activated -- it is where the caller's ceiling and
+    the deployment's middleware are attached for the delegate nobody declares.
     """
     captured = capture_build(monkeypatch)
     build_agent(
@@ -73,7 +83,7 @@ def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
     names = {type(m).__name__ for m in captured["middleware"]}
     assert "ToolAllowlist" not in names
     assert "NarrowedSkills" not in names
-    assert not captured.get("subagents")
+    assert not declared_subagents(captured)
 
 
 def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, session_dir):
@@ -163,7 +173,7 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, s
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (subagent,) = captured["subagents"]
+    (subagent,) = declared_subagents(captured)
     assert subagent["name"] == "reviewer"
     assert subagent["system_prompt"] == "You review analyses."
     # Unset in the definition, so absent here — deepagents then inherits.
@@ -172,6 +182,15 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, s
 
 
 def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, monkeypatch, session_dir):
+    """`()` activates none where the default `ALL` activates every one the
+    workspace offers -- so the reviewer written above is absent here.
+
+    Asserted on the declared specs rather than on the whole kwarg, which is
+    what this read before. `general-purpose` is supplied on every build now, so
+    the raw list is never empty and "empty" stopped being a way to say "nothing
+    was activated". What the request asked for is unchanged; only the way to
+    read it back is.
+    """
     _write_subagent(cfg.workspace)
     captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
@@ -179,7 +198,7 @@ def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, monkeypatch, s
         capabilities=Capabilities(subagents=()),
     )
 
-    assert captured["subagents"] == []
+    assert declared_subagents(captured) == []
 
 
 @pytest.mark.parametrize(
@@ -339,7 +358,7 @@ def test_a_subagents_tool_restriction_becomes_an_allowlist(cfg, monkeypatch, ses
         capabilities=Capabilities(subagents=("reader",)),
     )
 
-    (subagent,) = captured["subagents"]
+    (subagent,) = declared_subagents(captured)
     assert "tools" not in subagent  # names here would raise inside ToolNode
     # By type rather than by position. A delegate carries guards it did not ask
     # for -- the host-path correction, and the workspace tools' own failures --
@@ -368,7 +387,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
         capabilities=Capabilities(subagents=("cheap",)),
     )
 
-    (subagent,) = captured["subagents"]
+    (subagent,) = declared_subagents(captured)
     assert not isinstance(subagent["model"], str)
     assert subagent["model"].model == "cheap-model"
     # Same gateway as the main agent, not whatever the environment suggests.
@@ -401,7 +420,7 @@ def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir
         capabilities=Capabilities(subagents=("cheap",)),
     )
 
-    (subagent,) = captured["subagents"]
+    (subagent,) = declared_subagents(captured)
     assert subagent["model"].model == "cheap-model"
 
 
@@ -501,7 +520,7 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, 
         capabilities=Capabilities(subagents=("reviewer",)),
     )
 
-    (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
+    (spec,) = [s for s in declared_subagents(captured) if s["name"] == "reviewer"]
     assert spec["model"].model == "cheap-model"
 
 
