@@ -1,7 +1,11 @@
 from __future__ import annotations
 
+import pytest
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
+from kingfisher.domain.agent import AgentSpec
+from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.prompting import system_prompt
@@ -142,3 +146,125 @@ def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
         "ls", "read_file", "write_file", "edit_file", "delete", "glob", "grep",
         "execute", "task", "write_todos",
     }
+
+
+# -- the agent's own middleware --------------------------------------------
+
+
+class _Audit(AgentMiddleware):
+    """Stands in for what a deployment registers: an audit hook, a rate limit.
+
+    No hook, like `Audited` in `test_subagent_middleware.py` -- these assert on
+    the list handed to `create_deep_agent`, not on compiled graph nodes, so a
+    middleware that declares nothing is enough and stays out of ty's way.
+    """
+
+    name = "_Audit"
+
+
+def _named(spec_middleware, **kwargs) -> AgentSpec:
+    return AgentSpec(
+        name="probed",
+        description="an agent whose file names middleware",
+        system_prompt="You work.",
+        middleware=spec_middleware,
+        **kwargs,
+    )
+
+
+def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, session_dir):
+    """`middleware:` in an agent file did nothing to the agent.
+
+    It parsed, and `declares` folded it into `Capabilities.middleware`, where
+    the only reader was the `granted=` argument of the delegates' own
+    `approved_middleware` call. So the name bounded what an agent's *delegates*
+    could activate and never reached the agent -- silently, since nothing
+    refuses and `_withheld_by_kind` reports tools, skills and subagents but not
+    this.
+
+    Measured before it was fixed, one build, same registry, same name: the
+    delegate's graph had an `Audit.before_agent` node and the agent's did not.
+    An audit hook that covers the cheap half of a run and not the expensive
+    half is worse than none, because it looks like coverage.
+
+    The design doc for this format says `middleware` "read[s] exactly as they
+    do in a subagent file". This is that sentence made true.
+    """
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        agent=_named(("audit",)),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+    )
+
+    assert "_Audit" in {type(m).__name__ for m in captured["middleware"]}
+
+
+def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
+    cfg, monkeypatch, session_dir
+):
+    """Last, for the reason `as_subagent` already gives for a delegate's: a
+    deployment's middleware should see the tool and skill narrowing rather than
+    running ahead of it."""
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        agent=_named(("audit",)),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+        capabilities=Capabilities(builtin_tools=("read_file",)),
+    )
+
+    names = [type(m).__name__ for m in captured["middleware"]]
+    assert names[-1] == "_Audit", f"the deployment's middleware is not last: {names}"
+    assert "ToolAllowlist" in names, "nothing narrowed, so this proves nothing"
+
+
+def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_dir):
+    """The same refusal a subagent gets, and for the same reason: a name
+    nothing registered is a mistake in the definition, not a narrower caller."""
+    with pytest.raises(CapabilityError, match="unregistered middleware"):
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={},
+        )
+
+
+def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
+    """Withholding it refuses rather than running with less than the definition
+    asked for -- which could mean running without the rate limit or the audit
+    hook it was written to have. `Capabilities.middleware` defaults to `ALL`, so
+    only a request that narrowed it on purpose reaches this."""
+    with pytest.raises(CapabilityError, match="may not use"):
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": _Audit},
+            capabilities=Capabilities(middleware=()),
+        )
+
+
+def test_an_agent_that_names_none_wires_none(cfg, monkeypatch, session_dir):
+    """Omission grants nothing here, like `skills` and `subagents` -- so a
+    deployment with a registry does not wrap every agent in it by default."""
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        agent=_named(None),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+    )
+
+    assert "_Audit" not in {type(m).__name__ for m in captured["middleware"]}

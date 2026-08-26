@@ -12,8 +12,10 @@ from dataclasses import replace
 from pathlib import Path
 
 import pytest
+from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
+from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import ceiling
@@ -21,7 +23,7 @@ from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.delegation import as_subagent, subagent_skills
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
-from tests.conftest import FakeToolCallingModel, subagents_dir
+from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 HELPER = """name: helper
 description: Declares no tools, so it inherits whatever it is given.
@@ -545,11 +547,21 @@ def test_the_builtin_delegate_is_supplied_exactly_once(cfg, session_dir):
 
 def test_an_unrestricted_request_supplies_no_ceiling_and_needs_none(cfg, session_dir):
     """Nothing was narrowed, so the delegate having everything the main agent
-    has is what deepagents would have done anyway."""
+    has is what deepagents would have done anyway.
+
+    The spec is still supplied, which this used to assert the opposite of. The
+    ceiling was the only thing riding on it then, and an unrestricted request
+    has no ceiling to attach; two things ride on it now that are owed to every
+    run -- the deployment's own middleware, and the `DeclaredDelegatesOnly`
+    backstop against a delegate a future deepagents adds. What this test is
+    about is the ceiling, and the ceiling is still absent.
+    """
     seen = _built_with(cfg, session_dir, Capabilities())
 
     assert not [m for m in seen["middleware"] if isinstance(m, ToolAllowlist)]
-    assert not [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
+    supplied = [s for s in (seen.get("subagents") or ()) if s["name"] == "general-purpose"]
+    assert len(supplied) == 1
+    assert supplied[0]["middleware"] == [], "nothing was narrowed and nothing registered"
 
 
 # -- a tool name nothing offers -------------------------------------------
@@ -735,3 +747,99 @@ def test_a_delegate_that_does_not_exist_still_names_it():
     assert refusal is not None
     assert "'nobody' is not a delegate" in refusal.content
 
+
+
+# -- the delegate nobody declared ------------------------------------------
+
+
+class _Audit(AgentMiddleware):
+    """Stands in for what a deployment registers: an audit hook, a rate limit."""
+
+    name = "_Audit"
+
+
+def _gp(captured) -> dict:
+    """The `general-purpose` spec handed to deepagents, or `{}` if absent."""
+    for spec in captured.get("subagents", ()):
+        if spec.get("name") == "general-purpose":
+            return spec
+    return {}
+
+
+def _audited_build(cfg, monkeypatch, session_dir, **caps):
+    captured = capture_build(monkeypatch)
+    build_agent(
+        _with_helper(cfg),
+        agent=AgentSpec(
+            name="probed",
+            description="names the deployment's middleware",
+            system_prompt="You work.",
+            middleware=("audit",),
+            subagents=("helper",),
+        ),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        middleware_registry={"audit": _Audit},
+        capabilities=Capabilities(**caps),
+    )
+    return captured
+
+
+def test_the_builtin_delegate_carries_the_deployments_middleware(cfg, monkeypatch, session_dir):
+    """An audit hook that can be stepped around by naming one delegate is not
+    an audit hook.
+
+    `general-purpose` had its middleware list *replaced* with the caller's tool
+    ceiling and nothing else, so a deployment's hook reached the agent and every
+    delegate it declared, and missed the one delegate nobody has to declare --
+    which is reachable whenever `task` is, and named in that tool's own
+    description.
+    """
+    captured = _audited_build(cfg, monkeypatch, session_dir, builtin_tools=("read_file", "task"))
+
+    kinds = [type(m).__name__ for m in _gp(captured).get("middleware", ())]
+    assert "_Audit" in kinds, f"the built-in delegate runs unaudited: {kinds}"
+    assert "ToolAllowlist" in kinds, "the ceiling it already had must survive"
+
+
+def test_the_builtin_delegate_is_supplied_when_nothing_was_narrowed(cfg, monkeypatch, session_dir):
+    """The replacement used to happen only for a request that narrowed
+    something, because it was written to carry a ceiling. It carries the
+    deployment's middleware now too, and that is owed to every run.
+
+    Left as it was, the way to run unaudited was to ask for nothing in
+    particular.
+    """
+    captured = _audited_build(cfg, monkeypatch, session_dir)
+
+    kinds = [type(m).__name__ for m in _gp(captured).get("middleware", ())]
+    assert "_Audit" in kinds, f"an unrestricted request runs it unaudited: {kinds}"
+    assert "ToolAllowlist" not in kinds, "nothing was narrowed, so nothing to narrow it by"
+
+
+def test_the_backstop_is_on_an_unrestricted_request_too(cfg, monkeypatch, session_dir):
+    """`DeclaredDelegatesOnly` exists so a delegate deepagents adds in a future
+    version does not arrive unnoticed. That reason has nothing to do with
+    whether this caller narrowed anything, and it used to be wired only when
+    they had."""
+    captured = _audited_build(cfg, monkeypatch, session_dir)
+
+    assert "DeclaredDelegatesOnly" in {type(m).__name__ for m in captured["middleware"]}
+
+
+def test_the_builtin_delegate_gets_its_own_instances(cfg, monkeypatch, session_dir):
+    """Built per graph, like every declared delegate's -- `as_subagent` calls
+    the factory again for each one rather than sharing.
+
+    Worth pinning because it is a real choice and the other reading is
+    defensible: one shared rate limiter bounds a whole turn, where one per graph
+    bounds each. This follows what delegates already do; changing it should
+    change it for them too.
+    """
+    captured = _audited_build(cfg, monkeypatch, session_dir)
+
+    on_agent = [m for m in captured["middleware"] if type(m).__name__ == "_Audit"]
+    on_builtin = [m for m in _gp(captured).get("middleware", ()) if type(m).__name__ == "_Audit"]
+
+    assert on_agent and on_builtin
+    assert on_agent[0] is not on_builtin[0], "one instance is shared between two graphs"

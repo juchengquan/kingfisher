@@ -21,7 +21,7 @@ from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.subagent.reading import EXPORT, NOT_COMPILED, declared
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import build_agent
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel, capture_build, declared_subagents
 
 COMPILED = '''"""A delegate the workspace assembled."""
 
@@ -258,7 +258,7 @@ def test_a_compiled_delegate_reaches_deepagents_as_a_runnable(cfg, monkeypatch, 
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    (delegate,) = captured["subagents"]
+    (delegate,) = declared_subagents(captured)
     assert set(delegate) == {"name", "description", "runnable"}
     assert delegate["name"] == "researcher"
     # None of the prompted path's fields, because none of them reach a graph
@@ -282,7 +282,7 @@ def test_the_compiled_shape_is_deepagents_own(cfg, monkeypatch, session_dir):
         capabilities=Capabilities(subagents=("researcher",)),
     )
 
-    (delegate,) = captured["subagents"]
+    (delegate,) = declared_subagents(captured)
     assert set(delegate) == set(CompiledSubAgent.__required_keys__)
 
 

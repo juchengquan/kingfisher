@@ -122,6 +122,18 @@ def start(cfg, session_id: str) -> str:
     return session_id
 
 
+def declared_subagents(captured: dict) -> list:
+    """The delegate specs a build activated, without the built-in one.
+
+    `general-purpose` is supplied on every build -- it is what carries the
+    caller's tool ceiling and the deployment's registered middleware onto the
+    one delegate nobody has to declare. So a test about what a *request*
+    activated says so, rather than counting the list and picking up a spec no
+    request asked for.
+    """
+    return [s for s in captured.get("subagents") or () if s.get("name") != "general-purpose"]
+
+
 def capture_build(monkeypatch) -> dict:
     """Record the arguments `create_deep_agent` was called with -- and let the
     call through.

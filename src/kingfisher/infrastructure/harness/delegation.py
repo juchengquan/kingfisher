@@ -28,7 +28,6 @@ from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     ALL,
     Selection,
-    approved_middleware,
     narrowed,
     refuse_ungranted_endpoint,
     refuse_unoffered,
@@ -46,7 +45,7 @@ from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllo
 from kingfisher.infrastructure.prompting import with_user_prompt
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping
+    from collections.abc import Mapping
 
     from kingfisher.config import Config
 
@@ -104,32 +103,6 @@ def subagent_helpers(
         named, offered=defined, kind="subagent", subject=f"subagent {spec.name!r}"
     )
     return tuple(narrowed(named, by=activated) or ())
-
-
-def subagent_middleware(
-    spec: SubagentSpec,
-    registry: Mapping[str, Callable[[], Any]],
-    allowed: Selection,
-) -> list[Any]:
-    """Build the middleware a definition asked for.
-
-    Which names it may have is `capabilities.approved_middleware`, and that is
-    the whole of the rule -- two refusals, both raising, neither the "caller was
-    narrower" case that quietly drops a skill. This half is the part that needs
-    the registry: an approved name is still only a name until something calls
-    the factory behind it.
-
-    Split that way because the decision is expressible in kingfisher's own
-    vocabulary and the construction is not. `Capabilities.middleware` and
-    `SubagentSpec.middleware` are both name lists; only the objects are ours.
-    """
-    approved = approved_middleware(
-        spec.middleware,
-        registered=registry,
-        granted=allowed,
-        subject=f"subagent {spec.name!r}",
-    )
-    return [registry[name]() for name in approved]
 
 
 def _host(url: str) -> str:
