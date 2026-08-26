@@ -404,6 +404,19 @@ class SessionRoot(Protocol):
     Kingfisher creates the layout inside what it is handed. A provider that had
     to create `data`, `memory` and the rest would be a provider that breaks
     every time this repository adds a directory.
+
+    **Nothing here is ever closed by kingfisher.** Whoever constructs one owns
+    shutting it down, which is the rule `threads` already states -- *"an instance
+    is a shared store the deployment made and manages"* -- and it applies for the
+    same reason: kingfisher does not decide when the service stops, so it cannot
+    be the one that decides when a connection to the storage does. Two owners of
+    one lifetime is what that rule exists to prevent.
+
+    Two lifetimes, then, and only one of them is kingfisher's. Anything set up
+    per *turn* belongs inside `hold`, which closes on the way out however the
+    turn ended. Anything set up when the provider was *built* -- a connection
+    pool, a thread, a mount made once at startup -- is released by the
+    deployment that built it, or by the process exiting.
     """
 
     def hold(self, session_id: str) -> AbstractContextManager[Path]:
