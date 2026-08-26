@@ -129,3 +129,95 @@ def test_something_that_is_not_a_string_is_handed_back_as_it_is(bridge):
     """A tool may take a number called `path`, and this is not the place to have
     an opinion about that."""
     assert handed(bridge, a_call(path=7)) == {"path": 7}
+
+
+# -- through a real graph ----------------------------------------------------
+#
+# The tests above hold the middleware directly, which is where the decisions
+# are. These drive a compiled agent with a scripted model, because "the tool
+# received the right string" and "the model got a useful answer" are different
+# claims and only the second is the one anybody cares about.
+
+
+A_TOOL = '''
+"""A tool that reports the path it was actually handed."""
+
+
+def whereami(path: str) -> str:
+    """Report what this tool received.
+
+    `path` is the same virtual path the file tools take -- `/data/<name>` --
+    rooted at this session.
+    """
+    from pathlib import Path
+
+    return f"handed={path} exists={Path(path).exists()}"
+
+
+TOOLS = [whereami]
+'''
+
+
+def a_workspace_with_the_tool(cfg):
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "whereami.py").write_text(A_TOOL, encoding="utf-8")
+
+
+def ran(cfg, session_dir, argument: str) -> str:
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel
+
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[{"name": "whereami", "args": {"path": argument}, "id": "c1"}],
+        ),
+        AIMessage(content="done"),
+    ]
+    agent = build_agent(
+        cfg, session_dir=session_dir, model=FakeToolCallingModel(responses=responses)
+    )
+    out = agent.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
+    )
+    return "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+
+
+def test_the_agents_own_name_reaches_the_tool_as_a_real_file(cfg, session_dir):
+    """End to end, and the claim that matters: the model writes the name it was
+    taught, and the tool opens a file that is there.
+
+    Before this, the same call produced `FileNotFoundError` from inside the
+    process and a delegate reporting it could not read a file `ls` could see.
+    """
+    a_workspace_with_the_tool(cfg)
+    (session_dir / "data").mkdir(parents=True, exist_ok=True)
+    (session_dir / "data" / "report.csv").write_text("a,b\n1,2\n", encoding="utf-8")
+
+    transcript = ran(cfg, session_dir, "/data/report.csv")
+
+    assert str(session_dir / "data" / "report.csv") in transcript
+    assert "exists=True" in transcript
+
+
+def test_another_sessions_file_is_not_reachable_through_a_tool(cfg, session_dir):
+    """The leak, end to end.
+
+    `line_count('/workspace/sessions/<other>/secret.txt')` returned an answer.
+    The same shape now resolves under this session, so the tool is handed a path
+    that does not exist -- and the secret is not in the transcript at any point.
+    """
+    a_workspace_with_the_tool(cfg)
+    other = session_dir.parent / "another-tenant" / "derived"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "secret.txt").write_text("TENANT-A-PRIVATE\n", encoding="utf-8")
+
+    transcript = ran(cfg, session_dir, str(other / "secret.txt"))
+
+    assert "exists=False" in transcript
+    assert "TENANT-A-PRIVATE" not in transcript
+    assert transcript.count(str(session_dir)) >= 1, "resolved under this session"
