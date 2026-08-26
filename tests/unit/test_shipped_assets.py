@@ -13,8 +13,9 @@ here should not turn a test red over there.
 
 from __future__ import annotations
 
-from dataclasses import fields
+from dataclasses import fields, replace
 
+import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
@@ -27,6 +28,7 @@ from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
+from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, repository_root
 
 
@@ -440,3 +442,85 @@ def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
         "file tools take. The model reads the docstring, so one that says otherwise "
         "teaches it to go looking for a host path"
     )
+
+
+# -- the example nothing seeds ---------------------------------------------
+
+
+def _call_cap(shipped):
+    """`CallCap`, loaded the way a deployment would import it."""
+    module = load(shipped / "middleware" / "call_cap.py", declares="CallCap")
+    return module.CallCap
+
+
+def test_the_middleware_example_is_not_a_definition_kind(shipped):
+    """It sits under `examples/` and `seed` does not copy it, which is the one
+    surprising thing about this folder and therefore the thing to pin.
+
+    `DEFINITION_KINDS` is the fields of `Definitions`, and `seed` walks exactly
+    those. Middleware is not among them by design: a middleware read out of the
+    workspace would be code the agent can edit, wrapped around the agent that
+    edited it.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    assert (shipped / "middleware").is_dir()
+    assert "middleware" not in DEFINITION_KINDS
+
+
+def test_no_shipped_definition_names_middleware(shipped):
+    """The curriculum has to keep running after a bare `kingfisher seed`.
+
+    A definition naming `call-cap-strict` is refused when the agent is built --
+    `names unregistered middleware` -- on every deployment that has not written
+    the factory. Putting that line in a shipped file would break the first run
+    of a fresh checkout to demonstrate a feature, which is the wrong trade.
+    """
+    for kind in ("agents", "subagents"):
+        for path in (shipped / kind).rglob("*.yaml"):
+            document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
+            assert "middleware" not in document, f"{path.name} needs a registry to run"
+
+
+def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
+    """It is code, so "does it parse" means "does it run" -- the same bar
+    `test_every_preset_tool_loads` sets for `tools/`.
+
+    Driven rather than inspected: a scripted model asks for three tool calls
+    against a cap of two, and the third has to come back refused while the turn
+    keeps going. A cap that ended the turn would be a worse thing wearing the
+    same name.
+    """
+    cap = _call_cap(shipped)
+    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
+    responses = [
+        AIMessage(
+            content="",
+            tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": f"c{i}"}],
+        )
+        for i in range(3)
+    ] + [AIMessage(content="done")]
+
+    graph = build_agent(
+        cfg,
+        agent=replace(spec, middleware=("call-cap-strict",), subagents=None, skills=None),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses),
+        middleware_registry={"call-cap-strict": lambda: cap(2)},
+    )
+    out = graph.invoke(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={"configurable": {"thread_id": "cap"}, "recursion_limit": 30},
+    )
+
+    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+    assert "limit of 2 tool calls is used up" in transcript
+    assert out["messages"][-1].content == "done", "the cap ended the turn instead of the call"
+
+
+def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
+    """`CallCap(0)` would refuse the first call and every one after it, which
+    is not a narrower cap but a broken agent. Omitting the name is how you say
+    'none', on this axis as on every other."""
+    with pytest.raises(ValueError, match="omit the middleware instead"):
+        _call_cap(shipped)(0)

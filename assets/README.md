@@ -16,6 +16,15 @@ demonstrating a distinct feature of the formats. It is committed, and about four
 hundred lines of tests check that every file in it parses, loads and runs. It is
 a curriculum rather than a bag of assets, which is why it is not called this.
 
+One folder under `examples/` is not a definition and is not copied by `seed`:
+`middleware/`. `DEFINITION_KINDS` is the fields of `Definitions` — agents,
+skills, subagents, tools — and `seed` walks exactly those. Middleware is
+deliberately not among them: a middleware name selects code the *deployment*
+wrote, and one read out of the workspace would be code the agent can edit,
+wrapped around the agent that edited it. So the class is imported by whatever
+constructs `Kingfisher` and the name is all a definition ever says. See
+`examples/middleware/call_cap.py`.
+
 **`assets/`** — here — is theirs. A skill fetched from another project arrives
 with its own `LICENSE.txt` and its own idea of what it is for. Everything under
 this directory is ignored by git except this file, and that ignore rule is the

@@ -158,6 +158,27 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
 
 
+#: Directories under `examples/` that are not a catalogue kind, and why each is
+#: there in spite of that.
+#:
+#: The rule below is that this repository's worked set holds only what a
+#: catalogue reads, so that seeding it produces a workspace where every file is
+#: found. An entry here is a folder that breaks the rule on purpose, and the
+#: value is the argument for it -- written next to the check rather than in the
+#: commit that added the folder.
+#:
+#: Kept honest by `test_a_folder_that_is_not_a_kind_is_not_seeded_either`: the
+#: harm the rule names is a file "copied where nothing looks", so an exception
+#: has to be a folder that is not copied at all.
+NOT_A_KIND = {
+    "middleware": (
+        "deployment code, not a definition -- a middleware name selects code "
+        "the deployment wrote, and one read out of the workspace would be code "
+        "the agent can edit wrapped around the agent that edited it"
+    ),
+}
+
+
 def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
     """A kind the catalogue does not read would be copied where nothing looks.
 
@@ -177,8 +198,37 @@ def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
     found = {p.name for p in shipped.iterdir() if p.is_dir() and not p.name.startswith("_")}
 
     assert found, "this repository's worked set is empty -- this asserts nothing"
-    assert found <= set(DEFINITION_KINDS), (
-        f"examples/ holds {sorted(found - set(DEFINITION_KINDS))}, which is not a "
-        "catalogue kind and would be copied where nothing looks"
+    assert found <= set(DEFINITION_KINDS) | set(NOT_A_KIND), (
+        f"examples/ holds {sorted(found - set(DEFINITION_KINDS) - set(NOT_A_KIND))}, which "
+        "is not a catalogue kind and would be copied where nothing looks. If it belongs "
+        "there anyway, write it in NOT_A_KIND above with the reason"
     )
+    assert set(NOT_A_KIND) <= found, (
+        f"NOT_A_KIND names {sorted(set(NOT_A_KIND) - found)}, which examples/ does not "
+        "hold -- an exception outliving the thing it excepted"
+    )
+    assert not set(NOT_A_KIND) & set(DEFINITION_KINDS), "an exception for a kind that is one"
 
+
+def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
+    """The claim every `NOT_A_KIND` entry rests on, checked rather than asserted.
+
+    The rule above names one harm -- a folder "copied where nothing looks" --
+    and an exception to it is only safe while that harm does not happen. `seed`
+    walks `DEFINITION_KINDS`, so a folder outside the vocabulary is skipped
+    rather than miscopied, and this drives it to make sure: seed this
+    repository's own worked set and look at what landed.
+
+    Without this the exception would be a promise about `seed` written in a
+    dictionary that `seed` has never read.
+    """
+    from kingfisher.infrastructure import seeding
+
+    seeding.seed(cfg, shipped)
+
+    for name in NOT_A_KIND:
+        assert not (cfg.workspace / name).exists(), (
+            f"{name}/ is written off as unseeded and seeding wrote it anyway"
+        )
+    # And the ordinary kinds did arrive, or the assertion above is vacuous.
+    assert (cfg.workspace / "agents").is_dir()

@@ -1,0 +1,135 @@
+"""A ceiling on how many tools one turn may call, and the thing it demonstrates.
+
+This is the only example here that a workspace does **not** load. Every other
+file under `examples/` is a definition -- an agent, a skill, a subagent, a tool
+-- copied into a workspace by `kingfisher seed` and found there by name.
+Middleware is not, and cannot be: `DEFINITION_KINDS` is the fields of
+`Definitions`, this is not one of them, and `seed` walks exactly those. Nothing
+copies this file anywhere.
+
+That is the design rather than a gap. `Capabilities.including` puts it plainly
+-- an upload may widen skills and subagents because "a skill or subagent an
+upload brings is the caller's own text; a middleware *name* is a selector for
+code the deployment wrote". A middleware read out of the workspace would be
+code the agent can edit, wrapped around the agent that edited it.
+
+So the two halves of this example live on opposite sides of that line. The class
+below is yours, imported by whatever constructs `Kingfisher`. The name is the
+definition's, and naming is all a definition may do.
+
+## Wiring it
+
+    from examples.middleware.call_cap import CallCap
+
+    kingfisher = Kingfisher(
+        cfg,
+        middleware={
+            "call-cap-strict":   lambda: CallCap(20),
+            "call-cap-generous": lambda: CallCap(100),
+        },
+    )
+
+and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
+
+    middleware: [call-cap-strict]
+
+An agent that names nothing gets nothing: `middleware` omits to none, like
+`skills` and `subagents` and unlike the two tool axes. A name this deployment
+did not register is refused when the agent is built, not discovered mid-run.
+
+## Two names, one class, and why that is the whole lesson
+
+`call-cap-strict` and `call-cap-generous` are two registry entries over one
+class. The obvious alternative is one entry and a number in the yaml:
+
+    middleware: [call-cap]
+    metadata:
+      call-cap: {limit: 20}
+
+Do not reach for that, and the reason is this middleware in particular. A cap a
+definition can set is not a cap -- the first thing a definition wanting more
+than twenty calls would write is `{limit: 1000000}`, and it would be within its
+rights, because the format let it. The same argument holds for the audit hook
+and the rate limit that `approved_middleware` names as the cases it exists for.
+
+Naming the variants keeps the decision where the code is. A deployment that
+wants a third writes a third factory; a definition chooses among what exists and
+can invent nothing. And because the choice is a *name*, it narrows like every
+other capability: a request may withhold `call-cap-generous` and leave
+`call-cap-strict` in reach, which a number in a mapping could never express.
+
+The seam for per-middleware settings is cut and deliberately unconnected --
+`metadata` is carried on every spec and read by nothing at run time. When
+something genuinely needs it, `SubagentSpec.metadata`'s docstring is where the
+argument was left.
+
+## What it is not
+
+Not a budget. `execution_timeout_s` bounds one command, `recursion_limit` bounds
+graph steps and `turn_timeout_s` bounds the wall clock; this bounds tool calls,
+which is a different axis from all three and stops nothing that does not call a
+tool. A model that spends a turn thinking passes it untouched.
+
+Per turn rather than per session, and by construction rather than by choice: the
+agent is built once per turn, so the factory runs once per turn and the count
+starts at zero each time. A cap that outlived a turn would need somewhere to
+live that a graph does not have.
+"""
+
+from __future__ import annotations
+
+from collections.abc import Awaitable, Callable
+from typing import Any
+
+from langchain.agents.middleware import AgentMiddleware
+from langchain_core.messages import ToolMessage
+
+
+class CallCap(AgentMiddleware):
+    """Refuse a tool call once this turn has made `limit` of them.
+
+    Refused as a `ToolMessage` rather than raised, which is what
+    `ToolAllowlist` does two files over and for the same reason: the agent gets
+    to see that it ran out and write its answer from what it already has, where
+    an exception would end the turn and lose the work.
+
+    Counted at `wrap_tool_call`, so it counts what actually ran. Counting the
+    calls a model *asked* for would be a different and worse rule -- a refusal
+    from another middleware would spend the budget it prevented.
+    """
+
+    def __init__(self, limit: int) -> None:
+        if limit < 1:
+            msg = f"a cap of {limit} would refuse every call; omit the middleware instead"
+            raise ValueError(msg)
+        self._limit = limit
+        self._made = 0
+        super().__init__()
+
+    def _refuse(self, request: Any) -> ToolMessage | None:
+        """A `ToolMessage` when the budget is gone, `None` while it is not."""
+        if self._made < self._limit:
+            self._made += 1
+            return None
+        call = request.tool_call
+        return ToolMessage(
+            content=(
+                f"Error: this turn's limit of {self._limit} tool calls is used up. "
+                f"Answer from what you have, and say that you stopped early."
+            ),
+            tool_call_id=call.get("id", ""),
+            name=call.get("name"),
+            status="error",
+        )
+
+    def wrap_tool_call(self, request: Any, handler: Callable[[Any], Any]) -> Any:
+        return self._refuse(request) or handler(request)
+
+    async def awrap_tool_call(
+        self, request: Any, handler: Callable[[Any], Awaitable[Any]]
+    ) -> Any:
+        # Both paths, because neither delegates to the other here. `stream` and
+        # `astream` are two loops over one turn and a cap that held on only one
+        # of them would depend on which the caller reached for.
+        refusal = self._refuse(request)
+        return refusal if refusal is not None else await handler(request)
