@@ -288,6 +288,32 @@ include = ["spikes/**"]
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
 
+# `sandlock` is the Linux shell fence, installed by the `fence` extra under a
+# `sys_platform == 'linux'` marker -- so whether this import resolves depends on
+# which machine ty runs on, and the two answers used to be settled in opposite
+# directions. A `ty: ignore[unresolved-import]` on each import is right on the
+# macOS this is developed on and *unused* on the Linux job that installs the
+# extra, and `error-on-warning` makes an unused directive fatal too. The check
+# failed on Linux the first time it ran, which is what added it.
+#
+# Settled here instead, once, rather than three comments that are correct on one
+# platform each. The narrower reading -- ignoring `unused-ignore-comment` and
+# keeping the directives -- was the other option and is worse: it leaves three
+# comments that can go stale for reasons unrelated to the platform, and turns off
+# the very rule that would catch that.
+#
+# Scoped to the two files that import it. Both are short and everything else they
+# import is the standard library or this package, so what this gives up is small
+# and named.
+[[tool.ty.overrides]]
+include = [
+    "src/kingfisher/infrastructure/fence.py",
+    "src/kingfisher/infrastructure/confinement.py",
+]
+
+[tool.ty.overrides.rules]
+unresolved-import = "ignore"
+
 # Tests exercise seams a type checker cannot see through: fakes that stand in
 # for protocol implementations, monkeypatched module attributes, and stubs whose
 # fields are populated by the code under test. These three rules fire on that

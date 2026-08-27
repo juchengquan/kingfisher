@@ -186,7 +186,7 @@ def landlock_ready() -> bool:
     if landlock_abi() is None or (landlock_abi() or 0) < REQUIRED_LANDLOCK_ABI:
         return False
     try:
-        import sandlock  # noqa: F401, PLC0415  # ty: ignore[unresolved-import]
+        import sandlock  # noqa: F401, PLC0415
     except ImportError:
         return False
     return True

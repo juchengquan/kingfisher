@@ -110,7 +110,7 @@ def policy_for(
     # `ty: ignore` for the same reason: it is not installed on the machine
     # this is developed on, and an optional Linux-only dependency that
     # resolved everywhere would not be optional.
-    from sandlock import Sandbox  # noqa: PLC0415  # ty: ignore[unresolved-import]
+    from sandlock import Sandbox  # noqa: PLC0415
 
     return Sandbox(
         fs_readable=_present([*SYSTEM_PATHS, *readable]),
@@ -174,7 +174,7 @@ class LandlockRunner:
         starts inherits it -- Landlock rulesets only ever narrow, and a child
         cannot widen its own.
         """
-        from sandlock import confine  # noqa: PLC0415  # ty: ignore[unresolved-import]
+        from sandlock import confine  # noqa: PLC0415
 
         def fence() -> None:
             confine(self.policy)
