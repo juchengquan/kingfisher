@@ -22,6 +22,8 @@ import pytest
 
 from kingfisher.domain.ports import CommandResult
 from kingfisher.infrastructure import confinement
+from kingfisher.infrastructure.bubblewrap import BubblewrapRunner
+from kingfisher.infrastructure.fence import LandlockRunner
 from kingfisher.infrastructure.harness.backend import build_backend
 from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
@@ -264,15 +266,27 @@ def test_what_a_runner_returns_reaches_the_model(cfg, session_dir):
     assert result.exit_code == 3
 
 
-def test_no_runner_runs_the_command_here(cfg, session_dir):
+def test_the_only_runner_kingfisher_builds_for_itself_is_a_fence(cfg, session_dir):
     """`None` is not "do nothing" -- it is upstream's own execution, unchanged.
 
     A default runner would be 110 lines of upstream's truncation, timeout and
-    exit-code handling copied into this repository to be kept in step.
+    exit-code handling copied into this repository to be kept in step. So the
+    only runner built here is a fence, and where the platform has no fence
+    there is no runner at all.
+
+    Said that way rather than `is None`, which is what it said and what only
+    held on the platform it was written on. On Linux `_fence_for` builds a
+    `LandlockRunner` -- correctly, that is the feature -- and this failed the
+    first time a Linux job ran the suite. The property was never that the
+    runner is absent; it is that kingfisher owns no execution path of its own.
     """
     backend = build_backend(cfg, session_dir)
 
-    assert backend.default.runner is None
+    runner = backend.default.runner
+    assert runner is None or isinstance(runner, (LandlockRunner, BubblewrapRunner)), (
+        f"{type(runner).__name__} is a runner this repository built for itself, "
+        "which is the 110 lines of upstream's execution handling this avoids"
+    )
     assert backend.execute("echo hi").output.strip() == "hi"
 
 
