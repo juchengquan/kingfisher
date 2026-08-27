@@ -19,6 +19,7 @@ from __future__ import annotations
 
 import os
 import platform
+import warnings
 
 import pytest
 
@@ -64,16 +65,23 @@ def test_ci_ran_against_a_real_fence() -> None:
 
 @pytest.mark.skipif(platform.system() != "Linux", reason="the fences are Linux's")
 @pytest.mark.skipif(not on_ci, reason="a developer's machine owes this nothing")
-def test_the_kernel_is_reported_whichever_fence_ran() -> None:
-    """Not an assertion -- a record, printed into the job's log.
+def test_the_half_that_ran_is_named_in_the_log() -> None:
+    """Which fence ran, said where a green run will show it.
 
-    Which half ran is the thing a reader of a green Linux job most wants and
-    cannot otherwise get: "16 skipped" does not say whether Landlock skipped
-    because the kernel is old or because the wheel is missing. When the runner
-    image moves to 6.12 this is where that shows up.
+    `-rs` already names what *skipped* and why, so a reader can infer the rest.
+    Inference is what this is for avoiding: "16 skipped" does not say whether
+    Landlock skipped because the kernel is old or because the wheel is missing,
+    and the answer changes when the runner image moves.
+
+    Through `warnings.warn` rather than `print`, which is what this did first
+    and which reports nothing: pytest captures stdout for a passing test, so
+    the line went nowhere on the only kind of run that matters. A warning lands
+    in the summary without `-s`, and without turning capture off for the whole
+    suite to carry one line.
     """
-    print(  # noqa: T201 -- the point is the job log
-        f"\nfence coverage: Landlock={'yes' if landlock_ready() else 'no'} "
+    warnings.warn(
+        f"fence coverage: Landlock={'yes' if landlock_ready() else 'no'} "
         f"(ABI {landlock_abi()}, needs {REQUIRED_LANDLOCK_ABI}) "
-        f"bubblewrap={'yes' if bubblewrap_available() else 'no'}"
+        f"bubblewrap={'yes' if bubblewrap_available() else 'no'}",
+        stacklevel=1,
     )
