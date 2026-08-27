@@ -60,6 +60,54 @@ jobs:
       - name: pytest
         run: uv run pytest -q
 
+  # The other half of the sentence at the top of `checks`. The fences that keep
+  # `execute` off the host are `sandbox-exec` on macOS and Landlock or
+  # bubblewrap on Linux, and each exists on exactly one platform -- so the job
+  # above covers one of the two and skips the other, in a repository that
+  # deploys to Linux. `tests/linux/` held real escape tests that had never run
+  # anywhere.
+  #
+  # The same three steps, so a Linux-only regression is caught the same way and
+  # not only by `pytest`: `--all-extras` is what installs `sandlock`, which is
+  # `sys_platform == 'linux'` and therefore absent from the macOS job's install
+  # however many extras it asks for.
+  fences:
+    name: the Linux fence
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Pin a uv-managed Python
+        run: uv python install 3.12
+
+      # bwrap is not on the image. It is the fallback fence rather than the
+      # preferred one, and it is the half this runner can actually exercise:
+      # `ubuntu-latest` has been on a kernel below the ABI a full Landlock
+      # ruleset needs, so Landlock's own escape tests skip here and
+      # `test_a_fence_was_exercised` records which half ran.
+      - name: Install bubblewrap
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
+
+      - name: Install the project
+        run: uv sync --all-extras --dev
+
+      - name: ruff
+        run: uv run ruff check src/ tests/ service/ examples/
+
+      - name: ty
+        run: uv run ty check
+
+      # `-rs` so the log says which fence skipped and why. A green job here
+      # with everything skipped is what `tests/linux/test_a_fence_was_exercised.py`
+      # exists to turn red.
+      - name: pytest
+        run: uv run pytest -q -rs
+
   # A second job, and the only thing that proves the claim the split is for.
   # The job above installs every extra, so it cannot tell whether the library
   # needs the service -- it always has it. `tests/unit/test_the_base_stands_alone.py`
