@@ -85,11 +85,22 @@ jobs:
       - name: Pin a uv-managed Python
         run: uv python install 3.12
 
-      # bwrap is not on the image. It is the fallback fence rather than the
-      # preferred one, and it is the half this runner can actually exercise:
-      # `ubuntu-latest` has been on a kernel below the ABI a full Landlock
-      # ruleset needs, so Landlock's own escape tests skip here and
-      # `test_a_fence_was_exercised` records which half ran.
+      # bwrap is not on the image, and installing it is not sufficient to run
+      # its half. This job was written expecting bubblewrap to be the half a
+      # bare runner could exercise, on the grounds that `ubuntu-latest` had
+      # been below the ABI a full Landlock ruleset needs. The first green run
+      # said the opposite: the image is on Landlock ABI 7 against the 6
+      # required, so the Landlock escapes run, while bwrap installs and is
+      # still unavailable because the image refuses an unprivileged user
+      # namespace and the probe cannot make one.
+      #
+      # Installed anyway, for two reasons that survive being wrong about which
+      # half runs: the `fence coverage:` line then distinguishes "no binary"
+      # from "namespace refused", which are the same word otherwise; and the
+      # bubblewrap escapes begin running the day that policy relaxes, without
+      # this file having to be edited again to notice. Relaxing it here instead
+      # is one sysctl away and deliberately not done yet -- that is a decision
+      # about how much the runner is allowed to weaken, not a comment.
       - name: Install bubblewrap
         run: sudo apt-get update -qq && sudo apt-get install -y -qq bubblewrap
 

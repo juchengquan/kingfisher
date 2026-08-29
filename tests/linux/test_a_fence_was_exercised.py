@@ -41,13 +41,20 @@ on_ci = os.environ.get("CI") == "true"
 def test_ci_ran_against_a_real_fence() -> None:
     """At least one mechanism has to be live, or this shelf tested nothing.
 
-    Deliberately `or` rather than both. GitHub's `ubuntu-latest` image has been
-    on a kernel below `REQUIRED_LANDLOCK_ABI`, so demanding Landlock would make
-    the job red for a reason that is about the runner rather than about this
-    repository -- and a job that is red for something nobody can fix gets
-    disabled, which costs more than the coverage it was buying.
+    Deliberately `or` rather than both, and the first green run justified that
+    in the direction nobody predicted. This was written expecting Landlock to
+    be the half that skips, GitHub's `ubuntu-latest` image having been on a
+    kernel below `REQUIRED_LANDLOCK_ABI`. That image is now on ABI 7 against
+    the 6 required, so Landlock is the half that runs; bubblewrap is installed
+    by the workflow and still unavailable, because the runner refuses an
+    unprivileged user namespace.
 
-    What it does buy: the bubblewrap escapes cannot silently stop running. If
+    Which is the argument for `or`, made by the thing it was guessing about:
+    demanding both would put this job red for a reason about the runner rather
+    than about this repository, and a job that is red for something nobody can
+    fix gets disabled, costing more than the coverage it was buying.
+
+    What it does buy: whichever half is live cannot silently stop being so. If
     the day comes that neither works on the runner, this says so in one line
     instead of `0 failed` over sixteen skips.
     """
