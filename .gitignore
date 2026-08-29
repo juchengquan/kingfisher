@@ -232,3 +232,9 @@ __marimo__/
 # a stray `git add -A` committing somebody else's terms into an MIT repository.
 assets/*
 !assets/README.md
+
+# This checkout doubles as a workspace when the CLI is run from it, so the
+# workspace's own `models.yaml` lands at the root. It is one deployment's
+# endpoints, not the project's -- `src/kingfisher/models.yaml.example` is the
+# tracked template, and is what a reader should be reading.
+/models.yaml
