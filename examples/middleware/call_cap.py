@@ -33,6 +33,13 @@ and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
 
     middleware: [call-cap-strict]
 
+Both halves of that are written out beside this file. `researcher.yaml` and
+`sweeper.yaml` are an agent and its delegate, naming the two registry entries
+above -- the only definitions in this repository that name middleware, and here
+rather than under `agents/` and `subagents/` for the reason the next paragraph
+gives. They are read by nothing at run time; copy them across once the factories
+are registered.
+
 An agent that names nothing gets nothing: `middleware` omits to none, like
 `skills` and `subagents` and unlike the two tool axes. A name this deployment
 did not register is refused when the agent is built, not discovered mid-run.
