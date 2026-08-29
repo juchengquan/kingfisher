@@ -19,8 +19,10 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher.domain import agent as agent_format
 from kingfisher.domain import skill
-from kingfisher.domain.capabilities import ALL
+from kingfisher.domain.capabilities import ALL, CapabilityError
+from kingfisher.domain.subagent import reading as subagent_format
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
@@ -28,7 +30,7 @@ from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
-from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from tests.conftest import FakeToolCallingModel, repository_root
 
 
@@ -524,3 +526,93 @@ def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
     'none', on this axis as on every other."""
     with pytest.raises(ValueError, match="omit the middleware instead"):
         _call_cap(shipped)(0)
+
+
+def _example_definitions(shipped):
+    """The agent and delegate beside `call_cap.py`, read by the formats that own them.
+
+    Read here rather than through `LocalAgentRepository`, which scans a whole
+    directory: these two share a folder with each other and with the module,
+    so pointing an agent repository at it would try to read a subagent as an
+    agent. Nothing loads this folder at run time, which is the point of it.
+    """
+    root = shipped / "middleware"
+    agent_path = root / "researcher.yaml"
+    delegate_path = root / "sweeper.yaml"
+    return (
+        agent_format.parse(
+            yaml.safe_load(agent_path.read_text(encoding="utf-8")), agent_path
+        ),
+        subagent_format.parse(
+            yaml.safe_load(delegate_path.read_text(encoding="utf-8")), delegate_path
+        ),
+    )
+
+
+def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
+    """Unseeded is not unchecked.
+
+    Nothing copies this folder and nothing loads it, so these two files have no
+    run to fail on -- which is exactly the condition documentation rots under.
+    `call_cap.py` is driven by a scripted model two tests up for the same
+    reason: an example that only ever gets read is an example nobody notices
+    has gone stale.
+
+    So they are parsed by the real formats, and the names they exist to
+    demonstrate are asserted rather than assumed. A rename of either registry
+    entry in `call_cap.py`'s wiring block turns this red.
+    """
+    agent, delegate = _example_definitions(shipped)
+
+    assert agent.name == "researcher"
+    assert agent.middleware == ("call-cap-strict",)
+    assert delegate.name == "sweeper"
+    assert delegate.middleware == ("call-cap-generous",)
+    assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
+
+
+def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
+    """The reason they sit here rather than under `agents/` and `subagents/`.
+
+    `test_no_shipped_definition_names_middleware` states the rule; this drives
+    the harm behind it. Against a deployment that registered nothing -- which is
+    every fresh checkout -- both are refused when the definition is built, and
+    refused by name rather than quietly built without the cap they specified.
+
+    Which is also why the rule cannot simply be relaxed for these two. It is not
+    that they are unfinished; it is that a definition naming middleware is only
+    loadable somewhere the factory exists, and a seeded workspace is not that
+    place until its deployment says so.
+    """
+    agent, delegate = _example_definitions(shipped)
+
+    for spec, kind in ((agent, "agent"), (delegate, "subagent")):
+        with pytest.raises(CapabilityError, match="names unregistered middleware"):
+            declared_middleware(spec, {}, ALL, kind=kind)
+
+
+def test_the_middleware_examples_build_against_the_registry_they_document(shipped):
+    """The wiring block in `call_cap.py` is copy-pasteable, checked by pasting it.
+
+    The registry below is that block's two entries over the one class, which is
+    the lesson those two names carry: a cap a definition could set is not a cap,
+    so the variants are registered and a definition chooses among them.
+
+    The delegate's middleware is built from the same registry and is a separate
+    object, which is the other half of what this pair shows. A subagent inherits
+    none of its parent's middleware, so `researcher` running out of calls says
+    nothing about how many `sweeper` has left.
+    """
+    cap = _call_cap(shipped)
+    registry = {
+        "call-cap-strict": lambda: cap(20),
+        "call-cap-generous": lambda: cap(100),
+    }
+    agent, delegate = _example_definitions(shipped)
+
+    built = declared_middleware(agent, registry, ALL, kind="agent")
+    delegated = declared_middleware(delegate, registry, ALL, kind="subagent")
+
+    assert [type(m).__name__ for m in built] == ["CallCap"]
+    assert [type(m).__name__ for m in delegated] == ["CallCap"]
+    assert built[0] is not delegated[0], "one instance for both would share a budget"
