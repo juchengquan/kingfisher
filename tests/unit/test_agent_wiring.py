@@ -1,12 +1,19 @@
 from __future__ import annotations
 
+import warnings
+
 import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.agent import AgentSpec
-from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
+from kingfisher.infrastructure.harness.agent import (
+    REQUIRED_BY_DEEPAGENTS,
+    _deepagents_middleware_names,
+    build_agent,
+    declared_middleware,
+)
 from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.prompting import system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
@@ -268,3 +275,148 @@ def test_an_agent_that_names_none_wires_none(cfg, monkeypatch, session_dir):
     )
 
     assert "_Audit" not in {type(m).__name__ for m in captured["middleware"]}
+
+
+# -- middleware that replaces deepagents' own ------------------------------
+
+
+class FilesystemMiddleware(AgentMiddleware):
+    """A deployment's own middleware, named like deepagents' scaffolding.
+
+    Spelled as the collision rather than as `name = "FilesystemMiddleware"`,
+    because a class name is what collides: `AgentMiddleware.name` defaults to
+    `self.__class__.__name__`, so this is the shape somebody actually writes
+    when they write this by accident, and it needs no `name` line to be one.
+    """
+
+
+class _Summarization(AgentMiddleware):
+    """deepagents' own, but not one it refuses to run without.
+
+    The two halves of the notice are different sentences, and this is the one
+    that gets the shorter of them.
+    """
+
+    name = "SummarizationMiddleware"
+
+
+def _replacement_warnings(recorded) -> list[str]:
+    """Just the ones this file is about, since a build warns about other things."""
+    return [str(w.message) for w in recorded if "deepagents merges by name" in str(w.message)]
+
+
+def test_the_required_names_match_deepagents():
+    """`REQUIRED_BY_DEEPAGENTS` is a copy, so something has to compare it.
+
+    Copied rather than imported because `_REQUIRED_MIDDLEWARE_NAMES` is private,
+    and an upstream rename would otherwise change which replacement gets the
+    louder sentence with nobody deciding.
+    """
+    from deepagents.graph import _REQUIRED_MIDDLEWARE_NAMES
+
+    assert set(REQUIRED_BY_DEEPAGENTS) == set(_REQUIRED_MIDDLEWARE_NAMES)
+
+
+def test_deepagents_own_middleware_is_discovered_across_the_package():
+    """The breadth, pinned, because the narrow version looked right and was not.
+
+    Walking `graph.py`'s namespace alone found eight names and missed the
+    summarizer, which is reached there through a factory. A notice that covers
+    most of the stack is the kind nobody notices has stopped covering the rest.
+    """
+    found = _deepagents_middleware_names()
+
+    assert set(REQUIRED_BY_DEEPAGENTS) <= found
+    assert "SummarizationMiddleware" in found, "the factory-built one, missed by graph.py alone"
+    assert "AgentMiddleware" not in found, "the base class is not one of deepagents' own"
+
+
+def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, monkeypatch, session_dir):
+    """The whole point: said, not forbidden.
+
+    A filesystem middleware of one's own is a reasonable thing to deploy, and
+    refusing it here would be kingfisher inventing a policy deepagents does not
+    have. What is unreasonable is doing it by accident -- the names collide
+    because somebody picked an obvious class name, and neither side would
+    otherwise mention that deepagents' own is now gone rather than wrapped.
+
+    So the build completes and the middleware is handed over, which is the half
+    a warning could quietly have cost.
+    """
+    captured = capture_build(monkeypatch)
+
+    with pytest.warns(UserWarning, match="deepagents merges by name"):
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": FilesystemMiddleware},
+        )
+
+    assert "FilesystemMiddleware" in {m.name for m in captured["middleware"]}
+
+
+def test_the_warning_names_both_of_the_deployments_two_names():
+    """A deployment has two names for one middleware and only one is the problem.
+
+    The registry key is fine and stays; the class name is the collision. A
+    message naming only the key would send somebody to rename the thing that was
+    never wrong. `kind` reaches the wording too, which is why it has no default.
+    """
+    with pytest.warns(UserWarning) as recorded:
+        declared_middleware(
+            _named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="subagent"
+        )
+
+    message = _replacement_warnings(recorded)[0]
+    assert "'audit'" in message, "the key it was registered under"
+    assert "'FilesystemMiddleware'" in message, "the class name that collides"
+    assert message.startswith("subagent "), "the kind, so the reader opens the right file"
+    assert "rename the class" in message
+
+
+def test_replacing_one_deepagents_needs_says_so_more_loudly():
+    """Two sentences, because the two cases are not the same size.
+
+    Losing the summarizer costs summarization. Losing `FilesystemMiddleware`
+    costs the `permissions` rules every built-in file tool is checked against,
+    and a deployment that did that by accident has quietly turned off a
+    guarantee rather than a feature.
+    """
+    with pytest.warns(UserWarning) as recorded:
+        declared_middleware(_named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="agent")
+    required = _replacement_warnings(recorded)[0]
+
+    with pytest.warns(UserWarning) as recorded:
+        declared_middleware(
+            _named(("summarize",)), {"summarize": _Summarization}, ALL, kind="agent"
+        )
+    ordinary = _replacement_warnings(recorded)[0]
+
+    assert "refuses to run without" in required
+    assert "permissions" in required
+    assert "refuses to run without" not in ordinary
+    assert "deepagents merges by name" in ordinary, "still said, just not as loudly"
+
+
+def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, monkeypatch, session_dir):
+    """The quiet path, which is every deployment that named its classes normally.
+
+    Without this the notice could grow into one that fires on every registered
+    middleware, and a warning that always fires is one nobody reads.
+    """
+    captured = capture_build(monkeypatch)
+
+    with warnings.catch_warnings(record=True) as recorded:
+        warnings.simplefilter("always")
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": _Audit},
+        )
+
+    assert _replacement_warnings(recorded) == []
+    assert "_Audit" in {m.name for m in captured["middleware"]}
