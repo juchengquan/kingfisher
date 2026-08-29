@@ -470,18 +470,55 @@ def test_the_middleware_example_is_not_a_definition_kind(shipped):
     assert "middleware" not in DEFINITION_KINDS
 
 
-def test_no_shipped_definition_names_middleware(shipped):
+def test_no_shipped_definition_names_a_middleware(shipped):
     """The curriculum has to keep running after a bare `kingfisher seed`.
 
     A definition naming `call-cap-strict` is refused when the agent is built --
     `names unregistered middleware` -- on every deployment that has not written
     the factory. Putting that line in a shipped file would break the first run
     of a fresh checkout to demonstrate a feature, which is the wrong trade.
+
+    A star is not that, and this refused one anyway. The assertion was
+    `"middleware" not in document`, which is broader than the paragraph above
+    and broader for no reason the paragraph gives -- a rule whose test says more
+    than its argument does, which is the kind that outlives being right.
+
+    `["*"]` resolves against whatever the deployment registered, and on a fresh
+    checkout that is nothing: `approved_middleware` answers `()` and raises
+    nothing, which `test_a_wildcard_can_resolve_to_nothing_and_says_nothing`
+    pins from the domain side. It degrades where a name refuses, so it is the
+    one form of this field a shipped file may carry.
     """
     for kind in ("agents", "subagents"):
         for path in (shipped / kind).rglob("*.yaml"):
             document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            assert "middleware" not in document, f"{path.name} needs a registry to run"
+            written = document.get("middleware") or []
+            named = [entry for entry in written if entry != "*"]
+            assert not named, (
+                f"{path.name} names {named}, which is refused on any deployment that "
+                'did not register it; `["*"]` is the form that resolves to nothing instead'
+            )
+
+
+def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped):
+    """The property the rule above now rests on, driven rather than argued.
+
+    `assistant` carries `middleware: ["*"]`, so this is the exact path a first
+    run takes on a checkout that has registered nothing. What it has to do is
+    produce no middleware *quietly* -- not raise, which is what a name would do,
+    and not report a shortfall either, because a caller cannot register a
+    middleware and telling it what it could not have asked for is noise.
+
+    Read off the shipped file rather than a spec built here, because the thing
+    that could regress is the file: delete the star and this still passes if it
+    asserts on a spec of its own making.
+    """
+    from kingfisher.infrastructure.harness.agent import declared_middleware
+
+    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
+
+    assert spec.middleware == ALL, "the file this rests on stopped carrying the star"
+    assert declared_middleware(spec, {}, ALL, kind="agent") == []
 
 
 def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
@@ -574,7 +611,7 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
 def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
     """The reason they sit here rather than under `agents/` and `subagents/`.
 
-    `test_no_shipped_definition_names_middleware` states the rule; this drives
+    `test_no_shipped_definition_names_a_middleware` states the rule; this drives
     the harm behind it. Against a deployment that registered nothing -- which is
     every fresh checkout -- both are refused when the definition is built, and
     refused by name rather than quietly built without the cap they specified.

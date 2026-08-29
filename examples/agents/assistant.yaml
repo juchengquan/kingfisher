@@ -21,6 +21,26 @@ skills: ["*"]
 # A delegate that names helpers of its own brings them with it: grant the
 # delegate and its helpers arrive, without the agent listing them here.
 subagents: [extractor, reviewer, profiler]
+# Every middleware this deployment registered and this request still grants --
+# the same idiom as `skills: ["*"]` above, on the one axis where a definition
+# cannot name anything portable. A registry entry is code the *deployment*
+# wrote, so no name written in a file that ships inside a wheel could resolve
+# anywhere but the machine it was written for.
+#
+# The star is the only form of this field a shipped file may carry, and the
+# difference is what happens when the deployment has registered nothing -- which
+# is every fresh checkout. A name is refused when the agent is built (`names
+# unregistered middleware`) and the first run dies to demonstrate a feature. A
+# star resolves to nothing and raises nothing. It degrades where a name refuses.
+#
+# So an audit hook or a rate limit you register reaches this agent without
+# editing this file, which is the case the axis exists for. The cost is the
+# other side of the same sentence: it takes whatever is there, so a middleware
+# registered for one narrow purpose arrives here too. When that is wrong, narrow
+# the axis on the request -- a star resolves smaller when the caller withheld
+# something, and raises nothing then either -- or delete this line and name what
+# you want, which is what `examples/middleware/` shows.
+middleware: ["*"]
 # No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships
 # inside a wheel, since no vendor's model id is portable anywhere else.
