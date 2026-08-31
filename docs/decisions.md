@@ -193,12 +193,43 @@ delegates holding the workspace's tools with the guard only on the parent.
 *(2026-08-18 as `a-tool-failure-is-not-a-crash.md`; shipped, and the file removed
 2026-08-31.)*
 
-**Still open from it.** The routed/host path mismatch was explicitly deferred and
-has not been answered: a workspace tool takes host paths while the agent lives on
-routed ones, and a docstring is the only defence. The guard stops that costing a
-run; it does not stop it happening. Also unanswered: whether a repeatedly failing
-tool should be taken away from the model rather than left to the recursion limit,
-and whether a tool's exception should reach the run report as well as the model.
+**A workspace tool is handed real paths, resolved against its own session.**
+`WorkspaceToolPaths` rewrites a `path` argument before the tool sees it, so
+`/data/config.ini` means the same thing to a workspace tool as it does to
+`read_file`. A workspace tool is an ordinary function that opens files with the
+operating system; the built-in file tools do not have the problem because they
+close over the backend that roots them at a session, and nothing hands that
+backend to a tool the caller supplied.
+
+It closed a leak as well as a usability bug, and the second is how the first was
+found. Before it, the only way for the model to make a workspace tool work was to
+learn the host layout from the shell -- and from there it could name any session:
+`line_count('/workspace/sessions/<other>/secret.txt')` returned an answer. Now
+that argument resolves under *this* session and finds nothing, not by being
+refused but by there being no way to say it. Symlinks are resolved on both sides,
+because `execute` is rooted in a directory the agent can write to and a link at
+`/derived/link.txt` pointing at another session was measured returning
+`TENANT-A-PRIVATE` through a tool while `read_file` refused the same path.
+
+Rewriting the call rather than wrapping each tool, because tools are not alike --
+some are `BaseTool`s from `@tool`, some plain functions -- and the call is the one
+shape they share. `PATH_ARGUMENTS` is `{"path"}`, the convention this repository
+already enforces on shipped tools; a tool calling it `input_file` is missed, and
+that fails visibly on the first call rather than silently, because a name that is
+*not* translated cannot reach outside the session either.
+
+**Still open from it.** Whether a repeatedly failing tool should be taken away
+from the model rather than left to the recursion limit. Three failures of the
+same tool with the same argument is a loop, and a middleware could say so;
+nothing needs it yet, and a rule that removes a capability mid-run deserves its
+own argument.
+
+*Two other things this document listed as open were answered before it was
+written, and were copied here on 2026-08-31 without being checked. The
+routed/host mismatch is the entry above. A tool's exception does reach the run
+report: `on_tool_error` writes a `tool_error` event even when the middleware has
+already converted the exception into a tool result, which is now asserted rather
+than assumed.*
 
 ## Layering
 
