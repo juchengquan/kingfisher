@@ -63,9 +63,26 @@ def test_a_bare_list_entry_is_refused_by_name():
         read.audienced({"sql_query": ["A"]}, absent=ALL, key="tools")
 
 
-def test_an_entry_that_says_nothing_is_refused():
-    with pytest.raises(AgentError, match="says nothing"):
-        read.audienced({"sql_query": {}}, absent=ALL, key="tools")
+def test_an_entry_that_states_no_audience_inherits_the_definitions():
+    """What makes the mapping form usable: only the entries you actually
+    restrict carry a `groups:` line, and the rest are selected and left to
+    inherit. Restricting one tool must not mean writing an audience for every
+    other tool beside it."""
+    selected, audiences = read.audienced(
+        {"sql_query": {"groups": ["A"]}, "http_fetch": None, "line_count": {}},
+        absent=ALL,
+        key="tools",
+    )
+    assert selected == ("sql_query", "http_fetch", "line_count")
+    assert audiences == {"sql_query": ("A",)}
+
+
+def test_a_mapping_where_nothing_is_restricted_is_just_a_list():
+    """The degenerate case reads as what it is, rather than being refused."""
+    assert read.audienced({"a": None, "b": None}, absent=ALL, key="tools") == (
+        ("a", "b"),
+        {},
+    )
 
 
 def test_a_mistyped_entry_key_is_refused_with_a_suggestion():
@@ -83,7 +100,9 @@ def test_a_bare_string_audience_is_refused_rather_than_iterated():
 
 
 def test_an_empty_entry_audience_is_refused():
-    with pytest.raises(AgentError, match="name the groups or drop it"):
+    """`groups: []` would mean nobody, and the way to say "no restriction" is
+    to leave the line out -- so an empty one is an unfinished edit."""
+    with pytest.raises(AgentError, match="Leave the line out"):
         read.audienced({"sql_query": {"groups": []}}, absent=ALL, key="tools")
 
 

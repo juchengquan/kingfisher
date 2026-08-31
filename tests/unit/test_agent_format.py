@@ -396,3 +396,34 @@ def test_an_entry_audience_outside_the_definitions_own_is_refused():
             MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [C]\n",
             "plain.yaml",
         )
+
+
+def test_only_the_restricted_entries_need_an_audience():
+    """The ergonomics of the mapping form, and the reason an entry may say
+    nothing. An agent holding five tools and restricting one should write one
+    `groups:` line, not five -- and the four that say nothing inherit the
+    definition's own audience, exactly as a plain list would.
+    """
+    spec = _read(
+        MINIMAL.rstrip()
+        + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [A]\n  http_fetch:\n  line_count:\n",
+        "plain.yaml",
+    )
+
+    assert spec.tools == ("sql_query", "http_fetch", "line_count")
+    assert spec.audiences["tools"] == {"sql_query": ("A",)}
+    assert spec.declares(frozenset({"A"})).tools == ("sql_query", "http_fetch", "line_count")
+    assert spec.declares(frozenset({"B"})).tools == ("http_fetch", "line_count")
+
+
+def test_a_mapping_that_restricts_nothing_means_what_the_list_means():
+    """The two spellings have to agree about an unrestricted name, or the
+    mapping form would quietly change what a definition holds."""
+    written = "\ngroups: [A]\ntools:\n  sql_query:\n  http_fetch:\n"
+    as_list = "\ngroups: [A]\ntools: [sql_query, http_fetch]\n"
+
+    mapped = _read(MINIMAL.rstrip() + written, "plain.yaml")
+    listed = _read(MINIMAL.rstrip() + as_list, "plain.yaml")
+
+    assert mapped.declares(frozenset({"A"})).tools == listed.declares(frozenset({"A"})).tools
+    assert mapped.declares(frozenset({"B"})).tools == listed.declares(frozenset({"B"})).tools

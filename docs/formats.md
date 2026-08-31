@@ -1231,6 +1231,25 @@ says which fact it is stating, has somewhere to put a second one later, and can
 have a mistyped key refused. `sql_query: [A]` is refused by name, showing the
 form to write: two spellings of one thing is what this format keeps deleting,
 and the long one is worth having only while it is the only one.
+
+**Only the entries you restrict need one.** An entry that says nothing inherits
+the definition's own audience, so an agent holding five tools and restricting one
+writes one `groups:` line rather than five:
+
+```yaml
+groups: [A, B]
+tools:
+  sql_query:
+    groups: [A]            # narrower than the definition
+  http_fetch:              # says nothing, so [A, B] — the definition's own
+  line_count:
+```
+
+A mapping where nothing is restricted means exactly what the plain list means,
+which is what keeps the two spellings honest about an unrestricted name.
+
+`groups: []` on an entry is refused rather than read as "nobody": leaving the
+line out is how you say "no restriction", so an empty one is an unfinished edit.
 ```yaml
 groups: [A, B]
 tools: []                  # none, as it always meant
