@@ -106,8 +106,8 @@ packages = ["src/kingfisher"]
 #
 # What that costs is real and is written down rather than glossed: a fresh
 # install seeds nothing, and since a request must name an agent, it cannot run
-# until definitions arrive from somewhere. See
-# docs/design/2026-08-19-examples-are-ours-assets-are-yours.md.
+# until definitions arrive from somewhere. See *Packaging: where the
+# definitions live* in docs/decisions.md.
 
 [tool.uv.workspace]
 members = ["service"]
