@@ -31,6 +31,8 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
+from kingfisher.domain.access import Access
+
 #: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
 #: rather than written twice: the two are spread into one `build_model` call
 #: and carry one rule between them -- additive only, may not name a value the
@@ -337,6 +339,21 @@ class Config:
     #: invariants between its parts that siblings of `shell_sandbox` could not
     #: express. See `Models`.
     models: Models
+    #: Which groups reach which agents, subagents and tools, or `None` where
+    #: this deployment writes no policy.
+    #:
+    #: Beside `models` because it is the same kind of thing: a static,
+    #: operator-authored table, read once at startup, whose absence is a
+    #: legitimate state rather than a setting somebody forgot. `None` is the
+    #: whole of what "this deployment does not control access by group" means,
+    #: and every deployment that predates this field has exactly that.
+    #:
+    #: Read once rather than per turn, unlike the catalogue. The catalogue is
+    #: re-read because a workspace directory is edited between turns and a
+    #: stale view of it is a wrong answer about what exists; a policy is a
+    #: deployment setting, and a revocation lands on restart the way every
+    #: other one here does.
+    access: Access | None = None
     #: What bounds one shell command or one interpreter run.
     #:
     #: Not the model timeout. This was `timeout_s` and served three unrelated

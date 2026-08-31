@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import os
 from dataclasses import fields
+from pathlib import Path
 
 import pytest
 
 from kingfisher.application import config as config_module
 from kingfisher.application.config import from_env
 from kingfisher.config import ConfigError
+from kingfisher.domain.access import AccessError
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
 
 CATALOGUE = """
@@ -307,3 +309,54 @@ def test_a_config_is_a_seeding_destination(tmp_path):
     from kingfisher.infrastructure.seeding import Destination
 
     assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
+
+
+# -- the access policy ------------------------------------------------------
+
+
+def test_a_workspace_without_a_policy_file_has_no_policy(env):
+    """Absent is the whole of what "this deployment controls nothing by group"
+    means, and it is what every deployment that predates the field has."""
+    assert from_env(env).access is None
+
+
+def test_a_policy_in_the_workspace_is_read(env):
+    workspace = Path(env["KINGFISHER_WORKSPACE"])
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "access.yaml").write_text(
+        "groups: [A]\ntools:\n  line_count: [A]\n", encoding="utf-8"
+    )
+    access = from_env(env).access
+    assert access is not None
+    assert access.entries["tools"] == {"line_count": ("A",)}
+
+
+def test_the_policy_file_can_be_relocated(env, tmp_path):
+    """A policy can be deployed once and shared by several workspaces, the way
+    a model catalogue can -- it holds content a person authored and reviewed."""
+    elsewhere = tmp_path / "policy.yaml"
+    elsewhere.write_text("groups: [B]\n", encoding="utf-8")
+    access = from_env({**env, "KINGFISHER_ACCESS_FILE": str(elsewhere)}).access
+    assert access is not None
+    assert access.groups == {"B": ("B",)}
+
+
+def test_a_relocated_policy_wins_over_one_in_the_workspace(env, tmp_path):
+    workspace = Path(env["KINGFISHER_WORKSPACE"])
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "access.yaml").write_text("groups: [A]\n", encoding="utf-8")
+    elsewhere = tmp_path / "policy.yaml"
+    elsewhere.write_text("groups: [B]\n", encoding="utf-8")
+    access = from_env({**env, "KINGFISHER_ACCESS_FILE": str(elsewhere)}).access
+    assert access is not None
+    assert set(access.groups) == {"B"}
+
+
+def test_a_policy_that_will_not_parse_stops_the_deployment(env):
+    """Fail closed. A policy that cannot be honoured must not come up as no
+    policy at all, which would serve every caller everything."""
+    workspace = Path(env["KINGFISHER_WORKSPACE"])
+    workspace.mkdir(parents=True, exist_ok=True)
+    (workspace / "access.yaml").write_text("groups: [A]\ntools: {x: [\n", encoding="utf-8")
+    with pytest.raises(AccessError):
+        from_env(env)
