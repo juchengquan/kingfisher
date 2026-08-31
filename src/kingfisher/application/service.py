@@ -228,12 +228,20 @@ class _Prepared:
     history: tuple[Message, ...] = ()
 
 
-def _withheld_by_kind(
+def _withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
+    # "what the workspace offers" comes from, and none is derivable from
+    # another: the grant, the config, the session, the built graph and the
+    # catalogue. The last two are who is asking. Folding any of them into a
+    # parameter object would hide which source a kind is measured against,
+    # which is the one thing a reader of this function needs to see.
     allowed: Capabilities,
     cfg: Config,
     session_dir: Path,
     graph: Any,
     catalogue: Definitions,
+    *,
+    reach: Access | None = None,
+    held: frozenset[str] | None = None,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
@@ -267,6 +275,26 @@ def _withheld_by_kind(
     """
     default = Capabilities()
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
+
+    def visible(kind: str | None, names: tuple[str, ...]) -> tuple[str, ...]:
+        """`names`, less anything this caller's groups do not reach.
+
+        Applied to what the workspace *offers*, before the comparison, and the
+        ordering is the whole of it. This function names every offered thing a
+        grant left out -- so measured against the unfiltered catalogue it would
+        hand a caller the exact list of assets their groups denied them, which
+        is precisely what filtering them out of listings and error messages
+        exists to avoid. An asset out of reach is not withheld from this
+        caller; as far as they are concerned it was never offered.
+
+        `kind` is `None` for the axes no policy controls, which are unfiltered
+        and keep reporting what they always did.
+        """
+        if reach is None or held is None or kind is None:
+            return names
+        within = set(reach.reachable(kind, held))
+        return tuple(name for name in names if name in within)
+
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported
         # apart: "3 tool(s) not granted" meant nothing when it could have been
@@ -275,19 +303,20 @@ def _withheld_by_kind(
         # `build_agent` made -- and if it ever does, a run report listing no
         # built-ins is a better outcome than a turn that will not start.
         # `test_a_real_build_is_readable` is what notices instead.
-        ("builtin tool", "builtin_tools", lambda: tuple(
+        ("builtin tool", "builtin_tools", None, lambda: tuple(
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
-        ("tool", "tools", lambda: workspace),
-        ("skill", "skills", lambda: available_skills(cfg, session_dir, catalogue=catalogue)),
+        ("tool", "tools", "tools", lambda: workspace),
+        ("skill", "skills", None, lambda: available_skills(cfg, session_dir, catalogue=catalogue)),
         (
             "subagent",
+            "subagents",
             "subagents",
             lambda: tuple(defined_subagents(cfg, session_dir, catalogue=catalogue)),
         ),
     )
     found = []
-    for what, field, names_of in offered:
+    for what, field, kind, names_of in offered:
         granted = getattr(allowed, field)
         # Silent when the request left an axis alone. `subagents` defaults to
         # none, so reporting every axis at its default would put a line about
@@ -295,7 +324,7 @@ def _withheld_by_kind(
         # exists to avoid being.
         if granted == getattr(default, field):
             continue
-        if left_out := withheld(granted, offered=names_of()):
+        if left_out := withheld(granted, offered=visible(kind, tuple(names_of()))):
             found.append((what, left_out))
     return tuple(found)
 
@@ -1290,6 +1319,15 @@ class Kingfisher:
         allowed = self._effective_grants(groups).intersect(request.capabilities).including(
             skills=brought.skills, subagents=brought.subagents
         )
+        # Named here rather than inline below, because two things want it and
+        # the expression is a mouthful. `None` for a run with no policy or an
+        # `UNSCOPED` one: both see the whole workspace, so there is nothing to
+        # filter the report against.
+        held = (
+            self.access.expand(groups)
+            if self.access is not None and isinstance(groups, tuple)
+            else None
+        )
         # Resolved here rather than in `__init__`, because the default is a
         # database inside this session and there is no session until now. The
         # async path opens its own on the event loop and hands it down, which is
@@ -1320,7 +1358,15 @@ class Kingfisher:
             # Skills and subagents are not on the graph, so they are asked of
             # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
             # an admit already measured at 15-46ms.
-            withheld=_withheld_by_kind(allowed, cfg, session.directory, graph, self.catalogue),
+            withheld=_withheld_by_kind(
+                allowed,
+                cfg,
+                session.directory,
+                graph,
+                self.catalogue,
+                reach=self.access,
+                held=held,
+            ),
             delegate_only=_delegate_only(allowed, cfg, catalogue=self.catalogue),
             indistinct=indistinct_delegates(
                 cfg,

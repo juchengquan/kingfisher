@@ -196,3 +196,85 @@ def test_a_granted_tool_is_on_the_graph(policied, monkeypatch):
     )
     offered = [getattr(t, "name", getattr(t, "__name__", "")) for t in captured["tools"] or ()]
     assert "line_count" in offered
+
+
+def reported(kf, groups):
+    """The withheld report a caller in these groups is handed for one turn.
+
+    Asked of `_withheld_by_kind` directly rather than by running a turn: what is
+    under test is which *offered* set the comparison is made against, and a live
+    turn would need a model, a checkpointer and a session to say the same thing.
+    """
+    from kingfisher.application.service import _withheld_by_kind
+    from kingfisher.domain.request import Request
+    from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+
+    session = kf.workspace / "sessions" / "w1"
+    session.mkdir(parents=True, exist_ok=True)
+    ensure_session_layout(session)
+    caller = kf.for_groups(groups)
+    graph = kf.graph_for(
+        Request(task="t", agent="surveyor"),
+        session,
+        capabilities=caller.grants,
+        checkpointer=None,
+    )
+    return _withheld_by_kind(
+        caller.grants,
+        kf.cfg,
+        session,
+        graph,
+        kf.catalogue,
+        reach=kf.access,
+        held=kf.access.expand(caller.held) if kf.access is not None else None,
+    )
+
+
+def test_a_caller_is_not_told_about_assets_their_groups_deny(policied):
+    """Decision 15, and the one place it leaks if it is going to. This report
+    names, by design, every offered thing a grant left out -- so measured
+    against the unfiltered catalogue it would hand a caller the exact list of
+    what their groups denied them."""
+    kf = Kingfisher(policied)
+    names = " ".join(n for _kind, group in reported(kf, ["B"]) for n in group)
+    assert "line_count" not in names
+
+
+def test_a_caller_is_still_told_about_what_they_narrowed_themselves(policied):
+    """The filtering must not silence the report altogether: a caller who could
+    have had a tool and did not ask for it should still hear that."""
+    kf = Kingfisher(policied)
+    names = " ".join(n for _kind, group in reported(kf, ["A"]) for n in group)
+    assert "line_count" not in names  # granted, so not withheld
+
+
+def test_the_report_still_names_a_builtin_the_request_declined(policied):
+    """An uncontrolled axis is unaffected by the filter, so the report keeps
+    doing its original job."""
+    from kingfisher.application.service import _withheld_by_kind
+    from kingfisher.domain.request import Request
+    from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+
+    kf = Kingfisher(policied)
+    session = kf.workspace / "sessions" / "w2"
+    session.mkdir(parents=True, exist_ok=True)
+    ensure_session_layout(session)
+    grants = replace(kf.for_groups(["A"]).grants, builtin_tools=("read_file",))
+    graph = kf.graph_for(
+        Request(task="t", agent="surveyor"),
+        session,
+        capabilities=grants,
+        checkpointer=None,
+    )
+    kinds = dict(
+        _withheld_by_kind(
+            grants,
+            kf.cfg,
+            session,
+            graph,
+            kf.catalogue,
+            reach=kf.access,
+            held=kf.access.expand(("A",)) if kf.access is not None else None,
+        )
+    )
+    assert "execute" in kinds.get("builtin tool", ())
