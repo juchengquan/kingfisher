@@ -388,3 +388,39 @@ def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
 
     assert [m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"]
     assert out["messages"][-1].content == "done"
+
+
+def test_a_converted_failure_still_reaches_the_run_log(cfg, session_dir, tmp_path):
+    """Catching it for the model does not hide it from whoever reads afterwards.
+
+    The design that asked for this guard left one question open -- "whether a
+    tool's exception should reach the run report as well". It does, and the two
+    mechanisms are independent: `on_tool_error` is a callback on the tool's own
+    failure, while `WorkspaceToolErrors` converts what escapes it. Nothing forced
+    that to be true, and nothing asserted it either, so a middleware ordered
+    ahead of the callback would have quietly taken the run log's only record of a
+    failing tool.
+
+    Which is the half that matters for diagnosis. `recursion_limit` failures of
+    one tool are, by design, "noisier and more diagnosable" -- and they are only
+    diagnosable if the log still says so.
+    """
+    from kingfisher.infrastructure.harness.runlog import JsonlRunLogger
+
+    log = tmp_path / "run.jsonl"
+    out = _graph_with_a_failing_tool(cfg, session_dir).invoke(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={
+            "callbacks": [
+                JsonlRunLogger(log, model="m", endpoint="e", session_id="s")
+            ]
+        },
+    )
+
+    assert [m for m in out["messages"] if isinstance(m, ToolMessage) and m.status == "error"], (
+        "the model stopped being told, which is what this guard is for"
+    )
+    assert log.exists(), "the run produced no log at all"
+    assert '"tool_error"' in log.read_text(encoding="utf-8"), (
+        "the run log lost its only record of a tool that failed"
+    )
