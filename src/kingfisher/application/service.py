@@ -70,6 +70,7 @@ from kingfisher.domain.access import (
     Access,
     AccessError,
     AccessReport,
+    Held,
     _Unscoped,
 )
 from kingfisher.domain.agent import AgentSpec
@@ -498,17 +499,6 @@ def _out_of_steps(cfg: Config) -> RunEvent:
             f"(raise KINGFISHER_RECURSION_LIMIT)"
         ),
     )
-
-
-#: What a call may say about who is making it: the groups held, or the explicit
-#: refusal to say.
-#:
-#: `None` is a third thing and means *nobody said*, which is why this is not
-#: spelled `tuple[str, ...] | None`. Once a policy exists those two must not
-#: collapse: "run without a caller" is a decision somebody made, and "nobody
-#: said" is a handler that forgot the boundary. One is honoured and the other
-#: is refused.
-Held = tuple[str, ...] | _Unscoped
 
 
 @dataclass(frozen=True)

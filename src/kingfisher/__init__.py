@@ -21,6 +21,9 @@ __version__ = "0.1.0"
 #: Public name -> the module that defines it. The single source for both
 #: `__getattr__` and `__all__`, so the two cannot drift.
 _EXPORTS = {
+    "ALL": "kingfisher.domain.capabilities",
+    "CONTROLLED": "kingfisher.domain.access",
+    "Held": "kingfisher.domain.access",
     "Access": "kingfisher.domain.access",
     "AccessError": "kingfisher.domain.access",
     "AccessReport": "kingfisher.domain.access",
@@ -102,6 +105,8 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "ALL",
+    "CONTROLLED",
     "DEFINITION_KINDS",
     "SEED_HINT",
     "SKILL_LAYOUT",
@@ -114,6 +119,7 @@ __all__ = [
     "Config",
     "ConfigError",
     "Confinement",
+    "Held",
     "Inventory",
     "Kingfisher",
     "LocalFileStore",
@@ -175,10 +181,13 @@ if TYPE_CHECKING:
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.config import WorkspacePaths as WorkspacePaths
+    from kingfisher.domain.access import CONTROLLED as CONTROLLED
     from kingfisher.domain.access import UNSCOPED as UNSCOPED
     from kingfisher.domain.access import Access as Access
     from kingfisher.domain.access import AccessError as AccessError
     from kingfisher.domain.access import AccessReport as AccessReport
+    from kingfisher.domain.access import Held as Held
+    from kingfisher.domain.capabilities import ALL as ALL
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.references import (

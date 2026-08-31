@@ -1129,3 +1129,183 @@ Two shapes:
 
 A skill the agent declines to read is not a failure. If the task did not warrant
 it, not loading it is the mechanism working.
+
+---
+
+## Access — `access.yaml`, one per deployment
+
+Which user groups may reach which agents, subagents and tools. Optional: with
+no such file, kingfisher controls nothing by group and behaves exactly as it
+did before this format existed.
+
+```yaml
+groups:
+  A: {}
+  B: {}
+  C: {}
+  admin: {contains: [A, B, C]}
+
+agents:
+  assistant:  [A, B]
+  surveyor:   ["*"]
+subagents:
+  reviewer:   [A, B, C]
+  extractor:  [A]
+tools:
+  sql_query:  [A, B]
+  http_fetch: [A, B, C]
+  line_count: [B, C]
+```
+
+`<workspace>/access.yaml` by default, and `KINGFISHER_ACCESS_FILE` points
+somewhere else — the same shape `models.yaml` has, and for the same reason:
+this is reviewed content, so several deployments sharing one copy is the point.
+
+Read once at startup. A revocation lands on restart, the way every other
+deployment setting here does. A file that is present and will not parse stops
+the deployment: a policy that cannot be honoured must never come up as no
+policy at all.
+
+### Who is calling
+
+A policy is useless without one, so once the file exists every call has to say:
+
+```python
+kf = Kingfisher(from_env())
+caller = kf.for_groups(["B", "C"])     # bind once, reuse
+caller.run(Request(task="...", agent="surveyor"))
+```
+
+`kf.run(...)` with nobody named is **refused**. That refusal is the point: the
+dangerous failure is a handler that forgot the boundary, and without it that
+handler would serve every caller everything with nothing anywhere to show for
+it. To run with no caller deliberately, say so:
+
+```python
+kf.for_groups(UNSCOPED).run(...)       # a value someone typed, and greppable
+```
+
+It takes group *names*, never a `Capabilities`. A name is resolved against the
+policy this deployment wrote, so the only thing anyone can hand in is an input —
+there is no spelling of "give me everything" except `UNSCOPED`.
+
+### What the lists mean
+
+**Any overlap grants.** `sql_query: [A, B]` is reachable by a caller in `A`, or
+in `B`, or in both. A longer list means more people, which is what everyone
+reads an access list as meaning.
+
+**`["*"]` is everyone.** Useful with the rule below, so an asset nobody needs to
+restrict does not have to name every group and be edited when a group is added.
+
+**Unlisted is nobody.** An asset the file does not name is reachable by no
+group at all. That is a whitelist, and a whitelist goes stale on its own, so
+startup names every asset no group can reach:
+
+```
+access:
+  offered, no group can reach:
+    tool pdf_export
+```
+
+The other direction is reported too, and is not fatal. A line naming an asset
+the workspace no longer offers is inert — it grants nothing — and refusing to
+start over one would mean removing a tool takes the deployment down until
+somebody edits a file they may not own:
+
+```
+access:
+  listed but not offered:
+    tool sql_query
+```
+
+A rename produces both at once, which is the case they exist to make legible
+together. Write a tool's key exactly as `kingfisher list` prints it: where two
+files define one `fetch`, the workspace offers `vendor_a/fetch.py::fetch`, and
+a policy line saying the bare name matches neither.
+
+### `contains`
+
+A group may contain others, expanded once when the file is read:
+
+```yaml
+groups:
+  admin: {contains: [A, B, C]}
+```
+
+A caller in `admin` reaches anything listing `A`, `B` or `C`, without `admin`
+appearing on a single asset. Without this, a broad group has to be typed onto
+every asset and re-typed on every asset added. A loop is refused, naming the
+whole cycle rather than one edge of it — one edge does not tell a reader which
+link to cut, and they may own none of the groups involved.
+
+The vocabulary is **closed**. A caller naming a group this file does not
+declare is refused rather than quietly reaching nothing: the two are
+indistinguishable from the outside, and one of them is a typo.
+
+### One grant, everywhere
+
+The caller's groups bound the agent, its delegates, and their delegates alike.
+A subagent has no identity of its own — its entry answers "may this caller
+reach it at all?", never "what does it run with".
+
+So a delegate whose tools are partly out of reach **runs with the rest and says
+what was withheld**:
+
+```yaml
+# reviewer is [A, B, C] and declares tools: [sql_query, http_fetch]
+# sql_query is [A, B]; http_fetch is [A, B, C]
+```
+
+A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
+Write delegate prompts to cope, the same way `docs/formats.md` already advises
+for a withheld helper — the caller decides, not the file.
+
+**An ungranted tool never reaches the graph.** It is not attached and then
+refused: `create_deep_agent` is handed only what the caller reaches, so the
+model is never told the tool exists and never spends context on its schema. An
+ungranted subagent is never compiled, so its graph is never paid for either.
+
+### Three kinds, and why not the others
+
+`agents`, `subagents` and `tools`. The rest are refused by name, each with its
+own reason, because a generic "unknown section" reads as *not supported yet*
+and sends someone looking for a workaround:
+
+- **`builtin_tools`** — deepagents registers those itself, so kingfisher can
+  only filter them afterwards, never leave them out of the graph. Gating them
+  here would buy the weakest form of the guarantee. Control them through
+  `agents` instead: an agent declaring `builtin_tools: [read_file, ls, glob,
+  grep]` can never yield `execute` to anyone, whatever they ask for.
+- **`skills`** — a skill is guidance rather than a capability, and what bounds
+  it is the tools it names.
+- **`middleware`** — already granted rather than inherited, and its names come
+  from the deployment's own registry rather than the workspace.
+
+### What a caller can see
+
+**Out of reach reads as not offered.** An asset a caller's groups do not reach
+is absent from what they are told: absent from listings, absent from the
+"this workspace offers …" in a refusal, and absent from the report of what a
+run withheld. Naming one gives the same answer naming a typo does. Nothing lets
+a caller enumerate the catalogue by guessing, and nothing sends them off to try
+something they will only be refused for.
+
+The operator's view is the whole of it:
+
+```
+$ kingfisher list                 # everything, plus who reaches it
+$ kingfisher list --as B,C        # exactly what that caller sees
+$ kingfisher list --as admin      # check `contains` before trusting it
+```
+
+`list` is exempt from the refusal above, and only `list`: it is read-only, and
+whoever runs it is on the host with the policy file already in front of them.
+Running a *turn* still has to say who is calling.
+
+### Uploads are unchanged
+
+A request may still bring its own subagent or skill. Those cannot escalate: an
+uploaded definition is text the caller wrote, and it holds only the tools their
+groups already reach — `middleware`, `endpoints` and `models` are never widened
+by an upload. What it buys someone is new instructions, never new powers.

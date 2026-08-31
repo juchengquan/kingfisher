@@ -13,7 +13,15 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from kingfisher import SEED_HINT, SKILL_LAYOUT, Inventory, offered, split_reference
+from kingfisher import (
+    ALL,
+    CONTROLLED,
+    SEED_HINT,
+    SKILL_LAYOUT,
+    Inventory,
+    offered,
+    split_reference,
+)
 
 
 def _from(source: str | None, expected: str) -> str:
@@ -98,6 +106,40 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
     yield offered(dict(found.tool_sources), found.tools)
 
     yield from _catalogue(found)
+    yield from _access(found)
+
+
+def _access(found: Inventory) -> Iterator[str]:
+    """Who reaches what, and where the policy and the workspace disagree.
+
+    A section of its own rather than a column beside each name, and that is a
+    decision rather than a layout preference. The names above are printed by
+    `domain.tool.offered`, which is *also* what builds the refusal a caller
+    reads when they name something that is not there -- deliberately, so the
+    listing and the refusal cannot drift. Threading an audience through it
+    would put group names into an error message a caller sees, which is the one
+    thing keeping out-of-reach assets invisible exists to prevent.
+
+    Printed only in the operator's view. Under `--as`, the sections above have
+    already been narrowed to what that caller reaches, and who *else* reaches a
+    thing is not their question.
+    """
+    if found.access is None or found.held is not None:
+        return
+    yield "\naccess — who reaches what"
+    for kind in CONTROLLED:
+        entries = found.access.entries.get(kind, {})
+        yield f"  {kind}"
+        if not entries:
+            yield "    (none listed, so none reachable)"
+            continue
+        width = max(len(name) for name in entries)
+        for name, audience in entries.items():
+            who = "[*]" if audience == ALL else f"[{', '.join(audience)}]"
+            yield f"    {name.ljust(width)}  {who}"
+    # The two halves of the reconciliation, which is where a whitelist going
+    # stale is said out loud rather than left for a confused caller months on.
+    yield from (f"\n{line}" if line == "access:" else line for line in found.access_report.lines())
 
 
 def _catalogue(found: Inventory) -> Iterator[str]:
@@ -223,6 +265,22 @@ def as_json(found: Inventory) -> dict[str, object]:
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
+        # The policy as who-reaches-what, or `null` where there is none. The
+        # vocabulary is not repeated: a group with no asset listed against it
+        # reaches nothing, and a reader of this document wants the mapping.
+        "access": (
+            None
+            if found.access is None
+            else {
+                kind: {name: list(audience) for name, audience in entries.items()}
+                for kind, entries in found.access.entries.items()
+            }
+        ),
+        "access_report": {
+            "listed_not_offered": [list(p) for p in found.access_report.listed_not_offered],
+            "offered_unreachable": [list(p) for p in found.access_report.offered_unreachable],
+        },
+        "held": None if found.held is None else sorted(found.held),
     }
 
 

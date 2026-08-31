@@ -725,3 +725,118 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatc
     assert "cannot load" in printed
     assert "\nskills" in printed, "the skills section went with the tools"
     assert "helper" in printed, "so did the subagents"
+
+
+# -- listing under an access policy -----------------------------------------
+
+POLICY = """
+groups: [A, B]
+tools:
+  line_count: [A]
+"""
+
+TOOL = '''
+def line_count(path: str) -> str:
+    """Count the lines in a text file."""
+    return "0"
+
+
+TOOLS = [line_count]
+'''
+
+
+@pytest.fixture
+def policied(cfg, monkeypatch):
+    """A workspace with one tool, reachable by A and not by B."""
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
+    (cfg.workspace / "access.yaml").write_text(POLICY, encoding="utf-8")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    return cfg
+
+
+def test_listing_unscoped_says_who_reaches_each_asset(policied, capsys):
+    """Decision 18: unscoped is the operator's audit view. It is exempt from
+    the refusal that covers a *turn* -- listing is read-only, and whoever runs
+    it is on the host and can read access.yaml anyway."""
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "line_count" in printed
+    assert "[A]" in printed
+
+
+def test_listing_as_a_group_shows_only_what_it_reaches(policied, capsys):
+    assert main(["list", "--as", "B"]) == 0
+
+    assert "line_count" not in capsys.readouterr().out
+
+
+def test_listing_as_the_other_group_still_shows_it(policied, capsys):
+    """So the assertion above is not passing because the tool vanished."""
+    assert main(["list", "--as", "A"]) == 0
+
+    assert "line_count" in capsys.readouterr().out
+
+
+def test_a_callers_view_does_not_carry_the_groups_column(policied, capsys):
+    """Who else can reach a thing is the operator's question, not a caller's."""
+    assert main(["list", "--as", "A"]) == 0
+
+    assert "[A]" not in capsys.readouterr().out
+
+
+def test_listing_names_an_asset_no_group_can_reach(cfg, monkeypatch, capsys):
+    """The whitelist going stale, said where somebody will see it."""
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
+    (cfg.workspace / "access.yaml").write_text("groups: [A]\n", encoding="utf-8")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "no group can reach" in printed
+    assert "line_count" in printed
+
+
+def test_naming_a_group_that_does_not_exist_is_refused(policied, capsys):
+    assert main(["list", "--as", "Q"]) != 0
+
+    assert "unknown group" in capsys.readouterr().err
+
+
+def test_as_is_ignored_where_there_is_no_policy(cfg, monkeypatch, capsys):
+    """A listing is the one place naming groups against no policy should not
+    stop you: you are looking at the workspace, and it has nothing to filter."""
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+    assert "no group can reach" not in capsys.readouterr().out
+
+
+def test_as_parses_a_comma_separated_list():
+    from kingfisher.presentation.cli.__main__ import _held
+
+    assert _held("A,B") == ("A", "B")
+    assert _held(" A , B ") == ("A", "B")
+
+
+def test_as_unscoped_is_spelled_out_rather_than_implied():
+    """An empty `--as` is far more likely to be a shell variable that did not
+    expand than a considered decision to run with no caller."""
+    from kingfisher.domain.access import UNSCOPED
+    from kingfisher.presentation.cli.__main__ import _held
+
+    assert _held("UNSCOPED") is UNSCOPED
+    assert _held("") == ()

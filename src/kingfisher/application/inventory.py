@@ -20,12 +20,13 @@ lives in infrastructure and cannot sit any higher.
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Mapping
-from dataclasses import dataclass
+from collections.abc import Callable, Iterable, Mapping
+from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.config import Config
+from kingfisher.domain.access import Access, AccessReport
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
@@ -140,6 +141,21 @@ class Inventory:
     #: empty skills list means "none" or "switched off".
     skills_enabled: bool = True
 
+    #: The reconciled policy, or `None` where this deployment has none.
+    #:
+    #: Carried rather than looked up by the printer, for the reason the sources
+    #: above are: a listing is assembled once and formatted by whoever asked,
+    #: and a renderer that had to reach for `Config` would be a second place
+    #: deciding what a workspace offers.
+    access: Access | None = None
+    #: What the policy and the catalogue disagree about. Empty when they agree.
+    access_report: AccessReport = field(default_factory=AccessReport)
+    #: Whose view this is, expanded, or `None` for the operator's view of
+    #: everything. Set, the names above have already been filtered to what this
+    #: caller reaches -- so the printer never filters and the two views cannot
+    #: come apart.
+    held: frozenset[str] | None = None
+
     @property
     def offered(self) -> dict[str, tuple[str, ...]]:
         """The four grant axes as bare names, which is what a subtraction needs.
@@ -234,13 +250,64 @@ def _bundled(
     return tools, skills, shadowed, error
 
 
-def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory:
+
+def _reconciled(
+    cfg: Config,
+    groups: Iterable[str] | None,
+    *,
+    agents: tuple[str, ...],
+    subagents: tuple[str, ...],
+    tools: tuple[str, ...],
+) -> tuple[Access | None, AccessReport, frozenset[str] | None]:
+    """The policy as it applies to what was just walked, and whose view this is.
+
+    Reconciled against the names this function found rather than against a
+    second reading of the same directories, so the report a listing prints says
+    the same thing `Kingfisher` says at construction.
+    """
+    if cfg.access is None:
+        return None, AccessReport(), None
+    access, report = cfg.access.reconciled(
+        {"agents": agents, "subagents": subagents, "tools": tools}
+    )
+    return access, report, (access.expand(groups) if groups is not None else None)
+
+
+def _reaching(
+    access: Access | None, held: frozenset[str] | None
+) -> Callable[[str, Mapping[str, str]], Mapping[str, str]]:
+    """A filter keeping only what this caller reaches, or the identity.
+
+    Applied where the record is built rather than where it is printed, so a
+    `--as` listing and the turn that caller would actually get are narrowed by
+    one rule and cannot come apart. The identity for the operator's view, which
+    is what `None` means.
+    """
+    if access is None or held is None:
+        return lambda _kind, names: names
+
+    def keep(kind: str, names: Mapping[str, str]) -> Mapping[str, str]:
+        within = set(access.reachable(kind, held))
+        return {name: value for name, value in names.items() if name in within}
+
+    return keep
+
+def inventory(
+    cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
+) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use.
 
     `catalogue` is accepted so a caller that already resolved one does not
     resolve it twice; the fallback is `cfg`, which is what the drivers pass.
     Reading `cfg` here while the agent read somewhere else is how
     `--without-skills X` came to refuse a name the run did not have.
+
+    `groups` narrows the answer to what one caller reaches, which is the same
+    rule a turn runs under rather than a second one -- the filtering happens
+    *here*, on the record, so the printed view and the runnable view cannot
+    come apart. `None` is the operator's view of everything, which is what a
+    listing is for and is why a listing is not refused the way a turn is: it
+    is read-only, and whoever runs it can read the policy file anyway.
     """
     from kingfisher.infrastructure.harness.agent import (  # noqa: PLC0415
         build_agent,
@@ -365,24 +432,29 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
         # somebody goes because something is broken.
         agents_error = str(exc)
 
+    access, report, held = _reconciled(
+        cfg, groups, agents=tuple(agents), subagents=tuple(subagents), tools=workspace_tools
+    )
+    reaching = _reaching(access, held)
+
     return Inventory(
         workspace=cfg.workspace,
         skills_source=source_of(resolved.skills),
         subagents_source=source_of(resolved.subagents),
         agents_source=source_of(resolved.agents),
-        agents=MappingProxyType(dict(agents)),
+        agents=MappingProxyType(dict(reaching("agents", agents))),
         agent_sources=agent_sources,
         agent_delegates=agent_delegates,
         agents_error=agents_error,
         builtin_tools=builtin,
-        tools=workspace_tools,
+        tools=tuple(reaching("tools", dict.fromkeys(workspace_tools, ""))),
         tool_sources=sources,
         tools_error=tools_error,
         skills={name: registry.description(name) for name in registry.names},
         skills_unloadable=tuple(registry.unloadable),
         skills_misplaced=tuple(getattr(resolved.skills, "misplaced", ())),
         skills_misfiled=tuple(registry.misfiled),
-        subagents=MappingProxyType(dict(subagents)),
+        subagents=MappingProxyType(dict(reaching("subagents", subagents))),
         subagent_sources=subagent_sources,
         subagents_error=subagents_error,
         bundled_tools=bundled_tools,
@@ -391,4 +463,7 @@ def inventory(cfg: Config, *, catalogue: Definitions | None = None) -> Inventory
         bundles_error=bundles_error,
         compiled_subagents=compiled_subagents,
         skills_enabled=cfg.skills_enabled,
+        access=access,
+        access_report=report,
+        held=held,
     )

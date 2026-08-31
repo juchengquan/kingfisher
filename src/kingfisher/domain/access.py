@@ -77,6 +77,20 @@ class _Unscoped:
 #: This has to be typed, which means it can be grepped for in a review.
 UNSCOPED: Final[_Unscoped] = _Unscoped()
 
+#: What a call may say about who is making it: the groups held, or the explicit
+#: refusal to say.
+#:
+#: `None` is a third thing and means *nobody said*, which is why this is not
+#: spelled `tuple[str, ...] | None`. Once a policy exists those two must not
+#: collapse: "run without a caller" is a decision somebody made, and "nobody
+#: said" is a handler that forgot the boundary. One is honoured, the other is
+#: refused.
+#:
+#: Here rather than beside the service that threads it, because it is a fact
+#: about access rather than about orchestration -- and because the command needs
+#: to name the type too, through the public API.
+Held = tuple[str, ...] | _Unscoped
+
 
 def _reaches(audience: Audience, held: frozenset[str]) -> bool:
     """Whether a caller holding `held` reaches an asset with this audience.
