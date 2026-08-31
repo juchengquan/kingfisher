@@ -128,6 +128,49 @@ skills and subagents, because those are the caller's own text. A middleware name
 is not -- it selects code the deployment wrote -- so it gets no such exemption.
 *(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 
+## Group access
+
+**An audience lives in the definition it is about.** An agent or subagent writes
+`groups:` for who may reach it, and may write `tools:`, `subagents:` or `skills:`
+as a mapping of name to `{groups: [...]}` for who reaches each entry. One central
+file, `groups.yaml`, holds the vocabulary and `contains` -- names only, no policy.
+An audience resolves into an ordinary `Capabilities`, so nothing downstream
+changed: an ungranted tool is never attached to the graph and an ungranted
+subagent is never compiled. *(2026-08-31.)*
+
+The rule that makes it safe to add to an existing definition: **`groups:` is the
+default audience for everything the definition holds, and the ceiling on what any
+entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning, and
+an entry naming a group the definition itself does not admit is refused as dead
+policy. A definition with no `groups:` line is reachable by everyone, and startup
+names every such definition -- default-open must not also be silent.
+
+**Reversed: a central `access.yaml` listing every asset by name.** Built in full
+-- vocabulary, per-asset audiences, reconciliation against the catalogue, two
+load reports -- then replaced within the same branch. What killed it was not
+taste. A central table can name an asset the workspace no longer offers, and that
+stale entry had to be *dropped* rather than merely reported, because the grant it
+produced reached `Offering.refuse_unknown` and turned every turn into a refusal.
+A definition *is* the asset it is about, so that failure has no shape in the
+current design: the reconciliation, both its reports and the whole class of bug
+went with it. What survived unchanged: `for_groups`, `UNSCOPED`, the refusal of a
+call that names no caller, the per-turn re-check of a session's pinned agent, and
+the closed vocabulary. *(2026-08-31, reversed the same day.)*
+
+**`builtin_tools` takes no audience, and that is not an omission.** deepagents
+registers its own tools, so kingfisher can filter them but never leave them out
+of a graph -- `harness/narrowing.py` records a live run where a model called
+`execute` from memory. Gating them here would promise a boundary it cannot keep.
+What gates them is which *agents* a group may open, since an agent declaring a
+read-only builtin set cannot yield the shell to anyone.
+
+**Out of reach reads as not offered.** An asset a caller's groups do not reach is
+absent from listings, from the "this workspace offers ..." in a refusal, and from
+the report of what a run withheld -- so nothing lets a caller enumerate the
+catalogue by guessing. The withheld report hides only what group narrowing
+removed, never what the agent simply never declared: the second is a fact about
+the agent and has always been reported.
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

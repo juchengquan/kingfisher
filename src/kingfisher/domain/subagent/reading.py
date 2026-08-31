@@ -397,7 +397,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     }
     groups = read.groups(document.get("groups"))
     refuse_dead(audiences, groups=groups, source=source.name, error=SubagentError)
->>>>>>> 2d7cfa9 (Put an audience beside the thing it is about)
 
     return SubagentSpec(
         name=fields.text(document["name"]),
