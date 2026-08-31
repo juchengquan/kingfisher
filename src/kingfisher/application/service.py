@@ -544,6 +544,20 @@ class Caller:
     def astream(self, request: str | Request) -> AsyncIterator[RunEvent]:
         return self._kf.astream(request, groups=self.held)
 
+    def agent_named(self, name: str | None) -> AgentSpec | None:
+        return self._kf.agent_named(name, groups=self.held)
+
+    def open_session_for(self, request: Request) -> Session:
+        """Name a session and make its directory. Deliberately takes no groups.
+
+        Opening a session resolves no agent, so there is nothing here for a
+        policy to check. A resuming turn legitimately names no agent and runs
+        the one the session remembers, so the name is not read until
+        `_agent_for` -- which every turn goes through, first or not, and which
+        is where the check lives.
+        """
+        return self._kf.open_session_for(request)
+
 
 class Kingfisher:
     """A configured kingfisher. Construct once; call `run` or `stream` per request.
@@ -992,6 +1006,8 @@ class Kingfisher:
         session_dir: Path,
         capabilities: Capabilities | None = None,
         checkpointer: Any = _UNSET,
+        *,
+        groups: Held | None = None,
     ) -> Any:
         """The graph that serves one request, rooted at its session.
 
@@ -1010,7 +1026,7 @@ class Kingfisher:
 
         return build_agent(
             self.cfg,
-            agent=self._agent_for(request, session_dir.name),
+            agent=self._agent_for(request, session_dir.name, groups=groups),
             # Called here rather than passed down. This is where a turn first
             # has a session directory, and `build_agent` is where one is already
             # known -- so the harness keeps taking a runner, and only the
@@ -1040,7 +1056,9 @@ class Kingfisher:
         if (text := documents.get(name)) is not None:
             remember_agent(self.cfg.state_dir, session_id, text)
 
-    def _agent_for(self, request: Request, session_id: str) -> AgentSpec | None:
+    def _agent_for(
+        self, request: Request, session_id: str, *, groups: Held | None = None
+    ) -> AgentSpec | None:
         """The agent this turn runs, which is the one its session opened with.
 
         A session is fixed to an agent for its whole life. Swapping mid-session
@@ -1055,7 +1073,7 @@ class Kingfisher:
         """
         kept = agent_started_with(self.cfg.state_dir, session_id)
         if kept is None:
-            spec = self.agent_named(request.agent)
+            spec = self.agent_named(request.agent, groups=groups)
             self.remember_agent(session_id, request.agent)
             return spec
 
@@ -1069,7 +1087,9 @@ class Kingfisher:
             raise CapabilityError(msg)
         return started
 
-    def agent_named(self, name: str | None) -> AgentSpec | None:
+    def agent_named(
+        self, name: str | None, *, groups: Held | None = None
+    ) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue.
 
         Naming one is required, and `None` is refused rather than defaulted.
@@ -1087,6 +1107,26 @@ class Kingfisher:
         question from what a *request* may leave out.
         """
         offered = self.catalogue.agents.specs
+        # Filtered before the listing is built, not after, so the message a
+        # caller reads never names an agent they cannot open. An agent out of
+        # reach is spelled exactly the way an agent that was never written is:
+        # anything else lets a caller enumerate the catalogue by guessing, and
+        # sends them off to try something they will only be refused for.
+        #
+        # An agent is not a `Capabilities` axis, which is why this is here and
+        # not in the grant: a request names one before there is anything to
+        # narrow, so the check has to be at the moment the name is resolved.
+        if (reach := self.access) is not None:
+            if groups is None:
+                msg = (
+                    "this deployment has an access policy, so a call must say who "
+                    "is calling: for_groups([...]) with the caller's groups, or "
+                    "for_groups(UNSCOPED) to run without one"
+                )
+                raise AccessError(msg)
+            if isinstance(groups, tuple):
+                within = set(reach.reachable("agents", reach.expand(groups)))
+                offered = {n: spec for n, spec in offered.items() if n in within}
         listing = ", ".join(sorted(offered)) if offered else "none"
         if name is None:
             msg = (
@@ -1326,7 +1366,11 @@ class Kingfisher:
         if checkpointer is _UNSET:
             checkpointer, release = self._checkpointer_for(session.directory)
         graph = self.graph_for(
-            request, session.directory, capabilities=allowed, checkpointer=checkpointer
+            request,
+            session.directory,
+            capabilities=allowed,
+            checkpointer=checkpointer,
+            groups=groups,
         )
 
         # The last thing that can refuse, and the reason this half exists. The

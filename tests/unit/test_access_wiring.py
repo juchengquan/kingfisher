@@ -170,6 +170,7 @@ def test_an_ungranted_tool_is_not_on_the_graph_at_all(policied, monkeypatch):
         session,
         capabilities=kf.for_groups(["B"]).grants,
         checkpointer=None,
+        groups=("B",),
     )
     offered = [getattr(t, "name", getattr(t, "__name__", "")) for t in captured["tools"] or ()]
     assert "line_count" not in offered
@@ -193,6 +194,7 @@ def test_a_granted_tool_is_on_the_graph(policied, monkeypatch):
         session,
         capabilities=kf.for_groups(["A"]).grants,
         checkpointer=None,
+        groups=("A",),
     )
     offered = [getattr(t, "name", getattr(t, "__name__", "")) for t in captured["tools"] or ()]
     assert "line_count" in offered
@@ -218,6 +220,7 @@ def reported(kf, groups):
         session,
         capabilities=caller.grants,
         checkpointer=None,
+        groups=caller.held,
     )
     return _withheld_by_kind(
         caller.grants,
@@ -265,6 +268,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         session,
         capabilities=grants,
         checkpointer=None,
+        groups=("A",),
     )
     kinds = dict(
         _withheld_by_kind(
