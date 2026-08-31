@@ -90,6 +90,7 @@ from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.agent import (
+    MiddlewareFactory,
     available_skills,
     build_agent,
     defined_subagents,
@@ -505,7 +506,7 @@ class Kingfisher:
         runner: Callable[[Path], CommandRunner] | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
-        middleware: Mapping[str, Callable[[], Any]] | None = None,
+        middleware: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
     ) -> None:
         self.cfg = cfg or config_module.from_env()
@@ -601,7 +602,7 @@ class Kingfisher:
         # kingfisher cannot define these, only a deployment knows what its
         # middleware is. Registering is not the same as permitting: `grants`
         # still clamps which registered names a request may reach.
-        self.middleware: Mapping[str, Any] = middleware or {}
+        self.middleware: Mapping[str, MiddlewareFactory] = middleware or {}
         self._graph = graph
 
     def _session_id_for(self, request: Request, root: Path) -> str:

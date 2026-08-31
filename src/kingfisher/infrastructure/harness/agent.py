@@ -24,6 +24,7 @@ from __future__ import annotations
 import logging
 import sys
 import warnings
+from collections.abc import Callable
 from contextlib import suppress
 from dataclasses import dataclass, field
 from functools import cache
@@ -83,7 +84,7 @@ from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
 from kingfisher.infrastructure.prompting import system_prompt
 
 if TYPE_CHECKING:
-    from collections.abc import Callable, Mapping, Sequence
+    from collections.abc import Mapping, Sequence
 
     from langgraph.graph.state import CompiledStateGraph
 
@@ -238,9 +239,30 @@ def indistinct_delegates(
     return tuple(found)
 
 
+#: One entry of a deployment's middleware registry.
+#:
+#: `Callable` is imported at run time for this line, rather than under
+#: `TYPE_CHECKING` with `Mapping` and `Sequence`: this is a module-level
+#: assignment rather than an annotation, and `from __future__ import
+#: annotations` makes annotations strings while doing nothing for a value.
+#:
+#: Two shapes, and the ellipsis is the honest way to say so. An entry may be a
+#: zero-argument factory, which is what a registry has held since before
+#: settings existed; or a class, which `_instantiate` calls with its own
+#: `defaults` plus whatever the definition was allowed to write.
+#:
+#: It was `Callable[[], Any]`, which stopped being true the moment a class
+#: could be registered -- and stopped being *checkable* in the same moment: a
+#: deployment pasting the wiring block `call_cap.py` documents got a type error
+#: on its own registry while the code it described ran correctly. A signature
+#: narrower than the contract is worse than a loose one, because the reader who
+#: believes it is the one following the docs.
+MiddlewareFactory = Callable[..., Any]
+
+
 def declared_middleware(
     spec: Any,
-    registry: Mapping[str, Callable[[], Any]],
+    registry: Mapping[str, MiddlewareFactory],
     allowed: Selection,
     *,
     kind: str,
@@ -1117,7 +1139,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     *,
     capabilities: Capabilities | None = None,
     session_dir: Path | None = None,
-    middleware_registry: Mapping[str, Callable[[], Any]] | None = None,
+    middleware_registry: Mapping[str, MiddlewareFactory] | None = None,
     model: Any | None = None,
     backend: Any | None = None,
     runner: CommandRunner | None = None,
