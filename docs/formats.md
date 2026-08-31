@@ -1159,10 +1159,13 @@ name: assistant
 description: Answers questions about the data in this workspace.
 groups: [A, B]                 # who may open a session on this agent
 tools:
-  sql_query: [A]               # this agent's sql_query is for A only
-  http_fetch: [A, B]
+  sql_query:
+    groups: [A]                # this agent's sql_query is for A only
+  http_fetch:
+    groups: [A, B]
 subagents:
-  reviewer: [A]
+  reviewer:
+    groups: [A]
 skills: [code-review]          # a plain list means "these, at my audience"
 system_prompt: |
   ...
@@ -1216,9 +1219,18 @@ tools: [sql_query]         # a list — that tool, for A and B
 ```yaml
 groups: [A, B]
 tools:                     # a mapping — per entry
-  sql_query: [A]           #   for A only
-  http_fetch: ["*"]        #   for anyone who reaches this definition
+  sql_query:
+    groups: [A]            #   for A only
+  http_fetch:
+    groups: ["*"]          #   for anyone who reaches this definition
 ```
+
+An entry is a mapping with a `groups:` line, not a bare list. The same word the
+definition's own line uses, meaning the same thing one level down — so an entry
+says which fact it is stating, has somewhere to put a second one later, and can
+have a mistyped key refused. `sql_query: [A]` is refused by name, showing the
+form to write: two spellings of one thing is what this format keeps deleting,
+and the long one is worth having only while it is the only one.
 ```yaml
 groups: [A, B]
 tools: []                  # none, as it always meant
@@ -1244,12 +1256,16 @@ everyone reads an access list as meaning. `["*"]` is everyone.
 ```yaml
 groups: [A, B]
 tools:
-  sql_query: [A]
+  sql_query:
+    groups: [A]
 subagents:
-  reviewer: [A]
+  reviewer:
+    groups: [A]
 skills:
-  audit: [A]              # only A is told this procedure exists
-  review: [A, B]
+  audit:
+    groups: [A]           # only A is told this procedure exists
+  review:
+    groups: [A, B]
 ```
 
 A skill reaches the model by a different road from a tool — it is advertised
@@ -1315,8 +1331,10 @@ reports what was withheld**:
 name: reviewer
 groups: [A, B, C]
 tools:
-  sql_query: [A, B]
-  http_fetch: [A, B, C]
+  sql_query:
+    groups: [A, B]
+  http_fetch:
+    groups: [A, B, C]
 ```
 
 A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
@@ -1338,7 +1356,7 @@ SUBAGENTS = [
         "name": "profiler",
         "description": "...",
         "groups": ["A", "B"],
-        "tools": {"sql_query": ["A"]},
+        "tools": {"sql_query": {"groups": ["A"]}},
         "build": _build,
     }
 ]

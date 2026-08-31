@@ -309,9 +309,9 @@ def test_an_agent_that_says_nothing_is_reachable_by_everyone():
 @pytest.mark.parametrize(
     ("field_name", "written"),
     [
-        ("tools", "tools:\n  sql_query: [A]\n  http_fetch: [A, B]\n"),
-        ("skills", "skills:\n  audit: [A]\n  review: [A, B]\n"),
-        ("subagents", "subagents:\n  checker: [A]\n  reviewer: [A, B]\n"),
+        ("tools", "tools:\n  sql_query:\n    groups: [A]\n  http_fetch:\n    groups: [A, B]\n"),
+        ("skills", "skills:\n  audit:\n    groups: [A]\n  review:\n    groups: [A, B]\n"),
+        ("subagents", "subagents:\n  checker:\n    groups: [A]\n  reviewer:\n    groups: [A, B]\n"),
     ],
 )
 def test_every_audienced_field_takes_a_mapping(field_name, written):
@@ -326,9 +326,17 @@ def test_every_audienced_field_takes_a_mapping(field_name, written):
 @pytest.mark.parametrize(
     ("field_name", "written", "kept"),
     [
-        ("tools", "tools:\n  sql_query: [A]\n  http_fetch: [A, B]\n", "http_fetch"),
-        ("skills", "skills:\n  audit: [A]\n  review: [A, B]\n", "review"),
-        ("subagents", "subagents:\n  checker: [A]\n  reviewer: [A, B]\n", "reviewer"),
+        (
+            "tools",
+            "tools:\n  sql_query:\n    groups: [A]\n  http_fetch:\n    groups: [A, B]\n",
+            "http_fetch",
+        ),
+        ("skills", "skills:\n  audit:\n    groups: [A]\n  review:\n    groups: [A, B]\n", "review"),
+        (
+            "subagents",
+            "subagents:\n  checker:\n    groups: [A]\n  reviewer:\n    groups: [A, B]\n",
+            "reviewer",
+        ),
     ],
 )
 def test_every_audienced_field_narrows_for_a_caller(field_name, written, kept):
@@ -349,7 +357,9 @@ def test_an_entry_with_no_audience_inherits_the_definitions():
 def test_declaring_with_no_caller_is_what_it_always_was():
     """A deployment with no vocabulary, or an UNSCOPED call. This is the path
     every existing deployment takes, so it must not narrow at all."""
-    spec = _read(MINIMAL.rstrip() + "\ngroups: [A]\ntools: {sql_query: [A]}\n", "plain.yaml")
+    spec = _read(
+        MINIMAL.rstrip() + "\ngroups: [A]\ntools:\n  sql_query:\n    groups: [A]\n", "plain.yaml"
+    )
 
     assert spec.declares(None).tools == ("sql_query",)
 
@@ -364,7 +374,7 @@ def test_builtin_tools_takes_no_audience():
     single built-in named "{'execute': ['A']}".
     """
     with pytest.raises(AgentError, match="this field takes a list"):
-        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute: [A]\n", "plain.yaml")
+        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    groups: [A]\n", "plain.yaml")
 
 
 def test_only_the_audienced_fields_take_a_mapping():
@@ -373,7 +383,7 @@ def test_only_the_audienced_fields_take_a_mapping():
     from kingfisher.domain.access import AUDIENCED
 
     with pytest.raises(AgentError) as raised:
-        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute: [A]\n", "plain.yaml")
+        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    groups: [A]\n", "plain.yaml")
 
     for field_name in AUDIENCED:
         assert field_name in str(raised.value)
@@ -382,4 +392,7 @@ def test_only_the_audienced_fields_take_a_mapping():
 def test_an_entry_audience_outside_the_definitions_own_is_refused():
     """Dead policy: nobody reaching this agent is ever in C."""
     with pytest.raises(AgentError, match="never reaches anyone"):
-        _read(MINIMAL.rstrip() + "\ngroups: [A, B]\ntools: {sql_query: [C]}\n", "plain.yaml")
+        _read(
+            MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [C]\n",
+            "plain.yaml",
+        )

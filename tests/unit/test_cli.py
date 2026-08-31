@@ -742,7 +742,8 @@ NARROW = """name: narrow
 description: An agent.
 groups: [A, B]
 tools:
-  line_count: [A]
+  line_count:
+    groups: [A]
 system_prompt: |
   You do the task.
 """
@@ -751,7 +752,8 @@ WIDE = """name: wide
 description: An agent.
 groups: [A, B]
 tools:
-  line_count: [A, B]
+  line_count:
+    groups: [A, B]
 system_prompt: |
   You do the task.
 """
