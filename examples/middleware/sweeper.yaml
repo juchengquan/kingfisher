@@ -12,12 +12,15 @@ description: Reads many files and returns only what was asked for. Use to keep b
 # exists to open a lot of files, so a cap sized for an agent that mostly thinks
 # would refuse it in the middle of its job.
 #
-# Two names over one class, which is `call_cap.py`'s own lesson: the alternative
-# is one entry and `{limit: 100}` written here, and then a delegate that wants
-# more writes a bigger number and is within its rights, because the format let
-# it. Naming the variants keeps the decision where the code is. It also narrows
-# like every other capability -- a request may withhold `call-cap-generous` and
-# leave `call-cap-strict` in reach, which a number in a mapping could not say.
+# Two names over two classes, which is `call_cap.py`'s own lesson. The format
+# does now let an entry carry `settings:`, so the alternative is real -- one
+# registered name and `{limit: 100}` written here. It is still the wrong one,
+# and `CallCap.yaml_settable` is what settles it rather than good manners: the
+# class lists no settable key, so a delegate wanting more cannot write a bigger
+# number however the format is spelled. Naming the variants keeps the decision
+# where the code is. It also narrows like every other capability -- a request
+# may withhold `call-cap-generous` and leave `call-cap-strict` in reach, which
+# a number in a mapping could not say.
 #
 # Withholding it does not raise. It is a *name* here rather than a star, so a
 # request that subtracts it refuses this delegate rather than quietly building

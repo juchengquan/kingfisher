@@ -361,6 +361,11 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     written_tools = read.selection(
         document.get("tools"), absent=ALL, key="tools"
     )
+    # Same two-in-one read as the agent format, and the same field: a
+    # definition writing settings has to mean the same thing in either file.
+    written_middleware, middleware_settings = read.selection_with_settings(
+        document.get("middleware"), absent=None, key="middleware"
+    )
 
     return SubagentSpec(
         name=fields.text(document["name"]),
@@ -377,9 +382,8 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
         skills=read.selection(document.get("skills"), absent=None, key="skills"),
-        middleware=read.selection(
-            document.get("middleware"), absent=None, key="middleware"
-        ),
+        middleware=written_middleware,
+        middleware_settings=middleware_settings,
         subagents=read.selection(
             document.get("subagents"),
             absent=None,

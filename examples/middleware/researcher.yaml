@@ -12,22 +12,33 @@
 # `call_cap.py` is the next file over. Copy it into your workspace's `agents/`
 # once you have registered the names below, which is the whole of the setup:
 #
-#     from examples.middleware.call_cap import CallCap
+#     from examples.middleware.call_cap import CallCap, CallCapGenerous
 #
 #     kingfisher = Kingfisher(
 #         cfg,
 #         middleware={
-#             "call-cap-strict":   lambda: CallCap(20),
-#             "call-cap-generous": lambda: CallCap(100),
+#             "call-cap-strict":   CallCap,
+#             "call-cap-generous": CallCapGenerous,
 #         },
 #     )
 name: researcher
 description: Answers questions from a workspace's files under a ceiling on how much it may do to get there.
 # The line this example exists for. `middleware` names entries from a registry
 # the *deployment* supplies -- not files, not anything a workspace holds -- and
-# naming is all a definition may do. The name selects code; it cannot configure
-# it, which is why the ceiling is `call-cap-strict` rather than a number written
-# here. A cap a definition can set is not a cap.
+# the name selects code. Which is why the ceiling is `call-cap-strict` rather
+# than a number written here: a cap a definition can set is not a cap.
+#
+# An entry may also be written long, when the class behind the name says it
+# takes something:
+#
+#     middleware:
+#       - name: audit-hook
+#         settings: {level: DEBUG}
+#
+# Not available here, and deliberately. What a definition may write is whatever
+# the class listed in `yaml_settable`, and `CallCap` lists nothing -- so there
+# is no spelling of this file that raises its own ceiling. The looser one is a
+# second registered class, `call-cap-generous`, which `sweeper.yaml` names.
 #
 # Omission grants none, like `skills` and `subagents` and unlike the two tool
 # axes. An agent that says nothing here runs with no middleware of its own.

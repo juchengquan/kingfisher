@@ -43,6 +43,7 @@ from kingfisher.domain.capabilities import (
     CapabilityError,
     Selection,
     approved_middleware,
+    approved_settings,
     narrowed,
     refuse_ungranted_models,
     refuse_unoffered,
@@ -276,12 +277,89 @@ def declared_middleware(
         granted=allowed,
         subject=subject,
     )
+    # Absent on a spec built in code rather than parsed, and on every spec that
+    # predates the field. `{}` is the same answer either way: nothing was
+    # written, so every name is built on what the deployment registered.
+    wrote = getattr(spec, "middleware_settings", None) or {}
     built = []
     for name in approved:
-        instance = registry[name]()
+        instance = _instantiate(
+            registry[name],
+            wrote.get(name) or {},
+            registered_as=name,
+            subject=subject,
+        )
         _warn_if_it_replaces_deepagents(instance, registered_as=name, subject=subject)
         built.append(instance)
     return built
+
+
+def _instantiate(
+    entry: Any, wrote: Mapping[str, object], *, registered_as: str, subject: str
+) -> Any:
+    """One registry entry, built into the middleware it stands for.
+
+    Two shapes, because a registry has held one of them since before settings
+    existed and breaking every deployment that wrote one would be a poor trade
+    for a field most definitions will never use.
+
+    A **class** is the shape that can be configured. `defaults` is what the
+    deployment supplies, the settings a definition wrote are laid over the top,
+    and `yaml_settable` on the class decides which of those it was allowed to
+    write. Deployment first and definition second is the whole precedence rule:
+    the registry holds the value that applies when nobody says otherwise, and a
+    definition overrides it only where the class said it may.
+
+    Anything else is a **zero-argument factory**, which is what a registry
+    entry used to be and still may be. It takes no settings and cannot be
+    given any -- there is no seam to pass them through, since whatever values
+    it uses were closed over when the deployment wrote the lambda.
+
+    Which is why a definition writing settings for one is refused rather than
+    built without them. A factory that quietly ignored a `settings:` block
+    would be the exact failure `approved_settings` exists to prevent, one layer
+    down and harder to see: the file says a value and the object does not have
+    it.
+    """
+    if not isinstance(entry, type):
+        if wrote:
+            msg = (
+                f"{subject} writes settings for middleware {registered_as!r}, which "
+                f"this deployment registered as a factory taking no arguments. Only "
+                f"a registered *class* takes settings -- it declares what it accepts "
+                f"in `yaml_settable` and what it falls back to in `defaults`; a "
+                f"factory has already chosen its values and there is nowhere to put "
+                f"these"
+            )
+            raise CapabilityError(msg)
+        return entry()
+
+    approved = approved_settings(
+        wrote,
+        settable=getattr(entry, "yaml_settable", ()) or (),
+        subject=subject,
+        registered_as=registered_as,
+    )
+    # `defaults` is the deployment's half and is copied rather than passed, so a
+    # class attribute cannot be mutated by the merge and carry one definition's
+    # setting into the next agent built from the same registry.
+    arguments = {**dict(getattr(entry, "defaults", None) or {}), **approved}
+    try:
+        return entry(**arguments)
+    except TypeError as exc:
+        # The registry's mistake rather than the definition's, so it says which
+        # entry and what it was given. Reached when `defaults` does not cover
+        # the arguments the class actually requires -- which no definition can
+        # cause and no definition can fix.
+        given = ", ".join(sorted(arguments)) or "no arguments"
+        msg = (
+            f"{subject} could not build middleware {registered_as!r}: "
+            f"{entry.__name__} was called with {given} and refused -- {exc}. A "
+            f"registered class is called with its own `defaults` plus whatever the "
+            f"definition was allowed to write, so every argument it requires "
+            f"belongs in `defaults`"
+        )
+        raise CapabilityError(msg) from exc
 
 
 #: The two deepagents will not run without, by the `.name` each answers to.

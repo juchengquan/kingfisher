@@ -182,6 +182,18 @@ class AgentSpec:
     skills: Selection = None
     subagents: Selection = None
     middleware: Selection = None
+    #: What each `middleware:` entry wrote under `settings:`, for the entries
+    #: that wrote one. Keyed by name, beside the names rather than folded into
+    #: them, which is `tool_sources` beside `tools` and for the same reason:
+    #: granting and narrowing are operations on names, and neither has anything
+    #: to say about a value passed to one.
+    #:
+    #: Read against the class the deployment registered, by `approved_settings`
+    #: at build time. Nothing here is checked when the file is parsed, because
+    #: which keys a name accepts is declared by code this layer cannot see.
+    middleware_settings: Mapping[str, Mapping[str, object]] = field(
+        default_factory=dict
+    )
     #: What this agent asked to run, in the order it would prefer. Empty means
     #: it named nothing, so it runs the deployment's `default:`.
     wanted: str | None = None
@@ -249,6 +261,12 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     # only `what` may reach the rest of kingfisher; where it claims to live
     # travels beside it, for whoever checks the claim.
     written_tools = read.selection(document.get("tools"), absent=ALL, key="tools")
+    # Read together, because they are one field. The names stay a `Selection`
+    # and the settings ride beside them; `Reader.selection_with_settings` has
+    # why the two halves are kept apart.
+    written_middleware, middleware_settings = read.selection_with_settings(
+        document.get("middleware"), absent=None, key="middleware"
+    )
 
     return AgentSpec(
         name=fields.text(document["name"]),
@@ -265,7 +283,8 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         # loop; an agent is not one of them, so this is the ordinary "give it
         # the run of the place".
         subagents=read.selection(document.get("subagents"), absent=None, key="subagents"),
-        middleware=read.selection(document.get("middleware"), absent=None, key="middleware"),
+        middleware=written_middleware,
+        middleware_settings=middleware_settings,
         wanted=wanted_model(document, read),
         # Absent is `None` rather than `False`, which `flag` alone cannot say:
         # a switch has three states here, and "no opinion" is not "no".

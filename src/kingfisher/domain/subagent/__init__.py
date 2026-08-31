@@ -96,6 +96,17 @@ class SubagentSpec:
     #: deployment supplies. A name here selects *code*, which is why it is the
     #: one field never widened for an uploaded definition.
     middleware: Selection = None
+    #: What each `middleware:` entry wrote under `settings:`, for the entries
+    #: that wrote one. Keyed by name and kept beside them, the way
+    #: `tool_sources` sits beside `tools`: a name is what gets granted and
+    #: narrowed, and a value passed to the code behind it is neither.
+    #:
+    #: `derived`, so it is not in `KNOWN`. It is read out of `middleware`, and
+    #: a `middleware_settings:` key in a definition is refused like any other
+    #: name this format does not define.
+    middleware_settings: Mapping[str, Mapping[str, object]] = field(
+        default_factory=dict, metadata={"derived": True}
+    )
     #: Delegates this one may consult, by name, from the same catalogue. Absent
     #: means none -- like `skills`, and for the same reason: a delegate that
     #: needed the whole catalogue would not have been worth defining.

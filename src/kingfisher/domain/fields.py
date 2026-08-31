@@ -21,6 +21,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
+from types import MappingProxyType
 from typing import TYPE_CHECKING
 
 from kingfisher.domain.capabilities import ALL, Selection
@@ -32,6 +33,12 @@ if TYPE_CHECKING:
 #: ever used to *word* a refusal, never to decide one: a guess that changed
 #: behaviour would be the silent-drop bug wearing a spellchecker.
 SIMILARITY = 0.7
+
+#: What one entry of a `selection_with_settings` list may write when it is
+#: written long. Two keys, and deliberately no third: an entry says which thing
+#: and what to pass it, and anything else it wanted to say belongs to the field
+#: as a whole rather than to one name in it.
+ENTRY_FIELDS = ("name", "settings")
 
 
 def unrecognised(
@@ -213,6 +220,123 @@ class Reader:
             )
             raise self.error(msg)
         return ALL
+
+    def selection_with_settings(
+        self,
+        value: object,
+        *,
+        absent: Selection,
+        key: str,
+    ) -> tuple[Selection, Mapping[str, Mapping[str, object]]]:
+        """One name-list field whose entries may also carry settings.
+
+        `selection` above reads the same field. What this adds is a second way
+        to write one entry of it:
+
+            middleware:
+              - call-cap-strict          # a name, as it always was
+              - name: audit-hook         # the same name, with values beside it
+                settings: {level: INFO}
+
+        Both spellings in one list, because they say the same kind of thing: an
+        entry is a name, and the mapping is that name with values attached. A
+        format where the whole list changed shape as soon as one entry wanted a
+        setting would make the common case pay for the rare one, and every
+        definition that never writes a setting keeps the list it already has.
+
+        Returns the two halves apart, which is the point. The names are a
+        `Selection` like every other field -- granting, narrowing and refusing
+        are all operations on names and none of them has heard of a setting --
+        and the settings are a sibling mapping keyed by name. That is
+        `tool_sources` beside `tools` and for the same reason: they are asked
+        for one name at a time, by whoever is building that one thing.
+
+        What a setting *means* is not decided here and cannot be. The keys a
+        name will accept are declared by the class the deployment registered
+        under it, and this layer has never seen a registry -- so this reads the
+        shape and `approved_settings` refuses the contents, the same split
+        `approved_middleware` already makes between a name and the code behind
+        it.
+
+        `"*"` is refused in the mapping form. It resolves to whatever the
+        deployment registered, so settings written beside it would be settings
+        for classes this file has never heard of; there is no reading of that
+        which is not a guess. The plain `["*"]` is untouched and still means
+        everything.
+        """
+        if not isinstance(value, (list, tuple)):
+            # A bare `"*"`, one unbracketed name, or nothing at all. None of
+            # the three can carry a setting, and `selection` already has the
+            # answer or the refusal for each.
+            return self.selection(value, absent=absent, key=key), MappingProxyType({})
+
+        written: list[str] = []
+        settings: dict[str, Mapping[str, object]] = {}
+        for position, entry in enumerate(value, start=1):
+            name = self._entry_name(entry, position=position, key=key)
+            if name in written:
+                msg = (
+                    f"{self.source}: {key} names {name!r} twice. One name is one "
+                    f"thing to build, so a second entry for it is either settings "
+                    f"that cannot both apply or a line that says nothing"
+                )
+                raise self.error(msg)
+            written.append(name)
+            if isinstance(entry, Mapping):
+                # Absent and empty both land as `{}`, which is the same answer:
+                # this entry wrote the long form and asked for nothing by it.
+                settings[name] = self.mapping(
+                    entry.get("settings"), key=f"{key} entry {position} 'settings'"
+                )
+
+        # Back through `selection`, so `["*"]`, the mixing refusal and the
+        # meaning of an absent field are all decided in exactly one place.
+        return self.selection(written, absent=absent, key=key), MappingProxyType(settings)
+
+    def _entry_name(self, entry: object, *, position: int, key: str) -> str:
+        """The name one entry carries, whichever way that entry was written.
+
+        Positional in the message rather than named, because a name is the
+        thing that might be missing -- "entry 2" is findable in a file where
+        "the entry called nothing" is not.
+        """
+        if isinstance(entry, str):
+            return entry.strip()
+        if not isinstance(entry, Mapping):
+            msg = (
+                f"{self.source}: {key} entry {position} is neither a name nor a "
+                f"mapping (got {type(entry).__name__}); an entry is a name, or a "
+                f"mapping of 'name' and 'settings'"
+            )
+            raise self.error(msg)
+
+        if (complaint := unrecognised(entry, known=ENTRY_FIELDS, noun="key")) is not None:
+            msg = f"{self.source}: {key} entry {position} has {complaint}"
+            raise self.error(msg)
+        if "name" not in entry:
+            msg = (
+                f"{self.source}: {key} entry {position} is a mapping with no "
+                f"'name'. Written long, an entry is {{name: <a registered name>, "
+                f"settings: {{...}}}} -- the settings are for the name, so there "
+                f"is nothing to attach them to without one"
+            )
+            raise self.error(msg)
+
+        name = text(entry["name"])
+        if not name:
+            msg = f"{self.source}: {key} entry {position} has an empty 'name'"
+            raise self.error(msg)
+        if name == ALL:
+            msg = (
+                f"{self.source}: {key} entry {position} writes name {ALL!r}, which "
+                f"the mapping form does not take. {ALL!r} is whatever this "
+                f"deployment registered, so a setting written beside it is a "
+                f"setting for classes this file has never seen. Write "
+                f"{key}: [{ALL!r}] on its own for all of them, or name the one "
+                f"you meant to configure"
+            )
+            raise self.error(msg)
+        return name
 
     def flag(self, value: object, *, key: str) -> bool:
         """A yes/no field, refusing the spellings YAML would quietly accept.

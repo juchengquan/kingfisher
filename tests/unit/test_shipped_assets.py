@@ -451,8 +451,12 @@ def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
 
 def _call_cap(shipped):
     """`CallCap`, loaded the way a deployment would import it."""
-    module = load(shipped / "middleware" / "call_cap.py", declares="CallCap")
-    return module.CallCap
+    return _call_cap_module(shipped).CallCap
+
+
+def _call_cap_module(shipped):
+    """The whole example module, for the tests that want more than one name."""
+    return load(shipped / "middleware" / "call_cap.py", declares="CallCap")
 
 
 def test_the_middleware_example_is_not_a_definition_kind(shipped):
@@ -640,10 +644,10 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
     none of its parent's middleware, so `researcher` running out of calls says
     nothing about how many `sweeper` has left.
     """
-    cap = _call_cap(shipped)
+    module = _call_cap_module(shipped)
     registry = {
-        "call-cap-strict": lambda: cap(20),
-        "call-cap-generous": lambda: cap(100),
+        "call-cap-strict": module.CallCap,
+        "call-cap-generous": module.CallCapGenerous,
     }
     agent, delegate = _example_definitions(shipped)
 
@@ -651,5 +655,29 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
     delegated = declared_middleware(delegate, registry, ALL, kind="subagent")
 
     assert [type(m).__name__ for m in built] == ["CallCap"]
-    assert [type(m).__name__ for m in delegated] == ["CallCap"]
+    assert [type(m).__name__ for m in delegated] == ["CallCapGenerous"]
     assert built[0] is not delegated[0], "one instance for both would share a budget"
+    # The ceilings the two classes document, read off the objects rather than
+    # off `defaults`: the point of registering a class is that the build path
+    # applies its defaults, so asserting the attribute would assert nothing.
+    assert built[0]._limit == 20
+    assert delegated[0]._limit == 100
+
+
+def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
+    """The shape the whole argument rests on, pinned where it can rot.
+
+    `CallCap.yaml_settable` is empty, so no definition can write `limit:` --
+    and the way a deployment offers a looser ceiling is a second class, not a
+    second key. If someone later adds `limit` to `yaml_settable` to save a
+    class, this fails and says why that trade is the one the module argues
+    against.
+    """
+    module = _call_cap_module(shipped)
+
+    assert module.CallCap.yaml_settable == frozenset(), (
+        "a cap a definition can set is not a cap; `limit` stays out of yaml_settable"
+    )
+    assert issubclass(module.CallCapGenerous, module.CallCap)
+    assert module.CallCap.defaults["limit"] == 20
+    assert module.CallCapGenerous.defaults["limit"] == 100
