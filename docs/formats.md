@@ -1239,11 +1239,37 @@ everyone reads an access list as meaning. `["*"]` is everyone.
 
 ### Which fields take an audience
 
-`tools`, `subagents` and `skills`. **`builtin_tools` deliberately does not.**
-deepagents registers its own tools itself, so kingfisher can filter them but
-never leave them out of a graph — `infrastructure.harness.narrowing` records a
-live run where a model called `execute` from memory. What gates them is which
-*agents* a group may open: an agent declaring
+`tools`, `subagents` and `skills` — all three, and identically:
+
+```yaml
+groups: [A, B]
+tools:
+  sql_query: [A]
+subagents:
+  reviewer: [A]
+skills:
+  audit: [A]              # only A is told this procedure exists
+  review: [A, B]
+```
+
+A skill reaches the model by a different road from a tool — it is advertised
+through a middleware rather than registered as a callable — but the rule is the
+same, and a skill out of reach is not advertised at all.
+
+Note what that is and is not, because a skill was never a boundary: removing it
+means the agent is not *told* about it. The file is still on disk, so this is
+guidance, and an agent holding `execute` can read anything. The boundary is the
+tools a skill's procedure would need, which have audiences of their own.
+
+**`builtin_tools` deliberately takes none.** deepagents registers its own tools
+itself, so kingfisher can filter them but never leave them out of a graph —
+`infrastructure.harness.narrowing` records a live run where a model called
+`execute` from memory. Writing a mapping there is refused rather than parsed,
+because three sibling fields take one and reading it as a single tool named
+`{'execute': ['A']}` is exactly the silent wrong answer this format refuses
+everywhere else.
+
+What gates the built-ins is which *agents* a group may open: an agent declaring
 `builtin_tools: [read_file, ls, glob, grep]` cannot yield the shell to anyone,
 whatever they ask for.
 

@@ -288,3 +288,98 @@ def test_an_agent_naming_several_models_is_refused():
 
 def test_an_agent_naming_one_model_is_untouched():
     assert _read(MINIMAL.rstrip() + "\nmodel: gpt-5\n", "plain.yaml").wanted == "gpt-5"
+
+
+# -- who reaches it, and who reaches what it holds --------------------------
+
+
+def test_an_agent_may_say_who_reaches_it():
+    spec = _read(MINIMAL.rstrip() + "\ngroups: [A, B]\n", "plain.yaml")
+
+    assert spec.groups == ("A", "B")
+
+
+def test_an_agent_that_says_nothing_is_reachable_by_everyone():
+    """An absent optional field means no restriction, which is what it means
+    everywhere else in this format -- and what makes adopting audiences
+    incremental rather than all-or-nothing."""
+    assert _read(MINIMAL, "plain.yaml").groups == ALL
+
+
+@pytest.mark.parametrize(
+    ("field_name", "written"),
+    [
+        ("tools", "tools:\n  sql_query: [A]\n  http_fetch: [A, B]\n"),
+        ("skills", "skills:\n  audit: [A]\n  review: [A, B]\n"),
+        ("subagents", "subagents:\n  checker: [A]\n  reviewer: [A, B]\n"),
+    ],
+)
+def test_every_audienced_field_takes_a_mapping(field_name, written):
+    """All three, because a rule that covered one would be the one nobody
+    noticed was a third of a rule."""
+    spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
+
+    first, second = (getattr(spec, field_name))[0], (getattr(spec, field_name))[1]
+    assert spec.audiences[field_name] == {first: ("A",), second: ("A", "B")}
+
+
+@pytest.mark.parametrize(
+    ("field_name", "written", "kept"),
+    [
+        ("tools", "tools:\n  sql_query: [A]\n  http_fetch: [A, B]\n", "http_fetch"),
+        ("skills", "skills:\n  audit: [A]\n  review: [A, B]\n", "review"),
+        ("subagents", "subagents:\n  checker: [A]\n  reviewer: [A, B]\n", "reviewer"),
+    ],
+)
+def test_every_audienced_field_narrows_for_a_caller(field_name, written, kept):
+    spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
+
+    assert getattr(spec.declares(frozenset({"B"})), field_name) == (kept,)
+
+
+def test_an_entry_with_no_audience_inherits_the_definitions():
+    """A plain list under a policied definition means 'these, at my audience',
+    which is what keeps every file written before audiences unchanged."""
+    spec = _read(MINIMAL.rstrip() + "\ngroups: [A]\ntools: [sql_query]\n", "plain.yaml")
+
+    assert spec.declares(frozenset({"A"})).tools == ("sql_query",)
+    assert spec.declares(frozenset({"B"})).tools == ()
+
+
+def test_declaring_with_no_caller_is_what_it_always_was():
+    """A deployment with no vocabulary, or an UNSCOPED call. This is the path
+    every existing deployment takes, so it must not narrow at all."""
+    spec = _read(MINIMAL.rstrip() + "\ngroups: [A]\ntools: {sql_query: [A]}\n", "plain.yaml")
+
+    assert spec.declares(None).tools == ("sql_query",)
+
+
+def test_builtin_tools_takes_no_audience():
+    """deepagents registers those itself, so they can be filtered but never left
+    out of a graph -- an audience here would promise a boundary it cannot keep.
+
+    Refused rather than ignored, and that matters more now than it would have
+    before: three sibling fields take a mapping, so writing one here is the
+    reasonable mistake. Unrefused it parsed, reading the whole mapping as a
+    single built-in named "{'execute': ['A']}".
+    """
+    with pytest.raises(AgentError, match="this field takes a list"):
+        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute: [A]\n", "plain.yaml")
+
+
+def test_only_the_audienced_fields_take_a_mapping():
+    """Pins the prose in `fields.selection` against `AUDIENCED`, which it cannot
+    import -- `domain.access` imports `fields`, so naming it there is a cycle."""
+    from kingfisher.domain.access import AUDIENCED
+
+    with pytest.raises(AgentError) as raised:
+        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute: [A]\n", "plain.yaml")
+
+    for field_name in AUDIENCED:
+        assert field_name in str(raised.value)
+
+
+def test_an_entry_audience_outside_the_definitions_own_is_refused():
+    """Dead policy: nobody reaching this agent is ever in C."""
+    with pytest.raises(AgentError, match="never reaches anyone"):
+        _read(MINIMAL.rstrip() + "\ngroups: [A, B]\ntools: {sql_query: [C]}\n", "plain.yaml")

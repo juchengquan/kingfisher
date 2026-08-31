@@ -244,3 +244,89 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         )
     )
     assert "execute" in kinds.get("builtin tool", ())
+
+
+# -- skills take the same audience, by a different road ---------------------
+
+SKILL = """---
+name: {name}
+description: Something to do.
+---
+
+Do it.
+"""
+
+SKILLED = """name: skilled
+description: Holds two skills at different audiences.
+groups: [A, B]
+skills:
+  audit: [A]
+  review: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+
+@pytest.fixture
+def with_skills(cfg):
+    """Two skills, and an agent holding them at different audiences."""
+    for name in ("audit", "review"):
+        folder = cfg.skills_dir / name
+        folder.mkdir(parents=True, exist_ok=True)
+        (folder / "SKILL.md").write_text(SKILL.format(name=name), encoding="utf-8")
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "skilled.yaml").write_text(SKILLED, encoding="utf-8")
+    return replace(cfg, access=vocabulary(), skills_enabled=True)
+
+
+def test_a_skill_audience_narrows_the_selection(with_skills):
+    kf = Kingfisher(with_skills)
+
+    assert kf.agent_named("skilled", groups=UNSCOPED).declares(
+        kf.held_for(("A",))
+    ).skills == ("audit", "review")
+    assert kf.agent_named("skilled", groups=UNSCOPED).declares(
+        kf.held_for(("B",))
+    ).skills == ("review",)
+
+
+def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkeypatch):
+    """The half a selection alone does not prove. A skill reaches the model
+    through a middleware rather than the tool list, so narrowing the grant is
+    only half the claim -- this asserts what the agent is actually told about.
+    """
+    captured = capture_build(monkeypatch)
+    kf = Kingfisher(with_skills)
+    caller = kf.for_groups(["B"])
+    kf.graph_for(
+        Request(task="t", agent="skilled"),
+        session_at(kf, "sk1"),
+        capabilities=caller.grants,
+        checkpointer=None,
+        groups=caller.held,
+    )
+    narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
+    advertised = {name for m in narrowed for name in m._allowed}
+
+    assert not any(name.endswith("::audit") for name in advertised)
+    assert any(name.endswith("::review") for name in advertised)
+
+
+def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatch):
+    """So the assertion above is not passing because nothing was advertised."""
+    captured = capture_build(monkeypatch)
+    kf = Kingfisher(with_skills)
+    caller = kf.for_groups(["A"])
+    kf.graph_for(
+        Request(task="t", agent="skilled"),
+        session_at(kf, "sk2"),
+        capabilities=caller.grants,
+        checkpointer=None,
+        groups=caller.held,
+    )
+    narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
+    advertised = {name for m in narrowed for name in m._allowed}
+
+    assert any(name.endswith("::audit") for name in advertised)
+    assert any(name.endswith("::review") for name in advertised)
