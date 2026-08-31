@@ -26,7 +26,8 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from kingfisher.domain.capabilities import ALL, Selection
+from kingfisher.domain.access import Audience, reaching
+from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 
 class SubagentError(ValueError):
@@ -162,6 +163,74 @@ class SubagentSpec:
     #: writing `build:` in one is refused like any other key this format does
     #: not define. The Python declaration has its own key set, `DECLARED`.
     build: Any = field(default=None, metadata={"derived": True})
+    #: Who may reach this delegate, wherever it is used.
+    #:
+    #: Its intrinsic ceiling rather than the whole answer: an agent naming it
+    #: may narrow further for its own context, and the two intersect. `ALL`
+    #: when the file says nothing, for the reason `AgentSpec.groups` gives.
+    #:
+    #: Enforced even for a compiled delegate, and it is the one thing that is:
+    #: whether a graph gets built at all is kingfisher's decision, so there is
+    #: nothing here for a graph to ignore.
+    groups: Audience = ALL
+    #: Field name -> entry name -> who reaches that entry, for the fields in
+    #: `AUDIENCED`. Empty for a definition written as plain lists.
+    #:
+    #: For a compiled delegate this narrows what is *handed* to `build` and is
+    #: no more of a boundary than the plain `tools` list already is there --
+    #: deepagents applies no allowlist to a graph it did not build, which
+    #: `delegation.as_compiled` says out loud and `--list` flags.
+    #:
+    #: `derived`, because no definition writes `audiences:` -- it is read
+    #: *out of* the three selection fields, the way `tool_sources` is read out
+    #: of `tools`. Writing the key in a document is refused like any other the
+    #: format does not define.
+    audiences: Mapping[str, Mapping[str, Audience]] = field(
+        default_factory=dict, metadata={"derived": True}
+    )
+
+    def declares(self, held: frozenset[str] | None = None) -> Capabilities:
+        """What this delegate holds, narrowed to what one caller reaches.
+
+        `held` is the caller's expanded groups, or `None` where this deployment
+        declares no vocabulary or the call is `UNSCOPED` -- and `None` returns
+        the selections untouched, which is what keeps every deployment that has
+        not adopted audiences unchanged.
+
+        The same shape `AgentSpec.declares` has, and the narrowing rule itself
+        is shared rather than written twice: `access.reaching` is the one place
+        that decides what an entry with no audience of its own inherits.
+        """
+        if held is None:
+            return Capabilities(
+                builtin_tools=self.builtin_tools,
+                tools=self.tools,
+                skills=self.skills,
+                subagents=self.subagents,
+                middleware=self.middleware,
+            )
+        return Capabilities(
+            builtin_tools=self.builtin_tools,
+            tools=reaching(
+                self.tools,
+                audiences=self.audiences.get("tools", {}),
+                default=self.groups,
+                held=held,
+            ),
+            skills=reaching(
+                self.skills,
+                audiences=self.audiences.get("skills", {}),
+                default=self.groups,
+                held=held,
+            ),
+            subagents=reaching(
+                self.subagents,
+                audiences=self.audiences.get("subagents", {}),
+                default=self.groups,
+                held=held,
+            ),
+            middleware=self.middleware,
+        )
 
     def __post_init__(self) -> None:
         """Exactly one of `system_prompt` and `build`.

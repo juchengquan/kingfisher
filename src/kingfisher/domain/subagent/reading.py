@@ -127,6 +127,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
+from kingfisher.domain.access import AUDIENCED, refuse_dead
 from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.tool import claimed_sources
@@ -155,6 +156,7 @@ KNOWN: frozenset[str] = frozenset(
         "subagents",
         "model",
         "metadata",
+        "groups",
     }
 )
 
@@ -201,6 +203,7 @@ DECLARED: frozenset[str] = frozenset(
         "tools",
         "model",
         "metadata",
+        "groups",
     }
 )
 
@@ -291,7 +294,12 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
     wanted = wanted_model(entry, read)
-    written_tools = read.selection(entry.get("tools"), absent=ALL, key="tools")
+    written_tools, tool_audiences = read.audienced(entry.get("tools"), absent=ALL, key="tools")
+    # Only `tools` here: `skills` and `subagents` are refused for a compiled
+    # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
+    audiences = {"tools": tool_audiences} if tool_audiences else {}
+    groups = read.groups(entry.get("groups"))
+    refuse_dead(audiences, groups=groups, source=where.name, error=SubagentError)
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
@@ -306,6 +314,8 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         tool_sources=claimed_sources(written_tools),
         wanted=wanted,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
+        groups=groups,
+        audiences=audiences,
     )
 
 
@@ -358,7 +368,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
     # the dictionary the agent dispatches through all key on the plain name.
     # Where it claims to live travels beside it, for whoever checks the claim.
-    written_tools = read.selection(
+    written_tools, tool_audiences = read.audienced(
         document.get("tools"), absent=ALL, key="tools"
     )
     # Same two-in-one read as the agent format, and the same field: a
@@ -366,6 +376,27 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     written_middleware, middleware_settings = read.selection_with_settings(
         document.get("middleware"), absent=None, key="middleware"
     )
+    written_skills, skill_audiences = read.audienced(
+        document.get("skills"), absent=None, key="skills"
+    )
+    written_delegates, delegate_audiences = read.audienced(
+        document.get("subagents"),
+        absent=None,
+        key="subagents",
+        refuse_all=(
+            "it would mean every definition in the catalogue, which includes this "
+            "one, so it is always a loop. Name the delegates this one consults"
+        ),
+    )
+    audiences = {
+        name: entries
+        for name, entries in zip(
+            AUDIENCED, (tool_audiences, delegate_audiences, skill_audiences), strict=True
+        )
+        if entries
+    }
+    groups = read.groups(document.get("groups"))
+    refuse_dead(audiences, groups=groups, source=source.name, error=SubagentError)
 
     return SubagentSpec(
         name=fields.text(document["name"]),
@@ -381,20 +412,14 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         ),
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
-        skills=read.selection(document.get("skills"), absent=None, key="skills"),
+        skills=written_skills,
         middleware=written_middleware,
         middleware_settings=middleware_settings,
-        subagents=read.selection(
-            document.get("subagents"),
-            absent=None,
-            key="subagents",
-            refuse_all=(
-                "it would mean every definition in the catalogue, which includes this "
-                "one, so it is always a loop. Name the delegates this one consults"
-            ),
-        ),
+        subagents=written_delegates,
         wanted=wanted,
         metadata=read.mapping(document.get("metadata"), key="metadata"),
+        groups=groups,
+        audiences=audiences,
     )
 
 

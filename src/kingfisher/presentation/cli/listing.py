@@ -13,7 +13,16 @@ from __future__ import annotations
 from collections.abc import Iterator
 from pathlib import Path
 
-from kingfisher import SEED_HINT, SKILL_LAYOUT, Inventory, offered, split_reference
+from kingfisher import (
+    ALL,
+    AUDIENCED,
+    SEED_HINT,
+    SKILL_LAYOUT,
+    Audience,
+    Inventory,
+    offered,
+    split_reference,
+)
 
 
 def _from(source: str | None, expected: str) -> str:
@@ -98,6 +107,70 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
     yield offered(dict(found.tool_sources), found.tools)
 
     yield from _catalogue(found)
+    yield from _access(found)
+
+
+def _who(audience: Audience) -> str:
+    """One audience, as a reader sees it."""
+    return "[*]" if audience == ALL else f"[{', '.join(audience)}]"
+
+
+def _singular(field_name: str) -> str:
+    """`tools` -> `tool`. `skills` is the one that does not just lose an s."""
+    return "skill" if field_name == "skills" else field_name[:-1]
+
+
+def _access(found: Inventory) -> Iterator[str]:
+    """Who reaches what, twice: as the files say it, and rolled up by asset.
+
+    Two views because audiences are per use-site. The first mirrors the files.
+    The second answers the question the files no longer answer on their own --
+    "who reaches `sql_query`?" is spread across every definition that uses it,
+    and a call site quietly wider than its neighbours would otherwise be
+    visible only to whoever went looking for it.
+
+    Printed only in the operator's view. Under `--as`, the sections above have
+    already been narrowed to what that caller reaches, and who *else* reaches a
+    thing is not their question.
+    """
+    if found.access is None or found.held is not None:
+        return
+    yield "\naccess — by definition"
+    said = False
+    for kind, definitions in found.audiences.items():
+        for name, stated in definitions.items():
+            said = True
+            yield f"  {kind[:-1]} {name}  {_who(stated.groups)}"
+            for field_name in AUDIENCED:
+                for entry, audience in stated.of(field_name).items():
+                    yield f"      {_singular(field_name)} {entry}  {_who(audience)}"
+    if not said:
+        yield "  (nothing says who reaches it, so everyone reaches everything)"
+
+    yield from _rollup(found)
+    yield from found.access_report.lines()
+
+
+def _rollup(found: Inventory) -> Iterator[str]:
+    """Every asset carrying an audience anywhere, and where it carries it.
+
+    Inverted from the per-definition record rather than gathered separately, so
+    the two views cannot disagree about what the files say.
+    """
+    where: dict[str, dict[str, list[tuple[str, Audience]]]] = {}
+    for definitions in found.audiences.values():
+        for name, stated in definitions.items():
+            for field_name in AUDIENCED:
+                for entry, audience in stated.of(field_name).items():
+                    where.setdefault(field_name, {}).setdefault(entry, []).append(
+                        (name, audience)
+                    )
+    for field_name, entries in where.items():
+        yield f"\naccess — by {_singular(field_name)}"
+        for entry, sites in sorted(entries.items()):
+            yield f"  {entry}"
+            for name, audience in sites:
+                yield f"      {name}  {_who(audience)}"
 
 
 def _catalogue(found: Inventory) -> Iterator[str]:
@@ -223,6 +296,31 @@ def as_json(found: Inventory) -> dict[str, object]:
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
+        # The vocabulary, or `null` where this deployment declares none. Who
+        # reaches what is `audiences` below, keyed the way the definitions
+        # themselves are.
+        "access": (
+            None
+            if found.access is None
+            else {name: list(holds) for name, holds in found.access.names.items()}
+        ),
+        "audiences": {
+            kind: {
+                name: {
+                    "groups": list(stated.groups),
+                    **{
+                        field_name: {entry: list(who) for entry, who in entries.items()}
+                        for field_name, entries in stated.entries.items()
+                    },
+                }
+                for name, stated in definitions.items()
+            }
+            for kind, definitions in found.audiences.items()
+        },
+        "access_report": {
+            "unrestricted": [list(pair) for pair in found.access_report.unrestricted],
+        },
+        "held": None if found.held is None else sorted(found.held),
     }
 
 

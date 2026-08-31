@@ -40,7 +40,10 @@ from dotenv import load_dotenv
 
 from kingfisher import (
     DEFINITION_KINDS,
+    UNSCOPED,
+    AccessError,
     ConfigError,
+    Held,
     definitions_source,
     ensure_layout,
     from_env,
@@ -172,6 +175,20 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="emit the same answer as JSON, for a script rather than a person",
     )
+    # Unscoped is the operator's view: everything, plus who reaches it. Naming
+    # groups simulates a caller, which is how a policy gets checked before
+    # somebody trusts it.
+    listing.add_argument(
+        "--as",
+        dest="held",
+        type=_held,
+        default=None,
+        metavar="GROUPS",
+        help=(
+            "show what these groups reach: comma-separated names, or UNSCOPED "
+            "for the operator's view of everything"
+        ),
+    )
     return parser
 
 
@@ -240,7 +257,20 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     return 0
 
 
-def _list(*, as_document: bool = False) -> int:
+def _held(raw: str) -> Held:
+    """`--as A,B` as the groups it names, or the explicit absence of any.
+
+    `UNSCOPED` is spelled out rather than being what an empty value means: an
+    empty `--as` is far more likely to be a shell variable that did not expand
+    than a considered decision to run with no caller at all, and the two must
+    not look the same at the one place somebody says who they are.
+    """
+    if raw.strip() == "UNSCOPED":
+        return UNSCOPED
+    return tuple(part.strip() for part in raw.split(",") if part.strip())
+
+
+def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     """Print what the workspace offers.
 
     The whole configuration here, unlike `seed`: answering means building an
@@ -251,7 +281,13 @@ def _list(*, as_document: bool = False) -> int:
     caller can find out either way round rather than having to pick.
     """
     cfg = from_env()
-    found = inventory(cfg)
+    # `UNSCOPED` and an absent flag are the same answer here, and that is not
+    # the inconsistency it looks like. A listing is read-only and whoever runs
+    # it is on the host with the policy file in front of them, so it is exempt
+    # from the refusal that covers a *turn*: there is nothing to protect by
+    # making an operator name themselves to read their own workspace.
+    groups = held if isinstance(held, tuple) else None
+    found = inventory(cfg, groups=groups)
     if as_document:
         print(json.dumps(as_json(found), indent=2, sort_keys=True))
     else:
@@ -349,7 +385,7 @@ HANDLERS = {
     "seed": lambda args, parser: _seed(args.source, everything=args.everything),  # noqa: ARG005
     "serve": lambda args, parser: _serve(),  # noqa: ARG005
     "doctor": lambda args, parser: _doctor(as_document=args.json),  # noqa: ARG005
-    "list": lambda args, parser: _list(as_document=args.json),  # noqa: ARG005
+    "list": lambda args, parser: _list(as_document=args.json, held=args.held),  # noqa: ARG005
     "help": lambda args, parser: _help(parser, args.verb),
 }
 
@@ -369,6 +405,13 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return HANDLERS[args.command](args, parser)
+    except AccessError as exc:
+        # Beside `ConfigError` because it is the same kind of thing: something
+        # the person at the terminal wrote and can fix, in a file or on the
+        # command line. A traceback for `--as Q` would bury the one line that
+        # says which groups this deployment actually defines.
+        print(f"access error: {exc}", file=sys.stderr)
+        return 2
     except ConfigError as exc:
         # The one error a caller causes and can fix, so it is reported rather
         # than raised. Anything else is a bug and should keep its traceback.

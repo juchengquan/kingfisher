@@ -725,3 +725,165 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatc
     assert "cannot load" in printed
     assert "\nskills" in printed, "the skills section went with the tools"
     assert "helper" in printed, "so did the subagents"
+
+
+# -- listing under a group vocabulary ---------------------------------------
+
+TOOL = '''
+def line_count(path: str) -> str:
+    """Count the lines in a text file."""
+    return "0"
+
+
+TOOLS = [line_count]
+'''
+
+NARROW = """name: narrow
+description: An agent.
+groups: [A, B]
+tools:
+  line_count:
+    groups: [A]
+system_prompt: |
+  You do the task.
+"""
+
+WIDE = """name: wide
+description: An agent.
+groups: [A, B]
+tools:
+  line_count:
+    groups: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+
+def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "groups: [A, B]\n"):
+    """A workspace with one tool and whichever agents the test names."""
+    from tests.conftest import tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    for document in agents:
+        name = document.split("name: ", 1)[1].split("\n", 1)[0]
+        (directory / f"{name}.yaml").write_text(document, encoding="utf-8")
+    (cfg.workspace / "groups.yaml").write_text(vocabulary, encoding="utf-8")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    return cfg
+
+
+@pytest.fixture
+def policied(cfg, monkeypatch):
+    return _workspace(cfg, monkeypatch, NARROW)
+
+
+def test_the_operator_sees_audiences_per_definition(policied, capsys):
+    """The unscoped listing is the operator's audit view. It is exempt from the
+    refusal that covers a *turn* -- listing is read-only, and whoever runs it is
+    on the host with the definitions already in front of them."""
+    assert main(["list"]) == 0
+
+    shown = capsys.readouterr().out
+    assert "by definition" in shown
+    assert "agent narrow  [A, B]" in shown
+    assert "tool line_count  [A]" in shown
+
+
+def test_the_operator_sees_a_roll_up_by_asset(policied, capsys):
+    """The question the files can no longer answer on their own."""
+    assert main(["list"]) == 0
+
+    shown = capsys.readouterr().out
+    assert "by tool" in shown
+    assert "line_count" in shown.split("by tool", 1)[1]
+
+
+def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, monkeypatch, capsys):
+    """The case it exists for: a call site quietly wider than its neighbour."""
+    _workspace(cfg, monkeypatch, NARROW, WIDE)
+
+    assert main(["list"]) == 0
+
+    section = capsys.readouterr().out.split("by tool", 1)[1]
+    assert "narrow  [A]" in section
+    assert "wide  [A, B]" in section
+
+
+def test_a_callers_view_carries_no_audiences(policied, capsys):
+    """Who else reaches a thing is the operator's question, not a caller's."""
+    assert main(["list", "--as", "A"]) == 0
+
+    shown = capsys.readouterr().out
+    assert "by definition" not in shown
+    assert "by tool" not in shown
+
+
+def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, monkeypatch, capsys):
+    _workspace(cfg, monkeypatch, NARROW, vocabulary="groups: [A, B, C]\n")
+
+    assert main(["list", "--as", "C"]) == 0
+
+    assert "narrow" not in capsys.readouterr().out
+
+
+def test_the_operator_still_sees_it(cfg, monkeypatch, capsys):
+    """So the assertion above is not passing because the agent vanished."""
+    _workspace(cfg, monkeypatch, NARROW, vocabulary="groups: [A, B, C]\n")
+
+    assert main(["list"]) == 0
+
+    assert "narrow" in capsys.readouterr().out
+
+
+def test_listing_names_a_definition_that_restricts_nobody(cfg, monkeypatch, capsys):
+    """Default-open, said where somebody will see it."""
+    from tests.conftest import an_agent
+
+    _workspace(cfg, monkeypatch)
+    an_agent(cfg, "open_to_all")
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "reachable by everyone" in printed
+    assert "open_to_all" in printed
+
+
+def test_naming_a_group_that_does_not_exist_is_refused(policied, capsys):
+    assert main(["list", "--as", "Q"]) != 0
+
+    assert "unknown group" in capsys.readouterr().err
+
+
+def test_no_vocabulary_means_no_access_section(cfg, monkeypatch, capsys):
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "plain")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+    assert "access —" not in capsys.readouterr().out
+
+
+def test_as_parses_a_comma_separated_list():
+    from kingfisher.presentation.cli.__main__ import _held
+
+    assert _held("A,B") == ("A", "B")
+    assert _held(" A , B ") == ("A", "B")
+
+
+def test_as_unscoped_is_spelled_out_rather_than_implied():
+    """An empty `--as` is far more likely to be a shell variable that did not
+    expand than a considered decision to run with no caller."""
+    from kingfisher.domain.access import UNSCOPED
+    from kingfisher.presentation.cli.__main__ import _held
+
+    assert _held("UNSCOPED") is UNSCOPED
+    assert _held("") == ()

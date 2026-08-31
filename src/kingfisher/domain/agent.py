@@ -96,6 +96,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
+from kingfisher.domain.access import AUDIENCED, Audience, reaching, refuse_dead
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 # Imported rather than restated: both formats name a model the same way, so a
@@ -129,6 +130,7 @@ KNOWN: frozenset[str] = frozenset(
         "model",
         "memory",
         "metadata",
+        "groups",
     }
 )
 
@@ -202,9 +204,32 @@ class AgentSpec:
     #: other axis, and only `False` can subtract.
     memory: bool | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
+    #: Who may open a session on this agent.
+    #:
+    #: `ALL` when the file says nothing, because an absent optional field means
+    #: no restriction everywhere else in this format. Reading it as "nobody"
+    #: would stop every unannotated definition working the moment a vocabulary
+    #: file appeared, which makes adopting access control all-or-nothing rather
+    #: than incremental. What keeps that from being silent is the startup report
+    #: naming every definition with no line here.
+    groups: Audience = ALL
+    #: Field name -> entry name -> who reaches that entry, for the fields in
+    #: `AUDIENCED`. Empty for a definition written as plain lists, which is
+    #: every definition that predates audiences existing.
+    #:
+    #: Beside the selections rather than replacing them, so `tools` stays the
+    #: `Selection` every consumer already reads -- `narrowed`, `Offering`, the
+    #: allowlist -- and this is consulted only where a caller's groups are known.
+    #:
+    #: `derived`, because no definition writes `audiences:` -- it is read
+    #: *out of* the three selection fields, the way `tool_sources` is read out
+    #: of `tools`. Writing the key in a document is refused like any other the
+    #: format does not define.
+    audiences: Mapping[str, Mapping[str, Audience]] = field(
+        default_factory=dict, metadata={"derived": True}
+    )
 
-    @property
-    def declares(self) -> Capabilities:
+    def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by.
 
         The agent file is the baseline and a request only ever subtracts from
@@ -218,12 +243,32 @@ class AgentSpec:
         either. They are grants a *deployment* makes -- which credentials may be
         spent, which model a caller may name for a delegate -- and an agent that
         narrowed them here would be a definition authorising itself.
+
+        `held` is the caller's expanded groups, or `None` where this deployment
+        declares no vocabulary or the call is `UNSCOPED`. `None` returns exactly
+        what this returned before audiences existed, which is what keeps every
+        deployment that has not adopted them unchanged -- and is why this is one
+        method rather than a policied path beside an unpolicied one.
+
+        `builtin_tools` is never narrowed here. deepagents registers those
+        itself, so they can be filtered but never left out of a graph; what
+        gates them is which *agents* a group may open, since an agent declaring
+        a read-only builtin set cannot yield the shell to anyone.
         """
         return Capabilities(
             builtin_tools=self.builtin_tools,
-            tools=self.tools,
-            skills=self.skills,
-            subagents=self.subagents,
+            tools=self.tools if held is None else reaching(
+                self.tools, audiences=self.audiences.get("tools", {}),
+                default=self.groups, held=held,
+            ),
+            skills=self.skills if held is None else reaching(
+                self.skills, audiences=self.audiences.get("skills", {}),
+                default=self.groups, held=held,
+            ),
+            subagents=self.subagents if held is None else reaching(
+                self.subagents, audiences=self.audiences.get("subagents", {}),
+                default=self.groups, held=held,
+            ),
             middleware=self.middleware,
             endpoints=ALL,
             models=ALL,
@@ -260,10 +305,37 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher; where it claims to live
     # travels beside it, for whoever checks the claim.
-    written_tools = read.selection(document.get("tools"), absent=ALL, key="tools")
+    written_tools, tool_audiences = read.audienced(
+        document.get("tools"), absent=ALL, key="tools"
+    )
+    written_skills, skill_audiences = read.audienced(
+        document.get("skills"), absent=None, key="skills"
+    )
+    written_delegates, delegate_audiences = read.audienced(
+        # No `refuse_all` here, and that is the divergence worth reading twice.
+        # A *subagent* naming every subagent names itself, which is always a
+        # loop; an agent is not one of them, so this is the ordinary "give it
+        # the run of the place".
+        document.get("subagents"),
+        absent=None,
+        key="subagents",
+    )
+    audiences = {
+        name: entries
+        for name, entries in zip(
+            AUDIENCED, (tool_audiences, delegate_audiences, skill_audiences), strict=True
+        )
+        if entries
+    }
+    groups = read.groups(document.get("groups"))
+    refuse_dead(audiences, groups=groups, source=source.name, error=AgentError)
     # Read together, because they are one field. The names stay a `Selection`
     # and the settings ride beside them; `Reader.selection_with_settings` has
     # why the two halves are kept apart.
+    #
+    # `middleware` takes no audience, and that is not an oversight: it is the
+    # one field naming *code the deployment registered* rather than something
+    # the workspace offers, so it is granted rather than reachable.
     written_middleware, middleware_settings = read.selection_with_settings(
         document.get("middleware"), absent=None, key="middleware"
     )
@@ -277,12 +349,10 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         ),
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
-        skills=read.selection(document.get("skills"), absent=None, key="skills"),
-        # No `refuse_all` here, and that is the divergence worth reading twice.
-        # A *subagent* naming every subagent names itself, which is always a
-        # loop; an agent is not one of them, so this is the ordinary "give it
-        # the run of the place".
-        subagents=read.selection(document.get("subagents"), absent=None, key="subagents"),
+        skills=written_skills,
+        subagents=written_delegates,
+        groups=groups,
+        audiences=audiences,
         middleware=written_middleware,
         middleware_settings=middleware_settings,
         wanted=wanted_model(document, read),

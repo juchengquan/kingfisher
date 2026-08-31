@@ -21,6 +21,15 @@ __version__ = "0.1.0"
 #: Public name -> the module that defines it. The single source for both
 #: `__getattr__` and `__all__`, so the two cannot drift.
 _EXPORTS = {
+    "ALL": "kingfisher.domain.capabilities",
+    "AUDIENCED": "kingfisher.domain.access",
+    "Audience": "kingfisher.domain.access",
+    "Stated": "kingfisher.domain.access",
+    "Held": "kingfisher.domain.access",
+    "Groups": "kingfisher.domain.access",
+    "AccessError": "kingfisher.domain.access",
+    "AccessReport": "kingfisher.domain.access",
+    "UNSCOPED": "kingfisher.domain.access",
     "Capabilities": "kingfisher.domain.capabilities",
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
@@ -98,14 +107,22 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "ALL",
+    "AUDIENCED",
     "DEFINITION_KINDS",
     "SEED_HINT",
     "SKILL_LAYOUT",
+    "UNSCOPED",
+    "AccessError",
+    "AccessReport",
+    "Audience",
     "Capabilities",
     "CapabilityError",
     "Config",
     "ConfigError",
     "Confinement",
+    "Groups",
+    "Held",
     "Inventory",
     "Kingfisher",
     "LocalFileStore",
@@ -119,6 +136,7 @@ __all__ = [
     "SessionBusyError",
     "SessionInfo",
     "SkillError",
+    "Stated",
     "SubagentError",
     "UnknownReferenceError",
     "UnknownSessionError",
@@ -167,6 +185,15 @@ if TYPE_CHECKING:
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.config import WorkspacePaths as WorkspacePaths
+    from kingfisher.domain.access import AUDIENCED as AUDIENCED
+    from kingfisher.domain.access import UNSCOPED as UNSCOPED
+    from kingfisher.domain.access import AccessError as AccessError
+    from kingfisher.domain.access import AccessReport as AccessReport
+    from kingfisher.domain.access import Audience as Audience
+    from kingfisher.domain.access import Groups as Groups
+    from kingfisher.domain.access import Held as Held
+    from kingfisher.domain.access import Stated as Stated
+    from kingfisher.domain.capabilities import ALL as ALL
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.references import (

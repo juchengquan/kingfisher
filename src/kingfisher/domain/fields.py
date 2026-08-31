@@ -22,7 +22,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
 from types import MappingProxyType
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Literal
 
 from kingfisher.domain.capabilities import ALL, Selection
 
@@ -202,6 +202,24 @@ class Reader:
                 f"instead. Every selection here is a list, so everything is a list too"
             )
             raise self.error(msg)
+        if isinstance(value, Mapping):
+            # `names` would fall through to `(text(value),)` and read the whole
+            # mapping as one name -- `builtin_tools: {execute: {groups: [A]}}`
+            # became a built-in called "{'execute': ...}", offered to nobody and
+            # reported nowhere. Worth refusing by name now that three sibling
+            # fields *do* take a mapping, because writing one here is the
+            # reasonable mistake rather than a strange one.
+            #
+            # The three are spelled out rather than imported: `domain.access`
+            # imports this module, so naming `AUDIENCED` here would be a cycle.
+            # `test_only_the_audienced_fields_take_a_mapping` pins the pair.
+            msg = (
+                f"{self.source}: {key} is a mapping; this field takes a list. A "
+                f"mapping says who reaches each entry, and only tools, subagents "
+                f"and skills may say that -- builtin tools are registered by "
+                f"deepagents, so they can be filtered but never left out of a graph"
+            )
+            raise self.error(msg)
 
         written = names(value)
         if written is None:
@@ -337,6 +355,146 @@ class Reader:
             )
             raise self.error(msg)
         return name
+
+    def groups(self, value: object, *, key: str = "groups") -> tuple[str, ...] | Literal["*"]:
+        """A definition's own audience: who may reach it at all.
+
+        Its own reader rather than `selection`, and not only for the type. A
+        selection names things the *workspace* offers and may be `None` for
+        "none of them"; this names groups, and there is no "none" -- a
+        definition nobody may reach is written by giving it a group nobody
+        holds. Absent means everyone, which is what an absent optional field
+        means everywhere else in these formats.
+        """
+        if value is None:
+            return ALL
+        written = self.selection(value, absent=ALL, key=key)
+        # `selection` cannot answer `None` with `absent=ALL`; this narrows the
+        # type rather than guarding against a case that can happen.
+        return written if written is not None else ALL
+
+    def _audience(
+        self, raw: object, *, key: str, entry: str
+    ) -> tuple[str, ...] | Literal["*"] | None:
+        """One entry's audience, written `{groups: [...]}`, or `None` for none.
+
+        `None` is what makes the mapping form usable at all. Only the entries
+        you actually restrict carry a `groups:` line; the rest say nothing and
+        inherit the definition's own, so restricting one tool does not mean
+        writing an audience for every other tool beside it:
+
+            groups: [A, B]
+            tools:
+              sql_query:
+                groups: [A]        # this one is narrower
+              http_fetch:          # this one is not, and says so by saying nothing
+
+        Absent and empty are the same answer -- the entry wrote the long form
+        and asked for nothing by it -- which is the reading
+        `selection_with_settings` already makes of its own `settings`.
+
+        A mapping rather than a bare list where an audience *is* stated, so that
+        an entry says which fact it is stating, has somewhere to put a second
+        one later, and can have a mistyped key refused: `{grops: [A]}` is caught
+        here, where `[A]` alone has no key to check.
+        """
+        where = f"{self.source}: {key} entry {entry!r}"
+        if raw is None:
+            return None
+        if isinstance(raw, (list, tuple)):
+            written = ", ".join(str(one) for one in raw) or "..."
+            msg = (
+                f"{where}: an audience is written `groups: [{written}]`, not as a "
+                f"bare list -- the same word the definition's own line uses, so an "
+                f"entry says which fact it is stating and has room for another"
+            )
+            raise self.error(msg)
+        if not isinstance(raw, Mapping):
+            msg = f"{where}: write `groups: [...]`, or nothing at all -- got {raw!r}"
+            raise self.error(msg)
+        if complaint := unrecognised(raw, known={"groups"}, noun="key"):
+            msg = f"{where}: {complaint}"
+            raise self.error(msg)
+        if "groups" not in raw:
+            return None
+
+        listed = raw["groups"]
+        if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
+            msg = f'{where}: groups is a list of names, or ["{ALL}"] -- got {listed!r}'
+            raise self.error(msg)
+        written = tuple(text(one) for one in listed if text(one))
+        if not written:
+            msg = (
+                f"{where}: groups is empty, which would mean nobody. Leave the "
+                f"line out to inherit this definition's own audience, or name "
+                f"the groups this entry is for"
+            )
+            raise self.error(msg)
+        if ALL in written and len(written) > 1:
+            msg = (
+                f'{where}: ["{ALL}"] is everyone, so it cannot mean both that '
+                f"and {', '.join(n for n in written if n != ALL)}"
+            )
+            raise self.error(msg)
+        return ALL if written == (ALL,) else written
+
+    def audienced(
+        self,
+        value: object,
+        *,
+        absent: Selection,
+        key: str,
+        refuse_all: str | None = None,
+    ) -> tuple[Selection, Mapping[str, tuple[str, ...] | Literal["*"]]]:
+        """A selection, and who reaches each entry of it.
+
+        Two spellings of one field, and the second is a strict extension of the
+        first: a list selects, a mapping selects *and* says who for. Every file
+        written before audiences existed reads identically through this.
+
+        Returned as a pair rather than as a richer type, so that `spec.tools`
+        stays the `Selection` every consumer already reads -- `narrowed`,
+        `Offering`, `as_subagent`, the allowlist -- and the audiences travel
+        beside it, consulted only where a caller's groups are known. A new type
+        here would mean touching every one of those to unwrap it.
+
+        The same pair `selection_with_settings` returns, arrived at separately
+        and for the same reason: names are what granting and narrowing operate
+        on, and whatever rides beside a name is asked for one name at a time.
+
+        The star belongs to the list form, because it says something about the
+        whole field rather than about an entry. `{"*": ...}` is a name that is
+        not a name, and is refused rather than read as one.
+        """
+        if not isinstance(value, Mapping):
+            return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}
+        if not value:
+            msg = (
+                f"{self.source}: {key} is an empty mapping, which reads as nothing "
+                f"-- write [] if that is what you mean, or name what it holds"
+            )
+            raise self.error(msg)
+        stated = {
+            text(name): self._audience(raw, key=key, entry=text(name))
+            for name, raw in value.items()
+        }
+        if ALL in stated:
+            msg = (
+                f"{self.source}: {key} names {ALL!r} as an entry, which is not a "
+                f"name -- {ALL!r} says something about the whole field, so write "
+                f"it as the list [{ALL!r}]"
+            )
+            raise self.error(msg)
+        # `refuse_all` is deliberately not consulted here. It refuses `["*"]`,
+        # which is a statement about the whole field -- and the star cannot be
+        # written in a mapping at all, refused two lines above as a name that is
+        # not a name. There is nothing left for it to catch.
+        #
+        # Every key is selected; only the ones that stated an audience carry
+        # one. An absent entry falls back to the definition's own in
+        # `access.reaching`, which is the same fallback a plain list gets --
+        # so the two spellings agree about an unrestricted name.
+        return tuple(stated), {n: a for n, a in stated.items() if a is not None}
 
     def flag(self, value: object, *, key: str) -> bool:
         """A yes/no field, refusing the spellings YAML would quietly accept.

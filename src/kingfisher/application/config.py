@@ -23,7 +23,7 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from kingfisher.config import Config, ConfigError, WorkspacePaths
-from kingfisher.infrastructure import model_catalogue
+from kingfisher.infrastructure import access_policy, model_catalogue
 
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `kingfisher.config`
@@ -132,10 +132,22 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
     # a catalogue load.
     models_file = _optional_path("KINGFISHER_MODELS_FILE") or workspace / "models.yaml"
     catalogue = model_catalogue.load(models_file, env)
+    # The group vocabulary, and nothing else: who reaches what is written in
+    # the definitions themselves. Defaults and relocates exactly as the
+    # catalogue above does, so several deployments can share one set of names.
+    #
+    # Optional, unlike the catalogue -- `load` answers `None` for a file that is
+    # not there, which is the whole of what "this deployment controls nothing by
+    # group" means. A file that is there and will not parse raises instead: a
+    # vocabulary that cannot be read leaves every definition's audience
+    # uncheckable, and coming up anyway is how a server serves everyone
+    # everything.
+    access_file = _optional_path("KINGFISHER_GROUPS_FILE") or workspace / "groups.yaml"
 
     return Config(
         workspace=workspace,
         models=catalogue,
+        access=access_policy.load(access_file),
         execution_timeout_s=_int(env, "KINGFISHER_EXECUTION_TIMEOUT_S", 120),
         turn_timeout_s=_int(env, "KINGFISHER_TURN_TIMEOUT_S", 3600),
         session_max_bytes=_optional_int(env, "KINGFISHER_SESSION_MAX_BYTES"),

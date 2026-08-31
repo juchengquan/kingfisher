@@ -1125,6 +1125,17 @@ LIGHT_EXPORTS = frozenset({
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
+    # The access policy, its report, its error and the sentinel for running
+    # without a caller. `domain.access` imports `domain.fields` and
+    # `domain.capabilities` and nothing else, which is the point of it being a
+    # domain module: deciding who reaches what must not cost a provider SDK,
+    # because a deployment resolves a grant on every turn.
+    "Groups", "AccessError", "AccessReport", "UNSCOPED", "Held", "AUDIENCED",
+    "Audience", "Stated",
+    # The `"*"` sentinel itself, published because the command prints an
+    # audience and has to tell "everyone" from a list of names. Reaching into
+    # `domain.capabilities` for it is what the consumer rule forbids.
+    "ALL",
     # Reaching it costs nothing; calling it may write a sandbox profile,
     # which is the same light-to-reach / heavy-to-call split `inventory` has.
     "shell_confinement", "Confinement",
@@ -1512,8 +1523,17 @@ DEPLOYMENT_ERRORS = frozenset({
     # inconsistency and is the rule working: a caller may *upload* a subagent, so
     # a malformed one is their text and their fault. Agents come from the
     # catalogue only, so a malformed one is always the deployment's own file.
-    "AgentError", "ConfigError", "DataError", "HostPathError", "LoadError",
-    "MissingStoreError", "ToolError",
+    #
+    # `AccessError` is here for a reason worth stating, because "access" sounds
+    # caller-facing and is not. Every way of raising it is the *integrator*
+    # being wrong: a policy file that will not parse, a call that did not say
+    # who was calling, a group name outside the closed vocabulary. A caller who
+    # is merely denied something never sees it -- an asset out of their reach
+    # reads as one the workspace does not offer, so what reaches them is the
+    # `CapabilityError` that any absent name produces. If this ever becomes
+    # something a caller can provoke, it has moved above.
+    "AccessError", "AgentError", "ConfigError", "DataError", "HostPathError",
+    "LoadError", "MissingStoreError", "ToolError",
 })
 
 
