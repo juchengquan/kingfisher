@@ -4,6 +4,12 @@
 are marked; the constraint that drives it arrived on 2026-08-23, after most of
 the exploration, and rearranged it.
 **Date:** 2026-08-21
+**Re-checked:** 2026-08-31, when this became the only design document left. Two
+rows of *What the constraint touches* had drifted and are corrected below; the
+constraint and every decision still stand. `build_backend` has since been split
+-- *A folder handed in, a command handed off*, 2026-08-26 -- which was the
+groundwork N6 and N7 need, so the next step here no longer starts by moving that
+function.
 
 A deployment must not keep data on the machine it runs on. Session files,
 results, the agent's notes — none of it may live on local disk. Where it *does*
@@ -23,14 +29,28 @@ More than the filesystem. Kingfisher writes to local disk in four places:
 | what | where | what it holds |
 |---|---|---|
 | session files | `sessions/<id>/{data,derived,memory,runs}` | uploads, results, the agent's notes |
-| **conversation history** | sqlite — `checkpoint_db_path`, `session_db_path` | **every message to and from the model** |
-| run log | `log_path(state_dir, session_id)` | per-event record, token usage — **read by nothing but a test** |
+| **conversation history** | sqlite — `checkpoint_db_path` | **every message to and from the model** |
+| run log | `log_path(state_dir, session_id)` | per-event record, token usage — reaches the caller on `Result.log_path` |
 | uploads | definitions unpacked into the session | skills and subagents a request brought |
 
 The second row is the one most worth naming. It is the conversation itself,
 usually the most sensitive thing in the system, and today it is a sqlite file on
 the host. Any design that addresses only the first row has solved a third of the
 problem and should not claim otherwise.
+
+*Corrected 2026-08-31.* The table named `session_db_path` beside
+`checkpoint_db_path`; there is no such symbol, and `checkpoint_db_path` in
+`infrastructure/harness/checkpointing.py` is the whole of it. The row's point is
+unchanged and the sqlite file is still on the host.
+
+*Corrected 2026-08-31.* The run log was described as "read by nothing but a
+test". It is not: `service.py` puts it on `Result.log_path`, so it reaches the
+caller in-process. The service then goes out of its way to keep it off the wire
+-- `payloads.py` types `run_dir` and `log_path` as `Path` "precisely so
+`json.dumps` raises on them". That is this document's own constraint already
+being enforced at one boundary, by hand, in one place. It strengthens the case
+rather than weakening it: a host path that must not leave the machine is today
+guarded by a deliberate `TypeError`, and nothing generalises that.
 
 ## What is already right
 
