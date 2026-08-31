@@ -171,6 +171,35 @@ kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
 **A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
 before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
 
+## Tool failure
+
+**A workspace tool's exception is a failed tool result, not a dead run.**
+`WorkspaceToolErrors` converts it to a `ToolMessage` with `status="error"` and
+the text carried whole, so the model sees a failure rather than a value. Built-in
+tools are untouched -- they already report properly, and `HostPathGuard` covers
+the one thing they do not, so widening this to them would put a second opinion
+between deepagents and its own error handling. `BaseException` is deliberately
+not caught: an interrupt is not a tool telling the model something.
+
+Measured before it was built, on one deployment: the same wrong path cost nothing
+through `read_file` and killed a sixteen-call run through `csv_profile`. Which of
+the two happened depended on the tool the model reached for, which a deployment
+cannot predict.
+
+Built beyond what the design asked for. It specified the agent; delegates and
+helpers below them get the guard too, because an agent declares its own roster
+and `subagents` defaults to everything in it, so the common case became several
+delegates holding the workspace's tools with the guard only on the parent.
+*(2026-08-18 as `a-tool-failure-is-not-a-crash.md`; shipped, and the file removed
+2026-08-31.)*
+
+**Still open from it.** The routed/host path mismatch was explicitly deferred and
+has not been answered: a workspace tool takes host paths while the agent lives on
+routed ones, and a docstring is the only defence. The guard stops that costing a
+run; it does not stop it happening. Also unanswered: whether a repeatedly failing
+tool should be taken away from the model rather than left to the recursion limit,
+and whether a tool's exception should reach the run report as well as the model.
+
 ## Layering
 
 **`infrastructure/harness/` holds every module that imports deepagents, langchain
@@ -193,13 +222,14 @@ while the service is stateful. `sweep()` came off the request path.
 
 ## Still proposed, not built
 
-Two documents survive in `docs/design/` because they describe work that has not
-happened. They are proposals, not history.
+One document survives in `docs/design/`, because it describes work that has not
+happened. It is a proposal, not history.
 
-- [**A tool failure is not a crash**](design/2026-08-18-a-tool-failure-is-not-a-crash.md)
-  -- a workspace tool's exception should become a failed `ToolMessage` rather than
-  killing the run. A `FileNotFoundError` from `csv_profile` ended a sixteen-call
-  turn.
+*A second one was there until 2026-08-31. `a-tool-failure-is-not-a-crash` had
+shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
+and its status line had never been changed to say so. Its decisions are under
+*Tool failure* above.*
+
 - [**Nothing at rest on this machine**](design/2026-08-21-nothing-at-rest-on-this-machine.md)
   -- no session data on local disk, reached through a door kingfisher does not
   look behind. Several of its claims are still unmeasured, and it says so.

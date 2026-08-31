@@ -16,16 +16,23 @@ manual, and an entry old enough to doubt is one to re-check rather than trust.
 
 ## `design/`
 
-Two documents, both **proposals that have not been built**. This folder is no
+One document, and it is a **proposal that has not been built**. This folder is no
 longer history -- history was condensed into `decisions.md`.
 
-- [A tool failure is not a crash](design/2026-08-18-a-tool-failure-is-not-a-crash.md)
 - [Nothing at rest on this machine](design/2026-08-21-nothing-at-rest-on-this-machine.md)
 
 A document belongs here while it is arguing for something. Once it is built, its
 decisions move to `decisions.md`, anything measured about upstream moves to
 `findings.md`, and the file goes -- which is what happened to the other
-twenty-five.
+twenty-six.
+
+The twenty-sixth is worth naming, because it is the failure this folder now has
+one job to avoid. *A tool failure is not a crash* sat here saying **designed, not
+implemented** while `WorkspaceToolErrors` and its test file had been in the tree
+for some time. A proposal that has quietly shipped is worse than a missing
+document: it reads as work still to do, and the next person to pick it up
+rediscovers their own codebase. A status line is only true on the day it is
+written -- check it against the code before trusting it.
 
 ## What was removed, and how to get it back
 

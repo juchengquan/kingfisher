@@ -32,7 +32,14 @@ distribution, which has its own suite and its own CI job.
 **Read `docs/decisions.md` before proposing a change to anything it lists.**
 Several things in this codebase were proposed, built, and reversed; the reversals
 are recorded there precisely so the argument does not get re-run. `docs/design/`
-now holds only two documents, both proposals that have not been built.
+holds only proposals that have not been built.
+
+**Check a proposal against the code before working from it.** A status line is
+true on the day it was written and not necessarily after. One document sat in
+`docs/design/` saying *designed, not implemented* while the middleware it asked
+for had already shipped, and a test cannot catch that -- a proposal names things
+that do not exist yet, which is what makes it a proposal. Grep for the thing it
+proposes before building it.
 
 Do not go looking for design history in the tree -- it was condensed into those
 files deliberately, and the originals are in git if an entry is not enough.
