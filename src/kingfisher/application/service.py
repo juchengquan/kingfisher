@@ -54,9 +54,10 @@ by not caching at all.
 from __future__ import annotations
 
 import asyncio
-from collections.abc import AsyncIterator, Iterator
+from collections.abc import AsyncIterator, Iterable, Iterator
 from contextlib import AsyncExitStack, contextmanager, suppress
 from dataclasses import dataclass, replace
+from functools import partial
 from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
@@ -65,6 +66,12 @@ from uuid import uuid4
 from kingfisher.application import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
+from kingfisher.domain.access import (
+    Access,
+    AccessError,
+    AccessReport,
+    _Unscoped,
+)
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     UNRESTRICTED,
@@ -464,6 +471,61 @@ def _out_of_steps(cfg: Config) -> RunEvent:
     )
 
 
+#: What a call may say about who is making it: the groups held, or the explicit
+#: refusal to say.
+#:
+#: `None` is a third thing and means *nobody said*, which is why this is not
+#: spelled `tuple[str, ...] | None`. Once a policy exists those two must not
+#: collapse: "run without a caller" is a decision somebody made, and "nobody
+#: said" is a handler that forgot the boundary. One is honoured and the other
+#: is refused.
+Held = tuple[str, ...] | _Unscoped
+
+
+@dataclass(frozen=True)
+class Caller:
+    """One `Kingfisher`, bound to who is calling.
+
+    A handle rather than a second `Kingfisher`. The catalogue, the session store
+    and the per-session locks are properties of the *deployment*, not of the
+    caller, so one instance keeps owning them and a handle is cheap enough to
+    build per turn. Two handles over one instance is what a process serving
+    several callers needs; binding one at the top of a script is what a person
+    at a terminal needs. The same object does both, which is why there is no
+    constructor argument doing half of it.
+
+    It takes group *names* rather than a `Capabilities`, and that is the
+    security property: a name is resolved against a policy this deployment
+    wrote, so the only thing anyone can hand in is an input. There is no
+    spelling of "give me everything" here except `UNSCOPED`, which is a value
+    someone typed and a reviewer can grep for.
+
+    The grant is resolved once, when the handle is made, rather than on every
+    call through it -- so a reused handle costs the expansion once and a group
+    name that does not exist is refused at the boundary rather than at the
+    first turn.
+    """
+
+    _kf: Kingfisher
+    #: What the caller said, kept beside the grant for whatever has to report
+    #: it and for the checks that run per turn rather than per handle.
+    held: Held
+    #: What this deployment permits this caller, both ceilings already applied.
+    grants: Capabilities
+
+    def run(self, request: str | Request) -> RunResult:
+        return self._kf.run(request, groups=self.held)
+
+    async def arun(self, request: str | Request) -> RunResult:
+        return await self._kf.arun(request, groups=self.held)
+
+    def stream(self, request: str | Request) -> Iterator[RunEvent]:
+        return self._kf.stream(request, groups=self.held)
+
+    def astream(self, request: str | Request) -> AsyncIterator[RunEvent]:
+        return self._kf.astream(request, groups=self.held)
+
+
 class Kingfisher:
     """A configured kingfisher. Construct once; call `run` or `stream` per request.
 
@@ -604,6 +666,83 @@ class Kingfisher:
         # still clamps which registered names a request may reach.
         self.middleware: Mapping[str, MiddlewareFactory] = middleware or {}
         self._graph = graph
+        # Reconciled here rather than where the file was read, because "which
+        # assets exist" is the catalogue's answer and the catalogue is not known
+        # until the line above. Stale entries are dropped rather than kept: the
+        # grant they would produce reaches `Offering.refuse_unknown`, which
+        # refuses a name the workspace does not offer, so a line still pointing
+        # at a deleted tool would turn every turn into a refusal instead of the
+        # report this leaves behind.
+        self.access: Access | None = None
+        self.access_report: AccessReport = AccessReport()
+        if self.cfg.access is not None:
+            self.access, self.access_report = self.cfg.access.reconciled(self._offered_names())
+
+    def _offered_names(self) -> dict[str, tuple[str, ...]]:
+        """What the catalogue holds, per controlled kind, for reconciliation.
+
+        Tools are the workspace's own: built-ins are not controlled by a policy
+        and have no file to be stale about. They are asked for in the *written*
+        form a grant uses, so a policy naming a bare `fetch` where two files
+        define one is reported as stale rather than silently matching neither.
+
+        `session_dir=None` because this is the shared catalogue, before any
+        session exists. What a session adds is a request's own upload, which a
+        policy written beforehand cannot have an opinion about.
+        """
+        return {
+            "agents": tuple(self.catalogue.agents.specs),
+            "subagents": tuple(defined_subagents(self.cfg, None, catalogue=self.catalogue)),
+            "tools": tuple(workspace_tool_names(self.cfg, catalogue=self.catalogue)),
+        }
+
+    def for_groups(self, groups: Iterable[str] | _Unscoped) -> Caller:
+        """This deployment, bound to a caller holding these groups.
+
+        The one place a caller's identity enters, and the only way to run a turn
+        on a deployment that has a policy. See `Caller` for why it takes names
+        rather than a grant.
+        """
+        held: Held = groups if isinstance(groups, _Unscoped) else tuple(groups)
+        return Caller(_kf=self, held=held, grants=self._effective_grants(held))
+
+    def _effective_grants(self, groups: Held | None) -> Capabilities:
+        """The ceiling for one call: this deployment's, narrowed by the caller's.
+
+        Four states, and the third is the reason this exists at all.
+
+        No policy and no groups is every deployment that predates this feature,
+        and it must keep behaving exactly as it did. No policy but groups named
+        is a caller who believes access is controlled here and is wrong -- said
+        out loud, because a group list quietly doing nothing is how somebody
+        ships a deployment they think is locked down. A policy and no groups is
+        a call that never said who was making it: refused, because the
+        alternative is one handler forgetting the boundary and granting
+        everything with nothing anywhere to show for it. A policy and groups is
+        the ordinary case.
+
+        Composition is `intersect`, so both ceilings hold and neither can widen
+        the other: a policy cannot hand back what the deployment withheld.
+        """
+        if self.access is None:
+            if groups is not None:
+                msg = (
+                    "this deployment has no access policy, so naming groups means "
+                    "nothing here -- write access.yaml in the workspace, or set "
+                    "KINGFISHER_ACCESS_FILE"
+                )
+                raise AccessError(msg)
+            return self.grants
+        if groups is None:
+            msg = (
+                "this deployment has an access policy, so a call must say who is "
+                "calling: for_groups([...]) with the caller's groups, or "
+                "for_groups(UNSCOPED) to run without one"
+            )
+            raise AccessError(msg)
+        if isinstance(groups, _Unscoped):
+            return self.grants
+        return self.grants.intersect(self.access.resolve(groups))
 
     def _session_id_for(self, request: Request, root: Path) -> str:
         """Mint an id, or accept one that already names a session.
@@ -950,6 +1089,8 @@ class Kingfisher:
         request: str | Request,
         session: Session | None = None,
         checkpointer: Any = _UNSET,
+        *,
+        groups: Held | None = None,
     ) -> _Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
@@ -965,7 +1106,7 @@ class Kingfisher:
         Written as two functions it is checkable, and `_Admitted` is the only
         way across.
         """
-        return self._open_turn(self._admit(request, session, checkpointer))
+        return self._open_turn(self._admit(request, session, checkpointer, groups=groups))
 
     def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
         """The saver this turn runs on, and how to release it when the turn ends.
@@ -1074,6 +1215,8 @@ class Kingfisher:
         request: str | Request,
         session: Session | None = None,
         checkpointer: Any = _UNSET,
+        *,
+        groups: Held | None = None,
     ) -> _Admitted:
         """Everything that can refuse, before anything a refusal would strand.
 
@@ -1093,13 +1236,19 @@ class Kingfisher:
         # and a turn arriving halfway through would be reading it as it moved.
         session.claim(dirs, self._claims, stale_after=cfg.claim_stale_after, now=time())
         try:
-            return self._admitted(request, session, cfg, checkpointer)
+            return self._admitted(request, session, cfg, checkpointer, groups=groups)
         except BaseException:
             session.release(dirs, self._claims)
             raise
 
     def _admitted(
-        self, request: Request, session: Session, cfg: Config, checkpointer: Any = _UNSET
+        self,
+        request: Request,
+        session: Session,
+        cfg: Config,
+        checkpointer: Any = _UNSET,
+        *,
+        groups: Held | None = None,
     ) -> _Admitted:
         """The rest of admission, once the session is claimed.
 
@@ -1138,7 +1287,7 @@ class Kingfisher:
         # Definitions the request brought itself are added back: their content
         # came from the caller, so a grant list -- written before their names
         # existed -- has no opinion about them.
-        allowed = self.grants.intersect(request.capabilities).including(
+        allowed = self._effective_grants(groups).intersect(request.capabilities).including(
             skills=brought.skills, subagents=brought.subagents
         )
         # Resolved here rather than in `__init__`, because the default is a
@@ -1352,7 +1501,9 @@ class Kingfisher:
         if messages:
             write_transcript(prepared.session.directory, runtime.as_transcript(messages))
 
-    def stream(self, request: str | Request) -> Iterator[RunEvent]:
+    def stream(
+        self, request: str | Request, *, groups: Held | None = None
+    ) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens.
 
         The terminal event has `kind == "finished"` and carries the `RunResult`.
@@ -1362,16 +1513,18 @@ class Kingfisher:
         # read.
         request = Request.coerce(request)
         with self._held_session(request) as session:
-            yield from self._stream_turn(request, session)
+            yield from self._stream_turn(request, session, groups=groups)
 
-    def _stream_turn(self, request: Request, session: Session) -> Iterator[RunEvent]:
+    def _stream_turn(
+        self, request: Request, session: Session, *, groups: Held | None = None
+    ) -> Iterator[RunEvent]:
         """One turn, with its directory already held.
 
         Split from `stream` for the reason `_astream_turn` is split from
         `astream`: so what holds the session wraps the whole turn without
         indenting the loop that matters.
         """
-        prepared = self._prepare(request, session)
+        prepared = self._prepare(request, session, groups=groups)
         answer = ""
         ok = False
         cut_short = False
@@ -1427,7 +1580,9 @@ class Kingfisher:
 
         yield self._finished(prepared, answer, kept, cut_short=cut_short)
 
-    async def astream(self, request: str | Request) -> AsyncIterator[RunEvent]:
+    async def astream(
+        self, request: str | Request, *, groups: Held | None = None
+    ) -> AsyncIterator[RunEvent]:
         """`stream`, on an event loop.
 
         The same turn and the same ordering -- `_prepare` is shared, so there
@@ -1461,18 +1616,20 @@ class Kingfisher:
             # After entering, so a hold that failed is not then released.
             stack.push(holding)
             saver = await self._async_checkpointer_for(stack, session.directory)
-            async for event in self._astream_turn(request, session, saver):
+            async for event in self._astream_turn(request, session, saver, groups=groups):
                 yield event
 
     async def _astream_turn(
-        self, request: Request, session: Session, saver: Any
+        self, request: Request, session: Session, saver: Any, *, groups: Held | None = None
     ) -> AsyncIterator[RunEvent]:
         """One async turn, with its session and saver already resolved.
 
         Split from `astream` only so the exit stack holding the saver wraps the
         whole turn without indenting the loop that matters.
         """
-        prepared = await asyncio.to_thread(self._prepare, request, session, saver)
+        prepared = await asyncio.to_thread(
+            partial(self._prepare, request, session, saver, groups=groups)
+        )
         answer = ""
         ok = False
         cut_short = False
@@ -1529,10 +1686,12 @@ class Kingfisher:
 
         yield self._finished(prepared, answer, kept, cut_short=cut_short)
 
-    async def arun(self, request: str | Request) -> RunResult:
+    async def arun(
+        self, request: str | Request, *, groups: Held | None = None
+    ) -> RunResult:
         """Run one task to completion on an event loop. A drain of `astream`."""
         result: RunResult | None = None
-        async for event in self.astream(request):
+        async for event in self.astream(request, groups=groups):
             if event.kind == "finished":
                 result = event.result
 
@@ -1541,10 +1700,10 @@ class Kingfisher:
             raise RuntimeError(msg)
         return result
 
-    def run(self, request: str | Request) -> RunResult:
+    def run(self, request: str | Request, *, groups: Held | None = None) -> RunResult:
         """Run one task to completion. A drain of `stream`."""
         result: RunResult | None = None
-        for event in self.stream(request):
+        for event in self.stream(request, groups=groups):
             if event.kind == "finished":
                 result = event.result
 
