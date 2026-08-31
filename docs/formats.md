@@ -1303,6 +1303,31 @@ $ kingfisher list --as admin      # check `contains` before trusting it
 whoever runs it is on the host with the policy file already in front of them.
 Running a *turn* still has to say who is calling.
 
+### Agents, and what a session does not let you keep
+
+`agents` is the one kind with no `Capabilities` axis behind it, because a
+request names an agent before there is anything to narrow. So it is checked
+where the *name* is resolved: when a session is opened, and again on **every
+turn afterwards**.
+
+That second half is the part worth knowing. A session pins its agent for life,
+and a session id is a bearer credential — holding one is how a caller proves the
+session is theirs. Checked only at the open, holding one would be a durable
+grant to an agent you may not open, and a caller who lost a group would keep
+running what they had before. So:
+
+- A leaked session id grants nothing its holder could not open themselves.
+- A demotion takes effect on the caller's next turn, and an in-flight
+  conversation on an agent they can no longer reach stops being usable. That is
+  the intended behaviour, not a bug — it is the same answer as "you may not run
+  this agent", arriving at the first moment it became true.
+
+Because an agent decides its own `builtin_tools`, controlling agents
+transitively controls the shell. An agent declaring
+`builtin_tools: [read_file, ls, glob, grep]` cannot yield `execute` to anyone,
+so restricting who may open it is how a deployment keeps the shell away from a
+group — which is why `builtin_tools` needs no section of its own.
+
 ### Uploads are unchanged
 
 A request may still bring its own subagent or skill. Those cannot escalate: an

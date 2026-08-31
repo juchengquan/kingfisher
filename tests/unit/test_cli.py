@@ -825,6 +825,29 @@ def test_as_is_ignored_where_there_is_no_policy(cfg, monkeypatch, capsys):
     assert "no group can reach" not in capsys.readouterr().out
 
 
+def test_the_listing_filters_agents_too(cfg, monkeypatch, capsys):
+    """Agents are a controlled kind, so a caller's view drops the ones they
+    cannot open -- the same rule the refusal follows, so the two cannot drift."""
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "assistant")
+    an_agent(cfg, "surveyor")
+    (cfg.workspace / "access.yaml").write_text(
+        'groups: [A, B]\nagents:\n  assistant: [A]\n  surveyor: ["*"]\n', encoding="utf-8"
+    )
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list", "--as", "B"]) == 0
+    narrowed = capsys.readouterr().out
+    assert "surveyor" in narrowed
+    assert "assistant" not in narrowed
+
+    assert main(["list"]) == 0
+    assert "assistant" in capsys.readouterr().out, "the operator still sees every agent"
+
+
 def test_as_parses_a_comma_separated_list():
     from kingfisher.presentation.cli.__main__ import _held
 
