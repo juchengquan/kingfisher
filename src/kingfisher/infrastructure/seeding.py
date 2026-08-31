@@ -16,7 +16,8 @@ wheel, no metadata and no publish step. This repository keeps a worked set in
 What that costs is written down rather than glossed: `pip install kingfisher`
 followed by `kingfisher seed` no longer produces a working workspace, and since
 a request must name an agent, it produces a library that cannot run. See
-docs/design/2026-08-19-examples-are-ours-assets-are-yours.md.
+*Packaging: where the definitions live* in docs/decisions.md, which also records
+the two arrangements this one reversed.
 
 `models.yaml.example` used to be seeded here too, apart from the definitions,
 because it is the one thing that was never content. `ensure_layout` writes it

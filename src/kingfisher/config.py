@@ -20,7 +20,7 @@ and which *endpoint* to send to, welded 1:1 -- so a deployment had exactly one
 endpoint per wire format and two Anthropic-compatible gateways were
 unconfigurable. The wire formats are now a closed registry in
 `infrastructure.harness.models`, keyed by `api`, and endpoints are open data
-read from `models.yaml`. See `docs/design/2026-08-16-model-catalogue.md`.
+read from `models.yaml`. See *Models and endpoints* in `docs/decisions.md`.
 """
 
 from __future__ import annotations

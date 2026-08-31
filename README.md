@@ -24,7 +24,9 @@ same two:
     kingfisher seed --from ./my-definitions  # from here instead
 
 The formats — tools, skills, subagents, and the catalogue they live in —
-are documented in [`docs/formats.md`](docs/formats.md).
+are documented in [`docs/formats.md`](docs/formats.md), and the rest of
+[`docs/`](docs/README.md) says why the code is shaped the way it is and what
+deepagents actually does underneath it.
 
 `kingfisher list` shows what a workspace offers a request — tools, skills,
 subagents — and where each one came from. `kingfisher seed` writes a starting
