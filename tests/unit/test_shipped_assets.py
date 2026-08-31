@@ -19,10 +19,8 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.domain import agent as agent_format
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.subagent import reading as subagent_format
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
@@ -50,12 +48,16 @@ def test_every_preset_subagent_parses(shipped):
     # graph and exports it as `SUBAGENTS`. It has no `system_prompt` and cannot
     # -- whatever prompt it uses is inside the graph -- which is why the loop
     # below asks each spec for the half it actually has.
+    # `sweeper` is the fourth shape and the newest: a definition that names
+    # middleware, which is why `seed` leaves it behind and why it lives here
+    # rather than in a folder of its own. It parses like any other.
     assert set(specs) == {
         "reviewer",
         "extractor",
         "profiler",
         "redactor",
         "show-your-work",
+        "sweeper",
     }
     for spec in specs.values():
         assert spec.description.strip()
@@ -233,7 +235,11 @@ def test_every_preset_agent_parses(shipped):
     definitions in it could not run."""
     specs = LocalAgentRepository(shipped / "agents").specs
 
-    assert set(specs) == {"assistant", "surveyor"}
+    # `researcher` names middleware, so `seed` leaves it behind -- see
+    # `test_seed_leaves_behind_a_definition_naming_middleware`. Left behind is
+    # not unread: it is a definition of this kind, in this kind's folder, and
+    # it parses like the rest.
+    assert set(specs) == {"assistant", "researcher", "surveyor"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -451,8 +457,28 @@ def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
 
 def _call_cap(shipped):
     """`CallCap`, loaded the way a deployment would import it."""
-    module = load(shipped / "middleware" / "call_cap.py", declares="CallCap")
-    return module.CallCap
+    return _call_cap_module(shipped).CallCap
+
+
+def _call_cap_module(shipped):
+    """The whole example module, for the tests that want more than one name."""
+    return load(shipped / "middleware" / "call_cap.py", declares="CallCap")
+
+
+def _documented_registry(shipped):
+    """The wiring block the examples tell you to paste, pasted.
+
+    Both example modules at once, because the block is one block: a deployment
+    copying it registers three names over three classes, and a test that built
+    half of it would not be checking the thing the comment promises.
+    """
+    cap = _call_cap_module(shipped)
+    note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
+    return {
+        "call-cap-strict": cap.CallCap,
+        "call-cap-generous": cap.CallCapGenerous,
+        "tool-note": note.ToolNote,
+    }
 
 
 def test_the_middleware_example_is_not_a_definition_kind(shipped):
@@ -470,33 +496,110 @@ def test_the_middleware_example_is_not_a_definition_kind(shipped):
     assert "middleware" not in DEFINITION_KINDS
 
 
-def test_no_shipped_definition_names_a_middleware(shipped):
-    """The curriculum has to keep running after a bare `kingfisher seed`.
+def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path):
+    """The curriculum has to keep running after a `kingfisher seed`.
 
-    A definition naming `call-cap-strict` is refused when the agent is built --
+    A definition naming `call-cap-strict` is refused when it is built --
     `names unregistered middleware` -- on every deployment that has not written
-    the factory. Putting that line in a shipped file would break the first run
-    of a fresh checkout to demonstrate a feature, which is the wrong trade.
+    the factory. Seeding one into a fresh workspace hands somebody a file that
+    cannot run and no reason why.
 
-    A star is not that, and this refused one anyway. The assertion was
-    `"middleware" not in document`, which is broader than the paragraph above
-    and broader for no reason the paragraph gives -- a rule whose test says more
-    than its argument does, which is the kind that outlives being right.
+    This used to be a rule about *folders*: the two definitions naming
+    middleware lived under `examples/middleware/`, which `seed` does not walk,
+    and this test asserted that nothing in `agents/` or `subagents/` named one.
+    That kept a fresh checkout working and cost the thing it was checking --
+    an agent and a delegate filed away from their own kinds, hand-parsed by
+    this file because no repository could be pointed at the folder holding
+    them.
 
-    `["*"]` resolves against whatever the deployment registered, and on a fresh
-    checkout that is nothing: `approved_middleware` answers `()` and raises
-    nothing, which `test_a_wildcard_can_resolve_to_nothing_and_says_nothing`
-    pins from the domain side. It degrades where a name refuses, so it is the
-    one form of this field a shipped file may carry.
+    So the rule moved to where the decision is. `seed` reads the field and
+    leaves such a definition behind, at any depth, and the files live with
+    their kind. Driven against the real tree rather than asserted over it,
+    because what could regress is the copying rather than the wording.
     """
+    from kingfisher.infrastructure.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+
+    done = seed(Destination(), shipped)
+
+    assert {left.label for left in done.skipped} == {
+        "agents/researcher.yaml",
+        "subagents/sweeper.yaml",
+    }
+    assert "agents/researcher.yaml" not in done.written
+    assert "subagents/sweeper.yaml" not in done.written
+    assert not (tmp_path / "agents" / "researcher.yaml").exists()
+    assert not (tmp_path / "subagents" / "sweeper.yaml").exists()
+
+    # The names are the actionable half of the message: "names middleware"
+    # sends a reader looking, and naming them says what to register.
+    assert {left.label: left.names for left in done.skipped} == {
+        "agents/researcher.yaml": ("call-cap-strict", "tool-note"),
+        "subagents/sweeper.yaml": ("call-cap-generous", "tool-note"),
+    }
+
+    # And everything else still arrives, which is the half that would break
+    # quietly if the rule were ever widened by accident.
+    assert "agents/assistant.yaml" in done.written
+    assert "subagents/reviewer.yaml" in done.written
+
+
+def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_path):
+    """The deployment that already registered the names wants its own examples.
+
+    Skipping is a fact about the *workspace* -- one that has registered nothing
+    cannot build these -- rather than a judgement about the files, so a
+    deployment that has done the registering says so and gets them.
+    """
+    from kingfisher.infrastructure.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+
+    done = seed(Destination(), shipped, everything=True)
+
+    assert not done.skipped
+    assert "agents/researcher.yaml" in done.written
+    assert "subagents/sweeper.yaml" in done.written
+    assert (tmp_path / "agents" / "researcher.yaml").is_file()
+    assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
+
+
+def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
+    """The property the rule exists for, checked over the result rather than
+    the inputs.
+
+    The test above pins the two files this tree happens to have. This one holds
+    the *invariant*: whatever lands in a seeded workspace can be built against
+    an empty registry. A definition added later that names middleware turns
+    this red without anybody remembering to list it.
+    """
+    from kingfisher.infrastructure.catalogue.documents import middleware_named
+    from kingfisher.infrastructure.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+
+    seed(Destination(), shipped)
+
     for kind in ("agents", "subagents"):
-        for path in (shipped / kind).rglob("*.yaml"):
-            document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            written = document.get("middleware") or []
-            named = [entry for entry in written if entry != "*"]
+        for path in (tmp_path / kind).rglob("*.yaml"):
+            named = middleware_named(path.read_text(encoding="utf-8"))
             assert not named, (
-                f"{path.name} names {named}, which is refused on any deployment that "
-                'did not register it; `["*"]` is the form that resolves to nothing instead'
+                f"{path.relative_to(tmp_path)} was seeded naming {named}, which is "
+                'refused on any deployment that did not register it; `["*"]` is the '
+                "form that resolves to nothing instead"
             )
 
 
@@ -557,6 +660,47 @@ def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
     assert out["messages"][-1].content == "done", "the cap ended the turn instead of the call"
 
 
+def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
+    """It is code, so "does it parse" means "does it run" -- the same bar
+    `test_the_middleware_example_caps_a_turn` sets for the cap two tests up.
+
+    Driven by a scripted model rather than by calling `_annotate` directly,
+    because what could be wrong is the wiring: a middleware that annotates
+    correctly and is never reached by the graph passes every unit assertion and
+    does nothing at all.
+    """
+    note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
+    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
+    responses = [
+        AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "c1"}]),
+        AIMessage(content="done"),
+    ]
+
+    graph = build_agent(
+        cfg,
+        agent=replace(
+            spec,
+            middleware=("tool-note",),
+            middleware_settings={"tool-note": {"text": "Mind the source."}},
+            subagents=None,
+            skills=None,
+        ),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses),
+        middleware_registry={"tool-note": note.ToolNote},
+    )
+    out = graph.invoke(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={"configurable": {"thread_id": "note"}, "recursion_limit": 30},
+    )
+
+    results = [m for m in out["messages"] if isinstance(m, ToolMessage)]
+    assert results, "the scripted call never produced a tool result"
+    assert all(m.content.endswith("Mind the source.") for m in results), (
+        "the definition's wording did not reach the result the model reads"
+    )
+
+
 def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
     """`CallCap(0)` would refuse the first call and every one after it, which
     is not a narrower cap but a broken agent. Omitting the name is how you say
@@ -566,23 +710,22 @@ def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
 
 
 def _example_definitions(shipped):
-    """The agent and delegate beside `call_cap.py`, read by the formats that own them.
+    """The agent and delegate that name middleware, from the kinds they belong to.
 
-    Read here rather than through `LocalAgentRepository`, which scans a whole
-    directory: these two share a folder with each other and with the module,
-    so pointing an agent repository at it would try to read a subagent as an
-    agent. Nothing loads this folder at run time, which is the point of it.
+    Through the ordinary repositories, which is the point of the move that put
+    them there. They used to sit beside `call_cap.py` and be hand-parsed here,
+    because a folder holding an agent, a delegate and two modules is a folder no
+    repository can be pointed at -- it would have tried to read `sweeper` as an
+    agent.
+
+    What kept them out of these folders was that `seed` copied everything in
+    them, and a definition naming middleware cannot run in a workspace that has
+    registered nothing. That is `seed`'s rule now rather than the layout's, so
+    the layout is free to say what these files *are*.
     """
-    root = shipped / "middleware"
-    agent_path = root / "researcher.yaml"
-    delegate_path = root / "sweeper.yaml"
     return (
-        agent_format.parse(
-            yaml.safe_load(agent_path.read_text(encoding="utf-8")), agent_path
-        ),
-        subagent_format.parse(
-            yaml.safe_load(delegate_path.read_text(encoding="utf-8")), delegate_path
-        ),
+        LocalAgentRepository(shipped / "agents").specs["researcher"],
+        LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
     )
 
 
@@ -602,10 +745,23 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     agent, delegate = _example_definitions(shipped)
 
     assert agent.name == "researcher"
-    assert agent.middleware == ("call-cap-strict",)
+    assert agent.middleware == ("call-cap-strict", "tool-note")
     assert delegate.name == "sweeper"
-    assert delegate.middleware == ("call-cap-generous",)
+    assert delegate.middleware == ("call-cap-generous", "tool-note")
     assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
+
+    # Both spellings in one list, which is what these two files are now for.
+    # The cap is bare because `CallCap` opens nothing; the note is written long
+    # because `ToolNote` opens `text`.
+    assert dict(agent.middleware_settings) == {
+        "tool-note": {"text": "Cite the path and line for anything you assert."}
+    }
+    assert dict(delegate.middleware_settings) == {
+        "tool-note": {"text": "Return the path and line, not the file."}
+    }
+    assert (
+        agent.middleware_settings["tool-note"] != delegate.middleware_settings["tool-note"]
+    ), "one registry entry configured two ways is the thing this pair demonstrates"
 
 
 def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
@@ -640,16 +796,102 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
     none of its parent's middleware, so `researcher` running out of calls says
     nothing about how many `sweeper` has left.
     """
-    cap = _call_cap(shipped)
-    registry = {
-        "call-cap-strict": lambda: cap(20),
-        "call-cap-generous": lambda: cap(100),
-    }
+    registry = _documented_registry(shipped)
     agent, delegate = _example_definitions(shipped)
 
     built = declared_middleware(agent, registry, ALL, kind="agent")
     delegated = declared_middleware(delegate, registry, ALL, kind="subagent")
 
-    assert [type(m).__name__ for m in built] == ["CallCap"]
-    assert [type(m).__name__ for m in delegated] == ["CallCap"]
+    assert [type(m).__name__ for m in built] == ["CallCap", "ToolNote"]
+    assert [type(m).__name__ for m in delegated] == ["CallCapGenerous", "ToolNote"]
     assert built[0] is not delegated[0], "one instance for both would share a budget"
+    # The ceilings the two classes document, read off the objects rather than
+    # off `defaults`: the point of registering a class is that the build path
+    # applies its defaults, so asserting the attribute would assert nothing.
+    assert built[0]._limit == 20
+    assert delegated[0]._limit == 100
+
+
+def test_the_note_example_is_one_class_configured_two_ways(shipped):
+    """The half of the axis `call_cap.py` cannot show, driven end to end.
+
+    One registry entry, named by both definitions, built into two objects
+    carrying the sentences their own files wrote. That is what a setting buys
+    and what two-names-over-two-classes cannot express -- and it is the reason
+    `ToolNote` opens `text` where `CallCap` opens nothing.
+
+    Read off the built objects rather than the specs, because the specs were
+    already asserted two tests up. What could still be wrong here is the merge.
+    """
+    registry = _documented_registry(shipped)
+    agent, delegate = _example_definitions(shipped)
+
+    note = declared_middleware(agent, registry, ALL, kind="agent")[1]
+    delegated = declared_middleware(delegate, registry, ALL, kind="subagent")[1]
+
+    assert note._text == "Cite the path and line for anything you assert."
+    assert delegated._text == "Return the path and line, not the file."
+    assert note._text != delegated._text
+    # The key neither file wrote, which both take from the deployment. The
+    # merge is per key rather than all-or-nothing, and this is where that shows.
+    assert note._max_length == delegated._max_length == 200
+
+
+def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
+    """`max_length` is a ceiling on what a definition may inject into every tool
+    result, so it is shut for the same reason `limit` is.
+
+    Driven against the real class rather than a fixture, because the thing that
+    could regress is `ToolNote.yaml_settable` -- someone adding `max_length` to
+    it to make a long note fit would pass every other test in this file.
+    """
+    from dataclasses import replace
+
+    registry = _documented_registry(shipped)
+    agent, _ = _example_definitions(shipped)
+    greedy = replace(
+        agent,
+        middleware_settings={"tool-note": {"text": "hi", "max_length": 100_000}},
+    )
+
+    with pytest.raises(CapabilityError, match="does not accept"):
+        declared_middleware(greedy, registry, ALL, kind="agent")
+
+
+def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
+    """`middleware: [tool-note]` with no settings is a working line, not a no-op.
+
+    `defaults` holds a real sentence rather than an empty string, so a
+    definition that names the middleware and says no more still gets a note.
+    Worth pinning: an empty default would make the bare form silently do
+    nothing, which is the shape of a feature nobody notices is broken.
+    """
+    from dataclasses import replace
+
+    registry = _documented_registry(shipped)
+    agent, _ = _example_definitions(shipped)
+    quiet = replace(agent, middleware=("tool-note",), middleware_settings={})
+
+    (built,) = declared_middleware(quiet, registry, ALL, kind="agent")
+
+    assert built._text == registry["tool-note"].defaults["text"]
+    assert built._text, "the bare form has to do something"
+
+
+def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
+    """The shape the whole argument rests on, pinned where it can rot.
+
+    `CallCap.yaml_settable` is empty, so no definition can write `limit:` --
+    and the way a deployment offers a looser ceiling is a second class, not a
+    second key. If someone later adds `limit` to `yaml_settable` to save a
+    class, this fails and says why that trade is the one the module argues
+    against.
+    """
+    module = _call_cap_module(shipped)
+
+    assert module.CallCap.yaml_settable == frozenset(), (
+        "a cap a definition can set is not a cap; `limit` stays out of yaml_settable"
+    )
+    assert issubclass(module.CallCapGenerous, module.CallCap)
+    assert module.CallCap.defaults["limit"] == 20
+    assert module.CallCapGenerous.defaults["limit"] == 100

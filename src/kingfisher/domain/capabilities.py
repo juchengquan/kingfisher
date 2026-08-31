@@ -27,7 +27,7 @@ the two ends are an ordinary lattice and narrowing is set intersection.
 
 from __future__ import annotations
 
-from collections.abc import Iterable
+from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from typing import Literal
 
@@ -567,6 +567,62 @@ def approved_middleware(
             raise CapabilityError(msg)
 
     return tuple(declared)
+
+
+def approved_settings(
+    wrote: Mapping[str, object],
+    *,
+    settable: Iterable[str],
+    subject: str,
+    registered_as: str,
+) -> dict[str, object]:
+    """Which of the settings a definition wrote beside a name it may actually pass.
+
+    The second half of `approved_middleware`, on the axis that one added. A name
+    selects code the deployment wrote; a setting reaches *into* that code, so the
+    class behind the name says which of its own keys a definition is allowed to
+    write and this refuses the rest.
+
+    Refuses rather than drops, which is the same choice made one function up and
+    for a sharper reason. A definition that wrote a setting believes it took
+    effect, and the failure it is guarding against is exactly the one where it
+    did not: running with a value the deployment chose while the file says
+    otherwise is how a cap nobody raised turns out to have been raised.
+
+    Which keys those are is not negotiable per deployment and not a policy this
+    layer holds. `yaml_settable` is a class attribute, so it is written once
+    beside the code it governs, and a class that declares none -- the default --
+    is a class no definition may configure at all. `CallCap` is deliberately
+    that: a cap a definition can set is not a cap, so `limit` is absent from its
+    `yaml_settable` and the way to have a looser one is a second registry entry
+    over a subclass.
+
+    Takes the permitted *names* rather than the class, for the reason the rest
+    of this module takes names: reading an attribute off a registered object is
+    the caller's half, and the rule about what to do with the answer is ours.
+    """
+    if not wrote:
+        return {}
+    permitted = set(settable)
+    unknown = tuple(key for key in wrote if key not in permitted)
+    if unknown:
+        offered = tuple(sorted(permitted))
+        # Worded around what the *class* allows rather than what the file wrote,
+        # because the fix is nearly always to stop writing the key rather than to
+        # spell it differently -- and a class offering none should say so plainly
+        # instead of printing an empty tuple and leaving the reader guessing.
+        allows = (
+            f"{registered_as!r} takes settings for {', '.join(offered)}"
+            if offered
+            else f"{registered_as!r} takes no settings from a definition at all"
+        )
+        msg = (
+            f"{subject} writes settings {', '.join(repr(k) for k in unknown)} for middleware "
+            f"{registered_as!r}, which it does not accept; {allows}. A setting a "
+            f"definition may write is one the class named in `yaml_settable`"
+        )
+        raise CapabilityError(msg)
+    return dict(wrote)
 
 
 #: What a deployment permits when it says nothing, which is now exactly the

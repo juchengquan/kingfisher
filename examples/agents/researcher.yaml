@@ -1,0 +1,85 @@
+# The agent half of the middleware example, and one of the only two definitions
+# in this repository that name middleware at all.
+#
+# `kingfisher seed` will not copy it, and that is what the `middleware:` line
+# below costs. A definition naming `call-cap-strict` is refused when the agent
+# is built -- `names unregistered middleware` -- on every deployment that has
+# not written the factory behind that name, so seeding one into a fresh
+# workspace hands somebody a file that cannot run and no reason why.
+#
+# It lives here anyway, under the kind it *is*. The rule is `seed`'s rather
+# than the folder's: seeding reads this field and says what it left behind, so
+# an agent can be filed as an agent and still be kept out of a workspace that
+# cannot build it. `seed --all` takes it once you have registered the names,
+# which is the whole of the setup:
+#
+#     from examples.middleware.call_cap import CallCap, CallCapGenerous
+#     from examples.middleware.tool_note import ToolNote
+#
+#     kingfisher = Kingfisher(
+#         cfg,
+#         middleware={
+#             "call-cap-strict":   CallCap,
+#             "call-cap-generous": CallCapGenerous,
+#             "tool-note":         ToolNote,
+#         },
+#     )
+name: researcher
+description: Answers questions from a workspace's files under a ceiling on how much it may do to get there.
+# The line this example exists for. `middleware` names entries from a registry
+# the *deployment* supplies -- not files, not anything a workspace holds -- and
+# the name selects code. Which is why the ceiling is `call-cap-strict` rather
+# than a number written here: a cap a definition can set is not a cap.
+#
+# Two entries and two spellings, which is the point of writing them together.
+#
+# `call-cap-strict` is a bare name because `CallCap` opens nothing: its
+# `yaml_settable` is empty, so there is no spelling of this file that raises
+# its own ceiling. The looser ceiling is a second registered class,
+# `call-cap-generous`, which `sweeper.yaml` names.
+#
+# `tool-note` is written long because `ToolNote` opens `text`, and what is
+# worth reminding an agent about depends on the agent. `sweeper.yaml` names the
+# same registry entry and writes a different sentence -- one registered class,
+# two definitions, two configurations, which is exactly what the cap must not
+# have and this may.
+#
+# `max_length` is not writable here and the refusal says so at build time. It
+# is a ceiling on how much a definition may inject into every tool result, and
+# a ceiling the ceilinged thing can set is not a ceiling -- the same sentence
+# as the cap, on a different resource.
+#
+# Omission grants none, like `skills` and `subagents` and unlike the two tool
+# axes. An agent that says nothing here runs with no middleware of its own.
+middleware:
+  - call-cap-strict
+  - name: tool-note
+    settings:
+      text: Cite the path and line for anything you assert.
+# Named, so what this agent may do stays legible. It reads and it delegates.
+builtin_tools: [read_file, ls, glob, grep]
+tools: []
+# The other half of the pairing, and the reason there are two files. `sweeper`
+# runs under `call-cap-generous` while this agent runs under `call-cap-strict`,
+# and that is not an inconsistency: **a subagent inherits none of its parent's
+# middleware.** Each definition names its own, each gets its own instance, and a
+# cap here bounds this agent's tool calls and not one call its delegate makes.
+#
+# Which is the argument for the pairing. A ceiling on the agent that thinks and
+# a looser one on the delegate that reads is the shape most deployments want,
+# and it is only expressible because the two are counted apart.
+subagents: [sweeper]
+# No `model:`, so this runs your `default:`.
+system_prompt: |
+  You answer questions about this workspace's files, and you have a budget.
+
+  A middleware caps how many tool calls you may make this turn. You will not
+  be told the number and you cannot raise it. When it runs out, the next call
+  comes back as an error saying so, and you answer from what you already have.
+
+  So spend it deliberately. Delegate the bulk reading to `sweeper`, whose
+  budget is its own and larger than yours -- a hundred files read there cost
+  you one call. Use your own calls for the reading that decides something.
+
+  If you do run out, say so in your answer and name what you had not checked
+  yet. An answer that hides where it stopped is worse than a short one.

@@ -46,6 +46,50 @@ LITERAL = "|"
 
 
 
+def middleware_named(text: str) -> tuple[str, ...]:
+    """The middleware a definition names, for a document that may not parse.
+
+    Two callers want this and neither wants a whole spec: `seed`, deciding
+    whether a definition belongs in a fresh workspace, and the test holding it
+    to that. Written once because the two must agree -- a rule enforced by one
+    reading and checked by another is a rule with a seam in it.
+
+    Both spellings, because a definition may write either and they mean the
+    same thing here. A `"*"` is *not* a name and is deliberately absent from
+    the result: it resolves against whatever the deployment registered, which
+    on an empty registry is nothing, and raises nothing either way. That is
+    what makes it the one form a definition can carry anywhere.
+
+    Never raises. A document that does not parse, or parses to something other
+    than a mapping, has a loader whose job is to say so in the terms of its own
+    format -- and saying it here, during a copy, would report a definition's
+    syntax error as a seeding failure. Empty means "nothing to act on", which
+    for a broken file is the answer that leaves the real error reachable.
+    """
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return ()
+    if not isinstance(parsed, dict):
+        return ()
+
+    written = parsed.get("middleware")
+    if isinstance(written, str):
+        written = [written]
+    if not isinstance(written, (list, tuple)):
+        return ()
+
+    found = []
+    for entry in written:
+        # A mapping is the long form, `{name, settings}`; a string is the name
+        # on its own. Anything else is a definition the format will refuse, and
+        # refusing it here is not this function's job.
+        name = entry.get("name") if isinstance(entry, dict) else entry
+        if isinstance(name, str) and name.strip() and name.strip() != "*":
+            found.append(name.strip())
+    return tuple(found)
+
+
 def decode(header: str) -> dict[str, object] | str:
     """A header's fields, or one line saying why it could not be read.
 

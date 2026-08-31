@@ -91,6 +91,20 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="seed from this directory instead of the one KINGFISHER_ASSETS names",
     )
+    # Off by default, because the default has to be right for a workspace that
+    # has registered nothing -- which is every first run. A definition naming
+    # middleware is refused when it is built, so copying one in by default
+    # would fill a fresh workspace with a file that cannot run.
+    seeding.add_argument(
+        "--all",
+        dest="everything",
+        action="store_true",
+        help=(
+            "also copy definitions that name middleware, which are left behind "
+            "by default because a workspace that has not registered those names "
+            "cannot build them"
+        ),
+    )
     explain = sub.add_parser(
         "help",
         help="show this, or what one verb does",
@@ -161,7 +175,7 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def _seed(source: str | None = None) -> int:
+def _seed(source: str | None = None, *, everything: bool = False) -> int:
     """Fill the workspace with definitions.
 
     On the paths half of the configuration, not the whole of it: `models.yaml`
@@ -179,9 +193,18 @@ def _seed(source: str | None = None) -> int:
     ensure_layout(paths.workspace)
 
     tree = definitions_source(paths, source)
-    written = seed(paths, tree)
+    written = seed(paths, tree, everything=everything)
     for name in written.written:
         print(f"seeded {name}")
+    for left in written.skipped:
+        # Named with what to do about it, because "skipped" on its own reads as
+        # a failure and this is a choice. The names are the actionable half: a
+        # reader who registers them can seed again with `--all`.
+        print(
+            f"skipped {left.label} — names middleware "
+            f"({', '.join(left.names)}) that this workspace cannot build. "
+            f"Register the names, then seed again with --all"
+        )
     for name in written.overwritten:
         # After the list, not beside each entry: the point is that you edit your
         # copy, so losing one is the line that has to survive being skimmed.
@@ -200,6 +223,18 @@ def _seed(source: str | None = None) -> int:
     # directory level in the wrong direction, and "holds no definitions" leaves
     # a reader guessing which direction.
     if not written.written:
+        if written.skipped:
+            # A different failure from an empty directory, and the remedy is
+            # the opposite: everything here was found and understood, and left
+            # behind on purpose. Saying "holds none of agents, skills..." would
+            # send a reader looking one directory up for files that are right
+            # where they thought.
+            print(
+                f"nothing seeded — every definition in {tree} names middleware "
+                f"this workspace cannot build. Register the names, then seed "
+                f"again with --all"
+            )
+            return 1
         print(f"nothing to seed — {tree} holds none of {', '.join(DEFINITION_KINDS)}")
         return 1
     return 0
@@ -311,7 +346,7 @@ def _doctor(*, as_document: bool = False) -> int:
 #: on somebody reordering two blocks that looked interchangeable. Here each verb
 #: names the arguments it has, and the order of this table means nothing.
 HANDLERS = {
-    "seed": lambda args, parser: _seed(args.source),  # noqa: ARG005
+    "seed": lambda args, parser: _seed(args.source, everything=args.everything),  # noqa: ARG005
     "serve": lambda args, parser: _serve(),  # noqa: ARG005
     "doctor": lambda args, parser: _doctor(as_document=args.json),  # noqa: ARG005
     "list": lambda args, parser: _list(as_document=args.json),  # noqa: ARG005

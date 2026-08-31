@@ -333,6 +333,120 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
     assert (tools_dir(cfg) / "csv_profile" / "__init__.py").is_file(), "and the package itself"
 
 
+def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
+    """`seed` reads one field and declines to copy on it.
+
+    The only thing seeding has ever decided about a *file* rather than a path.
+    It earns that: a definition naming middleware is refused when it is built on
+    a deployment that has not registered the name, so copying one into a fresh
+    workspace produces a file that cannot run and says nothing about why.
+
+    Planted rather than read off `examples/`, so this holds whatever that tree
+    happens to contain.
+    """
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "plain.yaml").write_text(
+        "name: plain\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
+    )
+    (source / "agents" / "wired.yaml").write_text(
+        "name: wired\ndescription: d\nmiddleware: [audit]\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "agents/plain.yaml" in done.written
+    assert "agents/wired.yaml" not in done.written
+    assert [(s.label, s.names) for s in done.skipped] == [("agents/wired.yaml", ("audit",))]
+
+
+def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
+    """`middleware: ["*"]` resolves against whatever the deployment registered,
+    which on an empty registry is nothing -- and raises nothing either way.
+
+    That is what makes it the one form a definition can carry anywhere, and it
+    is the shape `assistant.yaml` ships. A rule that skipped it would leave a
+    fresh workspace without its general agent to protect it from a middleware
+    it was never going to get.
+    """
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "starry.yaml").write_text(
+        'name: starry\ndescription: d\nmiddleware: ["*"]\nsystem_prompt: |\n  Hi.\n',
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source)
+
+    assert "agents/starry.yaml" in done.written
+    assert not done.skipped
+
+
+def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
+    """A delegate in `subagents/analysis/` names middleware exactly as easily as
+    one beside it.
+
+    The debris filter learned this the hard way -- it checked the top level and
+    copied any directory wholesale -- and a rule with the same hole would be one
+    the catalogue's own nesting walks straight through.
+    """
+    source = tmp_path / "presets"
+    nested = source / "subagents" / "analysis"
+    nested.mkdir(parents=True)
+    (nested / "deep.yaml").write_text(
+        "name: deep\ndescription: d\nmiddleware: [audit]\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+    (nested / "shallow.yaml").write_text(
+        "name: shallow\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
+    )
+
+    done = seeding.seed(cfg, source)
+
+    landed = subagents_dir(cfg) / "analysis"
+    assert (landed / "shallow.yaml").is_file()
+    assert not (landed / "deep.yaml").exists(), "a nested definition walked the rule"
+    assert [s.label for s in done.skipped] == ["subagents/analysis/deep.yaml"]
+
+
+def test_everything_takes_what_the_default_leaves(cfg, tmp_path):
+    """For the deployment that has already registered the names.
+
+    Skipping is a fact about the workspace rather than a judgement about the
+    file, so a deployment that has done the registering says so and gets them.
+    """
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "wired.yaml").write_text(
+        "name: wired\ndescription: d\nmiddleware: [audit]\nsystem_prompt: |\n  Hi.\n",
+        encoding="utf-8",
+    )
+
+    done = seeding.seed(cfg, source, everything=True)
+
+    assert "agents/wired.yaml" in done.written
+    assert not done.skipped
+
+
+def test_a_definition_that_does_not_parse_is_copied_rather_than_judged(cfg, tmp_path):
+    """Seeding is not a validator, and a broken file has a loader whose job is
+    to say so in the terms of its own format.
+
+    Reporting a definition's syntax error as a seeding failure would put the
+    complaint in the wrong place and, worse, hide the file from the thing that
+    knows how to explain it.
+    """
+    source = tmp_path / "presets"
+    (source / "agents").mkdir(parents=True)
+    (source / "agents" / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+
+    done = seeding.seed(cfg, source)
+
+    assert "agents/broken.yaml" in done.written
+    assert not done.skipped
+
+
 def test_seeding_twice_unchanged_is_silent(cfg):
     """By content, not by presence. A warning that fires on the ordinary path
     is one people learn to scroll past."""

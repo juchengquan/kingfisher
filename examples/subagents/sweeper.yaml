@@ -1,29 +1,43 @@
 # The delegate half, and the reason the example is two files rather than one.
 #
-# Here for the same reason `researcher.yaml` is: `middleware:` below names a
-# registry entry, `seed` does not copy this folder, and a subagent naming
-# `call-cap-generous` on a deployment that never registered it is refused when
-# the delegate is built. Copy both files together, or neither -- `researcher`
-# names this one under `subagents:`, so a workspace with one and not the other
-# has an agent pointing at a delegate that is not there.
+# Left behind by `seed` for the same reason `researcher.yaml` is: `middleware:`
+# below names a registry entry, and a subagent naming `call-cap-generous` on a
+# deployment that never registered it is refused when the delegate is built.
+#
+# Which is why they are skipped as a pair rather than one at a time --
+# `researcher` names this one under `subagents:`, so a workspace with one and
+# not the other has an agent pointing at a delegate that is not there. Both
+# name middleware, so both are left; `seed --all` takes both.
 name: sweeper
 description: Reads many files and returns only what was asked for. Use to keep bulk reading out of the caller's context and off the caller's budget.
 # The looser of the two ceilings, on the definition that earns it. This delegate
 # exists to open a lot of files, so a cap sized for an agent that mostly thinks
 # would refuse it in the middle of its job.
 #
-# Two names over one class, which is `call_cap.py`'s own lesson: the alternative
-# is one entry and `{limit: 100}` written here, and then a delegate that wants
-# more writes a bigger number and is within its rights, because the format let
-# it. Naming the variants keeps the decision where the code is. It also narrows
-# like every other capability -- a request may withhold `call-cap-generous` and
-# leave `call-cap-strict` in reach, which a number in a mapping could not say.
+# Two names over two classes, which is `call_cap.py`'s own lesson. The format
+# does now let an entry carry `settings:`, so the alternative is real -- one
+# registered name and `{limit: 100}` written here. It is still the wrong one,
+# and `CallCap.yaml_settable` is what settles it rather than good manners: the
+# class lists no settable key, so a delegate wanting more cannot write a bigger
+# number however the format is spelled. Naming the variants keeps the decision
+# where the code is. It also narrows like every other capability -- a request
+# may withhold `call-cap-generous` and leave `call-cap-strict` in reach, which
+# a number in a mapping could not say.
 #
 # Withholding it does not raise. It is a *name* here rather than a star, so a
 # request that subtracts it refuses this delegate rather than quietly building
 # it uncapped: running with less middleware than the definition specified could
 # mean running without the audit hook it was written to have.
-middleware: [call-cap-generous]
+middleware:
+  - call-cap-generous
+  # The same registry entry `researcher.yaml` names, written with a different
+  # sentence. That is the half of the axis a cap cannot demonstrate: one class
+  # the deployment registered once, configured per definition, because the
+  # useful reminder for a delegate that discards is not the useful reminder for
+  # an agent that answers.
+  - name: tool-note
+    settings:
+      text: Return the path and line, not the file.
 # Reading only, and both lists named, because omitting `tools` would mean all of
 # them -- a delegate that exists to read files able to write and fetch.
 builtin_tools: [read_file, ls, glob, grep]
