@@ -19,10 +19,8 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.domain import agent as agent_format
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.subagent import reading as subagent_format
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
@@ -50,12 +48,16 @@ def test_every_preset_subagent_parses(shipped):
     # graph and exports it as `SUBAGENTS`. It has no `system_prompt` and cannot
     # -- whatever prompt it uses is inside the graph -- which is why the loop
     # below asks each spec for the half it actually has.
+    # `sweeper` is the fourth shape and the newest: a definition that names
+    # middleware, which is why `seed` leaves it behind and why it lives here
+    # rather than in a folder of its own. It parses like any other.
     assert set(specs) == {
         "reviewer",
         "extractor",
         "profiler",
         "redactor",
         "show-your-work",
+        "sweeper",
     }
     for spec in specs.values():
         assert spec.description.strip()
@@ -233,7 +235,11 @@ def test_every_preset_agent_parses(shipped):
     definitions in it could not run."""
     specs = LocalAgentRepository(shipped / "agents").specs
 
-    assert set(specs) == {"assistant", "surveyor"}
+    # `researcher` names middleware, so `seed` leaves it behind -- see
+    # `test_seed_leaves_behind_a_definition_naming_middleware`. Left behind is
+    # not unread: it is a definition of this kind, in this kind's folder, and
+    # it parses like the rest.
+    assert set(specs) == {"assistant", "researcher", "surveyor"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -490,33 +496,110 @@ def test_the_middleware_example_is_not_a_definition_kind(shipped):
     assert "middleware" not in DEFINITION_KINDS
 
 
-def test_no_shipped_definition_names_a_middleware(shipped):
-    """The curriculum has to keep running after a bare `kingfisher seed`.
+def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path):
+    """The curriculum has to keep running after a `kingfisher seed`.
 
-    A definition naming `call-cap-strict` is refused when the agent is built --
+    A definition naming `call-cap-strict` is refused when it is built --
     `names unregistered middleware` -- on every deployment that has not written
-    the factory. Putting that line in a shipped file would break the first run
-    of a fresh checkout to demonstrate a feature, which is the wrong trade.
+    the factory. Seeding one into a fresh workspace hands somebody a file that
+    cannot run and no reason why.
 
-    A star is not that, and this refused one anyway. The assertion was
-    `"middleware" not in document`, which is broader than the paragraph above
-    and broader for no reason the paragraph gives -- a rule whose test says more
-    than its argument does, which is the kind that outlives being right.
+    This used to be a rule about *folders*: the two definitions naming
+    middleware lived under `examples/middleware/`, which `seed` does not walk,
+    and this test asserted that nothing in `agents/` or `subagents/` named one.
+    That kept a fresh checkout working and cost the thing it was checking --
+    an agent and a delegate filed away from their own kinds, hand-parsed by
+    this file because no repository could be pointed at the folder holding
+    them.
 
-    `["*"]` resolves against whatever the deployment registered, and on a fresh
-    checkout that is nothing: `approved_middleware` answers `()` and raises
-    nothing, which `test_a_wildcard_can_resolve_to_nothing_and_says_nothing`
-    pins from the domain side. It degrades where a name refuses, so it is the
-    one form of this field a shipped file may carry.
+    So the rule moved to where the decision is. `seed` reads the field and
+    leaves such a definition behind, at any depth, and the files live with
+    their kind. Driven against the real tree rather than asserted over it,
+    because what could regress is the copying rather than the wording.
     """
+    from kingfisher.infrastructure.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+
+    done = seed(Destination(), shipped)
+
+    assert {left.label for left in done.skipped} == {
+        "agents/researcher.yaml",
+        "subagents/sweeper.yaml",
+    }
+    assert "agents/researcher.yaml" not in done.written
+    assert "subagents/sweeper.yaml" not in done.written
+    assert not (tmp_path / "agents" / "researcher.yaml").exists()
+    assert not (tmp_path / "subagents" / "sweeper.yaml").exists()
+
+    # The names are the actionable half of the message: "names middleware"
+    # sends a reader looking, and naming them says what to register.
+    assert {left.label: left.names for left in done.skipped} == {
+        "agents/researcher.yaml": ("call-cap-strict", "tool-note"),
+        "subagents/sweeper.yaml": ("call-cap-generous", "tool-note"),
+    }
+
+    # And everything else still arrives, which is the half that would break
+    # quietly if the rule were ever widened by accident.
+    assert "agents/assistant.yaml" in done.written
+    assert "subagents/reviewer.yaml" in done.written
+
+
+def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_path):
+    """The deployment that already registered the names wants its own examples.
+
+    Skipping is a fact about the *workspace* -- one that has registered nothing
+    cannot build these -- rather than a judgement about the files, so a
+    deployment that has done the registering says so and gets them.
+    """
+    from kingfisher.infrastructure.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+
+    done = seed(Destination(), shipped, everything=True)
+
+    assert not done.skipped
+    assert "agents/researcher.yaml" in done.written
+    assert "subagents/sweeper.yaml" in done.written
+    assert (tmp_path / "agents" / "researcher.yaml").is_file()
+    assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
+
+
+def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
+    """The property the rule exists for, checked over the result rather than
+    the inputs.
+
+    The test above pins the two files this tree happens to have. This one holds
+    the *invariant*: whatever lands in a seeded workspace can be built against
+    an empty registry. A definition added later that names middleware turns
+    this red without anybody remembering to list it.
+    """
+    from kingfisher.infrastructure.catalogue.documents import middleware_named
+    from kingfisher.infrastructure.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+
+    seed(Destination(), shipped)
+
     for kind in ("agents", "subagents"):
-        for path in (shipped / kind).rglob("*.yaml"):
-            document = yaml.safe_load(path.read_text(encoding="utf-8")) or {}
-            written = document.get("middleware") or []
-            named = [entry for entry in written if entry != "*"]
+        for path in (tmp_path / kind).rglob("*.yaml"):
+            named = middleware_named(path.read_text(encoding="utf-8"))
             assert not named, (
-                f"{path.name} names {named}, which is refused on any deployment that "
-                'did not register it; `["*"]` is the form that resolves to nothing instead'
+                f"{path.relative_to(tmp_path)} was seeded naming {named}, which is "
+                'refused on any deployment that did not register it; `["*"]` is the '
+                "form that resolves to nothing instead"
             )
 
 
@@ -627,23 +710,22 @@ def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
 
 
 def _example_definitions(shipped):
-    """The agent and delegate beside `call_cap.py`, read by the formats that own them.
+    """The agent and delegate that name middleware, from the kinds they belong to.
 
-    Read here rather than through `LocalAgentRepository`, which scans a whole
-    directory: these two share a folder with each other and with the module,
-    so pointing an agent repository at it would try to read a subagent as an
-    agent. Nothing loads this folder at run time, which is the point of it.
+    Through the ordinary repositories, which is the point of the move that put
+    them there. They used to sit beside `call_cap.py` and be hand-parsed here,
+    because a folder holding an agent, a delegate and two modules is a folder no
+    repository can be pointed at -- it would have tried to read `sweeper` as an
+    agent.
+
+    What kept them out of these folders was that `seed` copied everything in
+    them, and a definition naming middleware cannot run in a workspace that has
+    registered nothing. That is `seed`'s rule now rather than the layout's, so
+    the layout is free to say what these files *are*.
     """
-    root = shipped / "middleware"
-    agent_path = root / "researcher.yaml"
-    delegate_path = root / "sweeper.yaml"
     return (
-        agent_format.parse(
-            yaml.safe_load(agent_path.read_text(encoding="utf-8")), agent_path
-        ),
-        subagent_format.parse(
-            yaml.safe_load(delegate_path.read_text(encoding="utf-8")), delegate_path
-        ),
+        LocalAgentRepository(shipped / "agents").specs["researcher"],
+        LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
     )
 
 

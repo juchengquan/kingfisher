@@ -1,11 +1,13 @@
 # The delegate half, and the reason the example is two files rather than one.
 #
-# Here for the same reason `researcher.yaml` is: `middleware:` below names a
-# registry entry, `seed` does not copy this folder, and a subagent naming
-# `call-cap-generous` on a deployment that never registered it is refused when
-# the delegate is built. Copy both files together, or neither -- `researcher`
-# names this one under `subagents:`, so a workspace with one and not the other
-# has an agent pointing at a delegate that is not there.
+# Left behind by `seed` for the same reason `researcher.yaml` is: `middleware:`
+# below names a registry entry, and a subagent naming `call-cap-generous` on a
+# deployment that never registered it is refused when the delegate is built.
+#
+# Which is why they are skipped as a pair rather than one at a time --
+# `researcher` names this one under `subagents:`, so a workspace with one and
+# not the other has an agent pointing at a delegate that is not there. Both
+# name middleware, so both are left; `seed --all` takes both.
 name: sweeper
 description: Reads many files and returns only what was asked for. Use to keep bulk reading out of the caller's context and off the caller's budget.
 # The looser of the two ceilings, on the definition that earns it. This delegate

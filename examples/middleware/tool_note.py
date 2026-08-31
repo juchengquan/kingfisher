@@ -1,9 +1,9 @@
 """A reminder appended to every tool result, and the settings half of the axis.
 
 `call_cap.py` is the other half of this pair and was here first. Read it first
-too: it says what middleware is, why nothing seeds this folder, and why a
-definition may only ever *name* code the deployment wrote. None of that is
-repeated here.
+too: it says what middleware is, why `seed` leaves a definition naming one
+behind, and why a definition may only ever *name* code the deployment wrote.
+None of that is repeated here.
 
 What this adds is the case that one could not show. `CallCap` exposes nothing
 to a definition -- `yaml_settable` is empty -- because every value it takes is

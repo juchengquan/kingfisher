@@ -37,12 +37,18 @@ and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
 
     middleware: [call-cap-strict]
 
-Both halves of that are written out beside this file. `researcher.yaml` and
-`sweeper.yaml` are an agent and its delegate, naming the two registry entries
-above -- the only definitions in this repository that name middleware, and here
-rather than under `agents/` and `subagents/` for the reason the next paragraph
-gives. They are read by nothing at run time; copy them across once the factories
-are registered.
+Both halves of that are written out: `examples/agents/researcher.yaml` and
+`examples/subagents/sweeper.yaml` are an agent and its delegate, naming the
+registry entries above -- the only definitions in this repository that name
+middleware at all.
+
+They live under their own kinds, and `seed` is what keeps them out of a
+workspace that cannot build them: it reads the `middleware:` field, leaves such
+a definition behind, and says which names it would have needed. `seed --all`
+takes them once the factories are registered. That rule used to be the folder's
+-- both files sat beside this one, where nothing copies anything -- which kept a
+fresh workspace working at the cost of filing an agent somewhere no agent
+repository could read it.
 
 An agent that names nothing gets nothing: `middleware` omits to none, like
 `skills` and `subagents` and unlike the two tool axes. A name this deployment

@@ -27,12 +27,14 @@ module can refuse.
 from __future__ import annotations
 
 import shutil
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.infrastructure.catalogue.documents import middleware_named
 
 #: Named in the refusal below, and only when it is really there.
 #:
@@ -113,6 +115,30 @@ def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
     return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
 
+#: The kinds whose definitions are YAML documents with a `middleware:` field.
+#:
+#: `skills` is markdown and `tools` is Python, so neither has one to read. Named
+#: rather than "try to parse everything and see", because a `.yaml` under
+#: `tools/` would be a tool's data file and reading it as a definition would be
+#: this module inventing a meaning for somebody else's file.
+DOCUMENT_KINDS = ("agents", "subagents")
+
+
+@dataclass(frozen=True)
+class Skipped:
+    """A definition left behind, and the names that decided it.
+
+    The names travel with the label because the message needs them: "names
+    middleware" sends a reader looking, and "names call-cap-strict" tells them
+    what to register. Formatted by the caller rather than here -- what a CLI
+    prints is the CLI's business, and a service seeding a workspace has its own
+    way of reporting.
+    """
+
+    label: str
+    names: tuple[str, ...]
+
+
 @dataclass(frozen=True)
 class Seeding:
     """What `seed` did. `overwritten` names files, where `written` names entries.
@@ -120,10 +146,16 @@ class Seeding:
     The two are deliberately different granularities. An entry is what you asked
     for -- `skills/code-review` -- and a file is what you might have lost, which
     is the thing worth being exact about.
+
+    `skipped` is the third answer, and it is neither of those: a definition that
+    was found, understood, and deliberately not copied. Reported rather than
+    silent, because a workspace missing a definition somebody can see in the
+    source directory is a bug report waiting to be filed.
     """
 
     written: tuple[str, ...] = ()
     overwritten: tuple[str, ...] = ()
+    skipped: tuple[Skipped, ...] = ()
 
 
 def _is_debris(name: str) -> bool:
@@ -131,9 +163,64 @@ def _is_debris(name: str) -> bool:
     return name == "__pycache__" or name.startswith(".")
 
 
-def _debris(_directory: str, names: list[str]) -> set[str]:
-    """`copytree(ignore=...)`, so the rule holds at every depth rather than one."""
-    return {name for name in names if _is_debris(name)}
+def _deployment_specific(path: Path) -> tuple[str, ...]:
+    """The middleware this file names, or `()` for a file that names none.
+
+    The question `seed` has to answer about one definition: does this belong in
+    a workspace that has registered nothing? A definition naming middleware is
+    refused when it is built -- `names unregistered middleware` -- so seeding it
+    into a fresh workspace hands somebody a file that cannot run and no reason
+    why.
+
+    Only YAML, and only where a `middleware:` field exists at all. A directory,
+    a Python-defined subagent and a skill body all answer `()` here, which is
+    the same answer as "reads fine and names nothing".
+    """
+    if path.suffix not in (".yaml", ".yml") or not path.is_file():
+        return ()
+    try:
+        text = path.read_text(encoding="utf-8")
+    except (OSError, UnicodeDecodeError):
+        # Unreadable is the loader's problem to report, in its own words. This
+        # copies it and lets that happen.
+        return ()
+    return middleware_named(text)
+
+
+def _ignoring(
+    root: Path, kind: str, *, everything: bool, found: list[Skipped]
+) -> Callable[[str, list[str]], set[str]]:
+    """`copytree(ignore=...)` that drops debris and deployment-specific definitions.
+
+    Through the ignore callback rather than a check at the top level, for the
+    reason the debris rule went the same way: it has to hold at every depth. A
+    delegate in `subagents/analysis/` names middleware exactly as easily as one
+    beside it, and a rule that only saw the top level would be a rule with a
+    hole the catalogue's own layout walks straight through.
+
+    Both rules in one callback because `copytree` takes one, and they were two
+    functions only while debris was the only thing being dropped.
+
+    `found` is appended to rather than returned, because `copytree` decides what
+    to call this and how often. The labels come out relative to the source tree,
+    so they read like the `written` entries beside them.
+    """
+
+    def ignore(directory: str, names: list[str]) -> set[str]:
+        dropped = {name for name in names if _is_debris(name)}
+        if everything or kind not in DOCUMENT_KINDS:
+            return dropped
+        here = Path(directory)
+        for name in names:
+            if name in dropped:
+                continue
+            if wanted := _deployment_specific(here / name):
+                label = f"{kind}/{(here / name).relative_to(root)}"
+                found.append(Skipped(label, wanted))
+                dropped.add(name)
+        return dropped
+
+    return ignore
 
 
 def _overwritten(source: Path, target: Path, label: str) -> list[str]:
@@ -215,7 +302,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     raise ConfigError(msg)
 
 
-def seed(cfg: Destination, source: Path) -> Seeding:
+def seed(cfg: Destination, source: Path, *, everything: bool = False) -> Seeding:
     """Copy definitions into this deployment's catalogues, and say what changed.
 
     `source` is a directory holding `agents/`, `tools/`, `skills/` and
@@ -237,23 +324,34 @@ def seed(cfg: Destination, source: Path) -> Seeding:
     It still overwrites: refusing would make re-seeding after an upgrade
     impossible, and that is the same trade `place_data` makes for caller files.
     Replacing silently is the part that was wrong.
+
+    `everything` copies definitions that name middleware, which are left behind
+    by default. The default is the safe one because the common case is a fresh
+    workspace with an empty registry, where such a definition is refused when it
+    is built; the flag is for the deployment that has already registered the
+    names and wants its own examples. Neither is a judgement about the file --
+    it is a fact about the workspace it is going into.
     """
     if not source.is_dir():
         msg = f"nothing to seed from: {source} is not a directory"
         raise ConfigError(msg)
-    written, overwritten = _copy(cfg, source)
+    written, overwritten, skipped = _copy(cfg, source, everything=everything)
 
-    return Seeding(tuple(written), tuple(overwritten))
+    return Seeding(tuple(written), tuple(overwritten), tuple(skipped))
 
 
-def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
+def _copy(
+    cfg: Destination, tree: Path, *, everything: bool
+) -> tuple[list[str], list[str], list[Skipped]]:
     """Copy one opened tree of definitions into this deployment's catalogues."""
     written: list[str] = []
     overwritten: list[str] = []
+    skipped: list[Skipped] = []
     for kind, destination in destinations(cfg):
         source = tree / kind
         if not source.is_dir():  # pragma: no cover -- all three ship
             continue
+        ignore = _ignoring(source, kind, everything=everything, found=skipped)
         for item in sorted(source.iterdir()):
             # `tools/` holds Python, so importing one of them once -- a test
             # run is enough -- leaves bytecode beside it. Seeding that
@@ -263,6 +361,11 @@ def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
                 continue
             target = destination / item.name
             label = f"{kind}/{item.name}"
+            # The same question `ignore` asks of a nested file, asked here
+            # because `copytree` never sees a top-level one.
+            if not everything and (wanted := _deployment_specific(item)):
+                skipped.append(Skipped(label, wanted))
+                continue
             # Before the copy: afterwards there is nothing left to compare.
             overwritten += _overwritten(item, target, label)
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -271,9 +374,9 @@ def _copy(cfg: Destination, tree: Path) -> tuple[list[str], list[str]]:
                 # only ever saw the top level. A packaged tool used to be a
                 # single file, so a directory could not hold bytecode of
                 # its own; a package can, and `copytree` would take the lot.
-                shutil.copytree(item, target, dirs_exist_ok=True, ignore=_debris)
+                shutil.copytree(item, target, dirs_exist_ok=True, ignore=ignore)
             else:
                 shutil.copy(item, target)
             written.append(label)
 
-    return written, overwritten
+    return written, overwritten, skipped

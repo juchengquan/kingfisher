@@ -1,16 +1,17 @@
 # The agent half of the middleware example, and one of the only two definitions
 # in this repository that name middleware at all.
 #
-# It sits beside `call_cap.py` rather than under `agents/` because of what that
-# `middleware:` line costs. `seed` copies the definition kinds, this folder is
-# not one of them, and a definition naming `call-cap-strict` is refused when the
-# agent is built -- `names unregistered middleware` -- on every deployment that
-# has not written the factory behind that name. Under `agents/` this file would
-# break the first run of a fresh checkout in order to demonstrate a feature.
+# `kingfisher seed` will not copy it, and that is what the `middleware:` line
+# below costs. A definition naming `call-cap-strict` is refused when the agent
+# is built -- `names unregistered middleware` -- on every deployment that has
+# not written the factory behind that name, so seeding one into a fresh
+# workspace hands somebody a file that cannot run and no reason why.
 #
-# So it is here, where nothing copies it and nothing has to run it, and where
-# `call_cap.py` is the next file over. Copy it into your workspace's `agents/`
-# once you have registered the names below, which is the whole of the setup:
+# It lives here anyway, under the kind it *is*. The rule is `seed`'s rather
+# than the folder's: seeding reads this field and says what it left behind, so
+# an agent can be filed as an agent and still be kept out of a workspace that
+# cannot build it. `seed --all` takes it once you have registered the names,
+# which is the whole of the setup:
 #
 #     from examples.middleware.call_cap import CallCap, CallCapGenerous
 #     from examples.middleware.tool_note import ToolNote
