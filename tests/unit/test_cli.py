@@ -727,13 +727,7 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatc
     assert "helper" in printed, "so did the subagents"
 
 
-# -- listing under an access policy -----------------------------------------
-
-POLICY = """
-groups: [A, B]
-tools:
-  line_count: [A]
-"""
+# -- listing under a group vocabulary ---------------------------------------
 
 TOOL = '''
 def line_count(path: str) -> str:
@@ -744,68 +738,118 @@ def line_count(path: str) -> str:
 TOOLS = [line_count]
 '''
 
+NARROW = """name: narrow
+description: An agent.
+groups: [A, B]
+tools:
+  line_count: [A]
+system_prompt: |
+  You do the task.
+"""
 
-@pytest.fixture
-def policied(cfg, monkeypatch):
-    """A workspace with one tool, reachable by A and not by B."""
+WIDE = """name: wide
+description: An agent.
+groups: [A, B]
+tools:
+  line_count: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+
+def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "groups: [A, B]\n"):
+    """A workspace with one tool and whichever agents the test names."""
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
-    (cfg.workspace / "access.yaml").write_text(POLICY, encoding="utf-8")
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    for document in agents:
+        name = document.split("name: ", 1)[1].split("\n", 1)[0]
+        (directory / f"{name}.yaml").write_text(document, encoding="utf-8")
+    (cfg.workspace / "groups.yaml").write_text(vocabulary, encoding="utf-8")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
     return cfg
 
 
-def test_listing_unscoped_says_who_reaches_each_asset(policied, capsys):
-    """Decision 18: unscoped is the operator's audit view. It is exempt from
-    the refusal that covers a *turn* -- listing is read-only, and whoever runs
-    it is on the host and can read access.yaml anyway."""
+@pytest.fixture
+def policied(cfg, monkeypatch):
+    return _workspace(cfg, monkeypatch, NARROW)
+
+
+def test_the_operator_sees_audiences_per_definition(policied, capsys):
+    """The unscoped listing is the operator's audit view. It is exempt from the
+    refusal that covers a *turn* -- listing is read-only, and whoever runs it is
+    on the host with the definitions already in front of them."""
     assert main(["list"]) == 0
 
-    printed = capsys.readouterr().out
-    assert "line_count" in printed
-    assert "[A]" in printed
+    shown = capsys.readouterr().out
+    assert "by definition" in shown
+    assert "agent narrow  [A, B]" in shown
+    assert "tool line_count  [A]" in shown
 
 
-def test_listing_as_a_group_shows_only_what_it_reaches(policied, capsys):
-    assert main(["list", "--as", "B"]) == 0
+def test_the_operator_sees_a_roll_up_by_asset(policied, capsys):
+    """The question the files can no longer answer on their own."""
+    assert main(["list"]) == 0
 
-    assert "line_count" not in capsys.readouterr().out
-
-
-def test_listing_as_the_other_group_still_shows_it(policied, capsys):
-    """So the assertion above is not passing because the tool vanished."""
-    assert main(["list", "--as", "A"]) == 0
-
-    assert "line_count" in capsys.readouterr().out
+    shown = capsys.readouterr().out
+    assert "by tool" in shown
+    assert "line_count" in shown.split("by tool", 1)[1]
 
 
-def test_a_callers_view_does_not_carry_the_groups_column(policied, capsys):
-    """Who else can reach a thing is the operator's question, not a caller's."""
-    assert main(["list", "--as", "A"]) == 0
-
-    assert "[A]" not in capsys.readouterr().out
-
-
-def test_listing_names_an_asset_no_group_can_reach(cfg, monkeypatch, capsys):
-    """The whitelist going stale, said where somebody will see it."""
-    from tests.conftest import tools_dir
-
-    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
-    (cfg.workspace / "access.yaml").write_text("groups: [A]\n", encoding="utf-8")
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, monkeypatch, capsys):
+    """The case it exists for: a call site quietly wider than its neighbour."""
+    _workspace(cfg, monkeypatch, NARROW, WIDE)
 
     assert main(["list"]) == 0
 
+    section = capsys.readouterr().out.split("by tool", 1)[1]
+    assert "narrow  [A]" in section
+    assert "wide  [A, B]" in section
+
+
+def test_a_callers_view_carries_no_audiences(policied, capsys):
+    """Who else reaches a thing is the operator's question, not a caller's."""
+    assert main(["list", "--as", "A"]) == 0
+
+    shown = capsys.readouterr().out
+    assert "by definition" not in shown
+    assert "by tool" not in shown
+
+
+def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, monkeypatch, capsys):
+    _workspace(cfg, monkeypatch, NARROW, vocabulary="groups: [A, B, C]\n")
+
+    assert main(["list", "--as", "C"]) == 0
+
+    assert "narrow" not in capsys.readouterr().out
+
+
+def test_the_operator_still_sees_it(cfg, monkeypatch, capsys):
+    """So the assertion above is not passing because the agent vanished."""
+    _workspace(cfg, monkeypatch, NARROW, vocabulary="groups: [A, B, C]\n")
+
+    assert main(["list"]) == 0
+
+    assert "narrow" in capsys.readouterr().out
+
+
+def test_listing_names_a_definition_that_restricts_nobody(cfg, monkeypatch, capsys):
+    """Default-open, said where somebody will see it."""
+    from tests.conftest import an_agent
+
+    _workspace(cfg, monkeypatch)
+    an_agent(cfg, "open_to_all")
+
+    assert main(["list"]) == 0
+
     printed = capsys.readouterr().out
-    assert "no group can reach" in printed
-    assert "line_count" in printed
+    assert "reachable by everyone" in printed
+    assert "open_to_all" in printed
 
 
 def test_naming_a_group_that_does_not_exist_is_refused(policied, capsys):
@@ -814,38 +858,16 @@ def test_naming_a_group_that_does_not_exist_is_refused(policied, capsys):
     assert "unknown group" in capsys.readouterr().err
 
 
-def test_as_is_ignored_where_there_is_no_policy(cfg, monkeypatch, capsys):
-    """A listing is the one place naming groups against no policy should not
-    stop you: you are looking at the workspace, and it has nothing to filter."""
-    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
-    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
-    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
-
-    assert main(["list"]) == 0
-    assert "no group can reach" not in capsys.readouterr().out
-
-
-def test_the_listing_filters_agents_too(cfg, monkeypatch, capsys):
-    """Agents are a controlled kind, so a caller's view drops the ones they
-    cannot open -- the same rule the refusal follows, so the two cannot drift."""
+def test_no_vocabulary_means_no_access_section(cfg, monkeypatch, capsys):
     from tests.conftest import an_agent
 
-    an_agent(cfg, "assistant")
-    an_agent(cfg, "surveyor")
-    (cfg.workspace / "access.yaml").write_text(
-        'groups: [A, B]\nagents:\n  assistant: [A]\n  surveyor: ["*"]\n', encoding="utf-8"
-    )
+    an_agent(cfg, "plain")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
 
-    assert main(["list", "--as", "B"]) == 0
-    narrowed = capsys.readouterr().out
-    assert "surveyor" in narrowed
-    assert "assistant" not in narrowed
-
     assert main(["list"]) == 0
-    assert "assistant" in capsys.readouterr().out, "the operator still sees every agent"
+    assert "access —" not in capsys.readouterr().out
 
 
 def test_as_parses_a_comma_separated_list():

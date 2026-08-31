@@ -132,15 +132,17 @@ def from_env(environ: Mapping[str, str] | None = None) -> Config:
     # a catalogue load.
     models_file = _optional_path("KINGFISHER_MODELS_FILE") or workspace / "models.yaml"
     catalogue = model_catalogue.load(models_file, env)
-    # Defaults and relocates exactly as the catalogue above does, and for the
-    # same reason: it is authored and reviewed content, so several deployments
-    # sharing one file is the point. Unlike the catalogue it is optional --
-    # `load` answers `None` for a file that is not there, which is the whole of
-    # what "this deployment controls nothing by group" means. A file that is
-    # there and will not parse raises instead, because a policy that cannot be
-    # honoured coming up as no policy is how a server serves everyone
+    # The group vocabulary, and nothing else: who reaches what is written in
+    # the definitions themselves. Defaults and relocates exactly as the
+    # catalogue above does, so several deployments can share one set of names.
+    #
+    # Optional, unlike the catalogue -- `load` answers `None` for a file that is
+    # not there, which is the whole of what "this deployment controls nothing by
+    # group" means. A file that is there and will not parse raises instead: a
+    # vocabulary that cannot be read leaves every definition's audience
+    # uncheckable, and coming up anyway is how a server serves everyone
     # everything.
-    access_file = _optional_path("KINGFISHER_ACCESS_FILE") or workspace / "access.yaml"
+    access_file = _optional_path("KINGFISHER_GROUPS_FILE") or workspace / "groups.yaml"
 
     return Config(
         workspace=workspace,

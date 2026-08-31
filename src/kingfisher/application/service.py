@@ -67,17 +67,21 @@ from kingfisher.application import config as config_module
 from kingfisher.config import Config
 from kingfisher.domain import retention
 from kingfisher.domain.access import (
-    Access,
+    AUDIENCED,
     AccessError,
     AccessReport,
+    Groups,
     Held,
     _Unscoped,
+    reaches,
 )
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
+    ALL,
     UNRESTRICTED,
     Capabilities,
     CapabilityError,
+    Selection,
     withheld,
 )
 from kingfisher.domain.request import Request
@@ -229,6 +233,16 @@ class _Prepared:
     history: tuple[Message, ...] = ()
 
 
+def _named(selection: Selection) -> set[str]:
+    """A selection as a set of names, with the two ends read as empty.
+
+    `ALL` and `None` name nothing that can be *lost*: one is everything and the
+    other is nothing, and neither changes under group narrowing -- so the
+    difference this feeds is empty either way, which is the right answer.
+    """
+    return set(selection) if isinstance(selection, tuple) else set()
+
+
 def _withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
     # "what the workspace offers" comes from, and none is derivable from
     # another: the grant, the config, the session, the built graph and the
@@ -241,7 +255,7 @@ def _withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
     graph: Any,
     catalogue: Definitions,
     *,
-    reach: Access | None = None,
+    agent: AgentSpec | None = None,
     held: frozenset[str] | None = None,
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
@@ -277,24 +291,42 @@ def _withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
     default = Capabilities()
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
 
+    # What this agent would have held for *someone*, less what it holds for
+    # this caller: exactly the names group narrowing took away, per field.
+    #
+    # Computed rather than asked of the policy, because there is no policy to
+    # ask any more -- an audience is a property of the definition, so the only
+    # thing that knows what a caller lost is the definition resolved twice.
+    denied: dict[str, frozenset[str]] = {}
+    if agent is not None and held is not None:
+        everyone, theirs = agent.declares(None), agent.declares(held)
+        denied = {
+            name: frozenset(_named(getattr(everyone, name)) - _named(getattr(theirs, name)))
+            for name in AUDIENCED
+        }
+
     def visible(kind: str | None, names: tuple[str, ...]) -> tuple[str, ...]:
-        """`names`, less anything this caller's groups do not reach.
+        """`names`, less what this caller's groups took away.
 
         Applied to what the workspace *offers*, before the comparison, and the
         ordering is the whole of it. This function names every offered thing a
         grant left out -- so measured against the unfiltered catalogue it would
-        hand a caller the exact list of assets their groups denied them, which
-        is precisely what filtering them out of listings and error messages
-        exists to avoid. An asset out of reach is not withheld from this
-        caller; as far as they are concerned it was never offered.
+        hand a caller the exact list of what their groups denied them, which is
+        precisely what filtering them out of listings and refusals exists to
+        avoid. An asset out of reach is not withheld from this caller; as far
+        as they are concerned it was never offered.
 
-        `kind` is `None` for the axes no policy controls, which are unfiltered
-        and keep reporting what they always did.
+        Only what *group narrowing* removed, and that precision matters. A tool
+        the agent simply never declared is still reported, because that is a
+        fact about the agent rather than about who is calling -- and it is what
+        this report has always said.
+
+        `kind` is `None` for the axes no audience controls, which are
+        unfiltered and keep reporting exactly what they did.
         """
-        if reach is None or held is None or kind is None:
+        if kind is None or not (lost := denied.get(kind)):
             return names
-        within = set(reach.reachable(kind, held))
-        return tuple(name for name in names if name in within)
+        return tuple(name for name in names if name not in lost)
 
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported
@@ -699,35 +731,57 @@ class Kingfisher:
         # still clamps which registered names a request may reach.
         self.middleware: Mapping[str, MiddlewareFactory] = middleware or {}
         self._graph = graph
-        # Reconciled here rather than where the file was read, because "which
-        # assets exist" is the catalogue's answer and the catalogue is not known
-        # until the line above. Stale entries are dropped rather than kept: the
-        # grant they would produce reaches `Offering.refuse_unknown`, which
-        # refuses a name the workspace does not offer, so a line still pointing
-        # at a deleted tool would turn every turn into a refusal instead of the
-        # report this leaves behind.
-        self.access: Access | None = None
-        self.access_report: AccessReport = AccessReport()
-        if self.cfg.access is not None:
-            self.access, self.access_report = self.cfg.access.reconciled(self._offered_names())
+        # There is nothing to reconcile, and that is the shape of the design
+        # rather than an omission. Audiences live in the definitions, so a
+        # definition *is* the asset it is about -- there is no such thing as a
+        # line naming something the workspace does not offer, and a definition
+        # naming a tool that does not exist was already refused by
+        # `Offering.refuse_unknown` long before any of this.
+        #
+        # What is left to say is what the vocabulary cannot: which definitions
+        # restrict nobody. Default-open must not also be silent.
+        self.access: Groups | None = self.cfg.access
+        self.access_report: AccessReport = (
+            AccessReport(unrestricted=self._unrestricted())
+            if self.access is not None
+            else AccessReport()
+        )
 
-    def _offered_names(self) -> dict[str, tuple[str, ...]]:
-        """What the catalogue holds, per controlled kind, for reconciliation.
+    def _unrestricted(self) -> tuple[tuple[str, str], ...]:
+        """Definitions carrying no `groups:` line, so reachable by everyone.
 
-        Tools are the workspace's own: built-ins are not controlled by a policy
-        and have no file to be stale about. They are asked for in the *written*
-        form a grant uses, so a policy naming a bare `fetch` where two files
-        define one is reported as stale rather than silently matching neither.
+        Walked at construction rather than per turn: the catalogue is read once
+        here, and this is a fact about the files rather than about a caller.
 
         `session_dir=None` because this is the shared catalogue, before any
-        session exists. What a session adds is a request's own upload, which a
-        policy written beforehand cannot have an opinion about.
+        session exists. What a session adds is a request's own upload, which is
+        the caller's own text and carries no audience anyone else wrote.
         """
-        return {
-            "agents": tuple(self.catalogue.agents.specs),
-            "subagents": tuple(defined_subagents(self.cfg, None, catalogue=self.catalogue)),
-            "tools": tuple(workspace_tool_names(self.cfg, catalogue=self.catalogue)),
-        }
+        found: list[tuple[str, str]] = [
+            ("agent", name)
+            for name, spec in sorted(self.catalogue.agents.specs.items())
+            if spec.groups == ALL
+        ]
+        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
+        found.extend(
+            ("subagent", name) for name, spec in sorted(delegates.items()) if spec.groups == ALL
+        )
+        return tuple(found)
+
+    def held_for(self, groups: Held | None) -> frozenset[str] | None:
+        """The caller's expanded groups, or `None` for no vocabulary / UNSCOPED.
+
+        The one place that turns what a call *said* into what the definitions
+        are *asked*. `None` is what every spec reads as "no opinion", and is
+        what keeps a deployment with no vocabulary behaving exactly as it did.
+
+        Public because `build_agent` needs it and the CLI wants to simulate a
+        caller with it; a second copy of this rule is one convention away from
+        the listing and the run disagreeing about who reaches what.
+        """
+        if self.access is None or not isinstance(groups, tuple):
+            return None
+        return self.access.expand(groups)
 
     def for_groups(self, groups: Iterable[str] | _Unscoped) -> Caller:
         """This deployment, bound to a caller holding these groups.
@@ -775,7 +829,13 @@ class Kingfisher:
             raise AccessError(msg)
         if isinstance(groups, _Unscoped):
             return self.grants
-        return self.grants.intersect(self.access.resolve(groups))
+        # Nothing central left to intersect with: the narrowing that groups
+        # imply is per definition, and happens in `AgentSpec.declares` where
+        # the spec is known. What this still does is validate the names -- a
+        # caller naming a group this deployment does not declare is refused
+        # here rather than quietly reaching nothing.
+        self.access.expand(groups)
+        return self.grants
 
     def _session_id_for(self, request: Request, root: Path) -> str:
         """Mint an id, or accept one that already names a session.
@@ -1027,6 +1087,7 @@ class Kingfisher:
         return build_agent(
             self.cfg,
             agent=self._agent_for(request, session_dir.name, groups=groups),
+            held=self.held_for(groups),
             # Called here rather than passed down. This is where a turn first
             # has a session directory, and `build_agent` is where one is already
             # known -- so the harness keeps taking a runner, and only the
@@ -1125,8 +1186,10 @@ class Kingfisher:
                 )
                 raise AccessError(msg)
             if isinstance(groups, tuple):
-                within = set(reach.reachable("agents", reach.expand(groups)))
-                offered = {n: spec for n, spec in offered.items() if n in within}
+                held = reach.expand(groups)
+                offered = {
+                    n: spec for n, spec in offered.items() if reaches(spec.groups, held)
+                }
         listing = ", ".join(sorted(offered)) if offered else "none"
         if name is None:
             msg = (
@@ -1353,11 +1416,7 @@ class Kingfisher:
         # the expression is a mouthful. `None` for a run with no policy or an
         # `UNSCOPED` one: both see the whole workspace, so there is nothing to
         # filter the report against.
-        held = (
-            self.access.expand(groups)
-            if self.access is not None and isinstance(groups, tuple)
-            else None
-        )
+        held = self.held_for(groups)
         # Resolved here rather than in `__init__`, because the default is a
         # database inside this session and there is no session until now. The
         # async path opens its own on the event loop and hands it down, which is
@@ -1398,7 +1457,16 @@ class Kingfisher:
                 session.directory,
                 graph,
                 self.catalogue,
-                reach=self.access,
+                # Only where a vocabulary is in force. With none, `held` is
+                # `None`, nothing was narrowed by groups and the filter is a
+                # no-op -- so the spec is not merely unused, it is unavailable:
+                # an injected graph never resolves one, which is exactly the
+                # case every test that hands in its own graph is.
+                agent=(
+                    self._agent_for(request, session.directory.name, groups=groups)
+                    if held is not None
+                    else None
+                ),
                 held=held,
             ),
             delegate_only=_delegate_only(allowed, cfg, catalogue=self.catalogue),

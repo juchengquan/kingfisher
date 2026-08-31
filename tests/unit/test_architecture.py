@@ -1130,7 +1130,8 @@ LIGHT_EXPORTS = frozenset({
     # `domain.capabilities` and nothing else, which is the point of it being a
     # domain module: deciding who reaches what must not cost a provider SDK,
     # because a deployment resolves a grant on every turn.
-    "Access", "AccessError", "AccessReport", "UNSCOPED", "Held", "CONTROLLED",
+    "Groups", "AccessError", "AccessReport", "UNSCOPED", "Held", "AUDIENCED",
+    "Audience", "Stated",
     # The `"*"` sentinel itself, published because the command prints an
     # audience and has to tell "everyone" from a list of names. Reaching into
     # `domain.capabilities` for it is what the consumer rule forbids.

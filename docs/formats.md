@@ -182,6 +182,7 @@ in the workspace.
 | `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
+| `groups` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--groups-in-the-definitions-groupsyaml-for-the-vocabulary) |
 
 The two tool fields inherit and the two name fields do not, which is the same
 rule a subagent file follows and worth saying as one sentence: **leave a tool
@@ -681,6 +682,7 @@ entry after the first was unreachable, and `model:` takes one name.
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
+| `groups` | optional | Who may reach this delegate, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--groups-in-the-definitions-groupsyaml-for-the-vocabulary) |
 
 ### A delegate that consults another
 
@@ -1129,104 +1131,253 @@ Two shapes:
 
 A skill the agent declines to read is not a failure. If the task did not warrant
 it, not loading it is the mechanism working.
-
 ---
 
-## Access — `access.yaml`, one per deployment
+## Access — `groups:` in the definitions, `groups.yaml` for the vocabulary
 
-Which user groups may reach which agents, subagents and tools. Optional: with
-no such file, kingfisher controls nothing by group and behaves exactly as it
-did before this format existed.
+Which user groups may reach which agents, delegates, tools and skills. Optional:
+with no `groups.yaml`, kingfisher controls nothing by group and behaves exactly
+as it did before this existed.
+
+**Audiences live in the definitions.** An agent or a subagent says who may reach
+*it*, and may say who reaches each thing it holds. What is central is only the
+vocabulary — which names exist, and which contain which — and that file holds no
+policy at all.
 
 ```yaml
+# groups.yaml  — the whole file
 groups:
   A: {}
   B: {}
   C: {}
   admin: {contains: [A, B, C]}
-
-agents:
-  assistant:  [A, B]
-  surveyor:   ["*"]
-subagents:
-  reviewer:   [A, B, C]
-  extractor:  [A]
-tools:
-  sql_query:  [A, B]
-  http_fetch: [A, B, C]
-  line_count: [B, C]
 ```
 
-`<workspace>/access.yaml` by default, and `KINGFISHER_ACCESS_FILE` points
-somewhere else — the same shape `models.yaml` has, and for the same reason:
-this is reviewed content, so several deployments sharing one copy is the point.
+```yaml
+# agents/assistant.yaml
+name: assistant
+description: Answers questions about the data in this workspace.
+groups: [A, B]                 # who may open a session on this agent
+tools:
+  sql_query: [A]               # this agent's sql_query is for A only
+  http_fetch: [A, B]
+subagents:
+  reviewer: [A]
+skills: [code-review]          # a plain list means "these, at my audience"
+system_prompt: |
+  ...
+```
 
-Read once at startup. A revocation lands on restart, the way every other
-deployment setting here does. A file that is present and will not parse stops
-the deployment: a policy that cannot be honoured must never come up as no
-policy at all.
+`<workspace>/groups.yaml` by default; `KINGFISHER_GROUPS_FILE` points elsewhere,
+so several deployments can share one vocabulary. Read once at startup — a
+revocation lands on restart, the way every other deployment setting here does. A
+file that is present and will not parse stops the deployment: a vocabulary that
+cannot be honoured must never come up as no vocabulary, because then no
+definition's audience can be checked at all.
 
 ### Who is calling
 
-A policy is useless without one, so once the file exists every call has to say:
+Once a vocabulary exists, every call has to say:
 
 ```python
 kf = Kingfisher(from_env())
 caller = kf.for_groups(["B", "C"])     # bind once, reuse
-caller.run(Request(task="...", agent="surveyor"))
+caller.run(Request(task="...", agent="assistant"))
 ```
 
 `kf.run(...)` with nobody named is **refused**. That refusal is the point: the
 dangerous failure is a handler that forgot the boundary, and without it that
-handler would serve every caller everything with nothing anywhere to show for
-it. To run with no caller deliberately, say so:
+handler would serve every caller everything with nothing to show for it. To run
+with no caller deliberately, say so:
 
 ```python
 kf.for_groups(UNSCOPED).run(...)       # a value someone typed, and greppable
 ```
 
 It takes group *names*, never a `Capabilities`. A name is resolved against the
-policy this deployment wrote, so the only thing anyone can hand in is an input —
-there is no spelling of "give me everything" except `UNSCOPED`.
+definitions this deployment wrote, so the only thing anyone can hand in is an
+input — there is no spelling of "give me everything" except `UNSCOPED`.
 
-### What the lists mean
+### The four spellings, and one rule
 
-**Any overlap grants.** `sql_query: [A, B]` is reachable by a caller in `A`, or
-in `B`, or in both. A longer list means more people, which is what everyone
-reads an access list as meaning.
+`groups:` on a definition is the **default audience** for everything it holds,
+and the **ceiling** on what any entry may say. That one rule covers every form
+the selection fields already had, so a definition written before audiences
+existed keeps its exact meaning once a `groups:` line is added above it:
 
-**`["*"]` is everyone.** Useful with the rule below, so an asset nobody needs to
-restrict does not have to name every group and be edited when a group is added.
+```yaml
+groups: [A, B]
+tools:                     # omitted — every tool, for A and B
+```
+```yaml
+groups: [A, B]
+tools: [sql_query]         # a list — that tool, for A and B
+```
+```yaml
+groups: [A, B]
+tools:                     # a mapping — per entry
+  sql_query: [A]           #   for A only
+  http_fetch: ["*"]        #   for anyone who reaches this definition
+```
+```yaml
+groups: [A, B]
+tools: []                  # none, as it always meant
+```
 
-**Unlisted is nobody.** An asset the file does not name is reachable by no
-group at all. That is a whitelist, and a whitelist goes stale on its own, so
-startup names every asset no group can reach:
+An entry naming a group the definition itself does not admit is **refused**:
+
+```
+assistant.yaml: tools entry 'sql_query' is for C, but this definition is only
+reachable by A, B -- so that line never reaches anyone
+```
+
+That is dead policy rather than a narrowing — nobody reaching `assistant` is
+ever in `C` — and it is almost always a group name typed from memory.
+
+**Any overlap grants.** A longer list means *more* people, which is what
+everyone reads an access list as meaning. `["*"]` is everyone.
+
+### Which fields take an audience
+
+`tools`, `subagents` and `skills`. **`builtin_tools` deliberately does not.**
+deepagents registers its own tools itself, so kingfisher can filter them but
+never leave them out of a graph — `infrastructure.harness.narrowing` records a
+live run where a model called `execute` from memory. What gates them is which
+*agents* a group may open: an agent declaring
+`builtin_tools: [read_file, ls, glob, grep]` cannot yield the shell to anyone,
+whatever they ask for.
+
+### Audiences are per use-site
+
+A tool's audience is a property of *this definition's use of it*, not of the
+tool. `reviewer` may restrict `sql_query` to `[A]` while `analyst` opens it to
+`[A, B]`, and both are correct — they are different contexts.
+
+The cost is that there is no single line answering "who reaches `sql_query`?".
+`kingfisher list` answers it instead, with a roll-up beside the per-definition
+view, so a call site quietly wider than its neighbours is visible rather than
+something you would only find by grepping.
+
+### No `groups:` line means everyone
+
+An absent optional field means no restriction, which is what it means everywhere
+else in these formats — and reading it as "nobody" would stop every unannotated
+definition working the moment `groups.yaml` appeared. So adoption is
+incremental: annotate the sensitive definitions first.
+
+That must not also be silent, so startup names what carries no line:
 
 ```
 access:
-  offered, no group can reach:
-    tool pdf_export
+  no groups: line, so reachable by everyone:
+    agent assistant
+    subagent extractor
 ```
 
-The other direction is reported too, and is not fatal. A line naming an asset
-the workspace no longer offers is inert — it grants nothing — and refusing to
-start over one would mean removing a tool takes the deployment down until
-somebody edits a file they may not own:
+### One grant, everywhere
+
+The caller's groups bound the agent, its delegates, and their delegates alike. A
+delegate's own `groups:` is its intrinsic ceiling — "this one is sensitive
+wherever it is used" — and a parent's `subagents:` entry narrows it further for
+that parent's context. The two intersect; neither widens the other.
+
+So a delegate whose tools are partly out of reach **runs with the rest and
+reports what was withheld**:
+
+```yaml
+# subagents/reviewer.yaml
+name: reviewer
+groups: [A, B, C]
+tools:
+  sql_query: [A, B]
+  http_fetch: [A, B, C]
+```
+
+A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
+Write delegate prompts to cope — *"if you can check the figure against the
+database, do; if not, say so"* — because the caller decides, not the file.
+
+**An ungranted tool never reaches the graph.** It is not attached and then
+refused: `create_deep_agent` is handed only what the caller reaches, so the model
+is never told it exists and never spends context on its schema. An ungranted
+subagent is never compiled, so its graph is never paid for either.
+
+### Compiled subagents
+
+A Python-declared delegate may carry `groups` and per-tool audiences:
+
+```python
+SUBAGENTS = [
+    {
+        "name": "profiler",
+        "description": "...",
+        "groups": ["A", "B"],
+        "tools": {"sql_query": ["A"]},
+        "build": _build,
+    }
+]
+```
+
+`groups` is a real boundary: whether a compiled delegate is built at all is
+kingfisher's decision, so there is nothing there for a graph to ignore.
+
+The per-tool audience narrows what is **handed to** `build`, and carries exactly
+the caveat the plain `tools` list already carries there: deepagents applies no
+allowlist to a graph it did not build, so a `build` that ignored what it was
+given could call anything it holds. `kingfisher list` marks compiled delegates
+for that reason. `skills` and `subagents` are refused for a compiled delegate
+regardless — see `NOT_COMPILED`.
+
+### What a caller can see
+
+**Out of reach reads as not offered.** An asset a caller's groups do not reach is
+absent from what they are told: absent from listings, from the "this workspace
+offers …" in a refusal, and from the report of what a run withheld. Naming one
+gives the same answer naming a typo does. Nothing lets a caller enumerate the
+catalogue by guessing, and nothing sends them to try something they will only be
+refused for.
+
+The operator's view is the whole of it:
 
 ```
-access:
-  listed but not offered:
-    tool sql_query
+$ kingfisher list                 # every definition, its audience, and a roll-up
+$ kingfisher list --as B,C        # exactly what that caller sees
+$ kingfisher list --as admin      # check `contains` before trusting it
 ```
 
-A rename produces both at once, which is the case they exist to make legible
-together. Write a tool's key exactly as `kingfisher list` prints it: where two
-files define one `fetch`, the workspace offers `vendor_a/fetch.py::fetch`, and
-a policy line saying the bare name matches neither.
+`list` is exempt from the refusal above, and only `list`: it is read-only, and
+whoever runs it is on the host with the definitions already in front of them.
+Running a *turn* still has to say who is calling.
 
-### `contains`
+### Agents, and what a session does not let you keep
 
-A group may contain others, expanded once when the file is read:
+`agents` is checked where the *name* is resolved: when a session is opened, and
+again on **every turn afterwards**.
+
+That second half is the part worth knowing. A session pins its agent for life,
+and a session id is a bearer credential — holding one is how a caller proves the
+session is theirs. Checked only at the open, holding one would be a durable grant
+to an agent you may not open, and a caller who lost a group would keep running
+what they had before. So:
+
+- A leaked session id grants nothing its holder could not open themselves.
+- A demotion takes effect on the caller's next turn, and an in-flight
+  conversation on an agent they can no longer reach stops being usable. That is
+  intended, not a bug — it is the same answer as "you may not run this agent",
+  arriving at the first moment it became true.
+
+### The vocabulary is closed
+
+A group named in a definition, or by a caller, that `groups.yaml` does not
+declare is **refused**. Both directions matter and they fail differently:
+
+- A caller naming an undeclared group would otherwise reach nothing, which looks
+  exactly like a caller who was denied.
+- A definition naming one would otherwise invent a group nobody is in, and the
+  only symptom would be a tool quietly reachable by no one — found weeks later
+  by whoever needed it.
+
+`contains` expands one name into others, once, when the file is read:
 
 ```yaml
 groups:
@@ -1234,99 +1385,10 @@ groups:
 ```
 
 A caller in `admin` reaches anything listing `A`, `B` or `C`, without `admin`
-appearing on a single asset. Without this, a broad group has to be typed onto
-every asset and re-typed on every asset added. A loop is refused, naming the
-whole cycle rather than one edge of it — one edge does not tell a reader which
-link to cut, and they may own none of the groups involved.
-
-The vocabulary is **closed**. A caller naming a group this file does not
-declare is refused rather than quietly reaching nothing: the two are
-indistinguishable from the outside, and one of them is a typo.
-
-### One grant, everywhere
-
-The caller's groups bound the agent, its delegates, and their delegates alike.
-A subagent has no identity of its own — its entry answers "may this caller
-reach it at all?", never "what does it run with".
-
-So a delegate whose tools are partly out of reach **runs with the rest and says
-what was withheld**:
-
-```yaml
-# reviewer is [A, B, C] and declares tools: [sql_query, http_fetch]
-# sql_query is [A, B]; http_fetch is [A, B, C]
-```
-
-A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
-Write delegate prompts to cope, the same way `docs/formats.md` already advises
-for a withheld helper — the caller decides, not the file.
-
-**An ungranted tool never reaches the graph.** It is not attached and then
-refused: `create_deep_agent` is handed only what the caller reaches, so the
-model is never told the tool exists and never spends context on its schema. An
-ungranted subagent is never compiled, so its graph is never paid for either.
-
-### Three kinds, and why not the others
-
-`agents`, `subagents` and `tools`. The rest are refused by name, each with its
-own reason, because a generic "unknown section" reads as *not supported yet*
-and sends someone looking for a workaround:
-
-- **`builtin_tools`** — deepagents registers those itself, so kingfisher can
-  only filter them afterwards, never leave them out of the graph. Gating them
-  here would buy the weakest form of the guarantee. Control them through
-  `agents` instead: an agent declaring `builtin_tools: [read_file, ls, glob,
-  grep]` can never yield `execute` to anyone, whatever they ask for.
-- **`skills`** — a skill is guidance rather than a capability, and what bounds
-  it is the tools it names.
-- **`middleware`** — already granted rather than inherited, and its names come
-  from the deployment's own registry rather than the workspace.
-
-### What a caller can see
-
-**Out of reach reads as not offered.** An asset a caller's groups do not reach
-is absent from what they are told: absent from listings, absent from the
-"this workspace offers …" in a refusal, and absent from the report of what a
-run withheld. Naming one gives the same answer naming a typo does. Nothing lets
-a caller enumerate the catalogue by guessing, and nothing sends them off to try
-something they will only be refused for.
-
-The operator's view is the whole of it:
-
-```
-$ kingfisher list                 # everything, plus who reaches it
-$ kingfisher list --as B,C        # exactly what that caller sees
-$ kingfisher list --as admin      # check `contains` before trusting it
-```
-
-`list` is exempt from the refusal above, and only `list`: it is read-only, and
-whoever runs it is on the host with the policy file already in front of them.
-Running a *turn* still has to say who is calling.
-
-### Agents, and what a session does not let you keep
-
-`agents` is the one kind with no `Capabilities` axis behind it, because a
-request names an agent before there is anything to narrow. So it is checked
-where the *name* is resolved: when a session is opened, and again on **every
-turn afterwards**.
-
-That second half is the part worth knowing. A session pins its agent for life,
-and a session id is a bearer credential — holding one is how a caller proves the
-session is theirs. Checked only at the open, holding one would be a durable
-grant to an agent you may not open, and a caller who lost a group would keep
-running what they had before. So:
-
-- A leaked session id grants nothing its holder could not open themselves.
-- A demotion takes effect on the caller's next turn, and an in-flight
-  conversation on an agent they can no longer reach stops being usable. That is
-  the intended behaviour, not a bug — it is the same answer as "you may not run
-  this agent", arriving at the first moment it became true.
-
-Because an agent decides its own `builtin_tools`, controlling agents
-transitively controls the shell. An agent declaring
-`builtin_tools: [read_file, ls, glob, grep]` cannot yield `execute` to anyone,
-so restricting who may open it is how a deployment keeps the shell away from a
-group — which is why `builtin_tools` needs no section of its own.
+appearing on a single definition. Without it, a broad group has to be written on
+every line and re-written on every line anyone adds. A loop is refused naming the
+whole cycle rather than one edge — one edge does not tell a reader which link to
+cut, and they may own none of the groups involved.
 
 ### Uploads are unchanged
 

@@ -1148,6 +1148,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     run_on: Mapping[str, RunOn] | None = None,
     workspace_tools: Sequence[Found] | None = None,
     agent: AgentSpec | None = None,
+    held: frozenset[str] | None = None,
 ) -> CompiledStateGraph:
     """Wire model, backend and checkpointer into a deep agent.
 
@@ -1175,7 +1176,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     # would zero `models`, whose default is `None` -- so there is no neutral
     # left-hand side to fold this into.
     asked = capabilities or Capabilities()
-    capabilities = agent.declares.intersect(asked) if agent is not None else asked
+    capabilities = agent.declares(held).intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
     resolved_backend = _backend_for(cfg, session_dir, backend, roots, runner)
     # Unconditional: the backend rejects host paths on every run, so the

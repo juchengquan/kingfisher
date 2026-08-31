@@ -311,52 +311,50 @@ def test_a_config_is_a_seeding_destination(tmp_path):
     assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
 
 
-# -- the access policy ------------------------------------------------------
+# -- the group vocabulary ------------------------------------------------------
 
 
-def test_a_workspace_without_a_policy_file_has_no_policy(env):
+def test_a_workspace_without_a_vocabulary_file_has_none(env):
     """Absent is the whole of what "this deployment controls nothing by group"
     means, and it is what every deployment that predates the field has."""
     assert from_env(env).access is None
 
 
-def test_a_policy_in_the_workspace_is_read(env):
+def test_a_vocabulary_in_the_workspace_is_read(env):
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "access.yaml").write_text(
-        "groups: [A]\ntools:\n  line_count: [A]\n", encoding="utf-8"
-    )
+    (workspace / "groups.yaml").write_text("groups: [A, B]\n", encoding="utf-8")
     access = from_env(env).access
     assert access is not None
-    assert access.entries["tools"] == {"line_count": ("A",)}
+    assert set(access.names) == {"A", "B"}
 
 
-def test_the_policy_file_can_be_relocated(env, tmp_path):
-    """A policy can be deployed once and shared by several workspaces, the way
-    a model catalogue can -- it holds content a person authored and reviewed."""
-    elsewhere = tmp_path / "policy.yaml"
+def test_the_vocabulary_file_can_be_relocated(env, tmp_path):
+    """It can be deployed once and shared by several workspaces, the way a
+    model catalogue can -- it holds content a person authored and reviewed."""
+    elsewhere = tmp_path / "vocab.yaml"
     elsewhere.write_text("groups: [B]\n", encoding="utf-8")
-    access = from_env({**env, "KINGFISHER_ACCESS_FILE": str(elsewhere)}).access
+    access = from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
     assert access is not None
-    assert access.groups == {"B": ("B",)}
+    assert access.names == {"B": ("B",)}
 
 
-def test_a_relocated_policy_wins_over_one_in_the_workspace(env, tmp_path):
+def test_a_relocated_vocabulary_wins_over_one_in_the_workspace(env, tmp_path):
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "access.yaml").write_text("groups: [A]\n", encoding="utf-8")
-    elsewhere = tmp_path / "policy.yaml"
+    (workspace / "groups.yaml").write_text("groups: [A]\n", encoding="utf-8")
+    elsewhere = tmp_path / "vocab.yaml"
     elsewhere.write_text("groups: [B]\n", encoding="utf-8")
-    access = from_env({**env, "KINGFISHER_ACCESS_FILE": str(elsewhere)}).access
+    access = from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
     assert access is not None
-    assert set(access.groups) == {"B"}
+    assert set(access.names) == {"B"}
 
 
-def test_a_policy_that_will_not_parse_stops_the_deployment(env):
-    """Fail closed. A policy that cannot be honoured must not come up as no
-    policy at all, which would serve every caller everything."""
+def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
+    """Fail closed. One that cannot be read leaves every definition's audience
+    uncheckable, and coming up anyway would serve every caller everything."""
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "access.yaml").write_text("groups: [A]\ntools: {x: [\n", encoding="utf-8")
+    (workspace / "groups.yaml").write_text("groups: [A\n", encoding="utf-8")
     with pytest.raises(AccessError):
         from_env(env)

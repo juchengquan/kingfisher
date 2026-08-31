@@ -19,20 +19,20 @@ from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.request import Request
 from tests.conftest import an_agent
 
-POLICY = """
-groups: [A, B]
-agents:
-  assistant: [A]
-  surveyor: ["*"]
-"""
+VOCABULARY = "groups: [A, B]\n"
 
 
 @pytest.fixture
 def two_agents(cfg):
-    """`assistant` for group A only; `surveyor` for everyone."""
-    an_agent(cfg, "assistant")
+    """`assistant` for group A only; `surveyor` for everyone.
+
+    Each says so in its own file, which is the whole of the change: there is no
+    table anywhere naming them, so there is nothing that can name an agent this
+    workspace does not have.
+    """
+    an_agent(cfg, "assistant", groups="[A]")
     an_agent(cfg, "surveyor")
-    return replace(cfg, access=parse(yaml.safe_load(POLICY), source="access.yaml"))
+    return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="groups.yaml"))
 
 
 def test_a_caller_reaches_an_agent_their_group_is_listed_on(two_agents):
@@ -60,7 +60,8 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
 
 
 def test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none(cfg):
-    kf = Kingfisher(replace(cfg, access=parse({"groups": ["A"]}, source="access.yaml")))
+    an_agent(cfg, "assistant", groups="[B]")
+    kf = Kingfisher(replace(cfg, access=parse({"groups": ["A", "B"]}, source="groups.yaml")))
     with pytest.raises(CapabilityError, match="offers none"):
         kf.for_groups(["A"]).agent_named("anything")
 
@@ -70,9 +71,16 @@ def test_unscoped_still_reaches_every_agent(two_agents):
     assert kf.for_groups(UNSCOPED).agent_named("assistant") is not None
 
 
-def test_a_deployment_with_no_policy_reaches_every_agent(cfg):
+def test_a_deployment_with_no_vocabulary_reaches_every_agent(cfg):
     an_agent(cfg, "assistant")
     assert Kingfisher(cfg).agent_named("assistant") is not None
+
+
+def test_an_agent_with_no_groups_line_is_reachable_by_everyone(two_agents):
+    """`surveyor` writes none, so every group opens it -- which is what makes
+    adopting audiences incremental rather than all-or-nothing."""
+    kf = Kingfisher(two_agents)
+    assert kf.for_groups(["B"]).agent_named("surveyor") is not None
 
 
 def test_naming_no_agent_still_says_so(two_agents):

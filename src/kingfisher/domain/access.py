@@ -1,63 +1,95 @@
-"""Which groups reach which assets, and what one caller's groups grant.
+"""Who reaches what: the group vocabulary, and the rule the definitions apply.
 
-Static, deployment-authored policy, read once and then only asked questions.
-The answer it gives is an ordinary `Capabilities` -- which is the whole design:
-a group grant is not a second permission system beside the one that exists, it
-is a way of *deriving* the one that exists. Everything downstream is unchanged,
-including the part that matters most, which is that an ungranted tool is never
-attached to the graph and an ungranted subagent is never compiled.
+Two halves, and the split is the design. **Audiences live in the definitions** --
+an agent or a subagent says who may reach it, and may say who reaches each tool,
+delegate or skill it holds. What is central is only the *vocabulary*: which
+group names exist, and which contain which. That file holds no policy at all,
+and everything it used to hold now sits beside the thing it was about.
 
-Three kinds are controlled and the rest are deliberately not. `builtin_tools`
-is absent because deepagents registers those itself: kingfisher can only filter
-them afterwards, so gating them here would buy the weakest form of the
-guarantee -- see `kingfisher.infrastructure.harness.narrowing`, which records a
-live run where a model called `execute` from memory. `skills` is absent because
-a skill is guidance rather than a capability, and the boundary is the tools it
-names.
+What that buys, beyond locality: there is nothing left to reconcile. A central
+table could name an asset the workspace no longer offers, which had to be
+detected and dropped or every turn would refuse. A definition *is* the asset, so
+that failure has no shape here -- and a definition naming a tool that does not
+exist was already refused by `Offering.refuse_unknown`, long before any of this.
+
+The answer the rule produces is an ordinary `Capabilities`, which is unchanged
+from the central design and is what keeps everything downstream unchanged too:
+an ungranted tool is never attached to the graph, and an ungranted subagent is
+never compiled.
+
+Three fields may carry audiences and one deliberately may not. `builtin_tools`
+is absent because deepagents registers those itself, so kingfisher can only
+filter them afterwards, never leave them out of a graph -- see
+`kingfisher.infrastructure.harness.narrowing`, which records a live run where a
+model called `execute` from memory. Control them through which *agents* a group
+may open instead: an agent declaring a read-only builtin set cannot yield the
+shell to anyone.
 
 Pure, like the rest of `domain/`: this module reads no file. The YAML half is
-`kingfisher.infrastructure.access_policy`, the same split `Models` and
-`kingfisher.infrastructure.model_catalogue` already have.
+`kingfisher.infrastructure.access_policy`.
 """
 
 from __future__ import annotations
 
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Final, Literal
 
 from kingfisher.domain import fields
-from kingfisher.domain.capabilities import ALL, Capabilities
+from kingfisher.domain.capabilities import ALL, Selection
 
-#: The kinds this format controls. Order is the order a report prints them in,
-#: coarsest first, because an agent decides the most and a tool the least.
-CONTROLLED: Final[tuple[str, ...]] = ("agents", "subagents", "tools")
+#: The selection fields that may be written as a mapping of name to audience.
+#: `builtin_tools` is absent on purpose -- see the module docstring.
+AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
 
-#: Kinds a reader will reasonably expect and this format deliberately omits,
-#: with the reason each is refused rather than accepted and ignored.
-DECLINED: Final[Mapping[str, str]] = {
-    "skills": (
-        "skills are not controlled here: a skill is guidance rather than a "
-        "capability, and what bounds it is the tools it names"
-    ),
-    "builtin_tools": (
-        "builtin tools are not controlled here: deepagents registers them "
-        "itself, so they can be filtered but never left out of the graph"
-    ),
-    "middleware": (
-        "middleware is not controlled here: it is already granted rather than "
-        "inherited, and its names come from the deployment's own registry"
-    ),
-}
+#: Sections the central format defined, and where each has gone. Refused rather
+#: than ignored, because a deployment upgrading has a file full of policy that
+#: would otherwise be read and dropped in silence -- which is the single failure
+#: this whole area exists to prevent.
+#: Where audiences went, said once and shared by the three keys that used to
+#: hold them.
+_WENT = (
+    "audiences live in the definition now: write `groups:` in the file itself, "
+    "and a mapping under `tools:`, `subagents:` or `skills:` to narrow one "
+    "entry further"
+)
 
-#: Who may reach one asset: `"*"` for everyone, or exactly these groups.
-#: No `None`. An asset nobody may reach is written by leaving it out, which is
-#: what makes the file a whitelist rather than a whitelist with a hole in it.
+MOVED: Final[Mapping[str, str]] = dict.fromkeys(("agents", "subagents", "tools"), _WENT)
+
+#: Who may reach one thing: `"*"` for everyone, or exactly these groups.
+#:
+#: No `None`. "Nobody" is not a state a definition can be in -- the absence of
+#: an audience means it inherits the one around it, and a definition nobody may
+#: reach is written by giving it a group nobody holds.
 Audience = Literal["*"] | tuple[str, ...]
+
+@dataclass(frozen=True)
+class Stated:
+    """What one definition says about who reaches what.
+
+    A record rather than a mapping with two value shapes. It was the second for
+    one commit, keyed `groups` beside one entry table per field, and every
+    reader of it then had to narrow a union at the point of use -- which is a
+    cost paid by everybody to save one type here.
+    """
+
+    #: The definition's own audience: who may reach it at all.
+    groups: Audience = ALL
+    #: Field name -> entry name -> who reaches that entry there.
+    entries: Mapping[str, Mapping[str, Audience]] = field(default_factory=dict)
+
+    @property
+    def says_nothing(self) -> bool:
+        """Whether this definition restricts anyone at all."""
+        return self.groups == ALL and not self.entries
+
+    def of(self, field_name: str) -> Mapping[str, Audience]:
+        """One field's per-entry audiences, or nothing."""
+        return self.entries.get(field_name, {})
 
 
 class AccessError(ValueError):
-    """The access policy is malformed, or a caller named a group it does not define."""
+    """The vocabulary is malformed, or a caller named a group it does not define."""
 
 
 class _Unscoped:
@@ -81,50 +113,107 @@ UNSCOPED: Final[_Unscoped] = _Unscoped()
 #: refusal to say.
 #:
 #: `None` is a third thing and means *nobody said*, which is why this is not
-#: spelled `tuple[str, ...] | None`. Once a policy exists those two must not
+#: spelled `tuple[str, ...] | None`. Once a vocabulary exists those two must not
 #: collapse: "run without a caller" is a decision somebody made, and "nobody
 #: said" is a handler that forgot the boundary. One is honoured, the other is
 #: refused.
-#:
-#: Here rather than beside the service that threads it, because it is a fact
-#: about access rather than about orchestration -- and because the command needs
-#: to name the type too, through the public API.
 Held = tuple[str, ...] | _Unscoped
 
 
-def _reaches(audience: Audience, held: frozenset[str]) -> bool:
-    """Whether a caller holding `held` reaches an asset with this audience.
+def reaches(audience: Audience, held: frozenset[str]) -> bool:
+    """Whether a caller holding `held` reaches something with this audience.
 
     Overlap, not containment: a longer list means *more* people, which is what
     everyone reads an access list as meaning.
+
+    Public because three readers ask it -- both definition formats and the
+    listing -- and a private copy in each is one convention away from them
+    disagreeing about who reaches what.
     """
     return audience == ALL or bool(held & set(audience))
 
 
+def reaching(
+    selection: Selection,
+    *,
+    audiences: Mapping[str, Audience],
+    default: Audience,
+    held: frozenset[str],
+) -> Selection:
+    """`selection`, keeping only the entries this caller reaches.
+
+    `default` is the definition's own audience, used for any entry that did not
+    state one. That is what makes a plain list under a policied definition mean
+    "these, at my audience", so every definition written before audiences
+    existed keeps its exact meaning once one is added above it.
+
+    `ALL` and `None` pass through untouched. `ALL` is "everything available",
+    which is bounded by the definition's own audience rather than by any entry;
+    `None` is nothing, and nothing narrowed is still nothing.
+    """
+    if selection == ALL or selection is None:
+        return selection
+    return tuple(name for name in selection if reaches(audiences.get(name, default), held))
+
+
+def refuse_dead(
+    audiences: Mapping[str, Mapping[str, Audience]],
+    *,
+    groups: Audience,
+    source: str,
+    error: type[Exception],
+) -> None:
+    """Refuse an entry audience that the definition's own audience never admits.
+
+    `reviewer` is `[A, B]` and writes `sql_query: [C]`. Nobody reaching
+    `reviewer` is ever in `C`, so that line can never grant anything -- it is
+    not a narrowing, it is a mistake, and almost always a group name typed from
+    memory. Refused rather than reported, because unlike a stale central entry
+    it costs nothing to fix and the file that is wrong is the file in front of
+    you.
+
+    Silent when the definition is `ALL`: everyone reaches it, so no entry
+    audience can fall outside.
+    """
+    if groups == ALL:
+        return
+    admitted = set(groups)
+    for field_name, entries in audiences.items():
+        for entry, audience in entries.items():
+            if audience == ALL or (set(audience) & admitted):
+                continue
+            msg = (
+                f"{source}: {field_name} entry {entry!r} is for "
+                f"{', '.join(audience)}, but this definition is only reachable by "
+                f"{', '.join(admitted)} -- so that line never reaches anyone"
+            )
+            raise error(msg)
+
+
 @dataclass(frozen=True)
 class AccessReport:
-    """Where the policy and the workspace disagree, as `(kind, name)` pairs.
+    """What a deployment's policy leaves open, said once at startup.
 
-    Two halves of one rule read in opposite directions, which is the shape
-    `withheld` and `all_but` already have in `capabilities`: one turns a grant
-    into what it leaves out, the other turns what to leave out into a grant.
-
-    Neither half is fatal. A stale line grants nothing, so it cannot be wrong
-    in the dangerous direction, and refusing to start over one would couple a
-    policy deploy to a catalogue deploy -- removing a tool would take the
-    server down until someone edited a file they may not own. An unreachable
-    asset is the whitelist going stale on its own, which is exactly what
-    `withheld` exists to say out loud rather than leave for a confused user.
+    One half of what the central design reported, and the other half is gone
+    rather than moved: a definition *is* the asset, so there is no such thing
+    as a line naming something that is not there.
     """
 
-    #: Policy lines naming an asset this workspace does not offer.
-    listed_not_offered: tuple[tuple[str, str], ...] = ()
-    #: Assets this workspace offers that no group can reach.
-    offered_unreachable: tuple[tuple[str, str], ...] = ()
+    #: Definitions carrying no `groups:` line, and so reachable by everyone, as
+    #: `(kind, name)`.
+    #:
+    #: Named because default-open must not also be silent. An absent optional
+    #: field meaning "no restriction" is right -- it is what an absent field
+    #: means everywhere else in these formats, and reading it as "nobody" would
+    #: stop every unannotated definition working the moment a vocabulary file
+    #: appeared. But it makes "we have not restricted that one yet" invisible,
+    #: and this line is the whole of what stands between that and nobody
+    #: noticing.
+    unrestricted: tuple[tuple[str, str], ...] = ()
 
     @property
     def is_clean(self) -> bool:
-        return not self.listed_not_offered and not self.offered_unreachable
+        return not self.unrestricted
 
     def lines(self) -> tuple[str, ...]:
         """The report, ready to print, or nothing at all when there is nothing.
@@ -135,32 +224,30 @@ class AccessReport:
         """
         if self.is_clean:
             return ()
-        said: list[str] = ["access:"]
-        for heading, pairs in (
-            ("listed but not offered", self.listed_not_offered),
-            ("offered, no group can reach", self.offered_unreachable),
-        ):
-            if not pairs:
-                continue
-            said.append(f"  {heading}:")
-            said.extend(f"    {kind[:-1]} {name}" for kind, name in pairs)
-        return tuple(said)
+        return (
+            "access:",
+            "  no groups: line, so reachable by everyone:",
+            *(f"    {kind} {name}" for kind, name in self.unrestricted),
+        )
 
 
 @dataclass(frozen=True)
-class Access:
-    """One deployment's policy: the group vocabulary, and who reaches what.
+class Groups:
+    """One deployment's group vocabulary: the names, and what each contains.
 
-    `groups` maps each declared name to its own transitive closure, itself
+    A dictionary rather than a policy. Nothing here says who reaches what --
+    that is in the definitions. What this buys is the two things a definition
+    cannot say for itself: that a name is real, so a typo is refused instead of
+    inventing a group nobody holds, and that one name stands for several, so a
+    broad group is written once instead of on every line forever.
+
+    `names` maps each declared group to its own transitive closure, itself
     included, worked out when the document was read. Expansion happens once
-    rather than on every turn, and a cycle is refused where it is written
-    rather than found by a stack overflow on a Tuesday.
+    rather than on every turn, and a cycle is refused where it is written.
     """
 
     #: Declared name -> that name plus everything it contains, transitively.
-    groups: Mapping[str, tuple[str, ...]]
-    #: Kind -> asset name -> who reaches it. Kinds are `CONTROLLED`.
-    entries: Mapping[str, Mapping[str, Audience]]
+    names: Mapping[str, tuple[str, ...]]
 
     def expand(self, held: Iterable[str]) -> frozenset[str]:
         """Every group a caller effectively holds, following `contains`.
@@ -171,88 +258,31 @@ class Access:
         looks exactly like a caller who was denied.
         """
         wanted = tuple(held)
-        if unknown := tuple(name for name in wanted if name not in self.groups):
-            known = ", ".join(sorted(self.groups)) or "none"
+        if unknown := tuple(name for name in wanted if name not in self.names):
+            known = ", ".join(sorted(self.names)) or "none"
             msg = (
                 f"unknown group(s): {', '.join(sorted(set(unknown)))}; "
                 f"this deployment defines {known}"
             )
             raise AccessError(msg)
-        return frozenset(one for name in wanted for one in self.groups[name])
+        return frozenset(one for name in wanted for one in self.names[name])
 
-    def reachable(self, kind: str, held: frozenset[str]) -> tuple[str, ...]:
-        """The names of one kind this caller reaches, in the file's own order."""
-        return tuple(
-            name
-            for name, audience in self.entries.get(kind, {}).items()
-            if _reaches(audience, held)
-        )
+    def refuse_undeclared(self, audience: Audience, *, where: str, error: type[Exception]) -> None:
+        """Refuse a definition naming a group this deployment does not declare.
 
-    def resolve(self, held: Iterable[str]) -> Capabilities:
-        """What a caller holding these groups may use, as an ordinary grant.
-
-        Every axis this format does not control is `ALL`, which is the identity
-        for `intersect` -- so composing this with a deployment's own grants
-        subtracts exactly the controlled kinds and nothing else. `None` there
-        would revoke, silently, whatever the deployment had granted.
-
-        `agents` has no axis on `Capabilities` and is not returned here. A
-        request names an agent before there is anything to narrow, so it is
-        checked where a session is opened instead.
+        The other end of the closed vocabulary. Without it a mistyped audience
+        invents a group nobody is in, and the only symptom is a tool quietly
+        reachable by no one -- found weeks later by whoever needed it.
         """
-        expanded = self.expand(held)
-        return Capabilities(
-            builtin_tools=ALL,
-            tools=self.reachable("tools", expanded),
-            skills=ALL,
-            subagents=self.reachable("subagents", expanded),
-            middleware=ALL,
-            endpoints=ALL,
-            models=ALL,
-            memory=None,
-        )
-
-    def reconciled(self, offered: Mapping[str, Iterable[str]]) -> tuple[Access, AccessReport]:
-        """This policy with stale entries dropped, and what the two disagree on.
-
-        Dropping rather than keeping is load-bearing rather than tidy. The
-        resolved grant reaches `Offering.refuse_unknown`, which refuses a name
-        the workspace does not offer -- so a policy line left pointing at a
-        deleted tool would turn every turn into a refusal instead of the report
-        this returns.
-
-        `offered` is what the catalogue actually holds, per kind, which is why
-        this is called where the catalogue is known rather than where the file
-        is read. Names are matched exactly as the catalogue writes them: where
-        two files define one `fetch`, it offers `vendor_a/fetch.py::fetch`, and
-        a policy line saying the bare name is genuinely stale -- granting it
-        would have to mean one of the two, and there is nothing to say which.
-        """
-        held = {kind: tuple(names) for kind, names in offered.items()}
-        kept: dict[str, dict[str, Audience]] = {}
-        missing: list[tuple[str, str]] = []
-        for kind in CONTROLLED:
-            available = set(held.get(kind, ()))
-            kept[kind] = {}
-            for name, audience in self.entries.get(kind, {}).items():
-                if name in available:
-                    kept[kind][name] = audience
-                else:
-                    missing.append((kind, name))
-
-        unreachable = [
-            (kind, name)
-            for kind in CONTROLLED
-            for name in held.get(kind, ())
-            if name not in kept[kind]
-        ]
-        return (
-            Access(groups=self.groups, entries=kept),
-            AccessReport(
-                listed_not_offered=tuple(missing),
-                offered_unreachable=tuple(unreachable),
-            ),
-        )
+        if audience == ALL:
+            return
+        if unknown := tuple(name for name in audience if name not in self.names):
+            listed = ", ".join(repr(u) for u in sorted(set(unknown)))
+            msg = (
+                f"{where}: names undeclared group(s) {listed}; "
+                f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
+            )
+            raise error(msg)
 
 
 def _vocabulary(raw: object, source: str) -> dict[str, tuple[str, ...]]:
@@ -265,7 +295,7 @@ def _vocabulary(raw: object, source: str) -> dict[str, tuple[str, ...]]:
     if raw is None:
         msg = (
             f"{source}: missing required section 'groups'; it is the closed "
-            f"vocabulary every other section is checked against"
+            f"vocabulary every definition's audience is checked against"
         )
         raise AccessError(msg)
     if isinstance(raw, list):
@@ -334,69 +364,19 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
     return {name: walk(name, ()) for name in declared}
 
 
-def _audience(
-    raw: object, *, kind: str, asset: str, known: Mapping[str, object], source: str
-) -> Audience:
-    """One asset's group list, checked against the vocabulary."""
-    where = f"{source}: {kind} {asset!r}"
-    shape = f'{where}: a list of group names, or ["*"] for everyone -- got {raw!r}'
-    if isinstance(raw, str) or not isinstance(raw, list):
-        # A bare string is one name, or a typo for `*`. Iterating its
-        # characters -- the default for a `for` over a `str` -- is the worst
-        # available answer, and is the mistake `capabilities._normalise`
-        # refuses for the same reason.
-        raise AccessError(shape)
-    names = tuple(str(one) for one in raw)
-    if not names:
-        msg = (
-            f"{where}: an empty list would mean nobody, which is what leaving "
-            f"the entry out already means -- leave it out, or name the groups"
-        )
-        raise AccessError(msg)
-    if ALL in names and len(names) > 1:
-        msg = f'{where}: ["*"] is everyone, so it cannot mean both that and {names}'
-        raise AccessError(msg)
-    if names == (ALL,):
-        return ALL
-    if unknown := tuple(one for one in names if one not in known):
-        listed = ", ".join(repr(u) for u in sorted(set(unknown)))
-        msg = (
-            f"{where}: names undeclared group(s) {listed}; "
-            f"this file defines {', '.join(sorted(known))}"
-        )
-        raise AccessError(msg)
-    return names
-
-
-def parse(document: Mapping[str, object], source: str) -> Access:
-    """One policy document, from its decoded fields.
+def parse(document: Mapping[str, object], source: str) -> Groups:
+    """One vocabulary document, from its decoded fields.
 
     Takes a mapping rather than a path: reading YAML needs a library and this
     is `domain/`. `kingfisher.infrastructure.access_policy` does that half.
 
-    A section this format does not define is refused rather than dropped, for
-    the reason every format here gives: a key we ignore is a key the author
-    believes took effect. Three sections get their *own* refusal, because a
-    generic "unknown key" reads as "not supported yet" and sends someone
-    looking for a workaround that does not exist.
+    The three sections the central format had are refused *by name*, each
+    saying where audiences went. A deployment upgrading has a file full of
+    policy, and reading it and dropping it would be the quiet catastrophe: the
+    server would come up believing it was locked down.
     """
-    complaint = fields.unrecognised(
-        document, known={"groups", *CONTROLLED}, declined=DECLINED, noun="section"
-    )
+    complaint = fields.unrecognised(document, known={"groups"}, declined=MOVED, noun="section")
     if complaint is not None:
         msg = f"{source}: {complaint}"
         raise AccessError(msg)
-
-    groups = _closed(_vocabulary(document.get("groups"), source), source)
-
-    entries: dict[str, dict[str, Audience]] = {}
-    for kind in CONTROLLED:
-        section = document.get(kind) or {}
-        if not isinstance(section, Mapping):
-            msg = f"{source}: {kind!r} is a mapping of name to a list of groups"
-            raise AccessError(msg)
-        entries[kind] = {
-            str(asset): _audience(raw, kind=kind, asset=str(asset), known=groups, source=source)
-            for asset, raw in section.items()
-        }
-    return Access(groups=groups, entries=entries)
+    return Groups(names=_closed(_vocabulary(document.get("groups"), source), source))

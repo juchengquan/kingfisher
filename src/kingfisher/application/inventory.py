@@ -26,7 +26,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.config import Config
-from kingfisher.domain.access import Access, AccessReport
+from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
@@ -42,6 +42,8 @@ _NOTHING: Mapping[str, str] = MappingProxyType({})
 #: constants rather than one untyped: an empty mapping cannot drift in value,
 #: so what this buys is the type staying honest at the field it defaults.
 _NO_NAMES: Mapping[str, tuple[str, ...]] = MappingProxyType({})
+#: The same, for the nested audience record.
+_NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
 
 
 @dataclass(frozen=True)
@@ -147,9 +149,16 @@ class Inventory:
     #: above are: a listing is assembled once and formatted by whoever asked,
     #: and a renderer that had to reach for `Config` would be a second place
     #: deciding what a workspace offers.
-    access: Access | None = None
+    access: Groups | None = None
     #: What the policy and the catalogue disagree about. Empty when they agree.
     access_report: AccessReport = field(default_factory=AccessReport)
+    #: Definition kind -> name -> {"groups": ..., "tools": {...}, ...}, for
+    #: every definition that says anything about who reaches what.
+    #:
+    #: Carried rather than looked up by the printer: a renderer that reached for
+    #: the specs would be a second place deciding what a workspace offers, and
+    #: the roll-up below is inverted from exactly this.
+    audiences: Mapping[str, Mapping[str, Stated]] = _NO_AUDIENCES
     #: Whose view this is, expanded, or `None` for the operator's view of
     #: everything. Set, the names above have already been filtered to what this
     #: caller reaches -- so the printer never filters and the two views cannot
@@ -251,46 +260,83 @@ def _bundled(
 
 
 
-def _reconciled(
+def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
+    """What each definition of one kind says about who reaches what.
+
+    Read off the specs so the printer needs no knowledge of the spec types --
+    there are two of them and they say this identically. A definition that
+    restricts nobody is left out, so the section stays quiet for a workspace
+    that has not adopted audiences.
+    """
+    found: dict[str, Stated] = {}
+    for name, spec in sorted(specs.items()):
+        stated = Stated(
+            groups=getattr(spec, "groups", ALL),
+            entries={k: dict(v) for k, v in getattr(spec, "audiences", {}).items()},
+        )
+        if not stated.says_nothing:
+            found[name] = stated
+    return found
+
+
+def _unrestricted(*sets: tuple[str, Mapping[str, object]]) -> tuple[tuple[str, str], ...]:
+    """Definitions carrying no `groups:` line, as `(kind, name)`.
+
+    The same walk `Kingfisher` does at construction, and it has to agree with
+    it: a listing that disagreed with startup about what restricts nobody would
+    be worse than neither saying anything.
+    """
+    return tuple(
+        (kind, name)
+        for kind, specs in sets
+        for name, spec in sorted(specs.items())
+        if getattr(spec, "groups", ALL) == ALL
+    )
+
+
+def _access(
     cfg: Config,
     groups: Iterable[str] | None,
     *,
-    agents: tuple[str, ...],
-    subagents: tuple[str, ...],
-    tools: tuple[str, ...],
-) -> tuple[Access | None, AccessReport, frozenset[str] | None]:
-    """The policy as it applies to what was just walked, and whose view this is.
+    agents: Mapping[str, object],
+    subagents: Mapping[str, object],
+) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, frozenset[str] | None]:
+    """What the definitions say, what restricts nobody, and whose view this is.
 
-    Reconciled against the names this function found rather than against a
-    second reading of the same directories, so the report a listing prints says
-    the same thing `Kingfisher` says at construction.
+    Audiences come off the specs that declare them, so there is nothing here
+    that could name a definition this workspace does not have -- which is the
+    whole reason the central table's reconciliation has no counterpart.
     """
+    stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
     if cfg.access is None:
-        return None, AccessReport(), None
-    access, report = cfg.access.reconciled(
-        {"agents": agents, "subagents": subagents, "tools": tools}
-    )
-    return access, report, (access.expand(groups) if groups is not None else None)
+        return stated, AccessReport(), None
+    report = AccessReport(unrestricted=_unrestricted(("agent", agents), ("subagent", subagents)))
+    return stated, report, (cfg.access.expand(groups) if groups is not None else None)
 
 
 def _reaching(
-    access: Access | None, held: frozenset[str] | None
+    held: frozenset[str] | None, audiences: Mapping[str, Mapping[str, Stated]]
 ) -> Callable[[str, Mapping[str, str]], Mapping[str, str]]:
-    """A filter keeping only what this caller reaches, or the identity.
+    """A filter keeping only the definitions this caller reaches, or the identity.
 
     Applied where the record is built rather than where it is printed, so a
     `--as` listing and the turn that caller would actually get are narrowed by
     one rule and cannot come apart. The identity for the operator's view, which
     is what `None` means.
     """
-    if access is None or held is None:
+    if held is None:
         return lambda _kind, names: names
 
     def keep(kind: str, names: Mapping[str, str]) -> Mapping[str, str]:
-        within = set(access.reachable(kind, held))
-        return {name: value for name, value in names.items() if name in within}
+        stated = audiences.get(kind, {})
+        return {
+            name: value
+            for name, value in names.items()
+            if held is None or reaches(stated.get(name, Stated()).groups, held)
+        }
 
     return keep
+
 
 def inventory(
     cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
@@ -378,6 +424,10 @@ def inventory(
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
     compiled_subagents: tuple[str, ...] = ()
+    # Bound before the `try`, because the audience walk below reads them and a
+    # catalogue that will not load must still produce a listing -- that is the
+    # whole reason these errors are carried rather than raised.
+    specs: Mapping[str, object] = _NOTHING
     try:
         # Both reads, in one `try`. `sources` parses the same files `specs`
         # does, so reading it outside let the error escape from the line that
@@ -410,6 +460,7 @@ def inventory(
     )
 
     agents: Mapping[str, str] = _NOTHING
+    defined_agents: Mapping[str, object] = _NOTHING
     agent_sources: Mapping[str, str] = _NOTHING
     agent_delegates: Mapping[str, tuple[str, ...]] = _NO_NAMES
     agents_error: str | None = None
@@ -432,10 +483,8 @@ def inventory(
         # somebody goes because something is broken.
         agents_error = str(exc)
 
-    access, report, held = _reconciled(
-        cfg, groups, agents=tuple(agents), subagents=tuple(subagents), tools=workspace_tools
-    )
-    reaching = _reaching(access, held)
+    stated, report, held = _access(cfg, groups, agents=defined_agents, subagents=specs)
+    reaching = _reaching(held, stated)
 
     return Inventory(
         workspace=cfg.workspace,
@@ -463,7 +512,8 @@ def inventory(
         bundles_error=bundles_error,
         compiled_subagents=compiled_subagents,
         skills_enabled=cfg.skills_enabled,
-        access=access,
+        access=cfg.access,
         access_report=report,
         held=held,
+        audiences=stated,
     )

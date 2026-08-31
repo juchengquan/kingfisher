@@ -1,4 +1,4 @@
-"""Reading `access.yaml`: which groups this deployment has, and who reaches what.
+"""Reading `groups.yaml`: the group names this deployment declares.
 
 The `infrastructure` half of a split `kingfisher.domain.access` states: that
 module owns the rule and may not read a file, this one owns the file and owns
@@ -25,13 +25,13 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain.access import Access, AccessError, parse
+from kingfisher.domain.access import AccessError, Groups, parse
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def load(path: Path) -> Access | None:
+def load(path: Path) -> Groups | None:
     """The policy at `path`, or `None` if there is no file there."""
     if not path.is_file():
         return None

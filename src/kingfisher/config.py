@@ -31,7 +31,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.domain.access import Access
+from kingfisher.domain.access import Groups
 
 #: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
 #: rather than written twice: the two are spread into one `build_model` call
@@ -353,7 +353,7 @@ class Config:
     #: stale view of it is a wrong answer about what exists; a policy is a
     #: deployment setting, and a revocation lands on restart the way every
     #: other one here does.
-    access: Access | None = None
+    access: Groups | None = None
     #: What bounds one shell command or one interpreter run.
     #:
     #: Not the model timeout. This was `timeout_s` and served three unrelated
