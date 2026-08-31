@@ -22,14 +22,17 @@ caller of either.
 from __future__ import annotations
 
 import logging
+import sys
+import warnings
 from contextlib import suppress
 from dataclasses import dataclass, field
+from functools import cache
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
-from langchain.agents.middleware import TodoListMiddleware
+from langchain.agents.middleware import AgentMiddleware, TodoListMiddleware
 
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain import skill
@@ -266,13 +269,113 @@ def declared_middleware(
     reached nothing -- so the function moved to the module that assembles both,
     rather than an agent's wiring reaching into the delegates'.
     """
+    subject = f"{kind} {spec.name!r}"
     approved = approved_middleware(
         spec.middleware,
         registered=registry,
         granted=allowed,
-        subject=f"{kind} {spec.name!r}",
+        subject=subject,
     )
-    return [registry[name]() for name in approved]
+    built = []
+    for name in approved:
+        instance = registry[name]()
+        _warn_if_it_replaces_deepagents(instance, registered_as=name, subject=subject)
+        built.append(instance)
+    return built
+
+
+#: The two deepagents will not run without, by the `.name` each answers to.
+#:
+#: Not a ban. Replacing either is a deployment's business -- a fence of one's own
+#: over the filesystem is a reasonable thing to build, and refusing it here would
+#: be kingfisher inventing a policy deepagents does not have. What these two buy
+#: is a louder sentence in the warning below, because the consequence of getting
+#: one wrong is not a missing hook but an agent whose file tools no longer
+#: enforce `permissions`.
+#:
+#: Written here rather than imported from `_REQUIRED_MIDDLEWARE_NAMES`, which is
+#: private: an upstream rename would otherwise change what this says with nobody
+#: deciding, and `test_the_required_names_match_deepagents` fails loudly instead.
+REQUIRED_BY_DEEPAGENTS = ("FilesystemMiddleware", "SubAgentMiddleware")
+
+
+@cache
+def _deepagents_middleware_names() -> frozenset[str]:
+    """Every name deepagents' own middleware answers to, read off its modules.
+
+    Discovered rather than listed, because a list would be wrong the first time
+    upstream adds a middleware and nobody here noticed -- and a notice that has
+    silently stopped covering half the stack is worse than none.
+
+    Across the package rather than `graph.py`'s namespace alone, which was the
+    first version and missed three: `SummarizationMiddleware` is reached there
+    through `create_summarization_middleware`, so the factory is imported and
+    the class it returns is not. A name-collision notice blind to the summarizer
+    would have been exactly the half-covering kind.
+
+    `deepagents.graph` is imported first because importing it is what pulls the
+    submodules in; walking `sys.modules` without that would depend on what
+    somebody else happened to import.
+
+    Cached because it walks every loaded module and the answer cannot change
+    inside a process.
+    """
+    import deepagents.graph  # noqa: F401, PLC0415  -- loads the submodules walked below
+
+    return frozenset(
+        obj.__name__
+        for name, module in list(sys.modules.items())
+        if name.startswith("deepagents") and module is not None
+        for obj in vars(module).values()
+        if isinstance(obj, type)
+        and issubclass(obj, AgentMiddleware)
+        and obj is not AgentMiddleware
+    )
+
+
+def _warn_if_it_replaces_deepagents(
+    instance: Any, *, registered_as: str, subject: str
+) -> None:
+    """Say when a deployment's middleware displaces one of deepagents' own.
+
+    `create_deep_agent` does not append what it is handed. It merges by name --
+    `_apply_custom_middleware`, which replaces in place when a custom
+    middleware's `.name` matches something already in the base stack. And
+    `AgentMiddleware.name` defaults to the class name, while the registry key a
+    definition reaches a middleware by is a different string entirely, so
+    nothing on either side of that would otherwise mention it.
+
+    A warning rather than a refusal, because the substitution is a legitimate
+    thing to deploy: a filesystem middleware of one's own, a summarizer that
+    truncates differently. What is not legitimate is doing it *by accident*,
+    which is the whole failure mode here -- the two names collide because
+    somebody picked an obvious class name, not because they meant to replace
+    anything. A deployment that meant it reads this once and moves on.
+
+    Through `warnings.warn` rather than a logger, which is what
+    `model_catalogue` does for the same shape of thing: a deployment's own
+    configuration is probably not what it meant, said once, fatal to nothing.
+    """
+    name = getattr(instance, "name", None)
+    if name not in _deepagents_middleware_names():
+        return
+
+    weight = (
+        f" {name} is also one of the two deepagents refuses to run without, so "
+        f"whatever replaces it has to do that job as well -- unreplaced, it backs "
+        f"every built-in file tool and enforces the `permissions` rules."
+        if name in REQUIRED_BY_DEEPAGENTS
+        else ""
+    )
+    warnings.warn(
+        f"{subject} runs middleware registered as {registered_as!r} whose class is "
+        f"named {name!r}, which is a name deepagents uses for its own. deepagents "
+        f"merges by name, so this replaces its {name} in place rather than running "
+        f"beside it.{weight} If that is what you meant, there is nothing to do; if "
+        f"it is not, rename the class -- the registry key it is reached by is "
+        f"separate and can stay as it is.",
+        stacklevel=2,
+    )
 
 
 def registered_tools(graph: Any) -> tuple[str, ...] | None:
