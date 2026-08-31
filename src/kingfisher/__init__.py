@@ -21,6 +21,10 @@ __version__ = "0.1.0"
 #: Public name -> the module that defines it. The single source for both
 #: `__getattr__` and `__all__`, so the two cannot drift.
 _EXPORTS = {
+    "Access": "kingfisher.domain.access",
+    "AccessError": "kingfisher.domain.access",
+    "AccessReport": "kingfisher.domain.access",
+    "UNSCOPED": "kingfisher.domain.access",
     "Capabilities": "kingfisher.domain.capabilities",
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
@@ -101,6 +105,10 @@ __all__ = [
     "DEFINITION_KINDS",
     "SEED_HINT",
     "SKILL_LAYOUT",
+    "UNSCOPED",
+    "Access",
+    "AccessError",
+    "AccessReport",
     "Capabilities",
     "CapabilityError",
     "Config",
@@ -167,6 +175,10 @@ if TYPE_CHECKING:
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.config import WorkspacePaths as WorkspacePaths
+    from kingfisher.domain.access import UNSCOPED as UNSCOPED
+    from kingfisher.domain.access import Access as Access
+    from kingfisher.domain.access import AccessError as AccessError
+    from kingfisher.domain.access import AccessReport as AccessReport
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.references import (
