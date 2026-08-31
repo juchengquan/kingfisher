@@ -26,6 +26,10 @@ same two:
 The formats — tools, skills, subagents, and the catalogue they live in —
 are documented in [`docs/formats.md`](docs/formats.md).
 
+Why any of it is shaped the way it is, in [`docs/README.md`](docs/README.md) —
+an index of the design documents, which are history rather than a manual and
+several of which describe something that was built and then taken back out.
+
 `kingfisher list` shows what a workspace offers a request — tools, skills,
 subagents — and where each one came from. `kingfisher seed` writes a starting
 workspace.

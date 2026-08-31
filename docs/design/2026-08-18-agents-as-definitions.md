@@ -1,6 +1,7 @@
 # The main agent becomes a definition
 
-**Status:** proposed.
+**Status:** implemented. The status line said *proposed* long after it shipped;
+corrected when the docs were indexed, and nothing else in this document was touched.
 **Date:** 2026-08-18
 
 There is no file anywhere that says what the main agent is. It is assembled from
