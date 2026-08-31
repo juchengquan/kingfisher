@@ -26,7 +26,16 @@ description: Reads many files and returns only what was asked for. Use to keep b
 # request that subtracts it refuses this delegate rather than quietly building
 # it uncapped: running with less middleware than the definition specified could
 # mean running without the audit hook it was written to have.
-middleware: [call-cap-generous]
+middleware:
+  - call-cap-generous
+  # The same registry entry `researcher.yaml` names, written with a different
+  # sentence. That is the half of the axis a cap cannot demonstrate: one class
+  # the deployment registered once, configured per definition, because the
+  # useful reminder for a delegate that discards is not the useful reminder for
+  # an agent that answers.
+  - name: tool-note
+    settings:
+      text: Return the path and line, not the file.
 # Reading only, and both lists named, because omitting `tools` would mean all of
 # them -- a delegate that exists to read files able to write and fetch.
 builtin_tools: [read_file, ls, glob, grep]

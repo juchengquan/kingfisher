@@ -459,6 +459,22 @@ def _call_cap_module(shipped):
     return load(shipped / "middleware" / "call_cap.py", declares="CallCap")
 
 
+def _documented_registry(shipped):
+    """The wiring block the examples tell you to paste, pasted.
+
+    Both example modules at once, because the block is one block: a deployment
+    copying it registers three names over three classes, and a test that built
+    half of it would not be checking the thing the comment promises.
+    """
+    cap = _call_cap_module(shipped)
+    note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
+    return {
+        "call-cap-strict": cap.CallCap,
+        "call-cap-generous": cap.CallCapGenerous,
+        "tool-note": note.ToolNote,
+    }
+
+
 def test_the_middleware_example_is_not_a_definition_kind(shipped):
     """It sits under `examples/` and `seed` does not copy it, which is the one
     surprising thing about this folder and therefore the thing to pin.
@@ -561,6 +577,47 @@ def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
     assert out["messages"][-1].content == "done", "the cap ended the turn instead of the call"
 
 
+def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
+    """It is code, so "does it parse" means "does it run" -- the same bar
+    `test_the_middleware_example_caps_a_turn` sets for the cap two tests up.
+
+    Driven by a scripted model rather than by calling `_annotate` directly,
+    because what could be wrong is the wiring: a middleware that annotates
+    correctly and is never reached by the graph passes every unit assertion and
+    does nothing at all.
+    """
+    note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
+    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
+    responses = [
+        AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "c1"}]),
+        AIMessage(content="done"),
+    ]
+
+    graph = build_agent(
+        cfg,
+        agent=replace(
+            spec,
+            middleware=("tool-note",),
+            middleware_settings={"tool-note": {"text": "Mind the source."}},
+            subagents=None,
+            skills=None,
+        ),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=responses),
+        middleware_registry={"tool-note": note.ToolNote},
+    )
+    out = graph.invoke(
+        {"messages": [{"role": "user", "content": "go"}]},
+        config={"configurable": {"thread_id": "note"}, "recursion_limit": 30},
+    )
+
+    results = [m for m in out["messages"] if isinstance(m, ToolMessage)]
+    assert results, "the scripted call never produced a tool result"
+    assert all(m.content.endswith("Mind the source.") for m in results), (
+        "the definition's wording did not reach the result the model reads"
+    )
+
+
 def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
     """`CallCap(0)` would refuse the first call and every one after it, which
     is not a narrower cap but a broken agent. Omitting the name is how you say
@@ -606,10 +663,23 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     agent, delegate = _example_definitions(shipped)
 
     assert agent.name == "researcher"
-    assert agent.middleware == ("call-cap-strict",)
+    assert agent.middleware == ("call-cap-strict", "tool-note")
     assert delegate.name == "sweeper"
-    assert delegate.middleware == ("call-cap-generous",)
+    assert delegate.middleware == ("call-cap-generous", "tool-note")
     assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
+
+    # Both spellings in one list, which is what these two files are now for.
+    # The cap is bare because `CallCap` opens nothing; the note is written long
+    # because `ToolNote` opens `text`.
+    assert dict(agent.middleware_settings) == {
+        "tool-note": {"text": "Cite the path and line for anything you assert."}
+    }
+    assert dict(delegate.middleware_settings) == {
+        "tool-note": {"text": "Return the path and line, not the file."}
+    }
+    assert (
+        agent.middleware_settings["tool-note"] != delegate.middleware_settings["tool-note"]
+    ), "one registry entry configured two ways is the thing this pair demonstrates"
 
 
 def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
@@ -644,24 +714,86 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
     none of its parent's middleware, so `researcher` running out of calls says
     nothing about how many `sweeper` has left.
     """
-    module = _call_cap_module(shipped)
-    registry = {
-        "call-cap-strict": module.CallCap,
-        "call-cap-generous": module.CallCapGenerous,
-    }
+    registry = _documented_registry(shipped)
     agent, delegate = _example_definitions(shipped)
 
     built = declared_middleware(agent, registry, ALL, kind="agent")
     delegated = declared_middleware(delegate, registry, ALL, kind="subagent")
 
-    assert [type(m).__name__ for m in built] == ["CallCap"]
-    assert [type(m).__name__ for m in delegated] == ["CallCapGenerous"]
+    assert [type(m).__name__ for m in built] == ["CallCap", "ToolNote"]
+    assert [type(m).__name__ for m in delegated] == ["CallCapGenerous", "ToolNote"]
     assert built[0] is not delegated[0], "one instance for both would share a budget"
     # The ceilings the two classes document, read off the objects rather than
     # off `defaults`: the point of registering a class is that the build path
     # applies its defaults, so asserting the attribute would assert nothing.
     assert built[0]._limit == 20
     assert delegated[0]._limit == 100
+
+
+def test_the_note_example_is_one_class_configured_two_ways(shipped):
+    """The half of the axis `call_cap.py` cannot show, driven end to end.
+
+    One registry entry, named by both definitions, built into two objects
+    carrying the sentences their own files wrote. That is what a setting buys
+    and what two-names-over-two-classes cannot express -- and it is the reason
+    `ToolNote` opens `text` where `CallCap` opens nothing.
+
+    Read off the built objects rather than the specs, because the specs were
+    already asserted two tests up. What could still be wrong here is the merge.
+    """
+    registry = _documented_registry(shipped)
+    agent, delegate = _example_definitions(shipped)
+
+    note = declared_middleware(agent, registry, ALL, kind="agent")[1]
+    delegated = declared_middleware(delegate, registry, ALL, kind="subagent")[1]
+
+    assert note._text == "Cite the path and line for anything you assert."
+    assert delegated._text == "Return the path and line, not the file."
+    assert note._text != delegated._text
+    # The key neither file wrote, which both take from the deployment. The
+    # merge is per key rather than all-or-nothing, and this is where that shows.
+    assert note._max_length == delegated._max_length == 200
+
+
+def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
+    """`max_length` is a ceiling on what a definition may inject into every tool
+    result, so it is shut for the same reason `limit` is.
+
+    Driven against the real class rather than a fixture, because the thing that
+    could regress is `ToolNote.yaml_settable` -- someone adding `max_length` to
+    it to make a long note fit would pass every other test in this file.
+    """
+    from dataclasses import replace
+
+    registry = _documented_registry(shipped)
+    agent, _ = _example_definitions(shipped)
+    greedy = replace(
+        agent,
+        middleware_settings={"tool-note": {"text": "hi", "max_length": 100_000}},
+    )
+
+    with pytest.raises(CapabilityError, match="does not accept"):
+        declared_middleware(greedy, registry, ALL, kind="agent")
+
+
+def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
+    """`middleware: [tool-note]` with no settings is a working line, not a no-op.
+
+    `defaults` holds a real sentence rather than an empty string, so a
+    definition that names the middleware and says no more still gets a note.
+    Worth pinning: an empty default would make the bare form silently do
+    nothing, which is the shape of a feature nobody notices is broken.
+    """
+    from dataclasses import replace
+
+    registry = _documented_registry(shipped)
+    agent, _ = _example_definitions(shipped)
+    quiet = replace(agent, middleware=("tool-note",), middleware_settings={})
+
+    (built,) = declared_middleware(quiet, registry, ALL, kind="agent")
+
+    assert built._text == registry["tool-note"].defaults["text"]
+    assert built._text, "the bare form has to do something"
 
 
 def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):

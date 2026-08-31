@@ -13,12 +13,14 @@
 # once you have registered the names below, which is the whole of the setup:
 #
 #     from examples.middleware.call_cap import CallCap, CallCapGenerous
+#     from examples.middleware.tool_note import ToolNote
 #
 #     kingfisher = Kingfisher(
 #         cfg,
 #         middleware={
 #             "call-cap-strict":   CallCap,
 #             "call-cap-generous": CallCapGenerous,
+#             "tool-note":         ToolNote,
 #         },
 #     )
 name: researcher
@@ -28,21 +30,31 @@ description: Answers questions from a workspace's files under a ceiling on how m
 # the name selects code. Which is why the ceiling is `call-cap-strict` rather
 # than a number written here: a cap a definition can set is not a cap.
 #
-# An entry may also be written long, when the class behind the name says it
-# takes something:
+# Two entries and two spellings, which is the point of writing them together.
 #
-#     middleware:
-#       - name: audit-hook
-#         settings: {level: DEBUG}
+# `call-cap-strict` is a bare name because `CallCap` opens nothing: its
+# `yaml_settable` is empty, so there is no spelling of this file that raises
+# its own ceiling. The looser ceiling is a second registered class,
+# `call-cap-generous`, which `sweeper.yaml` names.
 #
-# Not available here, and deliberately. What a definition may write is whatever
-# the class listed in `yaml_settable`, and `CallCap` lists nothing -- so there
-# is no spelling of this file that raises its own ceiling. The looser one is a
-# second registered class, `call-cap-generous`, which `sweeper.yaml` names.
+# `tool-note` is written long because `ToolNote` opens `text`, and what is
+# worth reminding an agent about depends on the agent. `sweeper.yaml` names the
+# same registry entry and writes a different sentence -- one registered class,
+# two definitions, two configurations, which is exactly what the cap must not
+# have and this may.
+#
+# `max_length` is not writable here and the refusal says so at build time. It
+# is a ceiling on how much a definition may inject into every tool result, and
+# a ceiling the ceilinged thing can set is not a ceiling -- the same sentence
+# as the cap, on a different resource.
 #
 # Omission grants none, like `skills` and `subagents` and unlike the two tool
 # axes. An agent that says nothing here runs with no middleware of its own.
-middleware: [call-cap-strict]
+middleware:
+  - call-cap-strict
+  - name: tool-note
+    settings:
+      text: Cite the path and line for anything you assert.
 # Named, so what this agent may do stays legible. It reads and it delegates.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []
