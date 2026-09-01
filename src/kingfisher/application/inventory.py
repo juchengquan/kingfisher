@@ -26,7 +26,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.config import Config
-from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
+from kingfisher.domain.access import AccessError, AccessReport, Groups, Stated, reaches
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
@@ -294,24 +294,65 @@ def _unrestricted(*sets: tuple[str, Mapping[str, object]]) -> tuple[tuple[str, s
     )
 
 
+def undeclared_in(specs: Mapping[str, Stated], *, kind: str, vocabulary: Groups) -> str | None:
+    """The first definition naming a group this deployment does not declare.
+
+    Returned rather than raised, which is this module's rule: a listing is where
+    somebody goes *because* something is broken, so one unloadable kind must not
+    take the other two down with it.
+
+    `Kingfisher` raises on the same condition, and the two agree by asking the
+    same question of the same specs. They differ only in what they do with the
+    answer, which is the difference between building a deployment and describing
+    one.
+
+    The first rather than all of them: a definition that cannot be honoured
+    stops the deployment, so there is no second one to reach.
+    """
+    for name, stated in specs.items():
+        for where, audience in (
+            (f"{kind} {name!r}", stated.groups),
+            *(
+                (f"{kind} {name!r}: {field_name} entry {entry!r}", who)
+                for field_name, entries in stated.entries.items()
+                for entry, who in entries.items()
+            ),
+        ):
+            try:
+                vocabulary.refuse_undeclared(audience, where=where, error=AccessError)
+            except AccessError as exc:
+                return str(exc)
+    return None
+
+
 def _access(
     cfg: Config,
     groups: Iterable[str] | None,
     *,
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
-) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, frozenset[str] | None]:
+) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, frozenset[str] | None, dict[str, str]]:
     """What the definitions say, what restricts nobody, and whose view this is.
 
     Audiences come off the specs that declare them, so there is nothing here
     that could name a definition this workspace does not have -- which is the
     whole reason the central table's reconciliation has no counterpart.
+
+    The fourth answer is what *cannot* be honoured: a definition naming a group
+    the vocabulary does not declare stops a deployment being built, so a listing
+    that showed it as ordinary would be describing a workspace that will not
+    start.
     """
     stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
     if cfg.access is None:
-        return stated, AccessReport(), None
+        return stated, AccessReport(), None, {}
     report = AccessReport(unrestricted=_unrestricted(("agent", agents), ("subagent", subagents)))
-    return stated, report, (cfg.access.expand(groups) if groups is not None else None)
+    broken = {
+        kind: complaint
+        for kind, held in (("agents", stated["agents"]), ("subagents", stated["subagents"]))
+        if (complaint := undeclared_in(held, kind=kind[:-1], vocabulary=cfg.access)) is not None
+    }
+    return stated, report, (cfg.access.expand(groups) if groups is not None else None), broken
 
 
 def _reaching(
@@ -483,7 +524,9 @@ def inventory(
         # somebody goes because something is broken.
         agents_error = str(exc)
 
-    stated, report, held = _access(cfg, groups, agents=defined_agents, subagents=specs)
+    stated, report, held, broken = _access(
+        cfg, groups, agents=defined_agents, subagents=specs
+    )
     reaching = _reaching(held, stated)
 
     return Inventory(
@@ -494,7 +537,10 @@ def inventory(
         agents=MappingProxyType(dict(reaching("agents", agents))),
         agent_sources=agent_sources,
         agent_delegates=agent_delegates,
-        agents_error=agents_error,
+        # `or`, not replace: a kind that already failed to load has the more
+        # fundamental problem, and saying the second one instead would send a
+        # reader to a group name in a file that does not parse.
+        agents_error=agents_error or broken.get("agents"),
         builtin_tools=builtin,
         tools=tuple(reaching("tools", dict.fromkeys(workspace_tools, ""))),
         tool_sources=sources,
@@ -505,7 +551,7 @@ def inventory(
         skills_misfiled=tuple(registry.misfiled),
         subagents=MappingProxyType(dict(reaching("subagents", subagents))),
         subagent_sources=subagent_sources,
-        subagents_error=subagents_error,
+        subagents_error=subagents_error or broken.get("subagents"),
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,
         shadowed=shadowed,

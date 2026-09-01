@@ -191,3 +191,105 @@ def test_a_session_with_nothing_pinned_stays_visible(two_agents):
     session_id = kf.start_session()
 
     assert kf.session(session_id, groups=("B",)) is not None
+
+
+# -- a definition naming a group the vocabulary does not declare ------------
+
+
+def test_a_definition_naming_an_undeclared_group_is_refused(cfg):
+    """The closed vocabulary's other end, and the one that was written and never
+    wired. Unrefused, `groups: [analists]` is not an error -- it invents a group
+    nobody is in, and the only symptom is an agent quietly reachable by no one,
+    found weeks later by whoever needed it."""
+    an_agent(cfg, "analyst", groups="[analists]")
+    policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
+
+    with pytest.raises(AccessError, match="analists"):
+        Kingfisher(policied)
+
+
+def test_that_refusal_names_the_definition_and_what_is_declared(cfg):
+    """Both halves, because a reader has one file to fix and needs the spelling
+    that would have worked."""
+    an_agent(cfg, "analyst", groups="[analists]")
+    policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
+
+    with pytest.raises(AccessError) as raised:
+        Kingfisher(policied)
+
+    assert "analyst" in str(raised.value)
+    assert "analysts" in str(raised.value)
+
+
+def test_an_entry_audience_naming_an_undeclared_group_is_refused(cfg):
+    """Not only the definition's own line: an entry names groups too, and a typo
+    there hides one tool rather than the whole agent -- which is quieter.
+
+    Written on a definition that restricts nobody, because that is the gap.
+    Under a *restricted* one, `refuse_dead` already catches this at parse: an
+    undeclared name cannot overlap the definition's own audience, so it reads as
+    the dead line it is. With no `groups:` above it there is nothing to be dead
+    against, and this check is the only thing looking.
+    """
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "analyst.yaml").write_text(
+        "name: analyst\ndescription: An agent.\n"
+        "tools:\n  line_count:\n    groups: [analists]\n"
+        "system_prompt: |\n  Do it.\n",
+        encoding="utf-8",
+    )
+    policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
+
+    with pytest.raises(AccessError, match="analists"):
+        Kingfisher(policied)
+
+
+def test_a_restricted_definition_catches_that_typo_earlier(cfg):
+    """The neighbouring case, asserted so the split above is not folklore:
+    `refuse_dead` gets there first, at parse, and says the more specific thing
+    -- that the line reaches nobody rather than that the group is unknown."""
+    from kingfisher.domain.agent import AgentError
+
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "analyst.yaml").write_text(
+        "name: analyst\ndescription: An agent.\ngroups: [analysts]\n"
+        "tools:\n  line_count:\n    groups: [analists]\n"
+        "system_prompt: |\n  Do it.\n",
+        encoding="utf-8",
+    )
+    policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
+
+    with pytest.raises(AgentError, match="never reaches anyone"):
+        Kingfisher(policied)
+
+
+def test_a_subagent_is_checked_too(cfg):
+    an_agent(cfg, "assistant")
+    delegates = cfg.catalogue_roots["subagents"]
+    delegates.mkdir(parents=True, exist_ok=True)
+    (delegates / "auditor.yaml").write_text(
+        "name: auditor\ndescription: A delegate.\ngroups: [analists]\n"
+        "system_prompt: |\n  Do it.\n",
+        encoding="utf-8",
+    )
+    policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
+
+    with pytest.raises(AccessError, match="analists"):
+        Kingfisher(policied)
+
+
+def test_a_declared_group_is_fine(cfg):
+    an_agent(cfg, "analyst", groups="[analysts]")
+    policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
+
+    assert Kingfisher(policied).agent_named("analyst", groups=("analysts",)) is not None
+
+
+def test_nothing_is_checked_where_there_is_no_vocabulary(cfg):
+    """A `groups:` line on a deployment that declares none is inert, not wrong.
+    Checking it would need a vocabulary to check against, and there is none."""
+    an_agent(cfg, "analyst", groups="[whatever]")
+
+    assert Kingfisher(cfg).agent_named("analyst") is not None

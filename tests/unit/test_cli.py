@@ -887,3 +887,40 @@ def test_as_unscoped_is_spelled_out_rather_than_implied():
 
     assert _held("UNSCOPED") is UNSCOPED
     assert _held("") == ()
+
+
+def test_the_listing_reports_a_definition_naming_an_undeclared_group(cfg, monkeypatch, capsys):
+    """The listing is where somebody diagnosing this looks, and it goes through
+    `inventory` rather than `Kingfisher` -- so the check has to be in both or
+    the one place a reader would check shows a broken definition as ordinary.
+
+    Reported rather than raised, which is this listing's rule: it is where you
+    go *because* something is broken.
+    """
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "analyst", groups="[analists]")
+    (cfg.workspace / "groups.yaml").write_text("groups: [analysts]\n", encoding="utf-8")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 1, "a workspace that will not build is a non-zero listing"
+
+    printed = capsys.readouterr().out
+    assert "analists" in printed
+    assert "analysts" in printed, "and the spelling that would have worked"
+
+
+def test_the_listing_is_clean_when_every_group_is_declared(cfg, monkeypatch, capsys):
+    """So the rule above is not passing because every listing says that."""
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "analyst", groups="[analysts]")
+    (cfg.workspace / "groups.yaml").write_text("groups: [analysts]\n", encoding="utf-8")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+    assert "cannot load" not in capsys.readouterr().out
