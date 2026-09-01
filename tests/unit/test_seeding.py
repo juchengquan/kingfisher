@@ -283,6 +283,39 @@ def test_seeding_does_not_claim_the_catalogue_example(cfg):
     assert not [entry for entry in result.overwritten if entry.endswith(".example")]
 
 
+def test_seeding_alone_leaves_a_workspace_that_can_start(tmp_path):
+    """The other half of the test above, and the one the library got wrong.
+
+    Seeding does not *report* the catalogue example -- `ensure_layout` places
+    it, and that separation is right. What was missing is that nothing made a
+    library caller lay the workspace out at all. The obvious two lines,
+
+        paths = paths_from_env()
+        seed(paths, definitions_source(paths))
+
+    copied fourteen definitions, reported success, and left no
+    `models.yaml.example`: a deployment told to write `models.yaml` and given no
+    example of one, which is the dead end that write was moved to avoid. The CLI
+    had the ordering and a docstring saying why; a caller reading the signature
+    had neither.
+
+    So `seed` lays out first. Asserted from the disk here rather than the
+    report, because the report is deliberately silent about it -- the two tests
+    are the same distinction from opposite sides.
+    """
+    from kingfisher import paths_from_env
+
+    fresh = tmp_path / "untouched"
+    paths = paths_from_env({"KINGFISHER_WORKSPACE": str(fresh)})
+
+    result = seeding.seed(paths, FIXTURE)
+
+    assert result.written, "nothing was seeded, so the rest asserts nothing"
+    assert (fresh / "models.yaml.example").is_file(), (
+        "seeded but unusable: no worked example of the one file a deployment must write"
+    )
+
+
 def test_seeding_never_writes_the_catalogue_itself(cfg):
     """The one file seeding must not touch.
 
