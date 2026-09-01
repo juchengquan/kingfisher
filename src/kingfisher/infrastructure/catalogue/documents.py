@@ -82,16 +82,23 @@ def groups_named(text: str) -> tuple[str, ...]:
 
 
 def _collect(written: object, *, into: list[str]) -> None:
-    """The names in one audience, appended. Anything else is the format's to refuse."""
+    """The names in one audience, appended. Anything else is the format's to refuse.
+
+    An entry may be a conjunction -- `{all_of: [finance, senior]}` -- and its
+    parts are named as surely as a bare name is. Missed, `seed` would copy a
+    definition whose only undeclared group is written inside one, into a
+    workspace that then refuses to start: the exact failure the rule this feeds
+    exists to prevent.
+    """
     if isinstance(written, str):
         written = [written]
     if not isinstance(written, (list, tuple)):
         return
-    into.extend(
-        name.strip()
-        for name in written
-        if isinstance(name, str) and name.strip() and name.strip() != "*"
-    )
+    for one in written:
+        if isinstance(one, dict):
+            _collect(one.get("all_of"), into=into)
+        elif isinstance(one, str) and one.strip() and one.strip() != "*":
+            into.append(one.strip())
 
 
 def middleware_named(text: str) -> tuple[str, ...]:

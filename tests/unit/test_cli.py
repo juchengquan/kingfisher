@@ -875,6 +875,30 @@ def test_a_vocabulary_with_no_compounds_gets_no_such_section(policied, capsys):
     assert "groups that require others" not in capsys.readouterr().out
 
 
+def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
+    """`json` holds neither a set nor a tuple, so this is not a formality: an
+    audience carrying a conjunction used to be unencodable outright."""
+    import json
+
+    from kingfisher import config_from_env, inventory
+    from kingfisher.presentation.cli.listing import as_json
+
+    _workspace(
+        cfg, monkeypatch, BOTH, NAMED,
+        vocabulary="groups:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n",
+    )
+
+    # From the environment, not the fixture: the vocabulary is a file the
+    # helper just wrote, and the fixture config predates it.
+    document = json.loads(json.dumps(as_json(inventory(config_from_env()))))
+
+    # Nested, not "A+B": a script should not have to parse a separator out of a
+    # name, and a group name may legally contain one.
+    assert document["audiences"]["agents"]["both"]["groups"] == [["A", "B"]]
+    assert document["access"]["requires"]["ab"] == ["A", "B"]
+    assert document["access"]["names"]["A"] == ["A"]
+
+
 def test_a_callers_view_carries_no_audiences(policied, capsys):
     """Who else reaches a thing is the operator's question, not a caller's."""
     assert main(["list", "--as", "A"]) == 0

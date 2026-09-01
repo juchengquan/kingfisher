@@ -157,6 +157,59 @@ went with it. What survived unchanged: `for_groups`, `UNSCOPED`, the refusal of 
 call that names no caller, the per-turn re-check of a session's pinned agent, and
 the closed vocabulary. *(2026-08-31, reversed the same day.)*
 
+**An audience list is an `or`, and an entry of it may be an `and`.** `all_of`
+requires a caller to hold several groups at once, and is written two ways
+deliberately: named in `groups.yaml` for anything reused, inline as one entry of
+a list for a one-off. The same word both places, so the named form is literally a
+*name for* the inline one rather than a second mechanism -- the argument against
+two spellings was drift, and using one word with one evaluation is what answers
+it. The result is or-of-ands, which is the shape access rules take, out of one
+field with no rule about how two fields combine. *(2026-09-01.)*
+
+`expand` does the work, which is what kept `reaches` nearly unchanged: `contains`
+closes first, then a compound joins the held set once its parts are held, so a
+named compound is an ordinary held name by the time any audience is asked. Two
+consequences follow rather than being chosen. **`contains` satisfies `all_of`**,
+because expansion runs first -- the alternative is an `admin` who contains both
+parts yet is weaker than the sum of what they reach. And **nesting works for
+free**, since a compound whose parts are held is held.
+
+**A caller may not present a compound name.** It is what holding the parts adds
+up to, not something to claim; accepting it would let one assertion stand in for
+the two that `all_of` exists to require. The refusal names the parts. Over HTTP
+this surfaces as the `misconfigured` 500 a drifted vocabulary already gets, which
+is exactly what a gateway emitting a derived name is.
+
+**`refuse_dead` moved off `parse` onto `Groups`, and that was a bug fix.**
+Whether one line can ever reach another is a question about what the names
+*mean*, and `parse` reads one document with no vocabulary to answer it: a
+definition `[reviewers]` with an entry `[analysts]` is alive when `reviewers`
+contains `analysts`, and comparing raw names called it dead. `contains` already
+had that bug; compounds would have made it routine. It now runs beside
+`refuse_undeclared`, which had moved there first and for the same reason. Two
+things worth keeping in view:
+
+- **The check stays a heuristic on purpose.** A caller in `{A, C}` reaches a
+  definition `[A, B]` and an entry `[C]`, and this still refuses that pair. Made
+  exact it would allow nearly everything and stop catching the typos it exists
+  for.
+- **Ordering settles which fault a typo reports.** A misspelling makes a line
+  both undeclared and dead. `never reaches anyone` is true but sends its reader
+  off to reconcile two audiences, so the undeclared check goes first and names
+  the word.
+
+**`groups.yaml` now holds vocabulary with a rule in it**, and the file's pitch
+was "a dictionary, not a policy". A compound sits on that line: it still answers
+"what does this name mean", but answers it with a condition. Judged to stay on
+the right side -- what it cannot do is say who reaches what, which is the
+property that made the central design fail. Recorded because it is cheap to
+disagree with now and expensive later.
+
+The `--json` listing's `access` key grew from a name-to-closure mapping into
+`{names, requires}`. A shape change for scripts, taken because a compound has no
+honest place in the old shape and the alternative was dropping the second fact.
+Group access was two days old at the time.
+
 **`builtin_tools` takes no audience, and that is not an omission.** deepagents
 registers its own tools, so kingfisher can filter them but never leave them out
 of a graph -- `harness/narrowing.py` records a live run where a model called

@@ -46,6 +46,32 @@ groups:
   # were never told they could.
   reviewers: {contains: [analysts, auditors]}
 
+  # A seniority, held alongside one of the roles above rather than instead of
+  # one. On its own it reaches nothing here, and that is deliberate: it is a
+  # thing you also are, not a thing you are.
+  senior: {}
+
+  # The other operation this file can express, and the opposite of `contains`.
+  #
+  # `contains` says what holding a name *grants*. `all_of` says what a caller
+  # must hold for a name to *apply*: `senior-analysts` is not something anybody
+  # is given -- it is what holding `analysts` and `senior` together adds up to.
+  #
+  # Which is why a caller may not present it. `--as senior-analysts` is refused
+  # naming the parts, because accepting it would let one claim stand in for the
+  # two that the requirement exists to demand. Send `analysts` and `senior`;
+  # this name derives itself.
+  #
+  # `contains` and `all_of` cannot both appear on one group. One says what a
+  # name hands out and the other says what it costs, and a name that is both is
+  # a question with no answer.
+  #
+  # A `reviewers` reaches this too, without being senior -- containing
+  # `analysts` is not the same as being one, but expansion runs first and the
+  # requirement is checked against what is held afterwards. If that is wrong for
+  # your deployment, the fix is that `reviewers` should not contain `analysts`.
+  senior-analysts: {all_of: [analysts, senior]}
+
 # Expansion is transitive and cycles are refused, naming the whole loop rather
 # than one edge of it -- one edge does not tell a reader which link to cut, and
 # whoever reads the message may own none of the groups in it.

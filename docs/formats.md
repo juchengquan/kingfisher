@@ -1464,6 +1464,61 @@ every line and re-written on every line anyone adds. A loop is refused naming th
 whole cycle rather than one edge — one edge does not tell a reader which link to
 cut, and they may own none of the groups involved.
 
+### Requiring several groups at once
+
+An audience list is an **or**: any one of the names is enough. An entry of that
+list may be an **and**, written `all_of`, which is satisfied only in full:
+
+```yaml
+groups: [admin, {all_of: [finance, senior]}]
+```
+
+Either an `admin`, or somebody who is *both* in finance *and* senior. That is
+or-of-ands, which is the shape access rules actually take, and it stays one
+field with no rule about how two fields combine.
+
+Where the same requirement appears more than once, name it in the vocabulary
+instead — the same word, so the named form is simply a name for the inline one:
+
+```yaml
+# groups.yaml
+groups:
+  finance: {}
+  senior: {}
+  finance-senior: {all_of: [finance, senior]}
+```
+
+```yaml
+# any definition
+groups: [admin, finance-senior]
+```
+
+Use the inline form for a one-off and the named form for anything reused; a name
+that appears on two definitions and means the same thing on both belongs in the
+vocabulary, where changing it changes both.
+
+Three consequences worth knowing:
+
+- **`contains` satisfies `all_of`.** Expansion runs first, and requirements are
+  checked against whatever is held afterwards — so an `admin` who contains both
+  parts satisfies a compound of them. The alternative is an admin who is
+  mysteriously weaker than the sum of what they reach.
+- **A caller may not present a compound name.** It is what holding its parts
+  adds up to, not something to claim: accepting it would let one assertion stand
+  in for the two that `all_of` exists to require. The refusal names the parts to
+  send instead. A gateway emitting one is misconfigured, and is told so.
+- **`contains` and `all_of` cannot both appear on one group.** `contains` says
+  what a name grants and `all_of` says what a caller must bring; a name that is
+  both is a question with no answer. Requirement loops are refused like
+  `contains` loops, and for the same reason — a loop can never be entered, so
+  every name in it derives for nobody.
+
+`kingfisher list` writes a conjunction `finance+senior`, and prints what each
+named compound requires above the audiences, since a name alone tells a reader
+nothing on the line it appears on. The `--json` form nests it instead —
+`[["finance", "senior"]]` — so a script never has to parse a separator out of a
+name.
+
 ### Uploads are unchanged
 
 A request may still bring its own subagent or skill. Those cannot escalate: an
