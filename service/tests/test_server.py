@@ -188,9 +188,12 @@ def test_a_filesystem_endpoint_does_not_stall_every_other_request(cfg, monkeypat
     delay = 0.15
     real = Kingfisher.session
 
-    def slow(self, wanted):
+    def slow(self, wanted, **passed):
+        # `**passed` rather than the arguments spelled out: this stands in for
+        # the real method and is about how long it takes, not what it takes, so
+        # a signature copied by hand is one more thing to keep in step.
         time.sleep(delay)
-        return real(self, wanted)
+        return real(self, wanted, **passed)
 
     monkeypatch.setattr(Kingfisher, "session", slow)
     app = create_app(service)

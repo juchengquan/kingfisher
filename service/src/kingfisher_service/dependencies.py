@@ -25,7 +25,31 @@ def kingfisher_of(request: Request) -> Kingfisher:
 
     The cost measured there is the process, not the instance -- resolving
     deepagents is 1310ms and 115MB, a further instance is 1.1ms and 0.16MB --
-    so process count follows concurrency rather than tenancy. With identity
-    outside this server, there is nothing here to key a registry on anyway.
+    so process count follows concurrency rather than tenancy.
+
+    Still one per process now that callers have identity, and that is the point
+    of `for_groups` returning a handle: the catalogue, the session store and the
+    per-session locks belong to the deployment rather than to whoever is
+    calling, so a caller is a value passed through rather than an instance to
+    key a registry on.
     """
     return request.app.state.kingfisher
+
+
+def groups_of(request: Request) -> tuple[str, ...] | None:
+    """The caller's groups, from whatever this deployment wired.
+
+    `None` where no source is wired, which the library reads as a deployment
+    that controls nothing by group -- exactly what it read before any of this
+    existed. That default is only safe because `create_app` refuses a
+    deployment that has a policy and no source: the refusal and this `None` are
+    one mechanism, and weakening the first turns the second into "serve
+    everyone everything", silently. The test for the refusal is what guards it.
+
+    A tuple rather than whatever the source returned, so that one conversion
+    happens here instead of at each of the five routes -- and so a source
+    handing back a generator cannot be consumed by the first reader and empty
+    for the second.
+    """
+    source = request.app.state.groups_from
+    return None if source is None else tuple(source(request))
