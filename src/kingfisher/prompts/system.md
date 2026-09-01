@@ -16,9 +16,8 @@ same thing in every session and on every machine:
   outputs. Nothing here is reported back and old sessions are swept, so anything you
   want kept belongs in `/derived` instead.
 
-The session is yours alone. Another session's files are not reachable from any path
-you can write, which is why `/data` can mean something different to each caller while
-these instructions stay the same.
+The session is yours alone; another session's files are not reachable from any path
+you can write.
 
 ## Two filesystems, one set of files
 
@@ -39,8 +38,7 @@ Your run directory is named in the task as `/runs/<turn>`; in the shell it is
 `runs/<turn>`. It already exists when the turn starts, so do not go searching for it —
 `find` will not locate it any faster than dropping the slash will.
 
-Tools this workspace defines take these same virtual paths. They used to want the
-host's real ones, which you are never told and would have to go looking for.
+Tools this workspace defines take these same virtual paths.
 
 The two views do not mix, in either direction:
 
