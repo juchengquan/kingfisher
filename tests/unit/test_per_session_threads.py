@@ -339,3 +339,72 @@ def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):
     """A session that forgets is a surprising default for something that issues
     session ids."""
     assert cfg.conversation_enabled is True
+
+
+def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
+    """What the conversation carries, and what it deliberately does not.
+
+    Messages cross a turn boundary, through the transcript. A turn's *graph*
+    state does not, and `TodoListMiddleware`'s plan is the visible instance of
+    that: an agent resuming a session should not find a half-finished checklist
+    it has no memory of writing, from a task the caller may have abandoned.
+
+    It holds because the saver is built per turn -- `build_session_checkpointer`
+    at `service.py:1249`, released when the turn ends -- so the next turn's graph
+    starts with nothing in its channels. That is structural rather than enforced,
+    which is why it is worth a test: a deployment injecting a persistent
+    `threads` factory takes it back, and nothing else would say so.
+
+    The turn boundary is reconstructed here rather than driven through
+    `Kingfisher.run`, which builds its own agent and takes no model to script.
+    What makes the reconstruction faithful is the one line it copies: a fresh
+    saver per turn.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from kingfisher.infrastructure.harness.checkpointing import build_session_checkpointer
+    from tests.conftest import FakeToolCallingModel
+
+    config: Any = {"configurable": {"thread_id": session_dir.name}, "recursion_limit": 10}
+    plan = [{"content": "read the file", "status": "pending"}]
+
+    first_saver = build_session_checkpointer(session_dir)
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        checkpointer=first_saver,
+        model=FakeToolCallingModel(
+            responses=[
+                AIMessage(
+                    content="",
+                    tool_calls=[{"name": "write_todos", "args": {"todos": plan}, "id": "t1"}],
+                ),
+                AIMessage(content="planned"),
+            ]
+        ),
+    ).invoke({"messages": [("user", "plan it")]}, config=config)
+
+    # Asserted, so the second half cannot pass by the plan never being written.
+    written = build_agent(
+        cfg,
+        session_dir=session_dir,
+        checkpointer=first_saver,
+        model=FakeToolCallingModel(responses=[]),
+    ).get_state(config)
+    assert written.values.get("todos") == plan, "the first turn never wrote a plan"
+
+    second_saver = build_session_checkpointer(session_dir)
+    assert second_saver is not first_saver, "a turn reused the previous turn's saver"
+
+    carried = build_agent(
+        cfg,
+        session_dir=session_dir,
+        checkpointer=second_saver,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+    ).get_state(config)
+
+    assert not carried.values.get("todos"), (
+        "last turn's plan reached this one -- the agent resumes holding a checklist "
+        "it did not write, for a task the caller may have dropped"
+    )

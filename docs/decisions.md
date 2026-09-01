@@ -315,9 +315,15 @@ what it said -- tool calls and results, not only human and assistant text, since
 an agent that cannot see what it already did will do it again. Portable on
 purpose: the next turn may not be run by this harness.
 
-**The checkpointer is in-memory, and the transcript is what survives.** That is a
-change in what a checkpointer is *for* here rather than a cheaper way to do the
-same job: a checkpoint preserves resumable graph state, and kingfisher never
+**The checkpointer is in-memory, and the transcript is what survives.** So a
+turn's *working* state does not cross a turn boundary even though its
+conversation does -- an agent resuming a session does not find a half-finished
+`TodoListMiddleware` checklist it has no memory of writing, for a task the caller
+may have dropped. That is structural rather than enforced, so it is asserted:
+a deployment injecting a persistent `threads` factory takes it back.
+
+That is a change in what a checkpointer is *for* here rather than a cheaper way
+to do the same job: a checkpoint preserves resumable graph state, and kingfisher never
 resumes a graph -- no `checkpoint_id`, no `interrupt()` anywhere. What is left
 for a saver is one turn's supersteps.
 
