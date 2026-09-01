@@ -28,7 +28,7 @@ from kingfisher.infrastructure import access_policy, model_catalogue
 # Deliberately narrow: `Config` and friends are imported here to do the work,
 # not re-exported. One blessed import path for the record — `kingfisher.config`
 # — is the whole point of it sitting where it does.
-__all__ = ["enforce_local_only_tracing", "from_env"]
+__all__ = ["config_from_env", "enforce_local_only_tracing"]
 
 
 def _require(environ: Mapping[str, str], key: str) -> str:
@@ -77,7 +77,7 @@ def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
     """Where this deployment keeps things, without reading the model catalogue.
 
     The catalogue lives *inside* the workspace, so a first run cannot load one:
-    `from_env` raises `ConfigError` before the directory it would seed has been
+    `config_from_env` raises `ConfigError` before the directory it would seed has been
     created. Seeding a fresh workspace therefore has to run on this much and no
     more -- and it has to be this rather than `KINGFISHER_WORKSPACE` read
     directly, because a deployment that relocated `KINGFISHER_SKILLS_DIR` would
@@ -106,7 +106,7 @@ def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
     )
 
 
-def from_env(environ: Mapping[str, str] | None = None) -> Config:
+def config_from_env(environ: Mapping[str, str] | None = None) -> Config:
     """Build a `Config` from environment variables.
 
     Required: `KINGFISHER_WORKSPACE`, a readable model catalogue, and the key

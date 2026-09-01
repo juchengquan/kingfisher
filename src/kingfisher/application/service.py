@@ -8,7 +8,7 @@ a server that constructs once and serves many.
 
 So the wiring lives here and the orchestration reads as a sequence:
 
-    kingfisher = Kingfisher(from_env())
+    kingfisher = Kingfisher(config_from_env())
     for event in kingfisher.stream(request):
         ...
 
@@ -636,7 +636,7 @@ class Kingfisher:
         middleware: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
     ) -> None:
-        self.cfg = cfg or config_module.from_env()
+        self.cfg = cfg or config_module.config_from_env()
         config_module.enforce_local_only_tracing()
 
         # Only what sessions share. Each session's own layout is made per

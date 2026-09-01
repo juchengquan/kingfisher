@@ -44,9 +44,9 @@ from kingfisher import (
     AccessError,
     ConfigError,
     Held,
+    config_from_env,
     definitions_source,
     ensure_layout,
-    from_env,
     inventory,
     paths_from_env,
     seed,
@@ -300,7 +300,7 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     when a script is reading, and the reason is in the document as well -- so a
     caller can find out either way round rather than having to pick.
     """
-    cfg = from_env()
+    cfg = config_from_env()
     # `UNSCOPED` and an absent flag are the same answer here, and that is not
     # the inconsistency it looks like. A listing is read-only and whoever runs
     # it is on the host with the policy file in front of them, so it is exempt
@@ -382,7 +382,7 @@ def _doctor(*, as_document: bool = False) -> int:
     deployment's choice, and a command that failed on one would go unrun in
     exactly the deployments most worth checking.
     """
-    checks = examine(from_env())
+    checks = examine(config_from_env())
     if as_document:
         print(json.dumps([vars(check) for check in checks], indent=2))
     else:

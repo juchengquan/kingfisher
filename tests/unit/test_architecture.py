@@ -695,7 +695,7 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # not covered by that rule, which is what makes naming it here the decision
     # rather than an oversight.
     # `dotenv` because the command reads `./.env` before anything asks the
-    # environment. A driver's business rather than the library's: `from_env`
+    # environment. A driver's business rather than the library's: `config_from_env`
     # takes a mapping and does not care where it came from, which is what keeps
     # this on one side of the line.
     "presentation/cli": frozenset({"kingfisher_service", "dotenv"}),
@@ -1093,7 +1093,7 @@ LIGHT_EXPORTS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
     "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
-    "build_checkpointer", "build_model", "ensure_layout", "from_env",
+    "build_checkpointer", "build_model", "ensure_layout", "config_from_env",
     "normalize_answer", "protect_data", "system_prompt", "writable_data",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",

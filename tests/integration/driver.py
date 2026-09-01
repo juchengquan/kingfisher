@@ -139,8 +139,8 @@ from kingfisher import (
     Capabilities,
     ConfigError,
     Request,
+    config_from_env,
     ensure_layout,
-    from_env,
     paths_from_env,
 )
 from kingfisher.config import Config
@@ -479,7 +479,7 @@ def main(argv: list[str]) -> int:
     args = build_parser().parse_args(argv[1:])
 
     # The directories first, and the catalogue after. A brand-new workspace has
-    # no `models.yaml` -- it is a file *inside* the workspace -- so `from_env`
+    # no `models.yaml` -- it is a file *inside* the workspace -- so `config_from_env`
     # used to fail before the directory it needed had been created, and the
     # error told you to run `--seed-assets`, which failed the same way. A first
     # run could not reach seeding at all, which is precisely the run seeding is
@@ -533,7 +533,7 @@ def main(argv: list[str]) -> int:
             print(f"warning: overwrote your edited {name}")
 
     try:
-        cfg = from_env()
+        cfg = config_from_env()
     except ConfigError as exc:
         print(f"configuration error: {exc}", file=sys.stderr)
         print("copy .env.example to .env and fill it in", file=sys.stderr)
