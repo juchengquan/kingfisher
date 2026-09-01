@@ -22,12 +22,17 @@ from collections.abc import Mapping
 from dataclasses import dataclass
 from difflib import get_close_matches
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Literal
+from typing import TYPE_CHECKING
 
 from kingfisher.domain.capabilities import ALL, Selection
 
 if TYPE_CHECKING:
     from collections.abc import Collection, Iterable
+
+    # Type-only, and it has to be: `domain.access` imports this module to read
+    # its vocabulary document, so a runtime import here would close the loop.
+    # `from __future__ import annotations` is what makes that affordable.
+    from kingfisher.domain.access import Audience
 
 #: How alike two names must look before one is called a typo of the other. Only
 #: ever used to *word* a refusal, never to decide one: a guess that changed
@@ -356,7 +361,7 @@ class Reader:
             raise self.error(msg)
         return name
 
-    def groups(self, value: object, *, key: str = "groups") -> tuple[str, ...] | Literal["*"]:
+    def groups(self, value: object, *, key: str = "groups") -> Audience:
         """A definition's own audience: who may reach it at all.
 
         Its own reader rather than `selection`, and not only for the type. A
@@ -368,14 +373,91 @@ class Reader:
         """
         if value is None:
             return ALL
-        written = self.selection(value, absent=ALL, key=key)
-        # `selection` cannot answer `None` with `absent=ALL`; this narrows the
-        # type rather than guarding against a case that can happen.
-        return written if written is not None else ALL
+        return self.audience_list(value, where=f"{self.source}: {key}", lone_name=True)
 
-    def _audience(
-        self, raw: object, *, key: str, entry: str
-    ) -> tuple[str, ...] | Literal["*"] | None:
+    def audience_list(self, listed: object, *, where: str, lone_name: bool) -> Audience:
+        """A list of group names, any entry of which may be `{all_of: [...]}`.
+
+        One reader for both places an audience is written -- a definition's own
+        `groups:` line and an entry's -- because they take the same list and two
+        readers is two chances for them to disagree about what it means.
+
+        Its own reader rather than `selection`, and not only for the type. A
+        selection names things the *workspace* offers and may be `None` for
+        "none of them"; this names groups, and there is no "none" -- a
+        definition nobody may reach is written by giving it a group nobody
+        holds. `selection` also refuses a mapping outright, which is exactly the
+        shape a conjunction is written in.
+
+        `lone_name` is the one thing the two sites do not agree on, and it is
+        kept rather than reconciled. A definition's own line takes `groups: A`,
+        because every list field in these formats takes a single unbracketed
+        name and this one should not be the exception. An entry's does not: it
+        is already nested inside a mapping, so its author has opted into the
+        long form and a bare string there reads as an unfinished edit.
+        """
+        if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
+            return (listed.strip(),)
+        if isinstance(listed, Mapping):
+            inner = listed.get("all_of")
+            parts = ", ".join(str(one) for one in inner) if isinstance(inner, list) else "..."
+            said = f"[{{all_of: [{parts}]}}]"
+            msg = (
+                f"{where}: an audience is a list, so a conjunction is one entry "
+                f"of it -- write {said}. On its own it reads as the whole "
+                f"audience being a mapping, which has no `or` to put it in"
+            )
+            raise self.error(msg)
+        if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
+            msg = f'{where} is a list of names, or ["{ALL}"] -- got {listed!r}'
+            raise self.error(msg)
+
+        written: list[str | frozenset[str]] = []
+        for one in listed:
+            if isinstance(one, Mapping):
+                written.append(self._conjunction(one, where=where))
+            elif name := text(one):
+                written.append(name)
+        if not written:
+            msg = (
+                f"{where} is empty, which would mean nobody. Leave the line out "
+                f"to inherit the audience around it, or name the groups it is for"
+            )
+            raise self.error(msg)
+        if ALL in written and len(written) > 1:
+            rest = ", ".join(str(n) for n in written if n != ALL)
+            msg = f'{where}: ["{ALL}"] is everyone, so it cannot mean both that and {rest}'
+            raise self.error(msg)
+        return ALL if written == [ALL] else tuple(written)
+
+    def _conjunction(self, raw: Mapping[str, object], *, where: str) -> frozenset[str]:
+        """One audience entry that is satisfied only by holding every name in it.
+
+        The same word the vocabulary uses for the named form, so that a group
+        declared `all_of` is literally *a name for* what this writes inline --
+        one concept with a short spelling and a reusable one, rather than two
+        mechanisms that happen to agree.
+        """
+        if complaint := unrecognised(raw, known={"all_of"}, noun="key"):
+            msg = f"{where}: {complaint}"
+            raise self.error(msg)
+        parts = raw.get("all_of")
+        if isinstance(parts, str) or not isinstance(parts, (list, tuple)):
+            msg = f"{where}: 'all_of' is a list of group names -- got {parts!r}"
+            raise self.error(msg)
+        named = frozenset(name for one in parts if (name := text(one)))
+        if not named:
+            msg = (
+                f"{where}: 'all_of' is empty, which would require nothing and so "
+                f"admit everyone. Name the groups a caller must hold together"
+            )
+            raise self.error(msg)
+        if ALL in named:
+            msg = f'{where}: "{ALL}" is everyone, so it cannot be part of a requirement'
+            raise self.error(msg)
+        return named
+
+    def _audience(self, raw: object, *, key: str, entry: str) -> Audience | None:
         """One entry's audience, written `{groups: [...]}`, or `None` for none.
 
         `None` is what makes the mapping form usable at all. Only the entries
@@ -417,26 +499,7 @@ class Reader:
             raise self.error(msg)
         if "groups" not in raw:
             return None
-
-        listed = raw["groups"]
-        if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
-            msg = f'{where}: groups is a list of names, or ["{ALL}"] -- got {listed!r}'
-            raise self.error(msg)
-        written = tuple(text(one) for one in listed if text(one))
-        if not written:
-            msg = (
-                f"{where}: groups is empty, which would mean nobody. Leave the "
-                f"line out to inherit this definition's own audience, or name "
-                f"the groups this entry is for"
-            )
-            raise self.error(msg)
-        if ALL in written and len(written) > 1:
-            msg = (
-                f'{where}: ["{ALL}"] is everyone, so it cannot mean both that '
-                f"and {', '.join(n for n in written if n != ALL)}"
-            )
-            raise self.error(msg)
-        return ALL if written == (ALL,) else written
+        return self.audience_list(raw["groups"], where=f"{where}: groups", lone_name=False)
 
     def audienced(
         self,
@@ -445,7 +508,7 @@ class Reader:
         absent: Selection,
         key: str,
         refuse_all: str | None = None,
-    ) -> tuple[Selection, Mapping[str, tuple[str, ...] | Literal["*"]]]:
+    ) -> tuple[Selection, Mapping[str, Audience]]:
         """A selection, and who reaches each entry of it.
 
         Two spellings of one field, and the second is a strict extension of the

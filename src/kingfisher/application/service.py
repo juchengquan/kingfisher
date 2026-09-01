@@ -756,10 +756,11 @@ class Kingfisher:
         and the only symptom is an agent quietly reachable by no one, found
         weeks later by whoever needed it.
 
-        Here rather than in `parse`, which is where its sibling `refuse_dead`
-        lives, and for a reason rather than a preference: `parse` reads one
-        document and has no vocabulary to check against. This is the first
-        moment both are known.
+        Here rather than in `parse`, and its sibling `refuse_dead` with it, for
+        a reason rather than a preference: `parse` reads one document and has no
+        vocabulary to check against. This is the first moment both are known --
+        and `refuse_dead` needs the vocabulary as badly, since whether one line
+        can ever reach another is a question about what the names *mean*.
 
         Refused rather than reported, unlike the two things `AccessReport`
         carries. Those are drift between a definition and a workspace that may
@@ -780,6 +781,12 @@ class Kingfisher:
                             where=f"{where}: {field_name} entry {entry!r}",
                             error=AccessError,
                         )
+                # After, not before: a dead line is only worth reporting once
+                # every name in it is known to be real, or the reason given
+                # would be about reachability when the fault is a typo.
+                self.access.refuse_dead(
+                    spec.audiences, groups=spec.groups, where=where, error=AccessError
+                )
 
     def _unrestricted(self) -> tuple[tuple[str, str], ...]:
         """Definitions carrying no `groups:` line, so reachable by everyone.

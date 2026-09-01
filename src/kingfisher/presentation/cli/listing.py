@@ -14,13 +14,13 @@ from collections.abc import Iterator
 from pathlib import Path
 
 from kingfisher import (
-    ALL,
     AUDIENCED,
     SEED_HINT,
     SKILL_LAYOUT,
     Audience,
     Inventory,
     offered,
+    spell,
     split_reference,
 )
 
@@ -111,8 +111,13 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
 
 
 def _who(audience: Audience) -> str:
-    """One audience, as a reader sees it."""
-    return "[*]" if audience == ALL else f"[{', '.join(audience)}]"
+    """One audience, as a reader sees it.
+
+    `spell` rather than a join of its own: a conjunction has to be written some
+    way, and the refusals quote audiences too. A reader comparing an error
+    against this listing should not have to translate between two spellings.
+    """
+    return f"[{spell(audience)}]"
 
 
 def _singular(field_name: str) -> str:
@@ -135,6 +140,13 @@ def _access(found: Inventory) -> Iterator[str]:
     """
     if found.access is None or found.held is not None:
         return
+    if compounds := found.access.compounds:
+        # Before the audiences rather than after, because it is what makes them
+        # readable: a name that requires others tells a reader nothing on the
+        # line it appears on, and every line it appears on needs it.
+        yield "\naccess — groups that require others"
+        for name, parts in sorted(compounds.items()):
+            yield f"  {name} = {'+'.join(sorted(parts))}"
     yield "\naccess — by definition"
     said = False
     for kind, definitions in found.audiences.items():

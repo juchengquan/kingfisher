@@ -389,13 +389,32 @@ def test_only_the_audienced_fields_take_a_mapping():
         assert field_name in str(raised.value)
 
 
-def test_an_entry_audience_outside_the_definitions_own_is_refused():
-    """Dead policy: nobody reaching this agent is ever in C."""
-    with pytest.raises(AgentError, match="never reaches anyone"):
-        _read(
-            MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [C]\n",
-            "plain.yaml",
-        )
+def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
+    """Whether one audience can ever reach another is a question about what the
+    names *mean*, and this format has no vocabulary to answer it with: `B` may
+    contain `C`, or `A` may require it. So both lines are read as written and
+    `Groups.refuse_dead` decides, once the vocabulary is known.
+
+    Asserted here because it used to be refused here, and the reason it stopped
+    being is not visible from the file that no longer does it."""
+    spec = _read(
+        MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [C]\n",
+        "plain.yaml",
+    )
+
+    assert spec.groups == ("A", "B")
+    assert spec.audiences["tools"]["sql_query"] == ("C",)
+
+
+def test_a_conjunction_is_read_as_one_entry_of_the_list():
+    """`all_of` in a definition, which is the inline half of the same word the
+    vocabulary uses for a named one."""
+    spec = _read(
+        MINIMAL.rstrip() + "\ngroups: [admin, {all_of: [finance, senior]}]\n",
+        "plain.yaml",
+    )
+
+    assert spec.groups == ("admin", frozenset({"finance", "senior"}))
 
 
 def test_only_the_restricted_entries_need_an_audience():

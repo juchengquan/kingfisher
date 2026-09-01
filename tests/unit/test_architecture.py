@@ -1132,6 +1132,11 @@ LIGHT_EXPORTS = frozenset({
     # because a deployment resolves a grant on every turn.
     "Groups", "AccessError", "AccessReport", "UNSCOPED", "Held", "AUDIENCED",
     "Audience", "Stated",
+    # Writing one out. Published for the same reason `ALL` below is: the command
+    # prints audiences, an audience entry may be a conjunction, and a second
+    # spelling in the printer is how a refusal quoting one stops matching the
+    # listing showing it.
+    "spell",
     # The `"*"` sentinel itself, published because the command prints an
     # audience and has to tell "everyone" from a list of names. Reaching into
     # `domain.capabilities` for it is what the consumer rule forbids.

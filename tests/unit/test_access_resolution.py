@@ -16,7 +16,6 @@ from kingfisher.domain.access import (
     Groups,
     reaches,
     reaching,
-    refuse_dead,
 )
 from kingfisher.domain.capabilities import ALL
 
@@ -84,32 +83,52 @@ def test_none_passes_through_untouched():
 # -- dead policy ------------------------------------------------------------
 
 
+def dead(entry, *, groups, vocab=None):
+    """Ask the vocabulary whether one entry audience can ever reach anyone."""
+    (vocab or vocabulary()).refuse_dead(
+        {"tools": {"sql_query": entry}}, groups=groups, where="x.yaml", error=ValueError
+    )
+
+
 def test_an_entry_outside_the_definitions_own_audience_is_refused():
     """Nobody reaching this definition is ever in C, so the line can never
     grant anything -- a mistake, not a narrowing."""
     with pytest.raises(ValueError, match="never reaches anyone"):
-        refuse_dead(
-            {"tools": {"sql_query": ("C",)}},
-            groups=("A", "B"),
-            source="x.yaml",
-            error=ValueError,
-        )
+        dead(("C",), groups=("A", "B"))
 
 
 def test_an_overlapping_entry_is_allowed():
-    refuse_dead(
-        {"tools": {"sql_query": ("A",)}}, groups=("A", "B"), source="x.yaml", error=ValueError
-    )
+    dead(("A",), groups=("A", "B"))
 
 
 def test_nothing_is_dead_when_the_definition_reaches_everyone():
-    refuse_dead({"tools": {"sql_query": ("C",)}}, groups=ALL, source="x.yaml", error=ValueError)
+    dead(("C",), groups=ALL)
 
 
 def test_a_star_entry_is_never_dead():
-    refuse_dead(
-        {"tools": {"sql_query": ALL}}, groups=("A",), source="x.yaml", error=ValueError
-    )
+    dead(ALL, groups=("A",))
+
+
+def test_a_contained_entry_is_alive():
+    """The bug that moving this check off `parse` fixed. A caller holding `wide`
+    holds `A` too, so an entry for `A` under a definition for `wide` reaches
+    exactly them -- and comparing raw names called that dead."""
+    dead(("A",), groups=("wide",), vocab=vocabulary(wide=("A",)))
+
+
+def test_a_compound_is_alive_beside_either_part():
+    """Either part, in either direction: the definition names the compound and
+    the entry names a part, or the other way about."""
+    vocab = vocabulary(**{"A+B": ()})
+    both = Groups(names=vocab.names, compounds={"A+B": ("A", "B")})
+    dead(("A",), groups=("A+B",), vocab=both)
+    dead(("A+B",), groups=("A",), vocab=both)
+
+
+def test_a_compound_sharing_no_part_is_still_dead():
+    both = Groups(names={n: (n,) for n in ("A", "B", "C", "A+B")}, compounds={"A+B": ("A", "B")})
+    with pytest.raises(ValueError, match="never reaches anyone"):
+        dead(("C",), groups=("A+B",), vocab=both)
 
 
 # -- the vocabulary ---------------------------------------------------------

@@ -294,8 +294,13 @@ def _unrestricted(*sets: tuple[str, Mapping[str, object]]) -> tuple[tuple[str, s
     )
 
 
-def undeclared_in(specs: Mapping[str, Stated], *, kind: str, vocabulary: Groups) -> str | None:
-    """The first definition naming a group this deployment does not declare.
+def unhonourable_in(specs: Mapping[str, Stated], *, kind: str, vocabulary: Groups) -> str | None:
+    """The first definition whose audiences this deployment cannot honour.
+
+    Two faults, one walk, in the order `Kingfisher` applies them: a name the
+    vocabulary does not declare, then a line that name makes unreachable. A typo
+    causes both, and reported the other way round it would be explained as a
+    reachability problem by an error that never mentions the misspelling.
 
     Returned rather than raised, which is this module's rule: a listing is where
     somebody goes *because* something is broken, so one unloadable kind must not
@@ -322,6 +327,15 @@ def undeclared_in(specs: Mapping[str, Stated], *, kind: str, vocabulary: Groups)
                 vocabulary.refuse_undeclared(audience, where=where, error=AccessError)
             except AccessError as exc:
                 return str(exc)
+        try:
+            vocabulary.refuse_dead(
+                stated.entries,
+                groups=stated.groups,
+                where=f"{kind} {name!r}",
+                error=AccessError,
+            )
+        except AccessError as exc:
+            return str(exc)
     return None
 
 
@@ -350,7 +364,7 @@ def _access(
     broken = {
         kind: complaint
         for kind, held in (("agents", stated["agents"]), ("subagents", stated["subagents"]))
-        if (complaint := undeclared_in(held, kind=kind[:-1], vocabulary=cfg.access)) is not None
+        if (complaint := unhonourable_in(held, kind=kind[:-1], vocabulary=cfg.access)) is not None
     }
     return stated, report, (cfg.access.expand(groups) if groups is not None else None), broken
 

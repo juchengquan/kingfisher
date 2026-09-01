@@ -56,12 +56,24 @@ _WENT = (
 
 MOVED: Final[Mapping[str, str]] = dict.fromkeys(("agents", "subagents", "tools"), _WENT)
 
-#: Who may reach one thing: `"*"` for everyone, or exactly these groups.
+#: One audience entry that is satisfied only by holding *every* name in it.
+#:
+#: A `frozenset` because an entry that literally is a set of names reads as "all
+#: of these", it stays hashable so an `Audience` remains comparable, and order
+#: carries no meaning -- the listing sorts it before showing it.
+Requires = frozenset[str]
+
+#: Who may reach one thing: `"*"` for everyone, or exactly these entries.
+#:
+#: The tuple is an **or** and an entry may be an **and**: a plain name is held or
+#: it is not, and a `Requires` is satisfied only in full. That gives or-of-ands,
+#: which is the shape access rules actually take, out of one field and with no
+#: rule about how two fields combine.
 #:
 #: No `None`. "Nobody" is not a state a definition can be in -- the absence of
 #: an audience means it inherits the one around it, and a definition nobody may
 #: reach is written by giving it a group nobody holds.
-Audience = Literal["*"] | tuple[str, ...]
+Audience = Literal["*"] | tuple[str | Requires, ...]
 
 @dataclass(frozen=True)
 class Stated:
@@ -129,8 +141,16 @@ def reaches(audience: Audience, held: frozenset[str]) -> bool:
     Public because three readers ask it -- both definition formats and the
     listing -- and a private copy in each is one convention away from them
     disagreeing about who reaches what.
+
+    A *named* compound needs no case here: `Groups.expand` has already put it
+    into `held` if the caller's groups add up to it, so by the time an audience
+    is asked, the name is either held or it is not, exactly like any other. Only
+    the inline form is resolved here, because it has no name to have been
+    derived under.
     """
-    return audience == ALL or bool(held & set(audience))
+    if audience == ALL:
+        return True
+    return any(one <= held if isinstance(one, frozenset) else one in held for one in audience)
 
 
 def reaching(
@@ -156,38 +176,19 @@ def reaching(
     return tuple(name for name in selection if reaches(audiences.get(name, default), held))
 
 
-def refuse_dead(
-    audiences: Mapping[str, Mapping[str, Audience]],
-    *,
-    groups: Audience,
-    source: str,
-    error: type[Exception],
-) -> None:
-    """Refuse an entry audience that the definition's own audience never admits.
+def spell(audience: Audience) -> str:
+    """One audience, written the way the formats and the listing write it.
 
-    `reviewer` is `[A, B]` and writes `sql_query: [C]`. Nobody reaching
-    `reviewer` is ever in `C`, so that line can never grant anything -- it is
-    not a narrowing, it is a mistake, and almost always a group name typed from
-    memory. Refused rather than reported, because unlike a stale central entry
-    it costs nothing to fix and the file that is wrong is the file in front of
-    you.
-
-    Silent when the definition is `ALL`: everyone reaches it, so no entry
-    audience can fall outside.
+    `a+b` for a conjunction, sorted so that two runs of the same file say the
+    same thing. Shared rather than copied because the listing shows audiences
+    and the refusals quote them, and a reader comparing an error against a
+    `kingfisher list` should not have to translate between two spellings.
     """
-    if groups == ALL:
-        return
-    admitted = set(groups)
-    for field_name, entries in audiences.items():
-        for entry, audience in entries.items():
-            if audience == ALL or (set(audience) & admitted):
-                continue
-            msg = (
-                f"{source}: {field_name} entry {entry!r} is for "
-                f"{', '.join(audience)}, but this definition is only reachable by "
-                f"{', '.join(admitted)} -- so that line never reaches anyone"
-            )
-            raise error(msg)
+    if audience == ALL:
+        return ALL
+    return ", ".join(
+        "+".join(sorted(one)) if isinstance(one, frozenset) else one for one in audience
+    )
 
 
 @dataclass(frozen=True)
@@ -244,20 +245,75 @@ class Groups:
     `names` maps each declared group to its own transitive closure, itself
     included, worked out when the document was read. Expansion happens once
     rather than on every turn, and a cycle is refused where it is written.
+
+    `compounds` is the other direction, and the only place this file holds
+    something with a rule in it: `contains` says what one name *grants*, and
+    `all_of` says what a caller must hold for one to *apply*. Still vocabulary
+    -- both answer "what does this name mean" -- but the second answers it with
+    a condition, which is worth saying out loud.
     """
 
     #: Declared name -> that name plus everything it contains, transitively.
     names: Mapping[str, tuple[str, ...]]
+    #: Declared name -> the groups a caller must hold for it to apply, for the
+    #: names written with `all_of`. Absent for every ordinary group.
+    compounds: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+
+    def mentions(self, audience: Audience) -> frozenset[str]:
+        """Every group name an audience touches, following `contains` and `all_of`.
+
+        What `refuse_dead` compares, and the reason it needs a vocabulary. A
+        bare name mentions itself and everything it contains; a compound
+        mentions its parts; a conjunction mentions its members. `ALL` mentions
+        nothing, and is never asked.
+
+        A queue rather than recursion, so a vocabulary that loops across the two
+        kinds of edge cannot spin here. Each kind is separately acyclic by the
+        time this runs, but the union of two acyclic graphs need not be.
+        """
+        if audience == ALL:
+            return frozenset()
+        seen: set[str] = set()
+        queue = [n for one in audience for n in ((one,) if isinstance(one, str) else one)]
+        while queue:
+            name = queue.pop()
+            if name in seen:
+                continue
+            seen.add(name)
+            queue.extend(self.names.get(name, ()))
+            queue.extend(self.compounds.get(name, ()))
+        return frozenset(seen)
 
     def expand(self, held: Iterable[str]) -> frozenset[str]:
-        """Every group a caller effectively holds, following `contains`.
+        """Every group a caller effectively holds, following `contains` then `all_of`.
 
         Refuses a name the vocabulary does not have. That refusal is the reason
         the vocabulary is closed: silently expanding to nothing would turn a
         typo in a caller's group list into a caller who reaches nothing, which
         looks exactly like a caller who was denied.
+
+        Refuses a compound too, and for a sharper reason. A compound is what
+        holding its parts *adds up to*, so accepting it as a claim would let a
+        caller present the conclusion instead of the premises -- one assertion
+        standing in for the two that `all_of` exists to require.
+
+        Order is the whole of the rule: `contains` runs first, then compounds
+        are added against whatever is held afterwards. That is what makes an
+        `admin` who contains both parts satisfy a compound of them, rather than
+        being mysteriously weaker than the sum of what they reach.
         """
         wanted = tuple(held)
+        if derived := sorted({name for name in wanted if name in self.compounds}):
+            listed = "; ".join(
+                f"{name!r} means all of [{', '.join(sorted(self.compounds[name]))}]"
+                for name in derived
+            )
+            msg = (
+                f"derived group(s) cannot be held: {listed}. A name written with "
+                f"`all_of` is what holding its parts adds up to, not something to "
+                f"present -- name the parts instead"
+            )
+            raise AccessError(msg)
         if unknown := tuple(name for name in wanted if name not in self.names):
             known = ", ".join(sorted(self.names)) or "none"
             msg = (
@@ -265,7 +321,20 @@ class Groups:
                 f"this deployment defines {known}"
             )
             raise AccessError(msg)
-        return frozenset(one for name in wanted for one in self.names[name])
+
+        reached = {one for name in wanted for one in self.names[name]}
+        while gained := {
+            name
+            for name, parts in self.compounds.items()
+            if name not in reached and all(part in reached for part in parts)
+        }:
+            # `names[name]`, not `name`: a compound may itself be contained in
+            # something, and a caller who has just earned it earns that too.
+            # Adding only the bare name would make one written into a `contains`
+            # chain reach less than the same name written by hand.
+            for name in gained:
+                reached.update(self.names[name])
+        return frozenset(reached)
 
     def refuse_undeclared(self, audience: Audience, *, where: str, error: type[Exception]) -> None:
         """Refuse a definition naming a group this deployment does not declare.
@@ -273,10 +342,16 @@ class Groups:
         The other end of the closed vocabulary. Without it a mistyped audience
         invents a group nobody is in, and the only symptom is a tool quietly
         reachable by no one -- found weeks later by whoever needed it.
+
+        Looks inside a conjunction, because a name typed from memory is no
+        likelier to be right for having been written next to another one.
         """
         if audience == ALL:
             return
-        if unknown := tuple(name for name in audience if name not in self.names):
+        named = tuple(
+            n for one in audience for n in ((one,) if isinstance(one, str) else sorted(one))
+        )
+        if unknown := tuple(name for name in named if name not in self.names):
             listed = ", ".join(repr(u) for u in sorted(set(unknown)))
             msg = (
                 f"{where}: names undeclared group(s) {listed}; "
@@ -284,13 +359,63 @@ class Groups:
             )
             raise error(msg)
 
+    def refuse_dead(
+        self,
+        audiences: Mapping[str, Mapping[str, Audience]],
+        *,
+        groups: Audience,
+        where: str,
+        error: type[Exception],
+    ) -> None:
+        """Refuse an entry audience that the definition's own audience never admits.
 
-def _vocabulary(raw: object, source: str) -> dict[str, tuple[str, ...]]:
-    """The declared groups and what each contains, before expansion.
+        `reviewer` is `[A, B]` and writes `sql_query: [C]`. Nobody reaching
+        `reviewer` is ever in `C`, so that line can never grant anything -- it is
+        not a narrowing, it is a mistake, and almost always a group name typed
+        from memory. Refused rather than reported, because unlike a stale
+        central entry it costs nothing to fix and the file that is wrong is the
+        file in front of you.
 
-    Two spellings, because the common case has no `contains` and should not
-    have to write an empty mapping to say so. A list is the short form; a
-    mapping is the long one. Both produce the same thing.
+        On `Groups`, and no longer at parse time, because the comparison is
+        between what two lines *mean* and only the vocabulary knows that. A
+        definition `[reviewers]` with an entry `[analysts]` is perfectly alive
+        when `reviewers` contains `analysts`, and a raw name comparison called
+        it dead -- a bug `contains` already had and compounds would have made
+        routine. `refuse_undeclared` moved here first and for the same reason.
+
+        Still a heuristic and not a proof, which is worth knowing rather than
+        fixing: a caller in `{A, C}` reaches a definition `[A, B]` and an entry
+        `[C]`, and this refuses that pair. Made exact it would allow nearly
+        everything and stop catching the typos it exists for.
+
+        Silent when the definition is `ALL`: everyone reaches it, so no entry
+        audience can fall outside.
+        """
+        if groups == ALL:
+            return
+        admitted = self.mentions(groups)
+        for field_name, entries in audiences.items():
+            for entry, audience in entries.items():
+                if audience == ALL or (self.mentions(audience) & admitted):
+                    continue
+                msg = (
+                    f"{where}: {field_name} entry {entry!r} is for "
+                    f"{spell(audience)}, but this definition is only reachable by "
+                    f"{spell(groups)} -- so that line never reaches anyone"
+                )
+                raise error(msg)
+
+
+#: The declared groups and what each contains, beside the ones written `all_of`.
+_Vocabulary = tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]
+
+
+def _vocabulary(raw: object, source: str) -> _Vocabulary:
+    """The declared groups, what each contains, and what each requires.
+
+    Two spellings, because the common case has neither key and should not have
+    to write an empty mapping to say so. A list is the short form; a mapping is
+    the long one. Both produce the same thing.
     """
     if raw is None:
         msg = (
@@ -299,28 +424,55 @@ def _vocabulary(raw: object, source: str) -> dict[str, tuple[str, ...]]:
         )
         raise AccessError(msg)
     if isinstance(raw, list):
-        return {str(name): () for name in raw}
+        return {str(name): () for name in raw}, {}
     if not isinstance(raw, Mapping):
-        msg = f"{source}: 'groups' is a list of names, or a mapping of name to {{contains: [...]}}"
+        msg = (
+            f"{source}: 'groups' is a list of names, or a mapping of name to "
+            f"{{contains: [...]}} or {{all_of: [...]}}"
+        )
         raise AccessError(msg)
 
     declared: dict[str, tuple[str, ...]] = {}
+    compounds: dict[str, tuple[str, ...]] = {}
     for name, body in raw.items():
         if body is None or body == {}:
             declared[str(name)] = ()
             continue
         if not isinstance(body, Mapping):
-            msg = f"{source}: group {name!r} is {{contains: [...]}}, or empty"
+            msg = f"{source}: group {name!r} is {{contains: [...]}} or {{all_of: [...]}}, or empty"
             raise AccessError(msg)
-        if complaint := fields.unrecognised(body, known={"contains"}, noun="key"):
+        if complaint := fields.unrecognised(body, known={"contains", "all_of"}, noun="key"):
             msg = f"{source}: group {name!r}: {complaint}"
             raise AccessError(msg)
-        contains = body.get("contains") or ()
-        if isinstance(contains, str):
-            msg = f"{source}: group {name!r}: 'contains' is a list of group names"
+        if "contains" in body and "all_of" in body:
+            msg = (
+                f"{source}: group {name!r} has both 'contains' and 'all_of'. "
+                f"'contains' says what this name grants and 'all_of' says what a "
+                f"caller must hold for it to apply -- a group that is both is a "
+                f"question with no answer"
+            )
             raise AccessError(msg)
-        declared[str(name)] = tuple(str(one) for one in contains)
-    return declared
+        for key, into in (("contains", declared), ("all_of", compounds)):
+            if key not in body:
+                continue
+            listed = body[key] or ()
+            if isinstance(listed, str):
+                msg = f"{source}: group {name!r}: {key!r} is a list of group names"
+                raise AccessError(msg)
+            if not listed:
+                said = (
+                    "a group requiring nothing is reached by everyone, which is "
+                    "what a plain group already means"
+                    if key == "all_of"
+                    else "leave it out to declare a plain group"
+                )
+                msg = f"{source}: group {name!r}: {key!r} is empty -- {said}"
+                raise AccessError(msg)
+            into[str(name)] = tuple(str(one) for one in listed)
+        # Declared either way: a compound is a name in the vocabulary like any
+        # other, and `names` is what says a name exists at all.
+        declared.setdefault(str(name), ())
+    return declared, compounds
 
 
 def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, tuple[str, ...]]:
@@ -379,4 +531,56 @@ def parse(document: Mapping[str, object], source: str) -> Groups:
     if complaint is not None:
         msg = f"{source}: {complaint}"
         raise AccessError(msg)
-    return Groups(names=_closed(_vocabulary(document.get("groups"), source), source))
+    declared, compounds = _vocabulary(document.get("groups"), source)
+    _refuse_undeclared_parts(declared, compounds, source)
+    _refuse_compound_loops(compounds, source)
+    return Groups(names=_closed(declared, source), compounds=compounds)
+
+
+def _refuse_undeclared_parts(
+    declared: Mapping[str, tuple[str, ...]], compounds: Mapping[str, tuple[str, ...]], source: str
+) -> None:
+    """Refuse a compound built from a name this file never declares.
+
+    The same rule `_closed` applies to `contains`, applied to the other edge.
+    Without it a mistyped part is a requirement nobody can ever meet, and the
+    only symptom is a group that quietly derives for no one.
+    """
+    for name, parts in compounds.items():
+        for part in parts:
+            if part not in declared:
+                msg = (
+                    f"{source}: group {name!r} requires {part!r}, which is not "
+                    f"declared; this file defines {', '.join(sorted(declared))}"
+                )
+                raise AccessError(msg)
+
+
+def _refuse_compound_loops(compounds: Mapping[str, tuple[str, ...]], source: str) -> None:
+    """Refuse a compound that requires itself, directly or through others.
+
+    Not for termination -- the fixpoint in `expand` is monotone over a finite
+    set and would stop either way. For meaning: a loop of requirements can never
+    be entered, so every name in it derives for nobody. That is the "reaches no
+    one" failure the closed vocabulary exists to prevent, written in the file
+    that defines the vocabulary itself.
+    """
+    walked: set[str] = set()
+
+    def walk(name: str, path: tuple[str, ...]) -> None:
+        if name in path:
+            loop = " -> ".join((*path[path.index(name) :], name))
+            msg = (
+                f"{source}: groups require themselves: {loop}. A requirement "
+                f"loop can never be entered, so none of these is ever held -- "
+                f"one of them has to stop requiring the next"
+            )
+            raise AccessError(msg)
+        if name in walked:
+            return
+        for part in compounds.get(name, ()):
+            walk(part, (*path, name))
+        walked.add(name)
+
+    for name in compounds:
+        walk(name, ())

@@ -127,7 +127,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, refuse_dead
+from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.tool import claimed_sources
@@ -299,7 +299,6 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
     audiences = {"tools": tool_audiences} if tool_audiences else {}
     groups = read.groups(entry.get("groups"))
-    refuse_dead(audiences, groups=groups, source=where.name, error=SubagentError)
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
@@ -396,7 +395,6 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         if entries
     }
     groups = read.groups(document.get("groups"))
-    refuse_dead(audiences, groups=groups, source=source.name, error=SubagentError)
 
     return SubagentSpec(
         name=fields.text(document["name"]),

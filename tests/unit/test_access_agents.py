@@ -225,11 +225,10 @@ def test_an_entry_audience_naming_an_undeclared_group_is_refused(cfg):
     """Not only the definition's own line: an entry names groups too, and a typo
     there hides one tool rather than the whole agent -- which is quieter.
 
-    Written on a definition that restricts nobody, because that is the gap.
-    Under a *restricted* one, `refuse_dead` already catches this at parse: an
-    undeclared name cannot overlap the definition's own audience, so it reads as
-    the dead line it is. With no `groups:` above it there is nothing to be dead
-    against, and this check is the only thing looking.
+    Written on a definition that restricts nobody, because that is the thinnest
+    case: with no `groups:` above it, `refuse_dead` has nothing to measure the
+    line against and this check is the only thing looking. Its neighbour below
+    asserts that a restricted definition reports the same fault the same way.
     """
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
@@ -245,12 +244,13 @@ def test_an_entry_audience_naming_an_undeclared_group_is_refused(cfg):
         Kingfisher(policied)
 
 
-def test_a_restricted_definition_catches_that_typo_earlier(cfg):
-    """The neighbouring case, asserted so the split above is not folklore:
-    `refuse_dead` gets there first, at parse, and says the more specific thing
-    -- that the line reaches nobody rather than that the group is unknown."""
-    from kingfisher.domain.agent import AgentError
+def test_a_restricted_definition_reports_the_same_typo_the_same_way(cfg):
+    """The neighbouring case, asserted so the ordering is not folklore.
 
+    A typo makes the line dead *and* undeclared, and both checks can see it.
+    The undeclared one goes first deliberately: `never reaches anyone` is true
+    but sends its reader to reconcile two audiences, when the fault is one
+    misspelled word and the other check names it and offers the spelling."""
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
@@ -261,7 +261,27 @@ def test_a_restricted_definition_catches_that_typo_earlier(cfg):
     )
     policied = replace(cfg, access=parse({"groups": ["analysts"]}, source="groups.yaml"))
 
-    with pytest.raises(AgentError, match="never reaches anyone"):
+    with pytest.raises(AccessError, match="analists"):
+        Kingfisher(policied)
+
+
+def test_a_line_dead_against_declared_groups_is_still_refused(cfg):
+    """What survives the reordering: every name is real, and the line still
+    reaches nobody. Nothing about spelling is left to say, so the dead-policy
+    check is the one with something to report."""
+    directory = cfg.catalogue_roots["agents"]
+    directory.mkdir(parents=True, exist_ok=True)
+    (directory / "analyst.yaml").write_text(
+        "name: analyst\ndescription: An agent.\ngroups: [analysts]\n"
+        "tools:\n  line_count:\n    groups: [auditors]\n"
+        "system_prompt: |\n  Do it.\n",
+        encoding="utf-8",
+    )
+    policied = replace(
+        cfg, access=parse({"groups": ["analysts", "auditors"]}, source="groups.yaml")
+    )
+
+    with pytest.raises(AccessError, match="never reaches anyone"):
         Kingfisher(policied)
 
 
