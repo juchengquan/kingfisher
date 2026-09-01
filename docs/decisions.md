@@ -171,6 +171,35 @@ catalogue by guessing. The withheld report hides only what group narrowing
 removed, never what the agent simply never declared: the second is a fact about
 the agent and has always been reported.
 
+**The HTTP surface asks who is calling; it still authenticates nobody.**
+`create_app(groups_from=...)` takes a callable given the request and returning
+group names, and `from_header` is shipped but never defaulted -- the header is an
+argument so that trusting one is a line somebody wrote rather than what happens
+when nobody decides. A deployment whose policy and identity disagree refuses at
+startup, in both directions: a vocabulary with no source cannot serve a single
+request, and a source with no vocabulary is a server somebody believes is locked
+down and is not. *(2026-09-01.)*
+
+A source may return group names and nothing else. **`UNSCOPED` is unreachable
+over HTTP**, because it exists to be a value a person types at a call site they
+can see -- reachable from a request it is a value a *bug* can produce, and one
+returned on a parse failure hands every caller everything at once. "Reaches
+everything" is already a group that contains the others, which is declared and
+visible in the listing where an unscoped run would never appear.
+
+**The caller gets a code, the log gets the reason**, and it is one rule at every
+refusal. A session whose pinned agent a caller cannot reach answers 404
+`unknown_session` -- the same code a wrong id gets, so holding a real one teaches
+nothing. A group the vocabulary does not declare answers 500 `misconfigured`
+with a body naming no group, while the message that lists them all goes to the
+service logger. Reading and deleting a session are checked like running one: a
+session you cannot run is one you cannot touch.
+
+**`errors.STATUS` stays exactly the caller-facing set.** A deployment error that
+still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
+as such -- the first table's value is that it is checkable in both directions,
+and an entry a caller cannot cause would be a status nobody decided on.
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds
