@@ -909,8 +909,8 @@ class Kingfisher:
         """
         return known(self.dirs.listing(sessions_root(self.workspace)))
 
-    def session(self, session_id: str) -> SessionInfo | None:
-        """One session, or `None` when there is no such session.
+    def session(self, session_id: str, *, groups: Held | None = None) -> SessionInfo | None:
+        """One session, or `None` when this caller has no such session.
 
         `None` rather than raising, because "is this still there" is an ordinary
         question with two ordinary answers. `UnknownSessionError` is for a
@@ -920,8 +920,37 @@ class Kingfisher:
         answers come from one rule. At fifty sessions that is 0.22ms; it grows
         with the workspace, and a deployment large enough to mind wants an
         index rather than a cheaper stat.
+
+        **A session whose pinned agent this caller cannot reach answers `None`
+        too**, and the two states deliberately share one answer. One that said
+        so would be a session *confirmed to exist*, so a leaked id would still
+        be worth something -- and what an unreachable thing looks like here is,
+        everywhere else, a thing that is not there. The reason is not lost; it
+        is what that caller's audit line says.
+
+        The rule is here rather than in the service so both routes asking it get
+        one answer without either growing a branch, and so it sits beside the
+        per-turn check it mirrors.
+
+        Read from the *pinned document* rather than the catalogue, which is what
+        makes the two agree: a turn resolves the agent this session opened with,
+        so this has to ask the same copy. Restricting an agent's `groups:` after
+        a session pinned it does not reach back into that session, exactly as
+        editing its prompt does not -- and for the same reason.
+
+        A session with nothing pinned is visible. It has no agent to be out of
+        reach of -- a one-shot turn creates its session before the turn pins
+        anything -- and hiding it would make an id unusable in the window
+        between the two.
         """
-        return next((s for s in self.sessions() if s.id == session_id), None)
+        found = next((s for s in self.sessions() if s.id == session_id), None)
+        if found is None or self.access is None or not isinstance(groups, tuple):
+            return found
+        kept = agent_started_with(self.cfg.state_dir, session_id)
+        if kept is None:
+            return found
+        pinned = read_agent(kept, agent_snapshot(self.cfg.state_dir, session_id))
+        return found if reaches(pinned.groups, self.access.expand(groups)) else None
 
     def start_session(self, session_id: str | None = None) -> str:
         """Open a new session and return its id.

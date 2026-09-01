@@ -146,3 +146,48 @@ def test_a_turn_on_a_pinned_agent_still_in_reach_resolves(two_agents):
         opened.id,
         groups=("A",),
     )
+
+
+# -- a session out of reach reads as one that is not there ------------------
+
+
+def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents):
+    """A session you cannot run must be indistinguishable from one that was
+    never there. An id answered 403 would be an id confirmed real, so holding a
+    leaked one would still be worth something."""
+    kf = Kingfisher(two_agents)
+    # Opened and pinned the way `POST /sessions` does it: the id and the
+    # directory come first, and the agent is remembered separately.
+    session_id = kf.start_session()
+    kf.remember_agent(session_id, "assistant")
+
+    assert kf.session(session_id, groups=("A",)) is not None
+    assert kf.session(session_id, groups=("B",)) is None
+
+
+def test_a_session_is_visible_where_there_is_no_vocabulary(cfg):
+    """Every deployment that predates this keeps answering as it did."""
+    an_agent(cfg, "assistant")
+    kf = Kingfisher(cfg)
+    session_id = kf.start_session()
+    kf.remember_agent(session_id, "assistant")
+
+    assert kf.session(session_id) is not None
+
+
+def test_unscoped_sees_a_session_whatever_it_runs(two_agents):
+    kf = Kingfisher(two_agents)
+    session_id = kf.start_session()
+    kf.remember_agent(session_id, "assistant")
+
+    assert kf.session(session_id, groups=UNSCOPED) is not None
+
+
+def test_a_session_with_nothing_pinned_stays_visible(two_agents):
+    """It has no agent to be out of reach of. `POST /turns` creates a session
+    before its first turn pins anything, so hiding this one would make an id
+    unusable in the window between the two."""
+    kf = Kingfisher(two_agents)
+    session_id = kf.start_session()
+
+    assert kf.session(session_id, groups=("B",)) is not None
