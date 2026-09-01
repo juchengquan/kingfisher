@@ -36,6 +36,7 @@ from typing import Protocol, runtime_checkable
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.catalogue.documents import groups_named, middleware_named
+from kingfisher.infrastructure.workspace_fs import ensure_layout
 
 #: Named in the refusal below, and only when it is really there.
 #:
@@ -147,7 +148,7 @@ class Skipped:
 
 
 @dataclass(frozen=True)
-class Seeding:
+class Seeded:
     """What `seed` did. `overwritten` names files, where `written` names entries.
 
     The two are deliberately different granularities. An entry is what you asked
@@ -322,7 +323,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     raise ConfigError(msg)
 
 
-def seed(cfg: Destination, source: Path, *, everything: bool = False) -> Seeding:
+def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded:
     """Copy definitions into this deployment's catalogues, and say what changed.
 
     `source` is a directory holding `agents/`, `tools/`, `skills/` and
@@ -352,22 +353,40 @@ def seed(cfg: Destination, source: Path, *, everything: bool = False) -> Seeding
     names and wants its own examples. Neither is a judgement about the file --
     it is a fact about the workspace it is going into.
     """
+    # Before anything is copied, and not left to the caller. Seeding into a
+    # workspace that was never laid out succeeds, reports every definition
+    # written, and leaves no `models.yaml.example` -- which is the dead end that
+    # write was moved into `ensure_layout` to avoid: a deployment told to write
+    # `models.yaml` and given no example of one. The CLI got the ordering right
+    # and nothing made a library caller do the same, so the obvious two-liner
+    # produced a workspace that looked seeded and could not start.
+    #
+    # Idempotent, and safe on a workspace that is already in use: it creates
+    # directories and refreshes `models.yaml.example`, which is a shipped
+    # template rather than anybody's file. A real `models.yaml` is never touched.
+    #
+    # It does not cover every route to the same state. A caller whose
+    # `definitions_source` raises never reaches this line, and gets an
+    # unlaid-out workspace with an exception to explain it -- which is the
+    # loud version of the same thing, and why the CLI still lays out first.
+    ensure_layout(into.workspace)
+
     if not source.is_dir():
         msg = f"nothing to seed from: {source} is not a directory"
         raise ConfigError(msg)
-    written, overwritten, skipped = _copy(cfg, source, everything=everything)
+    written, overwritten, skipped = _copy(into, source, everything=everything)
 
-    return Seeding(tuple(written), tuple(overwritten), tuple(skipped))
+    return Seeded(tuple(written), tuple(overwritten), tuple(skipped))
 
 
 def _copy(
-    cfg: Destination, tree: Path, *, everything: bool
+    into: Destination, tree: Path, *, everything: bool
 ) -> tuple[list[str], list[str], list[Skipped]]:
     """Copy one opened tree of definitions into this deployment's catalogues."""
     written: list[str] = []
     overwritten: list[str] = []
     skipped: list[Skipped] = []
-    for kind, destination in destinations(cfg):
+    for kind, destination in destinations(into):
         source = tree / kind
         if not source.is_dir():  # pragma: no cover -- all three ship
             continue

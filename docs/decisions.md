@@ -21,7 +21,7 @@ This reversed twice. The current answer is the third one.
 
 **Definitions live outside the wheel, and where a deployment gets them is a
 setting.** `KINGFISHER_ASSETS` names one path, read in `application/config.py`;
-`seed(cfg, source)` takes it as a required argument with no `None` branch. This
+`seed(into, source)` takes it as a required argument with no `None` branch. This
 repository's own set is `examples/`, which is *not* shipped and exists to be read
 and copied. `assets/` is committed holding only a `README.md` and ignores
 everything else, because it is where a deployment puts content it did not write.
