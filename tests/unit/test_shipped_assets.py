@@ -52,6 +52,7 @@ def test_every_preset_subagent_parses(shipped):
     # middleware, which is why `seed` leaves it behind and why it lives here
     # rather than in a folder of its own. It parses like any other.
     assert set(specs) == {
+        "auditor",
         "reviewer",
         "extractor",
         "profiler",
@@ -235,11 +236,12 @@ def test_every_preset_agent_parses(shipped):
     definitions in it could not run."""
     specs = LocalAgentRepository(shipped / "agents").specs
 
-    # `researcher` names middleware, so `seed` leaves it behind -- see
-    # `test_seed_leaves_behind_a_definition_naming_middleware`. Left behind is
-    # not unread: it is a definition of this kind, in this kind's folder, and
-    # it parses like the rest.
-    assert set(specs) == {"assistant", "researcher", "surveyor"}
+    # `researcher` names middleware and `analyst` names groups, so `seed`
+    # leaves both behind -- see
+    # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
+    # is not unread: they are definitions of this kind, in this kind's folder,
+    # and they parse like the rest.
+    assert set(specs) == {"analyst", "assistant", "researcher", "surveyor"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -530,17 +532,22 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     assert {left.label for left in done.skipped} == {
         "agents/researcher.yaml",
         "subagents/sweeper.yaml",
+        "agents/analyst.yaml",
+        "subagents/auditor.yaml",
     }
-    assert "agents/researcher.yaml" not in done.written
-    assert "subagents/sweeper.yaml" not in done.written
-    assert not (tmp_path / "agents" / "researcher.yaml").exists()
-    assert not (tmp_path / "subagents" / "sweeper.yaml").exists()
+    for left in ("agents/researcher.yaml", "subagents/sweeper.yaml"):
+        assert left not in done.written
+        assert not (tmp_path / left).exists()
 
-    # The names are the actionable half of the message: "names middleware"
-    # sends a reader looking, and naming them says what to register.
-    assert {left.label: left.names for left in done.skipped} == {
-        "agents/researcher.yaml": ("call-cap-strict", "tool-note"),
-        "subagents/sweeper.yaml": ("call-cap-generous", "tool-note"),
+    # The names are the actionable half of the message, and `wants` is what
+    # makes them actionable: "names middleware" sends a reader to a registry
+    # and "names groups" to a file, so one sentence for both would send half
+    # its readers to the wrong place.
+    assert {left.label: (left.wants, left.names) for left in done.skipped} == {
+        "agents/researcher.yaml": ("middleware", ("call-cap-strict", "tool-note")),
+        "subagents/sweeper.yaml": ("middleware", ("call-cap-generous", "tool-note")),
+        "agents/analyst.yaml": ("groups", ("analysts", "auditors")),
+        "subagents/auditor.yaml": ("groups", ("analysts", "auditors", "reviewers")),
     }
 
     # And everything else still arrives, which is the half that would break
@@ -895,3 +902,108 @@ def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
     assert issubclass(module.CallCapGenerous, module.CallCap)
     assert module.CallCap.defaults["limit"] == 20
     assert module.CallCapGenerous.defaults["limit"] == 100
+
+
+# -- the worked set for group access ----------------------------------------
+
+
+def _vocabulary(shipped):
+    """The shipped `groups.yaml`, read the way a deployment would."""
+    from kingfisher.infrastructure import access_policy
+
+    return access_policy.load(shipped / "groups.yaml")
+
+
+def test_the_vocabulary_ships_and_reads(shipped):
+    """It is not seeded -- `seed` copies definitions and this is not one -- so
+    nothing else here would notice if it stopped parsing."""
+    groups = _vocabulary(shipped)
+
+    assert groups is not None
+    assert set(groups.names) == {"analysts", "auditors", "reviewers"}
+
+
+def test_the_containing_group_reaches_what_it_contains(shipped):
+    """`reviewers` appears on no definition in this set, which is the point of
+    shipping it: a group that reaches things without being written on them."""
+    groups = _vocabulary(shipped)
+
+    assert groups.expand(["reviewers"]) == frozenset({"reviewers", "analysts", "auditors"})
+
+
+def test_every_group_the_presets_name_is_declared(shipped):
+    """The assertion that keeps this set honest.
+
+    A definition naming an undeclared group is refused when a deployment reads
+    its catalogue -- so a preset that named one would be a file we ship, tell
+    people to copy, and which stops their server. It would also be demonstrating
+    the exact failure the vocabulary exists to prevent.
+
+    Checked here rather than trusted, because nothing else looks: these files
+    are not seeded by default and a workspace without `groups.yaml` never
+    resolves them at all.
+    """
+    from kingfisher.infrastructure.catalogue.documents import groups_named
+
+    declared = set(_vocabulary(shipped).names)
+    named = {
+        name
+        for kind in ("agents", "subagents")
+        for path in sorted((shipped / kind).rglob("*.yaml"))
+        for name in groups_named(path.read_text(encoding="utf-8"))
+    }
+
+    assert named, "no preset names a group, so this rule is checking nothing"
+    assert named <= declared, f"{sorted(named - declared)} are named but not declared"
+
+
+def test_the_group_presets_narrow_for_a_narrower_caller(shipped):
+    """The compounding case, asserted against the files rather than described:
+    one delegate, and an auditor holds fewer tools than an analyst."""
+    specs = LocalSubagentRepository(shipped / "subagents").specs
+    groups = _vocabulary(shipped)
+    auditor = specs["auditor"]
+
+    assert auditor.declares(groups.expand(["analysts"])).tools == (
+        "sql_query",
+        "line_count",
+    )
+    # Degraded, not empty: it still verifies what it can, and its prompt says so.
+    assert auditor.declares(groups.expand(["auditors"])).tools == ("line_count",)
+    # And `contains` reaches an *entry* audience, not only the definition's own
+    # line: `reviewers` is written on nothing here, contains `analysts`, and so
+    # gets the tool that entry restricts to analysts.
+    assert auditor.declares(groups.expand(["reviewers"])).tools == (
+        "sql_query",
+        "line_count",
+    )
+
+
+def test_an_entry_that_states_nothing_inherits(shipped):
+    """`analyst.yaml` restricts one tool and leaves two bare -- which is the
+    rule most likely to be got wrong, so it is asserted rather than only
+    commented."""
+    specs = LocalAgentRepository(shipped / "agents").specs
+    groups = _vocabulary(shipped)
+    analyst = specs["analyst"]
+
+    # One entry carries an audience; the other two say nothing and inherit.
+    assert analyst.audiences["tools"] == {"sql_query": ("analysts",)}
+    assert analyst.declares(groups.expand(["auditors"])).tools == (
+        "csv_profile::csv_profile",
+        "line_count",
+    )
+
+
+def test_the_other_presets_still_restrict_nobody(shipped):
+    """Adding a policied set must not quietly narrow the ones that were here.
+    Every other preset carries no `groups:` line and stays reachable by all."""
+    from kingfisher.domain.capabilities import ALL
+
+    agents = LocalAgentRepository(shipped / "agents").specs
+
+    assert {name for name, spec in agents.items() if spec.groups == ALL} == {
+        "assistant",
+        "researcher",
+        "surveyor",
+    }

@@ -1,0 +1,68 @@
+name: analyst
+description: Answers questions from the data, with the database behind a group.
+# Who may open a session on this agent. Everything below narrows from here, and
+# nothing can widen past it.
+#
+# This line is the whole of what most definitions need. `assistant.yaml` and
+# `surveyor.yaml` beside this one carry none, which means they are reachable by
+# everyone -- and that is what an absent optional field means everywhere else in
+# these formats. Adopting group access is annotating the definitions that matter
+# and leaving the rest alone; startup names the ones carrying no line, so
+# default-open is not also silent.
+#
+# The names have to be declared in `groups.yaml`. A typo here is refused at
+# startup rather than inventing a group nobody is in -- which would leave this
+# agent quietly reachable by no one, found weeks later by whoever needed it.
+groups: [analysts, auditors]
+builtin_tools: [read_file, ls, glob, grep]
+# **Only the entry that is actually restricted carries an audience**, and that
+# is the point of this file.
+#
+# A mapping under `tools:` selects exactly the same way a list does -- these
+# three tools and no others. What it adds is a place to say who each one is
+# for, and an entry that says nothing inherits this definition's own `groups:`
+# above. So restricting one tool is one line, not three.
+#
+# Write it as a list and it means the same thing with nothing restricted:
+#
+#     tools: [sql_query, csv_profile::csv_profile, line_count]
+#
+# The two spellings agree about an unrestricted name, which is what lets you
+# start with the list and add an audience to one entry later without touching
+# the others.
+tools:
+  sql_query:
+    # Narrower than the definition. An auditor opens this agent and runs it
+    # without the database; an analyst gets the whole set. One agent, two
+    # shapes, and no second file to keep in step with the first.
+    #
+    # `[auditors]` here would be refused before the deployment starts -- not
+    # because auditors are forbidden, but because `groups:` above never admits
+    # anyone outside `analysts, auditors`, so a line naming a group outside
+    # *that* could never reach anyone. Dead policy is a mistake, not a
+    # narrowing.
+    groups: [analysts]
+  # No `groups:`, so `[analysts, auditors]` -- this definition's own. Say
+  # nothing and you inherit; there is no way to spell "nobody" here, and
+  # `groups: []` is refused as the unfinished edit it almost always is.
+  csv_profile::csv_profile:
+  line_count:
+# No `builtin_tools` audience, and there cannot be one: deepagents registers its
+# own tools, so kingfisher can filter them but never leave them out of a graph.
+# What gates them is the line at the top of this file -- an agent declaring a
+# read-only builtin set cannot hand anyone the shell, whoever they are.
+memory: false
+system_prompt: |
+  You answer questions about the data in this workspace.
+
+  Check what you have before planning around it. If `sql_query` is not among
+  your tools, this caller may not reach the database through you, and the
+  answer is to work from the files or to say what you cannot check -- not to
+  ask for the tool, which will not arrive.
+
+  That is the ordinary case rather than a failure. Two people run this agent
+  and one of them is holding fewer tools than the other; the report should be
+  honest about which of the two produced it.
+
+  Say what you computed and from where. A figure whose source is not named is
+  a figure somebody has to reproduce before they can use it.

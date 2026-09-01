@@ -741,11 +741,45 @@ class Kingfisher:
         # What is left to say is what the vocabulary cannot: which definitions
         # restrict nobody. Default-open must not also be silent.
         self.access: Groups | None = self.cfg.access
-        self.access_report: AccessReport = (
-            AccessReport(unrestricted=self._unrestricted())
-            if self.access is not None
-            else AccessReport()
-        )
+        self.access_report: AccessReport = AccessReport()
+        if self.access is not None:
+            self._refuse_undeclared_groups()
+            self.access_report = AccessReport(unrestricted=self._unrestricted())
+
+    def _refuse_undeclared_groups(self) -> None:
+        """Refuse a definition naming a group this deployment does not declare.
+
+        The closed vocabulary's other end. The caller's end is `expand`, which
+        refuses an unknown name in a group list; this is the same rule pointed
+        at the files, and without it the vocabulary is only half closed --
+        `groups: [analists]` is not an error, it invents a group nobody is in,
+        and the only symptom is an agent quietly reachable by no one, found
+        weeks later by whoever needed it.
+
+        Here rather than in `parse`, which is where its sibling `refuse_dead`
+        lives, and for a reason rather than a preference: `parse` reads one
+        document and has no vocabulary to check against. This is the first
+        moment both are known.
+
+        Refused rather than reported, unlike the two things `AccessReport`
+        carries. Those are drift between a definition and a workspace that may
+        have different owners; this is a name misspelled in a file the same
+        deployment wrote, next to the file that lists the spellings. Its
+        sibling refuses for the same reason.
+        """
+        assert self.access is not None  # noqa: S101 -- guarded by the caller
+        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
+        for kind, specs in (("agent", self.catalogue.agents.specs), ("subagent", delegates)):
+            for name, spec in sorted(specs.items()):
+                where = f"{kind} {name!r}"
+                self.access.refuse_undeclared(spec.groups, where=where, error=AccessError)
+                for field_name, entries in spec.audiences.items():
+                    for entry, audience in entries.items():
+                        self.access.refuse_undeclared(
+                            audience,
+                            where=f"{where}: {field_name} entry {entry!r}",
+                            error=AccessError,
+                        )
 
     def _unrestricted(self) -> tuple[tuple[str, str], ...]:
         """Definitions carrying no `groups:` line, so reachable by everyone.
