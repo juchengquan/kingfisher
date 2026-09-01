@@ -174,11 +174,20 @@ because expansion runs first -- the alternative is an `admin` who contains both
 parts yet is weaker than the sum of what they reach. And **nesting works for
 free**, since a compound whose parts are held is held.
 
-**A caller may not present a compound name.** It is what holding the parts adds
-up to, not something to claim; accepting it would let one assertion stand in for
-the two that `all_of` exists to require. The refusal names the parts. Over HTTP
-this surfaces as the `misconfigured` 500 a drifted vocabulary already gets, which
-is exactly what a gateway emitting a derived name is.
+**A compound is derived, and nothing may hand it over directly.** A caller may
+not present one: it is what holding the parts adds up to, not something to
+claim, and accepting it would let one assertion stand in for the two that
+`all_of` exists to require. The refusal names the parts. Over HTTP this surfaces
+as the `misconfigured` 500 a drifted vocabulary already gets, which is exactly
+what a gateway emitting a derived name is.
+
+`contains` may not hand one over either, and that is the same rule rather than a
+second one. `admin: {contains: [finance-senior]}` was legal for one commit and
+gave an admin the compound while they held neither part -- the requirement
+defeated by the file declaring it, which is the caller's move made one level up.
+Refusing it in only one of the two places was the inconsistency. Naming the
+parts reaches the same people and is visible, since the listing prints what a
+compound requires and never prints `contains`.
 
 **`refuse_dead` moved off `parse` onto `Groups`, and that was a bug fix.**
 Whether one line can ever reach another is a question about what the names

@@ -208,3 +208,57 @@ def test_a_requirement_may_be_built_on_another():
 
     assert groups.expand(["a", "b", "c"]) == frozenset({"a", "b", "c", "ab", "abc"})
     assert groups.expand(["a", "c"]) == frozenset({"a", "c"})
+
+
+def test_contains_may_not_hand_out_a_compound():
+    """The bypass, closed. `admin` would hold `both` while holding neither part
+    -- the requirement defeated by the file that declares it, which is the same
+    move `expand` refuses from a caller, made one level up."""
+    with pytest.raises(AccessError, match="derived rather than held"):
+        parse(
+            {
+                "groups": {
+                    "A": {},
+                    "B": {},
+                    "both": {"all_of": ["A", "B"]},
+                    "admin": {"contains": ["both"]},
+                }
+            },
+            source="groups.yaml",
+        )
+
+
+def test_the_refusal_names_the_contains_that_would_have_worked():
+    """Naming the parts reaches the same people and says why, so the message
+    hands over the line rather than only the objection."""
+    with pytest.raises(AccessError, match=r"`contains: \[A, B\]` instead"):
+        parse(
+            {
+                "groups": {
+                    "A": {},
+                    "B": {},
+                    "both": {"all_of": ["A", "B"]},
+                    "admin": {"contains": ["both"]},
+                }
+            },
+            source="groups.yaml",
+        )
+
+
+def test_containing_the_parts_still_satisfies_the_requirement():
+    """What the refusal points at has to work, or it is not a remedy. The
+    admin reaches both parts, so the compound derives -- through the front
+    door, and visibly, since the listing prints what it requires."""
+    groups = parse(
+        {
+            "groups": {
+                "A": {},
+                "B": {},
+                "both": {"all_of": ["A", "B"]},
+                "admin": {"contains": ["A", "B"]},
+            }
+        },
+        source="groups.yaml",
+    )
+
+    assert groups.expand(["admin"]) == frozenset({"admin", "A", "B", "both"})

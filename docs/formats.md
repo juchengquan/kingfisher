@@ -1512,6 +1512,12 @@ Three consequences worth knowing:
   both is a question with no answer. Requirement loops are refused like
   `contains` loops, and for the same reason — a loop can never be entered, so
   every name in it derives for nobody.
+- **`contains` may not hand out a compound.**
+  `admin: {contains: [finance-senior]}` is refused: it would give an admin the
+  compound while they hold neither part, which is the requirement defeated by
+  the file that declares it. Name the parts instead —
+  `admin: {contains: [finance, senior]}` — which reaches exactly the same people
+  and is legible, since the listing prints what a compound requires.
 
 `kingfisher list` writes a conjunction `finance+senior`, and prints what each
 named compound requires above the audiences, since a name alone tells a reader

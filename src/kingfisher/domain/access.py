@@ -533,8 +533,40 @@ def parse(document: Mapping[str, object], source: str) -> Groups:
         raise AccessError(msg)
     declared, compounds = _vocabulary(document.get("groups"), source)
     _refuse_undeclared_parts(declared, compounds, source)
+    _refuse_granted_compounds(declared, compounds, source)
     _refuse_compound_loops(compounds, source)
     return Groups(names=_closed(declared, source), compounds=compounds)
+
+
+def _refuse_granted_compounds(
+    declared: Mapping[str, tuple[str, ...]], compounds: Mapping[str, tuple[str, ...]], source: str
+) -> None:
+    """Refuse a `contains` that hands out a compound rather than its parts.
+
+    `admin: {contains: [senior-analysts]}` gives an admin the compound while
+    they hold neither `analysts` nor `senior` -- the requirement defeated by the
+    file that declares it. It is the same move `expand` already refuses from a
+    caller, made one level up: presenting the conclusion instead of the
+    premises. Refusing it in only one of the two places would have been the
+    inconsistency, not the rule.
+
+    Naming the parts instead reaches exactly the same people through the front
+    door, and has the property the shortcut lacks -- `kingfisher list` prints
+    what a compound requires, so an admin who satisfies one legibly satisfies it
+    for a reason a reader can see.
+    """
+    for name, holds in declared.items():
+        for one in holds:
+            if one in compounds:
+                parts = ", ".join(compounds[one])
+                msg = (
+                    f"{source}: group {name!r} contains {one!r}, which is derived "
+                    f"rather than held -- it means all of [{parts}]. Handing it "
+                    f"over directly is the requirement defeated by the file that "
+                    f"declares it; write `contains: [{parts}]` instead, which "
+                    f"reaches the same people and says why"
+                )
+                raise AccessError(msg)
 
 
 def _refuse_undeclared_parts(
