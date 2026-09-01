@@ -141,8 +141,9 @@ subagent is never compiled. *(2026-08-31.)*
 The rule that makes it safe to add to an existing definition: **`groups:` is the
 default audience for everything the definition holds, and the ceiling on what any
 entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning, and
-an entry naming a group the definition itself does not admit is refused as dead
-policy. A definition with no `groups:` line is reachable by everyone, and startup
+an entry is always an *and* with the definition's own line -- the only way to
+reach an entry is through the definition holding it, so naming a group from
+outside that line adds a second requirement rather than replacing the first. A definition with no `groups:` line is reachable by everyone, and startup
 names every such definition -- default-open must not also be silent.
 
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
@@ -156,6 +157,76 @@ current design: the reconciliation, both its reports and the whole class of bug
 went with it. What survived unchanged: `for_groups`, `UNSCOPED`, the refusal of a
 call that names no caller, the per-turn re-check of a session's pinned agent, and
 the closed vocabulary. *(2026-08-31, reversed the same day.)*
+
+**An audience list is an `or`, and an entry of it may be an `and`.** `all_of`
+requires a caller to hold several groups at once, and is written two ways
+deliberately: named in `groups.yaml` for anything reused, inline as one entry of
+a list for a one-off. The same word both places, so the named form is literally a
+*name for* the inline one rather than a second mechanism -- the argument against
+two spellings was drift, and using one word with one evaluation is what answers
+it. The result is or-of-ands, which is the shape access rules take, out of one
+field with no rule about how two fields combine. *(2026-09-01.)*
+
+`expand` does the work, which is what kept `reaches` nearly unchanged: `contains`
+closes first, then a compound joins the held set once its parts are held, so a
+named compound is an ordinary held name by the time any audience is asked. Two
+consequences follow rather than being chosen. **`contains` satisfies `all_of`**,
+because expansion runs first -- the alternative is an `admin` who contains both
+parts yet is weaker than the sum of what they reach. And **nesting works for
+free**, since a compound whose parts are held is held.
+
+**A compound is derived, and nothing may hand it over directly.** A caller may
+not present one: it is what holding the parts adds up to, not something to
+claim, and accepting it would let one assertion stand in for the two that
+`all_of` exists to require. The refusal names the parts. Over HTTP this surfaces
+as the `misconfigured` 500 a drifted vocabulary already gets, which is exactly
+what a gateway emitting a derived name is.
+
+`contains` may not hand one over either, and that is the same rule rather than a
+second one. `admin: {contains: [finance-senior]}` was legal for one commit and
+gave an admin the compound while they held neither part -- the requirement
+defeated by the file declaring it, which is the caller's move made one level up.
+Refusing it in only one of the two places was the inconsistency. Naming the
+parts reaches the same people and is visible, since the listing prints what a
+compound requires and never prints `contains`.
+
+**Reversed: `refuse_dead`, the rule that an entry audience must overlap its
+definition's.** It moved off `parse` onto `Groups` first, which was a real fix
+-- a definition `[reviewers]` with an entry `[analysts]` is alive when
+`reviewers` contains `analysts`, and comparing raw names at parse called it
+dead. Then measuring it settled the larger question: it had no true positives
+left, and one class of false ones. *(2026-09-01, both the same day.)*
+
+An entry audience is already an **and** with the definition's, because the only
+way to reach an entry is through the definition holding it -- `agent_named`
+refuses a caller who cannot open the agent, and nothing else hands out a spec.
+So `[senior]` under `[analysts, auditors]` has always evaluated as "opens this
+agent, and is senior", which is a perfectly good second requirement. The refusal
+blocked writing it, and the fault it meant to catch -- `[auditors]` written
+under `[analysts]` by somebody trying to widen -- is the same shape, so no rule
+can separate them.
+
+What survived is the looking. It is `Groups.narrowing_in` now, and feeds
+`AccessReport.narrowed`, on the same reasoning as the `unrestricted` line beside
+it: a thing worth noticing, said once, where an operator sees it. The typos it
+was really catching are `refuse_undeclared`'s, which refuses them by name.
+
+One consequence worth keeping: **the ordering question went with it.** A
+misspelling used to trip both checks, and `never reaches anyone` explained it as
+a reachability problem without mentioning the spelling. There is now one refusal
+on that path.
+
+**`groups.yaml` now holds vocabulary with a rule in it**, and the file's pitch
+was "a dictionary, not a policy". A compound sits on that line: it still answers
+"what does this name mean", but answers it with a condition. Judged to stay on
+the right side -- what it cannot do is say who reaches what, which is the
+property that made the central design fail. Recorded because it is cheap to
+disagree with now and expensive later.
+
+The `--json` listing's `access` key grew from a name-to-closure mapping into
+`{names, requires}`. A shape change for scripts, taken because a compound has no
+honest place in the old shape and the alternative was dropping the second fact.
+Group access was two days old at the time.
 
 **`builtin_tools` takes no audience, and that is not an omission.** deepagents
 registers its own tools, so kingfisher can filter them but never leave them out

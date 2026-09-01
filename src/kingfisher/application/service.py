@@ -744,7 +744,9 @@ class Kingfisher:
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
             self._refuse_undeclared_groups()
-            self.access_report = AccessReport(unrestricted=self._unrestricted())
+            self.access_report = AccessReport(
+                unrestricted=self._unrestricted(), narrowed=self._narrowed()
+            )
 
     def _refuse_undeclared_groups(self) -> None:
         """Refuse a definition naming a group this deployment does not declare.
@@ -756,16 +758,16 @@ class Kingfisher:
         and the only symptom is an agent quietly reachable by no one, found
         weeks later by whoever needed it.
 
-        Here rather than in `parse`, which is where its sibling `refuse_dead`
-        lives, and for a reason rather than a preference: `parse` reads one
-        document and has no vocabulary to check against. This is the first
-        moment both are known.
+        Here rather than in `parse`, and `_narrowed` below with it, for a reason
+        rather than a preference: `parse` reads one document and has no
+        vocabulary to check against. This is the first moment both are known --
+        and the other needs the vocabulary as badly, since what one audience
+        says about another is a question about what the names *mean*.
 
-        Refused rather than reported, unlike the two things `AccessReport`
-        carries. Those are drift between a definition and a workspace that may
-        have different owners; this is a name misspelled in a file the same
-        deployment wrote, next to the file that lists the spellings. Its
-        sibling refuses for the same reason.
+        Refused rather than reported, unlike the things `AccessReport` carries.
+        Those are judgements about files somebody may have meant; this is a name
+        misspelled in a file the same deployment wrote, next to the file that
+        lists the spellings, and no reading of it is correct.
         """
         assert self.access is not None  # noqa: S101 -- guarded by the caller
         delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
@@ -780,6 +782,27 @@ class Kingfisher:
                             where=f"{where}: {field_name} entry {entry!r}",
                             error=AccessError,
                         )
+
+    def _narrowed(self) -> tuple[tuple[str, str], ...]:
+        """Entries asking for a group their definition's own audience never mentions.
+
+        Walked here rather than at parse, and reported rather than refused --
+        `Groups.narrowing_in` has both reasons. Runs after
+        `_refuse_undeclared_groups`, so every name in what it reports is known
+        to be real: a typo would otherwise be described as a narrowing, which is
+        an explanation of the wrong fault.
+        """
+        assert self.access is not None  # noqa: S101 -- guarded by the caller
+        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
+        found: list[tuple[str, str]] = []
+        for kind, specs in (("agent", self.catalogue.agents.specs), ("subagent", delegates)):
+            for name, spec in sorted(specs.items()):
+                found.extend(
+                    self.access.narrowing_in(
+                        spec.audiences, groups=spec.groups, where=f"{kind} {name}"
+                    )
+                )
+        return tuple(found)
 
     def _unrestricted(self) -> tuple[tuple[str, str], ...]:
         """Definitions carrying no `groups:` line, so reachable by everyone.

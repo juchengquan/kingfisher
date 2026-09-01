@@ -23,6 +23,7 @@ __version__ = "0.1.0"
 _EXPORTS = {
     "ALL": "kingfisher.domain.capabilities",
     "AUDIENCED": "kingfisher.domain.access",
+    "spell": "kingfisher.domain.access",
     "Audience": "kingfisher.domain.access",
     "Stated": "kingfisher.domain.access",
     "Held": "kingfisher.domain.access",
@@ -164,6 +165,7 @@ __all__ = [
     "seed",
     "shell_confinement",
     "shell_env",
+    "spell",
     "split_reference",
     "stream",
     "system_prompt",

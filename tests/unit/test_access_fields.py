@@ -120,3 +120,73 @@ def test_a_mapping_may_not_name_the_star_as_an_entry():
 def test_the_source_is_named_in_every_refusal():
     with pytest.raises(AgentError, match=r"x\.yaml"):
         read.audienced({"sql_query": {"groups": []}}, absent=ALL, key="tools")
+
+
+# -- requiring several groups at once ---------------------------------------
+
+
+def test_a_conjunction_is_one_entry_of_an_entry_audience():
+    assert read.audienced(
+        {"sql_query": {"groups": ["admin", {"all_of": ["finance", "senior"]}]}},
+        absent=ALL,
+        key="tools",
+    ) == (("sql_query",), {"sql_query": ("admin", frozenset({"finance", "senior"}))})
+
+
+def test_a_conjunction_of_one_is_that_one_name():
+    """Not special-cased: a set of one is satisfied by holding one, which is
+    what the bare name means. Asserted so nobody adds a case for it."""
+    _, audiences = read.audienced(
+        {"sql_query": {"groups": [{"all_of": ["finance"]}]}}, absent=ALL, key="tools"
+    )
+
+    assert audiences["sql_query"] == (frozenset({"finance"}),)
+
+
+def test_an_empty_conjunction_is_refused():
+    """It would require nothing and so admit everyone, which is not what
+    somebody writing `all_of` was reaching for."""
+    with pytest.raises(AgentError, match="empty"):
+        read.audienced({"sql_query": {"groups": [{"all_of": []}]}}, absent=ALL, key="tools")
+
+
+def test_a_mistyped_key_inside_a_conjunction_is_refused_with_a_suggestion():
+    with pytest.raises(AgentError, match="did you mean 'all_of'"):
+        read.audienced(
+            {"sql_query": {"groups": [{"all_off": ["A", "B"]}]}}, absent=ALL, key="tools"
+        )
+
+
+def test_a_conjunction_written_as_the_whole_audience_is_refused():
+    """`groups: {all_of: [...]}` has no list to be one entry of, so it reads as
+    the whole audience being a mapping -- and the refusal shows the brackets."""
+    with pytest.raises(AgentError, match=r"\[\{all_of: \[A, B\]\}\]"):
+        read.audienced(
+            {"sql_query": {"groups": {"all_of": ["A", "B"]}}}, absent=ALL, key="tools"
+        )
+
+
+def test_everyone_cannot_be_part_of_a_requirement():
+    """`*` is everyone, so requiring it alongside a group is either everyone or
+    that group, and there is no way to tell which was meant."""
+    with pytest.raises(AgentError, match="everyone"):
+        read.audienced(
+            {"sql_query": {"groups": [{"all_of": ["*", "A"]}]}}, absent=ALL, key="tools"
+        )
+
+
+def test_a_definitions_own_line_reads_a_conjunction_the_same_way():
+    """One reader for both sites, so the two cannot drift about what the same
+    list means."""
+    assert read.groups(["admin", {"all_of": ["finance", "senior"]}]) == (
+        "admin",
+        frozenset({"finance", "senior"}),
+    )
+
+
+def test_a_definitions_own_line_still_takes_a_single_unbracketed_name():
+    """The one thing the two sites do not agree on, kept rather than
+    reconciled: every list field in these formats takes a lone name, and an
+    entry's audience is already nested in a mapping where a bare string reads
+    as an unfinished edit."""
+    assert read.groups("analysts") == ("analysts",)

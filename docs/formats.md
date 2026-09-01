@@ -1266,15 +1266,33 @@ groups: [A, B]
 tools: []                  # none, as it always meant
 ```
 
-An entry naming a group the definition itself does not admit is **refused**:
+An entry's audience is always an **and** with the definition's own line. The
+only way to reach an entry is through the definition holding it, and a caller
+who cannot open the agent never gets as far as its tools — so `sql_query:
+groups: [A]` under `groups: [A, B]` means "opens this agent, *and* is in A".
+
+That makes a group from outside the definition's line useful rather than wrong:
+
+```yaml
+groups: [analysts, auditors]
+tools:
+  export:
+    groups: [senior]        # anyone who opens this agent, and is senior
+```
+
+Startup reports it, because the same line is what somebody trying to *widen*
+would write by accident:
 
 ```
-assistant.yaml: tools entry 'sql_query' is for C, but this definition is only
-reachable by A, B -- so that line never reaches anyone
+access:
+  narrows past this definition's own audience,
+  so it reaches only callers holding both:
+    agent analyst: tool export  [senior]
 ```
 
-That is dead policy rather than a narrowing — nobody reaching `assistant` is
-ever in `C` — and it is almost always a group name typed from memory.
+Said rather than refused, because no rule can tell the two apart — `[senior]`
+meaning "and senior" and `[auditors]` written under `[analysts]` by somebody who
+wanted to add auditors are the same shape, and only the author knows which.
 
 **Any overlap grants.** A longer list means *more* people, which is what
 everyone reads an access list as meaning. `["*"]` is everyone.
@@ -1463,6 +1481,67 @@ appearing on a single definition. Without it, a broad group has to be written on
 every line and re-written on every line anyone adds. A loop is refused naming the
 whole cycle rather than one edge — one edge does not tell a reader which link to
 cut, and they may own none of the groups involved.
+
+### Requiring several groups at once
+
+An audience list is an **or**: any one of the names is enough. An entry of that
+list may be an **and**, written `all_of`, which is satisfied only in full:
+
+```yaml
+groups: [admin, {all_of: [finance, senior]}]
+```
+
+Either an `admin`, or somebody who is *both* in finance *and* senior. That is
+or-of-ands, which is the shape access rules actually take, and it stays one
+field with no rule about how two fields combine.
+
+Where the same requirement appears more than once, name it in the vocabulary
+instead — the same word, so the named form is simply a name for the inline one:
+
+```yaml
+# groups.yaml
+groups:
+  finance: {}
+  senior: {}
+  finance-senior: {all_of: [finance, senior]}
+```
+
+```yaml
+# any definition
+groups: [admin, finance-senior]
+```
+
+Use the inline form for a one-off and the named form for anything reused; a name
+that appears on two definitions and means the same thing on both belongs in the
+vocabulary, where changing it changes both.
+
+Three consequences worth knowing:
+
+- **`contains` satisfies `all_of`.** Expansion runs first, and requirements are
+  checked against whatever is held afterwards — so an `admin` who contains both
+  parts satisfies a compound of them. The alternative is an admin who is
+  mysteriously weaker than the sum of what they reach.
+- **A caller may not present a compound name.** It is what holding its parts
+  adds up to, not something to claim: accepting it would let one assertion stand
+  in for the two that `all_of` exists to require. The refusal names the parts to
+  send instead. A gateway emitting one is misconfigured, and is told so.
+- **`contains` and `all_of` cannot both appear on one group.** `contains` says
+  what a name grants and `all_of` says what a caller must bring; a name that is
+  both is a question with no answer. Requirement loops are refused like
+  `contains` loops, and for the same reason — a loop can never be entered, so
+  every name in it derives for nobody.
+- **`contains` may not hand out a compound.**
+  `admin: {contains: [finance-senior]}` is refused: it would give an admin the
+  compound while they hold neither part, which is the requirement defeated by
+  the file that declares it. Name the parts instead —
+  `admin: {contains: [finance, senior]}` — which reaches exactly the same people
+  and is legible, since the listing prints what a compound requires.
+
+`kingfisher list` writes a conjunction `finance+senior`, and prints what each
+named compound requires above the audiences, since a name alone tells a reader
+nothing on the line it appears on. The `--json` form nests it instead —
+`[["finance", "senior"]]` — so a script never has to parse a separator out of a
+name.
 
 ### Uploads are unchanged
 

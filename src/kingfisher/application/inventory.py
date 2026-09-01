@@ -325,6 +325,25 @@ def undeclared_in(specs: Mapping[str, Stated], *, kind: str, vocabulary: Groups)
     return None
 
 
+def _narrowed(
+    vocabulary: Groups, *kinds: tuple[str, Mapping[str, Stated]]
+) -> tuple[tuple[str, str], ...]:
+    """Entries asking for a group their definition's own audience never mentions.
+
+    The listing's half of what `Kingfisher._narrowed` reports, and the two agree
+    by asking `Groups` the same question. Not an error: it is a thing worth
+    seeing, and `AccessReport` is where those go.
+    """
+    return tuple(
+        found
+        for kind, specs in kinds
+        for name, stated in sorted(specs.items())
+        for found in vocabulary.narrowing_in(
+            stated.entries, groups=stated.groups, where=f"{kind} {name}"
+        )
+    )
+
+
 def _access(
     cfg: Config,
     groups: Iterable[str] | None,
@@ -346,7 +365,12 @@ def _access(
     stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
     if cfg.access is None:
         return stated, AccessReport(), None, {}
-    report = AccessReport(unrestricted=_unrestricted(("agent", agents), ("subagent", subagents)))
+    report = AccessReport(
+        unrestricted=_unrestricted(("agent", agents), ("subagent", subagents)),
+        narrowed=_narrowed(
+            cfg.access, ("agent", stated["agents"]), ("subagent", stated["subagents"])
+        ),
+    )
     broken = {
         kind: complaint
         for kind, held in (("agents", stated["agents"]), ("subagents", stated["subagents"]))

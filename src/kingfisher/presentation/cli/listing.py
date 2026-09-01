@@ -21,6 +21,7 @@ from kingfisher import (
     Audience,
     Inventory,
     offered,
+    spell,
     split_reference,
 )
 
@@ -111,8 +112,13 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
 
 
 def _who(audience: Audience) -> str:
-    """One audience, as a reader sees it."""
-    return "[*]" if audience == ALL else f"[{', '.join(audience)}]"
+    """One audience, as a reader sees it.
+
+    `spell` rather than a join of its own: a conjunction has to be written some
+    way, and the refusals quote audiences too. A reader comparing an error
+    against this listing should not have to translate between two spellings.
+    """
+    return f"[{spell(audience)}]"
 
 
 def _singular(field_name: str) -> str:
@@ -135,6 +141,13 @@ def _access(found: Inventory) -> Iterator[str]:
     """
     if found.access is None or found.held is not None:
         return
+    if compounds := found.access.compounds:
+        # Before the audiences rather than after, because it is what makes them
+        # readable: a name that requires others tells a reader nothing on the
+        # line it appears on, and every line it appears on needs it.
+        yield "\naccess — groups that require others"
+        for name, parts in sorted(compounds.items()):
+            yield f"  {name} = {'+'.join(sorted(parts))}"
     yield "\naccess — by definition"
     said = False
     for kind, definitions in found.audiences.items():
@@ -257,6 +270,22 @@ def _catalogue(found: Inventory) -> Iterator[str]:
         yield f"  (none)  — try {SEED_HINT}"
 
 
+def _audience_json(audience: Audience) -> list[object]:
+    """One audience as JSON: names, and a conjunction as a nested list.
+
+    Nested rather than `"A+B"`, because a script reading this should not have to
+    parse a separator out of a name -- and a group name may legally contain a
+    `+`. The human form spells it `A+B`; this is the same fact for a reader that
+    does not need it to fit in a column.
+
+    Sorted, like every other rendering of a conjunction: the set has no order to
+    preserve, and two runs of the same file must produce the same document.
+    """
+    if audience == ALL:
+        return [ALL]
+    return [sorted(one) if isinstance(one, frozenset) else one for one in audience]
+
+
 def as_json(found: Inventory) -> dict[str, object]:
     """The same answer, in the shape a script can read.
 
@@ -299,17 +328,30 @@ def as_json(found: Inventory) -> dict[str, object]:
         # The vocabulary, or `null` where this deployment declares none. Who
         # reaches what is `audiences` below, keyed the way the definitions
         # themselves are.
+        #
+        # Two keys because a vocabulary says two things: what a name grants,
+        # already closed over `contains`, and what a caller must hold for one to
+        # apply. This was the `names` mapping alone until `all_of` existed, and
+        # a compound has no honest place in it -- so the shape grew rather than
+        # the second fact being dropped.
         "access": (
             None
             if found.access is None
-            else {name: list(holds) for name, holds in found.access.names.items()}
+            else {
+                "names": {name: list(holds) for name, holds in found.access.names.items()},
+                "requires": {
+                    name: list(parts) for name, parts in found.access.compounds.items()
+                },
+            }
         ),
         "audiences": {
             kind: {
                 name: {
-                    "groups": list(stated.groups),
+                    "groups": _audience_json(stated.groups),
                     **{
-                        field_name: {entry: list(who) for entry, who in entries.items()}
+                        field_name: {
+                            entry: _audience_json(who) for entry, who in entries.items()
+                        }
                         for field_name, entries in stated.entries.items()
                     },
                 }
@@ -319,6 +361,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         },
         "access_report": {
             "unrestricted": [list(pair) for pair in found.access_report.unrestricted],
+            "narrowed": [list(pair) for pair in found.access_report.narrowed],
         },
         "held": None if found.held is None else sorted(found.held),
     }

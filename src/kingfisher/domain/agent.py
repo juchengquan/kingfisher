@@ -96,7 +96,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, Audience, reaching, refuse_dead
+from kingfisher.domain.access import AUDIENCED, Audience, reaching
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 # Imported rather than restated: both formats name a model the same way, so a
@@ -328,7 +328,6 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         if entries
     }
     groups = read.groups(document.get("groups"))
-    refuse_dead(audiences, groups=groups, source=source.name, error=AgentError)
     # Read together, because they are one field. The names stay a `Selection`
     # and the settings ride beside them; `Reader.selection_with_settings` has
     # why the two halves are kept apart.

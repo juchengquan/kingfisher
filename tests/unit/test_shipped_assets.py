@@ -546,8 +546,11 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
         "agents/researcher.yaml": ("middleware", ("call-cap-strict", "tool-note")),
         "subagents/sweeper.yaml": ("middleware", ("call-cap-generous", "tool-note")),
-        "agents/analyst.yaml": ("groups", ("analysts", "auditors")),
-        "subagents/auditor.yaml": ("groups", ("analysts", "auditors", "reviewers")),
+        "agents/analyst.yaml": ("groups", ("analysts", "auditors", "senior-analysts")),
+        "subagents/auditor.yaml": (
+            "groups",
+            ("analysts", "auditors", "reviewers", "senior-analysts"),
+        ),
     }
 
     # And everything else still arrives, which is the half that would break
@@ -920,7 +923,14 @@ def test_the_vocabulary_ships_and_reads(shipped):
     groups = _vocabulary(shipped)
 
     assert groups is not None
-    assert set(groups.names) == {"analysts", "auditors", "reviewers"}
+    assert set(groups.names) == {
+        "analysts",
+        "auditors",
+        "reviewers",
+        "senior",
+        "senior-analysts",
+    }
+    assert groups.compounds == {"senior-analysts": ("analysts", "senior")}
 
 
 def test_the_containing_group_reaches_what_it_contains(shipped):
@@ -987,12 +997,49 @@ def test_an_entry_that_states_nothing_inherits(shipped):
     groups = _vocabulary(shipped)
     analyst = specs["analyst"]
 
-    # One entry carries an audience; the other two say nothing and inherit.
-    assert analyst.audiences["tools"] == {"sql_query": ("analysts",)}
+    # Two entries carry an audience; the other two say nothing and inherit.
+    assert analyst.audiences["tools"] == {
+        "sql_query": ("analysts",),
+        "http_fetch": ("senior-analysts",),
+    }
     assert analyst.declares(groups.expand(["auditors"])).tools == (
         "csv_profile::csv_profile",
         "line_count",
     )
+
+
+def test_a_shipped_requirement_takes_both_groups_at_once(shipped):
+    """The `all_of` case, asserted against the files rather than described.
+
+    An analyst reaches `sql_query` and not `http_fetch`; the same analyst who is
+    also senior reaches both. One definition, and the difference is a second
+    group rather than a second file."""
+    specs = LocalAgentRepository(shipped / "agents").specs
+    groups = _vocabulary(shipped)
+    analyst = specs["analyst"]
+
+    assert analyst.declares(groups.expand(["analysts"])).tools == (
+        "sql_query",
+        "csv_profile::csv_profile",
+        "line_count",
+    )
+    assert analyst.declares(groups.expand(["analysts", "senior"])).tools == (
+        "sql_query",
+        "http_fetch",
+        "csv_profile::csv_profile",
+        "line_count",
+    )
+    # Senior alone is not a role here, so it reaches the agent through nothing.
+    assert not analyst.declares(groups.expand(["senior"])).tools
+
+
+def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
+    """It is derived, so claiming it would be claiming the conclusion. The
+    refusal names the parts to send instead."""
+    from kingfisher.domain.access import AccessError
+
+    with pytest.raises(AccessError, match=r"all of \[analysts, senior\]"):
+        _vocabulary(shipped).expand(["senior-analysts"])
 
 
 def test_the_other_presets_still_restrict_nobody(shipped):
