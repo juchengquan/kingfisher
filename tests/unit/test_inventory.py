@@ -274,12 +274,12 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
     them, so a name quietly dropped from `_EXPORTS` fails this rather than
     passing on the module import.
     """
-    from kingfisher import Inventory, Seeding, inventory, kinds_at, seed
+    from kingfisher import Inventory, Seeded, inventory, kinds_at, seed
 
     written = seed(cfg, shipped)
     found = inventory(cfg)
 
-    assert isinstance(written, Seeding)
+    assert isinstance(written, Seeded)
     assert isinstance(found, Inventory)
     assert all(isinstance(kind, str) for kind in kinds_at(shipped))
     # And it did something, so this cannot pass by every call being a no-op.

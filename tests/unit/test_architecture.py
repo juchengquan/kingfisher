@@ -1115,7 +1115,7 @@ LIGHT_EXPORTS = frozenset({
     # `inventory` is light to *reach*, not to call: answering builds an agent,
     # so `harness.agent` is imported inside the function. That is the shape
     # this classification is about -- what a name costs to touch.
-    "seed", "definitions_source", "kinds_at", "Seeding", "inventory", "Inventory",
+    "seed", "definitions_source", "kinds_at", "Seeded", "inventory", "Inventory",
     # A directory of sessions, and the port it satisfies. Neither imports
     # anything a deployment does not already have -- see `session_store`.
     "LocalSessionStore",

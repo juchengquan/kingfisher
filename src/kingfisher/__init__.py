@@ -68,7 +68,7 @@ _EXPORTS = {
     "kinds_at": "kingfisher.infrastructure.seeding",
     "memory_backing": "kingfisher.infrastructure.workspace_fs",
     "seed": "kingfisher.infrastructure.seeding",
-    "Seeding": "kingfisher.infrastructure.seeding",
+    "Seeded": "kingfisher.infrastructure.seeding",
     "inventory": "kingfisher.application.inventory",
     # The fifth name a consumer has forced public. A purpose-built answer
     # rather than `model_for` itself, which the design named: `doctor` wants
@@ -132,7 +132,7 @@ __all__ = [
     "RunEvent",
     "RunOn",
     "RunResult",
-    "Seeding",
+    "Seeded",
     "SessionBusyError",
     "SessionInfo",
     "SkillError",
@@ -238,7 +238,7 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.harness.models import build_model as build_model
     from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.seeding import SEED_HINT as SEED_HINT
-    from kingfisher.infrastructure.seeding import Seeding as Seeding
+    from kingfisher.infrastructure.seeding import Seeded as Seeded
     from kingfisher.infrastructure.seeding import (
         definitions_source as definitions_source,
     )
