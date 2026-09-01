@@ -26,7 +26,7 @@ from kingfisher import Kingfisher
 from kingfisher import Request as TurnRequest
 from kingfisher_service import audit, streaming
 from kingfisher_service.capabilities import CapabilitiesBody
-from kingfisher_service.dependencies import kingfisher_of
+from kingfisher_service.dependencies import groups_of, kingfisher_of
 from kingfisher_service.errors import outcome
 
 if TYPE_CHECKING:
@@ -100,7 +100,11 @@ def turn_for(body: TurnBody, session_id: str | None = None) -> TurnRequest:
 
 
 async def stream_turn(
-    kf: Kingfisher, body: TurnBody, session_id: str | None, settings: ServiceConfig
+    kf: Kingfisher,
+    body: TurnBody,
+    session_id: str | None,
+    settings: ServiceConfig,
+    groups: tuple[str, ...] | None = None,
 ) -> Response:
     """Open the stream, having first checked there is one to open.
 
@@ -120,6 +124,7 @@ async def stream_turn(
         task=body.task,
         started=perf_counter(),
         settings=settings,
+        groups=groups,
     )
     # `turn_for` is inside the try, not before it. It refuses an empty task, and
     # that refusal names a session in the path -- so leaving it outside made a
@@ -130,7 +135,7 @@ async def stream_turn(
     # request appears.
     events = None
     try:
-        events = kf.astream(turn_for(body, session_id))
+        events = kf.astream(turn_for(body, session_id), groups=groups)
         first = await streaming.opening(events)
     except BaseException as error:
         # Let go, then let it out. The close is not what gives the claim back --
@@ -168,6 +173,7 @@ def turn_router(settings: ServiceConfig) -> APIRouter:
         session_id: str,
         body: TurnBody,
         kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
+        groups: tuple[str, ...] | None = Depends(groups_of),
     ) -> Response:
         """Run one turn in an existing session, streaming as it goes.
 
@@ -175,18 +181,19 @@ def turn_router(settings: ServiceConfig) -> APIRouter:
         resume but never create; that is what makes the id a credential instead
         of a name anyone can pick.
         """
-        return await stream_turn(kf, body, session_id, settings)
+        return await stream_turn(kf, body, session_id, settings, groups)
 
     @router.post("/turns")
     async def run_one_shot(
         body: TurnBody,
         kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
+        groups: tuple[str, ...] | None = Depends(groups_of),
     ) -> Response:
         """Ask one question without having opened a session first.
 
         A session is still created -- a turn needs somewhere to live -- and its
         id comes back on `finished`, so a caller who decides to continue can.
         """
-        return await stream_turn(kf, body, None, settings)
+        return await stream_turn(kf, body, None, settings, groups)
 
     return router

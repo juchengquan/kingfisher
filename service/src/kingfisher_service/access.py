@@ -15,6 +15,16 @@ whose session it was.
 Anything that does need to tell requests apart should correlate on something the
 caller can be given and can rotate. There is no such field yet; when there is,
 it belongs here rather than the id being un-redacted.
+
+A caller's *groups* are not that field, and are deliberately not here. They are
+not a credential -- nothing is replayable about a group name -- so the reason
+the session id is kept out does not apply to them. What does apply is that they
+are weak correlation and strong disclosure: several callers share a group, so it
+tells requests apart badly, while a name like `hr-restricted` describes an
+organisation to whoever collects this stream. They go to the audit log instead,
+which has no handler until a deployment attaches one -- so writing them down
+stays a decision somebody makes rather than one they inherit, which is the same
+rule this file follows about ids.
 """
 
 from __future__ import annotations

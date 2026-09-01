@@ -65,11 +65,20 @@ class ServiceConfig:
     """How to serve, as opposed to what to serve."""
 
     #: Loopback by default, and that is a decision rather than a placeholder.
-    #: This server does not know who is calling -- authentication, caller
-    #: identity and per-caller quotas belong to whatever sits in front of it --
-    #: so a default of `0.0.0.0` would publish an unauthenticated API to the
-    #: network the moment someone ran it. Binding wider is a thing to opt into
-    #: once something is in front.
+    #: This server authenticates nobody -- authentication and per-caller quotas
+    #: belong to whatever sits in front of it -- so a default of `0.0.0.0` would
+    #: publish an unauthenticated API to the network the moment someone ran it.
+    #: Binding wider is a thing to opt into once something is in front.
+    #:
+    #: It does now *ask* who is calling, which is a smaller claim than it
+    #: sounds and does not soften this one. A deployment with an access policy
+    #: supplies a `groups_from` to `create_app`, and the shipped reader takes
+    #: those groups off a header -- which is trustworthy exactly insofar as
+    #: whatever sets it also strips it from inbound requests. Bound to
+    #: `0.0.0.0` with nothing in front, that header is a request field any
+    #: caller can write, so identity would be self-asserted and the policy
+    #: would decide nothing. The reason for loopback is unchanged; there is
+    #: simply more riding on it.
     host: str = "127.0.0.1"
     port: int = 8000
     #: A ceiling on a request body. `task` is unbounded text and every other

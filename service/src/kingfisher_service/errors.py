@@ -20,6 +20,7 @@ that knows the shape.
 
 from __future__ import annotations
 
+import logging
 from http import HTTPStatus
 from typing import TYPE_CHECKING
 
@@ -28,6 +29,7 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException
 
 from kingfisher import (
+    AccessError,
     CapabilityError,
     QuotaExceededError,
     SessionBusyError,
@@ -68,6 +70,25 @@ STATUS: dict[type[Exception], tuple[int, str]] = {
     SubagentError: (HTTPStatus.BAD_REQUEST, "bad_subagent"),
 }
 
+#: Deployment errors that still earn a name. A second table rather than entries
+#: in the one above, because that one is *exactly* the caller-facing set and a
+#: rule checks it in both directions -- an error in it that a caller cannot
+#: cause would be a status nobody decided on, which is the drift that rule
+#: exists to catch.
+#:
+#: What these have in common is that nothing the caller sends can fix them, so
+#: they stay 5xx and the code is not really a contract: it is a name, worth
+#: having because "500 error" and "500 the deployment's identity has drifted
+#: from its policy" are the same line in a log otherwise.
+#:
+#: `AccessError` covers `MissingGroups` through the MRO walk in `outcome`. The
+#: two are one problem seen from two places -- a header nothing set, a group the
+#: vocabulary never declared -- and a caller told them apart would learn
+#: something about the deployment and could act on neither.
+DEPLOYMENT_STATUS: dict[type[Exception], tuple[int, str]] = {
+    AccessError: (HTTPStatus.INTERNAL_SERVER_ERROR, "misconfigured"),
+}
+
 #: Codes for refusals that are not a kingfisher error -- fastapi's own, and the
 #: body-size limit. A status alone is not enough for a client to branch on:
 #: `unknown_session` and a mistyped URL are both 404 and need different fixes.
@@ -90,9 +111,17 @@ def outcome(error: BaseException) -> tuple[int, str]:
     "invalid_request". A log that disagrees with the response is worse than no
     log, because it is believed.
     """
-    found = STATUS.get(type(error))
-    if found is not None:
-        return found
+    # Walked rather than looked up, because starlette dispatches handlers by
+    # walking the MRO and this has to agree with it. Asked as `STATUS.get(type)`
+    # a subclass reached the right *handler* and the wrong status and code --
+    # `MissingGroups` is the first subclass to exist here, and it arrived as a
+    # 500 called "error" from a table that says `misconfigured` two lines up.
+    # Exactly the disagreement this function was written to end, in the other
+    # direction.
+    for kind in type(error).__mro__:
+        found = STATUS.get(kind) or DEPLOYMENT_STATUS.get(kind)  # type: ignore[arg-type]
+        if found is not None:
+            return found
     if isinstance(error, HTTPException):
         return error.status_code, CODE_FOR_STATUS.get(error.status_code, "error")
     return int(HTTPStatus.INTERNAL_SERVER_ERROR), "error"
@@ -109,6 +138,22 @@ def problem(status: int, code: str, message: str, **extra: object) -> JSONRespon
     return JSONResponse({"error": code, "message": message, **extra}, status_code=status)
 
 
+#: The package's own logger, the one `access` already writes to, so a
+#: deployment configures one name and gets everything this server says.
+logger = logging.getLogger("kingfisher_service")
+
+#: What a caller is told when this deployment cannot work out who they are.
+#:
+#: Fixed prose rather than the exception's own, and deliberately incurious: the
+#: caller can do nothing about either cause and telling them apart would only
+#: say something about the deployment. `access` and the audit log carry the
+#: difference to the people who can act on it.
+RESOLUTION_FAILED = (
+    "this deployment cannot resolve the caller's groups; its access policy and "
+    "whatever states them have come apart"
+)
+
+
 def install(app: FastAPI) -> None:
     """Register the handlers that give every refusal that shape.
 
@@ -120,9 +165,20 @@ def install(app: FastAPI) -> None:
 
     async def from_kingfisher(_: Request, error: Exception) -> JSONResponse:
         status, code = outcome(error)
+        if isinstance(error, AccessError):
+            # The one refusal whose message may not be repeated. It names every
+            # group this deployment declares -- "unknown group(s): Q; this
+            # deployment defines A, B, C" -- which is exactly the enumeration
+            # that filtering listings and refusals exists to prevent, handed
+            # over by the one path that was not filtering anything.
+            #
+            # Logged rather than dropped, at ERROR on the service's own logger,
+            # because the operator who can act on it is the one reading that.
+            logger.error("cannot resolve the caller's groups: %s", error)
+            return problem(status, code, RESOLUTION_FAILED)
         return problem(status, code, str(error))
 
-    for error_type in STATUS:
+    for error_type in (*STATUS, *DEPLOYMENT_STATUS):
         app.add_exception_handler(error_type, from_kingfisher)
 
     async def from_http(_: Request, error: Exception) -> JSONResponse:

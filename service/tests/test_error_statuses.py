@@ -52,3 +52,38 @@ def test_no_two_refusals_share_a_code():
     codes = [code for _, code in STATUS.values()] + list(CODE_FOR_STATUS.values())
 
     assert len(codes) == len(set(codes)), sorted(codes)
+
+
+#: The library's other list, restated for the same reason as the one above.
+#: Only the ones this service names; the rest reach the default 500 and want no
+#: code of their own.
+NAMED_DEPLOYMENT_ERRORS = frozenset({"AccessError"})
+
+
+def test_the_two_tables_are_disjoint():
+    """One error, one meaning. An error in both would be a caller-facing thing
+    a caller cannot cause, which is the contradiction each table exists to
+    keep out of the other."""
+    from kingfisher_service.errors import DEPLOYMENT_STATUS, STATUS
+
+    assert not set(STATUS) & set(DEPLOYMENT_STATUS)
+
+
+def test_only_deployment_errors_are_named_as_such():
+    """The second table is not a way round the first. Anything in it must be an
+    error the caller cannot cause -- otherwise it belongs above, with a status
+    somebody decided on and a rule holding them together."""
+    from kingfisher_service.errors import DEPLOYMENT_STATUS
+
+    named = {error.__name__ for error in DEPLOYMENT_STATUS}
+
+    assert named == NAMED_DEPLOYMENT_ERRORS
+    assert not named & CALLER_FACING_ERRORS
+
+
+def test_every_named_deployment_error_stays_a_5xx():
+    """A 4xx here would say the caller sent something wrong, which is the one
+    thing these are not."""
+    from kingfisher_service.errors import DEPLOYMENT_STATUS
+
+    assert all(status >= 500 for status, _ in DEPLOYMENT_STATUS.values())
