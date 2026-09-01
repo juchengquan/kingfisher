@@ -1,0 +1,58 @@
+# The group vocabulary: which names exist here, and which contain which.
+#
+# Copy this to `$KINGFISHER_WORKSPACE/groups.yaml`, or point
+# `KINGFISHER_GROUPS_FILE` at it. It is the only central file group access has,
+# and it is the one `seed` does not copy -- `seed` copies definitions, and this
+# is not one. A deployment writing it is deciding something about itself.
+#
+# **With no such file, kingfisher controls nothing by group.** Every definition
+# is reachable by everyone, a `groups:` line anywhere is inert, and everything
+# behaves as it did before any of this existed. That is the default on purpose:
+# adopting access control should be a thing you do, not a thing you inherit.
+#
+# **This file holds no policy.** Who reaches what is written in the definitions
+# themselves -- see `agents/analyst.yaml` and `subagents/auditor.yaml` beside
+# it. What lives here is the two things a definition cannot say for itself:
+#
+#   - that a name is *real*, so `groups: [analists]` is refused at startup
+#     rather than inventing a group nobody is in and quietly hiding an agent
+#   - that one name stands for several, so a broad group is written once here
+#     rather than on every line of every definition, forever
+
+groups:
+  # The short form. A group that contains nothing else needs no body, and most
+  # do not -- `analysts: {}` and a bare `- analysts` mean the same thing, so a
+  # flat vocabulary can be written as a plain list:
+  #
+  #     groups: [analysts, auditors, operators]
+  #
+  # Spelled long here only because `reviewers` below needs a body, and one file
+  # switching form halfway is harder to read than one that does not.
+  analysts: {}
+  auditors: {}
+
+  # Written out, and worth reading twice: this is the whole reason the
+  # vocabulary is central rather than inferred from what the definitions
+  # mention.
+  #
+  # `reviewers` appears on no definition in this set. It does not need to --
+  # containing the other two means somebody in `reviewers` reaches anything
+  # either of them reaches, including definitions added next year that have
+  # never heard of it.
+  #
+  # Without this, a broad group is typed onto every audience in every file, and
+  # forgotten on exactly one of them. The one it is forgotten on is the one
+  # nobody notices, because the symptom is a person who cannot do a thing they
+  # were never told they could.
+  reviewers: {contains: [analysts, auditors]}
+
+# Expansion is transitive and cycles are refused, naming the whole loop rather
+# than one edge of it -- one edge does not tell a reader which link to cut, and
+# whoever reads the message may own none of the groups in it.
+#
+# There is no `agents:`, `subagents:` or `tools:` section here, and writing one
+# is refused by name. There was, in the first version of this feature: one
+# central table listing every asset and who reached it. It went because a table
+# can name an asset the workspace no longer offers, and a definition cannot --
+# it *is* the asset it is about. See `docs/decisions.md`, which records the
+# reversal and why it is the useful half.
