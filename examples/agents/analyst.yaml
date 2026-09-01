@@ -36,16 +36,17 @@ tools:
     # without the database; an analyst gets the whole set. One agent, two
     # shapes, and no second file to keep in step with the first.
     #
-    # A group nobody reaching this agent could ever be in -- `operators`, say
-    # -- is refused before the deployment starts. Not because operators are
-    # forbidden, but because `groups:` above never admits one, so the line
-    # could not narrow anything: it would reach nobody at all. Dead policy is a
-    # mistake, not a narrowing, and it is nearly always a name typed from
-    # memory.
+    # An entry audience is an **and** with the definition's, always: the only
+    # way to reach a tool is through the agent holding it, and a caller who
+    # cannot open this agent never gets here. So `[analysts]` means "opens this
+    # agent, and is an analyst".
     #
-    # Judged against what the names *mean*, not how they are spelled. `[senior]`
-    # here would be dead, but `[reviewers]` would not -- a reviewer contains
-    # `analysts`, so they reach this agent and this line both.
+    # Which is why naming a group from *outside* the line above is allowed and
+    # useful. `groups: [senior]` here would mean "anyone who opens this agent,
+    # and is senior" -- a second requirement rather than a mistake. Startup
+    # reports it, under `narrows past this definition's own audience`, because
+    # the same line is what somebody trying to *widen* would write by accident.
+    # Only the author knows which, so it is said rather than vetoed.
     groups: [analysts]
   # **A tool that takes two things at once.** Leaving the workspace to fetch
   # something is for an analyst who is also senior -- not either, both.

@@ -265,10 +265,10 @@ def test_a_restricted_definition_reports_the_same_typo_the_same_way(cfg):
         Kingfisher(policied)
 
 
-def test_a_line_dead_against_declared_groups_is_still_refused(cfg):
-    """What survives the reordering: every name is real, and the line still
-    reaches nobody. Nothing about spelling is left to say, so the dead-policy
-    check is the one with something to report."""
+def test_a_line_narrowing_past_declared_groups_is_reported_not_refused(cfg):
+    """Every name is real and the line asks for one the definition never
+    mentions. That reaches whoever holds both, which is a second requirement --
+    so the deployment starts and the report says where to look."""
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
@@ -281,8 +281,10 @@ def test_a_line_dead_against_declared_groups_is_still_refused(cfg):
         cfg, access=parse({"groups": ["analysts", "auditors"]}, source="groups.yaml")
     )
 
-    with pytest.raises(AccessError, match="never reaches anyone"):
-        Kingfisher(policied)
+    kf = Kingfisher(policied)
+
+    assert kf.access_report.narrowed == (("agent analyst: tool line_count", "auditors"),)
+    assert "reaches only callers holding both" in "\n".join(kf.access_report.lines())
 
 
 def test_a_subagent_is_checked_too(cfg):

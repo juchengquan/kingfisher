@@ -361,6 +361,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         },
         "access_report": {
             "unrestricted": [list(pair) for pair in found.access_report.unrestricted],
+            "narrowed": [list(pair) for pair in found.access_report.narrowed],
         },
         "held": None if found.held is None else sorted(found.held),
     }

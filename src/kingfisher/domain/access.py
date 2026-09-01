@@ -176,6 +176,16 @@ def reaching(
     return tuple(name for name in selection if reaches(audiences.get(name, default), held))
 
 
+def _singular(field_name: str) -> str:
+    """`tools` -> `tool`. `skills` is the one that does not just lose an s.
+
+    A copy of the printer's, which is the lesser of two evils: the report is
+    assembled here so that a server and the command say the same thing, and
+    `domain/` may not import `presentation/`.
+    """
+    return "skill" if field_name == "skills" else field_name[:-1]
+
+
 def spell(audience: Audience) -> str:
     """One audience, written the way the formats and the listing write it.
 
@@ -212,9 +222,25 @@ class AccessReport:
     #: noticing.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
+    #: Entries naming a group their definition's own audience never mentions,
+    #: as `(where, audience)`. Reached only by a caller holding one of each.
+    #:
+    #: Reported rather than refused, and it was refused for two commits. The
+    #: refusal could not tell the two readings apart: `[senior]` under
+    #: `[analysts, auditors]` is a deliberate second requirement -- everyone who
+    #: opens this agent, but this tool wants seniority too -- and `[auditors]`
+    #: under `[analysts]` is somebody who meant to widen and has written
+    #: something that reaches nobody. Same shape, opposite intents, and only the
+    #: author knows which.
+    #:
+    #: So the information is kept and the veto is not. That is the trade
+    #: `unrestricted` above already makes: a thing worth noticing, said once,
+    #: where an operator sees it.
+    narrowed: tuple[tuple[str, str], ...] = ()
+
     @property
     def is_clean(self) -> bool:
-        return not self.unrestricted
+        return not (self.unrestricted or self.narrowed)
 
     def lines(self) -> tuple[str, ...]:
         """The report, ready to print, or nothing at all when there is nothing.
@@ -225,11 +251,15 @@ class AccessReport:
         """
         if self.is_clean:
             return ()
-        return (
-            "access:",
-            "  no groups: line, so reachable by everyone:",
-            *(f"    {kind} {name}" for kind, name in self.unrestricted),
-        )
+        said: list[str] = ["access:"]
+        if self.unrestricted:
+            said.append("  no groups: line, so reachable by everyone:")
+            said.extend(f"    {kind} {name}" for kind, name in self.unrestricted)
+        if self.narrowed:
+            said.append("  narrows past this definition's own audience,")
+            said.append("  so it reaches only callers holding both:")
+            said.extend(f"    {where}  [{who}]" for where, who in self.narrowed)
+        return tuple(said)
 
 
 @dataclass(frozen=True)
@@ -359,51 +389,44 @@ class Groups:
             )
             raise error(msg)
 
-    def refuse_dead(
+    def narrowing_in(
         self,
         audiences: Mapping[str, Mapping[str, Audience]],
         *,
         groups: Audience,
         where: str,
-        error: type[Exception],
-    ) -> None:
-        """Refuse an entry audience that the definition's own audience never admits.
+    ) -> tuple[tuple[str, str], ...]:
+        """Entries naming a group this definition's own audience never mentions.
 
-        `reviewer` is `[A, B]` and writes `sql_query: [C]`. Nobody reaching
-        `reviewer` is ever in `C`, so that line can never grant anything -- it is
-        not a narrowing, it is a mistake, and almost always a group name typed
-        from memory. Refused rather than reported, because unlike a stale
-        central entry it costs nothing to fix and the file that is wrong is the
-        file in front of you.
+        An entry audience is already an **and** with the definition's, because
+        the only way to reach an entry is through the definition holding it --
+        `agent_named` refuses a caller who cannot open the agent, and nothing
+        else hands out a spec. So `[senior]` under `[analysts, auditors]` means
+        "everyone who opens this agent, and is senior", which is a perfectly
+        good second requirement and has always evaluated correctly.
 
-        On `Groups`, and no longer at parse time, because the comparison is
-        between what two lines *mean* and only the vocabulary knows that. A
-        definition `[reviewers]` with an entry `[analysts]` is perfectly alive
-        when `reviewers` contains `analysts`, and a raw name comparison called
-        it dead -- a bug `contains` already had and compounds would have made
-        routine. `refuse_undeclared` moved here first and for the same reason.
+        This was `refuse_dead` and it refused exactly that. The refusal was
+        wrong twice over: it blocked the narrowing above, and the thing it meant
+        to catch -- `[auditors]` written under `[analysts]` by somebody trying
+        to *widen* -- is the same shape, so no rule can tell them apart. What
+        survived is the looking. See `AccessReport.narrowed`.
 
-        Still a heuristic and not a proof, which is worth knowing rather than
-        fixing: a caller in `{A, C}` reaches a definition `[A, B]` and an entry
-        `[C]`, and this refuses that pair. Made exact it would allow nearly
-        everything and stop catching the typos it exists for.
+        Judged on what the names mean rather than how they are spelled, which
+        is why it needs the vocabulary: `[analysts]` under `[reviewers]` is not
+        narrowing at all when `reviewers` contains `analysts`.
 
-        Silent when the definition is `ALL`: everyone reaches it, so no entry
-        audience can fall outside.
+        Silent when the definition is `ALL`: everyone reaches it, so nothing an
+        entry says can be narrower than nothing.
         """
         if groups == ALL:
-            return
+            return ()
         admitted = self.mentions(groups)
-        for field_name, entries in audiences.items():
-            for entry, audience in entries.items():
-                if audience == ALL or (self.mentions(audience) & admitted):
-                    continue
-                msg = (
-                    f"{where}: {field_name} entry {entry!r} is for "
-                    f"{spell(audience)}, but this definition is only reachable by "
-                    f"{spell(groups)} -- so that line never reaches anyone"
-                )
-                raise error(msg)
+        return tuple(
+            (f"{where}: {_singular(field_name)} {entry}", spell(audience))
+            for field_name, entries in audiences.items()
+            for entry, audience in entries.items()
+            if audience != ALL and not (self.mentions(audience) & admitted)
+        )
 
 
 #: The declared groups and what each contains, beside the ones written `all_of`.

@@ -141,8 +141,9 @@ subagent is never compiled. *(2026-08-31.)*
 The rule that makes it safe to add to an existing definition: **`groups:` is the
 default audience for everything the definition holds, and the ceiling on what any
 entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning, and
-an entry naming a group the definition itself does not admit is refused as dead
-policy. A definition with no `groups:` line is reachable by everyone, and startup
+an entry is always an *and* with the definition's own line -- the only way to
+reach an entry is through the definition holding it, so naming a group from
+outside that line adds a second requirement rather than replacing the first. A definition with no `groups:` line is reachable by everyone, and startup
 names every such definition -- default-open must not also be silent.
 
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
@@ -189,23 +190,31 @@ Refusing it in only one of the two places was the inconsistency. Naming the
 parts reaches the same people and is visible, since the listing prints what a
 compound requires and never prints `contains`.
 
-**`refuse_dead` moved off `parse` onto `Groups`, and that was a bug fix.**
-Whether one line can ever reach another is a question about what the names
-*mean*, and `parse` reads one document with no vocabulary to answer it: a
-definition `[reviewers]` with an entry `[analysts]` is alive when `reviewers`
-contains `analysts`, and comparing raw names called it dead. `contains` already
-had that bug; compounds would have made it routine. It now runs beside
-`refuse_undeclared`, which had moved there first and for the same reason. Two
-things worth keeping in view:
+**Reversed: `refuse_dead`, the rule that an entry audience must overlap its
+definition's.** It moved off `parse` onto `Groups` first, which was a real fix
+-- a definition `[reviewers]` with an entry `[analysts]` is alive when
+`reviewers` contains `analysts`, and comparing raw names at parse called it
+dead. Then measuring it settled the larger question: it had no true positives
+left, and one class of false ones. *(2026-09-01, both the same day.)*
 
-- **The check stays a heuristic on purpose.** A caller in `{A, C}` reaches a
-  definition `[A, B]` and an entry `[C]`, and this still refuses that pair. Made
-  exact it would allow nearly everything and stop catching the typos it exists
-  for.
-- **Ordering settles which fault a typo reports.** A misspelling makes a line
-  both undeclared and dead. `never reaches anyone` is true but sends its reader
-  off to reconcile two audiences, so the undeclared check goes first and names
-  the word.
+An entry audience is already an **and** with the definition's, because the only
+way to reach an entry is through the definition holding it -- `agent_named`
+refuses a caller who cannot open the agent, and nothing else hands out a spec.
+So `[senior]` under `[analysts, auditors]` has always evaluated as "opens this
+agent, and is senior", which is a perfectly good second requirement. The refusal
+blocked writing it, and the fault it meant to catch -- `[auditors]` written
+under `[analysts]` by somebody trying to widen -- is the same shape, so no rule
+can separate them.
+
+What survived is the looking. It is `Groups.narrowing_in` now, and feeds
+`AccessReport.narrowed`, on the same reasoning as the `unrestricted` line beside
+it: a thing worth noticing, said once, where an operator sees it. The typos it
+was really catching are `refuse_undeclared`'s, which refuses them by name.
+
+One consequence worth keeping: **the ordering question went with it.** A
+misspelling used to trip both checks, and `never reaches anyone` explained it as
+a reachability problem without mentioning the spelling. There is now one refusal
+on that path.
 
 **`groups.yaml` now holds vocabulary with a rule in it**, and the file's pitch
 was "a dictionary, not a policy". A compound sits on that line: it still answers

@@ -1266,15 +1266,33 @@ groups: [A, B]
 tools: []                  # none, as it always meant
 ```
 
-An entry naming a group the definition itself does not admit is **refused**:
+An entry's audience is always an **and** with the definition's own line. The
+only way to reach an entry is through the definition holding it, and a caller
+who cannot open the agent never gets as far as its tools — so `sql_query:
+groups: [A]` under `groups: [A, B]` means "opens this agent, *and* is in A".
+
+That makes a group from outside the definition's line useful rather than wrong:
+
+```yaml
+groups: [analysts, auditors]
+tools:
+  export:
+    groups: [senior]        # anyone who opens this agent, and is senior
+```
+
+Startup reports it, because the same line is what somebody trying to *widen*
+would write by accident:
 
 ```
-assistant.yaml: tools entry 'sql_query' is for C, but this definition is only
-reachable by A, B -- so that line never reaches anyone
+access:
+  narrows past this definition's own audience,
+  so it reaches only callers holding both:
+    agent analyst: tool export  [senior]
 ```
 
-That is dead policy rather than a narrowing — nobody reaching `assistant` is
-ever in `C` — and it is almost always a group name typed from memory.
+Said rather than refused, because no rule can tell the two apart — `[senior]`
+meaning "and senior" and `[auditors]` written under `[analysts]` by somebody who
+wanted to add auditors are the same shape, and only the author knows which.
 
 **Any overlap grants.** A longer list means *more* people, which is what
 everyone reads an access list as meaning. `["*"]` is everyone.

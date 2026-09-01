@@ -899,6 +899,52 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
     assert document["access"]["names"]["A"] == ["A"]
 
 
+NARROWED = """name: narrowed
+description: An agent.
+groups: [A, B]
+tools:
+  line_count:
+    groups: [C]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, capsys):
+    """It used to be refused. Now it runs and says so, because the same line is
+    what somebody trying to widen would have written by accident."""
+    _workspace(cfg, monkeypatch, NARROWED, vocabulary="groups: [A, B, C]\n")
+
+    assert main(["list"]) == 0
+
+    shown = capsys.readouterr().out
+    assert "narrows past this definition's own audience" in shown
+    assert "agent narrowed: tool line_count  [C]" in shown
+
+
+def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, monkeypatch):
+    """The report is not the point -- this is. A caller in A and C opens the
+    agent and gets the tool; a caller in A alone opens it and does not.
+
+    Asserted on the grant rather than on `list`, because the `--tools` section
+    describes what the *workspace* offers and would answer a different
+    question."""
+    from kingfisher import config_from_env
+    from kingfisher.domain.access import reaches
+    from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
+
+    _workspace(cfg, monkeypatch, NARROWED, vocabulary="groups: [A, B, C]\n")
+    reach = config_from_env().access
+    assert reach is not None
+    spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
+
+    assert spec.declares(reach.expand(["A", "C"])).tools == ("line_count",)
+    assert spec.declares(reach.expand(["A"])).tools == ()
+    # And the definition's own line still gates the agent itself: C alone opens
+    # nothing, so there is no way to reach the tool by holding only C.
+    assert not reaches(spec.groups, reach.expand(["C"]))
+
+
 def test_a_callers_view_carries_no_audiences(policied, capsys):
     """Who else reaches a thing is the operator's question, not a caller's."""
     assert main(["list", "--as", "A"]) == 0

@@ -88,55 +88,69 @@ def test_none_passes_through_untouched():
     assert reaching(None, audiences={}, default=("A",), held=frozenset({"A"})) is None
 
 
-# -- dead policy ------------------------------------------------------------
+# -- narrowing past the definition ------------------------------------------------------------
 
 
-def dead(entry, *, groups, vocab=None):
-    """Ask the vocabulary whether one entry audience can ever reach anyone."""
-    (vocab or vocabulary()).refuse_dead(
-        {"tools": {"sql_query": entry}}, groups=groups, where="x.yaml", error=ValueError
+def narrowing(entry, *, groups, vocab=None):
+    """What the vocabulary says one entry audience asks beyond its definition."""
+    return (vocab or vocabulary()).narrowing_in(
+        {"tools": {"sql_query": entry}}, groups=groups, where="x.yaml"
     )
 
 
-def test_an_entry_outside_the_definitions_own_audience_is_refused():
-    """Nobody reaching this definition is ever in C, so the line can never
-    grant anything -- a mistake, not a narrowing."""
-    with pytest.raises(ValueError, match="never reaches anyone"):
-        dead(("C",), groups=("A", "B"))
+def test_an_entry_outside_the_definitions_own_audience_is_reported():
+    """Reported, not refused. It reaches whoever holds C *and* A-or-B, which is
+    a second requirement somebody may well have meant -- and is also what a
+    mistake looks like, which is why it is said out loud and not vetoed."""
+    assert narrowing(("C",), groups=("A", "B")) == (("x.yaml: tool sql_query", "C"),)
 
 
-def test_an_overlapping_entry_is_allowed():
-    dead(("A",), groups=("A", "B"))
+def test_an_overlapping_entry_is_not_narrowing():
+    assert narrowing(("A",), groups=("A", "B")) == ()
 
 
-def test_nothing_is_dead_when_the_definition_reaches_everyone():
-    dead(("C",), groups=ALL)
+def test_nothing_narrows_when_the_definition_reaches_everyone():
+    assert narrowing(("C",), groups=ALL) == ()
 
 
-def test_a_star_entry_is_never_dead():
-    dead(ALL, groups=("A",))
+def test_a_star_entry_never_narrows():
+    assert narrowing(ALL, groups=("A",)) == ()
 
 
-def test_a_contained_entry_is_alive():
-    """The bug that moving this check off `parse` fixed. A caller holding `wide`
-    holds `A` too, so an entry for `A` under a definition for `wide` reaches
-    exactly them -- and comparing raw names called that dead."""
-    dead(("A",), groups=("wide",), vocab=vocabulary(wide=("A",)))
+def test_a_contained_entry_does_not_narrow():
+    """Judged on meaning, not spelling. A caller holding `wide` holds `A` too,
+    so an entry for `A` under a definition for `wide` asks nothing extra --
+    and comparing raw names called it narrower."""
+    assert narrowing(("A",), groups=("wide",), vocab=vocabulary(wide=("A",))) == ()
 
 
-def test_a_compound_is_alive_beside_either_part():
+def test_a_compound_does_not_narrow_beside_either_part():
     """Either part, in either direction: the definition names the compound and
     the entry names a part, or the other way about."""
     vocab = vocabulary(**{"A+B": ()})
     both = Groups(names=vocab.names, compounds={"A+B": ("A", "B")})
-    dead(("A",), groups=("A+B",), vocab=both)
-    dead(("A+B",), groups=("A",), vocab=both)
+    assert narrowing(("A",), groups=("A+B",), vocab=both) == ()
+    assert narrowing(("A+B",), groups=("A",), vocab=both) == ()
 
 
-def test_a_compound_sharing_no_part_is_still_dead():
+def test_a_compound_sharing_no_part_narrows():
     both = Groups(names={n: (n,) for n in ("A", "B", "C", "A+B")}, compounds={"A+B": ("A", "B")})
-    with pytest.raises(ValueError, match="never reaches anyone"):
-        dead(("C",), groups=("A+B",), vocab=both)
+    assert narrowing(("C",), groups=("A+B",), vocab=both) == (("x.yaml: tool sql_query", "C"),)
+
+
+def test_the_second_requirement_a_narrowing_states_actually_works():
+    """The whole reason the refusal went. An entry naming a group outside the
+    definition's own line reaches exactly the callers holding one of each --
+    which is "everyone who opens this, and is senior", and has always evaluated
+    correctly. Only the veto stood in the way."""
+    audiences = {"export": ("C",)}
+    tools = ("export", "line_count")
+
+    both = reaching(tools, audiences=audiences, default=("A", "B"), held=frozenset({"A", "C"}))
+    one = reaching(tools, audiences=audiences, default=("A", "B"), held=frozenset({"A"}))
+
+    assert both == ("export", "line_count")
+    assert one == ("line_count",)
 
 
 # -- the vocabulary ---------------------------------------------------------
