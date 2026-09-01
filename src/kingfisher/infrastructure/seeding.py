@@ -35,7 +35,7 @@ from typing import Protocol, runtime_checkable
 
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-from kingfisher.infrastructure.catalogue.documents import middleware_named
+from kingfisher.infrastructure.catalogue.documents import groups_named, middleware_named
 
 #: Named in the refusal below, and only when it is really there.
 #:
@@ -138,6 +138,12 @@ class Skipped:
 
     label: str
     names: tuple[str, ...]
+    #: What those names *are* -- `middleware` or `groups`. The remedy differs by
+    #: kind, so a message built from the names alone could only be right for one
+    #: of them: middleware is registered in code, a group is declared in
+    #: `groups.yaml`, and sending a reader to the wrong file is worse than
+    #: saying less.
+    wants: str = "middleware"
 
 
 @dataclass(frozen=True)
@@ -164,28 +170,41 @@ def _is_debris(name: str) -> bool:
     return name == "__pycache__" or name.startswith(".")
 
 
-def _deployment_specific(path: Path) -> tuple[str, ...]:
-    """The middleware this file names, or `()` for a file that names none.
+def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
+    """What this file needs that a workspace may not have, or `None` for nothing.
 
     The question `seed` has to answer about one definition: does this belong in
-    a workspace that has registered nothing? A definition naming middleware is
-    refused when it is built -- `names unregistered middleware` -- so seeding it
-    into a fresh workspace hands somebody a file that cannot run and no reason
-    why.
+    a workspace that has registered and declared nothing?
 
-    Only YAML, and only where a `middleware:` field exists at all. A directory,
-    a Python-defined subagent and a skill body all answer `()` here, which is
-    the same answer as "reads fine and names nothing".
+    Two ways to fail that, and they fail at different moments. A definition
+    naming middleware is refused when it is *built* -- `names unregistered
+    middleware` -- so seeding it hands somebody a file that cannot run. A
+    definition naming a group is refused when the catalogue is *read*, which is
+    worse: it does not break that definition, it stops the deployment. Both are
+    a file arriving somewhere it cannot be honoured, which is the one question
+    this answers.
+
+    Middleware first where a file names both, because it is the older rule and
+    the message can only carry one remedy. A reader who registers the names
+    seeds again and hears about the groups.
+
+    Only YAML, and only where such a field exists at all. A directory, a
+    Python-defined subagent and a skill body all answer `None`, which is the
+    same answer as "reads fine and names nothing".
     """
     if path.suffix not in (".yaml", ".yml") or not path.is_file():
-        return ()
+        return None
     try:
         text = path.read_text(encoding="utf-8")
     except (OSError, UnicodeDecodeError):
         # Unreadable is the loader's problem to report, in its own words. This
         # copies it and lets that happen.
-        return ()
-    return middleware_named(text)
+        return None
+    if named := middleware_named(text):
+        return "middleware", named
+    if grouped := groups_named(text):
+        return "groups", grouped
+    return None
 
 
 def _ignoring(
@@ -215,9 +234,9 @@ def _ignoring(
         for name in names:
             if name in dropped:
                 continue
-            if wanted := _deployment_specific(here / name):
+            if (wanted := _deployment_specific(here / name)) is not None:
                 label = f"{kind}/{(here / name).relative_to(root)}"
-                found.append(Skipped(label, wanted))
+                found.append(Skipped(label, wanted[1], wants=wanted[0]))
                 dropped.add(name)
         return dropped
 
@@ -364,8 +383,8 @@ def _copy(
             label = f"{kind}/{item.name}"
             # The same question `ignore` asks of a nested file, asked here
             # because `copytree` never sees a top-level one.
-            if not everything and (wanted := _deployment_specific(item)):
-                skipped.append(Skipped(label, wanted))
+            if not everything and (wanted := _deployment_specific(item)) is not None:
+                skipped.append(Skipped(label, wanted[1], wants=wanted[0]))
                 continue
             # Before the copy: afterwards there is nothing left to compare.
             overwritten += _overwritten(item, target, label)

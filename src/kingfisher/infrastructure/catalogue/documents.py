@@ -35,6 +35,7 @@ from typing import TYPE_CHECKING
 import yaml
 
 from kingfisher.domain import agent, skill, subagent
+from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.subagent import reading
 
 if TYPE_CHECKING:
@@ -44,6 +45,53 @@ if TYPE_CHECKING:
 #: `|+` are all this one style once parsed -- the suffix never reaches the node.
 LITERAL = "|"
 
+
+
+def groups_named(text: str) -> tuple[str, ...]:
+    """Every group a definition names, for a document that may not parse.
+
+    Its own line and its entries both. Written for the same caller and the same
+    reason as `middleware_named`: `seed` has to decide whether a definition
+    belongs in a workspace that may not have what it names, and a definition
+    naming a group the vocabulary does not declare is refused when the
+    catalogue is read.
+
+    `"*"` is not a name and is deliberately absent, exactly as it is there. It
+    means everyone, resolves against no vocabulary at all, and is the one
+    audience a definition can carry into any workspace.
+
+    Never raises, for the reason its neighbour gives: a syntax error belongs to
+    the loader that can name the format, not to a copy.
+    """
+    try:
+        parsed = yaml.safe_load(text)
+    except yaml.YAMLError:
+        return ()
+    if not isinstance(parsed, dict):
+        return ()
+
+    found: list[str] = []
+    _collect(parsed.get("groups"), into=found)
+    for field_name in AUDIENCED:
+        entries = parsed.get(field_name)
+        if isinstance(entries, dict):
+            for stated in entries.values():
+                if isinstance(stated, dict):
+                    _collect(stated.get("groups"), into=found)
+    return tuple(dict.fromkeys(found))
+
+
+def _collect(written: object, *, into: list[str]) -> None:
+    """The names in one audience, appended. Anything else is the format's to refuse."""
+    if isinstance(written, str):
+        written = [written]
+    if not isinstance(written, (list, tuple)):
+        return
+    into.extend(
+        name.strip()
+        for name in written
+        if isinstance(name, str) and name.strip() and name.strip() != "*"
+    )
 
 
 def middleware_named(text: str) -> tuple[str, ...]:

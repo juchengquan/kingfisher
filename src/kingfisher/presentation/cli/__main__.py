@@ -60,6 +60,23 @@ from kingfisher.presentation.cli.listing import as_json, failed, render
 #: are standing in.
 ENV_FILE = ".env"
 
+#: What a workspace cannot do with a name it has not been given, per kind. Two
+#: verbs rather than one, because "cannot build" is exact for middleware and
+#: wrong for a group -- a definition naming an undeclared group does not fail to
+#: build, it stops the catalogue being read at all.
+CANNOT = {
+    "middleware": "cannot build",
+    "groups": "does not declare",
+}
+
+#: And what to do about it. The half a reader acts on, and the half that would
+#: be wrong if one sentence served both: middleware is registered in code, a
+#: group is declared in a file.
+REMEDY = {
+    "middleware": "Register the names",
+    "groups": "Declare the groups in groups.yaml",
+}
+
 
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
@@ -215,12 +232,14 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
         print(f"seeded {name}")
     for left in written.skipped:
         # Named with what to do about it, because "skipped" on its own reads as
-        # a failure and this is a choice. The names are the actionable half: a
-        # reader who registers them can seed again with `--all`.
+        # a failure and this is a choice. The names are the actionable half, and
+        # `wants` is what makes them actionable: middleware is registered in
+        # code and a group is declared in `groups.yaml`, so one sentence for
+        # both would send half its readers to the wrong file.
         print(
-            f"skipped {left.label} — names middleware "
-            f"({', '.join(left.names)}) that this workspace cannot build. "
-            f"Register the names, then seed again with --all"
+            f"skipped {left.label} — names {left.wants} "
+            f"({', '.join(left.names)}) that this workspace {CANNOT[left.wants]}. "
+            f"{REMEDY[left.wants]}, then seed again with --all"
         )
     for name in written.overwritten:
         # After the list, not beside each entry: the point is that you edit your
@@ -246,9 +265,10 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
             # behind on purpose. Saying "holds none of agents, skills..." would
             # send a reader looking one directory up for files that are right
             # where they thought.
+            wants = written.skipped[0].wants
             print(
-                f"nothing seeded — every definition in {tree} names middleware "
-                f"this workspace cannot build. Register the names, then seed "
+                f"nothing seeded — every definition in {tree} names {wants} "
+                f"this workspace {CANNOT[wants]}. {REMEDY[wants]}, then seed "
                 f"again with --all"
             )
             return 1
