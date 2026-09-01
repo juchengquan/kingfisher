@@ -16,6 +16,7 @@ from kingfisher.domain.access import (
     Groups,
     reaches,
     reaching,
+    spell,
 )
 from kingfisher.domain.capabilities import ALL
 
@@ -26,6 +27,13 @@ def vocabulary(**contains: tuple[str, ...]) -> Groups:
     for name, holds in contains.items():
         names[name] = (name, *holds)
     return Groups(names=names)
+
+
+def requiring(**all_of: tuple[str, ...]) -> Groups:
+    """The same vocabulary, plus compounds a caller must hold the parts of."""
+    names = {one: (one,) for one in ("A", "B", "C")}
+    names.update({name: (name,) for name in all_of})
+    return Groups(names=names, compounds=dict(all_of))
 
 
 # -- who reaches what -------------------------------------------------------
@@ -169,3 +177,82 @@ def test_a_star_names_no_group_so_is_never_undeclared():
 def test_unscoped_is_a_sentinel_and_not_a_group_name():
     assert UNSCOPED is not None
     assert not isinstance(UNSCOPED, str | tuple | list)
+
+
+# -- requiring several groups at once ---------------------------------------
+
+
+def test_an_inline_conjunction_needs_every_part():
+    both = (frozenset({"A", "B"}),)
+
+    assert reaches(both, frozenset({"A", "B"}))
+    assert reaches(both, frozenset({"A", "B", "C"}))
+    assert not reaches(both, frozenset({"A"}))
+    assert not reaches(both, frozenset())
+
+
+def test_a_conjunction_is_one_entry_of_an_or():
+    """The list still means OR. `admin` alone is enough, and so is A+B."""
+    audience = ("admin", frozenset({"A", "B"}))
+
+    assert reaches(audience, frozenset({"admin"}))
+    assert reaches(audience, frozenset({"A", "B"}))
+    assert not reaches(audience, frozenset({"A"}))
+
+
+def test_holding_every_part_earns_the_named_compound():
+    assert requiring(both=("A", "B")).expand(["A", "B"]) == frozenset({"A", "B", "both"})
+
+
+def test_holding_one_part_earns_nothing():
+    assert requiring(both=("A", "B")).expand(["A"]) == frozenset({"A"})
+
+
+def test_contains_satisfies_a_requirement():
+    """Expansion first, then requirements against what is held afterwards. An
+    `admin` who reaches both parts is not weaker than the sum of what they
+    reach -- which is the alternative, and it has no defence."""
+    vocab = Groups(
+        names={"A": ("A",), "B": ("B",), "both": ("both",), "admin": ("admin", "A", "B")},
+        compounds={"both": ("A", "B")},
+    )
+
+    assert vocab.expand(["admin"]) == frozenset({"admin", "A", "B", "both"})
+
+
+def test_a_compound_a_group_contains_comes_with_it():
+    """Earning a compound earns whatever contains it, or a name written into a
+    `contains` chain would reach less than the same name written by hand."""
+    vocab = Groups(
+        names={"A": ("A",), "B": ("B",), "both": ("both", "C"), "C": ("C",)},
+        compounds={"both": ("A", "B")},
+    )
+
+    assert vocab.expand(["A", "B"]) == frozenset({"A", "B", "both", "C"})
+
+
+def test_a_caller_may_not_present_a_compound():
+    """It is what holding the parts adds up to, not something to claim --
+    otherwise one assertion stands in for the two `all_of` exists to require."""
+    with pytest.raises(AccessError, match="derived"):
+        requiring(both=("A", "B")).expand(["both"])
+
+
+def test_the_refusal_names_the_parts_to_present_instead():
+    with pytest.raises(AccessError, match=r"all of \[A, B\]"):
+        requiring(both=("A", "B")).expand(["both"])
+
+
+def test_an_undeclared_name_inside_a_conjunction_is_refused():
+    """A name typed from memory is no likelier to be right for having been
+    written next to another one."""
+    with pytest.raises(ValueError, match="'Q'"):
+        vocabulary().refuse_undeclared(
+            (frozenset({"A", "Q"}),), where="x.yaml: tools", error=ValueError
+        )
+
+
+def test_an_audience_is_written_the_way_the_listing_writes_it():
+    assert spell(ALL) == ALL
+    assert spell(("A", "B")) == "A, B"
+    assert spell(("admin", frozenset({"B", "A"}))) == "admin, A+B"

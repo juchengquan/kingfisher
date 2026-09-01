@@ -814,6 +814,67 @@ def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, monkeypatch, capsys):
     assert "wide  [A, B]" in section
 
 
+BOTH = """name: both
+description: An agent.
+groups: [{all_of: [A, B]}]
+tools:
+  line_count:
+    groups: [A, B]
+system_prompt: |
+  You do the task.
+"""
+
+NAMED = """name: named
+description: An agent.
+groups: [ab]
+system_prompt: |
+  You do the task.
+"""
+
+
+def test_an_inline_conjunction_reads_as_a_plus_b(cfg, monkeypatch, capsys):
+    """`+` for "and", so the audience column stays a column."""
+    _workspace(cfg, monkeypatch, BOTH)
+
+    assert main(["list"]) == 0
+
+    assert "agent both  [A+B]" in capsys.readouterr().out
+
+
+def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypatch, capsys):
+    """The by-definition view and the roll-up print the same audience, and a
+    reader comparing the two should not have to translate."""
+    _workspace(cfg, monkeypatch, BOTH)
+
+    shown = capsys.readouterr().out if main(["list"]) == 0 else ""
+    before, after = shown.split("by tool", 1)
+    assert "[A+B]" in before
+    assert "both  [A, B]" in after
+
+
+def test_a_named_compound_says_what_it_requires(cfg, monkeypatch, capsys):
+    """A name tells a reader nothing on the line it appears on, and every line
+    it appears on needs it -- so it is said once, above."""
+    _workspace(
+        cfg, monkeypatch, NAMED, vocabulary="groups:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n"
+    )
+
+    assert main(["list"]) == 0
+
+    shown = capsys.readouterr().out
+    assert "groups that require others" in shown
+    assert "ab = A+B" in shown
+    assert "agent named  [ab]" in shown
+
+
+def test_a_vocabulary_with_no_compounds_gets_no_such_section(policied, capsys):
+    """It exists to make audiences readable, so it earns its lines or it has
+    none."""
+    assert main(["list"]) == 0
+
+    assert "groups that require others" not in capsys.readouterr().out
+
+
 def test_a_callers_view_carries_no_audiences(policied, capsys):
     """Who else reaches a thing is the operator's question, not a caller's."""
     assert main(["list", "--as", "A"]) == 0

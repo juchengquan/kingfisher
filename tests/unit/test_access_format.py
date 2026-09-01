@@ -137,3 +137,74 @@ def test_an_empty_file_is_refused_rather_than_read_as_nothing(tmp_path):
     written.write_text("", encoding="utf-8")
     with pytest.raises(AccessError, match="empty"):
         access_policy.load(written)
+
+
+# -- requiring several groups at once ---------------------------------------
+
+
+def test_a_compound_declares_what_a_caller_must_hold():
+    groups = parse(
+        {"groups": {"finance": {}, "senior": {}, "both": {"all_of": ["finance", "senior"]}}},
+        source="groups.yaml",
+    )
+
+    assert groups.compounds["both"] == ("finance", "senior")
+    # Declared like any other name, because `names` is what says a name exists
+    # and an audience may write this one.
+    assert groups.names["both"] == ("both",)
+
+
+def test_a_group_cannot_both_grant_and_require():
+    """Opposite operations: `contains` says what this name hands out, `all_of`
+    says what a caller must bring. A name that is both has no answer."""
+    with pytest.raises(AccessError, match="no answer"):
+        parse(
+            {"groups": {"A": {}, "B": {}, "x": {"contains": ["A"], "all_of": ["A", "B"]}}},
+            source="groups.yaml",
+        )
+
+
+def test_an_empty_requirement_is_refused():
+    """It would require nothing and so admit everyone, which is what a plain
+    group already means -- so it is an unfinished edit, not a spelling."""
+    with pytest.raises(AccessError, match="empty"):
+        parse({"groups": {"A": {}, "x": {"all_of": []}}}, source="groups.yaml")
+
+
+def test_a_requirement_naming_an_undeclared_group_is_refused():
+    """The same rule `contains` gets, on the other edge: a mistyped part is a
+    requirement nobody can meet, and the symptom is a name that derives for
+    no one."""
+    with pytest.raises(AccessError, match="'Q'"):
+        parse({"groups": {"A": {}, "x": {"all_of": ["A", "Q"]}}}, source="groups.yaml")
+
+
+def test_a_requirement_loop_is_refused_naming_the_whole_loop():
+    """Not for termination -- the fixpoint would stop either way -- but for
+    meaning: a loop can never be entered, so every name in it derives for
+    nobody."""
+    with pytest.raises(AccessError, match="x -> y -> x"):
+        parse(
+            {"groups": {"A": {}, "x": {"all_of": ["y"]}, "y": {"all_of": ["x", "A"]}}},
+            source="groups.yaml",
+        )
+
+
+def test_a_requirement_may_be_built_on_another():
+    """Nesting, which nothing implements: a compound is held once its parts
+    are, and a part may itself be one."""
+    groups = parse(
+        {
+            "groups": {
+                "a": {},
+                "b": {},
+                "c": {},
+                "ab": {"all_of": ["a", "b"]},
+                "abc": {"all_of": ["ab", "c"]},
+            }
+        },
+        source="groups.yaml",
+    )
+
+    assert groups.expand(["a", "b", "c"]) == frozenset({"a", "b", "c", "ab", "abc"})
+    assert groups.expand(["a", "c"]) == frozenset({"a", "c"})
