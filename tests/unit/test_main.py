@@ -360,7 +360,7 @@ def _unused(cfg, tmp_path):
 def _driver_on(monkeypatch, target, source=None):
     """Point the driver at one record for all three seams.
 
-    `from_env` serves the run, `paths_from_env` decides where seeding goes, and
+    `config_from_env` serves the run, `paths_from_env` decides where seeding goes, and
     the same record now says where seeding copies *from*. A `Config` satisfies
     `Destination` and `Source` by shape, so one record answers all three --
     which is the point of the protocols and not a shortcut for the test.
@@ -375,7 +375,7 @@ def _driver_on(monkeypatch, target, source=None):
     from tests.integration import driver
 
     configured = replace(target, assets=source or repository_root() / "examples")
-    monkeypatch.setattr(driver, "from_env", lambda: configured)
+    monkeypatch.setattr(driver, "config_from_env", lambda: configured)
     monkeypatch.setattr(driver, "paths_from_env", lambda: configured)
     return driver
 
@@ -440,7 +440,7 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
     """The ordering, which is the whole reason any of this can work.
 
     `models.yaml` lives *inside* the workspace, so a first run cannot load one:
-    `from_env` used to raise before the directory it needed had been created,
+    `config_from_env` used to raise before the directory it needed had been created,
     and the error it printed said to run `--seed-assets`, which failed the same
     way. A first run could not reach seeding at all -- precisely the run seeding
     is for. Measured on a workspace with no catalogue: it still seeds, and still

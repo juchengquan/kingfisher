@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.application import config as config_module
-from kingfisher.application.config import from_env
+from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError
 from kingfisher.domain.access import AccessError
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
@@ -54,7 +54,7 @@ def test_the_catalogue_is_required_with_no_default(tmp_path):
     was required and had none: a default silently picks a destination nobody
     chose the first time kingfisher is pointed somewhere new."""
     with pytest.raises(ConfigError, match="no model catalogue at"):
-        from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
+        config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
 
 
 def test_the_absent_file_error_shows_a_working_example(tmp_path):
@@ -62,7 +62,7 @@ def test_the_absent_file_error_shows_a_working_example(tmp_path):
     came with an unusually explanatory `.env.example`. A path alone would leave
     someone guessing at a schema."""
     with pytest.raises(ConfigError) as raised:
-        from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
+        config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
 
     message = str(raised.value)
     for expected in ("endpoints:", "api: anthropic", "key_env:", "default:", "models:"):
@@ -74,7 +74,7 @@ def test_it_defaults_inside_the_workspace(tmp_path):
     workspace.mkdir()
     (workspace / "models.yaml").write_text(CATALOGUE, encoding="utf-8")
 
-    cfg = from_env({"KINGFISHER_WORKSPACE": str(workspace), "GATEWAY_API_KEY": "sk-gateway"})
+    cfg = config_from_env({"KINGFISHER_WORKSPACE": str(workspace), "GATEWAY_API_KEY": "sk-gateway"})
 
     assert cfg.models.source == workspace / "models.yaml"
 
@@ -83,7 +83,7 @@ def test_it_defaults_inside_the_workspace(tmp_path):
 
 
 def test_endpoints_and_models_come_from_the_file(env):
-    cfg = from_env(env)
+    cfg = config_from_env(env)
 
     assert set(cfg.models.endpoints) == {"gateway", "openai"}
     assert set(cfg.models.models) == {"MiniMax-M3", "gpt-5"}
@@ -93,7 +93,7 @@ def test_endpoints_and_models_come_from_the_file(env):
 def test_credentials_come_from_the_variable_each_endpoint_names(env):
     """Keys are named, not written: the file is meant to be reviewed and shared,
     which a file holding credentials could not be."""
-    cfg = from_env(env)
+    cfg = config_from_env(env)
 
     assert cfg.models.endpoints["gateway"].api_key == "sk-gateway"
     assert cfg.models.endpoints["openai"].api_key == "sk-openai"
@@ -109,7 +109,7 @@ def test_an_endpoint_without_its_key_is_dropped_and_warned_about(env):
     del env["OPENAI_API_KEY"]
 
     with pytest.warns(UserWarning, match="OPENAI_API_KEY"):
-        cfg = from_env(env)
+        cfg = config_from_env(env)
 
     assert set(cfg.models.endpoints) == {"gateway"}
     assert set(cfg.models.models) == {"MiniMax-M3"}  # its models went with it
@@ -123,7 +123,7 @@ def test_a_default_whose_endpoint_has_no_key_is_refused(env):
     del env["GATEWAY_API_KEY"]
 
     with pytest.raises(ConfigError, match="no credentials"), pytest.warns(UserWarning):
-        from_env(env)
+        config_from_env(env)
 
 
 def test_a_default_naming_nothing_is_a_different_error(env, tmp_path):
@@ -134,7 +134,7 @@ def test_a_default_naming_nothing_is_a_different_error(env, tmp_path):
     )
 
     with pytest.raises(ConfigError, match="is not defined here"):
-        from_env(env)
+        config_from_env(env)
 
 
 # -- the rest of the environment -------------------------------------------
@@ -150,7 +150,7 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
 
 def test_state_and_scratch_default_to_the_workspace(env):
     """Unset means self-contained: nothing is written outside the workspace."""
-    cfg = from_env(env)
+    cfg = config_from_env(env)
 
     assert cfg.state_root is None
     assert cfg.scratch_root is None
@@ -160,7 +160,7 @@ def test_state_and_scratch_default_to_the_workspace(env):
 
 def test_state_and_scratch_can_be_pointed_elsewhere(env, tmp_path):
     """Host-side state is relocatable; the agent addresses none of it by path."""
-    cfg = from_env(
+    cfg = config_from_env(
         {
             **env,
             "KINGFISHER_STATE_DIR": str(tmp_path / "state"),
@@ -174,7 +174,7 @@ def test_state_and_scratch_can_be_pointed_elsewhere(env, tmp_path):
 
 def test_the_catalogue_defaults_inside_the_workspace(env):
     """Unset changes nothing: definitions stay where they have always been."""
-    cfg = from_env(env)
+    cfg = config_from_env(env)
 
     assert cfg.skills_root is None
     assert cfg.subagents_root is None
@@ -185,7 +185,7 @@ def test_the_catalogue_defaults_inside_the_workspace(env):
 def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
     """The point of the phase: one reviewed set of definitions, deployed once,
     rather than a copy per workspace that nobody can audit centrally."""
-    cfg = from_env(
+    cfg = config_from_env(
         {
             **env,
             "KINGFISHER_SKILLS_DIR": str(tmp_path / "catalogue" / "skills"),
@@ -235,7 +235,7 @@ def test_the_variables_that_chose_a_model_are_gone(env):
     Asserted as absence, because the failure mode is a variable that reads as
     configuration and is not -- someone sets it, sees no error, and believes it.
     """
-    cfg = from_env(
+    cfg = config_from_env(
         {
             **env,
             "KINGFISHER_MODEL": "ignored",
@@ -257,7 +257,7 @@ def test_the_execution_timeout_is_named_for_what_it_bounds(env):
     """It was `KINGFISHER_TIMEOUT_S` and bounded a model call as well as the
     shell and the interpreter -- three unrelated jobs for one number. The model
     half is per-model in the catalogue now."""
-    cfg = from_env({**env, "KINGFISHER_EXECUTION_TIMEOUT_S": "45"})
+    cfg = config_from_env({**env, "KINGFISHER_EXECUTION_TIMEOUT_S": "45"})
 
     assert cfg.execution_timeout_s == 45
     assert not [f for f in fields(cfg) if f.name == "timeout_s"]
@@ -317,14 +317,14 @@ def test_a_config_is_a_seeding_destination(tmp_path):
 def test_a_workspace_without_a_vocabulary_file_has_none(env):
     """Absent is the whole of what "this deployment controls nothing by group"
     means, and it is what every deployment that predates the field has."""
-    assert from_env(env).access is None
+    assert config_from_env(env).access is None
 
 
 def test_a_vocabulary_in_the_workspace_is_read(env):
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
     (workspace / "groups.yaml").write_text("groups: [A, B]\n", encoding="utf-8")
-    access = from_env(env).access
+    access = config_from_env(env).access
     assert access is not None
     assert set(access.names) == {"A", "B"}
 
@@ -334,7 +334,7 @@ def test_the_vocabulary_file_can_be_relocated(env, tmp_path):
     model catalogue can -- it holds content a person authored and reviewed."""
     elsewhere = tmp_path / "vocab.yaml"
     elsewhere.write_text("groups: [B]\n", encoding="utf-8")
-    access = from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
+    access = config_from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
     assert access is not None
     assert access.names == {"B": ("B",)}
 
@@ -345,7 +345,7 @@ def test_a_relocated_vocabulary_wins_over_one_in_the_workspace(env, tmp_path):
     (workspace / "groups.yaml").write_text("groups: [A]\n", encoding="utf-8")
     elsewhere = tmp_path / "vocab.yaml"
     elsewhere.write_text("groups: [B]\n", encoding="utf-8")
-    access = from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
+    access = config_from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
     assert access is not None
     assert set(access.names) == {"B"}
 
@@ -357,4 +357,4 @@ def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
     workspace.mkdir(parents=True, exist_ok=True)
     (workspace / "groups.yaml").write_text("groups: [A\n", encoding="utf-8")
     with pytest.raises(AccessError):
-        from_env(env)
+        config_from_env(env)

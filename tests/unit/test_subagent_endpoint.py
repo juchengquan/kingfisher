@@ -16,7 +16,7 @@ from dataclasses import replace
 import pytest
 from langchain_core.messages import AIMessage
 
-from kingfisher.application.config import from_env
+from kingfisher.application.config import config_from_env
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -91,7 +91,7 @@ def elsewhere(cfg):
 
 
 def test_the_catalogue_is_where_endpoints_and_models_come_from(tmp_path):
-    cfg = from_env(written(tmp_path))
+    cfg = config_from_env(written(tmp_path))
 
     assert set(cfg.models.endpoints) == {"minimax"}
     assert set(cfg.models.models) == {"MiniMax-M3", "MiniMax-M2.5"}
@@ -102,7 +102,7 @@ def test_the_catalogue_is_where_endpoints_and_models_come_from(tmp_path):
 def test_several_models_may_share_one_endpoint(tmp_path):
     """The shape the old `api_style` could not express at all: it keyed
     endpoints by wire format, so there was exactly one per format."""
-    cfg = from_env(written(tmp_path))
+    cfg = config_from_env(written(tmp_path))
 
     assert cfg.models.resolve("MiniMax-M3")[1] == cfg.models.resolve("MiniMax-M2.5")[1]
 
@@ -115,7 +115,7 @@ def test_two_endpoints_may_share_one_wire_format(tmp_path):
         "  vllm:\n    api: anthropic\n    base_url: http://localhost:8000\n"
         "    key_env: VLLM_API_KEY\n\ndefault: MiniMax-M3",
     ).replace("  MiniMax-M2.5:\n    endpoint: minimax\n", "  local:\n    endpoint: vllm\n")
-    cfg = from_env({**written(tmp_path, body), "VLLM_API_KEY": "sk-local"})
+    cfg = config_from_env({**written(tmp_path, body), "VLLM_API_KEY": "sk-local"})
 
     assert {e.api for e in cfg.models.endpoints.values()} == {"anthropic"}
     assert cfg.models.resolve("local")[1].base_url == "http://localhost:8000"
@@ -124,7 +124,7 @@ def test_two_endpoints_may_share_one_wire_format(tmp_path):
 def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
     """Closed, which is what converts a 404 mid-run into a sentence naming the
     catalogue that should have defined it."""
-    cfg = from_env(written(tmp_path))
+    cfg = config_from_env(written(tmp_path))
 
     with pytest.raises(ConfigError, match="no model 'gpt-5'"):
         cfg.models.resolve("gpt-5")

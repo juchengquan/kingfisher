@@ -62,7 +62,7 @@ class Check:
 def _catalogue(cfg: Config) -> Iterator[Check]:
     """The model catalogue: that it loaded, and that its names can be reached.
 
-    `from_env` has already refused a missing or unreadable one before we get
+    `config_from_env` has already refused a missing or unreadable one before we get
     here, so what is left is the half that loads and still cannot run: an
     endpoint whose credential is absent is dropped with a warning, and an alias
     a definition names but nothing binds refuses at build time, one request in.

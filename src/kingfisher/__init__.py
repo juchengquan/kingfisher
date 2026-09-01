@@ -95,7 +95,7 @@ _EXPORTS = {
     "SEED_HINT": "kingfisher.infrastructure.seeding",
     "SKILL_LAYOUT": "kingfisher.infrastructure.catalogue.skills",
     "Inventory": "kingfisher.application.inventory",
-    "from_env": "kingfisher.application.config",
+    "config_from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
     "normalize_answer": "kingfisher.domain.result",
     "protect_data": "kingfisher.infrastructure.workspace_fs",
@@ -149,9 +149,9 @@ __all__ = [
     "build_backend",
     "build_checkpointer",
     "build_model",
+    "config_from_env",
     "definitions_source",
     "ensure_layout",
-    "from_env",
     "inventory",
     "kinds_at",
     "landlock_abi",
@@ -175,7 +175,7 @@ if TYPE_CHECKING:
     # So type checkers and IDEs see the real symbols rather than `Any`.
     # Redundant aliases mark these as re-exports; `__all__` is computed, so a
     # checker cannot otherwise tell they are public.
-    from kingfisher.application.config import from_env as from_env
+    from kingfisher.application.config import config_from_env as config_from_env
     from kingfisher.application.config import paths_from_env as paths_from_env
     from kingfisher.application.inventory import Inventory as Inventory
     from kingfisher.application.inventory import inventory as inventory

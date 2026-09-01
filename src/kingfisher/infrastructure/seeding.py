@@ -66,7 +66,7 @@ class Destination(Protocol):
 
     A Protocol rather than `Config` because seeding a *fresh* workspace has to
     run before a model catalogue can be read -- the catalogue is a file inside
-    the workspace, so `from_env` raises before the directory exists. `Config`
+    the workspace, so `config_from_env` raises before the directory exists. `Config`
     satisfies this by shape, and so does `WorkspacePaths`, which is the part of
     a configuration a first run can actually know.
 
