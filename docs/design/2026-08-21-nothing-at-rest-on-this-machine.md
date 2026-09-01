@@ -1,15 +1,23 @@
 # Nothing at rest on this machine
 
-**Status:** designed. Not implemented. Several claims are still unmeasured and
-are marked; the constraint that drives it arrived on 2026-08-23, after most of
-the exploration, and rearranged it.
+**Status:** partly built -- six of twenty-three decisions, and one of them
+reversed. It stays here because the half that gives the document its title is
+untouched: nothing yet keeps a session's working files off local disk. Several
+claims are still unmeasured and are marked; the constraint that drives it arrived
+on 2026-08-23, after most of the exploration, and rearranged it.
 **Date:** 2026-08-21
 **Re-checked:** 2026-08-31, when this became the only design document left. Two
-rows of *What the constraint touches* had drifted and are corrected below; the
-constraint and every decision still stand. `build_backend` has since been split
--- *A folder handed in, a command handed off*, 2026-08-26 -- which was the
-groundwork N6 and N7 need, so the next step here no longer starts by moving that
-function.
+rows of *What the constraint touches* had drifted and are corrected below.
+`build_backend` has since been split -- *A folder handed in, a command handed
+off*, 2026-08-26 -- which was the groundwork N6 and N7 need, so the next step
+here no longer starts by moving that function.
+
+**Audited 2026-09-01, decision by decision, and "not implemented" was too
+simple.** Six of the twenty-three are built, and they are exactly the ones N2
+asked to be built first: the parts that need no memory-backed filesystem. One is
+contradicted by what was learned building its neighbours. See *What has been
+built* below before planning anything from this document -- the parts that
+remain are the mirage-shaped half, and they are genuinely untouched.
 
 A deployment must not keep data on the machine it runs on. Session files,
 results, the agent's notes — none of it may live on local disk. Where it *does*
@@ -21,6 +29,28 @@ This began as *"should kingfisher use [mirage](https://docs.mirage.strukto.ai/ho
 as its filesystem"* and spent most of its length answering the wrong question.
 The constraint is the answer to why, and it reverses several conclusions reached
 before it was known. Those reversals are recorded rather than tidied away.
+
+## What has been built
+
+*Added 2026-09-01. Their decisions now also live in `docs/decisions.md`, under
+*Sessions: what persists and where*, because that is where a settled one belongs.
+They are left in the table below rather than deleted, so the argument for each
+stays next to the ones that still depend on it.*
+
+| # | State | Evidence |
+|---|---|---|
+| N13 | **built** | `domain/transcript.py` -- a session's history as records kingfisher owns. `test_nothing_stored_belongs_to_a_framework`. |
+| N14 | **built** | The transcript keeps tool calls and results. `test_what_the_agent_did_is_kept_not_only_what_it_said`. |
+| N15 | **built** | The checkpointer is `InMemorySaver` and the transcript is what persists. The three things per-session sqlite bought were re-measured and all survive by another route. |
+| N16 | **holds, by construction** | The saver is built per turn -- `build_session_checkpointer(session_dir)` at `service.py:1249` -- and released when the turn ends, so nothing carries a turn's graph state forward and `TodoListMiddleware`'s does not survive either. Traced rather than inferred, but not separately asserted by a test: a deployment injecting a persistent `threads` factory would take this back without anything saying so. |
+| N20 | **built, and wider than asked** | `workspace_fs.py` reads filesystem type, size, cgroup limit and swap; `presentation/cli/health.py` reports them. The decision asked for arithmetic; what exists also names the swap case, where an oversized tmpfs is paged out rather than failing -- data at rest, arrived at silently. |
+| N22 | **built** | `run_dir` and `log_path` are typed `Path` so `json.dumps` raises, and `service/payloads.py` is the single place that omits them. |
+| **N11** | **contradicted** | It argued the quota could be metered on the tool-call hook, since kingfisher wraps every call. `_refuse_if_over_budget` now records why that fails: **`execute` writes without any file tool seeing it**, so a turn already running can exceed the bound and only a filesystem quota underneath could stop it. The check is between turns "and never during one". N19 leaned on N11 becoming load-bearing; it cannot, as written. |
+
+Everything else -- N1 to N10, N12, N17 to N19, N21, N23 -- is untouched. There is
+no `mirage` anywhere in the tree, no store port in `domain/ports.py`, and
+`session_max_bytes` is still `int | None = None`, so N19's "stops being optional"
+has not happened.
 
 ## What the constraint touches
 

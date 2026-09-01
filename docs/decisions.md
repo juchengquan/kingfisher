@@ -274,6 +274,58 @@ report: `on_tool_error` writes a `tool_error` event even when the middleware has
 already converted the exception into a tool result, which is now asserted rather
 than assumed.*
 
+## Sessions: what persists and where
+
+These began as decisions in *Nothing at rest on this machine* and were built
+without the rest of it, which is what that document's N2 asked for -- the parts
+that need no memory-backed filesystem, first and separately.
+
+**A session's history is kingfisher's own records, not a framework's.**
+`domain/transcript.py` holds it, and it keeps what the agent *did* as well as
+what it said -- tool calls and results, not only human and assistant text, since
+an agent that cannot see what it already did will do it again. Portable on
+purpose: the next turn may not be run by this harness.
+
+**The checkpointer is in-memory, and the transcript is what survives.** That is a
+change in what a checkpointer is *for* here rather than a cheaper way to do the
+same job: a checkpoint preserves resumable graph state, and kingfisher never
+resumes a graph -- no `checkpoint_id`, no `interrupt()` anywhere. What is left
+for a saver is one turn's supersteps.
+
+The three things the old per-session sqlite bought all survive by another route,
+which was measured rather than assumed. A conversation deleted with its directory
+(one workspace held 132 orphaned threads after every session had been reaped), a
+conversation the quota can see, and no cross-session contention (at 32 concurrent
+writers the slowest went from 363ms on a shared file to 80ms on its own). The
+transcript is a file in the session, so the first two hold; nothing is shared, so
+the third has nothing to contend for. What is genuinely gone is ~20KB of empty
+database per session, which was the cost rather than the benefit.
+
+**`doctor` checks whether a memory-backed workspace can be filled safely.**
+`workspace_fs.py` reads the filesystem type, its size, the cgroup limit and
+whether swap is permitted; `presentation/cli/health.py` reports on them. The
+danger it names is specific: a memory filesystem *larger* than the container's
+limit does not fail when it fills -- the kernel swaps its pages out, which is
+data at rest, arrived at silently, with the write succeeding and no error
+anywhere. Only a filesystem smaller than the limit gives a clean `ENOSPC`.
+
+**The run log never crosses the wire.** `run_dir` and `log_path` are typed `Path`
+in the domain so `json.dumps` raises rather than quietly stringifying them, and
+`service/payloads.py` is the one place that knows to leave them behind. A
+mirrored pydantic model would be a second home for that rule, and the kind that
+gets it wrong helpfully -- adding a `Path` serialiser makes the error go away and
+ships exactly the leak.
+
+**The session quota is checked between turns and never during one.** This reverses
+what *Nothing at rest* argued: N11 said the bound could be metered on the
+tool-call hook because kingfisher already wraps every tool call. It cannot.
+`execute` writes without any file tool seeing it, so a turn already running can
+exceed the bound and only a filesystem quota underneath could stop it. What the
+check prevents is the next turn making it worse.
+*(All 2026-08-21 as `nothing-at-rest-on-this-machine.md`, N11 and N13 to N16, N20
+and N22; built separately from the rest of that document, which is still a
+proposal.)*
+
 ## Layering
 
 **`infrastructure/harness/` holds every module that imports deepagents, langchain
