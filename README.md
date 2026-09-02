@@ -8,20 +8,41 @@ pip install kingfisher
 ```
 
 ```python
-from kingfisher import definitions_source, paths_from_env, seed
+from kingfisher import definitions_source, ensure_layout, paths_from_env, seed
 
 paths = paths_from_env()
-for name in seed(paths, definitions_source(paths)).written:
+ensure_layout(paths.workspace)
+
+done = seed(paths, definitions_source(paths))
+for name in done.written:
     print(f"seeded {name}")
+for left in done.skipped:
+    print(f"skipped {left.label} — needs {', '.join(left.names)}")
 ```
 
-`seed` requires a directory to copy from — it will not invent one.
-`definitions_source` is what turns configuration into that directory: it reads
-`KINGFISHER_ASSETS`, and takes a path that overrides it. On the command, the
+Four calls, and the order of the first two matters. `ensure_layout` writes
+`models.yaml.example`, which has to arrive whether or not there is anything to
+seed — a deployment told to write `models.yaml` and given no example of one is
+a dead end. `seed` requires a directory to copy from and will not invent one;
+`definitions_source` is what turns configuration into that directory, reading
+`KINGFISHER_ASSETS` and taking a path that overrides it. On the command, the
 same two:
 
     kingfisher seed                          # from KINGFISHER_ASSETS
     kingfisher seed --from ./my-definitions  # from here instead
+
+**Read `skipped`, or your workspace will quietly be missing agents.** A
+definition naming middleware or groups this deployment has not registered is
+refused when it is built, so seeding one produces a file that cannot run.
+`seed` leaves those behind and says which names each would have needed;
+`seed(..., everything=True)` and `kingfisher seed --all` take them once you have
+registered the names. Seeding the shipped `examples/` on a bare checkout leaves
+five behind and writes thirteen.
+
+`seed` takes a *destination* rather than a whole `Config` — anything with a
+`workspace` and `catalogue_roots`, which both `WorkspacePaths` and `Config`
+satisfy. That is what lets it run on a fresh workspace, before there is a
+`models.yaml` inside it to read.
 
 The formats — tools, skills, subagents, and the catalogue they live in —
 are documented in [`docs/formats.md`](docs/formats.md), and the rest of
