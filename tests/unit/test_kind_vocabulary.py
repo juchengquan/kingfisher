@@ -13,6 +13,8 @@ absent, in one place, with a reason.
 
 from __future__ import annotations
 
+import ast
+import inspect
 from dataclasses import fields
 
 from kingfisher.domain.capabilities import Capabilities
@@ -232,3 +234,68 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
         )
     # And the ordinary kinds did arrive, or the assertion above is vacuous.
     assert (cfg.workspace / "agents").is_dir()
+
+
+def _kinds_the_seeder_can_report() -> set[str]:
+    """Every `wants` value `_deployment_specific` can return, read off its source.
+
+    Derived rather than listed, for the reason this whole file exists. A third
+    kind is added by writing `return "endpoints", named` inside that function,
+    and a constant naming the set is one more thing to forget in the same edit --
+    it would go stale in exactly the situation it was added to catch.
+
+    Parsed rather than called, because the answer depends on the file being
+    examined and not on any file this test could hand it.
+    """
+    from kingfisher.infrastructure import seeding
+
+    body = ast.parse(inspect.getsource(seeding))
+    fn = next(
+        node
+        for node in ast.walk(body)
+        if isinstance(node, ast.FunctionDef) and node.name == "_deployment_specific"
+    )
+    return {
+        node.value.elts[0].value
+        for node in ast.walk(fn)
+        if isinstance(node, ast.Return)
+        and isinstance(node.value, ast.Tuple)
+        and node.value.elts
+        and isinstance(node.value.elts[0], ast.Constant)
+        and isinstance(node.value.elts[0].value, str)
+    }
+
+
+def test_every_reason_a_definition_is_skipped_has_a_remedy():
+    """A skipped definition is reported in two halves, and both are lookups.
+
+    `seed` names what a file wanted -- middleware, groups -- and the message is
+    built from two tables keyed by that word: `CANNOT` for what the workspace
+    cannot do about it, `REMEDY` for what the reader should. A third kind added
+    to `_deployment_specific` and to neither table raises `KeyError` while
+    printing, which is loud but lands on whoever ran `kingfisher seed` rather
+    than on whoever added the kind.
+
+    Added to neither *and* never triggered, it lands on nobody: the definition
+    is quietly skipped, seeding reports success, and a workspace is missing a
+    file its source directory plainly contains.
+
+    Both tables, separately, because they are separate mistakes. They are two
+    dicts because one sentence could not serve both -- middleware is registered
+    in code and a group is declared in a file -- and that is exactly the shape
+    where somebody updates one and stops.
+    """
+    from kingfisher.presentation.cli.__main__ import CANNOT, REMEDY
+
+    reported = _kinds_the_seeder_can_report()
+
+    assert reported, "nothing was parsed, so this asserts nothing"
+    assert reported <= set(CANNOT), (
+        f"{sorted(reported - set(CANNOT))} can be reported and CANNOT does not name it"
+    )
+    assert reported <= set(REMEDY), (
+        f"{sorted(reported - set(REMEDY))} can be reported and REMEDY does not name it"
+    )
+    assert set(CANNOT) == set(REMEDY), (
+        f"the two tables disagree: {sorted(set(CANNOT) ^ set(REMEDY))} is in one and not the other"
+    )
