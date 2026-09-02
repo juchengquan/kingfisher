@@ -34,6 +34,28 @@ document: it reads as work still to do, and the next person to pick it up
 rediscovers their own codebase. A status line is only true on the day it is
 written -- check it against the code before trusting it.
 
+## `superpowers/plans/`
+
+One document, and it is a plan that was **built and then reversed**. It is not
+`design/`, which is for arguments still being made, and it is not history that
+belongs only in git — it is the one case those two categories do not cover.
+
+- [Group access control (`access.yaml`)](superpowers/plans/2026-08-31-group-access-control.md)
+  — **reversed 2026-08-31, the day it was written.** Do not implement it. The
+  central `access.yaml` it specifies is now refused by name at startup; what
+  shipped writes the policy in each definition's own `groups:` line.
+  `decisions.md` has the reversal and what survived it.
+
+Kept for one reason: the argument it lost is a good one to have read before
+proposing a central table again. It opens with a notice saying so, because a
+plan full of unticked checkboxes reads as work to do, and this one is not.
+
+A second document here would be a mistake. A plan that was *built* has its
+decisions in `decisions.md` and belongs in git history; a plan still being
+argued belongs in `design/`. This folder is for the narrow case of a
+worked-out design that was tried and rejected, and one is enough to make the
+point.
+
 ## What was removed, and how to get it back
 
 Twenty-five design documents, three specs and seven implementation plans, in the
