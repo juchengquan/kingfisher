@@ -204,4 +204,26 @@ def test_the_entry_point_configures_its_own_logging_not_everyones(monkeypatch):
     main()
 
     assert logging.getLogger("kingfisher_service").level == logging.INFO
+    assert logging.getLogger("kingfisher.origins").level == logging.INFO
     assert logging.getLogger().level == logging.WARNING
+
+
+def test_turning_on_the_startup_line_does_not_turn_on_the_audit_trail(monkeypatch):
+    """`kingfisher.audit` is unconfigured on purpose -- "nothing is written
+    until a deployment attaches a handler, which is how 'may session ids be
+    written here' stays a decision somebody makes rather than a default they
+    inherit".
+
+    The library's startup line is raised to INFO here, and a logger named
+    `kingfisher` would be the audit one's parent -- so this server would have
+    begun writing session ids in exchange for a line saying where the skills
+    directory is. The sibling name is what stops that, and nothing else would
+    have noticed.
+    """
+    import uvicorn
+
+    monkeypatch.setattr(uvicorn, "run", lambda app, **kw: None)
+
+    main()
+
+    assert logging.getLogger("kingfisher.audit").getEffectiveLevel() == logging.WARNING

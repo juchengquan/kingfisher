@@ -54,6 +54,7 @@ by not caching at all.
 from __future__ import annotations
 
 import asyncio
+import logging
 from collections.abc import AsyncIterator, Iterable, Iterator
 from contextlib import AsyncExitStack, contextmanager, suppress
 from dataclasses import dataclass, replace
@@ -158,6 +159,23 @@ if TYPE_CHECKING:
         ThreadStore,
     )
 
+
+#: `kingfisher.origins`, and deliberately not `kingfisher`.
+#:
+#: The library has had no logger until now, and the name matters more than that
+#: sounds: `kingfisher.audit` already exists in the service, whose own comment
+#: says it is "unconfigured. Nothing is written until a deployment attaches a
+#: handler, which is how 'may session ids be written here' stays a decision
+#: somebody makes rather than a default they inherit". A logger named
+#: `kingfisher` is that one's *parent*, so raising it to INFO -- which the
+#: server does, to get this line -- would start writing session ids as a side
+#: effect of asking where the definitions live. A sibling cannot.
+#:
+#: One record, at construction, and that is the whole budget. `print` is not an
+#: option: a library that writes to stdout cannot be used by a server, which is
+#: said twice in this codebase. `warnings.warn` is the wrong instrument -- it
+#: means "this is probably not what you meant", and a summary is not that.
+logger = logging.getLogger("kingfisher.origins")
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
@@ -748,6 +766,18 @@ class Kingfisher:
             self.access_report = AccessReport(
                 unrestricted=self._unrestricted(), narrowed=self._narrowed()
             )
+
+        # Last, so the line reports what was resolved rather than what was
+        # asked for -- and so a wiring failure raises instead of announcing a
+        # deployment that never came up.
+        #
+        # Guarded rather than left to the `%s`, which is what `audit._write`
+        # does and for the same reason: the argument here is a *built string*,
+        # so deferring the interpolation would defer nothing. With no logging
+        # configured this costs one attribute lookup and the record is never
+        # assembled.
+        if logger.isEnabledFor(logging.INFO):
+            logger.info("reading from: %s", self.origins.line())
 
     @property
     def origins(self) -> Origins:

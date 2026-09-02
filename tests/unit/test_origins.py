@@ -9,6 +9,7 @@ list` never named, because there was no field for it.
 
 from __future__ import annotations
 
+import logging
 from dataclasses import replace
 from pathlib import Path
 
@@ -216,3 +217,98 @@ def test_asking_for_origins_does_not_create_the_directories_it_reports(cfg, tmp_
 
     assert found.skills.path == fresh / "skills"
     assert not fresh.exists()
+
+
+def test_the_line_factors_out_the_workspace_and_keeps_every_key(cfg):
+    """Short enough to read, and still greppable for any one place.
+
+    Spelled in full this is about 450 characters of which most is one repeated
+    prefix. Collapsing the ordinary entries instead would be shorter still and
+    would delete the path somebody is looking for.
+    """
+    line = Origins.of(cfg).line()
+
+    assert line.startswith(f"workspace={cfg.workspace} ")
+    assert " skills=./skills " in line
+    assert " tools=./tools " in line, "the catalogue no listing has ever named"
+
+
+def test_a_relocated_path_is_the_only_absolute_one_on_the_line(cfg, tmp_path):
+    """What the relative spelling is for. The entries worth noticing are the
+    ones that moved, and this is what makes the eye find them."""
+    elsewhere = tmp_path / "shared"
+    elsewhere.mkdir()
+
+    line = Origins.of(replace(cfg, skills_root=elsewhere)).line()
+
+    assert f"skills={elsewhere}" in line
+    assert " subagents=./subagents " in line
+
+
+def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
+    """The line is `key=value` pairs separated by spaces, so a space inside a
+    value stops `grep tools=` answering -- which is the whole reason every key
+    is printed rather than the ordinary ones being collapsed."""
+
+    class Rootless:
+        pass
+
+    catalogue = replace(
+        Definitions.from_roots(cfg.catalogue_roots),
+        subagents=Rootless(),  # type: ignore[arg-type]
+        tools=Definitions.from_roots({**cfg.catalogue_roots, "tools": tmp_path}).tools,
+    )
+    line = Origins.of(replace(cfg, access=None, access_source=tmp_path / "groups.yaml"),
+                      catalogue=catalogue).line()
+
+    pairs = line.split(" ")
+    assert all("=" in pair for pair in pairs), line
+    assert "subagents=<supplied>" in pairs
+    assert f"tools={tmp_path}(overridden)" in pairs
+    assert f"groups=unset({tmp_path / 'groups.yaml'})" in pairs
+
+
+def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):
+    """One record per construction, and that is the whole budget."""
+    caplog.set_level(logging.INFO, logger="kingfisher.origins")
+
+    Kingfisher(cfg)
+
+    records = [r for r in caplog.records if r.name == "kingfisher.origins"]
+    assert len(records) == 1
+    assert str(cfg.workspace) in records[0].getMessage()
+
+
+def test_the_logger_is_not_the_parent_of_the_audit_one(cfg, caplog):
+    """`kingfisher.audit` is unconfigured on purpose, so that writing session
+    ids stays a decision a deployment makes rather than one it inherits.
+
+    A logger named `kingfisher` would be its parent, and the server raises this
+    one to INFO -- so asking where the definitions live would have turned on the
+    audit trail as a side effect.
+    """
+    caplog.set_level(logging.INFO, logger="kingfisher.origins")
+
+    Kingfisher(cfg)
+
+    assert logging.getLogger("kingfisher.audit").getEffectiveLevel() > logging.INFO
+
+
+def test_nothing_is_emitted_or_even_built_when_logging_is_off(cfg, monkeypatch, capsys):
+    """The promise this makes to every caller that existed before it.
+
+    Python logging is silent until an application configures it, so no output
+    appears where none appeared before -- and the guard means the record is not
+    assembled either. `line` raising is how that second half is checked: if it
+    is reached, the logger was consulted too late.
+    """
+    logging.getLogger("kingfisher.origins").setLevel(logging.WARNING)
+    monkeypatch.setattr(
+        Origins, "line", lambda self: pytest.fail("the line was built with logging off")
+    )
+    try:
+        Kingfisher(cfg)
+    finally:
+        logging.getLogger("kingfisher.origins").setLevel(logging.NOTSET)
+
+    assert capsys.readouterr().out == ""
