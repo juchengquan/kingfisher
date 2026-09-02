@@ -34,6 +34,11 @@ never mentions. `--list` shows what this workspace offers.
     uv run tests/integration/driver.py --list          # what this workspace offers
     uv run tests/integration/driver.py --seed          # copy definitions in
     uv run tests/integration/driver.py --seed --from ./examples
+    uv run tests/integration/driver.py --seed --all    # including ones naming middleware
+
+Seeding leaves behind any definition naming middleware or groups this
+deployment has not registered -- it would be refused when built -- and says
+which names each needed. `--all` takes them once you have registered them.
 
 A workspace that has never been used seeds itself on its first run and prints
 what it wrote, so `--seed` is for re-seeding an existing one after the
@@ -379,6 +384,17 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="DIR",
         help="seed from this directory instead of the one KINGFISHER_ASSETS names",
     )
+    # The same name and the same default as `kingfisher seed --all`, for the
+    # same reason: a workspace that has registered nothing cannot build a
+    # definition that names middleware or groups, so the safe default leaves
+    # those behind and this is how a deployment that *has* registered them says
+    # so. A driver that could not reach the flag could not drive the case.
+    parser.add_argument(
+        "--all",
+        dest="everything",
+        action="store_true",
+        help="also seed definitions that name middleware or groups (see --seed)",
+    )
     return parser
 
 
@@ -496,6 +512,11 @@ def main(argv: list[str]) -> int:
     if args.source and not args.seed_assets:
         print("--from does nothing without --seed", file=sys.stderr)
         return 2
+    # The same rule for the same reason: silently ignoring it would let someone
+    # believe they had seeded definitions that were left behind.
+    if args.everything and not args.seed_assets:
+        print("--all does nothing without --seed", file=sys.stderr)
+        return 2
 
     fresh = is_new_workspace(paths.workspace)
     workspace = ensure_layout(paths.workspace)
@@ -523,9 +544,19 @@ def main(argv: list[str]) -> int:
         except ConfigError as exc:
             print(f"configuration error: {exc}", file=sys.stderr)
             return 2
-        result = seeding.seed(paths, source)
+        result = seeding.seed(paths, source, everything=args.everything)
         for name in result.written:
             print(f"seeded {name}")
+        for left in result.skipped:
+            # The reason `--agent researcher` would otherwise fail with nothing
+            # to go on. A definition naming middleware or groups this deployment
+            # has not registered is refused when it is built, so `seed` leaves it
+            # behind -- and a driver that printed only what it wrote would send
+            # you looking for a file it decided not to copy.
+            print(
+                f"skipped {left.label} — needs {', '.join(left.names)}; "
+                f"register those, then re-seed with --all"
+            )
         for name in result.overwritten:
             # After the list, not beside each entry: the point is that you edit
             # your copy, so losing one is the line that has to survive being

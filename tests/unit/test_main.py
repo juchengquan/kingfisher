@@ -508,7 +508,13 @@ def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkey
     empty = tmp_path / "no-definitions"
     empty.mkdir()
     real_seed = driver.seeding.seed
-    monkeypatch.setattr(driver.seeding, "seed", lambda cfg, source=None: real_seed(cfg, empty))
+    # `**kwargs` rather than the one keyword, so this stub does not have to be
+    # edited again the next time `seed` grows an argument it is not about.
+    monkeypatch.setattr(
+        driver.seeding,
+        "seed",
+        lambda cfg, source=None, **kwargs: real_seed(cfg, empty, **kwargs),
+    )
 
     driver.main(["driver.py", "--list"])
 
