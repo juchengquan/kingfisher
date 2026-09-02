@@ -185,7 +185,7 @@ def test_the_report_reads_as_a_sentence(cfg):
 
 def reported(kf, groups, name: str):
     """The withheld report a caller in these groups is handed for one turn."""
-    from kingfisher.application.service import _withheld_by_kind
+    from kingfisher.application.reporting import withheld_by_kind
 
     session = session_at(kf, name)
     caller = kf.for_groups(groups)
@@ -197,7 +197,7 @@ def reported(kf, groups, name: str):
         checkpointer=None,
         groups=caller.held,
     )
-    return _withheld_by_kind(
+    return withheld_by_kind(
         caller.grants,
         kf.cfg,
         session,
@@ -231,10 +231,10 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         checkpointer=None,
         groups=caller.held,
     )
-    from kingfisher.application.service import _withheld_by_kind
+    from kingfisher.application.reporting import withheld_by_kind
 
     kinds = dict(
-        _withheld_by_kind(
+        withheld_by_kind(
             grants,
             kf.cfg,
             session,
