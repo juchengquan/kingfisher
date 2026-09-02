@@ -184,6 +184,26 @@ class Origins:
             f"{name}={origin.spelled(self.workspace)}" for name, origin in self.entries()
         )
         return f"workspace={self.workspace} {pairs}"
+    def block(self) -> tuple[str, ...]:
+        """The same answer as a header, one place per line.
+
+        Both commands print this and neither formats its own. `kingfisher list`
+        assembled its header from three hand-written lines and `doctor` printed
+        no path at all, which is how `tools` came to be in neither -- a fourth
+        line nobody added, for a field that did not exist.
+
+        Eleven lines where the old header was four. That is the change rather
+        than a cost of it: seven of them were things no surface said.
+        """
+        names = ("workspace", *(name for name, _ in self.entries()))
+        width = max(len(name) for name in names)
+        return (
+            f"{'workspace'.ljust(width)} : {self.workspace}",
+            *(
+                f"{name.ljust(width)} : {origin.spelled(self.workspace)}"
+                for name, origin in self.entries()
+            ),
+        )
 
     def entries(self) -> tuple[tuple[str, Origin], ...]:
         """Each name and its origin, in declaration order.
