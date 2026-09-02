@@ -72,6 +72,25 @@ class Origin:
     kind: Kind
     path: Path | None = None
 
+    def spelled(self, workspace: Path) -> str:
+        """This entry as it appears on the startup line.
+
+        No value contains a space, deliberately. The line is `key=value` pairs
+        separated by spaces, so a space inside one stops `grep tools=` from
+        answering -- which is the property that made every key worth printing
+        rather than collapsing the ordinary ones to "default".
+        """
+        if self.kind == "supplied":
+            return "<supplied>"
+        if self.path is None:
+            return "unset"
+        where = _under(self.path, workspace)
+        if self.kind == "unset":
+            return f"unset({where})"
+        if self.kind == "overridden":
+            return f"{where}(overridden)"
+        return where
+
 
 @dataclass(frozen=True)
 class Origins:
@@ -148,6 +167,24 @@ class Origins:
             sessions=_sessions(cfg, sessions),
         )
 
+    def line(self) -> str:
+        """Every entry, on one line, with the workspace factored out.
+
+        Spelled out in full this is about 450 characters, nine of eleven values
+        sharing one prefix -- and the entries worth noticing, the ones that are
+        somewhere else, are buried in the repetition. Relative brings it to
+        about 240 *and* leaves the relocated ones as the only absolute paths, so
+        the eye finds them without reading.
+
+        Every key appears, including the ordinary ones. Collapsing those to
+        "catalogues: default" is shorter still and deletes the path somebody is
+        looking for.
+        """
+        pairs = " ".join(
+            f"{name}={origin.spelled(self.workspace)}" for name, origin in self.entries()
+        )
+        return f"workspace={self.workspace} {pairs}"
+
     def entries(self) -> tuple[tuple[str, Origin], ...]:
         """Each name and its origin, in declaration order.
 
@@ -160,6 +197,19 @@ class Origins:
             for f in fields(self)
             if isinstance(value := getattr(self, f.name), Origin)
         )
+
+
+def _under(path: Path, workspace: Path) -> str:
+    """A path inside the workspace as `./name`, anything else in full.
+
+    Not decoration, and not shortening for its own sake: what it buys is that
+    the absolute paths on the line are exactly the things that moved.
+    """
+    if path == workspace:
+        return "."
+    if path.is_relative_to(workspace):
+        return f"./{path.relative_to(workspace)}"
+    return str(path)
 
 
 def _derived(actual: Path, default: Path) -> Kind:
