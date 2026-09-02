@@ -96,6 +96,12 @@ _EXPORTS = {
     "SEED_HINT": "kingfisher.infrastructure.seeding",
     "SKILL_LAYOUT": "kingfisher.infrastructure.catalogue.skills",
     "Inventory": "kingfisher.application.inventory",
+    # Where this deployment reads from, as against what it offers. Public
+    # because the answer was assembled three times and agreed nowhere: the
+    # command printed four of eleven places, `doctor` printed one, and a
+    # library caller had no way to ask at all.
+    "Origin": "kingfisher.application.origins",
+    "Origins": "kingfisher.application.origins",
     "config_from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
     "normalize_answer": "kingfisher.domain.result",
@@ -128,6 +134,8 @@ __all__ = [
     "Kingfisher",
     "LocalFileStore",
     "LocalSessionStore",
+    "Origin",
+    "Origins",
     "QuotaExceededError",
     "Request",
     "RunEvent",
@@ -181,6 +189,8 @@ if TYPE_CHECKING:
     from kingfisher.application.config import paths_from_env as paths_from_env
     from kingfisher.application.inventory import Inventory as Inventory
     from kingfisher.application.inventory import inventory as inventory
+    from kingfisher.application.origins import Origin as Origin
+    from kingfisher.application.origins import Origins as Origins
     from kingfisher.application.run import run as run
     from kingfisher.application.run import stream as stream
     from kingfisher.application.service import Kingfisher as Kingfisher

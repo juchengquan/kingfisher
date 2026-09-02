@@ -148,6 +148,11 @@ def config_from_env(environ: Mapping[str, str] | None = None) -> Config:
         workspace=workspace,
         models=catalogue,
         access=access_policy.load(access_file),
+        # The path as well as what was found there. `load` answers `None` for a
+        # file that is not present, which is the ordinary case -- so without
+        # this, the one thing worth reporting about a deployment that meant to
+        # have a policy is unrecoverable.
+        access_source=access_file,
         execution_timeout_s=_int(env, "KINGFISHER_EXECUTION_TIMEOUT_S", 120),
         turn_timeout_s=_int(env, "KINGFISHER_TURN_TIMEOUT_S", 3600),
         session_max_bytes=_optional_int(env, "KINGFISHER_SESSION_MAX_BYTES"),

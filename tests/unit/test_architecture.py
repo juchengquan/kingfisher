@@ -1116,6 +1116,11 @@ LIGHT_EXPORTS = frozenset({
     # so `harness.agent` is imported inside the function. That is the shape
     # this classification is about -- what a name costs to touch.
     "seed", "definitions_source", "kinds_at", "Seeded", "inventory", "Inventory",
+    # Where a deployment reads from. Light for the reason `paths_from_env` is:
+    # the question "which directories?" must not cost three provider SDKs, and
+    # this one is asked by `doctor`, by a listing, and by anybody debugging a
+    # definition that will not load.
+    "Origins", "Origin",
     # A directory of sessions, and the port it satisfies. Neither imports
     # anything a deployment does not already have -- see `session_store`.
     "LocalSessionStore",

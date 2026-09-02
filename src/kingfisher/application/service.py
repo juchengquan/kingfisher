@@ -64,6 +64,7 @@ from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
 from kingfisher.application import config as config_module
+from kingfisher.application.origins import Origins
 from kingfisher.config import Config
 from kingfisher.domain import retention
 from kingfisher.domain.access import (
@@ -747,6 +748,23 @@ class Kingfisher:
             self.access_report = AccessReport(
                 unrestricted=self._unrestricted(), narrowed=self._narrowed()
             )
+
+    @property
+    def origins(self) -> Origins:
+        """Where this deployment is actually reading from.
+
+        Built here rather than from `cfg` alone, and that is the whole point:
+        `self.catalogue` is what was resolved and warmed above, so a deployment
+        that staged its definitions somewhere is reported as it is rather than
+        as it was configured. The same for `sessions_store`, which is either the
+        one this built from `cfg.session_store` or the one a deployment handed in.
+
+        A property rather than an attribute settled in `__init__`. Nothing here
+        changes after construction, so the two would be equivalent -- and a
+        property costs nothing until something asks, which keeps constructing a
+        `Kingfisher` exactly as cheap as it was.
+        """
+        return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
 
     def _refuse_undeclared_groups(self) -> None:
         """Refuse a definition naming a group this deployment does not declare.

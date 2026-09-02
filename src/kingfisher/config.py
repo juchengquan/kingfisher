@@ -354,6 +354,22 @@ class Config:
     #: deployment setting, and a revocation lands on restart the way every
     #: other one here does.
     access: Groups | None = None
+    #: Where the policy above was looked for, whether or not one was found.
+    #:
+    #: Beside `access` rather than on `Groups`, and the absent case is what
+    #: decides it: with no file there is no `Groups` to carry a path, and "not
+    #: set, and here is where I looked" is the one line this field exists to
+    #: make possible. A `groups.yaml` written one directory off leaves a
+    #: deployment silently open to everyone, and the symptom is nothing at all.
+    #:
+    #: It would also put a filesystem path on a `domain/` record whose own
+    #: docstring says it reads no file. `Models` carries its `source` because it
+    #: sits here, above the layers, and because a model catalogue is required --
+    #: there is always an object to hang it on.
+    #:
+    #: `None` when nothing resolved a path: a `Config` assembled in code rather
+    #: than read from the environment.
+    access_source: Path | None = None
     #: What bounds one shell command or one interpreter run.
     #:
     #: Not the model timeout. This was `timeout_s` and served three unrelated
