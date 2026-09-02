@@ -1,7 +1,14 @@
 # Where this deployment reads from
 
-**Status:** proposed, not built.
+**Status:** proposed, and built on four branches off `main` -- none of them
+merged. It stays here until they land, because from `main` this is still an
+argument rather than a description. When they merge, its decisions belong in
+`docs/decisions.md` and this file goes, per the rule in `docs/README.md`.
 **Date:** 2026-09-02
+**Corrected 2026-09-02, while building it.** Four decisions below were wrong or
+imprecise as written and are fixed in place; *What building it changed* at the
+foot records each one and why. Two of them -- the logger's name and the
+reachability of a `doctor` check -- would have shipped a real fault.
 
 Kingfisher reads from about eleven places. Nothing can tell you what they are.
 
@@ -72,11 +79,22 @@ moved something, which is the deployment that needs it.
 
 | kind | prints as | means |
 |---|---|---|
-| `default` | `./skills` | under the workspace, as configured |
-| `relocated` | `/opt/shared/skills` | configured, and moved |
-| `overridden` | `/opt/staged/skills (overridden)` | **not what the config says** -- supplied at construction |
-| `supplied` | `<supplied store>` | a repository with no directory |
+| `default` | `./skills` | the **derived** location -- where kingfisher would put it having been told nothing |
+| `relocated` | `/opt/shared/skills` | any other configured path |
+| `overridden` | `/opt/staged/skills(overridden)` | **not what the config says** -- supplied at construction |
+| `supplied` | `<supplied>` | a repository with no directory |
 | `unset` | `unset(./groups.yaml)` | not configured, and where it looked |
+
+`default` is decided by comparing against the derived location, *not* by asking
+whether an override was set. The difference shows on a deployment that names a
+path equal to the default: that is `default`, because it is. The other reading
+would fire O11's relocated-and-empty warning on every fresh workspace whose
+operator happened to be explicit, which is what would make it noise.
+
+No spelling contains a space. The startup line is `key=value` pairs separated by
+spaces, so a space inside one stops `grep tools=` from answering -- which is the
+property that made every key worth printing rather than collapsing the ordinary
+ones.
 
 A bare string would make `"the catalogue"` -- which `source_of` returns today --
 a magic phrase a consumer has to match on, and would leave `unset` and
@@ -109,8 +127,17 @@ says "Pure, like the rest of `domain/`: this module reads no file."
 has to report on it".
 
 **O6. The library logs one line, at INFO, at construction.** Its first logger,
-named `kingfisher`, and that is the whole budget -- one record per `Kingfisher`,
-not a habit.
+named `kingfisher.origins`, and that is the whole budget -- one record per
+`Kingfisher`, not a habit.
+
+`kingfisher.origins` and deliberately not `kingfisher`, which is what this said
+first. The service already has `kingfisher.audit`, and its own comment is the
+argument: "unconfigured. Nothing is written until a deployment attaches a
+handler, which is how 'may session ids be written here' stays a decision
+somebody makes rather than a default they inherit". A logger named `kingfisher`
+is that one's *parent*, and O8 has the server raise this one to INFO -- so
+asking where the definitions live would have started writing session ids. A
+sibling cannot, and a test in the service holds the two apart.
 
 Python logging is silent until an application configures it, so no existing
 caller sees new output. This is the only mechanism that satisfies "clearer when
@@ -152,7 +179,8 @@ machine-consumed by design. A startup line is read by a person, and `--json`
 already covers the machine case. Two JSON spellings of one record is the drift
 this document exists to remove.
 
-**O10. `Inventory` carries an `Origins` and drops its three loose fields.**
+**O10. `Inventory` carries an `Origins` and drops its three loose fields --
+and its own `workspace`, and `render`'s `workspace` argument.**
 `skills_source`, `subagents_source` and `agents_source` become `found.origins`.
 Counted first: two production call sites, both in `presentation/cli/listing.py`
 (the header, and `as_json`); four lines in `tests/unit/test_inventory.py`; zero
@@ -166,7 +194,7 @@ stays true. Nothing external breaks -- the distribution is at `0.1.0` with
 makes this the cheapest moment the change will ever have.
 
 **O11. `doctor` prints the same header, from the same renderer, and gains two
-checks.** The record states; the checks judge; neither does the other's job. The
+checks -- and `examine` takes the inventory rather than building one.** The record states; the checks judge; neither does the other's job. The
 seed check keeps all four of its branches, including the paths in its warnings --
 a warning has to read correctly when it is the only line somebody sees.
 
@@ -179,6 +207,19 @@ a warning has to read correctly when it is the only line somebody sees.
 
 Warnings, not failures, in both: `worst()` already records why a check that
 fails on a deliberate choice is a check nobody runs.
+
+The second check is unreachable unless `examine` accepts an `Inventory`. It
+built its own, from `cfg` -- and a catalogue resolved from `cfg` agrees with
+`cfg` by construction, so nothing it examined could ever be `overridden`. The
+deployment being checked was a fresh guess rather than the wiring that is
+running. `examine(cfg, found=None)` fixes it, and the command building the
+inventory once and handing it on is also what makes the header and the checks
+read one object instead of two.
+
+`doctor --json` becomes an object with `origins` and `checks` where it was a
+bare list of checks. The two forms of one command must not show different
+things, and a script checking a deployment's health wants the paths in the same
+answer as the verdicts rather than from a second command.
 
 **O12. `Origins` and `Origin`, not `Sources`.** `Source` is taken, and by the
 opposite concept: `seeding.Source` is *where definitions are copied from*, and
@@ -234,6 +275,10 @@ where it is copying *from*, which it already prints.
 Four slices, each green, each its own pull request off `main`. Sequential, not
 stacked -- this repository rebase-merges.
 
+Each depends on the one before it, including slice 3, which was planned as
+depending only on slice 1. So they land in order, each rebased onto `main` as
+its predecessor merges.
+
 1. **The record and the Python surface.** `application/origins.py`;
    `Config.access_source`; `Kingfisher.origins`; both names exported and added
    to `LIGHT_EXPORTS` in `test_architecture.py`. Nothing prints. New tests cover
@@ -253,6 +298,42 @@ stacked -- this repository rebase-merges.
 ask for, and `test_importing_kingfisher_does_not_pull_in_deepagents` is what
 keeps that true. `infrastructure.catalogue` imports in 40ms with no provider SDK
 loaded, so there is room.
+
+## What building it changed
+
+Four things below were written wrong and are corrected in place above. They are
+listed rather than tidied away, because two of them would have shipped a fault
+and the reason each was wrong is more useful than the corrected text.
+
+**The logger's name (O6).** `kingfisher` would have been the parent of
+`kingfisher.audit`, which the service leaves unconfigured so that writing
+session ids stays a deployment's decision. Raising the parent to INFO -- which
+O8 has the server do -- would have turned the audit trail on in exchange for a
+line saying where the skills directory is. Caught by reading the audit module,
+not by a failing test; there is one now, in the service suite.
+
+**A `doctor` check that could not fire (O11).** `examine` built its own
+inventory, so the `overridden` warning had nothing to warn about. Caught by
+asking how a test would reach it.
+
+**What `default` means (O3).** Written as "under the workspace", implemented as
+"the derived location". The two differ for a deployment that names a path equal
+to the default, and the written version would have fired the relocated-and-empty
+warning on every explicit fresh workspace.
+
+**Where the slices sit (below).** Slice 3 was planned as depending only on slice
+1, and does not: the header and the startup line share the per-entry spelling,
+which lands with slice 2. Found when the tests failed with an `AttributeError`.
+
+Two smaller things went beyond what was written, both because leaving them kept
+a second answer alive. `Inventory.workspace` sat beside `Origins.workspace`, and
+`render` took a `workspace` argument whose own docstring described it as a way
+to print something other than what the configuration says -- which is the
+disagreement this record removes. Both are gone. And `Origins` dropped its own
+tuple of the four definition kinds for `DEFINITION_KINDS`, which is derived from
+the fields of `Definitions`: a hand-written copy that has to match a dataclass is
+exactly how a fifth kind would go unreported, which is the bug this record is
+about.
 
 ## What this does not do
 
