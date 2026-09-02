@@ -176,7 +176,7 @@ def test_the_turn_message_names_both_forms(workspace, dirs):
     model calls, +19s, +56k input tokens. The 6 that used the shell form first
     never failed once.
     """
-    from kingfisher.application.service import turn_message
+    from kingfisher.application.turn import turn_message
 
     session = Session.open(workspace, "s1", dirs)
     turn = session.allocate_turn(dirs)

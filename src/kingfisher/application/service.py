@@ -71,6 +71,14 @@ from kingfisher.application.reporting import (
     opening_events,
     withheld_by_kind,
 )
+from kingfisher.application.turn import (
+    Admitted,
+    Prepared,
+    consume,
+    out_of_steps,
+    overrun,
+    turn_message,
+)
 from kingfisher.config import Config
 from kingfisher.domain import retention
 from kingfisher.domain.access import (
@@ -100,7 +108,6 @@ from kingfisher.domain.session import (
     sessions_root,
     still_held,
 )
-from kingfisher.domain.transcript import Message
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
@@ -179,168 +186,6 @@ logger = logging.getLogger("kingfisher.origins")
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
 _UNSET: Any = object()
-
-
-@dataclass(frozen=True)
-class _Admitted:
-    """A request that has passed everything able to reject it.
-
-    The boundary is the whole point of the type. `_admit` may raise -- an
-    unknown session, a quota, a file that is not there, middleware this request
-    may not use -- and it runs before any turn directory exists. `_open_turn`
-    creates one and never refuses.
-
-    That ordering was a claim in a docstring, and it was false: `--data` naming
-    a missing file left nothing behind, while `--input` naming one left `t001`,
-    because the inputs were copied after the turn was allocated. Making the
-    halves separate functions with one type between them is what turns the
-    claim into something a reader can check.
-    """
-
-    request: Request
-    session: Any
-    graph: Any
-    #: Paths `protect_data` could not harden. Reported to the caller rather
-    #: than raised, so they cross the boundary instead of stopping at it.
-    unprotected: tuple[str, ...]
-    placement: Any
-    #: Content resolved from `input_refs`, held until the turn exists.
-    #:
-    #: Fetched during admission because a ref that will not resolve must refuse
-    #: the request, and written in `_open_turn` because a turn's `input/` is not
-    #: there yet. The bytes wait in between rather than the refusal moving.
-    fetched_inputs: Any = None
-    #: The saver this service opened for the turn, or None when it opened
-    #: nothing -- an injected instance is the deployment's to close.
-    release: Any = None
-    #: `(what, names)` for each thing this workspace offers that the request did
-    #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
-    #: withheld name is a fact about the run, not a refusal.
-    withheld: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    #: `(name, why)` for each delegate that asked to run elsewhere and did not.
-    #: A fact about the run, like `withheld` -- nothing is wrong enough to stop
-    #: for, and nothing else would ever say it.
-    indistinct: tuple[tuple[str, str], ...] = ()
-    #: Tool names more than one file defines, which the agent holding the
-    #: grant therefore cannot hold. Reported rather than dropped in silence.
-    delegate_only: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class _Prepared:
-    """Everything a turn needs before the model is reached.
-
-    Extracted so the orchestration sequence exists once. `stream` and `astream`
-    differ only in how they iterate the graph -- a dozen lines each -- and the
-    hundred lines of ordering that matter are not written twice to drift apart.
-    """
-
-    graph: Any
-    message: str
-    session: Any
-    turn: Any
-    logger: Any
-    config: dict[str, Any]
-    events: tuple[RunEvent, ...]
-    deadline: float
-    timeout_s: float
-    #: Closed when the turn ends. See `_checkpointer_for`.
-    release: Any = None
-    #: What was said in this session before now. The graph's saver holds one
-    #: turn and nothing after it, so this is where a conversation comes from.
-    history: tuple[Message, ...] = ()
-
-
-def turn_message(task: str, turn: Any, placed: tuple[str, ...], has_inputs: bool) -> str:
-    """The task, plus this turn's facts and nothing more.
-
-    What the task should *produce* is the task's business: asking for a written
-    report is one kind of request among many, and a general agent should not
-    carry one convention's filenames in its plumbing. They lived in the system
-    prompt once, which made every greeting deliberate over two files nobody
-    wanted.
-
-    These facts reach the model here rather than in the system prompt because
-    they are run-scoped: the prompt is the cached prefix, and putting a turn
-    directory in it would move that prefix on every session.
-    """
-    # Named because `/data` changed under a session the agent may already have
-    # looked at.
-    arrived = f" New files in /data: {', '.join(placed)}." if placed else ""
-    supplied = (
-        f" Files supplied with this request are in {turn.virtual_input_dir}."
-        if has_inputs
-        else ""
-    )
-    # Both names for the one directory. `system.md` states the rule -- drop the
-    # leading slash for the shell -- and stating it there was not enough: over
-    # ten runs of one task the agent passed the virtual path to `execute` 4
-    # times, each failing and costing roughly three times the whole task to
-    # recover. The 6 that used the shell form first never failed. This line is
-    # already per-turn, so unlike the system prompt it costs no cache to say.
-    return (
-        f"{task}\n\n"
-        f"Your run directory for this task is {turn.virtual_dir} "
-        f"(from the shell, {turn.shell_dir}).{supplied}{arrived}"
-    )
-
-
-def _consume(
-    namespace: Any,
-    mode: str,
-    chunk: Any,
-    answer: str,
-    delegates: runtime.Delegates,
-) -> tuple[str, tuple[RunEvent, ...]]:
-    """One stream chunk into (answer so far, events to emit).
-
-    Both loops are offered every chunk and each mode ignores the ones that are
-    not its own. Written once so the sync and async loops cannot come to
-    disagree about which mode carries the answer -- or, now, about which agent
-    a chunk came from, which is a second thing they could have drifted on.
-    """
-    if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
-        answer = text
-    return answer, tuple(runtime.events_in(namespace, mode, chunk, delegates))
-
-
-def _overrun(prepared: _Prepared) -> RunEvent | None:
-    """The cut-short event once a turn is out of time, else nothing.
-
-    Checked between chunks, which is the only place there is to stop. What the
-    turn produced is already on disk and in the manifest, so ending here keeps
-    the work and loses only the steps that had not happened yet.
-    """
-    if monotonic() <= prepared.deadline:
-        return None
-    return RunEvent(kind="cut_short", text=f"turn stopped after {prepared.timeout_s}s")
-
-
-def _out_of_steps(cfg: Config) -> RunEvent:
-    """The same event for the other bound on a turn.
-
-    Two bounds, and until this they behaved nothing alike. `turn_timeout_s` is
-    checked between chunks and ends the turn as a `RunResult` with `cut_short`
-    set; `recursion_limit` is enforced inside langgraph's own loop and came out
-    as a `GraphRecursionError` through every caller -- the driver printed a
-    stack trace, and the HTTP surface had no mapping for it at all.
-
-    Observed on a run that had already written its report and validated the
-    markup: the file was on disk, and what the caller got was a traceback with
-    no path in it. Nothing about running out of steps is less ordinary than
-    running out of seconds, so it is reported the same way and the work
-    survives the same way.
-
-    Names the setting because the two bounds are raised in different places and
-    "turn stopped" alone sends the reader to the wrong one.
-    """
-    return RunEvent(
-        kind="cut_short",
-        text=(
-            f"turn stopped after {cfg.recursion_limit} steps "
-            f"(raise KINGFISHER_RECURSION_LIMIT)"
-        ),
-    )
 
 
 @dataclass(frozen=True)
@@ -1138,7 +983,7 @@ class Kingfisher:
         checkpointer: Any = _UNSET,
         *,
         groups: Held | None = None,
-    ) -> _Prepared:
+    ) -> Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
         Blocking, and deliberately so: filesystem work plus building
@@ -1264,7 +1109,7 @@ class Kingfisher:
         checkpointer: Any = _UNSET,
         *,
         groups: Held | None = None,
-    ) -> _Admitted:
+    ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand.
 
         Nothing is destroyed here either, and nothing turn-shaped is created.
@@ -1296,7 +1141,7 @@ class Kingfisher:
         checkpointer: Any = _UNSET,
         *,
         groups: Held | None = None,
-    ) -> _Admitted:
+    ) -> Admitted:
         """The rest of admission, once the session is claimed.
 
         Split so the claim has exactly one release path for a refusal. Every
@@ -1362,7 +1207,7 @@ class Kingfisher:
         # but refusing them must not wait that long.
         check_placeable(request.inputs)
 
-        return _Admitted(
+        return Admitted(
             request=request,
             session=session,
             graph=graph,
@@ -1404,7 +1249,7 @@ class Kingfisher:
             ),
         )
 
-    def _open_turn(self, admitted: _Admitted) -> _Prepared:
+    def _open_turn(self, admitted: Admitted) -> Prepared:
         """Create the turn and compose what the loop needs.
 
         Past the point of no refusal. Anything here that raised would leave a
@@ -1428,7 +1273,7 @@ class Kingfisher:
         )
         logger.run_start(request.task, turn.virtual_dir)
 
-        return _Prepared(
+        return Prepared(
             graph=admitted.graph,
             release=admitted.release,
             history=read_transcript(session.directory),
@@ -1461,7 +1306,7 @@ class Kingfisher:
             timeout_s=cfg.turn_timeout_s,
         )
 
-    def _keep(self, prepared: _Prepared) -> tuple[str, ...]:
+    def _keep(self, prepared: Prepared) -> tuple[str, ...]:
         """Persist what this turn produced, and name it.
 
         In the turn's `finally` rather than beside the terminal event, and that
@@ -1503,7 +1348,7 @@ class Kingfisher:
         return kept
 
     def _finished(
-        self, prepared: _Prepared, answer: str, kept: tuple[str, ...], *, cut_short: bool
+        self, prepared: Prepared, answer: str, kept: tuple[str, ...], *, cut_short: bool
     ) -> RunEvent:
         """The terminal event, built the same way whichever loop produced it.
 
@@ -1528,7 +1373,7 @@ class Kingfisher:
             ),
         )
 
-    def _record(self, prepared: _Prepared) -> None:
+    def _record(self, prepared: Prepared) -> None:
         """Write what was said this turn, as records this package owns.
 
         Read back out of the graph rather than accumulated from the stream: the
@@ -1615,9 +1460,9 @@ class Kingfisher:
                 stream_mode=runtime.STREAM_MODES,
                 subgraphs=True,
             ):
-                answer, events = _consume(namespace, mode, chunk, answer, delegates)
+                answer, events = consume(namespace, mode, chunk, answer, delegates)
                 yield from events
-                if (stop := _overrun(prepared)) is not None:
+                if (stop := overrun(prepared)) is not None:
                     cut_short = True
                     yield stop
                     break
@@ -1630,7 +1475,7 @@ class Kingfisher:
             answer = normalize_answer(answer)
             cut_short = True
             ok = True
-            yield _out_of_steps(self.cfg)
+            yield out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # Before the slot goes back, and inside its own `finally` so that a
@@ -1721,10 +1566,10 @@ class Kingfisher:
                 stream_mode=runtime.STREAM_MODES,
                 subgraphs=True,
             ):
-                answer, events = _consume(namespace, mode, chunk, answer, delegates)
+                answer, events = consume(namespace, mode, chunk, answer, delegates)
                 for event in events:
                     yield event
-                if (stop := _overrun(prepared)) is not None:
+                if (stop := overrun(prepared)) is not None:
                     cut_short = True
                     yield stop
                     break
@@ -1737,7 +1582,7 @@ class Kingfisher:
             answer = normalize_answer(answer)
             cut_short = True
             ok = True
-            yield _out_of_steps(self.cfg)
+            yield out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # As in `stream`, and on a worker thread for the same reason

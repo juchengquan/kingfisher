@@ -908,6 +908,12 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # somewhere -- so the edge is the point of it, not an accident of where it
     # used to live.
     "reporting": frozenset({"agent"}),
+    # One stream chunk, read the same way by the sync and async loops. The
+    # reading is deepagents' shape rather than ours -- which namespace a chunk
+    # came from, which mode carries the answer -- so it is an edge wherever it
+    # is written, and writing it once is the whole reason the two loops cannot
+    # drift about what a chunk means.
+    "turn": frozenset({"runtime"}),
 }
 
 
