@@ -33,6 +33,7 @@ from kingfisher import (
 )
 from kingfisher.config import ConfigError
 from tests.conftest import repository_root
+from tests.integration.seed_example import main, seed_workspace
 
 
 @pytest.fixture
@@ -159,3 +160,64 @@ def test_no_source_configured_says_how_to_name_one(tmp_path, monkeypatch):
 
     with pytest.raises(ConfigError, match="KINGFISHER_ASSETS"):
         definitions_source(paths)
+
+
+# -- the script on the live shelf ----------------------------------------
+
+
+def test_the_example_script_seeds_a_workspace(tmp_path, examples):
+    """`tests/integration/seed_example.py` is driven, not just readable.
+
+    Nothing collects that file -- it is deliberately not named `test_*.py`,
+    because a bare `pytest` must not run what lives on that shelf -- so without
+    this it would be a worked example with no run to fail on, which is exactly
+    the condition an example rots under. `call_cap.py` is driven by a scripted
+    model for the same reason.
+
+    Imported rather than shelled out to, so a signature that changes fails here
+    with a `TypeError` naming it rather than a non-zero exit code.
+    """
+    done = seed_workspace(tmp_path / "ws", examples)
+
+    assert done.written
+    assert (tmp_path / "ws" / "agents" / "assistant.yaml").is_file()
+    assert (tmp_path / "ws" / "models.yaml.example").is_file(), (
+        "the example stopped laying the workspace out before seeding it"
+    )
+
+
+def test_the_example_script_takes_everything_too(tmp_path, examples):
+    """Both branches, because the flag is half of what the example teaches."""
+    default = seed_workspace(tmp_path / "a", examples)
+    complete = seed_workspace(tmp_path / "b", examples, everything=True)
+
+    assert default.skipped
+    assert not complete.skipped
+    assert len(complete.written) > len(default.written)
+
+
+def test_the_example_script_reports_what_it_left(tmp_path, examples, capsys):
+    """Its output is its point, so the output is what this asserts.
+
+    A caller reading only `written` is the mistake the script exists to
+    demonstrate against; if `main` stopped printing the skips it would still
+    seed correctly and still teach the wrong thing.
+    """
+    code = main(["--workspace", str(tmp_path / "ws"), "--from", str(examples)])
+    printed = capsys.readouterr().out
+
+    assert code == 0
+    assert "seeded agents/assistant.yaml" in printed
+    assert "skipped " in printed, "the example stopped reporting what it left behind"
+    assert "run again with --all" in printed, "a skip with no remedy is half a message"
+
+
+def test_the_example_script_refuses_with_no_source_configured(tmp_path, monkeypatch, capsys):
+    """The error path is part of the example -- it is what makes it pasteable
+    rather than a snippet."""
+    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
+
+    code = main(["--workspace", str(tmp_path / "ws")])
+
+    assert code == 2, "a missing source is a configuration error, not an empty run"
+    assert "KINGFISHER_ASSETS" in capsys.readouterr().err
