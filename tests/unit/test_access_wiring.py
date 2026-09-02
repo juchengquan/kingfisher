@@ -167,6 +167,29 @@ def test_a_definition_with_no_groups_line_is_named(cfg):
     assert ("agent", "assistant") in kf.access_report.unrestricted
 
 
+def test_a_subagent_with_no_groups_line_is_named_too(cfg):
+    """Both kinds, asserted rather than assumed.
+
+    Mutation testing found this: the walk could stop looking at subagents
+    entirely and the whole suite stayed green, so a delegate reachable by
+    everyone would have gone unreported while the agent beside it was named.
+    The report's whole job is that default-open is not silent, and it was
+    silent for half the definitions it covers.
+    """
+    an_agent(cfg, "assistant")
+    delegates = cfg.catalogue_roots["subagents"]
+    delegates.mkdir(parents=True, exist_ok=True)
+    (delegates / "auditor.yaml").write_text(
+        "name: auditor\ndescription: A delegate.\nsystem_prompt: |\n  Do it.\n",
+        encoding="utf-8",
+    )
+
+    kf = Kingfisher(replace(cfg, access=vocabulary()))
+
+    assert ("subagent", "auditor") in kf.access_report.unrestricted
+    assert "auditor" in "\n".join(kf.access_report.lines())
+
+
 def test_a_definition_that_restricts_is_not_named(policied):
     kf = Kingfisher(policied)
     assert kf.access_report.is_clean
