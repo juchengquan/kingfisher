@@ -16,10 +16,11 @@ manual, and an entry old enough to doubt is one to re-check rather than trust.
 
 ## `design/`
 
-One document, and it is a **proposal that has not been built**. This folder is no
-longer history -- history was condensed into `decisions.md`.
+Two documents, and both are **proposals that have not been built**. This folder
+is no longer history -- history was condensed into `decisions.md`.
 
 - [Nothing at rest on this machine](design/2026-08-21-nothing-at-rest-on-this-machine.md)
+- [Where this deployment reads from](design/2026-09-02-where-this-deployment-reads-from.md)
 
 A document belongs here while it is arguing for something. Once it is built, its
 decisions move to `decisions.md`, anything measured about upstream moves to
