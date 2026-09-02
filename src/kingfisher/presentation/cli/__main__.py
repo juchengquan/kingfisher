@@ -52,7 +52,7 @@ from kingfisher import (
     seed,
 )
 from kingfisher.presentation.cli.health import examine, worst
-from kingfisher.presentation.cli.listing import as_json, failed, render
+from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
@@ -385,10 +385,33 @@ def _doctor(*, as_document: bool = False) -> int:
     deployment's choice, and a command that failed on one would go unrun in
     exactly the deployments most worth checking.
     """
-    checks = examine(config_from_env())
+    cfg = config_from_env()
+    # Built here and handed on, rather than each of the two asking for its own.
+    # The header and the checks are then reading one object -- and `examine`
+    # building its own is what made "your configuration is being ignored"
+    # unsayable, since a catalogue resolved from `cfg` agrees with `cfg` by
+    # construction.
+    found = inventory(cfg)
+    checks = examine(cfg, found)
+    origins = found.origins
     if as_document:
-        print(json.dumps([vars(check) for check in checks], indent=2))
+        # An object where this was a bare list of checks. The two forms of this
+        # command have to say the same thing, and the human one now opens with
+        # where everything was read from -- a JSON form that omitted it would
+        # be the disagreement between surfaces that record exists to end.
+        print(
+            json.dumps(
+                {"origins": origins_document(origins), "checks": [vars(c) for c in checks]},
+                indent=2,
+            )
+        )
     else:
+        # Before the checks, because it is what they are about. `doctor` could
+        # report twelve tools and never say which directory they came from,
+        # which is a strange thing for a diagnostic not to be able to answer.
+        for line in origins.block():
+            print(line)
+        print()
         width = max(len(check.name) for check in checks)
         for check in checks:
             mark = {"ok": "ok  ", "warn": "warn", "fail": "FAIL"}[check.verdict]
