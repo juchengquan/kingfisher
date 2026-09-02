@@ -210,9 +210,101 @@ def test_the_json_form_carries_the_same_checks(cfg, monkeypatch, capsys):
     assert main(["doctor", "--json"]) == 0
 
     document = json.loads(capsys.readouterr().out)
-    assert {entry["name"] for entry in document} == {check.name for check in examine(cfg)}
-    for entry in document:
+    checks = document["checks"]
+    assert {entry["name"] for entry in checks} == {check.name for check in examine(cfg)}
+    for entry in checks:
         assert set(entry) == {"name", "verdict", "detail", "remedy"}
+
+
+def test_both_forms_of_doctor_say_where_it_read_from(cfg, monkeypatch, capsys):
+    """An object where this was a bare list of checks, because the two forms of
+    one command must not show different things.
+
+    The human form opens with the header; a JSON form without it would be the
+    disagreement between surfaces this record was built to end -- and a script
+    checking a deployment's health wants the paths in the same answer as the
+    verdicts, not from a second command.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["doctor", "--json"]) == 0
+    document = json.loads(capsys.readouterr().out)
+
+    assert set(document) == {"origins", "checks"}
+    assert document["origins"]["skills"]["path"] == str(cfg.skills_dir)
+
+    assert main(["doctor"]) == 0
+    printed = capsys.readouterr().out
+    # The catalogue `doctor` could count and never name. It reported "12 in the
+    # workspace" and had no way to say which workspace.
+    assert "tools     :" in printed
+    assert str(cfg.workspace) in printed
+
+
+def test_an_empty_catalogue_somebody_pointed_at_is_not_an_empty_workspace(cfg, tmp_path):
+    """The two look identical and the remedies are opposite.
+
+    Resolving a catalogue *creates* the directory it was pointed at rather than
+    refusing an absent one, so a mistyped `KINGFISHER_SUBAGENTS_DIR` yields a
+    real, readable, empty directory. `doctor` then said `ok  subagents  0
+    defined`, which is also what a correct fresh workspace says.
+    """
+    from dataclasses import replace
+
+    elsewhere = tmp_path / "staged-subagents"
+    elsewhere.mkdir()
+
+    checks = {c.name: c for c in examine(replace(cfg, subagents_root=elsewhere))}
+
+    assert checks["subagents directory"].verdict == "warn"
+    assert str(elsewhere) in checks["subagents directory"].detail
+    assert "created rather than refused" in checks["subagents directory"].detail
+
+
+def test_an_empty_catalogue_where_it_belongs_says_nothing(cfg):
+    """A fresh workspace is the ordinary state, and warning about it would make
+    the check above noise on every first run."""
+    assert "subagents directory" not in {c.name for c in examine(cfg)}
+
+
+def test_a_relocated_catalogue_that_holds_something_says_nothing(cfg, tmp_path):
+    """Sharing a catalogue across deployments is the arrangement the setting
+    exists for. The warning is about emptiness, not about relocation."""
+    from dataclasses import replace
+
+    from tests.conftest import an_agent
+
+    moved = replace(cfg, agents_root=tmp_path / "shared-agents")
+    (tmp_path / "shared-agents").mkdir()
+    an_agent(moved, "only")
+
+    assert "agents directory" not in {c.name for c in examine(moved)}
+
+
+def test_a_configuration_that_is_being_ignored_is_said_out_loud(cfg, tmp_path):
+    """Otherwise somebody edits the setting and watches nothing change.
+
+    Only reachable because `examine` takes the inventory rather than building
+    one: a catalogue it resolved from `cfg` agrees with `cfg` by construction,
+    so the deployment being examined would have been a fresh guess instead of
+    the wiring that is actually running.
+    """
+    from kingfisher import inventory
+    from kingfisher.infrastructure.catalogue import Definitions
+
+    staged = {kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")}
+    for path in staged.values():
+        path.mkdir()
+
+    found = inventory(cfg, catalogue=Definitions.from_roots(staged))
+    checks = {c.name: c for c in examine(cfg, found)}
+
+    assert checks["skills directory"].verdict == "warn"
+    assert str(staged["skills"]) in checks["skills directory"].detail
+    assert str(cfg.skills_dir) in checks["skills directory"].detail
+    assert "does nothing" in checks["skills directory"].detail
 
 
 def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatch, capsys):
