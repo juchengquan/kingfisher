@@ -1495,9 +1495,17 @@ def test_the_package_ships_the_catalogue_example():
 
     from kingfisher.infrastructure import workspace_fs
 
-    assert (SRC / workspace_fs.EXAMPLE).is_file()
-    installed = resources.files(workspace_fs.PACKAGE).joinpath(workspace_fs.EXAMPLE)
-    assert installed.is_file()
+    # Both, from `EXAMPLES` rather than named here, so the file added next is
+    # covered by having been added rather than by somebody remembering. The
+    # groups example is optional where the catalogue one is required, and that
+    # changes nothing about this: `_place_example` skips a missing source
+    # silently, so a packaging fault would show up as a workspace quietly
+    # missing furniture rather than as anything failing.
+    assert workspace_fs.EXAMPLES, "nothing is asserted if the tuple is empty"
+    for name in workspace_fs.EXAMPLES:
+        assert (SRC / name).is_file(), f"{name} left the package"
+        installed = resources.files(workspace_fs.PACKAGE).joinpath(name)
+        assert installed.is_file(), f"{name} is not reachable the way an install reaches it"
 
 
 # -- who caused it ---------------------------------------------------------

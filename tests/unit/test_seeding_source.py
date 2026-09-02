@@ -85,6 +85,35 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
     assert EXAMPLE not in seeding.seed(cfg, mine).written
 
 
+def test_the_groups_example_arrives_too_and_is_not_seeded_either(cfg, tmp_path):
+    """The same furniture for the other file `seed` tells a deployment to write.
+
+    `seed` skips a definition naming a group this workspace does not declare and
+    says to declare it in `groups.yaml` -- a file that, until this, no example of
+    existed anywhere an installed deployment could reach. `examples/groups.yaml`
+    is the worked set for the shipped agents and lives outside the wheel, so it
+    is not that example.
+
+    Optional where the catalogue example is required, which changes where it
+    comes from and not whether it arrives: nothing refuses to start without a
+    policy file, and a deployment told to write one still needs to see the shape.
+
+    Not seeded, asserted from the report, because the group work decided that
+    deliberately -- `groups` is not a definition kind and copying it would make
+    adopting access control something a deployment inherits rather than does.
+    """
+    from kingfisher.infrastructure.workspace_fs import GROUPS_EXAMPLE, ensure_layout
+
+    mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
+    ensure_layout(cfg.workspace)
+
+    assert (cfg.workspace / GROUPS_EXAMPLE).is_file()
+    assert not (cfg.workspace / "groups.yaml").exists(), (
+        "the example became the policy -- access control is a thing you adopt"
+    )
+    assert GROUPS_EXAMPLE not in seeding.seed(cfg, mine).written
+
+
 # -- resolving one source from a flag and a variable -----------------------
 
 
