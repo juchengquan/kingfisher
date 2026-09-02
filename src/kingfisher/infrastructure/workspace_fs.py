@@ -44,6 +44,25 @@ PACKAGE = "kingfisher"
 #: able to refuse.
 EXAMPLE = "models.yaml.example"
 
+#: The same furniture for the other file a deployment may be told to write.
+#:
+#: `groups.yaml` is *optional* where `models.yaml` is required, so this is here
+#: for a different reason than its neighbour. Nothing refuses to start without
+#: it -- with no policy file at all, kingfisher controls nothing by group. What
+#: makes it furniture is that `seed` will name it: a definition asking for a
+#: group this workspace does not declare is skipped, and the message says to
+#: declare it. A file you are told to write and given no example of is the gap
+#: `_place_example`'s own docstring is about, and it did not stop being one
+#: because the file is optional.
+#:
+#: Not `examples/groups.yaml`, which is the worked set for the shipped agents
+#: and says so. That one is outside the wheel, so an installed deployment does
+#: not have it; this one arrives with the framework.
+GROUPS_EXAMPLE = "groups.yaml.example"
+
+#: Both, in the order a reader meets them.
+EXAMPLES = (EXAMPLE, GROUPS_EXAMPLE)
+
 
 #: What a catalogue is made of, named once so a caller can quote it in an error
 #: rather than writing the three out again.
@@ -136,7 +155,7 @@ def ensure_layout(workspace: Path) -> Path:
 
 
 def _place_example(workspace: Path) -> None:
-    """Put the catalogue example where `models.yaml` is read from.
+    """Put each worked example where the file it is an example of is read from.
 
     Here rather than in `seed`, which is where it lived. Seeding is about to
     become able to *refuse* -- a deployment that names no definitions has
@@ -160,14 +179,15 @@ def _place_example(workspace: Path) -> None:
     overwritten is the one naming every endpoint this deployment reaches and
     whose credentials pay.
     """
-    source = resources.files(PACKAGE).joinpath(EXAMPLE)
-    if not source.is_file():  # a packaging fault, caught by a test
-        return
-    target = workspace / EXAMPLE
-    text = source.read_text(encoding="utf-8")
-    if target.is_file() and target.read_text(encoding="utf-8") == text:
-        return
-    target.write_text(text, encoding="utf-8")
+    for name in EXAMPLES:
+        source = resources.files(PACKAGE).joinpath(name)
+        if not source.is_file():  # a packaging fault, caught by a test
+            continue
+        target = workspace / name
+        text = source.read_text(encoding="utf-8")
+        if target.is_file() and target.read_text(encoding="utf-8") == text:
+            continue
+        target.write_text(text, encoding="utf-8")
 
 
 def ensure_session_layout(session_dir: Path) -> Path:

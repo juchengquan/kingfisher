@@ -52,6 +52,36 @@ def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys, shipped):
     assert (cfg.workspace / "models.yaml.example").is_file()
 
 
+def test_the_skip_message_names_a_file_the_workspace_actually_has(
+    cfg, monkeypatch, capsys, shipped
+):
+    """A remedy is only actionable if the thing it names is reachable.
+
+    `seed` skips a definition asking for a group this workspace does not declare
+    and tells the reader to write `groups.yaml`. That was the whole instruction,
+    for a file no example of existed anywhere an installed deployment could
+    reach -- `examples/groups.yaml` is the worked set for the shipped agents and
+    is outside the wheel.
+
+    So the message names the example and `ensure_layout` puts it there. Both
+    halves are asserted here because either alone is worse than neither: a
+    message naming a file that is not there sends somebody looking, and a file
+    nothing mentions is never found.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+
+    assert main(["seed"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "groups.yaml.example" in printed, (
+        "the remedy names no example, so the reader is told to write a format "
+        "they have not been shown"
+    )
+    named = cfg.workspace / "groups.yaml.example"
+    assert named.is_file(), "the message names a file this workspace does not have"
+
+
 def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(
     tmp_path, monkeypatch, capsys, shipped
 ):

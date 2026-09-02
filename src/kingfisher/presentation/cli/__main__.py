@@ -74,7 +74,10 @@ CANNOT = {
 #: group is declared in a file.
 REMEDY = {
     "middleware": "Register the names",
-    "groups": "Declare the groups in groups.yaml",
+    # Names the example as well as the file, because the file does not exist
+    # yet -- that is why the definition was skipped. `ensure_layout` puts the
+    # example beside it, so this is a copy rather than a search.
+    "groups": "Declare the groups in groups.yaml (groups.yaml.example is beside it)",
 }
 
 
