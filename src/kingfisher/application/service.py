@@ -64,6 +64,7 @@ from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from kingfisher.application import access
 from kingfisher.application import config as config_module
 from kingfisher.application.origins import Origins
 from kingfisher.application.reporting import (
@@ -91,7 +92,6 @@ from kingfisher.domain.access import (
 )
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
-    ALL,
     UNRESTRICTED,
     Capabilities,
     CapabilityError,
@@ -398,10 +398,23 @@ class Kingfisher:
         self.access: Groups | None = self.cfg.access
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
-            self._refuse_undeclared_groups()
-            self.access_report = AccessReport(
-                unrestricted=self._unrestricted(), narrowed=self._narrowed()
+            # One walk of the definitions, not three. `defined_subagents` reads
+            # a directory, and asking it once per question is how this came to
+            # do it three times at every startup.
+            #
+            # `session_dir=None` because this is the shared catalogue, before
+            # any session exists. What a session adds is a request's own upload,
+            # which is the caller's own text and carries no audience anyone else
+            # wrote -- so the listing, which may be describing one, passes its
+            # own set to the same functions.
+            kinds = (
+                ("agent", self.catalogue.agents.specs),
+                ("subagent", defined_subagents(self.cfg, None, catalogue=self.catalogue)),
             )
+            # Refusals first: a typo makes a line both undeclared and narrowing,
+            # and reported as a narrowing it would explain the wrong fault.
+            access.refuse_undeclared(*kinds, vocabulary=self.access)
+            self.access_report = access.audit(*kinds, vocabulary=self.access)
 
         # Last, so the line reports what was resolved rather than what was
         # asked for -- and so a wiring failure raises instead of announcing a
@@ -431,83 +444,6 @@ class Kingfisher:
         `Kingfisher` exactly as cheap as it was.
         """
         return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
-
-    def _refuse_undeclared_groups(self) -> None:
-        """Refuse a definition naming a group this deployment does not declare.
-
-        The closed vocabulary's other end. The caller's end is `expand`, which
-        refuses an unknown name in a group list; this is the same rule pointed
-        at the files, and without it the vocabulary is only half closed --
-        `groups: [analists]` is not an error, it invents a group nobody is in,
-        and the only symptom is an agent quietly reachable by no one, found
-        weeks later by whoever needed it.
-
-        Here rather than in `parse`, and `_narrowed` below with it, for a reason
-        rather than a preference: `parse` reads one document and has no
-        vocabulary to check against. This is the first moment both are known --
-        and the other needs the vocabulary as badly, since what one audience
-        says about another is a question about what the names *mean*.
-
-        Refused rather than reported, unlike the things `AccessReport` carries.
-        Those are judgements about files somebody may have meant; this is a name
-        misspelled in a file the same deployment wrote, next to the file that
-        lists the spellings, and no reading of it is correct.
-        """
-        assert self.access is not None  # noqa: S101 -- guarded by the caller
-        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
-        for kind, specs in (("agent", self.catalogue.agents.specs), ("subagent", delegates)):
-            for name, spec in sorted(specs.items()):
-                where = f"{kind} {name!r}"
-                self.access.refuse_undeclared(spec.groups, where=where, error=AccessError)
-                for field_name, entries in spec.audiences.items():
-                    for entry, audience in entries.items():
-                        self.access.refuse_undeclared(
-                            audience,
-                            where=f"{where}: {field_name} entry {entry!r}",
-                            error=AccessError,
-                        )
-
-    def _narrowed(self) -> tuple[tuple[str, str], ...]:
-        """Entries asking for a group their definition's own audience never mentions.
-
-        Walked here rather than at parse, and reported rather than refused --
-        `Groups.narrowing_in` has both reasons. Runs after
-        `_refuse_undeclared_groups`, so every name in what it reports is known
-        to be real: a typo would otherwise be described as a narrowing, which is
-        an explanation of the wrong fault.
-        """
-        assert self.access is not None  # noqa: S101 -- guarded by the caller
-        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
-        found: list[tuple[str, str]] = []
-        for kind, specs in (("agent", self.catalogue.agents.specs), ("subagent", delegates)):
-            for name, spec in sorted(specs.items()):
-                found.extend(
-                    self.access.narrowing_in(
-                        spec.audiences, groups=spec.groups, where=f"{kind} {name}"
-                    )
-                )
-        return tuple(found)
-
-    def _unrestricted(self) -> tuple[tuple[str, str], ...]:
-        """Definitions carrying no `groups:` line, so reachable by everyone.
-
-        Walked at construction rather than per turn: the catalogue is read once
-        here, and this is a fact about the files rather than about a caller.
-
-        `session_dir=None` because this is the shared catalogue, before any
-        session exists. What a session adds is a request's own upload, which is
-        the caller's own text and carries no audience anyone else wrote.
-        """
-        found: list[tuple[str, str]] = [
-            ("agent", name)
-            for name, spec in sorted(self.catalogue.agents.specs.items())
-            if spec.groups == ALL
-        ]
-        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
-        found.extend(
-            ("subagent", name) for name, spec in sorted(delegates.items()) if spec.groups == ALL
-        )
-        return tuple(found)
 
     def held_for(self, groups: Held | None) -> frozenset[str] | None:
         """The caller's expanded groups, or `None` for no vocabulary / UNSCOPED.
