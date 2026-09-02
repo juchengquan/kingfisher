@@ -524,7 +524,7 @@ def approved_middleware(
     from one caller without breaking every definition that wrote one.
 
     Nor is the shortfall reported back. That is a decision about what the
-    withheld report is for rather than about this axis; `_withheld_by_kind`
+    withheld report is for rather than about this axis; `reporting.withheld_by_kind`
     carries it.
 
     Checked identically for a catalogue definition and an uploaded one.
