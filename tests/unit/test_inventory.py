@@ -11,8 +11,6 @@ catalogue rather than raising over the rest of the inventory.
 
 from __future__ import annotations
 
-from pathlib import Path
-
 import pytest
 
 from kingfisher.application.inventory import Inventory, inventory
@@ -208,11 +206,18 @@ def test_a_tool_says_which_module_defined_it(cfg):
 
 def test_the_record_says_where_each_catalogue_resolved_to(cfg):
     """A catalogue can be deployed outside the workspace and shared. Three bugs
-    have come from a path going stale, so the answer names them."""
+    have come from a path going stale, so the answer names them.
+
+    All four kinds, which it could not before: the record carried
+    `skills_source`, `subagents_source` and `agents_source` as loose strings and
+    had no field for `tools` at all, so the one catalogue nobody could see was
+    the one nobody had added a line for.
+    """
     found = inventory(cfg)
 
-    assert Path(found.skills_source) == cfg.skills_dir
-    assert Path(found.subagents_source) == subagents_dir(cfg)
+    assert found.origins.skills.path == cfg.skills_dir
+    assert found.origins.subagents.path == subagents_dir(cfg)
+    assert found.origins.tools.path == cfg.catalogue_roots["tools"]
 
 
 def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
@@ -242,7 +247,7 @@ def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
     assert calls == []
     # And the handed-over one is what was read, rather than being accepted and
     # ignored -- which would pass the line above and answer from somewhere else.
-    assert Path(found.skills_source) == cfg.skills_dir
+    assert found.origins.skills.path == cfg.skills_dir
 
 
 def test_the_record_is_the_only_shape_callers_need(cfg):
@@ -253,7 +258,10 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
 
     assert isinstance(found, Inventory)
     for name in (
-        "workspace", "skills_source", "subagents_source", "builtin_tools", "tools",
+        # One field where there were four -- the workspace and three of the four
+        # catalogue paths -- and it answers for all eleven places rather than
+        # those three.
+        "origins", "builtin_tools", "tools",
         "tool_sources", "tools_error", "skills", "skills_unloadable",
         "skills_misplaced", "skills_misfiled", "subagents", "subagent_sources",
         "subagents_error",

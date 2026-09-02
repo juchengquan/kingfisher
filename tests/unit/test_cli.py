@@ -200,7 +200,7 @@ def test_both_drivers_render_through_the_same_code(cfg, capsys):
     assert driver.show_inventory(cfg, cfg.workspace) == 0
     printed = capsys.readouterr().out
 
-    expected = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
+    expected = "\n".join(render(inventory(cfg)))
     assert printed.strip() == expected.strip()
 
 
@@ -415,9 +415,57 @@ def test_the_json_document_survives_a_round_trip(cfg):
 
     document = json.loads(json.dumps(as_json(inventory(cfg))))
 
-    assert isinstance(document["workspace"], str)
+    # Under `origins` now, with every other place beside it. `Path` is what
+    # made this test worth having and the record still holds them, one layer in.
+    assert isinstance(document["origins"]["workspace"], str)
+    assert document["origins"]["skills"] == {
+        "kind": "default",
+        "path": str(cfg.skills_dir),
+    }
     assert "probe-agent" in document["subagents"]
     assert document["tools_error"] is None
+
+
+def test_the_header_names_every_catalogue_including_tools(cfg):
+    """The regression this record was built to make impossible.
+
+    The header was four hand-written lines naming the workspace, agents, skills
+    and subagents. `tools` was in neither the header nor the record behind it --
+    not a decision, just a fourth line nobody added -- so the one question a
+    reader most often has about a relocated catalogue had no answer.
+    """
+    from kingfisher import inventory
+    from kingfisher.presentation.cli.listing import render
+
+    header = list(render(inventory(cfg)))[:11]
+
+    assert [line.split(" :")[0].strip() for line in header] == [
+        "workspace", "agents", "skills", "subagents", "tools",
+        "models", "groups", "seed", "state", "scratch", "sessions",
+    ]
+
+
+def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
+    """Two things the header deliberately does not do.
+
+    The header spells anything under the workspace as `./name`, which is a
+    reading aid -- it leaves the entries that moved as the only absolute paths
+    on the page. A script wants the path it can open, and it wants the kind,
+    because "nothing is configured" and "you handed me a store" are two
+    situations it must not have to tell apart by matching on prose.
+    """
+    import json
+    from dataclasses import replace
+
+    from kingfisher import inventory
+    from kingfisher.presentation.cli.listing import as_json
+
+    document = json.loads(json.dumps(as_json(inventory(replace(cfg, assets=tmp_path)))))
+    origins = document["origins"]
+
+    assert origins["skills"]["path"].startswith("/"), "not the ./name the header prints"
+    assert origins["seed"] == {"kind": "relocated", "path": str(tmp_path)}
+    assert origins["groups"]["kind"] == "unset"
 
 
 def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, capsys):
@@ -531,7 +579,7 @@ def test_the_listing_marks_a_compiled_delegate(cfg):
     from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
-    lines = list(render(inventory(cfg), workspace=cfg.workspace))
+    lines = list(render(inventory(cfg)))
     named = {name: [one for one in lines if one.strip().startswith(name)]
              for name in ("researcher", "reviewer")}
 
@@ -547,7 +595,7 @@ def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
     from kingfisher.presentation.cli.listing import render
 
     _subagent_catalogue(cfg)
-    printed = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
+    printed = "\n".join(render(inventory(cfg)))
 
     assert "--tools" in printed
     assert "do not restrict what it can call" in printed
@@ -563,7 +611,7 @@ def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "reviewer.yaml").write_text(PROMPTED_DEFINITION, encoding="utf-8")
 
-    printed = "\n".join(render(inventory(cfg), workspace=cfg.workspace))
+    printed = "\n".join(render(inventory(cfg)))
 
     assert "compiled" not in printed
 
@@ -577,7 +625,7 @@ def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(
 
     _subagent_catalogue(cfg)
     (line,) = [
-        one for one in render(inventory(cfg), workspace=cfg.workspace)
+        one for one in render(inventory(cfg))
         if one.strip().startswith("researcher")
     ]
 

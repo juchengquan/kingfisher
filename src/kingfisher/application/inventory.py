@@ -25,6 +25,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
+from kingfisher.application.origins import Origins
 from kingfisher.config import Config
 from kingfisher.domain.access import AccessError, AccessReport, Groups, Stated, reaches
 from kingfisher.domain.agent import AgentError
@@ -32,7 +33,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.domain.tool import Offering
-from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions, source_of
+from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.tools import ToolError
 from kingfisher.infrastructure.workspace_fs import ensure_session_layout
 
@@ -61,11 +62,16 @@ class Inventory:
     printer decides what to say and what exit code to use.
     """
 
-    workspace: Path
-    #: Where each shared catalogue resolved to. Named rather than assumed.
-    skills_source: str
-    subagents_source: str
-    agents_source: str = ""
+    #: Where every part of this deployment was read from, including the four
+    #: catalogue directories. One record rather than the three loose strings
+    #: that were here -- `skills_source`, `subagents_source`, `agents_source` --
+    #: which named three of the four kinds and left `tools` out, because a
+    #: fourth field is a thing somebody has to remember to add and nobody did.
+    #:
+    #: It carries the workspace too, so `Inventory` no longer holds its own. Two
+    #: fields answering one question is the drift this record exists to end, and
+    #: `render` used to take a third answer as an argument.
+    origins: Origins
 
     #: Agent name -> its description. First in the record because it is first in
     #: the listing: an agent is what a request names, and the three kinds below
@@ -554,10 +560,10 @@ def inventory(
     reaching = _reaching(held, stated)
 
     return Inventory(
-        workspace=cfg.workspace,
-        skills_source=source_of(resolved.skills),
-        subagents_source=source_of(resolved.subagents),
-        agents_source=source_of(resolved.agents),
+        # The resolved catalogue, not `cfg` -- so a deployment that staged its
+        # definitions somewhere is listed as it is rather than as it was
+        # configured, which is the difference the record was built for.
+        origins=Origins.of(cfg, catalogue=resolved),
         agents=MappingProxyType(dict(reaching("agents", agents))),
         agent_sources=agent_sources,
         agent_delegates=agent_delegates,

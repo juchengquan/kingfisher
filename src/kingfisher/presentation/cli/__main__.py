@@ -314,7 +314,7 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     if as_document:
         print(json.dumps(as_json(found), indent=2, sort_keys=True))
     else:
-        for line in render(found, workspace=cfg.workspace):
+        for line in render(found):
             print(line)
     return 1 if failed(found) else 0
 

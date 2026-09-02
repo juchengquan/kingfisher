@@ -231,7 +231,7 @@ def show_inventory(cfg: Config, workspace: Path) -> int:
     from kingfisher.presentation.cli.listing import failed, render
 
     found = inventory(cfg)
-    for line in render(found, workspace=workspace):
+    for line in render(found):
         print(line)
     return 1 if failed(found) else 0
 

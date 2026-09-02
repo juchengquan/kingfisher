@@ -11,7 +11,6 @@ writes to stdout cannot be used by a server, and this one is reached by both.
 from __future__ import annotations
 
 from collections.abc import Iterator
-from pathlib import Path
 
 from kingfisher import (
     ALL,
@@ -20,6 +19,7 @@ from kingfisher import (
     SKILL_LAYOUT,
     Audience,
     Inventory,
+    Origins,
     offered,
     spell,
     split_reference,
@@ -65,19 +65,23 @@ def _agents(found: Inventory) -> Iterator[str]:
     yield ""
 
 
-def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
+def render(found: Inventory) -> Iterator[str]:
     """The listing, line by line.
 
-    `workspace` overrides the record's own, for a driver that resolved one
-    itself and wants to print what it actually used rather than what the
-    configuration says.
+    The header is the record's, not this file's. It used to be four lines
+    written here, naming three of the four catalogues -- `tools` was in neither
+    the header nor the record behind it, because a fourth line is a thing
+    somebody has to remember. Now a place added to `Origins` appears here
+    without this function being touched.
+
+    `workspace` used to be a parameter, overriding the record "for a driver that
+    resolved one itself and wants to print what it actually used rather than
+    what the configuration says". That is exactly the disagreement `Origins`
+    removes: it reports what was resolved, so a second answer passed in
+    alongside it could only ever be the wrong one.
     """
-    yield f"workspace : {workspace or found.workspace}"
-    # Named rather than assumed: the catalogues may be deployed outside the
-    # workspace and shared by every deployment that points at them.
-    yield f"agents    : {found.agents_source}"
-    yield f"skills    : {found.skills_source}"
-    yield f"subagents : {found.subagents_source}\n"
+    yield from found.origins.block()
+    yield ""
 
     yield from _agents(found)
 
@@ -109,6 +113,28 @@ def render(found: Inventory, workspace: Path | None = None) -> Iterator[str]:
 
     yield from _catalogue(found)
     yield from _access(found)
+
+
+def _origins(origins: Origins) -> dict[str, object]:
+    """Where everything was read from, for a script rather than a person.
+
+    Absolute paths, unlike the header, which spells anything under the
+    workspace as `./name`. That shortening is a reading aid -- it makes the
+    entries that moved the only absolute ones on the page -- and a script wants
+    the path it can open.
+
+    The kind travels with it, which is the whole reason an entry is a record and
+    not a string. "Nothing is configured", "you handed me a store" and "this is
+    somewhere else entirely" are three different situations, and a consumer must
+    not have to match on prose to tell them apart.
+    """
+    return {
+        "workspace": str(origins.workspace),
+        **{
+            name: {"kind": origin.kind, "path": None if origin.path is None else str(origin.path)}
+            for name, origin in origins.entries()
+        },
+    }
 
 
 def _who(audience: Audience) -> str:
@@ -300,10 +326,7 @@ def as_json(found: Inventory) -> dict[str, object]:
     proxies become plain dicts because `json` will not encode them.
     """
     return {
-        "workspace": str(found.workspace),
-        "skills_source": found.skills_source,
-        "subagents_source": found.subagents_source,
-        "agents_source": found.agents_source,
+        "origins": _origins(found.origins),
         "agents": dict(found.agents),
         "agent_sources": dict(found.agent_sources),
         "agent_delegates": {name: list(v) for name, v in found.agent_delegates.items()},
