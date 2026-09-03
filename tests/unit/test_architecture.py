@@ -1081,6 +1081,70 @@ def test_the_public_api_list_matches_the_lazy_export_table():
     assert sorted(kingfisher.__all__) == sorted(kingfisher._EXPORTS)
 
 
+def test_the_layer_and_the_root_agree_about_this_layer():
+    """Two tables naming the same nine things, held to each other.
+
+    `kingfisher.application` re-exports what the root already exports from that
+    layer, so a caller may say where something lives. The cost of that
+    convenience is a second table, and a second table is what this whole file
+    exists to distrust -- `test_kind_vocabulary` opens on four places naming
+    four axes while a fifth existed, and nothing noticing.
+
+    Both directions, because they fail differently. A name the layer adds and
+    the root does not is reachable at `kingfisher.application.X` and not at
+    `kingfisher.X`, which makes the documented surface a lie by omission. A name
+    the root serves from this layer and the layer does not is the same lie the
+    other way round, and is what happens when somebody adds an export to the
+    root without thinking about this file.
+
+    The module string is compared too, not only the name. Two tables agreeing
+    that `Kingfisher` exists while disagreeing about where it comes from would
+    hand out two different objects under one name.
+    """
+    import kingfisher
+    from kingfisher import application
+
+    root_here = {
+        name: module
+        for name, module in kingfisher._EXPORTS.items()
+        if module.startswith("kingfisher.application.")
+    }
+
+    assert root_here, "the root exports nothing from this layer -- this asserts nothing"
+    assert root_here == application._EXPORTS, (
+        "kingfisher.application and the package root disagree about this layer: "
+        f"{sorted(set(application._EXPORTS.items()) ^ set(root_here.items()))}"
+    )
+    assert sorted(application.__all__) == sorted(application._EXPORTS), (
+        "the layer's __all__ and its export table name different things"
+    )
+
+
+def test_naming_the_layer_does_not_pull_in_deepagents():
+    """The reason the layer's table is lazy rather than nine plain imports.
+
+    A package's `__init__` runs before any of its submodules, so an eager
+    `from .service import Kingfisher` here would make `application.config` --
+    which needs no harness at all -- pay for deepagents and three provider SDKs.
+    Measured before it was written this way: 39ms became 888ms.
+
+    Asserted in a subprocess, because this one has already imported everything
+    by the time it runs.
+    """
+    import subprocess
+    import sys
+
+    probe = (
+        "import sys\n"
+        "from kingfisher.application import config_from_env\n"
+        "assert not any(m.startswith('deepagents') for m in sys.modules), "
+        "'naming the layer pulled in the harness'\n"
+    )
+    subprocess.run(  # noqa: S603 -- this interpreter, and a literal above
+        [sys.executable, "-c", probe], check=True
+    )
+
+
 def test_importing_kingfisher_does_not_pull_in_deepagents():
     """The point of the lazy re-exports: a consumer that only touches domain
     types should not pay a second for three provider SDKs."""
