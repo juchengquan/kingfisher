@@ -64,12 +64,25 @@ from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from kingfisher.application import access
 from kingfisher.application import config as config_module
 from kingfisher.application.origins import Origins
+from kingfisher.application.reporting import (
+    delegate_only,
+    opening_events,
+    withheld_by_kind,
+)
+from kingfisher.application.turn import (
+    Admitted,
+    Prepared,
+    consume,
+    out_of_steps,
+    overrun,
+    turn_message,
+)
 from kingfisher.config import Config
 from kingfisher.domain import retention
 from kingfisher.domain.access import (
-    AUDIENCED,
     AccessError,
     AccessReport,
     Groups,
@@ -79,12 +92,9 @@ from kingfisher.domain.access import (
 )
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
-    ALL,
     UNRESTRICTED,
     Capabilities,
     CapabilityError,
-    Selection,
-    withheld,
 )
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
@@ -98,20 +108,16 @@ from kingfisher.domain.session import (
     sessions_root,
     still_held,
 )
-from kingfisher.domain.transcript import Message
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.agent import (
     MiddlewareFactory,
-    available_skills,
     build_agent,
     defined_subagents,
     indistinct_delegates,
-    registered_tools,
     release_interpreter,
-    workspace_tool_names,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
@@ -180,376 +186,6 @@ logger = logging.getLogger("kingfisher.origins")
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
 _UNSET: Any = object()
-
-
-@dataclass(frozen=True)
-class _Admitted:
-    """A request that has passed everything able to reject it.
-
-    The boundary is the whole point of the type. `_admit` may raise -- an
-    unknown session, a quota, a file that is not there, middleware this request
-    may not use -- and it runs before any turn directory exists. `_open_turn`
-    creates one and never refuses.
-
-    That ordering was a claim in a docstring, and it was false: `--data` naming
-    a missing file left nothing behind, while `--input` naming one left `t001`,
-    because the inputs were copied after the turn was allocated. Making the
-    halves separate functions with one type between them is what turns the
-    claim into something a reader can check.
-    """
-
-    request: Request
-    session: Any
-    graph: Any
-    #: Paths `protect_data` could not harden. Reported to the caller rather
-    #: than raised, so they cross the boundary instead of stopping at it.
-    unprotected: tuple[str, ...]
-    placement: Any
-    #: Content resolved from `input_refs`, held until the turn exists.
-    #:
-    #: Fetched during admission because a ref that will not resolve must refuse
-    #: the request, and written in `_open_turn` because a turn's `input/` is not
-    #: there yet. The bytes wait in between rather than the refusal moving.
-    fetched_inputs: Any = None
-    #: The saver this service opened for the turn, or None when it opened
-    #: nothing -- an injected instance is the deployment's to close.
-    release: Any = None
-    #: `(what, names)` for each thing this workspace offers that the request did
-    #: not grant -- tools, skills, subagents. Crosses rather than stopping: a
-    #: withheld name is a fact about the run, not a refusal.
-    withheld: tuple[tuple[str, tuple[str, ...]], ...] = ()
-    #: `(name, why)` for each delegate that asked to run elsewhere and did not.
-    #: A fact about the run, like `withheld` -- nothing is wrong enough to stop
-    #: for, and nothing else would ever say it.
-    indistinct: tuple[tuple[str, str], ...] = ()
-    #: Tool names more than one file defines, which the agent holding the
-    #: grant therefore cannot hold. Reported rather than dropped in silence.
-    delegate_only: tuple[str, ...] = ()
-
-
-@dataclass(frozen=True)
-class _Prepared:
-    """Everything a turn needs before the model is reached.
-
-    Extracted so the orchestration sequence exists once. `stream` and `astream`
-    differ only in how they iterate the graph -- a dozen lines each -- and the
-    hundred lines of ordering that matter are not written twice to drift apart.
-    """
-
-    graph: Any
-    message: str
-    session: Any
-    turn: Any
-    logger: Any
-    config: dict[str, Any]
-    events: tuple[RunEvent, ...]
-    deadline: float
-    timeout_s: float
-    #: Closed when the turn ends. See `_checkpointer_for`.
-    release: Any = None
-    #: What was said in this session before now. The graph's saver holds one
-    #: turn and nothing after it, so this is where a conversation comes from.
-    history: tuple[Message, ...] = ()
-
-
-def _named(selection: Selection) -> set[str]:
-    """A selection as a set of names, with the two ends read as empty.
-
-    `ALL` and `None` name nothing that can be *lost*: one is everything and the
-    other is nothing, and neither changes under group narrowing -- so the
-    difference this feeds is empty either way, which is the right answer.
-    """
-    return set(selection) if isinstance(selection, tuple) else set()
-
-
-def _withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
-    # "what the workspace offers" comes from, and none is derivable from
-    # another: the grant, the config, the session, the built graph and the
-    # catalogue. The last two are who is asking. Folding any of them into a
-    # parameter object would hide which source a kind is measured against,
-    # which is the one thing a reader of this function needs to see.
-    allowed: Capabilities,
-    cfg: Config,
-    session_dir: Path,
-    graph: Any,
-    catalogue: Definitions,
-    *,
-    agent: AgentSpec | None = None,
-    held: frozenset[str] | None = None,
-) -> tuple[tuple[str, tuple[str, ...]], ...]:
-    """What this request left out, per kind, skipping the kinds it left nothing.
-
-    **`middleware` is deliberately not among them**, and the reason is about
-    this report rather than about that axis. What goes here is what a caller
-    could have asked for differently -- a tool, a skill, a delegate they may
-    grant next time. A caller cannot register a middleware: the names come from
-    whatever constructed `Kingfisher`, so telling them one was withheld names
-    something they have no way to act on.
-
-    It is the one axis where a shortfall can pass unremarked --
-    `approved_middleware` raises for a name a request withheld, but a
-    definition that wrote `middleware: ["*"]` resolves quietly smaller, and
-    quietly to nothing. That is the trade this absence accepts, written here
-    because this is where the next reader will come looking for it.
-
-    Three axes, one rule. Each differs only in where "what the workspace offers"
-    comes from, and none of the three is knowable without asking the thing that
-    assembled the agent -- which is why a grant goes stale in the first place.
-
-    The catalogue is passed rather than re-derived, so what a caller is told it
-    did not grant is measured against the same directories the agent was built
-    from.
-
-    Each "what the workspace offers" is a thunk, not a value, and that is a cost
-    rather than a style: three of the four walk a directory, and an axis left at
-    its default is skipped a line later without ever needing the answer. Written
-    eagerly, the subagent walk happened on every turn of every run -- which
-    stayed invisible only while that axis defaulted to none and this function
-    was the sole reader.
-    """
-    default = Capabilities()
-    workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
-
-    # What this agent would have held for *someone*, less what it holds for
-    # this caller: exactly the names group narrowing took away, per field.
-    #
-    # Computed rather than asked of the policy, because there is no policy to
-    # ask any more -- an audience is a property of the definition, so the only
-    # thing that knows what a caller lost is the definition resolved twice.
-    denied: dict[str, frozenset[str]] = {}
-    if agent is not None and held is not None:
-        everyone, theirs = agent.declares(None), agent.declares(held)
-        denied = {
-            name: frozenset(_named(getattr(everyone, name)) - _named(getattr(theirs, name)))
-            for name in AUDIENCED
-        }
-
-    def visible(kind: str | None, names: tuple[str, ...]) -> tuple[str, ...]:
-        """`names`, less what this caller's groups took away.
-
-        Applied to what the workspace *offers*, before the comparison, and the
-        ordering is the whole of it. This function names every offered thing a
-        grant left out -- so measured against the unfiltered catalogue it would
-        hand a caller the exact list of what their groups denied them, which is
-        precisely what filtering them out of listings and refusals exists to
-        avoid. An asset out of reach is not withheld from this caller; as far
-        as they are concerned it was never offered.
-
-        Only what *group narrowing* removed, and that precision matters. A tool
-        the agent simply never declared is still reported, because that is a
-        fact about the agent rather than about who is calling -- and it is what
-        this report has always said.
-
-        `kind` is `None` for the axes no audience controls, which are
-        unfiltered and keep reporting exactly what they did.
-        """
-        if kind is None or not (lost := denied.get(kind)):
-            return names
-        return tuple(name for name in names if name not in lost)
-
-    offered = (
-        # Built-ins and workspace tools are granted apart, so they are reported
-        # apart: "3 tool(s) not granted" meant nothing when it could have been
-        # either kind.
-        # `or ()` for the unreadable case, which cannot happen to a graph
-        # `build_agent` made -- and if it ever does, a run report listing no
-        # built-ins is a better outcome than a turn that will not start.
-        # `test_a_real_build_is_readable` is what notices instead.
-        ("builtin tool", "builtin_tools", None, lambda: tuple(
-            n for n in registered_tools(graph) or () if n not in set(workspace)
-        )),
-        ("tool", "tools", "tools", lambda: workspace),
-        ("skill", "skills", None, lambda: available_skills(cfg, session_dir, catalogue=catalogue)),
-        (
-            "subagent",
-            "subagents",
-            "subagents",
-            lambda: tuple(defined_subagents(cfg, session_dir, catalogue=catalogue)),
-        ),
-    )
-    found = []
-    for what, field, kind, names_of in offered:
-        granted = getattr(allowed, field)
-        # Silent when the request left an axis alone. `subagents` defaults to
-        # none, so reporting every axis at its default would put a line about
-        # undeclared delegates on every run -- which is the noise this event
-        # exists to avoid being.
-        if granted == getattr(default, field):
-            continue
-        if left_out := withheld(granted, offered=visible(kind, tuple(names_of()))):
-            found.append((what, left_out))
-    return tuple(found)
-
-
-def _delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
-    """Names this run was granted that only a delegate can actually ask for.
-
-    Computed from the catalogue rather than threaded out of `build_agent`,
-    because the graph has already dropped them by the time it exists -- which is
-    exactly why it has to be said from somewhere that still knows.
-    """
-    from kingfisher.domain.tool import Offering  # noqa: PLC0415
-    from kingfisher.infrastructure.catalogue import Definitions  # noqa: PLC0415
-
-    found = (catalogue or Definitions.from_config(cfg)).tools.found
-    return Offering.of(found).ambiguous(allowed.tools, found)
-
-
-def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
-    # kind, and folding them into a bag would only move the list somewhere
-    # a reader has to go and find it.
-    turn_dir: str,
-    unprotected: tuple[str, ...],
-    placement: Any,
-    withheld: tuple[tuple[str, tuple[str, ...]], ...] = (),
-    indistinct: tuple[tuple[str, str], ...] = (),
-    delegate_only: tuple[str, ...] = (),
-) -> tuple[RunEvent, ...]:
-    """What the caller is told before the model is reached.
-
-    A function because it is one: nothing here touches the service, and every
-    input is already decided by the time it runs. `_prepare` was 123 lines and
-    this was the part of it that could be checked on its own.
-    """
-    events: list[RunEvent] = []
-    if unprotected:
-        events.append(RunEvent(kind="protect_failed", text="; ".join(unprotected)))
-    # A grant is a whitelist, so it means less than the workspace holds and says
-    # so nowhere. Told here rather than discovered when the model reaches for
-    # one and is refused halfway through a turn. One line per kind, because a
-    # single line naming three kinds is the one nobody finishes reading.
-    for what, names in withheld:
-        events.append(
-            RunEvent(
-                kind="withheld",
-                text=f"{len(names)} {what}(s) not granted: {', '.join(names)}",
-            )
-        )
-    # Granted, and still not in the agent's own hands. Two files may each define
-    # a `fetch`, and an agent dispatches by name -- so the pair goes to whichever
-    # delegate names one, and the agent holding the grant gets neither.
-    #
-    # Said out loud because the alternative is the failure this codebase refuses
-    # everywhere: quietly holding less than was asked for. It is deliberately
-    # *not* folded into `withheld`, which means "you did not ask for this" --
-    # here the caller did ask, and the answer is "name which one, in a delegate".
-    if delegate_only:
-        events.append(
-            RunEvent(
-                kind="delegate_only",
-                text=(
-                    f"{len(delegate_only)} tool name(s) more than one file defines, "
-                    f"so this agent holds none of them -- a subagent that names one "
-                    f"gets it: {', '.join(delegate_only)}"
-                ),
-            )
-        )
-    # A delegate that meant to run elsewhere and did not. Said here because
-    # nothing later will: it builds, it answers, and an answer from the model
-    # it was supposed to be checking looks exactly like a good one.
-    for name, why in indistinct:
-        events.append(RunEvent(kind="indistinct", text=f"{name} {why}", agent=name))
-    if placement.placed:
-        # Replacement is the one dangerous case -- durable data, silently
-        # overwritten -- so it is named rather than assumed.
-        replaced = f" ({len(placement.replaced)} replaced)" if placement.replaced else ""
-        events.append(
-            RunEvent(kind="data_placed", text=f"{', '.join(placement.placed)}{replaced}")
-        )
-    events.append(RunEvent(kind="run_start", text=turn_dir))
-    return tuple(events)
-
-
-def turn_message(task: str, turn: Any, placed: tuple[str, ...], has_inputs: bool) -> str:
-    """The task, plus this turn's facts and nothing more.
-
-    What the task should *produce* is the task's business: asking for a written
-    report is one kind of request among many, and a general agent should not
-    carry one convention's filenames in its plumbing. They lived in the system
-    prompt once, which made every greeting deliberate over two files nobody
-    wanted.
-
-    These facts reach the model here rather than in the system prompt because
-    they are run-scoped: the prompt is the cached prefix, and putting a turn
-    directory in it would move that prefix on every session.
-    """
-    # Named because `/data` changed under a session the agent may already have
-    # looked at.
-    arrived = f" New files in /data: {', '.join(placed)}." if placed else ""
-    supplied = (
-        f" Files supplied with this request are in {turn.virtual_input_dir}."
-        if has_inputs
-        else ""
-    )
-    # Both names for the one directory. `system.md` states the rule -- drop the
-    # leading slash for the shell -- and stating it there was not enough: over
-    # ten runs of one task the agent passed the virtual path to `execute` 4
-    # times, each failing and costing roughly three times the whole task to
-    # recover. The 6 that used the shell form first never failed. This line is
-    # already per-turn, so unlike the system prompt it costs no cache to say.
-    return (
-        f"{task}\n\n"
-        f"Your run directory for this task is {turn.virtual_dir} "
-        f"(from the shell, {turn.shell_dir}).{supplied}{arrived}"
-    )
-
-
-def _consume(
-    namespace: Any,
-    mode: str,
-    chunk: Any,
-    answer: str,
-    delegates: runtime.Delegates,
-) -> tuple[str, tuple[RunEvent, ...]]:
-    """One stream chunk into (answer so far, events to emit).
-
-    Both loops are offered every chunk and each mode ignores the ones that are
-    not its own. Written once so the sync and async loops cannot come to
-    disagree about which mode carries the answer -- or, now, about which agent
-    a chunk came from, which is a second thing they could have drifted on.
-    """
-    if (text := runtime.answer_in(namespace, mode, chunk)) is not None:
-        answer = text
-    return answer, tuple(runtime.events_in(namespace, mode, chunk, delegates))
-
-
-def _overrun(prepared: _Prepared) -> RunEvent | None:
-    """The cut-short event once a turn is out of time, else nothing.
-
-    Checked between chunks, which is the only place there is to stop. What the
-    turn produced is already on disk and in the manifest, so ending here keeps
-    the work and loses only the steps that had not happened yet.
-    """
-    if monotonic() <= prepared.deadline:
-        return None
-    return RunEvent(kind="cut_short", text=f"turn stopped after {prepared.timeout_s}s")
-
-
-def _out_of_steps(cfg: Config) -> RunEvent:
-    """The same event for the other bound on a turn.
-
-    Two bounds, and until this they behaved nothing alike. `turn_timeout_s` is
-    checked between chunks and ends the turn as a `RunResult` with `cut_short`
-    set; `recursion_limit` is enforced inside langgraph's own loop and came out
-    as a `GraphRecursionError` through every caller -- the driver printed a
-    stack trace, and the HTTP surface had no mapping for it at all.
-
-    Observed on a run that had already written its report and validated the
-    markup: the file was on disk, and what the caller got was a traceback with
-    no path in it. Nothing about running out of steps is less ordinary than
-    running out of seconds, so it is reported the same way and the work
-    survives the same way.
-
-    Names the setting because the two bounds are raised in different places and
-    "turn stopped" alone sends the reader to the wrong one.
-    """
-    return RunEvent(
-        kind="cut_short",
-        text=(
-            f"turn stopped after {cfg.recursion_limit} steps "
-            f"(raise KINGFISHER_RECURSION_LIMIT)"
-        ),
-    )
 
 
 @dataclass(frozen=True)
@@ -762,10 +398,23 @@ class Kingfisher:
         self.access: Groups | None = self.cfg.access
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
-            self._refuse_undeclared_groups()
-            self.access_report = AccessReport(
-                unrestricted=self._unrestricted(), narrowed=self._narrowed()
+            # One walk of the definitions, not three. `defined_subagents` reads
+            # a directory, and asking it once per question is how this came to
+            # do it three times at every startup.
+            #
+            # `session_dir=None` because this is the shared catalogue, before
+            # any session exists. What a session adds is a request's own upload,
+            # which is the caller's own text and carries no audience anyone else
+            # wrote -- so the listing, which may be describing one, passes its
+            # own set to the same functions.
+            kinds = (
+                ("agent", self.catalogue.agents.specs),
+                ("subagent", defined_subagents(self.cfg, None, catalogue=self.catalogue)),
             )
+            # Refusals first: a typo makes a line both undeclared and narrowing,
+            # and reported as a narrowing it would explain the wrong fault.
+            access.refuse_undeclared(*kinds, vocabulary=self.access)
+            self.access_report = access.audit(*kinds, vocabulary=self.access)
 
         # Last, so the line reports what was resolved rather than what was
         # asked for -- and so a wiring failure raises instead of announcing a
@@ -795,83 +444,6 @@ class Kingfisher:
         `Kingfisher` exactly as cheap as it was.
         """
         return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
-
-    def _refuse_undeclared_groups(self) -> None:
-        """Refuse a definition naming a group this deployment does not declare.
-
-        The closed vocabulary's other end. The caller's end is `expand`, which
-        refuses an unknown name in a group list; this is the same rule pointed
-        at the files, and without it the vocabulary is only half closed --
-        `groups: [analists]` is not an error, it invents a group nobody is in,
-        and the only symptom is an agent quietly reachable by no one, found
-        weeks later by whoever needed it.
-
-        Here rather than in `parse`, and `_narrowed` below with it, for a reason
-        rather than a preference: `parse` reads one document and has no
-        vocabulary to check against. This is the first moment both are known --
-        and the other needs the vocabulary as badly, since what one audience
-        says about another is a question about what the names *mean*.
-
-        Refused rather than reported, unlike the things `AccessReport` carries.
-        Those are judgements about files somebody may have meant; this is a name
-        misspelled in a file the same deployment wrote, next to the file that
-        lists the spellings, and no reading of it is correct.
-        """
-        assert self.access is not None  # noqa: S101 -- guarded by the caller
-        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
-        for kind, specs in (("agent", self.catalogue.agents.specs), ("subagent", delegates)):
-            for name, spec in sorted(specs.items()):
-                where = f"{kind} {name!r}"
-                self.access.refuse_undeclared(spec.groups, where=where, error=AccessError)
-                for field_name, entries in spec.audiences.items():
-                    for entry, audience in entries.items():
-                        self.access.refuse_undeclared(
-                            audience,
-                            where=f"{where}: {field_name} entry {entry!r}",
-                            error=AccessError,
-                        )
-
-    def _narrowed(self) -> tuple[tuple[str, str], ...]:
-        """Entries asking for a group their definition's own audience never mentions.
-
-        Walked here rather than at parse, and reported rather than refused --
-        `Groups.narrowing_in` has both reasons. Runs after
-        `_refuse_undeclared_groups`, so every name in what it reports is known
-        to be real: a typo would otherwise be described as a narrowing, which is
-        an explanation of the wrong fault.
-        """
-        assert self.access is not None  # noqa: S101 -- guarded by the caller
-        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
-        found: list[tuple[str, str]] = []
-        for kind, specs in (("agent", self.catalogue.agents.specs), ("subagent", delegates)):
-            for name, spec in sorted(specs.items()):
-                found.extend(
-                    self.access.narrowing_in(
-                        spec.audiences, groups=spec.groups, where=f"{kind} {name}"
-                    )
-                )
-        return tuple(found)
-
-    def _unrestricted(self) -> tuple[tuple[str, str], ...]:
-        """Definitions carrying no `groups:` line, so reachable by everyone.
-
-        Walked at construction rather than per turn: the catalogue is read once
-        here, and this is a fact about the files rather than about a caller.
-
-        `session_dir=None` because this is the shared catalogue, before any
-        session exists. What a session adds is a request's own upload, which is
-        the caller's own text and carries no audience anyone else wrote.
-        """
-        found: list[tuple[str, str]] = [
-            ("agent", name)
-            for name, spec in sorted(self.catalogue.agents.specs.items())
-            if spec.groups == ALL
-        ]
-        delegates = defined_subagents(self.cfg, None, catalogue=self.catalogue)
-        found.extend(
-            ("subagent", name) for name, spec in sorted(delegates.items()) if spec.groups == ALL
-        )
-        return tuple(found)
 
     def held_for(self, groups: Held | None) -> frozenset[str] | None:
         """The caller's expanded groups, or `None` for no vocabulary / UNSCOPED.
@@ -1347,7 +919,7 @@ class Kingfisher:
         checkpointer: Any = _UNSET,
         *,
         groups: Held | None = None,
-    ) -> _Prepared:
+    ) -> Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
         Blocking, and deliberately so: filesystem work plus building
@@ -1473,7 +1045,7 @@ class Kingfisher:
         checkpointer: Any = _UNSET,
         *,
         groups: Held | None = None,
-    ) -> _Admitted:
+    ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand.
 
         Nothing is destroyed here either, and nothing turn-shaped is created.
@@ -1505,7 +1077,7 @@ class Kingfisher:
         checkpointer: Any = _UNSET,
         *,
         groups: Held | None = None,
-    ) -> _Admitted:
+    ) -> Admitted:
         """The rest of admission, once the session is claimed.
 
         Split so the claim has exactly one release path for a refusal. Every
@@ -1571,7 +1143,7 @@ class Kingfisher:
         # but refusing them must not wait that long.
         check_placeable(request.inputs)
 
-        return _Admitted(
+        return Admitted(
             request=request,
             session=session,
             graph=graph,
@@ -1585,7 +1157,7 @@ class Kingfisher:
             # Skills and subagents are not on the graph, so they are asked of
             # the same functions `build_agent` asked -- 0.04ms and 1.4ms against
             # an admit already measured at 15-46ms.
-            withheld=_withheld_by_kind(
+            withheld=withheld_by_kind(
                 allowed,
                 cfg,
                 session.directory,
@@ -1603,7 +1175,7 @@ class Kingfisher:
                 ),
                 held=held,
             ),
-            delegate_only=_delegate_only(allowed, cfg, catalogue=self.catalogue),
+            delegate_only=delegate_only(allowed, cfg, catalogue=self.catalogue),
             indistinct=indistinct_delegates(
                 cfg,
                 allowed,
@@ -1613,7 +1185,7 @@ class Kingfisher:
             ),
         )
 
-    def _open_turn(self, admitted: _Admitted) -> _Prepared:
+    def _open_turn(self, admitted: Admitted) -> Prepared:
         """Create the turn and compose what the loop needs.
 
         Past the point of no refusal. Anything here that raised would leave a
@@ -1637,7 +1209,7 @@ class Kingfisher:
         )
         logger.run_start(request.task, turn.virtual_dir)
 
-        return _Prepared(
+        return Prepared(
             graph=admitted.graph,
             release=admitted.release,
             history=read_transcript(session.directory),
@@ -1670,7 +1242,7 @@ class Kingfisher:
             timeout_s=cfg.turn_timeout_s,
         )
 
-    def _keep(self, prepared: _Prepared) -> tuple[str, ...]:
+    def _keep(self, prepared: Prepared) -> tuple[str, ...]:
         """Persist what this turn produced, and name it.
 
         In the turn's `finally` rather than beside the terminal event, and that
@@ -1712,7 +1284,7 @@ class Kingfisher:
         return kept
 
     def _finished(
-        self, prepared: _Prepared, answer: str, kept: tuple[str, ...], *, cut_short: bool
+        self, prepared: Prepared, answer: str, kept: tuple[str, ...], *, cut_short: bool
     ) -> RunEvent:
         """The terminal event, built the same way whichever loop produced it.
 
@@ -1737,7 +1309,7 @@ class Kingfisher:
             ),
         )
 
-    def _record(self, prepared: _Prepared) -> None:
+    def _record(self, prepared: Prepared) -> None:
         """Write what was said this turn, as records this package owns.
 
         Read back out of the graph rather than accumulated from the stream: the
@@ -1824,9 +1396,9 @@ class Kingfisher:
                 stream_mode=runtime.STREAM_MODES,
                 subgraphs=True,
             ):
-                answer, events = _consume(namespace, mode, chunk, answer, delegates)
+                answer, events = consume(namespace, mode, chunk, answer, delegates)
                 yield from events
-                if (stop := _overrun(prepared)) is not None:
+                if (stop := overrun(prepared)) is not None:
                     cut_short = True
                     yield stop
                     break
@@ -1839,7 +1411,7 @@ class Kingfisher:
             answer = normalize_answer(answer)
             cut_short = True
             ok = True
-            yield _out_of_steps(self.cfg)
+            yield out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # Before the slot goes back, and inside its own `finally` so that a
@@ -1930,10 +1502,10 @@ class Kingfisher:
                 stream_mode=runtime.STREAM_MODES,
                 subgraphs=True,
             ):
-                answer, events = _consume(namespace, mode, chunk, answer, delegates)
+                answer, events = consume(namespace, mode, chunk, answer, delegates)
                 for event in events:
                     yield event
-                if (stop := _overrun(prepared)) is not None:
+                if (stop := overrun(prepared)) is not None:
                     cut_short = True
                     yield stop
                     break
@@ -1946,7 +1518,7 @@ class Kingfisher:
             answer = normalize_answer(answer)
             cut_short = True
             ok = True
-            yield _out_of_steps(self.cfg)
+            yield out_of_steps(self.cfg)
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # As in `stream`, and on a worker thread for the same reason

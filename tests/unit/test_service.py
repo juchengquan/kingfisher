@@ -9,7 +9,8 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher
-from kingfisher.application.service import opening_events, turn_message
+from kingfisher.application.reporting import opening_events
+from kingfisher.application.turn import turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request

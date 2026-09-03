@@ -115,7 +115,7 @@ def render(found: Inventory) -> Iterator[str]:
     yield from _access(found)
 
 
-def _origins(origins: Origins) -> dict[str, object]:
+def origins_document(origins: Origins) -> dict[str, object]:
     """Where everything was read from, for a script rather than a person.
 
     Absolute paths, unlike the header, which spells anything under the
@@ -326,7 +326,7 @@ def as_json(found: Inventory) -> dict[str, object]:
     proxies become plain dicts because `json` will not encode them.
     """
     return {
-        "origins": _origins(found.origins),
+        "origins": origins_document(found.origins),
         "agents": dict(found.agents),
         "agent_sources": dict(found.agent_sources),
         "agent_delegates": {name: list(v) for name, v in found.agent_delegates.items()},

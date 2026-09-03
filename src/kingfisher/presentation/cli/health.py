@@ -286,6 +286,60 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
         yield Check("skills", "ok", detail)
 
 
+def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
+    """Two ways a catalogue is somewhere other than you think.
+
+    Both were unreportable until the record carried a *kind*. A path on its own
+    cannot tell you either of these, because in both cases the directory exists
+    and is readable -- what is wrong is the relationship between it and the
+    configuration, and only something holding both can see that.
+
+    Warnings in both cases, never failures. Staging a catalogue that has not
+    been filled yet is legitimate, and so is a deployment that overrides one on
+    purpose; `worst` already records why a check that fails on a deliberate
+    choice is a check nobody runs.
+    """
+    for kind in DEFINITION_KINDS:
+        origin = getattr(found.origins, kind)
+
+        if origin.kind == "overridden":
+            yield Check(
+                f"{kind} directory",
+                "warn",
+                f"read from {origin.path}, while the configuration names "
+                f"{cfg.catalogue_roots[kind]} — a catalogue was supplied when this "
+                f"kingfisher was built, and the setting does nothing",
+                "drop the setting, or point it at what is actually read",
+            )
+            continue
+
+        # An empty catalogue at the derived path is a fresh workspace, and
+        # `SEED_HINT` already covers that everywhere it matters. An empty one at
+        # a path somebody *typed* is the other thing entirely -- and the two
+        # look identical, because resolving a catalogue creates the directory it
+        # was pointed at rather than refusing an absent one.
+        if origin.kind == "relocated" and not _holds(found, kind):
+            yield Check(
+                f"{kind} directory",
+                "warn",
+                f"{origin.path} is where this deployment points {kind}, and it holds "
+                f"none — a mistyped path is created rather than refused, so this "
+                f"reads the same as a workspace nobody has seeded",
+                "check the path, or seed it",
+            )
+
+
+def _holds(found: Inventory, kind: str) -> bool:
+    """Whether a catalogue produced anything the agent can reach.
+
+    Asked of the listing rather than of the directory: a folder with three files
+    that will not parse is not empty, and the checks above it already say so.
+    What this decides is whether to add "and the path is unusual" to a count of
+    zero.
+    """
+    return bool(getattr(found, kind))
+
+
 def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
     """Which definitions this deployment cannot actually run.
 
@@ -459,7 +513,7 @@ def _shell(cfg: Config) -> Iterator[Check]:
         )
 
 
-def examine(cfg: Config) -> tuple[Check, ...]:
+def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
     """Every check, in the order somebody diagnosing would want them.
 
     Configuration first, because nothing else matters if that is wrong; then
@@ -467,14 +521,26 @@ def examine(cfg: Config) -> tuple[Check, ...]:
     the shell. A `ConfigError` from any of it is caught and becomes a failed
     check rather than an exception, because a diagnosis that stops at the first
     problem is the thing this command exists to replace.
+
+    `found` is optional and is what makes one of the checks below reachable at
+    all. Building the inventory here means resolving the catalogue from `cfg`,
+    which by construction agrees with `cfg` -- so a deployment that *supplied*
+    its catalogue could never be told that its configuration is being ignored,
+    because the thing being examined was a fresh guess rather than its wiring.
+    A deployment holding a real one passes it; the command passes the one it
+    already built to print the header.
     """
     checks: list[Check] = []
     try:
         checks += _catalogue(cfg)
         checks += _packs(cfg)
         checks += _at_rest(cfg)
-        found = inventory(cfg)
+        if found is None:
+            found = inventory(cfg)
         checks += _catalogues(found)
+        # After the counts, because it explains one: a zero that is ordinary and
+        # a zero that means the path is wrong print the same number.
+        checks += _where(cfg, found)
         checks += _definitions(cfg, found)
         checks += _shell(cfg)
     except ConfigError as exc:  # pragma: no cover -- belt and braces

@@ -23,13 +23,13 @@ from dataclasses import dataclass, fields
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
 
-from kingfisher.infrastructure.catalogue import catalogue_root
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS, catalogue_root
 
 if TYPE_CHECKING:
     from kingfisher.config import Config
     from kingfisher.infrastructure.catalogue import Definitions
 
-__all__ = ["CATALOGUES", "Kind", "Origin", "Origins"]
+__all__ = ["Kind", "Origin", "Origins"]
 
 #: What an entry turned out to be.
 #:
@@ -48,11 +48,6 @@ __all__ = ["CATALOGUES", "Kind", "Origin", "Origins"]
 #: there is such a place.
 Kind = Literal["default", "relocated", "overridden", "supplied", "unset"]
 
-#: The four kinds of definition, in the order a listing wants them: an agent is
-#: what a request names, and the other three are what it selects from. Shared
-#: with `Definitions` and `Config.catalogue_roots` by name rather than by
-#: position, which is why this is a tuple of strings and not a shape.
-CATALOGUES = ("agents", "skills", "subagents", "tools")
 
 
 @dataclass(frozen=True)
@@ -157,7 +152,7 @@ class Origins:
         return cls(
             workspace=cfg.workspace,
             **{
-                kind: _catalogue(cfg, kind, catalogue) for kind in CATALOGUES
+                kind: _catalogue(cfg, kind, catalogue) for kind in DEFINITION_KINDS
             },  # type: ignore[arg-type]
             models=_file(cfg.models.source, cfg.workspace / "models.yaml"),
             groups=_groups(cfg),
