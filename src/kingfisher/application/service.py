@@ -492,8 +492,8 @@ class Kingfisher:
             if groups is not None:
                 msg = (
                     "this deployment has no access policy, so naming groups means "
-                    "nothing here -- write access.yaml in the workspace, or set "
-                    "KINGFISHER_ACCESS_FILE"
+                    "nothing here -- write groups.yaml in the workspace, or set "
+                    "KINGFISHER_GROUPS_FILE"
                 )
                 raise AccessError(msg)
             return self.grants
