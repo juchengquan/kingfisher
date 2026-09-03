@@ -766,7 +766,7 @@ class Kingfisher:
                 dropped.append(thread)
         return replace(result, orphans=tuple(dropped))
 
-    def graph_for(
+    def _graph_for(
         self,
         request: Request,
         session_dir: Path,
@@ -776,6 +776,12 @@ class Kingfisher:
         groups: Held | None = None,
     ) -> Any:
         """The graph that serves one request, rooted at its session.
+
+        Private, and it was public for no one: `_prepare` is the only caller in
+        the package, the service never touches it, and five parameters of
+        assembly detail is a large thing to ask a reader to take as API. A test
+        reaching for it is reaching for an internal deliberately, which is what
+        `_agent_for` and `_admit` beside it already are.
 
         Built per request because capabilities narrow it, because it reads
         workspace content that can change between turns, and now because its
@@ -990,6 +996,16 @@ class Kingfisher:
     def open_session_for(self, request: Request) -> Session:
         """Name this request's session and make sure its directory exists.
 
+        Public, and `_graph_for` beside it is not, which is a distinction worth
+        stating because it was nearly made the other way. Nothing calls this on
+        a `Kingfisher` -- every use in the tree goes through `for_groups(...)`
+        -- so it reads as private-able. It is not: `Caller.open_session_for`
+        delegates here, and making this private leaves a public method on the
+        handle reaching through `_kf` into a private on its own composition
+        root. `test_nothing_is_defined_for_tests_alone` then reports the
+        delegate as orphaned, which is true and is a fact about `Caller` having
+        no in-repo consumer rather than about this method.
+
         Split out of `_admit` because the async path needs the directory before
         it can open anything: an aiosqlite connection belongs to the event loop,
         so it cannot be made inside the worker thread `_admit` runs on, and the
@@ -1130,7 +1146,7 @@ class Kingfisher:
         release: Any = None
         if checkpointer is _UNSET:
             checkpointer, release = self._checkpointer_for(session.directory)
-        graph = self.graph_for(
+        graph = self._graph_for(
             request,
             session.directory,
             capabilities=allowed,
