@@ -298,6 +298,72 @@ library answers "what does this workspace offer" with a record rather than a lis
 of names. Bare `kingfisher` prints help. Publishing was deferred, deliberately,
 and asked twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
 
+## Where a deployment reads from
+
+**One record, `Origins`, and every surface prints it.** Kingfisher reads from
+eleven places and nothing could say what they were: `kingfisher list` named four,
+`doctor` named one, and the library named none. `tools` was in no answer at all,
+because the listing header was three hand-written lines and `Inventory` carried
+three loose strings -- a fourth of each is a thing somebody has to remember, and
+nobody did. `Inventory` carries one of these now and both commands print it, so a
+place added to the record appears in both without either being touched.
+*(2026-09-02, `where-this-deployment-reads-from.md`.)*
+
+**It reports what was loaded, not what was configured.**
+`Config.catalogue_roots` is the fallback, not the answer -- a `Kingfisher` may be
+handed a mapping or a `Definitions` of its own -- so a report derived from
+configuration alone is right for the simple deployment and quietly wrong for the
+one that moved something. `Origins.of` does not call `resolve_definitions`, which
+creates derived roots: a report must not bring into being what it reports on.
+
+**Each entry carries a kind, not a formatted string.** `default` is the derived
+location, decided by comparing against it rather than by asking whether an
+override was set -- so a deployment naming the default path explicitly is
+`default`, which is what it is. `relocated` is any other configured path,
+`overridden` means the configuration is not what is being read, `supplied` is a
+repository with no directory, and `unset` carries where it looked. `--json` and
+the service read this, so "nothing is configured" and "you handed me a store"
+must not arrive as two spellings a consumer has to match on.
+
+**`Config` remembers where it looked for `groups.yaml`.** The path was read,
+used for error-message prefixes and discarded. It sits on `Config` rather than on
+`Groups` because of the absent case: with no file there is no record to hang a
+path on, and "not set, and here is where I looked" is the one line that makes a
+policy written one directory off visible at all -- otherwise the deployment comes
+up reachable by everyone and says nothing.
+
+**The library's first logger is `kingfisher.origins`, and not `kingfisher`.**
+One INFO record per construction, and that is the whole budget. `print` is not an
+option -- a library that writes to stdout cannot be used by a server -- and
+`warnings.warn` means "this is probably not what you meant", which a summary is
+not. The name is the load-bearing part: `kingfisher.audit` is left unconfigured
+so that writing session ids stays a deployment's decision, a logger named
+`kingfisher` is its *parent*, and the server raises this one to INFO -- so asking
+where the definitions live would have turned the audit trail on. A test in the
+service holds the two apart.
+
+**`doctor` gained two checks a path alone could not express.** An empty
+catalogue at a path somebody typed is not an empty workspace: resolving one
+*creates* the directory it was pointed at rather than refusing an absent one, so
+a mistyped root yields a real empty one and `ok  subagents  0 defined` is what a
+correct fresh workspace says too. And a configuration that is being ignored is
+said out loud, or somebody edits the setting and watches nothing change. The
+second needed `examine` to take the inventory rather than build one -- a
+catalogue it resolves from `cfg` agrees with `cfg` by construction, so nothing it
+examined could ever be overriding it.
+
+**Rejected along the way, and each for its own reason.** Opening in-code
+configuration as a first-class path -- `Models`, `Endpoint` and `ModelProfile`
+are constructible and the test suite wires a `Config` that way, but setup stays
+YAML and directories and this was about making that legible, not replacing it.
+Merging `WorkspacePaths` into `Config` -- `Config` requires a `Models` and
+`models.yaml` lives inside the workspace, so merging means making it optional and
+taking `Models.resolve()` from total to partial. Nesting one inside the other to
+end the six duplicated fields -- measured at 7 constructions and 38 reads, both
+cheap, against 17 `replace(cfg, ...)` calls that would become nested. Serving the
+record over the HTTP surface, which authenticates nobody. And a `Config.paths`
+property, which nothing would have read.
+
 ## The HTTP service
 
 **Transport only -- the server never interprets identity**, and lives in its own
@@ -461,6 +527,13 @@ happened. It is a proposal, not history.
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
 and its status line had never been changed to say so. Its decisions are under
 *Tool failure* above.*
+
+*A third, `where-this-deployment-reads-from`, was written on 2026-09-02 and
+removed the day after, having been built in four slices. Its decisions are under
+*Where a deployment reads from* above. It corrected itself once while being
+built, and that half is worth keeping in git rather than here: two of its
+decisions were wrong in ways that would have shipped a fault, and the commit that
+fixed them says how each was caught.*
 
 - [**Nothing at rest on this machine**](design/2026-08-21-nothing-at-rest-on-this-machine.md)
   -- no session data on local disk, reached through a door kingfisher does not
