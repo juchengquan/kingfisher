@@ -40,7 +40,7 @@ AGENT = """name: surveyor
 description: An agent.
 groups: [A, B]
 tools:
-  line_count:
+  - name: line_count
     groups: [A]
 system_prompt: |
   You do the task.
@@ -284,9 +284,9 @@ SKILLED = """name: skilled
 description: Holds two skills at different audiences.
 groups: [A, B]
 skills:
-  audit:
+  - name: audit
     groups: [A]
-  review:
+  - name: review
     groups: [A, B]
 system_prompt: |
   You do the task.

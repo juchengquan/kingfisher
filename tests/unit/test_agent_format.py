@@ -309,9 +309,12 @@ def test_an_agent_that_says_nothing_is_reachable_by_everyone():
 @pytest.mark.parametrize(
     ("field_name", "written"),
     [
-        ("tools", "tools:\n  sql_query:\n    groups: [A]\n  http_fetch:\n    groups: [A, B]\n"),
-        ("skills", "skills:\n  audit:\n    groups: [A]\n  review:\n    groups: [A, B]\n"),
-        ("subagents", "subagents:\n  checker:\n    groups: [A]\n  reviewer:\n    groups: [A, B]\n"),
+        ("tools", "tools:\n  - name: sql_query\n    groups: [A]\n"
+            "  - name: http_fetch\n    groups: [A, B]\n"),
+        ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
+            "  - name: review\n    groups: [A, B]\n"),
+        ("subagents", "subagents:\n  - name: checker\n    groups: [A]\n"
+            "  - name: reviewer\n    groups: [A, B]\n"),
     ],
 )
 def test_every_audienced_field_takes_a_mapping(field_name, written):
@@ -328,13 +331,16 @@ def test_every_audienced_field_takes_a_mapping(field_name, written):
     [
         (
             "tools",
-            "tools:\n  sql_query:\n    groups: [A]\n  http_fetch:\n    groups: [A, B]\n",
+            "tools:\n  - name: sql_query\n    groups: [A]\n"
+                "  - name: http_fetch\n    groups: [A, B]\n",
             "http_fetch",
         ),
-        ("skills", "skills:\n  audit:\n    groups: [A]\n  review:\n    groups: [A, B]\n", "review"),
+        ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
+            "  - name: review\n    groups: [A, B]\n", "review"),
         (
             "subagents",
-            "subagents:\n  checker:\n    groups: [A]\n  reviewer:\n    groups: [A, B]\n",
+            "subagents:\n  - name: checker\n    groups: [A]\n"
+                "  - name: reviewer\n    groups: [A, B]\n",
             "reviewer",
         ),
     ],
@@ -358,7 +364,8 @@ def test_declaring_with_no_caller_is_what_it_always_was():
     """A deployment with no vocabulary, or an UNSCOPED call. This is the path
     every existing deployment takes, so it must not narrow at all."""
     spec = _read(
-        MINIMAL.rstrip() + "\ngroups: [A]\ntools:\n  sql_query:\n    groups: [A]\n", "plain.yaml"
+        MINIMAL.rstrip() + "\ngroups: [A]\ntools:\n  - name: sql_query\n    groups: [A]\n",
+        "plain.yaml",
     )
 
     assert spec.declares(None).tools == ("sql_query",)
@@ -398,7 +405,7 @@ def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
     Asserted here because it used to be refused here, and the reason it stopped
     being is not visible from the file that no longer does it."""
     spec = _read(
-        MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [C]\n",
+        MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  - name: sql_query\n    groups: [C]\n",
         "plain.yaml",
     )
 
@@ -418,14 +425,17 @@ def test_a_conjunction_is_read_as_one_entry_of_the_list():
 
 
 def test_only_the_restricted_entries_need_an_audience():
-    """The ergonomics of the mapping form, and the reason an entry may say
-    nothing. An agent holding five tools and restricting one should write one
-    `groups:` line, not five -- and the four that say nothing inherit the
-    definition's own audience, exactly as a plain list would.
+    """The ergonomics of the long form, and the reason an entry may stay short.
+
+    An agent holding three tools and restricting one writes one `groups:` line,
+    not three -- the other two are bare names and inherit the definition's own
+    audience, exactly as a plain list would. Mixing the two spellings in one
+    list is the ordinary case rather than a special one.
     """
     spec = _read(
         MINIMAL.rstrip()
-        + "\ngroups: [A, B]\ntools:\n  sql_query:\n    groups: [A]\n  http_fetch:\n  line_count:\n",
+        + "\ngroups: [A, B]\ntools:\n  - name: sql_query\n    groups: [A]\n"
+        + "  - http_fetch\n  - line_count\n",
         "plain.yaml",
     )
 
@@ -435,10 +445,10 @@ def test_only_the_restricted_entries_need_an_audience():
     assert spec.declares(frozenset({"B"})).tools == ("http_fetch", "line_count")
 
 
-def test_a_mapping_that_restricts_nothing_means_what_the_list_means():
+def test_long_entries_that_restrict_nothing_mean_what_the_list_means():
     """The two spellings have to agree about an unrestricted name, or the
     mapping form would quietly change what a definition holds."""
-    written = "\ngroups: [A]\ntools:\n  sql_query:\n  http_fetch:\n"
+    written = "\ngroups: [A]\ntools:\n  - name: sql_query\n  - name: http_fetch\n"
     as_list = "\ngroups: [A]\ntools: [sql_query, http_fetch]\n"
 
     mapped = _read(MINIMAL.rstrip() + written, "plain.yaml")
