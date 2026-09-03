@@ -37,7 +37,7 @@ def two_agents(cfg):
 
 def test_a_caller_reaches_an_agent_their_group_is_listed_on(two_agents):
     kf = Kingfisher(two_agents)
-    assert kf.for_groups(["A"]).agent_named("assistant") is not None
+    assert kf.agent_named("assistant", groups=("A",)) is not None
 
 
 def test_an_agent_out_of_reach_reads_as_one_that_does_not_exist(two_agents):
@@ -45,7 +45,7 @@ def test_an_agent_out_of_reach_reads_as_one_that_does_not_exist(two_agents):
     permitted', so nothing is learned by guessing a name."""
     kf = Kingfisher(two_agents)
     with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
-        kf.for_groups(["B"]).agent_named("assistant")
+        kf.agent_named("assistant", groups=("B",))
 
 
 def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
@@ -53,7 +53,7 @@ def test_the_listing_in_that_refusal_names_only_reachable_agents(two_agents):
     enumeration this closes."""
     kf = Kingfisher(two_agents)
     with pytest.raises(CapabilityError) as raised:
-        kf.for_groups(["B"]).agent_named("assistant")
+        kf.agent_named("assistant", groups=("B",))
     offers = str(raised.value).split("offers", 1)[1]
     assert "surveyor" in offers
     assert "assistant" not in offers
@@ -63,12 +63,12 @@ def test_a_caller_who_reaches_no_agent_is_told_the_workspace_offers_none(cfg):
     an_agent(cfg, "assistant", groups="[B]")
     kf = Kingfisher(replace(cfg, access=parse({"groups": ["A", "B"]}, source="groups.yaml")))
     with pytest.raises(CapabilityError, match="offers none"):
-        kf.for_groups(["A"]).agent_named("anything")
+        kf.agent_named("anything", groups=("A",))
 
 
 def test_unscoped_still_reaches_every_agent(two_agents):
     kf = Kingfisher(two_agents)
-    assert kf.for_groups(UNSCOPED).agent_named("assistant") is not None
+    assert kf.agent_named("assistant", groups=UNSCOPED) is not None
 
 
 def test_a_deployment_with_no_vocabulary_reaches_every_agent(cfg):
@@ -80,7 +80,7 @@ def test_an_agent_with_no_groups_line_is_reachable_by_everyone(two_agents):
     """`surveyor` writes none, so every group opens it -- which is what makes
     adopting audiences incremental rather than all-or-nothing."""
     kf = Kingfisher(two_agents)
-    assert kf.for_groups(["B"]).agent_named("surveyor") is not None
+    assert kf.agent_named("surveyor", groups=("B",)) is not None
 
 
 def test_naming_no_agent_still_says_so(two_agents):
@@ -88,13 +88,13 @@ def test_naming_no_agent_still_says_so(two_agents):
     filtered too."""
     kf = Kingfisher(two_agents)
     with pytest.raises(CapabilityError, match="names no agent"):
-        kf.for_groups(["B"]).agent_named(None)
+        kf.agent_named(None, groups=("B",))
 
 
 def test_agent_named_without_saying_who_is_calling_is_refused(two_agents):
     """The same rule a turn follows, at the other entry point."""
     kf = Kingfisher(two_agents)
-    with pytest.raises(AccessError, match="for_groups"):
+    with pytest.raises(AccessError, match="groups="):
         kf.agent_named("assistant")
 
 
@@ -109,7 +109,7 @@ def test_opening_a_session_names_a_directory_rather_than_authorising(two_agents)
     through that, which is why the check lives there and is asserted below.
     """
     kf = Kingfisher(two_agents)
-    assert kf.for_groups(["B"]).open_session_for(Request(task="t", agent="assistant"))
+    assert kf.open_session_for(Request(task="t", agent="assistant"))
 
 
 def test_the_session_route_refuses_an_unreachable_agent(two_agents):
@@ -117,7 +117,7 @@ def test_the_session_route_refuses_an_unreachable_agent(two_agents):
     check, and it is the same one a turn makes."""
     kf = Kingfisher(two_agents)
     with pytest.raises(CapabilityError, match="no agent named"):
-        kf.for_groups(["B"]).agent_named("assistant")
+        kf.agent_named("assistant", groups=("B",))
 
 
 def test_a_turn_on_a_pinned_agent_out_of_reach_is_refused(two_agents):
@@ -126,10 +126,10 @@ def test_a_turn_on_a_pinned_agent_out_of_reach_is_refused(two_agents):
     open, holding one would be a durable grant to an agent its holder may not
     open, and a demoted caller would keep running what they had before."""
     kf = Kingfisher(two_agents)
-    opened = kf.for_groups(["A"]).open_session_for(Request(task="t", agent="assistant"))
+    opened = kf.open_session_for(Request(task="t", agent="assistant"))
 
     with pytest.raises(CapabilityError):
-        kf.for_groups(["B"])._kf._agent_for(
+        kf._agent_for(
             Request(task="again", agent="assistant", session_id=opened.id),
             opened.id,
             groups=("B",),
@@ -139,7 +139,7 @@ def test_a_turn_on_a_pinned_agent_out_of_reach_is_refused(two_agents):
 def test_a_turn_on_a_pinned_agent_still_in_reach_resolves(two_agents):
     """So the refusal above is not passing because every turn refuses."""
     kf = Kingfisher(two_agents)
-    opened = kf.for_groups(["A"]).open_session_for(Request(task="t", agent="assistant"))
+    opened = kf.open_session_for(Request(task="t", agent="assistant"))
 
     assert kf._agent_for(
         Request(task="again", agent="assistant", session_id=opened.id),

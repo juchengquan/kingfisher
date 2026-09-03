@@ -31,7 +31,7 @@ Pure, like the rest of `domain/`: this module reads no file. The YAML half is
 
 from __future__ import annotations
 
-from collections.abc import Iterable, Mapping
+from collections.abc import Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from typing import Final, Literal
 
@@ -125,11 +125,21 @@ UNSCOPED: Final[_Unscoped] = _Unscoped()
 #: refusal to say.
 #:
 #: `None` is a third thing and means *nobody said*, which is why this is not
-#: spelled `tuple[str, ...] | None`. Once a vocabulary exists those two must not
+#: spelled `Sequence[str] | None`. Once a vocabulary exists those two must not
 #: collapse: "run without a caller" is a decision somebody made, and "nobody
 #: said" is a handler that forgot the boundary. One is honoured, the other is
 #: refused.
-Held = tuple[str, ...] | _Unscoped
+#:
+#: A `Sequence`, not a tuple. It was `tuple[str, ...]` while `for_groups` was
+#: the way in and coerced whatever it was handed; `groups=` is the way in now,
+#: `["A"]` is the obvious thing to write, and a type that refused it would be
+#: refusing the documented form. Every use of this alias is a *parameter*, so
+#: widening it loosens no guarantee anything returns.
+#:
+#: A `str` satisfies `Sequence[str]` and always will, so the type cannot catch
+#: `groups="analysts"` -- eight one-letter group names. `Kingfisher.held_for`
+#: refuses it at runtime instead.
+Held = Sequence[str] | _Unscoped
 
 
 def reaches(audience: Audience, held: frozenset[str]) -> bool:

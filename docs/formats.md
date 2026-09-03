@@ -1195,8 +1195,7 @@ Once a vocabulary exists, every call has to say:
 
 ```python
 kf = Kingfisher(config_from_env())
-caller = kf.for_groups(["B", "C"])     # bind once, reuse
-caller.run(Request(task="...", agent="assistant"))
+kf.run(Request(task="...", agent="assistant"), groups=["B", "C"])
 ```
 
 `kf.run(...)` with nobody named is **refused**. That refusal is the point: the
@@ -1205,7 +1204,7 @@ handler would serve every caller everything with nothing to show for it. To run
 with no caller deliberately, say so:
 
 ```python
-kf.for_groups(UNSCOPED).run(...)       # a value someone typed, and greppable
+kf.run(..., groups=UNSCOPED)           # a value someone typed, and greppable
 ```
 
 It takes group *names*, never a `Capabilities`. A name is resolved against the
