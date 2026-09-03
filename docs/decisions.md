@@ -131,8 +131,9 @@ is not -- it selects code the deployment wrote -- so it gets no such exemption.
 ## Group access
 
 **An audience lives in the definition it is about.** An agent or subagent writes
-`groups:` for who may reach it, and may write `tools:`, `subagents:` or `skills:`
-as a mapping of name to `{groups: [...]}` for who reaches each entry. One central
+`groups:` for who may reach it, and an entry of `tools:`, `subagents:` or
+`skills:` may be written long -- `{name: X, groups: [...]}` -- for who reaches
+that one. One central
 file, `groups.yaml`, holds the vocabulary and `contains` -- names only, no policy.
 An audience resolves into an ordinary `Capabilities`, so nothing downstream
 changed: an ungranted tool is never attached to the graph and an ungranted

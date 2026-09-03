@@ -592,6 +592,48 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
         read(block, _Path("readme.yaml"))
 
 
+#: What a fenced block has to mention to be a definition fragment rather than a
+#: `groups.yaml` or a `models.yaml` example, which the same page also shows.
+DEFINITION_FIELDS = ("tools:", "skills:", "subagents:", "middleware:", "builtin_tools:")
+
+
+def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
+    """The other half of the page, and the half that rotted.
+
+    Its neighbour above reads only blocks starting with `name:`, and says so --
+    the fragments showing one field are not definitions. Nothing read them, so
+    when the audienced fields changed shape on 2026-09-03 every fragment showing
+    the old one stayed on the page, correct-looking and wrong, and the whole
+    suite passed.
+
+    A fragment is a definition with the required fields left out, so this puts
+    them back and reads the result. What that cannot check is whether the
+    fragment says what the prose around it claims; what it can check is that a
+    reader who copies it gets a file that loads, which is the failure that
+    actually happened.
+
+    Which reader, by the heading above it, for the same reason the neighbour
+    gives: the page documents two formats that look alike.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    from kingfisher.infrastructure.catalogue.documents import read_agent, read_subagent
+
+    required = "name: probe\ndescription: A probe.\nsystem_prompt: |\n  Do the task.\n"
+    fragments = [
+        (section.startswith("Agents"), body)
+        for section in re.split(r"\n## ", formats_doc.read_text(encoding="utf-8"))
+        for body in re.findall(r"```yaml\n(.*?)```", section, re.DOTALL)
+        if not body.startswith("name:") and any(f in body for f in DEFINITION_FIELDS)
+    ]
+
+    assert fragments, "no field fragments found -- this asserts nothing"
+    for is_agent, fragment in fragments:
+        read = read_agent if is_agent else read_subagent
+        read(required + fragment, _Path("readme.yaml"))
+
+
 # -- the one preset that consults another ---------------------------------
 
 
