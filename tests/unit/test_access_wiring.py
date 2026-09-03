@@ -73,7 +73,7 @@ def built(kf, monkeypatch, groups, name: str):
     """The tool names handed to `create_deep_agent` for this caller."""
     captured = capture_build(monkeypatch)
     held = tuple(groups) if groups is not UNSCOPED else groups
-    kf.graph_for(
+    kf._graph_for(
         Request(task="t", agent="surveyor"),
         session_at(kf, name),
         capabilities=kf._effective_grants(held),
@@ -245,7 +245,7 @@ def reported(kf, groups, name: str):
     session = session_at(kf, name)
     held_names = tuple(groups) if groups is not UNSCOPED else groups
     held = kf.held_for(held_names)
-    graph = kf.graph_for(
+    graph = kf._graph_for(
         Request(task="t", agent="surveyor"),
         session,
         capabilities=kf._effective_grants(held_names),
@@ -279,7 +279,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     session = session_at(kf, "w2")
     held = ("A",)
     grants = replace(kf._effective_grants(held), builtin_tools=("read_file",))
-    graph = kf.graph_for(
+    graph = kf._graph_for(
         Request(task="t", agent="surveyor"),
         session,
         capabilities=grants,
@@ -357,7 +357,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkey
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
     held = ("B",)
-    kf.graph_for(
+    kf._graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk1"),
         capabilities=kf._effective_grants(held),
@@ -376,7 +376,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatc
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
     held = ("A",)
-    kf.graph_for(
+    kf._graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk2"),
         capabilities=kf._effective_grants(held),

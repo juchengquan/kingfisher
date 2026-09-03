@@ -27,11 +27,23 @@ turn of 1.5-1.9s that is 0.6%.
 
 What it scales with, per item added at construction:
 
-  subagent      +4.3ms   each compiles its own graph
+  subagent      +5-6ms   each compiles its own graph; the range is the delegate
   custom tool   +0.47ms  linear to at least 50
-  middleware    +0.06ms
+  middleware    +0.03ms
   skill          0.0ms   sixteen measure the same as none
   deny rule      0.0ms   a hundred measure the same as none
+
+Re-measured 2026-09-03. The baseline above held -- 8.1ms median, 9.2ms p95, 124
+builds a second -- and the subagent row did not: 4.3ms became 5.1ms for a
+delegate declaring one built-in tool and nothing else, and 6.2ms for the shipped
+`examples/`. It is the largest term, so the additive prediction below now runs
+low, and the drift is not decay: a delegate costs what a delegate declares, and
+one number cannot say that. Every figure here is *per item added to an otherwise
+identical build*, which is the only form of it that transfers.
+
+The custom-tool row was not re-measured. Doing it needs tool files in the
+workspace, and their presence moves the baseline they would be measured against
+-- the delta and the ground shift together. Left as it was, and marked so.
 
 Skills and permissions are free because they reach the agent as prompt text and
 as a rules list, not as anything compiled. Tools are an order of magnitude
@@ -39,7 +51,10 @@ cheaper than subagents and an order dearer than middleware, so "adding things
 dynamically is cheap" is true or false depending entirely on which.
 
 The costs are additive: 10 tools, 5 middleware, 20 deny rules and 2 subagents
-predicts 20.8ms and measures 21.6ms, about 1% of a turn.
+predicted 20.8ms and measured 21.6ms, about 1% of a turn -- on the numbers above
+as they stood in August. With the subagent row re-measured the same shape
+predicts a little more, and the point survives either way: the model is additive
+and the total is small against a turn.
 
 Construction is CPU-bound Python, so it does not parallelise: ~100 builds per
 second per process, and worker threads make it slightly worse (0.85x) rather
@@ -714,7 +729,7 @@ class Kingfisher:
                 dropped.append(thread)
         return replace(result, orphans=tuple(dropped))
 
-    def graph_for(
+    def _graph_for(
         self,
         request: Request,
         session_dir: Path,
@@ -724,6 +739,12 @@ class Kingfisher:
         groups: Held | None = None,
     ) -> Any:
         """The graph that serves one request, rooted at its session.
+
+        Private, and it was public for no one: `_prepare` is the only caller in
+        the package, the service never touches it, and five parameters of
+        assembly detail is a large thing to ask a reader to take as API. A test
+        reaching for it is reaching for an internal deliberately, which is what
+        `_agent_for` and `_admit` beside it already are.
 
         Built per request because capabilities narrow it, because it reads
         workspace content that can change between turns, and now because its
@@ -938,6 +959,16 @@ class Kingfisher:
     def open_session_for(self, request: Request) -> Session:
         """Name this request's session and make sure its directory exists.
 
+        Public, and `_graph_for` beside it is not, which is a distinction worth
+        stating because it was nearly made the other way. Nothing calls this on
+        a `Kingfisher` -- every use in the tree goes through `for_groups(...)`
+        -- so it reads as private-able. It is not: `Caller.open_session_for`
+        delegates here, and making this private leaves a public method on the
+        handle reaching through `_kf` into a private on its own composition
+        root. `test_nothing_is_defined_for_tests_alone` then reports the
+        delegate as orphaned, which is true and is a fact about `Caller` having
+        no in-repo consumer rather than about this method.
+
         Split out of `_admit` because the async path needs the directory before
         it can open anything: an aiosqlite connection belongs to the event loop,
         so it cannot be made inside the worker thread `_admit` runs on, and the
@@ -1078,7 +1109,7 @@ class Kingfisher:
         release: Any = None
         if checkpointer is _UNSET:
             checkpointer, release = self._checkpointer_for(session.directory)
-        graph = self.graph_for(
+        graph = self._graph_for(
             request,
             session.directory,
             capabilities=allowed,

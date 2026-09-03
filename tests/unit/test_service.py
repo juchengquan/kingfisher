@@ -79,10 +79,10 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
     agent = StubAgent("ok")
     service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
 
-    assert service.graph_for(Request("go"), session_dir) is agent
+    assert service._graph_for(Request("go"), session_dir) is agent
 
     with pytest.raises(ValueError, match="pre-built graph"):
-        service.graph_for(
+        service._graph_for(
             Request("go", capabilities=Capabilities(builtin_tools=("read_file",))), session_dir
         )
 
@@ -97,7 +97,7 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     service = Kingfisher(cfg)
     asked = Request("go", agent="only")
 
-    assert service.graph_for(asked, session_dir) is not service.graph_for(
+    assert service._graph_for(asked, session_dir) is not service._graph_for(
         asked, session_dir
     )
 
