@@ -901,6 +901,19 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # the harness: an agent to run, a checkpointer to resume it, a run log to
     # record it, and the runtime that turns its stream into events.
     "service": frozenset({"agent", "checkpointing", "runlog", "runtime"}),
+    # The withheld report, which left `service` and took one of its four edges
+    # along. It has to ask the *assembled* agent what it registered and the
+    # workspace what it offers, because the whole claim of the report is that it
+    # measures against what was actually wired rather than against a list kept
+    # somewhere -- so the edge is the point of it, not an accident of where it
+    # used to live.
+    "reporting": frozenset({"agent"}),
+    # One stream chunk, read the same way by the sync and async loops. The
+    # reading is deepagents' shape rather than ours -- which namespace a chunk
+    # came from, which mode carries the answer -- so it is an edge wherever it
+    # is written, and writing it once is the whole reason the two loops cannot
+    # drift about what a chunk means.
+    "turn": frozenset({"runtime"}),
 }
 
 

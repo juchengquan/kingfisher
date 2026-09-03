@@ -139,11 +139,11 @@ def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
     """Quietly holding less than was asked for is the failure this codebase
     refuses everywhere. Deliberately not folded into `withheld`, which means
     "you did not ask for this" -- here the caller did ask."""
-    from kingfisher.application.service import _delegate_only
+    from kingfisher.application.reporting import delegate_only
 
     _two_vendors(cfg)
 
-    assert _delegate_only(
+    assert delegate_only(
         Capabilities(tools=("vendor_a/fetch.py::fetch", "vendor_b/fetch.py::fetch")),
         cfg,
         catalogue=None,

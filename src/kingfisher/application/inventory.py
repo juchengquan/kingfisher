@@ -25,9 +25,10 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
+from kingfisher.application import access
 from kingfisher.application.origins import Origins
 from kingfisher.config import Config
-from kingfisher.domain.access import AccessError, AccessReport, Groups, Stated, reaches
+from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
@@ -285,71 +286,6 @@ def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
     return found
 
 
-def _unrestricted(*sets: tuple[str, Mapping[str, object]]) -> tuple[tuple[str, str], ...]:
-    """Definitions carrying no `groups:` line, as `(kind, name)`.
-
-    The same walk `Kingfisher` does at construction, and it has to agree with
-    it: a listing that disagreed with startup about what restricts nobody would
-    be worse than neither saying anything.
-    """
-    return tuple(
-        (kind, name)
-        for kind, specs in sets
-        for name, spec in sorted(specs.items())
-        if getattr(spec, "groups", ALL) == ALL
-    )
-
-
-def undeclared_in(specs: Mapping[str, Stated], *, kind: str, vocabulary: Groups) -> str | None:
-    """The first definition naming a group this deployment does not declare.
-
-    Returned rather than raised, which is this module's rule: a listing is where
-    somebody goes *because* something is broken, so one unloadable kind must not
-    take the other two down with it.
-
-    `Kingfisher` raises on the same condition, and the two agree by asking the
-    same question of the same specs. They differ only in what they do with the
-    answer, which is the difference between building a deployment and describing
-    one.
-
-    The first rather than all of them: a definition that cannot be honoured
-    stops the deployment, so there is no second one to reach.
-    """
-    for name, stated in specs.items():
-        for where, audience in (
-            (f"{kind} {name!r}", stated.groups),
-            *(
-                (f"{kind} {name!r}: {field_name} entry {entry!r}", who)
-                for field_name, entries in stated.entries.items()
-                for entry, who in entries.items()
-            ),
-        ):
-            try:
-                vocabulary.refuse_undeclared(audience, where=where, error=AccessError)
-            except AccessError as exc:
-                return str(exc)
-    return None
-
-
-def _narrowed(
-    vocabulary: Groups, *kinds: tuple[str, Mapping[str, Stated]]
-) -> tuple[tuple[str, str], ...]:
-    """Entries asking for a group their definition's own audience never mentions.
-
-    The listing's half of what `Kingfisher._narrowed` reports, and the two agree
-    by asking `Groups` the same question. Not an error: it is a thing worth
-    seeing, and `AccessReport` is where those go.
-    """
-    return tuple(
-        found
-        for kind, specs in kinds
-        for name, stated in sorted(specs.items())
-        for found in vocabulary.narrowing_in(
-            stated.entries, groups=stated.groups, where=f"{kind} {name}"
-        )
-    )
-
-
 def _access(
     cfg: Config,
     groups: Iterable[str] | None,
@@ -371,16 +307,21 @@ def _access(
     stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
     if cfg.access is None:
         return stated, AccessReport(), None, {}
-    report = AccessReport(
-        unrestricted=_unrestricted(("agent", agents), ("subagent", subagents)),
-        narrowed=_narrowed(
-            cfg.access, ("agent", stated["agents"]), ("subagent", stated["subagents"])
-        ),
-    )
+    # The same walk `Kingfisher` runs at construction, and the same functions --
+    # which is the point. A listing that disagreed with startup about who
+    # reaches what would be worse than neither saying anything, and until these
+    # were shared nothing but a docstring held them together.
+    #
+    # Raw specs rather than `stated` above: that mapping drops the definitions
+    # restricting nobody, which are exactly the ones `unrestricted` is looking
+    # for.
+    kinds = (("agent", agents), ("subagent", subagents))
+    report = access.audit(*kinds, vocabulary=cfg.access)
     broken = {
-        kind: complaint
-        for kind, held in (("agents", stated["agents"]), ("subagents", stated["subagents"]))
-        if (complaint := undeclared_in(held, kind=kind[:-1], vocabulary=cfg.access)) is not None
+        f"{kind}s": complaint
+        for kind, specs in kinds
+        if (complaint := access.undeclared_in(specs, kind=kind, vocabulary=cfg.access))
+        is not None
     }
     return stated, report, (cfg.access.expand(groups) if groups is not None else None), broken
 

@@ -208,7 +208,7 @@ def indistinct_delegates(
     """`(name, why)` for each activated delegate that asked to run elsewhere and
     did not.
 
-    Asked after the build rather than during it, the way `_withheld_by_kind`
+    Asked after the build rather than during it, the way `reporting.withheld_by_kind`
     is: `build_agent` returns a graph, and a fact about the run is not one of
     the things a graph can carry. It re-resolves through `model_for`,
     the same call the build makes, so the two cannot come to disagree about
