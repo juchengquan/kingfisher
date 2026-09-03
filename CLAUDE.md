@@ -10,9 +10,13 @@ Exactly what CI runs, and all three must pass before a commit:
 
 `ty` runs with `error-on-warning`, so an *unused* ignore directive fails too.
 
-**Never run `ruff format`.** It is not in CI and the tree is not formatted to it:
-it would rewrite 90 files, burying a real change in noise. `ruff check` is the
-only ruff this project runs.
+**Never run `ruff format`.** It is not in CI and the tree is not formatted to
+it: it rewrites most of the repository, burying a real change in noise. `ruff
+check` is the only ruff this project runs.
+
+No count here on purpose. This said "56 files", then "90", and was "107" the
+next time anybody looked -- a measured number in a file nobody re-measures is a
+small lie with a date on it. `ruff format --check` will tell you today's.
 
 `ruff` prints a trailing note about fixable problems that reads like a summary --
 it is not one. Look for `All checks passed!` or `Found N errors`, not the last

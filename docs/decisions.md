@@ -45,6 +45,54 @@ the top of this section. Its D5 held: the tree went back to `src/`, `tests/` and
 caller saw it, and it went with the packaging reversal above.
 *(2026-08-17, `one-folder-for-the-packages.md`. Reversed 2026-08-18.)*
 
+**Seeding lays the workspace out itself, and its parameter says what it is.**
+`seed(into: Destination, source: Path) -> Seeded`. `into` rather than `cfg`,
+because `Destination` is a Protocol precisely so seeding can run before a
+`Config` exists -- the model catalogue is a file inside the workspace, so
+reading one raises before the directory does -- and naming the parameter after
+the type it deliberately does not take undid that where a reader most needed it.
+`Seeded` rather than `Seeding`, because it is a record of something finished.
+
+And it calls `ensure_layout` first. Seeding into a workspace that was never laid
+out used to succeed, report every definition written, and leave no
+`models.yaml.example` -- the dead end that write was moved into `ensure_layout`
+to avoid. The CLI had the ordering and a docstring explaining it; a library
+caller reading the signature had neither. Not a new responsibility so much as
+the rest of one seeding already had: it was already creating the four catalogue
+directories and omitting only the file that makes the result usable.
+*(2026-09-01.)*
+
+**`config_from_env`, not `from_env`.** It returns a `Config` and the bare name
+said none of that -- imported at package level, which is how most calls read, it
+could have returned anything, and it sat beside a qualified `paths_from_env`.
+Inside `application/config.py` the old name read well because the module
+qualified it, and that one call site now stutters; fifty-two others got clearer.
+*(2026-09-01.)*
+
+## The definition format
+
+**An entry is a name, or a mapping of `name` and the one thing that field lets a
+name carry.** `groups` for `tools`, `skills` and `subagents`; `settings` for
+`middleware`. One long form, whichever field it belongs to, read through one
+loop -- so a reader who has met one has met the other.
+
+It replaced a field-level mapping keyed by name, and not for tidiness. **That
+shape could not see a name written twice.** YAML collapses `{a: X, a: Y}` before
+any reader runs, so a tool named twice with two audiences lost one of them
+silently, with nothing able to refuse or report it -- an access restriction that
+disappears without a word, which is the failure this format exists to prevent.
+The list form refuses a duplicate by name, and for both fields at once because
+the check is in the shared loop.
+
+The other half of the argument was already written in the code that got it
+right first: *"a format where the whole list changed shape as soon as one entry
+wanted a setting would make the common case pay for the rare one."* The mapping
+form did exactly that -- adding one audience rewrote every entry in the field.
+
+Refused rather than dropped, and the message names the entry to write.
+*(2026-09-03. The `all_of` spelling nests one level deeper under it, which is the
+one place the old form read better and was accepted knowingly.)*
+
 ## The catalogue
 
 **Tools and subagents nest; skills stay flat.** A folder is organisation and never
@@ -271,6 +319,22 @@ session you cannot run is one you cannot touch.
 still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
 as such -- the first table's value is that it is checkable in both directions,
 and an entry a caller cannot cause would be a status nobody decided on.
+
+**The file `seed` tells you to write has an example beside it.**
+`groups.yaml.example` ships in the package and `ensure_layout` places it, the
+same as `models.yaml.example`. The reasons differ and the code says so rather
+than implying the files are alike: `models.yaml` is required with no fallback,
+while `groups.yaml` is optional -- with no policy file kingfisher controls
+nothing by group, which is the right default because adopting access control
+should be a thing a deployment does rather than one it inherits. What makes the
+example furniture is not that the file is required but that **`seed` names it**:
+a definition asking for an undeclared group is skipped with a message saying to
+declare it, and that message used to name a file no example of existed anywhere
+an installed deployment could reach. `examples/groups.yaml` is the worked set
+for the shipped agents and lives outside the wheel.
+
+Still not seeded. `groups` is not a definition kind and `.example` never becomes
+`groups.yaml`. *(2026-09-02.)*
 
 ## Models and endpoints
 
@@ -511,6 +575,23 @@ root did not change. *(2026-08-17, `layer-boundaries.md`.)*
 **Architecture rules are mutation-tested, not trusted.** All 44 were audited;
 43 held and one had lost its subject. Three of them exist *because* a rule had
 stopped working silently. *(2026-08-18, `mutating-the-architecture-rules.md`.)*
+
+**A layer may answer for its own names, lazily.** `from kingfisher.application
+import Kingfisher` works alongside the root import, and resolves through a
+`__getattr__` table rather than plain imports at the top of the file.
+
+That is not a style preference. A package's `__init__` runs before any of its
+submodules, so nine eager imports there would make `application.config` -- which
+needs no harness at all -- pay for `service`, which imports deepagents, which
+imports three provider SDKs at module level. Measured both ways: 39ms lazy,
+888ms eager, and the eager form pulls deepagents into a process that only wanted
+to read environment variables. `kingfisher seed` is 20ms today and would have
+become fifty times slower while staying correct.
+
+The cost is a second table, and two tables that can disagree is what this
+repository distrusts everywhere else -- so they are held to each other in both
+directions, on the module string as well as the name. Only `application/` has
+one, because only it was asked for. *(2026-09-03.)*
 
 ## Sessions and storage
 
