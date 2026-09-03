@@ -117,8 +117,10 @@ class Capabilities:
     skills: Selection = ALL
     #: `"*"` like the rest, which it was not until an agent could declare a
     #: roster. It defaulted to `None` because wiring a subagent compiles a whole
-    #: graph -- a measured 4.3ms each -- so a workspace with eight of them
-    #: charged every unrestricted turn ~34ms for delegates it might never call.
+    #: graph -- 5-6ms each, depending on what the delegate declares -- so a
+    #: workspace with eight of them charged every unrestricted turn 40ms or more
+    #: for delegates it might never call. (Measured at 4.3ms in August and
+    #: re-measured 2026-09-03; the argument was never sensitive to which.)
     #:
     #: That cost argument has not gone away; it has moved to where it can be
     #: answered. `"*"` means *everything this agent declares*, and an agent

@@ -27,11 +27,23 @@ turn of 1.5-1.9s that is 0.6%.
 
 What it scales with, per item added at construction:
 
-  subagent      +4.3ms   each compiles its own graph
+  subagent      +5-6ms   each compiles its own graph; the range is the delegate
   custom tool   +0.47ms  linear to at least 50
-  middleware    +0.06ms
+  middleware    +0.03ms
   skill          0.0ms   sixteen measure the same as none
   deny rule      0.0ms   a hundred measure the same as none
+
+Re-measured 2026-09-03. The baseline above held -- 8.1ms median, 9.2ms p95, 124
+builds a second -- and the subagent row did not: 4.3ms became 5.1ms for a
+delegate declaring one built-in tool and nothing else, and 6.2ms for the shipped
+`examples/`. It is the largest term, so the additive prediction below now runs
+low, and the drift is not decay: a delegate costs what a delegate declares, and
+one number cannot say that. Every figure here is *per item added to an otherwise
+identical build*, which is the only form of it that transfers.
+
+The custom-tool row was not re-measured. Doing it needs tool files in the
+workspace, and their presence moves the baseline they would be measured against
+-- the delta and the ground shift together. Left as it was, and marked so.
 
 Skills and permissions are free because they reach the agent as prompt text and
 as a rules list, not as anything compiled. Tools are an order of magnitude
@@ -39,7 +51,10 @@ cheaper than subagents and an order dearer than middleware, so "adding things
 dynamically is cheap" is true or false depending entirely on which.
 
 The costs are additive: 10 tools, 5 middleware, 20 deny rules and 2 subagents
-predicts 20.8ms and measures 21.6ms, about 1% of a turn.
+predicted 20.8ms and measured 21.6ms, about 1% of a turn -- on the numbers above
+as they stood in August. With the subagent row re-measured the same shape
+predicts a little more, and the point survives either way: the model is additive
+and the total is small against a turn.
 
 Construction is CPU-bound Python, so it does not parallelise: ~100 builds per
 second per process, and worker threads make it slightly worse (0.85x) rather
