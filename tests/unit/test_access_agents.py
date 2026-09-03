@@ -234,7 +234,7 @@ def test_an_entry_audience_naming_an_undeclared_group_is_refused(cfg):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
         "name: analyst\ndescription: An agent.\n"
-        "tools:\n  line_count:\n    groups: [analists]\n"
+        "tools:\n  - name: line_count\n    groups: [analists]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
@@ -255,7 +255,7 @@ def test_a_restricted_definition_reports_the_same_typo_the_same_way(cfg):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
         "name: analyst\ndescription: An agent.\ngroups: [analysts]\n"
-        "tools:\n  line_count:\n    groups: [analists]\n"
+        "tools:\n  - name: line_count\n    groups: [analists]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )
@@ -273,7 +273,7 @@ def test_a_line_narrowing_past_declared_groups_is_reported_not_refused(cfg):
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "analyst.yaml").write_text(
         "name: analyst\ndescription: An agent.\ngroups: [analysts]\n"
-        "tools:\n  line_count:\n    groups: [auditors]\n"
+        "tools:\n  - name: line_count\n    groups: [auditors]\n"
         "system_prompt: |\n  Do it.\n",
         encoding="utf-8",
     )

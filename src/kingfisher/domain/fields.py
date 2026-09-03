@@ -18,7 +18,7 @@ imports the standard library and `kingfisher.domain`, nothing else.
 
 from __future__ import annotations
 
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import dataclass
 from difflib import get_close_matches
 from types import MappingProxyType
@@ -43,7 +43,15 @@ SIMILARITY = 0.7
 #: written long. Two keys, and deliberately no third: an entry says which thing
 #: and what to pass it, and anything else it wanted to say belongs to the field
 #: as a whole rather than to one name in it.
-ENTRY_FIELDS = ("name", "settings")
+def entry_fields(extra: str) -> tuple[str, ...]:
+    """The keys one long-form entry may write, for a field carrying `extra`.
+
+    `name` always, and the one thing that field lets a name carry -- `settings`
+    for middleware, `groups` for the audienced three. Two extras and one shape,
+    which is the whole of this arrangement: a reader who has met one long form
+    has met the other.
+    """
+    return ("name", extra)
 
 
 def unrecognised(
@@ -293,30 +301,58 @@ class Reader:
             # answer or the refusal for each.
             return self.selection(value, absent=absent, key=key), MappingProxyType({})
 
-        written: list[str] = []
-        settings: dict[str, Mapping[str, object]] = {}
-        for position, entry in enumerate(value, start=1):
-            name = self._entry_name(entry, position=position, key=key)
-            if name in written:
-                msg = (
-                    f"{self.source}: {key} names {name!r} twice. One name is one "
-                    f"thing to build, so a second entry for it is either settings "
-                    f"that cannot both apply or a line that says nothing"
-                )
-                raise self.error(msg)
-            written.append(name)
-            if isinstance(entry, Mapping):
-                # Absent and empty both land as `{}`, which is the same answer:
-                # this entry wrote the long form and asked for nothing by it.
-                settings[name] = self.mapping(
-                    entry.get("settings"), key=f"{key} entry {position} 'settings'"
-                )
+        written, carried = self._entries(value, key=key, extra="settings")
+        settings = {
+            # Absent and empty both land as `{}`, which is the same answer: this
+            # entry wrote the long form and asked for nothing by it.
+            name: self.mapping(entry.get("settings"), key=f"{key} entry '{name}' 'settings'")
+            for name, entry in carried.items()
+        }
 
         # Back through `selection`, so `["*"]`, the mixing refusal and the
         # meaning of an absent field are all decided in exactly one place.
         return self.selection(written, absent=absent, key=key), MappingProxyType(settings)
 
-    def _entry_name(self, entry: object, *, position: int, key: str) -> str:
+    def _entries(
+        self, value: Sequence[object], *, key: str, extra: str
+    ) -> tuple[list[str], dict[str, Mapping[str, object]]]:
+        """The names a list field wrote, and what each entry carried beside one.
+
+        One loop for both long forms, because they are one long form. `tools`
+        attaches an audience and `middleware` attaches settings, and everything
+        else about reading them is the same: an entry is a name or a mapping of
+        `name` and that one extra, a name may appear once, and what the extra
+        *means* is decided by the caller after this returns.
+
+        The two were separate readers with separate spellings -- a field-level
+        mapping for audiences, an entry-level one for settings -- and the second
+        one's own docstring argued against the first: a format where the whole
+        list changes shape because one entry wants something makes the common
+        case pay for the rare one. This is that argument applied to both.
+
+        The entry itself is what comes back, not the extra pulled out of it, so
+        each caller reads its own key the way it already did. Only entries that
+        wrote the long form appear, which lets a caller tell "said nothing" from
+        "said nothing in particular" -- `audienced` needs that, because saying
+        nothing there means inheriting the definition's own audience.
+        """
+        written: list[str] = []
+        carried: dict[str, Mapping[str, object]] = {}
+        for position, entry in enumerate(value, start=1):
+            name = self._entry_name(entry, position=position, key=key, extra=extra)
+            if name in written:
+                msg = (
+                    f"{self.source}: {key} names {name!r} twice. One name is one "
+                    f"thing to build, so a second entry for it is either two "
+                    f"answers that cannot both apply or a line that says nothing"
+                )
+                raise self.error(msg)
+            written.append(name)
+            if isinstance(entry, Mapping):
+                carried[name] = entry
+        return written, carried
+
+    def _entry_name(self, entry: object, *, position: int, key: str, extra: str) -> str:
         """The name one entry carries, whichever way that entry was written.
 
         Positional in the message rather than named, because a name is the
@@ -329,19 +365,19 @@ class Reader:
             msg = (
                 f"{self.source}: {key} entry {position} is neither a name nor a "
                 f"mapping (got {type(entry).__name__}); an entry is a name, or a "
-                f"mapping of 'name' and 'settings'"
+                f"mapping of 'name' and {extra!r}"
             )
             raise self.error(msg)
 
-        if (complaint := unrecognised(entry, known=ENTRY_FIELDS, noun="key")) is not None:
+        if (complaint := unrecognised(entry, known=entry_fields(extra), noun="key")) is not None:
             msg = f"{self.source}: {key} entry {position} has {complaint}"
             raise self.error(msg)
         if "name" not in entry:
             msg = (
                 f"{self.source}: {key} entry {position} is a mapping with no "
-                f"'name'. Written long, an entry is {{name: <a registered name>, "
-                f"settings: {{...}}}} -- the settings are for the name, so there "
-                f"is nothing to attach them to without one"
+                f"'name'. Written long, an entry is {{name: <a name>, {extra}: ...}} "
+                f"-- the {extra} are for the name, so there is nothing to attach "
+                f"them to without one"
             )
             raise self.error(msg)
 
@@ -352,11 +388,10 @@ class Reader:
         if name == ALL:
             msg = (
                 f"{self.source}: {key} entry {position} writes name {ALL!r}, which "
-                f"the mapping form does not take. {ALL!r} is whatever this "
-                f"deployment registered, so a setting written beside it is a "
-                f"setting for classes this file has never seen. Write "
-                f"{key}: [{ALL!r}] on its own for all of them, or name the one "
-                f"you meant to configure"
+                f"the long form does not take. {ALL!r} says something about the "
+                f"whole field rather than about an entry, so there is nothing for "
+                f"{extra} beside it to be about. Write {key}: [{ALL!r}] on its own "
+                f"for all of them, or name the one you meant"
             )
             raise self.error(msg)
         return name
@@ -494,7 +529,11 @@ class Reader:
         if not isinstance(raw, Mapping):
             msg = f"{where}: write `groups: [...]`, or nothing at all -- got {raw!r}"
             raise self.error(msg)
-        if complaint := unrecognised(raw, known={"groups"}, noun="key"):
+        # `name` is the entry's own, checked and consumed by `_entry_name`
+        # before this sees it. Named here rather than stripped there, because
+        # stripping would hand this a mapping the file does not contain and put
+        # the two readers one edit apart from disagreeing about which keys exist.
+        if complaint := unrecognised(raw, known=set(entry_fields("groups")), noun="key"):
             msg = f"{where}: {complaint}"
             raise self.error(msg)
         if "groups" not in raw:
@@ -529,35 +568,40 @@ class Reader:
         whole field rather than about an entry. `{"*": ...}` is a name that is
         not a name, and is refused rather than read as one.
         """
-        if not isinstance(value, Mapping):
+        if isinstance(value, Mapping):
+            # The shape this field used to take, and the reason it stopped. A
+            # field-level mapping made the whole list change shape because one
+            # entry wanted an audience -- and worse, it could not see a name
+            # written twice: YAML collapses `{a: X, a: Y}` before any reader
+            # here runs, so one of the two audiences was gone with nothing able
+            # to refuse or report it. An access restriction that vanishes
+            # quietly is the failure this format exists to prevent.
+            first = next(iter(value), "<name>")
+            msg = (
+                f"{self.source}: {key} is a mapping; this field takes a list. An "
+                f"entry that says who it is for is written long -- "
+                f"- {{name: {first}, groups: [...]}} -- beside the plain names, "
+                f"which is the same shape 'middleware' takes for its settings"
+            )
+            raise self.error(msg)
+        if not isinstance(value, (list, tuple)):
+            # A bare `"*"`, one unbracketed name, or nothing. None can carry an
+            # audience, and `selection` already has the answer or the refusal.
             return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}
-        if not value:
-            msg = (
-                f"{self.source}: {key} is an empty mapping, which reads as nothing "
-                f"-- write [] if that is what you mean, or name what it holds"
-            )
-            raise self.error(msg)
+
+        written, carried = self._entries(value, key=key, extra="groups")
         stated = {
-            text(name): self._audience(raw, key=key, entry=text(name))
-            for name, raw in value.items()
+            name: self._audience(entry, key=key, entry=name) for name, entry in carried.items()
         }
-        if ALL in stated:
-            msg = (
-                f"{self.source}: {key} names {ALL!r} as an entry, which is not a "
-                f"name -- {ALL!r} says something about the whole field, so write "
-                f"it as the list [{ALL!r}]"
-            )
-            raise self.error(msg)
-        # `refuse_all` is deliberately not consulted here. It refuses `["*"]`,
-        # which is a statement about the whole field -- and the star cannot be
-        # written in a mapping at all, refused two lines above as a name that is
-        # not a name. There is nothing left for it to catch.
-        #
-        # Every key is selected; only the ones that stated an audience carry
-        # one. An absent entry falls back to the definition's own in
-        # `access.reaching`, which is the same fallback a plain list gets --
-        # so the two spellings agree about an unrestricted name.
-        return tuple(stated), {n: a for n, a in stated.items() if a is not None}
+        # Back through `selection`, so `["*"]`, the mixing refusal and the
+        # meaning of an absent field are all decided in exactly one place.
+        chosen = self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
+        # Every name is selected; only the ones that stated an audience carry
+        # one. An entry that wrote the long form and left `groups` out falls
+        # back to the definition's own in `access.reaching`, which is the same
+        # fallback a plain name gets -- so the two spellings agree about an
+        # unrestricted name.
+        return chosen, {n: a for n, a in stated.items() if a is not None}
 
     def flag(self, value: object, *, key: str) -> bool:
         """A yes/no field, refusing the spellings YAML would quietly accept.
