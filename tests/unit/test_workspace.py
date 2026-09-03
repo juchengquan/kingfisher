@@ -3,6 +3,8 @@ from __future__ import annotations
 import os
 import shutil
 
+import pytest
+
 from kingfisher.domain import retention
 from kingfisher.domain.layout import (
     AGENT_HOME,
@@ -12,6 +14,7 @@ from kingfisher.domain.layout import (
 )
 from kingfisher.infrastructure.workspace_fs import (
     EXAMPLE,
+    GROUPS_EXAMPLE,
     LocalSessionDirs,
     ensure_layout,
     ensure_session_layout,
@@ -65,6 +68,65 @@ def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
     example.write_text("# stale\n", encoding="utf-8")
     ensure_layout(ws)
     assert example.read_text(encoding="utf-8") != "# stale\n", "never refreshed"
+
+
+def test_the_example_lands_beside_a_relocated_catalogue(tmp_path):
+    """Beside the file it is an example of, which is not always the workspace.
+
+    `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue, and
+    `compose.yaml` ships exactly that arrangement. The example went into the
+    workspace regardless, so seeding such a deployment wrote the annotated
+    catalogue into a directory nothing reads -- while the error for the missing
+    one said `kingfisher seed` writes it next to the file. It had, into the
+    other directory, and the two never met.
+    """
+    ws = tmp_path / "ws"
+    shared = tmp_path / "catalogue" / "models.yaml"
+
+    ensure_layout(ws, authored={"models.yaml": shared, "groups.yaml": ws / "groups.yaml"})
+
+    assert (shared.parent / EXAMPLE).is_file()
+    assert not (ws / EXAMPLE).exists(), "a second copy where nothing reads it"
+
+
+def test_a_relocated_group_policy_gets_its_example_too(tmp_path):
+    """The same rule for the other file, and it needs saying separately.
+
+    `groups.yaml` relocates by its own variable, so the two can move apart --
+    and the message that names `groups.yaml.example` is printed by `seed`,
+    which is the same run that placed it.
+    """
+    ws = tmp_path / "ws"
+    policy = tmp_path / "policy" / "groups.yaml"
+
+    ensure_layout(ws, authored={"models.yaml": ws / "models.yaml", "groups.yaml": policy})
+
+    assert (policy.parent / GROUPS_EXAMPLE).is_file()
+    assert (ws / EXAMPLE).is_file(), "the catalogue did not move, so its example stays"
+
+
+@pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a mode 0o500 directory")
+def test_an_unwritable_destination_falls_back_to_the_workspace(tmp_path):
+    """Furniture is best-effort, and a shared catalogue is often read-only.
+
+    A fleet mounting one reviewed `models.yaml` read-only is the case this
+    exists for. Failing the layout there would take `kingfisher seed` down for
+    the deployment that relocated -- so the example goes where it always went,
+    which is no worse than before it could follow the file at all.
+    """
+    ws = tmp_path / "ws"
+    locked = tmp_path / "locked"
+    locked.mkdir()
+    locked.chmod(0o500)
+
+    try:
+        ensure_layout(
+            ws, authored={"models.yaml": locked / "models.yaml", "groups.yaml": ws / "groups.yaml"}
+        )
+    finally:
+        locked.chmod(0o700)
+
+    assert (ws / EXAMPLE).is_file()
 
 
 def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):

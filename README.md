@@ -11,7 +11,7 @@ pip install kingfisher
 from kingfisher import definitions_source, ensure_layout, paths_from_env, seed
 
 paths = paths_from_env()
-ensure_layout(paths.workspace)
+ensure_layout(paths.workspace, authored=paths.authored_files)
 
 done = seed(paths, definitions_source(paths))
 for name in done.written:
@@ -23,10 +23,12 @@ for left in done.skipped:
 Four calls, and the order of the first two matters. `ensure_layout` writes
 `models.yaml.example`, which has to arrive whether or not there is anything to
 seed — a deployment told to write `models.yaml` and given no example of one is
-a dead end. `seed` requires a directory to copy from and will not invent one;
-`definitions_source` is what turns configuration into that directory, reading
-`KINGFISHER_ASSETS` and taking a path that overrides it. On the command, the
-same two:
+a dead end. `authored` is where that example goes: `models.yaml` and
+`groups.yaml` both relocate, and an example a directory away from the file it
+describes is the same dead end wearing a different coat. `seed` requires a
+directory to copy from and will not invent one; `definitions_source` is what
+turns configuration into that directory, reading `KINGFISHER_ASSETS` and taking
+a path that overrides it. On the command, the same two:
 
     kingfisher seed                          # from KINGFISHER_ASSETS
     kingfisher seed --from ./my-definitions  # from here instead

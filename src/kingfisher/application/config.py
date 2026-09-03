@@ -98,6 +98,13 @@ def paths_from_env(environ: Mapping[str, str] | None = None) -> WorkspacePaths:
         subagents_root=_optional_path("KINGFISHER_SUBAGENTS_DIR"),
         tools_root=_optional_path("KINGFISHER_TOOLS_DIR"),
         agents_root=_optional_path("KINGFISHER_AGENTS_DIR"),
+        # Read here rather than only in `config_from_env` for the reason the
+        # four above are: laying a workspace out places the worked example for
+        # each of these, and that happens before a catalogue can be read. A
+        # deployment that relocated its catalogue and got the example in the
+        # workspace has been handed an annotated file for a path nothing reads.
+        models_file=_optional_path("KINGFISHER_MODELS_FILE"),
+        groups_file=_optional_path("KINGFISHER_GROUPS_FILE"),
         # Read here rather than at the command that uses it, so that
         # `test_every_variable_read_is_documented` can see it: that rule finds
         # variables by scanning this module alone, and one read at a CLI edge
@@ -124,17 +131,17 @@ def config_from_env(environ: Mapping[str, str] | None = None) -> Config:
 
     paths = paths_from_env(env)
     workspace = paths.workspace
-    # Defaults inside the workspace, like every other catalogue root, and
-    # relocatable for the same reason: it holds content a person authored and
-    # reviewed, so several deployments sharing one file is the point rather than
-    # an accident. Unlike the others it is a file, not a directory -- endpoints
-    # and models cross-reference, and splitting them across files would let half
-    # a catalogue load.
-    models_file = _optional_path("KINGFISHER_MODELS_FILE") or workspace / "models.yaml"
+    # Where it defaults and why it relocates is `authored_files_for`, which
+    # `paths_from_env` already answered: seeding places this file's worked
+    # example and runs before any of this, so the two must not decide separately.
+    #
+    # One file rather than several, unlike the definition roots: endpoints and
+    # models cross-reference, and splitting them would let half a catalogue load.
+    models_file = paths.authored_files["models.yaml"]
     catalogue = model_catalogue.load(models_file, env)
     # The group vocabulary, and nothing else: who reaches what is written in
     # the definitions themselves. Defaults and relocates exactly as the
-    # catalogue above does, so several deployments can share one set of names.
+    # catalogue above does, through the same function.
     #
     # Optional, unlike the catalogue -- `load` answers `None` for a file that is
     # not there, which is the whole of what "this deployment controls nothing by
@@ -142,7 +149,7 @@ def config_from_env(environ: Mapping[str, str] | None = None) -> Config:
     # vocabulary that cannot be read leaves every definition's audience
     # uncheckable, and coming up anyway is how a server serves everyone
     # everything.
-    access_file = _optional_path("KINGFISHER_GROUPS_FILE") or workspace / "groups.yaml"
+    access_file = paths.authored_files["groups.yaml"]
 
     return Config(
         workspace=workspace,

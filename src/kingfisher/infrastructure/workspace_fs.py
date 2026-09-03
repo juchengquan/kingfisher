@@ -118,8 +118,13 @@ def is_new_workspace(workspace: Path) -> bool:
     return not (Path(workspace) / MARKER).exists()
 
 
-def ensure_layout(workspace: Path) -> Path:
+def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None) -> Path:
     """Create the workspace layout. Idempotent.
+
+    `authored` says where the two files a deployment writes itself are read
+    from -- `Config.authored_files` and `WorkspacePaths.authored_files` are it,
+    keyed by filename. Omitted means the workspace, which is where both default
+    and where every caller holding only a directory should put them.
 
     What the workspace still owns is what sessions share — the skill and
     subagent definitions — plus the directory sessions live in. Everything the
@@ -150,11 +155,11 @@ def ensure_layout(workspace: Path) -> Path:
     if not marker.exists():
         marker.write_text("kingfisher workspace\n", encoding="utf-8")
 
-    _place_example(workspace)
+    _place_example(workspace, authored)
     return workspace
 
 
-def _place_example(workspace: Path) -> None:
+def _place_example(workspace: Path, authored: Mapping[str, Path] | None = None) -> None:
     """Put each worked example where the file it is an example of is read from.
 
     Here rather than in `seed`, which is where it lived. Seeding is about to
@@ -178,16 +183,50 @@ def _place_example(workspace: Path) -> None:
     As `.example`, never as `models.yaml` itself: the one file that must not be
     overwritten is the one naming every endpoint this deployment reaches and
     whose credentials pay.
+
+    "Where it is read from" is not always the workspace, which is what this took
+    a while to say. Both files relocate -- `KINGFISHER_MODELS_FILE` points a
+    fleet at one reviewed catalogue, the arrangement `compose.yaml` ships -- and
+    the example went into the workspace regardless. So a container deployment
+    was seeded with an annotated catalogue in a directory nothing reads, while
+    the error for the missing one told it `kingfisher seed` writes the example
+    next to the file. It had, next to the other one.
+
+    Best-effort where the destination will not take it: a shared catalogue is
+    often mounted read-only, and failing the whole layout over furniture would
+    take `kingfisher seed` down for exactly the deployment that relocated. The
+    fallback is the workspace, which is where it went before it could follow the
+    file at all.
     """
+    beside = dict(authored or {})
     for name in EXAMPLES:
         source = resources.files(PACKAGE).joinpath(name)
         if not source.is_file():  # a packaging fault, caught by a test
             continue
-        target = workspace / name
         text = source.read_text(encoding="utf-8")
-        if target.is_file() and target.read_text(encoding="utf-8") == text:
-            continue
-        target.write_text(text, encoding="utf-8")
+        # By filename, so the two halves of the pair cannot be mapped to each
+        # other anywhere else: `authored` is keyed by the name of the real file,
+        # and this is that name with `.example` on the end.
+        wanted = beside.get(name.removesuffix(".example"), workspace / name).parent
+        for target in _candidates(wanted / name, workspace / name):
+            if target.is_file() and target.read_text(encoding="utf-8") == text:
+                break
+            try:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_text(text, encoding="utf-8")
+            except OSError:
+                continue
+            break
+
+
+def _candidates(wanted: Path, fallback: Path) -> tuple[Path, ...]:
+    """Where to try writing one example, in order, without trying twice.
+
+    One entry for the ordinary deployment, which relocated nothing: the two are
+    the same path there, and a fallback that repeats the attempt that just
+    failed would write the same `OSError` off twice and say nothing new.
+    """
+    return (wanted,) if wanted == fallback else (wanted, fallback)
 
 
 def ensure_session_layout(session_dir: Path) -> Path:

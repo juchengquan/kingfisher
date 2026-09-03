@@ -353,6 +353,29 @@ for the shipped agents and lives outside the wheel.
 Still not seeded. `groups` is not a definition kind and `.example` never becomes
 `groups.yaml`. *(2026-09-02.)*
 
+**"Beside it" means beside the file, not inside the workspace.** Both files
+relocate -- `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue,
+which is what `compose.yaml` ships -- and the layout wrote each example into the
+workspace regardless. So the deployment most likely to need the annotated
+catalogue was the one guaranteed not to get it: `kingfisher seed` wrote it into
+the workspace, the container read `/config/models.yaml`, and the error for the
+missing file said seed would write the example next to it. It had, next to the
+other one, and nothing anywhere said so.
+
+`WorkspacePaths` carries the two overrides now and `authored_files_for` resolves
+them, which is `definition_roots_for` again and for the same reason: seeding
+answers "where does this go?" before a catalogue can be read, and a second copy
+of `models_file or workspace / "models.yaml"` is how the two records drift.
+`ensure_layout` takes the resolved mapping, so a caller holding only a directory
+still gets the old behaviour -- that caller is saying the files are read from the
+workspace, which for nearly every deployment is true.
+
+Best-effort, and that is a deliberate second choice. A shared catalogue is often
+mounted read-only, and a layout that raised there would take `kingfisher seed`
+down for exactly the deployment this fixes; the example falls back to the
+workspace, which is where it went before it could follow the file at all.
+*(2026-09-03.)*
+
 ## Models and endpoints
 
 **Endpoints and models are separate concepts in one file.** `models.yaml` holds

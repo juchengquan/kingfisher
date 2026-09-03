@@ -144,6 +144,35 @@ def definition_roots_for(
     }
 
 
+def authored_files_for(
+    workspace: Path,
+    models_file: Path | None = None,
+    groups_file: Path | None = None,
+) -> dict[str, Path]:
+    """The two files a deployment writes itself: an override, or a name in the workspace.
+
+    A free function for the reason `definition_roots_for` is one -- two records
+    answer this and the answer has to be the same -- and a separate one because
+    these are not catalogue roots. They are single files, they relocate by their
+    own variables, and each has a shipped `.example` beside it that is only
+    useful in the directory the real file is read from.
+
+    Both default inside the workspace and both relocate, for the reason the
+    definition roots do: they hold content a person authored and reviewed, so
+    several deployments sharing one reviewed file is the point rather than an
+    accident.
+
+    Keyed by filename rather than by concept, because that is what the caller
+    with the examples needs: `models.yaml.example` finds its destination by
+    dropping the suffix. Naming them `models` and `groups` would put the mapping
+    between the two names somewhere else, where it could disagree.
+    """
+    return {
+        "models.yaml": models_file or workspace / "models.yaml",
+        "groups.yaml": groups_file or workspace / "groups.yaml",
+    }
+
+
 @dataclass(frozen=True)
 class WorkspacePaths:
     """Where a deployment keeps things, before anything has been read.
@@ -164,6 +193,16 @@ class WorkspacePaths:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
+    #: The two single files, relocated. Not beside the four above because they
+    #: are not directories and do not move together with them: one reviewed
+    #: `models.yaml` shared across a fleet is the arrangement `compose.yaml`
+    #: ships, and a group policy may sit somewhere else again.
+    #:
+    #: Carried here rather than only on `Config` because laying a workspace out
+    #: places the worked example for each, and that runs before a catalogue can
+    #: be read. A relocation this record cannot see is one seeding writes past.
+    models_file: Path | None = None
+    groups_file: Path | None = None
     #: Where definitions are *copied from*, which is the opposite direction to
     #: the four above — those say where a catalogue is read, this says what
     #: seeding hands it. Deliberately not beside them for that reason.
@@ -182,6 +221,10 @@ class WorkspacePaths:
             self.tools_root,
             self.agents_root,
         )
+
+    @property
+    def authored_files(self) -> dict[str, Path]:
+        return authored_files_for(self.workspace, self.models_file, self.groups_file)
 
 
 class ConfigError(RuntimeError):
@@ -589,3 +632,17 @@ class Config:
             self.agents_root,
         )
 
+    @property
+    def authored_files(self) -> dict[str, Path]:
+        """Where `models.yaml` and `groups.yaml` are read from, found or not.
+
+        Assembled from the two fields that already record it rather than from a
+        pair of overrides: a `Config` has been *read*, so it knows where each
+        file was looked for -- `Models.source` and `access_source` exist to say
+        so. `WorkspacePaths` holds the overrides instead, because it is what a
+        first run has, and `authored_files_for` is where the two meet.
+
+        `None` on either means a `Config` assembled in code, which relocated
+        nothing; the workspace default is the right answer for it.
+        """
+        return authored_files_for(self.workspace, self.models.source, self.access_source)
