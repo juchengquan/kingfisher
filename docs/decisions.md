@@ -203,9 +203,26 @@ stale entry had to be *dropped* rather than merely reported, because the grant i
 produced reached `Offering.refuse_unknown` and turned every turn into a refusal.
 A definition *is* the asset it is about, so that failure has no shape in the
 current design: the reconciliation, both its reports and the whole class of bug
-went with it. What survived unchanged: `for_groups`, `UNSCOPED`, the refusal of a
-call that names no caller, the per-turn re-check of a session's pinned agent, and
-the closed vocabulary. *(2026-08-31, reversed the same day.)*
+went with it. What survived unchanged: `UNSCOPED`, the refusal of a call that
+names no caller, the per-turn re-check of a session's pinned agent, and the
+closed vocabulary. `for_groups` survived that reversal too and did not survive
+the next one -- see below. *(2026-08-31, reversed the same day.)*
+
+**Reversed: `for_groups` and the `Caller` handle.** A caller said who they were
+once and reused the handle; now every call takes `groups=`. Counted before
+removing: zero production callers. The service -- the only consumer that serves
+several callers, which is the case the handle was built for -- resolves groups
+per request from a header and passed `groups=` at all seven of its call sites.
+Two of the handle's three stated benefits did not survive checking either: the
+grant it resolved once measures **0.81 microseconds**, because the transitive
+closure is computed when `groups.yaml` loads; and refusing an unknown group "at
+the boundary rather than at the first turn" is a gap of one call, since `expand`
+still refuses before any agent is built. What was real was the script
+ergonomics, and one thing that was not a benefit at all: `held_for` tested
+`isinstance(groups, tuple)` and read anything else as *no opinion*, so the
+coercion inside `for_groups` was the only reason `["A"]` ever narrowed. That
+moved into `held_for`, which now takes any sequence and refuses a bare string.
+*(2026-09-03.)*
 
 **An audience list is an `or`, and an entry of it may be an `and`.** `all_of`
 requires a caller to hold several groups at once, and is written two ways

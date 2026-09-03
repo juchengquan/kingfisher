@@ -55,9 +55,9 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import AsyncIterator, Iterable, Iterator
+from collections.abc import AsyncIterator, Iterator
 from contextlib import AsyncExitStack, contextmanager, suppress
-from dataclasses import dataclass, replace
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from time import monotonic, time
@@ -186,64 +186,6 @@ logger = logging.getLogger("kingfisher.origins")
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
 _UNSET: Any = object()
-
-
-@dataclass(frozen=True)
-class Caller:
-    """One `Kingfisher`, bound to who is calling.
-
-    A handle rather than a second `Kingfisher`. The catalogue, the session store
-    and the per-session locks are properties of the *deployment*, not of the
-    caller, so one instance keeps owning them and a handle is cheap enough to
-    build per turn. Two handles over one instance is what a process serving
-    several callers needs; binding one at the top of a script is what a person
-    at a terminal needs. The same object does both, which is why there is no
-    constructor argument doing half of it.
-
-    It takes group *names* rather than a `Capabilities`, and that is the
-    security property: a name is resolved against a policy this deployment
-    wrote, so the only thing anyone can hand in is an input. There is no
-    spelling of "give me everything" here except `UNSCOPED`, which is a value
-    someone typed and a reviewer can grep for.
-
-    The grant is resolved once, when the handle is made, rather than on every
-    call through it -- so a reused handle costs the expansion once and a group
-    name that does not exist is refused at the boundary rather than at the
-    first turn.
-    """
-
-    _kf: Kingfisher
-    #: What the caller said, kept beside the grant for whatever has to report
-    #: it and for the checks that run per turn rather than per handle.
-    held: Held
-    #: What this deployment permits this caller, both ceilings already applied.
-    grants: Capabilities
-
-    def run(self, request: str | Request) -> RunResult:
-        return self._kf.run(request, groups=self.held)
-
-    async def arun(self, request: str | Request) -> RunResult:
-        return await self._kf.arun(request, groups=self.held)
-
-    def stream(self, request: str | Request) -> Iterator[RunEvent]:
-        return self._kf.stream(request, groups=self.held)
-
-    def astream(self, request: str | Request) -> AsyncIterator[RunEvent]:
-        return self._kf.astream(request, groups=self.held)
-
-    def agent_named(self, name: str | None) -> AgentSpec | None:
-        return self._kf.agent_named(name, groups=self.held)
-
-    def open_session_for(self, request: Request) -> Session:
-        """Name a session and make its directory. Deliberately takes no groups.
-
-        Opening a session resolves no agent, so there is nothing here for a
-        policy to check. A resuming turn legitimately names no agent and runs
-        the one the session remembers, so the name is not read until
-        `_agent_for` -- which every turn goes through, first or not, and which
-        is where the check lives.
-        """
-        return self._kf.open_session_for(request)
 
 
 class Kingfisher:
@@ -455,20 +397,26 @@ class Kingfisher:
         Public because `build_agent` needs it and the CLI wants to simulate a
         caller with it; a second copy of this rule is one convention away from
         the listing and the run disagreeing about who reaches what.
+
+        **Any sequence of names, not only a tuple.** This tested
+        `isinstance(groups, tuple)` and answered `None` -- "no opinion", the
+        same as no vocabulary at all -- for anything else. That was safe only
+        because `for_groups` coerced first and was the single documented way in;
+        with `groups=` the only way, `groups=["analysts"]` would have validated
+        the name and then narrowed nothing. A list is the obvious thing to
+        write, so it must mean what it looks like.
+
+        A bare `str` is refused rather than coerced. `groups="analysts"` is
+        iterable, so it would become eight one-letter group names -- caught
+        today only because `expand` refuses each of them, which reports a typo
+        nobody made.
         """
-        if self.access is None or not isinstance(groups, tuple):
+        if self.access is None or groups is None or isinstance(groups, _Unscoped):
             return None
-        return self.access.expand(groups)
-
-    def for_groups(self, groups: Iterable[str] | _Unscoped) -> Caller:
-        """This deployment, bound to a caller holding these groups.
-
-        The one place a caller's identity enters, and the only way to run a turn
-        on a deployment that has a policy. See `Caller` for why it takes names
-        rather than a grant.
-        """
-        held: Held = groups if isinstance(groups, _Unscoped) else tuple(groups)
-        return Caller(_kf=self, held=held, grants=self._effective_grants(held))
+        if isinstance(groups, str):
+            msg = f"groups is a sequence of names, not a string -- write [{groups!r}]"
+            raise AccessError(msg)
+        return self.access.expand(tuple(groups))
 
     def _effective_grants(self, groups: Held | None) -> Capabilities:
         """The ceiling for one call: this deployment's, narrowed by the caller's.
@@ -500,8 +448,8 @@ class Kingfisher:
         if groups is None:
             msg = (
                 "this deployment has an access policy, so a call must say who is "
-                "calling: for_groups([...]) with the caller's groups, or "
-                "for_groups(UNSCOPED) to run without one"
+                "calling: pass groups=[...] with the caller's groups, or "
+                "groups=UNSCOPED to run without one"
             )
             raise AccessError(msg)
         if isinstance(groups, _Unscoped):
@@ -887,8 +835,8 @@ class Kingfisher:
             if groups is None:
                 msg = (
                     "this deployment has an access policy, so a call must say who "
-                    "is calling: for_groups([...]) with the caller's groups, or "
-                    "for_groups(UNSCOPED) to run without one"
+                    "is calling: pass groups=[...] with the caller's groups, or "
+                    "groups=UNSCOPED to run without one"
                 )
                 raise AccessError(msg)
             if isinstance(groups, tuple):

@@ -72,13 +72,13 @@ def session_at(kf, name: str):
 def built(kf, monkeypatch, groups, name: str):
     """The tool names handed to `create_deep_agent` for this caller."""
     captured = capture_build(monkeypatch)
-    caller = kf.for_groups(groups)
+    held = tuple(groups) if groups is not UNSCOPED else groups
     kf.graph_for(
         Request(task="t", agent="surveyor"),
         session_at(kf, name),
-        capabilities=caller.grants,
+        capabilities=kf._effective_grants(held),
         checkpointer=None,
-        groups=caller.held,
+        groups=held,
     )
     return [getattr(t, "name", getattr(t, "__name__", "")) for t in captured["tools"] or ()]
 
@@ -90,14 +90,14 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
     """The dangerous failure is a handler that forgot the boundary, so it is
     made loud rather than left to grant everything in silence."""
     kf = Kingfisher(policied)
-    with pytest.raises(AccessError, match="for_groups"):
+    with pytest.raises(AccessError, match="groups="):
         kf.run("anything")
 
 
 def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
     """The opt-out is a value someone typed, so a review can find it."""
     kf = Kingfisher(policied)
-    assert kf.for_groups(UNSCOPED).held is UNSCOPED
+    assert kf.held_for(UNSCOPED) is None
 
 
 def test_an_unknown_group_is_refused(policied):
@@ -105,7 +105,7 @@ def test_an_unknown_group_is_refused(policied):
     reach nothing, which looks exactly like a caller who was denied."""
     kf = Kingfisher(policied)
     with pytest.raises(AccessError, match="unknown group"):
-        kf.for_groups(["Q"])
+        kf.held_for(("Q",))
 
 
 def test_naming_groups_where_there_is_no_vocabulary_is_refused(cfg):
@@ -113,7 +113,37 @@ def test_naming_groups_where_there_is_no_vocabulary_is_refused(cfg):
     confused, and silently ignoring them is how they stay confused."""
     kf = Kingfisher(cfg)
     with pytest.raises(AccessError, match="no access policy"):
-        kf.for_groups(["A"])
+        kf._effective_grants(("A",))
+
+
+def test_a_list_of_groups_narrows_exactly_as_a_tuple_does(policied):
+    """The trap that folding `for_groups` in had to disarm.
+
+    This tested `isinstance(groups, tuple)` and answered `None` for anything
+    else -- and `None` is "no opinion", which is what a deployment with no
+    vocabulary at all returns. That was survivable only while `for_groups` was
+    the single documented way in, because it coerced first. With `groups=` the
+    only way, `groups=["A"]` would have validated the name against the
+    vocabulary and then narrowed nothing: a caller who believes they are scoped
+    and is not, which is the exact failure the closed vocabulary exists to stop.
+
+    A list is the obvious thing to write. It has to mean what it looks like.
+    """
+    kf = Kingfisher(policied)
+
+    assert kf.held_for(["A"]) == kf.held_for(("A",))
+    assert kf.held_for(["A"]) is not None, "a list read as no opinion at all"
+
+
+def test_a_bare_string_of_groups_is_refused_rather_than_spelled_out(policied):
+    """`groups="analysts"` is iterable, so coercing it yields nine one-letter
+    group names. `expand` does refuse those, but it reports a typo nobody made
+    -- and now that a sequence is what callers pass directly, the mistake is
+    one keystroke from the correct form."""
+    kf = Kingfisher(policied)
+
+    with pytest.raises(AccessError, match="not a string"):
+        kf.held_for("A")
 
 
 def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
@@ -124,15 +154,17 @@ def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     assert kf.held_for(None) is None
 
 
-def test_the_handle_is_reusable(policied):
+def test_resolving_the_same_groups_twice_gives_the_same_grant(policied):
+    """It was a handle that could be bound once and reused; now the resolution
+    happens per call, so the thing worth asserting is that it is stable."""
     kf = Kingfisher(policied)
-    assert kf.for_groups(["A"]).grants == kf.for_groups(["A"]).grants
+    assert kf._effective_grants(("A",)) == kf._effective_grants(("A",))
 
 
 def test_the_deployments_own_grants_still_bound_a_caller(policied):
     """Two ceilings, and the lower one wins."""
     kf = Kingfisher(policied, grants=Capabilities(tools=()))
-    assert kf.for_groups(["A"]).grants.tools == ()
+    assert kf._effective_grants(("A",)).tools == ()
 
 
 # -- what the graph is built from -------------------------------------------
@@ -211,22 +243,22 @@ def reported(kf, groups, name: str):
     from kingfisher.application.reporting import withheld_by_kind
 
     session = session_at(kf, name)
-    caller = kf.for_groups(groups)
-    held = kf.held_for(caller.held)
+    held_names = tuple(groups) if groups is not UNSCOPED else groups
+    held = kf.held_for(held_names)
     graph = kf.graph_for(
         Request(task="t", agent="surveyor"),
         session,
-        capabilities=caller.grants,
+        capabilities=kf._effective_grants(held_names),
         checkpointer=None,
-        groups=caller.held,
+        groups=held_names,
     )
     return withheld_by_kind(
-        caller.grants,
+        kf._effective_grants(held_names),
         kf.cfg,
         session,
         graph,
         kf.catalogue,
-        agent=kf.agent_named("surveyor", groups=caller.held),
+        agent=kf.agent_named("surveyor", groups=held_names),
         held=held,
     )
 
@@ -245,14 +277,14 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     its original job."""
     kf = Kingfisher(policied)
     session = session_at(kf, "w2")
-    caller = kf.for_groups(["A"])
-    grants = replace(caller.grants, builtin_tools=("read_file",))
+    held = ("A",)
+    grants = replace(kf._effective_grants(held), builtin_tools=("read_file",))
     graph = kf.graph_for(
         Request(task="t", agent="surveyor"),
         session,
         capabilities=grants,
         checkpointer=None,
-        groups=caller.held,
+        groups=held,
     )
     from kingfisher.application.reporting import withheld_by_kind
 
@@ -263,8 +295,8 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
             session,
             graph,
             kf.catalogue,
-            agent=kf.agent_named("surveyor", groups=caller.held),
-            held=kf.held_for(caller.held),
+            agent=kf.agent_named("surveyor", groups=held),
+            held=kf.held_for(held),
         )
     )
     assert "execute" in kinds.get("builtin tool", ())
@@ -324,13 +356,13 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkey
     """
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
-    caller = kf.for_groups(["B"])
+    held = ("B",)
     kf.graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk1"),
-        capabilities=caller.grants,
+        capabilities=kf._effective_grants(held),
         checkpointer=None,
-        groups=caller.held,
+        groups=held,
     )
     narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
@@ -343,13 +375,13 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatc
     """So the assertion above is not passing because nothing was advertised."""
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
-    caller = kf.for_groups(["A"])
+    held = ("A",)
     kf.graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk2"),
-        capabilities=caller.grants,
+        capabilities=kf._effective_grants(held),
         checkpointer=None,
-        groups=caller.held,
+        groups=held,
     )
     narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
