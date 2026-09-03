@@ -167,8 +167,9 @@ def out_of_steps(cfg: Config) -> RunEvent:
     """The same event for the other bound on a turn.
 
     Two bounds, and until this they behaved nothing alike. `turn_timeout_s` is
-    checked between chunks and ends the turn as a `RunResult` with `cut_short`
-    set; `recursion_limit` is enforced inside langgraph's own loop and came out
+    checked between chunks and ends the turn as a `RunResult` whose
+    `stop_reason` is `max_duration`; `recursion_limit` is enforced inside
+    langgraph's own loop and came out
     as a `GraphRecursionError` through every caller -- the driver printed a
     stack trace, and the HTTP surface had no mapping for it at all.
 

@@ -134,9 +134,18 @@ async def watching(
         for name in totals:
             totals[name] += int(event.usage.get(name, 0) or 0)
         if event.kind == "cut_short":
+            # Provisional, and the coarse word is the honest one here: the event
+            # says a bound was hit and does not say which. The `finished` branch
+            # below overwrites this with the reason -- but a caller that
+            # disconnects mid-stream never produces one, and a line saying the
+            # turn was cut short beats no line at all.
             outcome = "cut_short"
         elif event.kind == "finished" and event.result is not None:
-            outcome = "cut_short" if event.result.cut_short else "ok"
+            # The reason itself, so an operator reading these can tell a turn
+            # that ran out of seconds from one that ran out of steps without
+            # going to find the run log.
+            reason = event.result.stop_reason
+            outcome = "ok" if reason == "end_turn" else reason
             turn_id = event.result.turn_id
             answer = event.result.answer
             session_id = event.result.session_id

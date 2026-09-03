@@ -53,7 +53,7 @@ def result_payload(result: RunResult) -> dict[str, object]:
         "answer": result.answer,
         "virtual_dir": result.virtual_dir,
         "artifacts": list(result.artifacts),
-        "cut_short": result.cut_short,
+        "stop_reason": result.stop_reason,
     }
 
 

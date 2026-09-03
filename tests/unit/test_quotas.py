@@ -46,7 +46,9 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
 
     result = kf.run(Request("go"))
 
-    assert result.cut_short
+    # The reason, not merely that it stopped: the two bounds set different ones,
+    # and asserting the flag could not tell which had fired.
+    assert result.stop_reason == "max_duration"
     assert agent.taken < 50, "the turn ran to completion despite the bound"
 
 
@@ -77,7 +79,7 @@ def test_an_ordinary_turn_is_untouched(cfg):
     pathological case."""
     result = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer()).run(Request("go"))
 
-    assert not result.cut_short
+    assert result.stop_reason == "end_turn"
     assert result.answer == "ok"
 
 
@@ -100,7 +102,8 @@ class RunawayAgent:
 def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     """The other bound on a turn, and it behaved nothing like the first.
 
-    `turn_timeout_s` ends a turn as a `RunResult` with `cut_short` set;
+    `turn_timeout_s` ends a turn as a `RunResult` whose `stop_reason` is
+    `max_duration`;
     `recursion_limit` ended it as a `GraphRecursionError` out of `stream`, so
     the caller got a langgraph traceback instead of the work. Observed on a run
     that had already written its report and validated it -- the file was on
@@ -112,7 +115,9 @@ def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
 
     result = kf.run(Request("go"))
 
-    assert result.cut_short
+    # `max_steps`, not `max_duration` -- the distinction the boolean could not
+    # carry, and the reason a reader was sent to the wrong setting.
+    assert result.stop_reason == "max_steps"
     assert result.run_dir.is_dir(), "the turn's work went with the error"
 
 
