@@ -228,6 +228,70 @@ def test_every_variable_read_is_documented():
     assert not missing, f"read by config.py but absent from .env.example: {sorted(missing)}"
 
 
+def test_no_message_names_a_variable_nothing_reads():
+    """The other direction, and the one that had gone wrong.
+
+    The rule above catches a knob nobody documented. This catches a knob that
+    does not exist: the refusal for naming groups without a policy said "write
+    access.yaml in the workspace, or set KINGFISHER_ACCESS_FILE", and neither
+    had existed since the central policy file was reversed. A reader following
+    it wrote a file nothing loads, set a variable nothing reads, and got the
+    identical refusal back. Worse than no message, because it is confidently
+    wrong -- and nothing would ever have failed: the string is a message, so no
+    import breaks and no lookup returns `None`.
+
+    **Runtime strings only, and that distinction is the whole rule.** Comments
+    and docstrings here deliberately name variables that are *gone* --
+    `KINGFISHER_MODEL_SUBAGENT` and `KINGFISHER_PROVIDER_SUBAGENT` are both
+    explained as removed, which is this codebase's convention for recording what
+    was tried and abandoned. A rule that could not tell those from an
+    instruction would either fail on correct prose or be deleted for crying
+    wolf. What a reader is told to *set* is a string the program evaluates;
+    what a reader is told about the past is not.
+    """
+    import ast
+    import re
+    from pathlib import Path as _Path
+
+    import kingfisher
+    from kingfisher.application import config as config_module
+
+    read = set(re.findall(r"KINGFISHER_[A-Z_]+", _Path(config_module.__file__).read_text()))
+    package = _Path(kingfisher.__file__).parent
+
+    def messages(tree: ast.Module) -> list[str]:
+        """Every string constant that is not a docstring."""
+        docstrings = {
+            id(node.body[0].value)
+            for node in ast.walk(tree)
+            if isinstance(node, (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef))
+            and node.body
+            and isinstance(node.body[0], ast.Expr)
+            and isinstance(node.body[0].value, ast.Constant)
+            and isinstance(node.body[0].value.value, str)
+        }
+        return [
+            node.value
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Constant)
+            and isinstance(node.value, str)
+            and id(node) not in docstrings
+        ]
+
+    invented = {
+        (path.relative_to(package).as_posix(), name)
+        for path in package.rglob("*.py")
+        for text in messages(ast.parse(path.read_text(encoding="utf-8")))
+        for name in re.findall(r"KINGFISHER_[A-Z_]+", text)
+        if name not in read
+    }
+
+    assert not invented, (
+        f"named in a runtime string but read nowhere: {sorted(invented)} -- a message "
+        "pointing at a variable that does not exist sends its reader to set "
+        "something with no effect, and nothing else would ever notice"
+    )
+
 def test_the_variables_that_chose_a_model_are_gone(env):
     """`KINGFISHER_MODEL`, `KINGFISHER_API_STYLE` and `KINGFISHER_MAX_TOKENS`
     are the catalogue's job now, and the per-role pair went before them.
