@@ -74,10 +74,15 @@ def groups_named(text: str) -> tuple[str, ...]:
     _collect(parsed.get("groups"), into=found)
     for field_name in AUDIENCED:
         entries = parsed.get(field_name)
-        if isinstance(entries, dict):
-            for stated in entries.values():
-                if isinstance(stated, dict):
-                    _collect(stated.get("groups"), into=found)
+        # A list whose entries are names, or mappings of `name` and `groups`.
+        # This walked a field-level mapping until 2026-09-03 and stopped finding
+        # anything the day the format changed -- which `seed` would not have
+        # reported, because a definition naming no group is exactly what a
+        # definition it cannot read looks like from here.
+        if isinstance(entries, (list, tuple)):
+            for entry in entries:
+                if isinstance(entry, dict):
+                    _collect(entry.get("groups"), into=found)
     return tuple(dict.fromkeys(found))
 
 

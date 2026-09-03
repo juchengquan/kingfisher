@@ -13,7 +13,7 @@ description: Re-checks figures against their sources. Use before reporting numbe
 groups: [analysts, auditors, reviewers]
 builtin_tools: [read_file, glob, grep]
 tools:
-  sql_query:
+  - name: sql_query
     # The compounding case, in three lines. Reached by an auditor, this
     # delegate holds `line_count` and not `sql_query`; reached by an analyst it
     # holds both. Nothing is refused, nothing errors -- it simply runs with
@@ -23,9 +23,10 @@ tools:
   # which is the whole argument for naming one. Two definitions, one place to
   # change it, and `kingfisher list` prints what it requires once above the
   # audiences rather than on every line that mentions it.
-  http_fetch:
+  - name: http_fetch
     groups: [senior-analysts]
-  line_count:
+  # Unrestricted, so a bare name with nothing attached.
+  - line_count
 system_prompt: |
   You verify claims. You do not improve prose or add analysis -- somebody else
   did that work and you are the check on it.

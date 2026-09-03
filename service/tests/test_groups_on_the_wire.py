@@ -38,7 +38,7 @@ system_prompt: |
 SHARED = """name: shared
 description: An agent for everyone.
 subagents:
-  reviewer:
+  - name: reviewer
     groups: [A]
 system_prompt: |
   You do the task.

@@ -1170,12 +1170,12 @@ name: assistant
 description: Answers questions about the data in this workspace.
 groups: [A, B]                 # who may open a session on this agent
 tools:
-  sql_query:
+  - name: sql_query
     groups: [A]                # this agent's sql_query is for A only
-  http_fetch:
+  - name: http_fetch
     groups: [A, B]
 subagents:
-  reviewer:
+  - name: reviewer
     groups: [A]
 skills: [code-review]          # a plain list means "these, at my audience"
 system_prompt: |
@@ -1229,19 +1229,26 @@ tools: [sql_query]         # a list — that tool, for A and B
 ```
 ```yaml
 groups: [A, B]
-tools:                     # a mapping — per entry
-  sql_query:
+tools:                     # the long form — per entry
+  - name: sql_query
     groups: [A]            #   for A only
-  http_fetch:
+  - name: http_fetch
     groups: ["*"]          #   for anyone who reaches this definition
 ```
 
-An entry is a mapping with a `groups:` line, not a bare list. The same word the
-definition's own line uses, meaning the same thing one level down — so an entry
-says which fact it is stating, has somewhere to put a second one later, and can
-have a mistyped key refused. `sql_query: [A]` is refused by name, showing the
-form to write: two spellings of one thing is what this format keeps deleting,
-and the long one is worth having only while it is the only one.
+**An entry is a name, or a mapping of `name` and `groups`** — the same shape
+`middleware:` takes for its `settings`, and deliberately so: one long form to
+learn rather than one per field. `groups` is the same word the definition's own
+line uses, meaning the same thing one level down, so an entry says which fact it
+is stating, has somewhere to put a second one later, and can have a mistyped key
+refused.
+
+The field itself stays a list. Writing the whole field as a mapping keyed by
+name is refused, and the message shows the entry to write instead. That spelling
+existed until 2026-09-03 and had a fault a format cannot carry: YAML collapses
+`{a: X, a: Y}` before any reader sees it, so a name written twice lost one of
+its audiences silently — a restriction that disappears without anything able to
+refuse or report it.
 
 **Only the entries you restrict need one.** An entry that says nothing inherits
 the definition's own audience, so an agent holding five tools and restricting one
@@ -1250,7 +1257,7 @@ writes one `groups:` line rather than five:
 ```yaml
 groups: [A, B]
 tools:
-  sql_query:
+  - name: sql_query
     groups: [A]            # narrower than the definition
   http_fetch:              # says nothing, so [A, B] — the definition's own
   line_count:
@@ -1276,7 +1283,7 @@ That makes a group from outside the definition's line useful rather than wrong:
 ```yaml
 groups: [analysts, auditors]
 tools:
-  export:
+  - name: export
     groups: [senior]        # anyone who opens this agent, and is senior
 ```
 
@@ -1304,15 +1311,15 @@ everyone reads an access list as meaning. `["*"]` is everyone.
 ```yaml
 groups: [A, B]
 tools:
-  sql_query:
+  - name: sql_query
     groups: [A]
 subagents:
-  reviewer:
+  - name: reviewer
     groups: [A]
 skills:
-  audit:
+  - name: audit
     groups: [A]           # only A is told this procedure exists
-  review:
+  - name: review
     groups: [A, B]
 ```
 
@@ -1379,9 +1386,9 @@ reports what was withheld**:
 name: reviewer
 groups: [A, B, C]
 tools:
-  sql_query:
+  - name: sql_query
     groups: [A, B]
-  http_fetch:
+  - name: http_fetch
     groups: [A, B, C]
 ```
 

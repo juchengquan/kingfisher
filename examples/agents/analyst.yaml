@@ -18,20 +18,22 @@ builtin_tools: [read_file, ls, glob, grep]
 # **Only the entry that is actually restricted carries an audience**, and that
 # is the point of this file.
 #
-# A mapping under `tools:` selects exactly the same way a list does -- these
-# three tools and no others. What it adds is a place to say who each one is
-# for, and an entry that says nothing inherits this definition's own `groups:`
-# above. So restricting one tool is one line, not three.
+# The list selects exactly as it always did -- these four tools and no others.
+# What the long form adds is a place to say who one of them is for, written
+# beside the plain names rather than instead of them:
 #
-# Write it as a list and it means the same thing with nothing restricted:
+#     tools: [sql_query, http_fetch, csv_profile::csv_profile, line_count]
 #
-#     tools: [sql_query, csv_profile::csv_profile, line_count]
+# is the same field with nothing restricted. An entry left as a bare name
+# inherits this definition's own `groups:` above, so restricting one tool is one
+# entry and the others are untouched -- which is what lets you start with the
+# list and add an audience later without rewriting the field.
 #
-# The two spellings agree about an unrestricted name, which is what lets you
-# start with the list and add an audience to one entry later without touching
-# the others.
+# It is the shape `middleware:` takes for its settings, and deliberately: an
+# entry is a name, or a mapping of `name` and the one thing that field lets a
+# name carry. One long form to learn rather than one per field.
 tools:
-  sql_query:
+  - name: sql_query
     # Narrower than the definition. An auditor opens this agent and runs it
     # without the database; an analyst gets the whole set. One agent, two
     # shapes, and no second file to keep in step with the first.
@@ -64,13 +66,17 @@ tools:
   # The list around it is still an `or`. `[senior-analysts, auditors]` would
   # mean "both of those, or else an auditor", which is how an exception is
   # written next to a requirement.
-  http_fetch:
+  - name: http_fetch
     groups: [senior-analysts]
-  # No `groups:`, so `[analysts, auditors]` -- this definition's own. Say
-  # nothing and you inherit; there is no way to spell "nobody" here, and
-  # `groups: []` is refused as the unfinished edit it almost always is.
-  csv_profile::csv_profile:
-  line_count:
+  # Bare names, so `[analysts, auditors]` -- this definition's own. Say nothing
+  # and you inherit; there is no way to spell "nobody" here, and `groups: []` is
+  # refused as the unfinished edit it almost always is.
+  #
+  # Left short on purpose. An unrestricted entry has nothing to attach, so it
+  # writes nothing -- the long form is for the entries that need it, and mixing
+  # the two in one list is the ordinary case rather than a special one.
+  - csv_profile::csv_profile
+  - line_count
 # No `builtin_tools` audience, and there cannot be one: deepagents registers its
 # own tools, so kingfisher can filter them but never leave them out of a graph.
 # What gates them is the line at the top of this file -- an agent declaring a
