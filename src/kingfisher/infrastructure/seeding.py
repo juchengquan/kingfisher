@@ -388,7 +388,12 @@ def _copy(
     skipped: list[Skipped] = []
     for kind, destination in destinations(into):
         source = tree / kind
-        if not source.is_dir():  # pragma: no cover -- all three ship
+        if not source.is_dir():
+            # A source holding only some of the kinds, which is ordinary rather
+            # than exceptional: `--from ./my-agents` is a directory with an
+            # `agents/` and nothing else, and seeding it should write the agents
+            # rather than refuse. `kinds_at` answers the same question for
+            # `doctor`, and `_seed` refuses only when *nothing* was written.
             continue
         ignore = _ignoring(source, kind, everything=everything, found=skipped)
         for item in sorted(source.iterdir()):
