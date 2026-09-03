@@ -83,11 +83,49 @@ wrong.*
 
 ## Costs worth knowing
 
-- **A whole agent rebuild is about 8ms**, so "loaded once" was never the argument
-  for the catalogue. *(2026-08-16.)*
-- **Each named delegate compiles its own graph, about 4.3ms, every turn**, whether
+*Re-measured 2026-09-03. All three had drifted, and one of them was never the
+number it looked like -- an agent rebuild costs what the workspace holds, and the
+figure recorded had been taken against an empty one.*
+
+- **A whole agent rebuild costs what the catalogue holds.** 8ms in an empty
+  workspace; **54ms** in one seeded with the shipped `examples/`, where the
+  default agent compiles every delegate it is offered. Between them, 25ms for a
+  seeded workspace whose agent names no delegates.
+
+  The conclusion it was recorded for still stands -- against a turn of 1.5-1.9s
+  even the worst of those is under 4%, so "loaded once" was never the argument
+  for the catalogue. What does not stand is quoting 8ms as *the* number: it is
+  the emptiest case there is. *(8ms 2026-08-16; the rest 2026-09-03.)*
+- **Each named delegate compiles its own graph, about 6ms, every turn**, whether
   or not the task uses it. Drop a name you never use rather than keeping the list
-  tidy. *(2026-08-18.)*
-- **A skills index costs about 464 tokens for three skills**, injected into the
-  prompt -- which is why a narrow agent with a procedure in its prompt does not
-  take one. *(2026-08-18.)*
+  tidy. *(4.3ms 2026-08-18, 6.2ms 2026-09-03 -- measured as the difference between
+  an agent naming three delegates and the same agent naming none.)*
+- **A skills index costs about 600 tokens for three skills, and most of it is
+  fixed.** deepagents' own scaffolding -- the "Skills System" preamble it wraps
+  the listing in -- is ~450 tokens before a single skill is named; the three
+  shipped ones add ~150 between them.
+
+  Which sharpens why a narrow agent with a procedure in its prompt does not take
+  one: the cost is almost all entry fee, so a workspace with one skill pays
+  nearly what a workspace with three does. *(464 tokens 2026-08-18, before the
+  split was measured; ~450 + ~50/skill 2026-09-03.)*
+
+## Historical, and not re-measurable
+
+Numbers that described an arrangement this code no longer has. They are kept
+because they are the evidence for a decision, not because they can be checked
+again -- the thing they measured is gone.
+
+- **6,872 compilations and seven seconds** for 15 definitions each naming three,
+  when delegates were compiled per *path* rather than per definition.
+  *(2026-08-18.)*
+- **132 orphaned threads** in one real workspace, when a conversation lived in a
+  database keyed beside the session directory rather than inside it.
+  *(2026-08-31.)*
+- **363ms to 80ms** for the slowest of 32 concurrent writers, moving from a
+  shared checkpoint file to one per session -- and **~20KB of empty database per
+  session**, which was that arrangement's cost rather than its benefit.
+  *(2026-08-31.)*
+- **The streaming observations above** were probed against a live gateway. They
+  need one to re-check, so they carry their date and are trusted no further than
+  it.

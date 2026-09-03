@@ -57,8 +57,11 @@ get everything available to you -- every built-in, every tool the workspace
 defines -- and leave `skills` or `subagents` out and you get none. Tools are
 what an agent needs to *act* and it can do nothing without them. Skills and
 delegates are what it needs to *know* and to *ask*, and most agents need neither;
-the skills index alone was measured at ~464 tokens for three, growing with the
-catalogue, and every delegate compiles a graph at ~4.3ms.
+the skills index alone costs ~600 tokens for three -- and ~450 of that is
+deepagents' own preamble, before a single skill is named -- while every delegate
+compiles a graph at ~6ms. Re-measured 2026-09-03; `docs/findings.md` carries
+what each figure is a measurement *of*, which is where the first pair went
+wrong.
 
 `subagents: ["*"]` is the one place the two formats genuinely answer differently,
 and the reason is in the files. In a subagent file "everything" includes the

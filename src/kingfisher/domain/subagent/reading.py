@@ -24,8 +24,9 @@ asymmetry is deliberate. Tools are what a delegate needs to *act* and it can do
 nothing without them, so inheriting is the useful default. Skills are what it
 needs to *know*, and the body below is already its procedure — a delegate that
 needed the whole index would not have been worth defining. Handing it over also
-costs: the listing is injected into the delegate's prompt, measured at ~464
-tokens for three skills and growing with the catalogue.
+costs: the listing is injected into the delegate's prompt at ~600 tokens for
+three skills, of which ~450 is deepagents' preamble and is paid for the first
+skill as much as the third. Re-measured 2026-09-03.
 
 `middleware` names entries from a registry the *deployment* supplies, so it is
 the one field that selects code rather than content. It is empty until someone
