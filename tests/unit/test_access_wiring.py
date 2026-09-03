@@ -73,7 +73,7 @@ def built(kf, monkeypatch, groups, name: str):
     """The tool names handed to `create_deep_agent` for this caller."""
     captured = capture_build(monkeypatch)
     caller = kf.for_groups(groups)
-    kf.graph_for(
+    kf._graph_for(
         Request(task="t", agent="surveyor"),
         session_at(kf, name),
         capabilities=caller.grants,
@@ -213,7 +213,7 @@ def reported(kf, groups, name: str):
     session = session_at(kf, name)
     caller = kf.for_groups(groups)
     held = kf.held_for(caller.held)
-    graph = kf.graph_for(
+    graph = kf._graph_for(
         Request(task="t", agent="surveyor"),
         session,
         capabilities=caller.grants,
@@ -247,7 +247,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
     session = session_at(kf, "w2")
     caller = kf.for_groups(["A"])
     grants = replace(caller.grants, builtin_tools=("read_file",))
-    graph = kf.graph_for(
+    graph = kf._graph_for(
         Request(task="t", agent="surveyor"),
         session,
         capabilities=grants,
@@ -325,7 +325,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkey
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
     caller = kf.for_groups(["B"])
-    kf.graph_for(
+    kf._graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk1"),
         capabilities=caller.grants,
@@ -344,7 +344,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatc
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
     caller = kf.for_groups(["A"])
-    kf.graph_for(
+    kf._graph_for(
         Request(task="t", agent="skilled"),
         session_at(kf, "sk2"),
         capabilities=caller.grants,
