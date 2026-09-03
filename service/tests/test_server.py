@@ -306,6 +306,39 @@ def test_the_finished_event_carries_the_answer_and_no_host_path(cfg):
     assert "log_path" not in result
 
 
+def test_the_result_payload_is_exactly_these_fields(cfg):
+    """The turn payload is a wire contract, and nothing pinned its shape.
+
+    The test above names the two fields that must be absent and three that must
+    be present, which leaves every other field free to appear or vanish
+    unnoticed. `stop_reason` -- and `cut_short` before it -- went on the wire
+    with no test at all: dropping the line from `result_payload` broke nothing,
+    so a client branching on it would have started seeing turns that never say
+    how they ended.
+
+    An exact set rather than a subset, so this fails in both directions: a field
+    added without a decision, and one removed without noticing who reads it.
+    """
+    service, app = serving(cfg, AsyncStub("the answer"))
+    session_id = service.start_session()
+
+    with TestClient(app) as http:
+        body = http.post(f"/sessions/{session_id}/turns", json={"task": "go"}).text
+
+    result = dict(frames(body))["finished"]["result"]
+
+    assert set(result) == {
+        "session_id",
+        "turn_id",
+        "answer",
+        "virtual_dir",
+        "artifacts",
+        "stop_reason",
+    }
+    # And the ordinary value, so "present" is not satisfied by a null.
+    assert result["stop_reason"] == "end_turn"
+
+
 def test_a_token_frame_carries_text_and_nothing_else(cfg):
     """Defaults are omitted rather than sent as nulls. Tokens are the bulk of a
     turn's bytes, and seven null fields each is a cost paid thousands of times

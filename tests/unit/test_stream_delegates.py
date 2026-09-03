@@ -211,7 +211,7 @@ def test_a_turn_cut_short_after_a_delegate_reports_no_delegate_answer(cfg):
 
     (finished,) = [e for e in events if e.kind == "finished"]
     assert finished.result is not None
-    assert finished.result.cut_short
+    assert finished.result.stop_reason == "max_duration"
     assert "delegate" not in finished.result.answer.lower()
 
 

@@ -1284,7 +1284,7 @@ class Kingfisher:
         return kept
 
     def _finished(
-        self, prepared: Prepared, answer: str, kept: tuple[str, ...], *, cut_short: bool
+        self, prepared: Prepared, answer: str, kept: tuple[str, ...], *, stop_reason: str
     ) -> RunEvent:
         """The terminal event, built the same way whichever loop produced it.
 
@@ -1305,7 +1305,7 @@ class Kingfisher:
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.
                 artifacts=kept,
-                cut_short=cut_short,
+                stop_reason=stop_reason,
             ),
         )
 
@@ -1381,7 +1381,7 @@ class Kingfisher:
         prepared = self._prepare(request, session, groups=groups)
         answer = ""
         ok = False
-        cut_short = False
+        stop_reason = "end_turn"
         kept: tuple[str, ...] = ()
         delegates = runtime.Delegates()
         try:
@@ -1399,7 +1399,7 @@ class Kingfisher:
                 answer, events = consume(namespace, mode, chunk, answer, delegates)
                 yield from events
                 if (stop := overrun(prepared)) is not None:
-                    cut_short = True
+                    stop_reason = "max_duration"
                     yield stop
                     break
             answer = normalize_answer(answer)
@@ -1409,7 +1409,7 @@ class Kingfisher:
             # turn ended in a way the caller was told about, which is what that
             # flag records -- not that every step it wanted happened.
             answer = normalize_answer(answer)
-            cut_short = True
+            stop_reason = "max_steps"
             ok = True
             yield out_of_steps(self.cfg)
         finally:
@@ -1432,7 +1432,7 @@ class Kingfisher:
             # the process rather than leaking a handle. See `release_interpreter`.
             release_interpreter(self.cfg, prepared.graph)
 
-        yield self._finished(prepared, answer, kept, cut_short=cut_short)
+        yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
 
     async def astream(
         self, request: str | Request, *, groups: Held | None = None
@@ -1486,7 +1486,7 @@ class Kingfisher:
         )
         answer = ""
         ok = False
-        cut_short = False
+        stop_reason = "end_turn"
         kept: tuple[str, ...] = ()
         delegates = runtime.Delegates()
         try:
@@ -1506,7 +1506,7 @@ class Kingfisher:
                 for event in events:
                     yield event
                 if (stop := overrun(prepared)) is not None:
-                    cut_short = True
+                    stop_reason = "max_duration"
                     yield stop
                     break
             answer = normalize_answer(answer)
@@ -1516,7 +1516,7 @@ class Kingfisher:
             # like the loop above it: the two differ only in `async for`, and
             # factoring three lines out of a generator costs more than it saves.
             answer = normalize_answer(answer)
-            cut_short = True
+            stop_reason = "max_steps"
             ok = True
             yield out_of_steps(self.cfg)
         finally:
@@ -1538,7 +1538,7 @@ class Kingfisher:
             # the process rather than leaking a handle. See `release_interpreter`.
             release_interpreter(self.cfg, prepared.graph)
 
-        yield self._finished(prepared, answer, kept, cut_short=cut_short)
+        yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
 
     async def arun(
         self, request: str | Request, *, groups: Held | None = None

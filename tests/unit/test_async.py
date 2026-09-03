@@ -194,7 +194,7 @@ def test_the_turn_bound_holds_on_the_async_path_too(cfg):
 
     result = asyncio.run(service.arun(Request("go")))
 
-    assert result.cut_short
+    assert result.stop_reason == "max_duration"
     assert agent.taken < 50, "the async turn ran to completion despite the bound"
 
 
@@ -203,7 +203,7 @@ def test_an_unbounded_async_turn_is_untouched(cfg):
     every async turn were cut short."""
     service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
 
-    assert not asyncio.run(service.arun(Request("go"))).cut_short
+    assert asyncio.run(service.arun(Request("go"))).stop_reason == "end_turn"
 
 
 def test_the_async_saver_is_reachable_from_outside_the_package(cfg):

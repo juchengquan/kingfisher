@@ -1874,6 +1874,42 @@ def test_the_event_kinds_are_what_the_package_emits():
         "as the SSE event names, so an extra entry is a kind no client sees and a "
         "missing one is a kind nobody handles"
     )
+def test_the_stop_reasons_are_what_the_package_assigns():
+    """`STOP_REASONS` is a wire contract like `KINDS`, and pinned the same way.
+
+    It replaced `RunResult.cut_short: bool`, which could not say *which* bound a
+    turn hit -- the only way to tell out-of-seconds from out-of-steps was to
+    match on the prose of the `cut_short` event. Moving that fact out of a
+    string is the whole point, so a reason assigned and never declared would put
+    it straight back: the value would reach a client that has no name for it.
+
+    Assignments rather than `RunResult(...)` call sites, because the service
+    settles the reason in a variable several lines before it builds the result.
+    The dataclass default is an assignment too, which is what contributes
+    `end_turn`.
+    """
+    from kingfisher.domain.result import STOP_REASONS
+
+    assigned = set()
+    for path in sorted(SRC.rglob("*.py")):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.AnnAssign):
+                targets = [node.target]
+            elif isinstance(node, ast.Assign):
+                targets = node.targets
+            else:
+                continue
+            named = any(isinstance(t, ast.Name) and t.id == "stop_reason" for t in targets)
+            if named and isinstance(node.value, ast.Constant) and isinstance(node.value.value, str):
+                assigned.add(node.value.value)
+
+    assert assigned == set(STOP_REASONS), (
+        "STOP_REASONS and the reasons actually assigned have diverged — the value "
+        "goes on the wire, so an extra entry is a reason no turn produces and a "
+        "missing one is a reason no client knows to handle"
+    )
+
+
 def _kinds_branched_on(source: str) -> set[str]:
     """Every literal a `self.kind == ...` comparison tests for."""
     found: set[str] = set()
@@ -2137,6 +2173,12 @@ READ_ELSEWHERE = frozenset({
     # would leave both comparing a list against itself, which is the tautology
     # the `AXES` commit deleted two tests for.
     "KINDS",
+    # The stop reasons, and the same argument one line for line: it goes on the
+    # wire as `stop_reason` in the turn payload, so its readers are the clients
+    # branching on that value and they are not in this repository. It is a
+    # declaration with nothing to derive from -- the rule below is what pins it,
+    # against the reasons the package actually assigns.
+    "STOP_REASONS",
 })
 
 

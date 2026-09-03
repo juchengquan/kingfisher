@@ -26,6 +26,28 @@ def normalize_answer(text: str) -> str:
     return _THINK.sub("", text or "").strip()
 
 
+#: Why a turn stopped, and the whole of it. Read alongside `KINDS` below: that
+#: one names the events a run emits, this one names how it can end.
+#:
+#: Named after the Messages API's `stop_reason` rather than invented, so a
+#: caller who has used one knows what to do with the other. The values are
+#: kingfisher's own because the bounds are: a turn here runs out of *seconds* or
+#: *steps*, never tokens, so `max_tokens` would be a familiar word for a thing
+#: that cannot happen.
+#:
+#: A tuple rather than a `Literal`, matching `KINDS` and for its reason: this
+#: grows, and a consumer meeting a reason it does not know should treat the turn
+#: as ended rather than fail.
+STOP_REASONS: tuple[str, ...] = (
+    # The turn finished because the agent was done.
+    "end_turn",
+    # `KINGFISHER_TURN_TIMEOUT_S`, checked between stream chunks.
+    "max_duration",
+    # `KINGFISHER_RECURSION_LIMIT`, enforced inside langgraph's own loop.
+    "max_steps",
+)
+
+
 @dataclass(frozen=True)
 class RunResult:
     session_id: str
@@ -54,10 +76,21 @@ class RunResult:
     #: is the filesystem's, and a caller persisting incrementally diffs against
     #: the previous turn's manifest -- which also tells it what was deleted.
     artifacts: tuple[str, ...] = ()
-    #: The turn hit its wall-clock bound and stopped between steps. The answer
-    #: is whatever it had reached, and `artifacts` still lists what it wrote --
-    #: discarding either would hide work rather than undo it.
-    cut_short: bool = False
+    #: Why this turn stopped. `end_turn` is the ordinary case; anything else
+    #: means the answer is what had been reached when a bound was hit, and
+    #: `artifacts` still lists what was written -- discarding either would hide
+    #: work rather than undo it.
+    #:
+    #: A named reason where this was `cut_short: bool`, which is the shape the
+    #: Messages API and every provider like it settled on: one enumerated field
+    #: on the terminal object, not a flag. The flag could not say *which* bound
+    #: was hit, so the only way to tell a turn that ran out of seconds from one
+    #: that ran out of steps was to match on the prose of the `cut_short` event
+    #: -- a fact that existed nowhere but inside a string.
+    #:
+    #: It also grows without another field. `cut_short` had to be added as one;
+    #: a cancelled turn or a refusal is a value here.
+    stop_reason: str = "end_turn"
 
 
 #: How much of one tool argument to show. `write_file` takes an entire file as
