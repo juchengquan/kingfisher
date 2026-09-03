@@ -52,6 +52,25 @@ def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys, shipped):
     assert (cfg.workspace / "models.yaml.example").is_file()
 
 
+def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
+    cfg, monkeypatch, capsys, shipped, tmp_path
+):
+    """`compose.yaml` sets `KINGFISHER_MODELS_FILE`, so this is the shipped case.
+
+    Seeding wrote `models.yaml.example` into the workspace and the container
+    read `/config/models.yaml`, so the one file a deployment cannot start
+    without had its worked example in a directory nobody looks at.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+    elsewhere = tmp_path / "config"
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(elsewhere / "models.yaml"))
+
+    assert main(["seed"]) == 0
+
+    assert (elsewhere / "models.yaml.example").is_file()
+
+
 def test_the_skip_message_names_a_file_the_workspace_actually_has(
     cfg, monkeypatch, capsys, shipped
 ):

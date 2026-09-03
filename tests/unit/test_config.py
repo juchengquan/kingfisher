@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import os
-from dataclasses import fields
+from dataclasses import fields, replace
 from pathlib import Path
 
 import pytest
@@ -363,6 +363,69 @@ def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
     )
 
     assert paths.catalogue_roots == cfg.catalogue_roots
+
+
+def test_the_two_records_cannot_disagree_about_the_authored_files(tmp_path):
+    """The same rule as above for the two files a deployment writes itself.
+
+    `models.yaml` and `groups.yaml` both relocate, and both have a shipped
+    example that is only useful beside the file it is an example of. Laying a
+    workspace out is what places those, and it runs on `WorkspacePaths` while
+    every later read goes through `Config` -- so a second copy of `models_file
+    or workspace / "models.yaml"` is how a deployment gets its example written
+    one directory away from the file it describes.
+    """
+    from kingfisher.config import Config, WorkspacePaths
+
+    elsewhere = tmp_path / "shared"
+    paths = WorkspacePaths(
+        workspace=tmp_path / "ws",
+        models_file=elsewhere / "models.yaml",
+        groups_file=elsewhere / "groups.yaml",
+    )
+    cfg = Config(
+        workspace=tmp_path / "ws",
+        models=replace(FAKE_CATALOGUE, source=elsewhere / "models.yaml"),
+        access_source=elsewhere / "groups.yaml",
+        turn_timeout_s=1,
+        execution_timeout_s=1,
+    )
+
+    assert paths.authored_files == cfg.authored_files
+    assert paths.authored_files["models.yaml"] == elsewhere / "models.yaml"
+
+
+def test_the_authored_files_default_into_the_workspace(tmp_path):
+    """The ordinary deployment, which relocates neither. Named because the
+    override path is the one with a test and the default is what nearly every
+    workspace runs."""
+    from kingfisher.config import WorkspacePaths
+
+    files = WorkspacePaths(workspace=tmp_path / "ws").authored_files
+
+    assert files == {
+        "models.yaml": tmp_path / "ws" / "models.yaml",
+        "groups.yaml": tmp_path / "ws" / "groups.yaml",
+    }
+
+
+def test_seeding_sees_a_relocated_catalogue(tmp_path, monkeypatch):
+    """`paths_from_env` is what a first run has, and it has to carry these.
+
+    The same reason it carries `KINGFISHER_SKILLS_DIR`: seeding decides where
+    things go before a catalogue can be read, so a variable it cannot see is a
+    relocation it writes past.
+    """
+    from kingfisher import paths_from_env
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(tmp_path / "shared" / "models.yaml"))
+    monkeypatch.delenv("KINGFISHER_GROUPS_FILE", raising=False)
+
+    files = paths_from_env().authored_files
+
+    assert files["models.yaml"] == tmp_path / "shared" / "models.yaml"
+    assert files["groups.yaml"] == tmp_path / "ws" / "groups.yaml"
 
 
 def test_a_config_is_a_seeding_destination(tmp_path):

@@ -253,7 +253,9 @@ class Kingfisher:
 
         # Only what sessions share. Each session's own layout is made per
         # request, because its path is not known until the request names it.
-        self.workspace: Path = ensure_layout(self.cfg.workspace)
+        self.workspace: Path = ensure_layout(
+            self.cfg.workspace, authored=self.cfg.authored_files
+        )
 
         # Where the reviewed definitions are read from, settled once. Omitted,
         # it is the three directories `cfg` names, which is what it has always

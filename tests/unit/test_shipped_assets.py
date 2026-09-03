@@ -526,6 +526,12 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         catalogue_roots = {
             kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
         }
+        # Neither file relocated, which is the ordinary deployment. Spelled out
+        # rather than borrowed from `authored_files_for`, because the point of a
+        # destination written here is that the protocol is satisfied by shape.
+        authored_files = {
+            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+        }
 
     done = seed(Destination(), shipped)
 
@@ -573,6 +579,12 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
         catalogue_roots = {
             kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
         }
+        # Neither file relocated, which is the ordinary deployment. Spelled out
+        # rather than borrowed from `authored_files_for`, because the point of a
+        # destination written here is that the protocol is satisfied by shape.
+        authored_files = {
+            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+        }
 
     done = seed(Destination(), shipped, everything=True)
 
@@ -599,6 +611,12 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
         workspace = tmp_path
         catalogue_roots = {
             kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")
+        }
+        # Neither file relocated, which is the ordinary deployment. Spelled out
+        # rather than borrowed from `authored_files_for`, because the point of a
+        # destination written here is that the protocol is satisfied by shape.
+        authored_files = {
+            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
         }
 
     seed(Destination(), shipped)

@@ -62,7 +62,7 @@ SEED_HINT = "`kingfisher seed --from DIR`"
 
 @runtime_checkable
 class Destination(Protocol):
-    """Where seeding puts things: a workspace, and the three catalogues.
+    """Where seeding puts things: a workspace, its catalogues, and two files.
 
     A Protocol rather than `Config` because seeding a *fresh* workspace has to
     run before a model catalogue can be read -- the catalogue is a file inside
@@ -73,6 +73,13 @@ class Destination(Protocol):
     Nothing here needs an endpoint, a credential or a timeout. Asking for a
     whole `Config` to copy files was always more than the job required; it only
     became a problem when the job had to happen earlier.
+
+    `authored_files` is here because seeding lays the workspace out, and laying
+    it out places the worked example for `models.yaml` and `groups.yaml`. Both
+    relocate, and an example is only useful in the directory the real file is
+    read from -- so a destination that could not say where those are is one that
+    writes the example somewhere nothing looks. Still nothing to read: these are
+    paths, and seeding opens neither.
     """
 
     @property
@@ -80,6 +87,9 @@ class Destination(Protocol):
 
     @property
     def catalogue_roots(self) -> dict[str, Path]: ...
+
+    @property
+    def authored_files(self) -> dict[str, Path]: ...
 
 
 @runtime_checkable
@@ -365,11 +375,16 @@ def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded
     # directories and refreshes `models.yaml.example`, which is a shipped
     # template rather than anybody's file. A real `models.yaml` is never touched.
     #
+    # `authored_files` because both examples belong beside the file they are an
+    # example of, and both files relocate. A library caller who seeds a
+    # deployment with `KINGFISHER_MODELS_FILE` set would otherwise get the
+    # annotated catalogue in the workspace and read the real one elsewhere.
+    #
     # It does not cover every route to the same state. A caller whose
     # `definitions_source` raises never reaches this line, and gets an
     # unlaid-out workspace with an exception to explain it -- which is the
     # loud version of the same thing, and why the CLI still lays out first.
-    ensure_layout(into.workspace)
+    ensure_layout(into.workspace, authored=into.authored_files)
 
     if not source.is_dir():
         msg = f"nothing to seed from: {source} is not a directory"

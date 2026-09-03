@@ -227,7 +227,10 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     # `models.yaml.example`, and that has to happen even when there is nothing
     # to seed: a deployment told to write `models.yaml` and given no example of
     # one is the dead end this ordering exists to avoid.
-    ensure_layout(paths.workspace)
+    #
+    # And beside wherever the catalogue is actually read from, which is not
+    # always the workspace: `compose.yaml` sets `KINGFISHER_MODELS_FILE`.
+    ensure_layout(paths.workspace, authored=paths.authored_files)
 
     tree = definitions_source(paths, source)
     written = seed(paths, tree, everything=everything)
