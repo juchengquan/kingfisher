@@ -1259,12 +1259,14 @@ groups: [A, B]
 tools:
   - name: sql_query
     groups: [A]            # narrower than the definition
-  http_fetch:              # says nothing, so [A, B] — the definition's own
-  line_count:
+  - http_fetch             # a bare name, so [A, B] — the definition's own
+  - line_count
 ```
 
-A mapping where nothing is restricted means exactly what the plain list means,
-which is what keeps the two spellings honest about an unrestricted name.
+Mixing the two spellings in one list is the ordinary case, not a special one:
+an entry with nothing to attach writes nothing. Long entries that restrict
+nothing mean exactly what bare names mean, which is what keeps the spellings
+honest about an unrestricted name.
 
 `groups: []` on an entry is refused rather than read as "nobody": leaving the
 line out is how you say "no restriction", so an empty one is an unfinished edit.
@@ -1335,10 +1337,11 @@ tools a skill's procedure would need, which have audiences of their own.
 **`builtin_tools` deliberately takes none.** deepagents registers its own tools
 itself, so kingfisher can filter them but never leave them out of a graph —
 `infrastructure.harness.narrowing` records a live run where a model called
-`execute` from memory. Writing a mapping there is refused rather than parsed,
-because three sibling fields take one and reading it as a single tool named
-`{'execute': ['A']}` is exactly the silent wrong answer this format refuses
-everywhere else.
+`execute` from memory. Writing a mapping there is refused rather than parsed:
+reading it as a single tool named `{'execute': ['A']}` is exactly the silent
+wrong answer this format refuses everywhere else. No field takes a mapping now —
+an entry that carries something is a mapping *inside* the list — so what is
+refused here is refused the same way for every field.
 
 What gates the built-ins is which *agents* a group may open: an agent declaring
 `builtin_tools: [read_file, ls, glob, grep]` cannot yield the shell to anyone,
