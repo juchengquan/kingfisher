@@ -129,7 +129,48 @@ def test_every_preset_tool_loads(shipped):
         # this set is here to show: kingfisher takes either, and a definition
         # should not have to know which one deepagents prefers this month.
         "line_count",
+        # And a class, which is the third. See below.
+        "sql_explain",
     }
+
+
+def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
+    """`docs/formats.md` documents three ways to write a tool, and a reference
+    that describes a shape nothing ships is a shape somebody has to take on
+    trust. Asserted by shape rather than by name so that renaming a preset does
+    not quietly drop the coverage it was carrying.
+
+    The class is the one worth having an example of: the other two infer their
+    schema from the annotations, and it is the only shape that can describe an
+    argument to the model.
+    """
+    from langchain_core.tools import BaseTool
+
+    tools = LocalToolRepository(shipped / "tools").tools
+    decorated = {tool_name(t) for t in tools if type(t).__name__ == "StructuredTool"}
+    classes = {
+        tool_name(t)
+        for t in tools
+        if isinstance(t, BaseTool) and type(t).__name__ != "StructuredTool"
+    }
+    plain = {tool_name(t) for t in tools if not isinstance(t, BaseTool)}
+
+    assert decorated, "no `@tool` preset"
+    assert classes == {"sql_explain"}
+    assert plain == {"line_count"}
+
+
+def test_the_class_shaped_preset_exports_an_instance(shipped):
+    """The near miss the format refuses by name: `TOOLS = [SqlExplain]` is a
+    class, which is callable, so nothing would notice until the model called it
+    and got a tool object back instead of an answer."""
+    tools = LocalToolRepository(shipped / "tools").tools
+    found = next(t for t in tools if tool_name(t) == "sql_explain")
+
+    assert not isinstance(found, type), "exported the class, not an instance"
+    assert list(found.args) == ["statement", "verbose"]
+    # The reason the class earns its place: each argument carries a sentence.
+    assert found.args["statement"]["description"].strip()
 
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
