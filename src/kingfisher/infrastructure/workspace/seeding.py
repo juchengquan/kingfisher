@@ -328,7 +328,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
 
     Two callers need this and must agree: `kingfisher seed`, and the driver's
     auto-seed on a fresh workspace. Written once because the alternative is two
-    messages, of which the one seen daily is the one nobody reviews -- `main.py`
+    messages, of which the one seen daily is the one nobody reviews -- the driver
     printed an instruction naming `--seed-assets` long after that had become the
     wrong advice.
 

@@ -5,7 +5,7 @@ calls the library, and prints what came back -- so running a command and calling
 the function give the same answer, and there is no second way to configure one.
 
 Subcommands rather than flags, and bare `kingfisher` prints help. A shipped
-command needs a safe do-nothing default: `main.py`'s bare invocation spends
+command needs a safe do-nothing default: the driver's bare invocation spends
 money, which is right for a driver you type daily and wrong for a stranger's
 first contact. Flags would force a default to be invented, and there is no good
 one.
@@ -134,9 +134,14 @@ def _declare(written: Seeded) -> tuple[str, ...]:
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="kingfisher",
+        # This said "running a task is the library's job -- see
+        # `kingfisher.run`", which was the rule `run` reversed. `d53d85f`
+        # corrected the same sentence where the console script is declared and
+        # did not reach this one, which is the copy a person actually reads.
+        # See *The command line* in `docs/decisions.md`.
         description=(
-            "Fill a kingfisher workspace, and see what is in it. "
-            "Running a task is the library's job -- see `kingfisher.run`."
+            "Fill a kingfisher workspace, run a task in it, see what is in it, "
+            "and check it over."
         ),
     )
     # `required=False`, so bare `kingfisher` reaches `main` and prints help
@@ -625,7 +630,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"configuration error: {exc}", file=sys.stderr)
         # Where the answer would have come from, said only when it is somewhere
         # the reader is not. This used to say `.env` is never read -- true then,
-        # and the reason this command failed while `main.py` worked with the key
+        # and the reason this command failed while the driver worked with the key
         # three lines away in a file. Now the useful thing to say is *which*
         # file was read, because a caller standing one directory from theirs
         # gets a message about a variable that is set, just not here.

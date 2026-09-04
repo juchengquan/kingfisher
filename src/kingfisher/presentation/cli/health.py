@@ -495,7 +495,8 @@ def _shell(cfg: Config) -> Iterator[Check]:
     """What is keeping `execute` off the host, if anything.
 
     The check most worth having and the one that was hardest to reach: it lived
-    in `main.py`, which an installed kingfisher does not have. An unconfined
+    in `tests/integration/driver.py`, which an installed kingfisher does not
+    have. An unconfined
     shell is a warning rather than a failure because plenty of deployments mean
     it -- but silence would make an unconfined one look exactly like a confined
     one, which is how this went unnoticed until it was measured.
