@@ -51,12 +51,17 @@ dependencies = [
     # against -- and until now nothing said which version their code was
     # written for. That is the promise the range makes.
     #
-    # `langgraph` looks declared and is not: `langgraph-checkpoint-sqlite` below
-    # shares the top-level name but ships none of `langgraph.errors`,
-    # `langgraph.types` or `langgraph.graph.state`, which the harness imports.
-    # The same holds for `langgraph-checkpoint`, whose `InMemorySaver` and
-    # `BaseCheckpointSaver` come from a different distribution than the sqlite
-    # one. A shared import name is not a declaration.
+    # `langgraph` looks declared and is not: `langgraph-checkpoint` below shares
+    # the top-level name but ships none of `langgraph.errors`, `langgraph.types`
+    # or `langgraph.graph.state`, which the harness imports -- it ships
+    # `InMemorySaver` and `BaseCheckpointSaver`, and nothing else the harness
+    # reaches for. A shared import name is not a declaration.
+    #
+    # `langgraph-checkpoint-sqlite` was a third distribution answering to the
+    # same name, and was the worked example here until it went with the savers
+    # it shipped -- see *Sessions: what persists and where* in
+    # `docs/decisions.md`. `test_the_provider_lookup_is_not_fooled_by_a_shared_root_name`
+    # keeps the rule that caught it.
     #
     # Capped at the major rather than the minor, which is where these differ
     # from `langchain-quickjs` above: that one is 0.x, where the minor is where
@@ -74,10 +79,6 @@ dependencies = [
     "langchain>=1.3.14,<2",
     "langgraph>=1.2.11,<2",
     "langgraph-checkpoint>=4.1,<5",
-    # Imported directly by infrastructure/harness/checkpointing.py for the async
-    # saver. It arrives transitively through langgraph-checkpoint-sqlite, and a
-    # transitive dep is not a promise.
-    "aiosqlite>=0.22.1",
     # Imported directly by infrastructure/definitions.py and
     # infrastructure/model_catalogue.py. It also arrives transitively through
     # deepagents, but a transitive dep is not a promise.
@@ -87,7 +88,6 @@ dependencies = [
     # importing a third-party parser at all. A dependency justified by a file
     # that is gone is a dependency nobody can re-examine.
     "pyyaml>=6.0",
-    "langgraph-checkpoint-sqlite>=3.1.1",
     "python-dotenv>=1.2.2",
     #
     "anthropic>=0.120.0,<1",

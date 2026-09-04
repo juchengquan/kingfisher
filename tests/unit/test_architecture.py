@@ -1288,13 +1288,18 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
 LIGHT_EXPORTS = frozenset({
     "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunOn",
     "RunResult", "SessionInfo",
-    # The errors a caller must tell apart, and the saver `astream` refuses to
-    # run without. Public so a consumer outside the package can catch them by
-    # name and open one -- the server being the first such consumer.
+    # The errors a caller must tell apart. Public so a consumer outside the
+    # package can catch them by name -- the server being the first such
+    # consumer.
+    #
+    # It listed two saver builders as well, because `astream` once refused to
+    # run without an async one. `InMemorySaver` serves both halves now, so the
+    # server opens nothing and the builders went with the sqlite dependencies
+    # that carried them.
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
-    "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
-    "build_checkpointer", "ensure_layout", "config_from_env",
+    "UnknownReferenceError", "LocalFileStore",
+    "ensure_layout", "config_from_env",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",
     # Asking the kernel what it can fence with. `ctypes` and a syscall, no
@@ -2987,12 +2992,12 @@ def _providers(module: str) -> set[str]:
     """Which installed distributions ship this exact module, not merely its root.
 
     By the module rather than its top-level name, and that distinction is the
-    whole guard. Four distributions answer to `langgraph` -- `langgraph`,
-    `langgraph-checkpoint`, `langgraph-checkpoint-sqlite` and
-    `langgraph-prebuilt` -- so a check on the root name calls `langgraph.errors`
-    declared on the strength of `langgraph-checkpoint-sqlite`, which does not
-    ship it. That is exactly the hole this rule was written to close, and a
-    version of it matching on the root would pass while leaving the hole open.
+    whole guard. Several distributions answer to `langgraph` -- `langgraph`,
+    `langgraph-checkpoint` and `langgraph-prebuilt` -- so a check on the root
+    name calls `langgraph.errors` declared on the strength of
+    `langgraph-checkpoint`, which does not ship it. That is exactly the hole this
+    rule was written to close, and a version of it matching on the root would
+    pass while leaving the hole open.
 
     Falls back to `PROVIDED_BY` for what is not installed here, and returns the
     empty set for what is neither -- which fails the rule, as an import nobody
@@ -3071,7 +3076,7 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
     distribution nobody had named. These are the questions the tree cannot ask.
     """
     assert "langgraph" in _providers("langgraph.errors")
-    assert "langgraph-checkpoint-sqlite" not in _providers("langgraph.errors")
+    assert "langgraph-checkpoint" not in _providers("langgraph.errors")
 
     assert "langgraph-checkpoint" in _providers("langgraph.checkpoint.memory")
     assert "langgraph" not in _providers("langgraph.checkpoint.memory")

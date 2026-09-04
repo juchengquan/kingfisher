@@ -13,7 +13,6 @@ from kingfisher.infrastructure.harness.backend import (
     prepare_scratch,
     shell_env,
 )
-from kingfisher.infrastructure.harness.checkpointing import checkpoint_db_path
 from kingfisher.infrastructure.harness.runlog import log_path
 
 
@@ -204,12 +203,13 @@ def test_prepare_scratch_refuses_something_that_is_not_a_directory(cfg, tmp_path
 
 
 def test_state_dir_defaults_and_relocates(cfg, tmp_path):
-    """Logs and the thread db move together; the agent addresses neither."""
+    """The run logs move with `state_dir`, and the agent addresses neither it
+    nor them. It asserted the thread database moved too, until there stopped
+    being one: what a session keeps is its transcript, inside the session."""
     assert cfg.state_dir == cfg.workspace / ".kingfisher"
 
     relocated = replace(cfg, state_root=tmp_path / "state")
     assert relocated.state_dir == tmp_path / "state"
-    assert checkpoint_db_path(relocated) == tmp_path / "state" / "threads.db"
     assert log_path(relocated.state_dir, "s1") == tmp_path / "state" / "runs" / "s1.jsonl"
 
 

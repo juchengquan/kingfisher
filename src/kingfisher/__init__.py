@@ -62,13 +62,6 @@ _EXPORTS = {
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.workspace.uploads",
-    "async_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
-    # Kept when its eleven neighbours went. Off the door it is defined for
-    # tests alone -- `tests/unit/test_checkpointing.py` is its only caller,
-    # and `test_nothing_is_defined_for_tests_alone` said so the moment it was
-    # dropped. The sync twin of `async_checkpointer` above, for a deployment
-    # whose graph is not async; being public is the whole of its job.
-    "build_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     "Config": "kingfisher.config",
     # The fourth name the consumer rule has forced public, and the first
     # that improved the library on its own: `resolve` takes six arguments
@@ -169,9 +162,7 @@ __all__ = [
     "UnsafeReferenceError",
     "UploadError",
     "WorkspacePaths",
-    "async_checkpointer",
     "bubblewrap_available",
-    "build_checkpointer",
     "config_from_env",
     "definitions_source",
     "destination_hint",
@@ -228,12 +219,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
-    )
-    from kingfisher.infrastructure.harness.checkpointing import (
-        async_checkpointer as async_checkpointer,
-    )
-    from kingfisher.infrastructure.harness.checkpointing import (
-        build_checkpointer as build_checkpointer,
     )
     from kingfisher.infrastructure.sandbox.bubblewrap import (
         bubblewrap_available as bubblewrap_available,

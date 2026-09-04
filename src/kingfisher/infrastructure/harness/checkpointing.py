@@ -2,81 +2,40 @@
 
 `BaseCheckpointSaver` is already the swappable interface, so this is a factory
 rather than a wrapper — wrapping an existing protocol in a bespoke one can only
-lose fidelity. A deployment that outgrows sqlite passes its own saver to
-`Kingfisher(threads=...)`; nothing else changes, including the thread deletion
-that `delete_session` and `reap` depend on.
+lose fidelity. A deployment that wants durable graph state passes its own saver
+to `Kingfisher(threads=...)`; nothing else changes, including the thread
+deletion that `delete_session` and `reap` depend on.
 
-Four builders, and which is the default matters:
+Two builders, and they return the same thing. `build_session_checkpointer` and
+`async_session_checkpointer` both hand back an `InMemorySaver`, held for one
+turn — the sync and async halves stay separate only because a deployment may
+have wired a factory through either.
 
-* `build_session_checkpointer` / `async_session_checkpointer` take a *session*
-  directory and put the database inside it. This is what a deployment gets by
-  passing nothing, and why an orphaned thread is not something a janitor
-  collects but something that cannot happen — deleting the session deletes the
-  conversation.
-* `build_checkpointer` / `async_checkpointer` take a `Config` and open one
-  database per *workspace*. Nothing in this package calls them; they are
-  exported so a deployment can still ask for one shared file on purpose. That
-  asymmetry is deliberate rather than an oversight: the default needs no export
-  because it is what you get for asking for nothing, so what is worth naming
-  publicly is the road not taken.
+**Nothing here persists, and that is the design.** A checkpoint holds one turn's
+working state; what a later turn reads is the transcript in the session
+directory. See *Sessions: what persists and where* in `docs/decisions.md`, which
+records why a checkpointer stopped being where a conversation lives: kingfisher
+never resumes a graph — no `checkpoint_id`, no `interrupt()` — so what a saver
+was preserving was machinery nothing asked for.
 
-Sqlite is configured for more than one process either way, because more than one
-is the shape this is deployed in: process count follows concurrency, and a
-session outlives the process that opened it. Left at its defaults it does not
-survive that — measured, six processes against one fresh database and three of
-them died in `setup()`, before serving anything. That measurement was taken
-against a shared file, which is where contention is worst; per-session files
-made the slowest writer 363ms → 80ms at 32 concurrent processes, and the tuning
-still earns its place because a resumed turn may land in any process.
+This module used to build sqlite savers too, one per workspace, exported for a
+deployment that wanted one shared file. They went with the dependencies that
+carried them once the server stopped opening one; a deployment that still wants
+that arrangement installs `langgraph-checkpoint-sqlite` and passes its own.
 """
 
 from __future__ import annotations
 
-import sqlite3
 from contextlib import asynccontextmanager, suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langgraph.checkpoint.memory import InMemorySaver
-from langgraph.checkpoint.sqlite import SqliteSaver
-
-from kingfisher.config import Config
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
     from langgraph.checkpoint.base import BaseCheckpointSaver
-
-#: How long to wait for another process to finish writing before giving up.
-#: Generous on purpose: the alternative to waiting is losing a turn's history,
-#: and a checkpoint write is milliseconds, so a queue this deep never forms
-#: unless something is badly wrong.
-BUSY_TIMEOUT_MS = 30_000
-
-
-def checkpoint_db_path(cfg: Config) -> Path:
-    return cfg.state_dir / "threads.db"
-
-
-def _tuned(db: Path) -> sqlite3.Connection:
-    """A connection with the two settings that make sqlite survive company.
-
-    `busy_timeout` first: without it a writer that finds the database locked
-    fails immediately rather than waiting. Then WAL, which lets readers work
-    while a writer holds the file; setting it needs an exclusive lock that the
-    busy handler does not retry, so losing that race is expected -- journal mode
-    is a property of the file, so whoever won has already set it for everyone.
-
-    Applied to a per-session database as well as a shared one. One session is
-    still served by more than one process over its life, and a resumed turn may
-    land anywhere.
-    """
-    db.parent.mkdir(parents=True, exist_ok=True)
-    conn = sqlite3.connect(db, check_same_thread=False, timeout=BUSY_TIMEOUT_MS / 1000)
-    conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-    with suppress(sqlite3.OperationalError):
-        conn.execute("PRAGMA journal_mode=WAL")
-    return conn
 
 
 def build_session_checkpointer(session_dir: Path) -> BaseCheckpointSaver:
@@ -140,82 +99,6 @@ def thread_ids(store: Any) -> tuple[str, ...] | None:
     if lister is None:
         return None
     return tuple({item.config["configurable"]["thread_id"] for item in lister(None)})
-
-
-def build_checkpointer(cfg: Config) -> BaseCheckpointSaver:
-    """Open (creating if needed) the workspace's thread database.
-
-    `check_same_thread=False` because LangGraph may touch the connection from
-    worker threads; the sqlite file lives inside the workspace by default, so a
-    project stays self-contained and copyable unless `KINGFISHER_STATE_DIR`
-    deliberately moves it elsewhere.
-
-    Two settings make it safe for several processes, and the order matters.
-
-    `busy_timeout` first: without it a writer that finds the database locked
-    fails immediately rather than waiting, which is what killed half the
-    processes in the measurement above. It is set by pragma as well as by
-    `timeout=` so that it is in force for the statement on the next line.
-
-    Then WAL, which lets readers work while a writer holds the file — the
-    default rollback journal blocks them. Setting it needs an exclusive lock,
-    and the busy handler does not retry *that* particular refusal, so a process
-    losing the race is expected rather than exceptional: journal mode is a
-    property of the file, so whoever won has already set it for everyone.
-    """
-    saver = SqliteSaver(_tuned(checkpoint_db_path(cfg)))
-    saver.setup()
-    return saver
-
-
-@asynccontextmanager
-async def async_checkpointer(cfg: Config) -> AsyncIterator[BaseCheckpointSaver]:
-    """The same database, opened for an event loop.
-
-    `SqliteSaver` raises `NotImplementedError` on `aget_tuple`, so `astream`
-    needs this one -- a sync saver does not merely block the loop, it refuses.
-
-    Every setting above applies here for the same reasons and in the same
-    order: `busy_timeout` before WAL, because the pragma that sets journal mode
-    needs an exclusive lock and the busy handler does not retry that particular
-    refusal. Sync and async processes share the file quite happily; WAL is a
-    property of the database, not of who opened it.
-
-    A context manager, unlike its sync counterpart, because this holds an
-    aiosqlite connection *and* the worker thread that serves it. Returning the
-    saver alone left both to be collected whenever -- which in practice was
-    after the loop had closed, and aiosqlite's thread then raised
-    `RuntimeError: Event loop is closed` into an exit nobody could catch.
-
-        async with async_checkpointer(cfg) as threads:
-            service = Kingfisher(cfg, threads=threads)
-
-    One connection serves every turn on the loop, and aiosqlite gives a
-    connection one worker thread -- so checkpoint writes are serialised across
-    concurrent turns. At a checkpoint per graph step and milliseconds per
-    write, that is far below the model's time and does not show up in
-    measurement. A deployment that outgrows it opens a connection per worker,
-    or passes its own saver; `Kingfisher(threads=...)` takes any.
-    """
-    import aiosqlite  # noqa: PLC0415 -- only an async deployment pays for this
-    from langgraph.checkpoint.sqlite.aio import AsyncSqliteSaver  # noqa: PLC0415
-
-    db = checkpoint_db_path(cfg)
-    db.parent.mkdir(parents=True, exist_ok=True)
-
-    conn = await aiosqlite.connect(db, timeout=BUSY_TIMEOUT_MS / 1000)
-    await conn.execute(f"PRAGMA busy_timeout={BUSY_TIMEOUT_MS}")
-    # Suppressed for the same reason as above: another process is setting it
-    # right now, and journal mode persists on the file, so theirs is ours.
-    with suppress(sqlite3.OperationalError):
-        await conn.execute("PRAGMA journal_mode=WAL")
-
-    saver = AsyncSqliteSaver(conn)
-    await saver.setup()
-    try:
-        yield saver
-    finally:
-        await conn.close()
 
 
 @asynccontextmanager

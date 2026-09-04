@@ -748,6 +748,28 @@ transcript is a file in the session, so the first two hold; nothing is shared, s
 the third has nothing to contend for. What is genuinely gone is ~20KB of empty
 database per session, which was the cost rather than the benefit.
 
+**Sqlite is gone entirely, and so are the two dependencies that carried it.**
+`langgraph-checkpoint-sqlite` and `aiosqlite` were what N13 asked to drop, and
+the transcript work shipped without them because two exported builders still
+needed them: `build_checkpointer` and `async_checkpointer`, one database per
+workspace, for a deployment that wanted one shared file on purpose.
+
+The reason they were public expired. `async_checkpointer` was exported because
+`astream` refused to run without an async saver -- `SqliteSaver` raises on
+`aget_tuple` -- and the server, the first consumer outside the package, opened
+one for the life of the process. `InMemorySaver` implements both halves, so the
+server stopped opening one, and what was left was two builders whose only
+callers in this repository were their own tests, plus the shape the library had
+deliberately moved away from: one database shared by every session.
+
+Removed rather than kept for symmetry. A deployment that wants durable graph
+state passes `threads=` its own saver, which is three lines it controls against
+a hundred kingfisher carries and two dependencies every install pays for. That
+it is a breaking change to a public surface is why it is written down here, and
+`0.1.0` is when such a change costs least. *(2026-09-04. The service stopped
+opening one first, separately, so the removal landed on a tree where nothing
+used it.)*
+
 **`doctor` checks whether a memory-backed workspace can be filled safely.**
 `workspace/backing.py` reads the filesystem type, its size, the cgroup limit
 and
