@@ -86,6 +86,10 @@ _EXPORTS = {
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
     "definitions_source": "kingfisher.infrastructure.seeding",
+    # A sentence, for the reason `SEED_HINT` is one: the refusal and
+    # `doctor` both tell a reader where their own definitions go, and two
+    # spellings of that is how the advice starts disagreeing with itself.
+    "destination_hint": "kingfisher.infrastructure.seeding",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
     "kinds_at": "kingfisher.infrastructure.seeding",
     "memory_backing": "kingfisher.infrastructure.workspace_fs",
@@ -170,6 +174,7 @@ __all__ = [
     "build_checkpointer",
     "config_from_env",
     "definitions_source",
+    "destination_hint",
     "ensure_layout",
     "inventory",
     "kinds_at",
@@ -249,6 +254,9 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.seeding import Seeded as Seeded
     from kingfisher.infrastructure.seeding import (
         definitions_source as definitions_source,
+    )
+    from kingfisher.infrastructure.seeding import (
+        destination_hint as destination_hint,
     )
     from kingfisher.infrastructure.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.seeding import seed as seed

@@ -144,6 +144,35 @@ def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
         assert kind in check.detail, kind
 
 
+def test_the_unset_remedy_says_where_your_own_definitions_go(cfg, tmp_path, monkeypatch):
+    """`doctor` is where a deployment learns it has nothing to seed from, and
+    the remedy said only where to point -- never where to put.
+
+    Only the unset case carries it. The other three are holding a path that is
+    wrong somehow and already have a remedy about that path; this is the one
+    where the reader has nothing yet.
+
+    Conditional on the directory being there, for the reason `SUGGESTION` is:
+    the reader most likely to see this warn installed the package and has no
+    `assets/` anywhere. Both halves, because a clause that never appears is as
+    wrong as one that always does.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.seeding import DESTINATION
+
+    unset = replace(cfg, assets=None)
+
+    monkeypatch.chdir(tmp_path)
+    bare = {c.name: c for c in examine(unset)}["definitions to seed"]
+
+    (tmp_path / DESTINATION).mkdir()
+    beside_one = {c.name: c for c in examine(unset)}["definitions to seed"]
+
+    assert str(DESTINATION) not in bare.remedy, "named a directory that is not there"
+    assert str(DESTINATION) in beside_one.remedy, "did not name the one that is"
+
+
 def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatch, shipped):
     """One place decides it, and this is what it decides.
 

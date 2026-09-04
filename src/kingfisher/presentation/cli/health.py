@@ -31,6 +31,7 @@ from kingfisher import (
     Confinement,
     Inventory,
     bubblewrap_available,
+    destination_hint,
     inventory,
     kinds_at,
     landlock_abi,
@@ -117,13 +118,19 @@ def _packs(cfg: Config) -> Iterator[Check]:
     of them" is the one worth spelling out: pointing one level off is the
     easiest mistake to make with a path, and naming what was looked for is what
     turns it from a puzzle into a fix.
+
+    The unset remedy carries `destination_hint`, which is the only one of the
+    four where a reader has nothing at all yet: the other three are holding a
+    path that is wrong somehow, and this one has never been told there is a
+    directory in a checkout for definitions it did not write.
     """
     if cfg.assets is None:
         yield Check(
             "definitions to seed",
             "warn",
             "KINGFISHER_ASSETS is not set",
-            "set it to a directory of definitions, or pass `kingfisher seed --from DIR`",
+            "set it to a directory of definitions, or pass"
+            f" `kingfisher seed --from DIR`{destination_hint()}",
         )
         return
     if not cfg.assets.is_dir():

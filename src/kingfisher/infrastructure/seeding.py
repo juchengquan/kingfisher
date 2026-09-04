@@ -47,6 +47,14 @@ from kingfisher.infrastructure.workspace_fs import ensure_layout
 #: messages here were rewritten to stop making.
 SUGGESTION = Path("examples")
 
+#: Named beside `SUGGESTION`, and conditional for exactly the same reason.
+#:
+#: `SUGGESTION` says where definitions can be copied *from*; this says where a
+#: deployment's own belong once it has fetched some. Both are directories in
+#: this checkout and nowhere else, so the reader who installed the package must
+#: not be sent to either -- see `SUGGESTION` for the fault that guards against.
+DESTINATION = Path("assets")
+
 #: How the four "this workspace is empty" messages tell a reader to fill it.
 #:
 #: One string, because four wordings drift and the one seen daily is the one
@@ -295,6 +303,26 @@ def kinds_at(source: Path) -> tuple[str, ...]:
     return tuple(kind for kind in DEFINITION_KINDS if (source / kind).is_dir())
 
 
+def destination_hint() -> str:
+    """The clause naming `assets/`, and nothing at all where there is none.
+
+    Two messages ask this question -- the refusal below, and `doctor`'s "not
+    set" warn -- so it is one wording in one place, for the reason `SEED_HINT`
+    gives: four wordings drift, and the one seen daily is the one nobody
+    reviews.
+
+    A function rather than a constant because the answer depends on the working
+    directory, and a module-level string would settle it at import time --
+    before a test has chdir'd anywhere, and before a command has read its
+    `.env`. `SUGGESTION` is a constant and can be, because it is the *name*
+    that is fixed and the caller does the asking.
+
+    Phrased to append to a sentence that already ends in advice, so it reads
+    whether or not `SUGGESTION` has put a clause in front of it.
+    """
+    return f", and ./{DESTINATION} is where your own go" if DESTINATION.is_dir() else ""
+
+
 def definitions_source(paths: Source, override: str | Path | None = None) -> Path:
     """The directory `seed` should copy from, or a refusal saying how to name one.
 
@@ -317,7 +345,10 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     any more, so there is no set to fall back to, and inventing one would mean
     seeding a workspace from somewhere the caller never named.
 
-    The refusal names `./examples` only when there is one. See `SUGGESTION`.
+    The refusal names `./examples` and `./assets` only when there is one to
+    name -- see `SUGGESTION` and `destination_hint`. It says both because a
+    reader stopped here has two things to learn and the messages only ever
+    taught the first: where to point, but never where to put.
     """
     if override is not None:
         return Path(override).expanduser()
@@ -330,6 +361,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     )
     if SUGGESTION.is_dir():
         msg += f" -- ./{SUGGESTION} is one"
+    msg += destination_hint()
     raise ConfigError(msg)
 
 

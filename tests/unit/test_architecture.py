@@ -1217,6 +1217,9 @@ LIGHT_EXPORTS = frozenset({
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
+    # A sentence that stats one directory. Cheaper than the two above it and
+    # public for the same reason `SEED_HINT` is -- `doctor` is a consumer.
+    "destination_hint",
     # The access policy, its report, its error and the sentinel for running
     # without a caller. `domain.access` imports `domain.fields` and
     # `domain.capabilities` and nothing else, which is the point of it being a
