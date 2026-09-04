@@ -434,14 +434,39 @@ def traversable(home: Path, readable: tuple[Path, ...]) -> tuple[Path, ...]:
     return tuple(found)
 
 
+def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
+    """Where the interpreter the shell was told to run actually lives.
+
+    `sys.prefix` is the virtualenv and `sys.base_prefix` the interpreter it was
+    built from; they differ exactly when a venv is in use, which is the case
+    that breaks. `extra` carries `shell_path_extra`, since a deployment that
+    added a directory to the agent's `PATH` meant for it to be runnable.
+
+    Roots rather than the `PATH` entries themselves, and the difference is the
+    whole reason this is a function. `PATH` names `bin`; the libraries live in a
+    *sibling* `lib/pythonX.Y/site-packages`, so granting what `PATH` says grants
+    an interpreter that starts and then cannot import anything this project
+    installed for it. `sys.prefix` covers both.
+
+    Lifted out of `readable_roots` for a second caller that must not have the
+    rest of it. The two fences answer opposite questions -- `sandbox-exec`
+    denies the operator's home and re-allows what is inside it, Landlock and
+    bubblewrap deny everything and allow one session -- so they agree about the
+    toolchain and cannot agree about the workspace. See *The two fences share a
+    toolchain and not a workspace* in `docs/decisions.md`.
+    """
+    roots = [Path(sys.prefix), Path(sys.base_prefix)]
+    roots += [Path(e) for e in extra]
+    return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
+
+
 def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
                    skills: Path | None = None) -> tuple[Path, ...]:
     """What has to stay readable for the shell to remain useful.
 
-    `sys.prefix` is the virtualenv, `sys.base_prefix` the interpreter it was
-    built from; they differ exactly when a venv is in use, which is the case
-    that breaks. `extra` carries `shell_path_extra`, since a deployment that
-    added a directory to the agent's `PATH` meant for it to be runnable.
+    The toolchain, plus the two directories only this mechanism needs: the
+    workspace, because `sandbox-exec` denies the home it usually sits in, and
+    the catalogue.
 
     `skills` is the catalogue, and it is here because it is the one definition
     directory the *shell* reads: skills ship scripts, and running one is the
@@ -456,8 +481,7 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
     tool directories are deliberately absent -- those are read by this process,
     never by the shell.
     """
-    roots = [Path(workspace), Path(sys.prefix), Path(sys.base_prefix)]
-    roots += [Path(e) for e in extra]
+    roots = [Path(workspace), *toolchain_roots(extra)]
     if skills is not None:
         roots.append(Path(skills))
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))

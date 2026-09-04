@@ -20,12 +20,16 @@ worse than none.
 
 from __future__ import annotations
 
+import sys
+from pathlib import Path
+
 import pytest
 
 from kingfisher.infrastructure.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     landlock_abi,
     landlock_ready,
+    toolchain_roots,
 )
 
 
@@ -54,12 +58,21 @@ def two_sessions(tmp_path):
 
 @pytest.fixture
 def fenced(two_sessions):
-    """A runner confined to the second session, as `build_backend` builds one."""
+    """A runner confined to the second session, as `build_backend` builds one.
+
+    "As `build_backend` builds one" was the claim before it was true: this
+    passed no `readable` and a hand-written `PATH` of system directories, so
+    `python3` resolved to `/usr/bin/python3` and the suite proved the fence
+    worked for an arrangement no deployment runs. `toolchain_roots` and the
+    venv's own `bin` are what `_fence_for` and `shell_env` actually hand it.
+    """
     from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
 
     _, theirs = two_sessions
     return LandlockRunner(
-        policy_for(theirs), cwd=theirs, env={"PATH": "/usr/bin:/bin:/usr/local/bin"}
+        policy_for(theirs, readable=toolchain_roots()),
+        cwd=theirs,
+        env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
     )
 
 
@@ -148,3 +161,32 @@ def test_a_fence_cannot_be_widened_from_inside(fenced, two_sessions):
     result = fenced.run(f"sh -c \"sh -c 'cat {secret}'\"")
 
     assert "TENANT-A-PRIVATE" not in result.output
+
+
+@needs_landlock
+def test_the_agent_reaches_its_own_interpreter(fenced):
+    """The promise `pyproject.toml` makes, held against a real kernel.
+
+    "`shell_env` puts `dirname(sys.executable)` first on the agent's PATH, so
+    the interpreter the agent reaches is this venv's, and it is the only one it
+    can reach" -- which was true unfenced and false under either fence, because
+    both are allow-lists and neither had been told where the venv is. Nothing
+    failed: the shell skipped the ungranted entry, found `/usr/local/bin/python3`
+    and ran a different Python without the libraries this project installs for
+    the agent.
+
+    Two assertions because the gap had two halves. `sys.prefix` says the
+    interpreter is this one rather than the system's, and the import says its
+    `site-packages` is readable -- granting `bin` alone gives an interpreter that
+    starts and cannot import, since the libraries are in a sibling directory.
+
+    `yaml` because kingfisher depends on it, so `pip install -e .` puts it in
+    the same venv this test is running from; the `agent` group is not installed
+    by the command in this module's docstring.
+    """
+    result = fenced.run('python3 -c "import sys, yaml; print(sys.prefix)"')
+
+    assert result.exit_code == 0, f"the agent could not run Python: {result.output}"
+    assert sys.prefix in result.output, (
+        f"the fenced shell reached a different interpreter: {result.output.strip()}"
+    )

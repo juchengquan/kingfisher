@@ -684,6 +684,37 @@ report: `on_tool_error` writes a `tool_error` event even when the middleware has
 already converted the exception into a tool result, which is now asserted rather
 than assumed.*
 
+## Confining the shell
+
+**The two fences share a toolchain and not a workspace**, and the asymmetry is
+the design rather than an oversight. `sandbox-exec` is `(allow default)` with
+denies: it takes away the operator's home and hands back what has to stay
+reachable inside it, so `readable_roots` names the workspace. Landlock and
+bubblewrap are allow-lists: they take away everything and hand back one session,
+so naming the workspace there would return every *other* tenant's session, which
+is the exact read the fence was built after -- measured before it existed, tenant
+B ran `cat ../<A>/derived/secret.txt` and got `TENANT-A-PRIVATE` with exit 0.
+
+So `toolchain_roots` is the shared half and the workspace is not. It is worth
+recording because the tidy-looking move is to have `_fence_for` call
+`readable_roots` -- one function, both platforms, three lines shorter -- and that
+change would close a bug and silently reopen a hole, which is the shape of thing
+this file exists to stop.
+
+**What went wrong without it:** the Linux side named only the catalogue, so the
+venv `shell_env` puts first on the agent's `PATH` was granted by nothing. An
+allow-list does not refuse an ungranted `PATH` entry, it skips it -- the shell
+walked on to `/usr/local/bin/python3` and ran a different interpreter, without
+the libraries this project installs for the agent and unable to read the venv's
+`site-packages` besides. Invisible on macOS, where the profile is default-allow
+and `readable_roots` had granted the same roots since denying the home broke
+Python there.
+
+The guard is stated as the property rather than as the fix:
+`test_every_directory_on_the_agent_s_path_is_reachable` asserts every existing
+entry of `shell_env`'s `PATH` falls inside something the fence grants, so a path
+added later by another route is caught by having been added. *(2026-09-04.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built

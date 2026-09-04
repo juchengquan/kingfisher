@@ -18,6 +18,8 @@ it succeeds. Without one, "B cannot read A" passes just as well against a typo.
 from __future__ import annotations
 
 import subprocess
+import sys
+from pathlib import Path
 
 import pytest
 
@@ -26,6 +28,7 @@ from kingfisher.infrastructure.sandbox.bubblewrap import (
     argv_for,
     bubblewrap_available,
 )
+from kingfisher.infrastructure.sandbox.confinement import toolchain_roots
 
 needs_bubblewrap = pytest.mark.skipif(
     not bubblewrap_available(),
@@ -46,9 +49,17 @@ def two_sessions(tmp_path):
 
 @pytest.fixture
 def fenced(two_sessions):
-    """A runner sandboxed to the second session, as `build_backend` builds one."""
+    """A runner sandboxed to the second session, as `build_backend` builds one.
+
+    The toolchain is bound for the reason the Landlock fixture explains: without
+    it the venv is simply not in the namespace, `PATH` skips the entry, and the
+    agent gets whatever interpreter `/usr` holds.
+    """
     _, theirs = two_sessions
-    return BubblewrapRunner(argv_for(theirs), env={"PATH": "/usr/bin:/bin:/usr/local/bin"})
+    return BubblewrapRunner(
+        argv_for(theirs, readable=toolchain_roots()),
+        env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
+    )
 
 
 ESCAPES = [
@@ -126,3 +137,32 @@ def test_the_network_is_closed(fenced):
 
     assert "NET-OPEN" not in result.output
     assert result.exit_code != 0
+
+
+@needs_bubblewrap
+def test_the_agent_reaches_its_own_interpreter(fenced):
+    """The promise `pyproject.toml` makes, held against a real kernel.
+
+    "`shell_env` puts `dirname(sys.executable)` first on the agent's PATH, so
+    the interpreter the agent reaches is this venv's, and it is the only one it
+    can reach" -- which was true unfenced and false under either fence, because
+    both are allow-lists and neither had been told where the venv is. Nothing
+    failed: the shell skipped the ungranted entry, found `/usr/local/bin/python3`
+    and ran a different Python without the libraries this project installs for
+    the agent.
+
+    Two assertions because the gap had two halves. `sys.prefix` says the
+    interpreter is this one rather than the system's, and the import says its
+    `site-packages` is readable -- granting `bin` alone gives an interpreter that
+    starts and cannot import, since the libraries are in a sibling directory.
+
+    `yaml` because kingfisher depends on it, so `pip install -e .` puts it in
+    the same venv this test is running from; the `agent` group is not installed
+    by the command in this module's docstring.
+    """
+    result = fenced.run('python3 -c "import sys, yaml; print(sys.prefix)"')
+
+    assert result.exit_code == 0, f"the agent could not run Python: {result.output}"
+    assert sys.prefix in result.output, (
+        f"the fenced shell reached a different interpreter: {result.output.strip()}"
+    )

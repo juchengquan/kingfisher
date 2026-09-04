@@ -343,5 +343,68 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     )
     # And that the paths are the ones meant, so agreeing on nothing would fail.
     _, readable, writable = seen["Landlock"]
-    assert readable == [skills], "the shared catalogue is what a skill's scripts are read from"
+    assert skills in readable, "the shared catalogue is what a skill's scripts are read from"
     assert writable == [cfg.scratch_dir], "$TMPDIR has to be writable or the first command fails"
+
+
+def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):
+    """The rule the fence exists to keep, stated the way it actually breaks.
+
+    `shell_env` hands the shell a `PATH`, and on Linux the fence is an
+    allow-list: a directory on that `PATH` which no rule grants is not refused
+    loudly, it is skipped. The shell walks on to the next entry and finds
+    `/usr/local/bin/python3`, which is granted -- so the agent runs a *different*
+    interpreter, without the `agent` dependency group this project installs for
+    it, and the venv's `site-packages` is unreadable besides. Nothing fails.
+
+    Invisible on macOS, which is why it survived: that profile is
+    `(allow default)`, so every `PATH` entry is readable whether anyone thought
+    about it or not. The two platforms have opposite defaults and only one of
+    them punishes forgetting.
+
+    Asserted over `PATH` rather than over `toolchain_roots`, deliberately. The
+    second would check that this change was made; the first checks the property
+    the change was for, so an entry added to `PATH` later by some other route is
+    caught by having been added.
+
+    `_BASE_PATH` satisfies it through `SYSTEM_PATHS` already, and entries that do
+    not exist on this host are skipped for the reason `_present` skips them: a
+    path that is not there grants nothing and denies nothing.
+    """
+    from kingfisher.infrastructure.harness.backend import _fence_for, shell_env
+    from kingfisher.infrastructure.sandbox import bubblewrap, fence
+    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
+
+    seen: dict[str, tuple[list[Path], list[Path]]] = {}
+
+    def recorder(mechanism, result):
+        def fake(session_dir, *, readable=(), writable=()):
+            seen[mechanism] = ([Path(p) for p in readable], [Path(p) for p in writable])
+            return result
+
+        return fake
+
+    monkeypatch.setattr(bubblewrap, "argv_for", recorder("bubblewrap", ["bwrap"]))
+    monkeypatch.setattr(fence, "policy_for", recorder("Landlock", object()))
+
+    session = tmp_path / "sessions" / "s1"
+    session.mkdir(parents=True)
+    env = shell_env(cfg, session)
+
+    _fence_for(cfg, session, Confinement(wrap=_unwrapped, mechanism="Landlock"), None, env)
+    readable, writable = seen["Landlock"]
+    granted = [Path(p) for p in SYSTEM_PATHS] + readable + writable + [session]
+
+    on_path = [Path(p) for p in env["PATH"].split(":") if p and Path(p).exists()]
+    assert on_path, "nothing was checked -- PATH named no directory that exists"
+
+    unreachable = [
+        str(entry)
+        for entry in on_path
+        if not any(entry == root or root in entry.parents for root in granted)
+    ]
+    assert not unreachable, (
+        f"{unreachable} are on the agent's PATH and inside nothing the fence grants. "
+        "A fenced shell does not refuse them, it silently runs whatever it finds "
+        "next -- see toolchain_roots"
+    )
