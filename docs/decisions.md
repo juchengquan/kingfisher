@@ -800,6 +800,69 @@ or langgraph**, and only that package may. Registries and DTOs did *not* move to
 `application/`, and the package root did not change.
 *(2026-08-17, `layer-boundaries.md`.)*
 
+**An asset kind owns its own registration.** `tools/`, `skills/` and
+`subagents/` are modules at the package root, each holding what its definitions
+say, how they are found on disk, and how they reach the runtime. Kingfisher
+fetches from them; they do not answer to a layer. *(2026-09-05.)*
+
+**They deliberately do not share.** All three resolve a `source::name` and all
+three do it their own way -- `tools.spec.split_reference` and
+`skills.registry.split_qualified` differ today by one call that strips a
+trailing slash. Written once and shared, a change for one kind would have to be
+argued past the other two. The duplication is the price of each kind changing on
+its own, and it is the point rather than an oversight. What stays shared is the
+vocabulary of *grants* -- `SEPARATOR` and `_bare` in `domain.capabilities` --
+because a grant is spelled the same way whatever it names.
+
+**Reversed to get there: "the domain imports only the standard library and
+itself."** Four domain modules need an asset kind's `spec`: `ports` names
+`Found` and `SubagentSpec` because a port cannot name a type it has no word for,
+and the definition readers parse a tool reference because an agent definition
+*writes* `csv_profile::csv_profile` in its `tools:` list. That is the format
+referring to itself, not the domain reaching for a layer.
+
+The rule was refused as a wall first and then measured, which is the order that
+was wrong. Importing `domain.ports` and `domain.agent` with those edges takes
+39ms and loads 101 modules with no part of the agent runtime among them -- the
+same 39ms recorded below as the good case against 888ms. The direction was
+protecting two operational properties and this costs neither, so what stopped
+the work was DDD purity in a codebase that had already decided it is an adapter
+over deepagents rather than a domain model.
+
+The exception is narrow and stated where it is enforced: the domain may name a
+kind's `spec`, never its `catalogue` or its `harness`. A spec is format
+vocabulary with no adapter behind it; the other two walk the disk and reach the
+runtime, and a test asserts the predicate at each of those edges.
+
+**The cost is the swap boundary.** `THIRD_PARTY` now names four areas that may
+import the agent runtime rather than one. An upgrade is still a list of files
+rather than a search -- which is what that rule was ever for -- but the list
+spans `infrastructure/harness/`, `tools/`, `skills/` and `subagents/`.
+
+**Three things were in the wrong place and only the move said so.** Each had
+lived quietly because the two halves shared a directory and nothing had to
+choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
+used by `domain.layout`, which *is* the layout; `ceiling` sat in the tool module
+and touches no registry, so it went to `domain.capabilities` with the rest of
+that arithmetic; and `wanted_model` was in the subagent format while
+`domain.agent` imported it to read its own `model:` line, so it went to
+`domain.fields`, which is the field readers. A helper two formats need belongs
+to neither of them.
+
+**When a kind should be a module, and it is not "always".** `skills` fitted
+first and easiest because kingfisher does not own that format -- deepagents
+reads a `SKILL.md` and decides what it means, so `spec` is 65 lines and nothing
+else depended on it. `tools` and `subagents` own formats that *reference each
+other*, which is why both dragged shared vocabulary into the question. Nothing
+here was insurmountable, but a fourth kind with an interlocking format should
+expect the same three-way negotiation rather than a rename.
+
+**Not a module: agents.** An agent is selected by name, one per request, and is
+the thing the graph *is* rather than something the graph holds. `domain/agent.py`
+and `infrastructure/catalogue/agents.py` stay where they are, and
+`harness/agent.py` with them -- assembling a graph out of the three kinds is
+kingfisher's own job, not any kind's.
+
 **Reversed: "the rest of the layer stays flat."** The clause read *a second
 subpackage would advertise a distinction no test could hold*, and by the time
 anyone looked there were three of them -- `catalogue/` had arrived without the
