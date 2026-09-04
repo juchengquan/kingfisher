@@ -681,7 +681,7 @@ class Kingfisher(Sessions, Disposal):
         request runs first, and only then is a turn directory created. That was
         a sentence in this docstring for a long time and was not true --
         `--input` named a missing file, was refused, and left `t001` behind.
-        Written as two functions it is checkable, and `_Admitted` is the only
+        Written as two functions it is checkable, and `Admitted` is the only
         way across.
         """
         return self._open_turn(self._admit(request, session, checkpointer, groups=groups))
