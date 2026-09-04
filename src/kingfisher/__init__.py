@@ -25,9 +25,9 @@ __version__ = "0.1.0"
 #: `build_backend`, `build_model`, `system_prompt`,
 #: `writable_data`, `protect_data`, `shell_env`, `normalize_answer`,
 #: `AccessReport`, `Groups` and `Stated`. Every one is live -- `build_backend`
-#: alone has 88 callers -- and every one of those callers imports it from the
-#: module that defines it. Nothing had ever come through the front door for
-#: them.
+#: alone is called from dozens of places -- and every one of those callers
+#: imports it from the module that defines it. Nothing had ever come through the
+#: front door for them.
 #:
 #: That is the distinction this table exists to draw and had stopped drawing.
 #: The comments below record why a name is public one at a time -- "the fourth
