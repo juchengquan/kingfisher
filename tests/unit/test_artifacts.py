@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from kingfisher.application.run import Request, run
-from kingfisher.infrastructure.workspace_fs import collect_artifacts
+from kingfisher.infrastructure.workspace.fs import collect_artifacts
 from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 

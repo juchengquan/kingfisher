@@ -6,7 +6,7 @@ import pytest
 
 from kingfisher.domain.ports import DefinitionStore
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.uploads import UploadError, provision
+from kingfisher.infrastructure.workspace.uploads import UploadError, provision
 
 SKILL = b"---\nname: extractor\ndescription: Pulls fields out of documents.\n---\nBody.\n"
 SUBAGENT = b"name: reviewer\ndescription: Checks arithmetic.\nsystem_prompt: |\n  You review.\n"

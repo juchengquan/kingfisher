@@ -20,7 +20,7 @@ from dataclasses import fields
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.subagents import ASSET_DIRECTORIES
-from kingfisher.infrastructure.uploads import Brought
+from kingfisher.infrastructure.workspace.uploads import Brought
 from tests.integration import driver
 
 #: The vocabulary, derived here rather than imported. It was a constant on
@@ -224,7 +224,7 @@ def test_a_folder_that_is_not_a_kind_is_not_seeded_either(shipped, cfg):
     Without this the exception would be a promise about `seed` written in a
     dictionary that `seed` has never read.
     """
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
 
@@ -247,7 +247,7 @@ def _kinds_the_seeder_can_report() -> set[str]:
     Parsed rather than called, because the answer depends on the file being
     examined and not on any file this test could hand it.
     """
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     body = ast.parse(inspect.getsource(seeding))
     fn = next(

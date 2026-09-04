@@ -25,7 +25,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.config import ConfigError
-from kingfisher.infrastructure import seeding
+from kingfisher.infrastructure.workspace import seeding
 
 
 def _definitions(root: Path, *entries: str) -> Path:
@@ -76,7 +76,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
     still has to be told where to write `models.yaml`, and that instruction is
     this file.
     """
-    from kingfisher.infrastructure.workspace_fs import EXAMPLE, ensure_layout
+    from kingfisher.infrastructure.workspace.fs import EXAMPLE, ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)
@@ -97,7 +97,7 @@ def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
     So `seed` says what to write instead of pointing at a file, and this asserts
     the file it stopped pointing at does not come back by another route.
     """
-    from kingfisher.infrastructure.workspace_fs import ensure_layout
+    from kingfisher.infrastructure.workspace.fs import ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)
@@ -192,7 +192,7 @@ def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, mo
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.seeding import SUGGESTION
+    from kingfisher.infrastructure.workspace.seeding import SUGGESTION
 
     nowhere = replace(cfg, assets=None)
 
@@ -223,7 +223,7 @@ def test_the_refusal_says_where_your_own_definitions_go(cfg, tmp_path, monkeypat
     """
     from dataclasses import replace
 
-    from kingfisher.infrastructure.seeding import DESTINATION
+    from kingfisher.infrastructure.workspace.seeding import DESTINATION
 
     nowhere = replace(cfg, assets=None)
 

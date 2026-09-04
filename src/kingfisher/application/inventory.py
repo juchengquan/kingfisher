@@ -36,7 +36,7 @@ from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.tools import ToolError
-from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+from kingfisher.infrastructure.workspace.fs import ensure_session_layout
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})

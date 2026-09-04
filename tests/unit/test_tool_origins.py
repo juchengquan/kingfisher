@@ -22,7 +22,7 @@ from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.domain.tool import Offering, offered
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+from kingfisher.infrastructure.workspace.fs import ensure_session_layout
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 TOOL = """from langchain_core.tools import tool

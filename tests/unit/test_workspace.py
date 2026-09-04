@@ -12,7 +12,7 @@ from kingfisher.domain.layout import (
     SESSION_DIRS,
     SESSION_PLUMBING,
 )
-from kingfisher.infrastructure.workspace_fs import (
+from kingfisher.infrastructure.workspace.fs import (
     EXAMPLE,
     LocalSessionDirs,
     ensure_layout,

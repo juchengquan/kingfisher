@@ -15,7 +15,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
-from kingfisher.infrastructure.workspace_fs import DataError
+from kingfisher.infrastructure.workspace.fs import DataError
 from tests.conftest import StubCheckpointer, an_agent, start, subagents_dir
 from tests.unit.test_run import StubAgent
 
@@ -302,7 +302,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     """Not off a list kept somewhere. The tool surface includes whatever the
     workspace defined, so the only honest answer is what was actually wired --
     which is also what makes a grant go stale when a workspace gains a tool."""
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
@@ -334,7 +334,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
 def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     """Every axis narrows the same way and every one of them went silent the
     same way. One line per kind, and only for kinds that lost something."""
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
@@ -389,7 +389,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
 
 def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     """Narrowing tools should not produce a line about skills."""
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
     # deployment is wired, so definitions written afterwards are not its.
