@@ -545,6 +545,19 @@ def _fence_for(
     shared catalogue. A deployment never writes one -- see `fence.py` for the
     hand-written policy that failed open and why that is the rule.
     """
+    if confined.mechanism not in ("bubblewrap", "Landlock"):
+        return None
+
+    # One answer for both fences rather than the same three lines twice.
+    # `argv_for` and `policy_for` take the same arguments and mean the same
+    # thing by them, so a path added to one branch and not the other fences the
+    # shell differently depending on which mechanism the host happens to have --
+    # and the suite would not catch it, because a run only ever exercises the
+    # one mechanism its own kernel offers. That is the divergence this function
+    # already avoids one question earlier by deriving from `Confinement`.
+    readable = [skills_dir] if skills_dir is not None else []
+    writable = [cfg.scratch_dir]
+
     if confined.mechanism == "bubblewrap":
         from kingfisher.infrastructure.bubblewrap import (  # noqa: PLC0415
             BubblewrapRunner,
@@ -552,27 +565,17 @@ def _fence_for(
         )
 
         return BubblewrapRunner(
-            argv_for(
-                session_dir,
-                readable=[skills_dir] if skills_dir is not None else [],
-                writable=[cfg.scratch_dir],
-            ),
+            argv_for(session_dir, readable=readable, writable=writable),
             env=env,
         )
 
-    if confined.mechanism != "Landlock":
-        return None
     # Imported here for the reason the module explains: `sandlock` is a
     # Linux-only optional install, and this function is called on every turn on
     # every platform.
     from kingfisher.infrastructure.fence import LandlockRunner, policy_for  # noqa: PLC0415
 
     return LandlockRunner(
-        policy_for(
-            session_dir,
-            readable=[skills_dir] if skills_dir is not None else [],
-            writable=[cfg.scratch_dir],
-        ),
+        policy_for(session_dir, readable=readable, writable=writable),
         cwd=session_dir,
         env=env,
     )
