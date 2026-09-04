@@ -7,10 +7,10 @@ That is the failure worth naming rather than the count: a charter nothing
 enforces is a claim, and this one had been false for weeks.
 
 The rule that produced "two" was that the command exists for what the library
-cannot do for itself. It is being replaced -- see
-`docs/design/2026-09-04-the-verb-that-runs-a-task.md` -- because it measures the
-library's completeness rather than the user's, and under it the one thing a
-person installs this to do is the one thing the command cannot.
+cannot do for itself. It was replaced -- see *The command line* in
+`docs/decisions.md` -- because it measures the library's completeness rather than
+the user's, and under it the one thing a person installs this to do is the one
+thing the command cannot.
 
 `main.py` keeps its flags and its default. Bare invocation there runs the eval
 smoke -- a real model call against whatever key the deployment holds -- which is

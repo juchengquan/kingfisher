@@ -129,6 +129,84 @@ def test_the_front_page_and_the_agent_instructions_both_point_here() -> None:
         assert page in instructions, f"CLAUDE.md does not send an agent to {page}"
 
 
+#: A path to a document, as prose names one, wherever it is written.
+#: Deliberately not spelled out in the comment above: this pattern matches its own
+#: example, and the first run of this rule reported itself.
+CITATION = re.compile(r"docs/[A-Za-z0-9_./-]+\.md")
+
+#: Where a citation can hide. Everything tracked that is text and is *not* under
+#: `docs/`, because that directory has its own two rules above and because
+#: `docs/README.md` names removed documents on purpose -- its recovery commands
+#: are `git show <commit>^:docs/design/...`, which are supposed to be paths that
+#: no longer resolve.
+CITED_FROM = ("src", "tests", "service", ".github")
+
+#: The root files, named rather than globbed: the repository root also holds a
+#: `.venv`, a `.git` and whatever a developer left there, and a rule that reads
+#: the working directory finds different things on different machines.
+CITED_FROM_FILES = ("Dockerfile", "compose.yaml", "pyproject.toml", "CLAUDE.md", "README.md")
+
+#: Suffixes worth opening. `Dockerfile` has none, which is why the files above
+#: are named individually rather than filtered.
+TEXT = {".py", ".md", ".toml", ".yaml", ".yml"}
+
+
+def _cited() -> list[tuple[str, int, str]]:
+    """`(file, line, path)` for every document cited outside `docs/`."""
+    files = [ROOT / name for name in CITED_FROM_FILES]
+    for folder in CITED_FROM:
+        files += [p for p in sorted((ROOT / folder).rglob("*")) if p.suffix in TEXT]
+
+    found = []
+    for path in files:
+        if not path.is_file():
+            continue
+        for number, line in enumerate(path.read_text(encoding="utf-8").splitlines(), 1):
+            found += [
+                (path.relative_to(ROOT).as_posix(), number, cited)
+                for cited in CITATION.findall(line)
+            ]
+    return found
+
+
+def test_no_code_cites_a_document_that_is_not_there() -> None:
+    """A pointer to a deleted document is worse than none.
+
+    `docs/` is small because documents are removed once they have finished their
+    job -- twenty-eight of them so far -- and every removal leaves whatever cited
+    them pointing at nothing. The two rules above catch that inside
+    `docs/README.md`; nothing looked at the citations from code, and prose is
+    exactly where they hide: a module docstring explaining *why* something is
+    shaped a certain way is the most natural place to name the document that
+    argued for it, and the least likely place anyone re-reads.
+
+    Found by doing it. Retiring the last two proposals on 2026-09-04 left
+    `Dockerfile` naming `nothing-at-rest-on-this-machine.md`, and
+    `presentation/cli/__init__.py` was already naming `the-verb-that-runs-a-task.md`,
+    removed days earlier by the commit that was cleaning up after it.
+
+    Scoped outside `docs/` deliberately: that directory has its own rules, and
+    `docs/README.md` cites removed documents *on purpose* -- its recovery
+    commands are `git show <commit>^:docs/design/...`, which only work because
+    the path no longer resolves.
+    """
+    cited = _cited()
+    assert cited, "nothing was checked -- the collector found no citations at all"
+
+    dead = [
+        f"{where}:{line} cites {path}"
+        for where, line, path in cited
+        if not (ROOT / path).is_file()
+    ]
+
+    assert not dead, (
+        "these name a document that is not there:\n  "
+        + "\n  ".join(dead)
+        + "\nPoint them at what replaced it, or say the argument in place -- "
+        "`decisions.md` is where a removed document's reasoning went"
+    )
+
+
 #: ```python fences, with the line the fence opens on so a failure is clickable.
 PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 
