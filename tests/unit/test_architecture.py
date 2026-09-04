@@ -757,6 +757,11 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # same trade `skills` made one entry up, and the third directory the swap
     # boundary now spans.
     "tools": frozenset({"langchain_core", "langgraph"}),
+    # `subagents.harness` turns a spec into the `SubAgent` deepagents expects,
+    # which cannot be done without naming the type. The third and last kind to
+    # reach the runtime, and the reason the swap boundary is now stated as a
+    # list of areas rather than one directory.
+    "subagents": frozenset({"deepagents", "langchain_core"}),
     # The one consumer still in this distribution. `presentation` was the other
     # and is now `kingfisher-service`, a package of its own with its own rules --
     # so fastapi and uvicorn are no longer anything this table has an opinion
@@ -851,7 +856,7 @@ def test_a_subpackage_is_judged_by_its_own_area():
     instead.
     """
     catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
-    buried = SRC / "infrastructure" / "catalogue" / "subagents.py"
+    buried = SRC / "infrastructure" / "catalogue" / "documents.py"
     for path in (catalogue, buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
@@ -1667,8 +1672,8 @@ def _definition_documents(root: Path) -> list[Path]:
     `skills/` under `src/` is a package of registration code and ships as code,
     while a `SKILL.md` ships as content wherever it is filed.
     """
-    from kingfisher.domain.subagent.reading import SUFFIX
     from kingfisher.skills.spec import FILENAME as SKILL_FILE
+    from kingfisher.subagents.reading import SUFFIX
 
     return sorted(
         path

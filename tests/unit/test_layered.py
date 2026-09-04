@@ -14,7 +14,6 @@ from dataclasses import dataclass, replace
 import pytest
 
 from kingfisher.domain.ports import SkillRepository, SubagentRepository
-from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import (
     LayeredSkills,
@@ -23,6 +22,7 @@ from kingfisher.infrastructure.catalogue.layered import (
     uploaded_skills,
     uploaded_subagents,
 )
+from kingfisher.subagents.spec import SubagentSpec
 
 SKILL = "---\nname: {name}\ndescription: A skill.\n---\n\nDo the thing.\n"
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"

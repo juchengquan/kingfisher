@@ -107,7 +107,6 @@ from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 # by coincidence until it does not. The dependency runs this way round because
 # an agent already names delegates -- it depends on the subagent vocabulary
 # whatever happens here.
-from kingfisher.domain.subagent.reading import wanted_model
 from kingfisher.tools.spec import claimed_sources
 
 DIRECTORY = "agents"
@@ -357,7 +356,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         audiences=audiences,
         middleware=written_middleware,
         middleware_settings=middleware_settings,
-        wanted=wanted_model(document, read),
+        wanted=fields.wanted_model(document, read),
         # Absent is `None` rather than `False`, which `flag` alone cannot say:
         # a switch has three states here, and "no opinion" is not "no".
         memory=(

@@ -22,14 +22,14 @@ from functools import cached_property
 from pathlib import Path
 
 from kingfisher.domain.agent import AgentError, AgentSpec
+from kingfisher.infrastructure.catalogue.documents import read_agent
+from kingfisher.infrastructure.catalogue.importing import skipped
+from kingfisher.subagents.catalogue import NEAR_MISS
 
 # `SUFFIX` comes from the format that already names it rather than being
 # restated here: both are YAML documents kingfisher reads, and a second copy of
 # the extension is a second thing to keep in step.
-from kingfisher.domain.subagent.reading import SUFFIX
-from kingfisher.infrastructure.catalogue.documents import read_agent
-from kingfisher.infrastructure.catalogue.importing import skipped
-from kingfisher.infrastructure.catalogue.subagents import NEAR_MISS
+from kingfisher.subagents.reading import SUFFIX
 
 
 def _definitions_in(directory: Path) -> list[Path]:

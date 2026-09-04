@@ -12,7 +12,6 @@ from langgraph.graph import END, START, StateGraph
 from typing_extensions import TypedDict
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
@@ -20,6 +19,7 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FakeToolCallingModel,
     capture_build,

@@ -19,9 +19,9 @@ import pytest
 
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import read_agent, read_subagent
+from kingfisher.subagents.spec import SubagentError
 
 WHOLE = """name: surveyor
 description: Reads and profiles data without changing anything.

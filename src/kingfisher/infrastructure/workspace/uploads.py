@@ -19,10 +19,10 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.domain import layout
-from kingfisher.domain.subagent.reading import SUFFIX
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
 from kingfisher.skills import spec as skill
+from kingfisher.subagents.reading import SUFFIX
 
 if TYPE_CHECKING:
     from collections.abc import Mapping

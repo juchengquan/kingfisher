@@ -113,7 +113,7 @@ consumer can be added later without changing what a definition may say.
 
 Parsing lives in the domain because this is kingfisher's format, not a library's
 — nothing here knows deepagents exists, and nothing here reads a disk. Finding
-the files is `infrastructure.catalogue.subagents`; translating a spec into
+the files is `subagents.catalogue`; translating a spec into
 `SubAgent` is `infrastructure.harness.agent`.
 
 `declared` is the same format arriving another way -- a Python module stating
@@ -130,7 +130,7 @@ from types import MappingProxyType
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.subagent import SubagentError, SubagentSpec
+from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.spec import claimed_sources
 
 DIRECTORY = "subagents"
@@ -294,7 +294,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
 
     where = Path(source)
     read = fields.Reader(source=where.name, error=SubagentError)
-    wanted = wanted_model(entry, read)
+    wanted = fields.wanted_model(entry, read)
     written_tools, tool_audiences = read.audienced(entry.get("tools"), absent=ALL, key="tools")
     # Only `tools` here: `skills` and `subagents` are refused for a compiled
     # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
@@ -362,7 +362,9 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
             msg = f"{source.name}: {required!r} is present but empty"
             raise SubagentError(msg)
 
-    wanted = wanted_model(document, fields.Reader(source=source.name, error=SubagentError))
+    wanted = fields.wanted_model(
+        document, fields.Reader(source=source.name, error=SubagentError)
+    )
 
     # Read once, then split. A `tools:` entry may be written `where::what`, and
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
@@ -434,25 +436,4 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 # One reference, doing two jobs now rather than one.
 
 
-def wanted_model(document: Mapping[str, object], read: fields.Reader) -> str | None:
-    """The model a definition names, or `None` for whatever summoned it.
-
-    One name. `model:` took a list while `alias:` existed, because an alias this
-    deployment had not bound was passed over and the next candidate tried -- so
-    a list was a definition naming the deployments it could still be useful in.
-    Nothing passes over a *model*: one this deployment cannot run refuses on the
-    spot, and always did. With `alias` gone every entry after the first was
-    unreachable, so a list here would be a shape that cannot mean anything.
-
-    Read through `Reader.one_name`, which refuses that list where the file can
-    still be named. It said `fields.text` for a while, and `fields.text` is the
-    `str()` that produced the shape rather than the check that stops it: a
-    definition writing `model: [gpt-5, claude-4]` was read as a model called
-    `"['gpt-5', 'claude-4']"`.
-
-    Takes the `Reader` both formats already build, rather than a bare error
-    type, because that is the pair -- the file's name and the format's
-    exception -- and it is bound once at each call site.
-    """
-    return read.one_name(document.get("model"), key="model")
 

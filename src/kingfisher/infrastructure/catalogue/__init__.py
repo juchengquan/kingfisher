@@ -66,10 +66,10 @@ from kingfisher.domain.ports import (
     ToolRepository,
 )
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.skills import registry as skill_registry
 from kingfisher.skills.catalogue import LocalSkillRepository
 from kingfisher.skills.registry import SkillRegistry
+from kingfisher.subagents.catalogue import LocalSubagentRepository
 from kingfisher.tools.catalogue import LocalToolRepository
 from kingfisher.tools.spec import Offering
 

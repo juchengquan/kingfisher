@@ -18,9 +18,9 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.domain.subagent import SubagentSpec
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace.fs import ensure_session_layout
+from kingfisher.subagents.spec import SubagentSpec
 from kingfisher.tools.catalogue import LocalToolRepository
 from kingfisher.tools.spec import Offering, offered
 from tests.conftest import FakeToolCallingModel, tools_dir

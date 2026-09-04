@@ -19,10 +19,8 @@ from langchain_core.messages import AIMessage
 from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import (
     BUNDLED_SKILLS_ROUTE,
@@ -32,6 +30,8 @@ from kingfisher.infrastructure.harness.backend import (
 )
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.presentation.cli.listing import _catalogue, failed
+from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.subagents.spec import SubagentError
 from kingfisher.tools.catalogue import ToolError
 from kingfisher.tools.spec import Offering, tool_name
 from tests.conftest import FakeToolCallingModel, capture_build

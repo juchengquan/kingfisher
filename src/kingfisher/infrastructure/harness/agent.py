@@ -38,7 +38,6 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_models,
 )
 from kingfisher.domain.ports import CommandRunner
-from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,
@@ -55,12 +54,6 @@ from kingfisher.infrastructure.harness.backend import (
     build_backend,
     skills_sources,
 )
-from kingfisher.infrastructure.harness.delegation import (
-    as_subagent,
-    model_object,
-    subagent_helpers,
-    subagent_skills,
-)
 from kingfisher.infrastructure.harness.interpreter import _interpreter
 from kingfisher.infrastructure.harness.middleware import (
     MiddlewareFactory,
@@ -73,6 +66,13 @@ from kingfisher.infrastructure.harness.narrowing import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.subagents.harness import (
+    as_subagent,
+    model_object,
+    subagent_helpers,
+    subagent_skills,
+)
+from kingfisher.subagents.spec import RunOn
 from kingfisher.tools.harness import (
     _private_tools,
     _resolve_tools,

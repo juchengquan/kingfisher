@@ -7,7 +7,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.subagent import RunOn
+from kingfisher.subagents.spec import RunOn
 
 
 @dataclass(frozen=True)

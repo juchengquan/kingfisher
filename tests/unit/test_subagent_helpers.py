@@ -21,10 +21,10 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.domain.subagent import SubagentError, SubagentSpec
-from kingfisher.domain.subagent.rules import refuse_cycles
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.subagents.rules import refuse_cycles
+from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 REVIEWER = """name: reviewer
@@ -372,7 +372,7 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
     right = REVIEWER.replace("reviewer", "right").replace("second-opinion", "shared")
     _define(cfg, left, right, shared)
 
-    from kingfisher.infrastructure.harness import delegation
+    from kingfisher.subagents import harness as delegation
 
     built: list[str] = []
     real = delegation.as_subagent

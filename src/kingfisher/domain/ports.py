@@ -33,7 +33,7 @@ from pathlib import Path
 from typing import Protocol, runtime_checkable
 
 from kingfisher.domain.agent import AgentSpec
-from kingfisher.domain.subagent import SubagentSpec
+from kingfisher.subagents.spec import SubagentSpec
 from kingfisher.tools.spec import Found
 
 

@@ -36,10 +36,10 @@ from kingfisher.domain.layout import (
 )
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.references import UnsafeReferenceError, within
-from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.skills.backend import skills_backend
+from kingfisher.subagents.spec import SubagentError
 
 if TYPE_CHECKING:
 

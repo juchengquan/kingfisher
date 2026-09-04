@@ -15,8 +15,8 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.skills.catalogue import LocalSkillRepository
+from kingfisher.subagents.catalogue import LocalSubagentRepository
 from kingfisher.tools.catalogue import LocalToolRepository, ToolError, tool_name
 from kingfisher.tools.spec import Offering
 
