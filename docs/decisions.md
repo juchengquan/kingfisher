@@ -803,7 +803,7 @@ or langgraph**, and only that package may. Registries and DTOs did *not* move to
 **An asset kind owns its own registration.** `tools/`, `skills/` and
 `subagents/` are modules at the package root, each holding what its definitions
 say, how they are found on disk, and how they reach the runtime. Kingfisher
-fetches from them; they do not answer to a layer. *(2026-09-05.)*
+fetches from them; they do not answer to a layer. *(2026-09-04.)*
 
 **They deliberately do not share.** All three resolve a `source::name` and all
 three do it their own way -- `tools.spec.split_reference` and
@@ -862,6 +862,37 @@ the thing the graph *is* rather than something the graph holds. `domain/agent.py
 and `infrastructure/catalogue/agents.py` stay where they are, and
 `harness/agent.py` with them -- assembling a graph out of the three kinds is
 kingfisher's own job, not any kind's.
+
+**Considered and rejected: splitting `config.py` by its parts.** It is 648 lines
+and reads as three -- the model records (`Endpoint`, `ModelProfile`, `Models`),
+the workspace paths (`definition_roots_for`, `authored_files_for`,
+`WorkspacePaths`), and the deployment record itself -- with the second-highest
+churn in the package behind it. That was enough to recommend the split, and the
+recommendation was made on a count of top-level definitions and a histogram of
+who imports what, neither of which is evidence about the work.
+
+The hunk headers are. Of the 36 commits that have touched this file, 20 land
+only in `Config`, which is the part that would stay -- and at ~285 lines it would
+be exactly as long afterwards. Five land only in the model records. Five reach
+two or three of the regions at once, so those commits would open more files than
+they do today. The churn here is a configuration record gaining settings, and a
+new setting lands on `Config` whatever else has moved out from under it.
+
+The costs are on top of a benefit that was not there. `ConfigError` is raised by
+`Models` and imported by twelve modules across every layer, `domain/` included:
+it is this package's *configuration is wrong*, not a model error, so it cannot
+travel with the records. That forces a `config/` package rather than a sibling
+module, and a package has to re-export to keep `from kingfisher.config import
+Config` working in the 40 files that write it. No subpackage here re-exports --
+the root `__init__` has a table, and that is there to defer an import cost, not
+to spare callers a module name. Moving only the records out to a top-level
+`models.py` avoids all of that and buys a third thing named "models", beside
+`infrastructure/harness/models.py` and `infrastructure/model_catalogue.py`.
+
+What the file already did instead is the thing worth repeating: `Models` exists
+because five fields on `Config` had invariants between them that siblings of
+`shell_sandbox` could not express. That split ran along a rule, not along a size,
+and it happened inside the file. *(Measured 2026-09-04.)*
 
 **Reversed: "the rest of the layer stays flat."** The clause read *a second
 subpackage would advertise a distinction no test could hold*, and by the time
