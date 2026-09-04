@@ -50,7 +50,7 @@ class Fetched:
 
     Held in memory between admission and the turn opening -- a few hundred
     milliseconds -- because the alternative is writing the inputs before the
-    request is known to be admissible, which is the ordering `_Admitted` exists
+    request is known to be admissible, which is the ordering `Admitted` exists
     to protect.
     """
 
