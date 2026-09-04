@@ -10,7 +10,11 @@ Nothing else in this repository opens these files, so nothing else would notice.
 
 from __future__ import annotations
 
+import ast
+import importlib
 import re
+
+import pytest
 
 from tests.conftest import repository_root
 
@@ -114,3 +118,133 @@ def test_the_front_page_and_the_agent_instructions_both_point_here() -> None:
     instructions = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
     for page in ("docs/formats.md", "docs/decisions.md", "docs/findings.md"):
         assert page in instructions, f"CLAUDE.md does not send an agent to {page}"
+
+
+#: ```python fences, with the line the fence opens on so a failure is clickable.
+PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
+
+#: Which documents have their Python held to the package, and which do not.
+#:
+#: The split is the one `CLAUDE.md` already draws. A document describing what
+#: exists can be checked against it. **A proposal names things that do not exist
+#: yet, which is what makes it a proposal** -- so resolving its imports would
+#: fail for the one reason that is not a defect, and the plan below is worse
+#: still: twenty of its forty-three blocks are excerpts lifted from inside a
+#: function and do not parse as modules at all.
+#:
+#: Deny by default. A new document with Python in it fails
+#: `test_every_document_with_python_is_classified` until it appears here, which
+#: is where somebody decides which kind it is rather than discovering later that
+#: nothing looked.
+CHECKED_SNIPPETS: dict[str, bool] = {
+    "README.md": True,
+    "docs/formats.md": True,
+    # Proposals. Neither is checked, and the entries are here so that silence
+    # is a decision rather than an oversight.
+    "docs/design/2026-08-21-nothing-at-rest-on-this-machine.md": False,
+    "docs/superpowers/plans/2026-08-31-group-access-control.md": False,
+}
+
+
+def _documents_with_python() -> set[str]:
+    """Every tracked document carrying at least one ```python fence."""
+    found = set()
+    for path in [ROOT / "README.md", *sorted(DOCS.rglob("*.md"))]:
+        if PYTHON_FENCE.search(path.read_text(encoding="utf-8")):
+            found.add(path.relative_to(ROOT).as_posix())
+    return found
+
+
+def _snippets() -> list[tuple[str, int, str]]:
+    """`(document, line, source)` for every fence in a checked document."""
+    out = []
+    for name, checked in sorted(CHECKED_SNIPPETS.items()):
+        if not checked:
+            continue
+        text = (ROOT / name).read_text(encoding="utf-8")
+        for match in PYTHON_FENCE.finditer(text):
+            out.append((name, text[: match.start()].count("\n") + 1, match.group(1)))
+    return out
+
+
+def _snippet_id(case: tuple[str, int, str]) -> str:
+    name, line, _ = case
+    return f"{name}:{line}"
+
+
+def test_every_document_with_python_is_classified() -> None:
+    """A document nobody classified is one nobody checks, silently.
+
+    The same shape as `THIRD_PARTY` in `test_architecture`: the table is what
+    has to be edited to take something on, and editing it is where the question
+    gets asked.
+    """
+    present = _documents_with_python()
+    assert present == set(CHECKED_SNIPPETS), (
+        "documents with Python that CHECKED_SNIPPETS does not classify: "
+        f"{sorted(present - set(CHECKED_SNIPPETS))}; classified but carrying no "
+        f"Python any more: {sorted(set(CHECKED_SNIPPETS) - present)}"
+    )
+
+
+@pytest.mark.parametrize("case", _snippets(), ids=_snippet_id)
+def test_a_documented_snippet_parses(case: tuple[str, int, str]) -> None:
+    """Code in a document is code. Nothing imports it, so nothing compiled it."""
+    name, line, source = case
+    try:
+        ast.parse(source)
+    except SyntaxError as exc:
+        pytest.fail(f"{name}:{line} does not parse -- {exc.msg} at offset {exc.offset}")
+
+
+@pytest.mark.parametrize("case", _snippets(), ids=_snippet_id)
+def test_a_documented_snippet_imports_what_exists(case: tuple[str, int, str]) -> None:
+    """The check that would have caught the bug this rule was written after.
+
+    `docs/formats.md` told a reader to write `from
+    kingfisher.infrastructure.subagent_store import LocalSubagentRepository`.
+    That module had not existed for two refactors, and the line below it reached
+    for `cfg.subagents_dir`, a property removed on purpose. Both had been wrong
+    since before anyone last read the page.
+
+    Parsing alone would not have caught either one -- both are valid Python.
+    What was missing is that nothing ever resolved the names, because a fenced
+    block is imported by nothing and the architecture suite parses `src/` alone.
+
+    Attributes as well as modules, since `subagent_store` was only half of it:
+    a module that still exists having lost the name a reader is told to import
+    from it is the same failure arriving one line later.
+    """
+    name, line, source = case
+    for node in ast.walk(ast.parse(source)):
+        if not isinstance(node, ast.ImportFrom) or node.level:
+            continue
+        if not node.module or node.module.split(".")[0] != "kingfisher":
+            continue
+        try:
+            module = importlib.import_module(node.module)
+        except ImportError as exc:
+            pytest.fail(f"{name}:{line} imports {node.module}, which does not import -- {exc}")
+        for alias in node.names:
+            assert hasattr(module, alias.name), (
+                f"{name}:{line} imports {alias.name} from {node.module}, which does "
+                "not define it"
+            )
+
+
+def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
+    """A rule parametrised over an empty list passes.
+
+    That is how a collector reading the wrong root went unnoticed in
+    `test_architecture` twice, and this one reads two roots -- `README.md` is
+    not under `docs/`. Both are asserted present, and the count is asserted
+    non-trivial rather than exact, so adding an example does not fail a test
+    about collection.
+    """
+    collected = {name for name, _, _ in _snippets()}
+    assert collected == {"README.md", "docs/formats.md"}
+    assert len(_snippets()) >= 11, "the fences stopped being found"
+
+    # The classifier has to actually read files, not trust the table: a document
+    # listed as carrying Python while carrying none is the entry to delete.
+    assert "docs/decisions.md" not in _documents_with_python()
