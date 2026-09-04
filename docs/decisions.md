@@ -424,11 +424,81 @@ test. *(2026-08-18, `what-the-catalogue-dropped.md`; 2026-08-17,
 
 ## The command line
 
-**`seed` and `list`, and the command is a consumer of the library, not an
-insider.** Seeding and the inventory became public API to make that true. The
-library answers "what does this workspace offer" with a record rather than a list
-of names. Bare `kingfisher` prints help. Publishing was deferred, deliberately,
-and asked twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
+**The command is a consumer of the library, not an insider.** Seeding and the
+inventory became public API to make that true. The library answers "what does
+this workspace offer" with a record rather than a list of names. Bare
+`kingfisher` prints help. Publishing was deferred, deliberately, and asked
+twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
+
+**Reversed: the command is for what the library cannot do for itself.** That
+rule was written above the console script and kept the surface at `seed` and
+`list`; running a task was `kingfisher.run` and therefore not the command's job.
+It measures the library's completeness rather than the user's -- "the library
+can already do it, in Python" is true of every command-line tool ever written,
+and here it meant an editor, four lines, and knowing a bare task string is
+refused because a request must name an agent. Replaced by *what does a person at
+a terminal need to do*, under which `run` is the first verb and the others exist
+to get somebody to it.
+
+The half that survives: a bare invocation of the driver spends real money on the
+smoke, which is a fine default for a driver and a wrong one for a stranger's
+first command. A verb with a required task argument cannot be reached by
+accident. *(2026-09-04, `the-verb-that-runs-a-task.md`.)*
+
+**`run` takes six flags, and the eight that narrow capabilities are not among
+them.** `task`, `--agent`, `--session`, `--input`, `--data`, `--as`. Narrowing
+what a request may activate is a deployment's concern with two better homes --
+the service clamps with `grants`, an agent file declares what it holds -- and
+`--without-*` freezes what the workspace offers *now*, which is a subtlety for
+somebody wiring a service rather than running a first task. The cost is that you
+cannot say "without the shell" from the command line; write an agent that
+declares it.
+
+`--data` was never a candidate for cutting: `/data` is read-only to the agent,
+so it is the only supported way to hand one a file at all. Nor was `--as`,
+measured rather than assumed -- on a workspace declaring groups, a run that
+names nobody is refused by the library, so a `run` without it would be broken on
+exactly the deployments that took access control seriously. Unlike `list --as`,
+an absent one is not the operator's view: a listing is read-only, and a turn
+acts. *(2026-09-04, same document.)*
+
+**The answer goes to stdout and everything watched goes to stderr**, so
+`kingfisher run ... > answer.md` keeps the answer alone and `2>/dev/null` keeps
+the quiet. A `--quiet` flag was rejected: it asks the caller for correct
+behaviour and does nothing for whoever forgets it.
+
+That split settled something the design had not reached. **A delegate's prose is
+progress, not answer.** On one stream the speaker tag is what keeps two voices
+apart; on two, the streams do it better, and an extractor's working notes are
+not what anybody redirected stdout for. `Progress` moved out of the unshipped
+driver rather than being copied -- two renderers would have disagreed about a
+new event kind the first time one was added. *(2026-09-04, same document.)*
+
+**The exit code carries `stop_reason`, because prose on stdout leaves nowhere
+else to put it.** `0` finished, `1` ran and stopped at a bound, `2` never ran.
+The case `1` exists for is `kingfisher run ... > report.md && publish
+report.md`, which must not publish a report that stopped halfway. A code per
+reason was rejected: it encodes in the exit status what one stderr line already
+says, in a vocabulary that grows every time `STOP_REASONS` does.
+
+Nine errors that could only ever have reached a stranger as a traceback are
+reported instead, all as `2`. `SessionBusyError` keeps its own branch: it is the
+one that is not the caller's mistake, and "wait" is different advice from "fix
+something". *(2026-09-04, same document.)*
+
+**`help` went, and `--seed`, `--from` and `--all` went off the driver.**
+`kingfisher help seed` was byte-for-byte `kingfisher seed --help`; its only
+unique contribution was naming the valid words for a mistyped verb, which
+argparse already does. The driver's seeding flags duplicated `kingfisher seed`
+and were kept on the argument that it is "the driver you already have open" --
+true while nothing else could run a task.
+
+**`--list` stayed on the driver, and not as a listing.** The plan said all four
+go; building it found the fourth does a second job nothing else there does -- it
+is the only way to reach the driver's `main` and have it return without calling
+a model, which six tests covering workspace creation and first-run seeding are
+built on. Written into the flag, because from outside it looks exactly as
+removable as the three that went. *(2026-09-04, same document.)*
 
 ## Where a deployment reads from
 
@@ -702,6 +772,12 @@ happened. It is a proposal, not history.
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
 and its status line had never been changed to say so. Its decisions are under
 *Tool failure* above.*
+
+*A fourth, `the-verb-that-runs-a-task`, was written on 2026-09-04 and removed the
+same day, having been built in three slices. Its decisions are under *The command
+line* above. One of them did not survive contact: it said the driver's `--list`
+would go with the other three, and building it found that flag is the only way to
+reach the driver's `main` without calling a model.*
 
 *A third, `where-this-deployment-reads-from`, was written on 2026-09-02 and
 removed the day after, having been built in four slices. Its decisions are under
