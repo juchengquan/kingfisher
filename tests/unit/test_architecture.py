@@ -918,7 +918,15 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # without widening what the consumer does -- worth knowing before reading
     # five as more coupling than four.
     "service": frozenset(
-        {"agent", "checkpointing", "interpreter", "middleware", "runlog", "runtime"}
+        {
+            "activation",
+            "agent",
+            "checkpointing",
+            "interpreter",
+            "middleware",
+            "runlog",
+            "runtime",
+        }
     ),
     # The withheld report, which left `service` and took one of its four edges
     # along. It has to ask the *assembled* agent what it registered and the
@@ -926,7 +934,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # measures against what was actually wired rather than against a list kept
     # somewhere -- so the edge is the point of it, not an accident of where it
     # used to live.
-    "reporting": frozenset({"agent"}),
+    "reporting": frozenset({"activation", "agent"}),
     # One stream chunk, read the same way by the sync and async loops. The
     # reading is deepagents' shape rather than ours -- which namespace a chunk
     # came from, which mode carries the answer -- so it is an edge wherever it

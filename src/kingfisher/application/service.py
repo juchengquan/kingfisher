@@ -127,11 +127,11 @@ from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.infrastructure.harness.agent import (
-    build_agent,
+from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
     indistinct_delegates,
 )
+from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
