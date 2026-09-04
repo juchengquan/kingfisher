@@ -393,7 +393,7 @@ def prepare_scratch(cfg: Config) -> Path:
     if not stat.S_ISDIR(info.st_mode):
         msg = f"scratch directory {scratch} is a symlink or not a directory"
         raise ConfigError(msg)
-    if info.st_uid != os.getuid():
+    if hasattr(os, "getuid") and info.st_uid != os.getuid():
         msg = f"scratch directory {scratch} is owned by uid {info.st_uid}, not by us"
         raise ConfigError(msg)
     if info.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
