@@ -73,10 +73,10 @@ _EXPORTS = {
     # The fourth name the consumer rule has forced public, and the first
     # that improved the library on its own: `resolve` takes six arguments
     # and two callers were assembling them from the same `Config`.
-    "Confinement": "kingfisher.infrastructure.confinement",
-    "bubblewrap_available": "kingfisher.infrastructure.bubblewrap",
-    "landlock_abi": "kingfisher.infrastructure.confinement",
-    "shell_confinement": "kingfisher.infrastructure.confinement",
+    "Confinement": "kingfisher.infrastructure.sandbox.confinement",
+    "bubblewrap_available": "kingfisher.infrastructure.sandbox.bubblewrap",
+    "landlock_abi": "kingfisher.infrastructure.sandbox.confinement",
+    "shell_confinement": "kingfisher.infrastructure.sandbox.confinement",
     "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
@@ -230,16 +230,8 @@ if TYPE_CHECKING:
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
     from kingfisher.domain.tool import split_reference as split_reference
-    from kingfisher.infrastructure.bubblewrap import (
-        bubblewrap_available as bubblewrap_available,
-    )
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
-    from kingfisher.infrastructure.confinement import Confinement as Confinement
-    from kingfisher.infrastructure.confinement import landlock_abi as landlock_abi
-    from kingfisher.infrastructure.confinement import (
-        shell_confinement as shell_confinement,
-    )
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
@@ -249,6 +241,14 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.harness.checkpointing import (
         build_checkpointer as build_checkpointer,
+    )
+    from kingfisher.infrastructure.sandbox.bubblewrap import (
+        bubblewrap_available as bubblewrap_available,
+    )
+    from kingfisher.infrastructure.sandbox.confinement import Confinement as Confinement
+    from kingfisher.infrastructure.sandbox.confinement import landlock_abi as landlock_abi
+    from kingfisher.infrastructure.sandbox.confinement import (
+        shell_confinement as shell_confinement,
     )
     from kingfisher.infrastructure.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.seeding import Seeded as Seeded

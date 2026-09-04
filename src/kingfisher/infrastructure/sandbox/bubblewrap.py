@@ -69,7 +69,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.fence import MAX_OUTPUT_BYTES
+from kingfisher.infrastructure.sandbox.fence import MAX_OUTPUT_BYTES
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence

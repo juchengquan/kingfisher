@@ -86,7 +86,7 @@ EXTERNAL = "external"
 #: syscall filter relaxed, which is a fact about the deployment and not about
 #: this host. `AUTO` selecting it would mean kingfisher betting on something it
 #: cannot check, and losing that bet looks like a shell that reports confined
-#: and fails at its first command. See `infrastructure/bubblewrap.py`.
+#: and fails at its first command. See `infrastructure/sandbox/bubblewrap.py`.
 BUBBLEWRAP = "bubblewrap"
 #: Deliberately unconfined. Warned about on every start, because an exposure
 #: nobody is reminded of is one nobody fixes.
@@ -199,7 +199,7 @@ def _bubblewrap() -> Confinement:
     which is the normal state of a container nobody relaxed, and the state an
     operator naming this mode has most likely not noticed.
     """
-    from kingfisher.infrastructure.bubblewrap import bubblewrap_available  # noqa: PLC0415
+    from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available  # noqa: PLC0415
 
     if bubblewrap_available():
         return Confinement(wrap=_unwrapped, mechanism="bubblewrap")

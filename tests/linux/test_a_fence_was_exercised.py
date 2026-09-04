@@ -23,8 +23,8 @@ import warnings
 
 import pytest
 
-from kingfisher.infrastructure.bubblewrap import bubblewrap_available
-from kingfisher.infrastructure.confinement import (
+from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
+from kingfisher.infrastructure.sandbox.confinement import (
     REQUIRED_LANDLOCK_ABI,
     landlock_abi,
     landlock_ready,

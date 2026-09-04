@@ -24,8 +24,12 @@ from typing import Any
 import pytest
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure.confinement import REQUIRED_LANDLOCK_ABI, Confinement, landlock_ready
-from kingfisher.infrastructure.fence import SYSTEM_PATHS, LandlockRunner, policy_for
+from kingfisher.infrastructure.sandbox.confinement import (
+    REQUIRED_LANDLOCK_ABI,
+    Confinement,
+    landlock_ready,
+)
+from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
 
 #: A message short enough for `TRY003`, since what it says never survives
 #: `subprocess` anyway -- see the test that uses it.
@@ -143,7 +147,7 @@ def test_a_fence_that_could_not_be_built_says_so(sandlock, tmp_path, monkeypatch
     building read as a broken image. Whatever else is wrong, the reason has to
     travel.
     """
-    from kingfisher.infrastructure.fence import LandlockRunner
+    from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 
     def refuse(_policy):
         raise OSError(FAILED)
@@ -167,7 +171,7 @@ def test_a_fence_that_could_not_be_built_says_so(sandlock, tmp_path, monkeypatch
 
 
 def a_runner(sandlock, tmp_path, **kwargs):
-    from kingfisher.infrastructure.fence import LandlockRunner
+    from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True, exist_ok=True)
@@ -247,7 +251,7 @@ def test_a_result_is_kingfisher_s_own_type(sandlock, tmp_path):
 def test_a_named_mechanism_counts_as_confined_even_with_nothing_wrapped():
     """Landlock is applied to the process, not wrapped round the command, so
     "does `wrap` do anything" reports a fenced shell as unfenced."""
-    from kingfisher.infrastructure.confinement import _unwrapped
+    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     assert Confinement(wrap=_unwrapped, mechanism="Landlock").confined
     assert not Confinement(wrap=_unwrapped).confined
@@ -257,7 +261,7 @@ def test_three_things_have_to_hold_and_any_one_fails_quietly(monkeypatch):
     """A deployment with two of the three would run unfenced while believing
     otherwise, so they are checked together in one place rather than assumed
     from the platform."""
-    import kingfisher.infrastructure.confinement as c
+    import kingfisher.infrastructure.sandbox.confinement as c
 
     monkeypatch.setattr(c.platform, "system", lambda: "Linux")
     monkeypatch.setattr(c, "landlock_abi", lambda: REQUIRED_LANDLOCK_ABI - 1)
@@ -276,8 +280,8 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     unfenced branch would pass on this machine and prove nothing about the one
     the fence is for.
     """
-    from kingfisher.infrastructure.confinement import _unwrapped
     from kingfisher.infrastructure.harness.backend import _fence_for
+    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True)
@@ -306,9 +310,9 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     Stubbing `policy_for` is also what lets this run off Linux -- `sandlock`
     ships Linux-only wheels, and the real one imports it.
     """
-    from kingfisher.infrastructure import bubblewrap, fence
-    from kingfisher.infrastructure.confinement import _unwrapped
     from kingfisher.infrastructure.harness.backend import _fence_for
+    from kingfisher.infrastructure.sandbox import bubblewrap, fence
+    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     seen: dict[str, tuple[Path, list[Path], list[Path]]] = {}
 
