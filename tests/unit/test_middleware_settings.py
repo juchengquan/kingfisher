@@ -31,7 +31,7 @@ from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.subagent import reading as subagent_format
-from kingfisher.infrastructure.harness.agent import declared_middleware
+from kingfisher.infrastructure.harness.middleware import declared_middleware
 
 
 class Audit(AgentMiddleware):

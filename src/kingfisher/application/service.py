@@ -128,7 +128,6 @@ from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.agent import (
-    MiddlewareFactory,
     build_agent,
     defined_subagents,
     indistinct_delegates,
@@ -140,6 +139,7 @@ from kingfisher.infrastructure.harness.checkpointing import (
     thread_ids,
 )
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
+from kingfisher.infrastructure.harness.middleware import MiddlewareFactory
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.seeding import SEED_HINT
 from kingfisher.infrastructure.session_store import (
