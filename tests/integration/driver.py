@@ -32,22 +32,23 @@ driver that picked for you would put that choice somewhere the command line
 never mentions. `--list` shows what this workspace offers.
 
     uv run tests/integration/driver.py --list          # what this workspace offers
-    uv run tests/integration/driver.py --seed          # copy definitions in
-    uv run tests/integration/driver.py --seed --from ./examples
-    uv run tests/integration/driver.py --seed --all    # including ones naming middleware
 
-Seeding leaves behind any definition naming middleware or groups this
-deployment has not registered -- it would be refused when built -- and says
-which names each needed. `--all` takes them once you have registered them.
+`--seed`, `--from` and `--all` are gone. They kept their place on the argument
+that this is "the driver you already have open" -- true while nothing else could
+run a task, and untrue since `kingfisher run` shipped. Re-seeding an existing
+workspace is `kingfisher seed`, which takes the same `--from` and `--all` and
+means the same thing by them.
 
-A workspace that has never been used seeds itself on its first run and prints
-what it wrote, so `--seed` is for re-seeding an existing one after the
-definitions change. That overwrites, which is the point of asking.
+A workspace that has never been used still seeds itself on its first run and
+prints what it wrote. That is not the removed flag by another name: it happens
+once, to a directory that is empty by definition, so nothing can be overwritten
+-- which is exactly why `--seed` had to be asked for and this does not.
 
-Both have a shipped equivalent -- `kingfisher list` and `kingfisher seed` --
-which is what an installed kingfisher has, since this file is not in the wheel.
-They print through the same code; these flags stay because this is the driver
-you already have open.
+`--list` stayed, and not as a listing: `kingfisher list` prints the same block
+through the same renderer, so as a listing it is a duplicate too. What it also
+is, and what nothing else here provides, is the one way to reach `main` and have
+it return without calling a model. The tests that cover workspace creation and
+first-run seeding are built on that.
 
     uv run tests/integration/driver.py "Review it" --skills code-review --subagents reviewer
     uv run tests/integration/driver.py "Count the rows" --tools read_file,write_file
@@ -295,39 +296,13 @@ def build_parser() -> argparse.ArgumentParser:
         metavar="NAME",
         help="which agent runs this, from the workspace's agents/ (--list shows them)",
     )
+    # Kept when `--seed`, `--from` and `--all` went, and not because it is
+    # convenient: `kingfisher list` prints the same block through the same
+    # renderer, so as a *listing* it is a duplicate. What it also is, and what
+    # nothing else here provides, is the one way to reach `main` and have it
+    # return without calling a model -- which is how the tests exercise
+    # workspace creation and first-run seeding without spending anything.
     parser.add_argument("--list", action="store_true", help="show what the workspace offers")
-    # Two flags rather than one taking an optional argument, which is what this
-    # wanted to be. `task` is `nargs="*"` and greedy, so `--seed summarise the
-    # pdf` parses as `seed='summarise'` with the rest as the task -- measured,
-    # not feared. Neither of these can collide with a positional.
-    #
-    # `--seed` rather than `--seed-assets`: "assets" now means content fetched
-    # from elsewhere, and what this usually copies is `examples/`.
-    parser.add_argument(
-        "--seed",
-        dest="seed_assets",
-        action="store_true",
-        help="copy definitions into the workspace, from KINGFISHER_ASSETS or --from",
-    )
-    # The same name the shipped command uses, so the word means one thing on the
-    # driver and on `kingfisher seed`.
-    parser.add_argument(
-        "--from",
-        dest="source",
-        metavar="DIR",
-        help="seed from this directory instead of the one KINGFISHER_ASSETS names",
-    )
-    # The same name and the same default as `kingfisher seed --all`, for the
-    # same reason: a workspace that has registered nothing cannot build a
-    # definition that names middleware or groups, so the safe default leaves
-    # those behind and this is how a deployment that *has* registered them says
-    # so. A driver that could not reach the flag could not drive the case.
-    parser.add_argument(
-        "--all",
-        dest="everything",
-        action="store_true",
-        help="also seed definitions that name middleware or groups (see --seed)",
-    )
     return parser
 
 
@@ -440,17 +415,6 @@ def main(argv: list[str]) -> int:
         print("copy .env.example to .env and fill it in", file=sys.stderr)
         return 2
 
-    # `--from` is only meaningful with `--seed`, and silently ignoring it would
-    # let someone believe they had seeded from somewhere they had not.
-    if args.source and not args.seed_assets:
-        print("--from does nothing without --seed", file=sys.stderr)
-        return 2
-    # The same rule for the same reason: silently ignoring it would let someone
-    # believe they had seeded definitions that were left behind.
-    if args.everything and not args.seed_assets:
-        print("--all does nothing without --seed", file=sys.stderr)
-        return 2
-
     fresh = is_new_workspace(paths.workspace)
     workspace = ensure_layout(paths.workspace)
     if fresh:
@@ -471,13 +435,13 @@ def main(argv: list[str]) -> int:
     # of "created a new workspace at ...", and is the one line saying something
     # did *not* happen. An error nobody can walk past is the right shape for a
     # condition hit once whose fix is a line in `.env`.
-    if fresh or args.seed_assets:
+    if fresh:
         try:
-            source = seeding.definitions_source(paths, args.source)
+            source = seeding.definitions_source(paths)
         except ConfigError as exc:
             print(f"configuration error: {exc}", file=sys.stderr)
             return 2
-        result = seeding.seed(paths, source, everything=args.everything)
+        result = seeding.seed(paths, source)
         for name in result.written:
             print(f"seeded {name}")
         for left in result.skipped:
@@ -488,7 +452,7 @@ def main(argv: list[str]) -> int:
             # you looking for a file it decided not to copy.
             print(
                 f"skipped {left.label} — needs {', '.join(left.names)}; "
-                f"register those, then re-seed with --all"
+                f"register those, then `kingfisher seed --all`"
             )
         for name in result.overwritten:
             # After the list, not beside each entry: the point is that you edit

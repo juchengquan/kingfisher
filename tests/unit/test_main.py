@@ -290,69 +290,6 @@ def test_skills_stay_shared_across_sessions(cfg):
     assert list((session / "skills" / "uploaded").iterdir()) == []
 
 
-def test_seeding_lands_in_the_catalogue_not_the_workspace(cfg, tmp_path, capsys, monkeypatch):
-    """They are the same directory until a deployment moves them, and this
-    wrote to the workspace unconditionally. With a relocated catalogue it
-    seeded four skills where nothing reads, and the `--list` on the next line
-    reported `(none)` -- the third time a path has gone stale this way, after
-    `writable_data` and `promote_report`.
-    """
-    from dataclasses import replace
-
-    catalogue = tmp_path / "catalogue"
-    relocated = replace(
-        cfg, skills_root=catalogue / "skills", subagents_root=catalogue / "subagents"
-    )
-    driver = _driver_on(monkeypatch, relocated)
-
-    assert driver.main(["driver.py", "--seed", "--list"]) == 0
-
-    assert LocalSkillRepository(relocated.skills_dir).names  # the catalogue was filled
-    assert not LocalSkillRepository(relocated.workspace / "skills").names  # and not the workspace
-
-    # And the listing that follows reflects it, which is what went wrong before.
-    listed = capsys.readouterr().out
-    for name in LocalSkillRepository(relocated.skills_dir).names:
-        assert name in listed
-
-
-def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, capsys, monkeypatch):
-    """The default, and the case the old code got right -- worth keeping, or
-    the fix above could quietly break the ordinary setup."""
-    driver = _driver_on(monkeypatch, cfg)
-
-    # `--list` so it returns after seeding; without it the driver falls
-    # through to running the task, which wants a model.
-    assert driver.main(["driver.py", "--seed", "--list"]) == 0
-    assert LocalSkillRepository(cfg.skills_dir).names
-
-
-def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, monkeypatch):
-    """The third catalogue, and the third chance to seed where nothing reads.
-
-    `KINGFISHER_TOOLS_DIR` relocates it the way the other two relocate, so a
-    preset tool written to `workspace/tools` would be invisible to the agent
-    for exactly the reason #40 fixed for skills.
-    """
-    from dataclasses import replace
-
-    from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
-
-    catalogue = tmp_path / "catalogue"
-    relocated = replace(cfg, tools_root=catalogue / "tools")
-    driver = _driver_on(monkeypatch, relocated)
-
-    assert driver.main(["driver.py", "--seed", "--list"]) == 0
-
-    assert "http_fetch" in LocalToolRepository(tools_dir(relocated)).names
-    # `ensure_layout` still makes the workspace directory, so the place to put
-    # one is obvious. What must not happen is a preset landing in it.
-    assert LocalToolRepository(relocated.workspace / "tools").names == ()
-
-
-# -- a fresh workspace seeds itself ---------------------------------------
-
-
 def _unused(cfg, tmp_path):
     """A `Config` whose workspace does not exist yet.
 
