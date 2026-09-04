@@ -367,10 +367,10 @@ def inventory(
     listing is for and is why a listing is not refused the way a turn is: it
     is read-only, and whoever runs it can read the policy file anyway.
     """
-    from kingfisher.infrastructure.harness.agent import (  # noqa: PLC0415
-        build_agent,
-        registered_tools,
-    )
+    # The modules rather than the names: two imports where there was one tipped
+    # this function over the statement cap, and naming where each half comes
+    # from reads better than a bare `registered_tools` did anyway.
+    from kingfisher.infrastructure.harness import agent, surface  # noqa: PLC0415
 
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
 
@@ -400,8 +400,8 @@ def inventory(
         # exists rather than one it makes for itself -- `ensure_session_layout`
         # is the only thing that makes a session now.
         with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-            introspected = registered_tools(
-                build_agent(
+            introspected = surface.registered_tools(
+                agent.build_agent(
                     cfg,
                     session_dir=ensure_session_layout(Path(scratch)),
                     catalogue=resolved,

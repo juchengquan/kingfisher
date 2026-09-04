@@ -24,7 +24,8 @@ from langchain_core.messages import AIMessage, ToolMessage
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.tool import named, tool_name
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, ToolError
-from kingfisher.infrastructure.harness.agent import build_agent, registered_tools
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.surface import registered_tools
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 BARE = '''
