@@ -72,21 +72,19 @@ def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
     assert (elsewhere / "models.yaml.example").is_file()
 
 
-def test_the_skip_message_names_a_file_the_workspace_actually_has(
-    cfg, monkeypatch, capsys, shipped
-):
-    """A remedy is only actionable if the thing it names is reachable.
+def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, shipped):
+    """A remedy is only actionable if it is about the groups you are missing.
 
-    `seed` skips a definition asking for a group this workspace does not declare
-    and tells the reader to write `groups.yaml`. That was the whole instruction,
-    for a file no example of existed anywhere an installed deployment could
-    reach -- `examples/groups.yaml` is the worked set for the shipped agents and
-    is outside the wheel.
+    This named `groups.yaml.example` for two days, and `ensure_layout` placed
+    it. Both halves were true and the pair still did not help: an example ships
+    one vocabulary and a workspace needs whichever names its own definitions ask
+    for, so seeding this repository's own set said "declare analysts, auditors,
+    senior-analysts" and put a file beside it declaring readers, writers, staff,
+    senior and senior-writers. Five names, none of them the three.
 
-    So the message names the example and `ensure_layout` puts it there. Both
-    halves are asserted here because either alone is worse than neither: a
-    message naming a file that is not there sends somebody looking, and a file
-    nothing mentions is never found.
+    So the shape travels in the message, where it can be built from the names
+    actually missing. Asserted as a paste rather than as prose: what makes it
+    actionable is that the line works unedited.
     """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
@@ -94,12 +92,45 @@ def test_the_skip_message_names_a_file_the_workspace_actually_has(
     assert main(["seed"]) == 0
 
     printed = capsys.readouterr().out
-    assert "groups.yaml.example" in printed, (
-        "the remedy names no example, so the reader is told to write a format "
-        "they have not been shown"
+    assert "groups.yaml.example" not in printed, "still naming a file that is gone"
+    assert "groups: [analysts, auditors, reviewers, senior-analysts]" in printed, (
+        "the remedy does not carry the line to write, so the reader is told to "
+        "produce a format they have not been shown"
     )
-    named = cfg.workspace / "groups.yaml.example"
-    assert named.is_file(), "the message names a file this workspace does not have"
+
+
+def test_the_line_is_printed_once_for_every_definition_skipped(
+    cfg, monkeypatch, capsys, shipped
+):
+    """Two definitions are skipped for groups and they want overlapping but
+    different sets. One line naming the union unblocks both; a copy each would
+    print two partial lists and leave whoever pasted the first skipped again on
+    the second."""
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+
+    assert main(["seed"]) == 0
+
+    printed = capsys.readouterr().out
+    assert printed.count("the groups.yaml that unblocks") == 1
+    assert len([ln for ln in printed.splitlines() if "does not declare" in ln]) > 1
+
+
+def test_no_line_is_printed_when_nothing_wanted_a_group(cfg, monkeypatch, capsys, tmp_path):
+    """It earns its lines or it has none. A set with no `groups:` anywhere gets
+    no advice about a file it has no reason to write."""
+    plain = tmp_path / "plain" / "skills" / "only"
+    plain.mkdir(parents=True)
+    (plain / "SKILL.md").write_text(
+        "---\nname: only\ndescription: A skill.\n---\n\nDo the thing.\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(tmp_path / "plain"))
+
+    assert main(["seed"]) == 0
+
+    assert "groups.yaml" not in capsys.readouterr().out
 
 
 def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(

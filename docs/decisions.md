@@ -337,21 +337,36 @@ still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
 as such -- the first table's value is that it is checkable in both directions,
 and an entry a caller cannot cause would be a status nobody decided on.
 
-**The file `seed` tells you to write has an example beside it.**
-`groups.yaml.example` ships in the package and `ensure_layout` places it, the
-same as `models.yaml.example`. The reasons differ and the code says so rather
-than implying the files are alike: `models.yaml` is required with no fallback,
-while `groups.yaml` is optional -- with no policy file kingfisher controls
-nothing by group, which is the right default because adopting access control
-should be a thing a deployment does rather than one it inherits. What makes the
-example furniture is not that the file is required but that **`seed` names it**:
-a definition asking for an undeclared group is skipped with a message saying to
-declare it, and that message used to name a file no example of existed anywhere
-an installed deployment could reach. `examples/groups.yaml` is the worked set
-for the shipped agents and lives outside the wheel.
+**Reversed: `groups.yaml.example`, shipped in the package and placed by
+`ensure_layout`.** The reasoning was that `seed` names `groups.yaml` in a skip
+message, and that message named a file no example of existed anywhere an
+installed deployment could reach. True, and the example still did not help --
+which only became visible by running it. An example ships *one* vocabulary and a
+workspace needs whichever names its own definitions ask for, so seeding this
+repository's set said `declare analysts, auditors, senior-analysts` and put a
+file beside it declaring `readers, writers, staff, senior, senior-writers`. Five
+names, none of them the three. Following the pointer led away from the answer.
 
-Still not seeded. `groups` is not a definition kind and `.example` never becomes
-`groups.yaml`. *(2026-09-02.)*
+So the remedy travels in the message instead, where it can be built from the
+names actually missing -- one line, after the list, holding the union across
+every skipped definition, because a copy per definition prints overlapping
+partial lists and whoever pastes the first is skipped again on the second. The
+flat form only: `contains` and `all_of` are a deployment's choices about its own
+organisation, and nothing can infer which a name wants.
+
+`examples/groups.yaml` is now the only groups example, and it is named the thing
+the message points at rather than a `.example` beside it.
+
+**`models.yaml.example` stays, and the asymmetry is the point.** The two were
+never alike: `models.yaml` is required with no fallback, its example is a
+hundred lines of annotation about endpoints and keys, and nothing else anywhere
+carries that -- where deleting the groups example leaves `examples/groups.yaml`
+standing. Its error message already prints a minimal working catalogue inline,
+so the getting-started path exists and the file is the reference beside it.
+
+Still not seeded, which is unchanged. `groups` is not a definition kind, and
+copying a policy would make adopting access control something a deployment
+inherits rather than does. *(2026-09-02, reversed 2026-09-04.)*
 
 **"Beside it" means beside the file, not inside the workspace.** Both files
 relocate -- `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue,
