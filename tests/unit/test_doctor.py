@@ -680,7 +680,7 @@ def test_the_probe_answers_nothing_where_there_is_no_landlock():
     """Landlock is a Linux thing, and asking anywhere else must not raise --
     this runs inside `doctor`, whose whole job is to survive a host that is
     wrong in some way and report it."""
-    from kingfisher.infrastructure.confinement import landlock_abi
+    from kingfisher.infrastructure.sandbox.confinement import landlock_abi
 
     assert landlock_abi() is None or platform.system() == "Linux"
 
@@ -746,7 +746,7 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     test that quietly asserts nothing on the CI runner is worse than no test.
     """
     from kingfisher import Confinement
-    from kingfisher.infrastructure.confinement import _unwrapped
+    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
         "sandbox-exec"

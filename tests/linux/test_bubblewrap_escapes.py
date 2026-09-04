@@ -21,7 +21,11 @@ import subprocess
 
 import pytest
 
-from kingfisher.infrastructure.bubblewrap import BubblewrapRunner, argv_for, bubblewrap_available
+from kingfisher.infrastructure.sandbox.bubblewrap import (
+    BubblewrapRunner,
+    argv_for,
+    bubblewrap_available,
+)
 
 needs_bubblewrap = pytest.mark.skipif(
     not bubblewrap_available(),

@@ -360,8 +360,8 @@ invalid-argument-type = "ignore"
 # and named.
 [[tool.ty.overrides]]
 include = [
-    "src/kingfisher/infrastructure/fence.py",
-    "src/kingfisher/infrastructure/confinement.py",
+    "src/kingfisher/infrastructure/sandbox/fence.py",
+    "src/kingfisher/infrastructure/sandbox/confinement.py",
 ]
 
 [tool.ty.overrides.rules]

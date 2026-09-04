@@ -14,7 +14,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.infrastructure.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
+from kingfisher.infrastructure.sandbox.bubblewrap import SYSTEM_PATHS, BubblewrapRunner, argv_for
 
 
 @pytest.fixture
@@ -130,7 +130,7 @@ def test_the_runner_puts_the_command_after_the_sandbox(session):
         seen.append(argv)
         return Done()
 
-    import kingfisher.infrastructure.bubblewrap as module
+    import kingfisher.infrastructure.sandbox.bubblewrap as module
 
     original, module.subprocess.run = module.subprocess.run, fake_run
     try:
@@ -153,8 +153,8 @@ def test_the_runner_says_it_is_local(session):
 
 def a_linux_host(monkeypatch, *, landlock: bool, bwrap: bool):
     """A Linux host with either fence available, or neither."""
-    import kingfisher.infrastructure.bubblewrap as bwrap_module
-    from kingfisher.infrastructure import confinement
+    import kingfisher.infrastructure.sandbox.bubblewrap as bwrap_module
+    from kingfisher.infrastructure.sandbox import confinement
 
     monkeypatch.setattr(confinement.platform, "system", lambda: "Linux")
     monkeypatch.setattr(confinement, "landlock_ready", lambda: landlock)

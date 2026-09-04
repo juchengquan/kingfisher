@@ -37,9 +37,9 @@ from kingfisher.domain.layout import (
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.references import UnsafeReferenceError, within
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure import confinement
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.harness.skills_backend import skills_backend
+from kingfisher.infrastructure.sandbox import confinement
 
 if TYPE_CHECKING:
 
@@ -559,7 +559,7 @@ def _fence_for(
     writable = [cfg.scratch_dir]
 
     if confined.mechanism == "bubblewrap":
-        from kingfisher.infrastructure.bubblewrap import (  # noqa: PLC0415
+        from kingfisher.infrastructure.sandbox.bubblewrap import (  # noqa: PLC0415
             BubblewrapRunner,
             argv_for,
         )
@@ -572,7 +572,7 @@ def _fence_for(
     # Imported here for the reason the module explains: `sandlock` is a
     # Linux-only optional install, and this function is called on every turn on
     # every platform.
-    from kingfisher.infrastructure.fence import LandlockRunner, policy_for  # noqa: PLC0415
+    from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for  # noqa: PLC0415
 
     return LandlockRunner(
         policy_for(session_dir, readable=readable, writable=writable),

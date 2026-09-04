@@ -21,10 +21,10 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.infrastructure import confinement
-from kingfisher.infrastructure.bubblewrap import BubblewrapRunner
-from kingfisher.infrastructure.fence import LandlockRunner
 from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.sandbox import confinement
+from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
+from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 from kingfisher.infrastructure.workspace_fs import ensure_layout, ensure_session_layout
 
 macos = pytest.mark.skipif(
