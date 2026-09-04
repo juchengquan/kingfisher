@@ -116,7 +116,12 @@ def test_the_front_page_and_the_agent_instructions_both_point_here() -> None:
     )
 
     instructions = (ROOT / "CLAUDE.md").read_text(encoding="utf-8")
-    for page in ("docs/formats.md", "docs/decisions.md", "docs/findings.md"):
+    for page in (
+        "docs/guides/formats.md",
+        "docs/guides/tools.md",
+        "docs/decisions.md",
+        "docs/findings.md",
+    ):
         assert page in instructions, f"CLAUDE.md does not send an agent to {page}"
 
 
@@ -138,7 +143,8 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 #: nothing looked.
 CHECKED_SNIPPETS: dict[str, bool] = {
     "README.md": True,
-    "docs/formats.md": True,
+    "docs/guides/formats.md": True,
+    "docs/guides/tools.md": True,
     # Proposals. Neither is checked, and the entries are here so that silence
     # is a decision rather than an oversight.
     "docs/design/2026-08-21-nothing-at-rest-on-this-machine.md": False,
@@ -201,7 +207,7 @@ def test_a_documented_snippet_parses(case: tuple[str, int, str]) -> None:
 def test_a_documented_snippet_imports_what_exists(case: tuple[str, int, str]) -> None:
     """The check that would have caught the bug this rule was written after.
 
-    `docs/formats.md` told a reader to write `from
+    `docs/guides/formats.md` told a reader to write `from
     kingfisher.infrastructure.subagent_store import LocalSubagentRepository`.
     That module had not existed for two refactors, and the line below it reached
     for `cfg.subagents_dir`, a property removed on purpose. Both had been wrong
@@ -242,7 +248,7 @@ def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
     about collection.
     """
     collected = {name for name, _, _ in _snippets()}
-    assert collected == {"README.md", "docs/formats.md"}
+    assert collected == {"README.md", "docs/guides/formats.md", "docs/guides/tools.md"}
     assert len(_snippets()) >= 11, "the fences stopped being found"
 
     # The classifier has to actually read files, not trust the table: a document

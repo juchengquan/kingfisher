@@ -98,6 +98,19 @@ cost an experiment to establish.
   and runs; the schema comes back as `{'text': {'title': 'Text'}}` -- an argument
   the model is told the name of and not the type. A silent degradation rather than a
   refusal. *(2026-09-04.)*
+- **The return annotation is read by nobody**, and what langchain does with the
+  value is `json.dumps` first and `repr` when that fails, so `None` reaches the
+  model as `null` and an ordinary object as its repr. Pinned by
+  `tests/unit/test_tool_returns.py`, so the cases are not listed twice. What the
+  test cannot say is which versions answered: langchain-core 1.5.5, langgraph
+  1.2.11, deepagents 0.7.6. *(2026-09-04.)*
+- **A `Command` returned by a workspace tool is applied, not wrapped.**
+  `_format_output` hands back any `ToolOutputMixin` untouched, and both
+  `ToolMessage` and langgraph's `Command` are one -- so a tool can replace its own
+  result or write graph state, and `WorkspaceToolErrors` never sees it because it
+  catches exceptions and nothing else. The cost is in the transcript: the message
+  carries no `name`, so `_event_for` records a `tool_result` naming no tool.
+  Documented rather than refused, and `decisions.md` says why. *(2026-09-04.)*
 
 ## The Linux fence
 

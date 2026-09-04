@@ -2682,7 +2682,7 @@ def test_every_package_the_library_imports_is_a_declared_dependency():
     requirements.
 
     `langchain-core` is the one with a cost outside this repository.
-    `docs/formats.md` tells a tool author to import it, so a resolver handing
+    `docs/guides/tools.md` tells a tool author to import it, so a resolver handing
     them a different major breaks code this project invited them to write.
 
     The rule reads what is imported rather than `THIRD_PARTY` above, which is a
@@ -2782,7 +2782,7 @@ def test_prose_names_class_attributes_that_exist():
     `PROSE_REF` is rooted at a layer and cannot match a class head, and the
     documentation guard added alongside it reads fenced blocks in `docs/`.
 
-    The same decay as `subagent_store` in `docs/formats.md`, one layer in. The
+    The same decay as `subagent_store` in `docs/guides/formats.md`, one layer in. The
     difference is who it costs: that one misled a stranger extending kingfisher,
     and this one misleads whoever is changing the code.
     """

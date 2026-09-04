@@ -56,8 +56,10 @@ leaves five behind and writes thirteen.
 satisfy. That is what lets it run on a fresh workspace, before there is a
 `models.yaml` inside it to read.
 
-The formats — tools, skills, subagents, and the catalogue they live in —
-are documented in [`docs/formats.md`](docs/formats.md), and the rest of
+The formats — agents, skills, subagents, and the catalogue they live in — are
+documented in [`docs/guides/formats.md`](docs/guides/formats.md). A tool is the
+one that is code rather than a document, so writing one has its own page:
+[`docs/guides/tools.md`](docs/guides/tools.md). The rest of
 [`docs/`](docs/README.md) says why the code is shaped the way it is and what
 deepagents actually does underneath it.
 

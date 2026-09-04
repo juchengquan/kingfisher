@@ -112,7 +112,7 @@ def _declare(written: Seeded) -> tuple[str, ...]:
     load. A name meant to stand for several is `{contains: [...]}` and one meant
     to require several is `{all_of: [...]}` -- both are the deployment's choice
     about its own organisation, and nothing here can infer which a name wants.
-    `docs/formats.md` has them; this has the line you can paste.
+    `docs/guides/formats.md` has them; this has the line you can paste.
     """
     wanted = sorted(
         {name for left in written.skipped if left.wants == "groups" for name in left.names}
