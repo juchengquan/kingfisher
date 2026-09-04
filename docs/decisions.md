@@ -749,7 +749,8 @@ the third has nothing to contend for. What is genuinely gone is ~20KB of empty
 database per session, which was the cost rather than the benefit.
 
 **`doctor` checks whether a memory-backed workspace can be filled safely.**
-`workspace_fs.py` reads the filesystem type, its size, the cgroup limit and
+`workspace/backing.py` reads the filesystem type, its size, the cgroup limit
+and
 whether swap is permitted; `presentation/cli/health.py` reports on them. The
 danger it names is specific: a memory filesystem *larger* than the container's
 limit does not fail when it fills -- the kernel swaps its pages out, which is
@@ -862,6 +863,52 @@ the thing the graph *is* rather than something the graph holds. `domain/agent.py
 and `infrastructure/catalogue/agents.py` stay where they are, and
 `harness/agent.py` with them -- assembling a graph out of the three kinds is
 kingfisher's own job, not any kind's.
+
+**`workspace/fs.py` became six modules; four other long files did not.**
+`layout` makes the tree and places the furniture that ships in it, `sessions` is
+one session's directory and the ports over it, `permissions` owns the write bits
+on `/data`, `placement` copies a caller's files in, `snapshots` keeps the agent a
+session opened with, and `backing` reads what the workspace sits on. *(2026-09-04.)*
+
+**Chosen by the history rather than by reading the source.** The lesson of the
+`config.py` entry below is that a count of definitions describes the file's
+shape and says nothing about the work, so this time the commits drew the
+boundaries: two definitions are joined when a commit touched both, and whatever
+stays disconnected is a seam already being kept. `fs.py` came back as three
+clusters and fifteen lone definitions, and the clusters landed on the regions
+the source already read as. The callers agreed -- of 25 files importing from it,
+19 need exactly one of the six, and the only one reaching five is
+`application/service.py`, which is the composition root.
+
+Git's default hunk-header pattern matches any line starting in column one, which
+inside a long class reports every method as the class. `core.attributesFile`
+pointing at `*.py diff=python` is what makes the measurement see methods, and
+without it `service.py` looks like one definition touched 232 times.
+
+**The same test said no to the other four, including one that looks obvious.**
+`service.py` is a single cluster of 40, `capabilities.py` one of 16, and
+`__main__.py` one containing `build_parser`, `main` and every command -- adding a
+command touches the parser, `main` and the command together, so splitting the
+commands into files would make those commits open *more* files. `backend.py`
+reads like a hub plus three independent `AgentMiddleware` classes, and those
+three do not appear in its history at all: they have never been edited since
+they landed. Moving them relocates 250 lines nobody touches and leaves
+`build_backend`, at 25 commits, exactly where it was.
+
+**The split cost one invariant its structure.** *Nothing outside this module
+should ever chmod `/data`* was a fact about a file while `place_data` and the
+`chmod` were the same 700 lines. It is now a rule --
+`test_only_one_workspace_module_changes_a_mode` -- because the code that copies
+into `/data` sits one import from the code that lifts the write bits, and the
+unlock that is allowed puts them back in a `finally` an open-coded chmod would
+not have.
+
+**And the move found a comment that had been lying.** Two `#:` lines above
+`class LocalSessionDirs` described "what a catalogue is made of ... the three",
+an orphan left by a constant that went to `domain.layout`. It had been read past
+for as long as it had been there, which is what a comment attached to the wrong
+definition does; deciding which of six files it belonged in is what finally
+asked the question.
 
 **Considered and rejected: splitting `config.py` by its parts.** It is 648 lines
 and reads as three -- the model records (`Endpoint`, `ModelProfile`, `Models`),
