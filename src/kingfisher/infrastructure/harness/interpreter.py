@@ -105,16 +105,17 @@ def _interpreter(cfg: Config, permitted: tuple[str, ...] | None) -> Any:
     cap under it drops everything and any cap over it keeps everything.
 
     Dispatching subagents from code needs the *async* path. `task()` inside the
-    REPL awaits, so a sync `SqliteSaver` raises `does not support async
-    methods` partway through a workflow that has already run. Use `arun` or
-    `astream`; everything else here works on either. Undocumented upstream, and
-    found by running it.
+    REPL awaits, so a saver without async methods raises partway through a
+    workflow that has already run. Use `arun` or `astream`; everything else here
+    works on either. Undocumented upstream, and found by running it.
 
-    Nothing has to be injected for that. This note used to say
-    `async_checkpointer(cfg)`, which was true when a sync saver was the default
-    and `astream` refused it -- and became advice to reach for the one shared
-    database per workspace, which is the contention a database per session
-    exists to avoid. `astream` now opens an async saver for the session itself.
+    Nothing has to be injected for that, and this note has now been wrong twice
+    in the same direction. It said `async_checkpointer(cfg)` while a sync saver
+    was the default -- true then, and advice to reach for one shared database
+    per workspace, which is the contention a database per session exists to
+    avoid. Then it said `astream` opens an async saver for the session, which
+    outlived the saver being asynchronous at all: the default is `InMemorySaver`
+    either way, and only an injected saver can still lack the async half.
     """
     # Deferred so that shipping the sandbox by default costs nothing to the runs
     # that never enable it. Measured, because the saving is smaller than it

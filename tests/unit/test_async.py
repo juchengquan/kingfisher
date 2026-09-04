@@ -85,16 +85,6 @@ def test_turns_on_one_service_genuinely_overlap(cfg):
     assert all(k[-1] == "finished" for k in kinds)
 
 
-def test_a_sync_saver_is_refused_rather_than_blocking(cfg):
-    """`SqliteSaver` does not merely block the loop on `aget_tuple` -- it
-    raises. Worth pinning, because "use the async saver" is otherwise a
-    footnote someone discovers at runtime."""
-    from langgraph.checkpoint.sqlite import SqliteSaver
-
-    with pytest.raises(NotImplementedError, match="does not support async"):
-        asyncio.run(SqliteSaver.aget_tuple(object(), {}))  # ty: ignore[invalid-argument-type]
-
-
 def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
     """`_prepare` is filesystem work -- 15-46ms measured -- and on an event loop
     that is 15-46ms during which no other turn can progress. `astream` runs it
@@ -204,28 +194,6 @@ def test_an_unbounded_async_turn_is_untouched(cfg):
     service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
 
     assert asyncio.run(service.arun(Request("go"))).stop_reason == "end_turn"
-
-
-def test_the_async_saver_is_reachable_from_outside_the_package(cfg):
-    """Why it is exported at all.
-
-    `astream` needs a saver with async methods -- `SqliteSaver` raises
-    `NotImplementedError` on `aget_tuple`, so a sync one does not merely block
-    the loop, it refuses. Until this was public, the only saver a consumer
-    could build was the one that cannot serve the async path, which made the
-    concurrency `astream` exists for unreachable from outside.
-
-    The refusal itself is pinned by
-    `test_a_sync_saver_is_refused_rather_than_blocking`; this is the other
-    half -- that the saver which does not refuse is reachable by name.
-    """
-    import kingfisher
-
-    async def open_and_ask():
-        async with kingfisher.async_checkpointer(cfg) as saver:
-            return await saver.aget_tuple({"configurable": {"thread_id": "nobody"}})
-
-    assert asyncio.run(open_and_ask()) is None
 
 
 class RecordingRoot:
