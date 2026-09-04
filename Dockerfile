@@ -15,7 +15,10 @@ FROM python:3.12-slim
 
 # `fuse3` is deliberately absent. It would be needed to expose a virtual
 # filesystem as real paths, and this design does not have one: tmpfs is already
-# real paths. See docs/design/2026-08-21-nothing-at-rest-on-this-machine.md.
+# real paths, with a size limit the kernel enforces and no library under every
+# turn. See *Sessions: what persists and where* in docs/decisions.md for the
+# choice, and *mirage, and why it was not adopted* in docs/findings.md for what
+# the alternative measured.
 #
 # `ca-certificates` because the agent reaches model endpoints over TLS, and
 # `git` because a skill may.
