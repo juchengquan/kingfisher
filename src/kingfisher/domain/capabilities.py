@@ -1,28 +1,29 @@
 """What a request is allowed to use.
 
-Capabilities are turn-scoped: they travel with a request rather than being
-fixed for a workspace or a conversation. Rebuilding an agent costs about 8ms,
-so the cost is not construction — it is prompt caching, and only when the set
-actually *changes*, since the cache compares bytes and does not care that we
-rebuilt. A caller passing the same set every turn keeps its cache hits.
+Turn-scoped: they travel with a request rather than being fixed for a workspace
+or a conversation. Construction is not the cost -- an agent rebuild is 8ms empty
+and 54ms seeded, and `docs/findings.md` records that the smaller figure is the
+misleading one. The cost is prompt caching, and only when the set actually
+*changes*, since the cache compares bytes and does not care that we rebuilt: a
+caller passing the same set every turn keeps its hits.
 
-Names, never definitions. A request activates what the workspace already
-offers; it cannot invent a tool or write a subagent's prompt. That keeps
-definitions reviewable wherever the operator keeps them and means an untrusted
-caller can widen nothing.
+Names, never definitions. A request activates what the workspace already offers;
+it cannot invent a tool or write a subagent's prompt. That keeps definitions
+reviewable wherever the operator keeps them, and means an untrusted caller can
+widen nothing.
 
 `"*"` means everything, a list means exactly those, `None` means none. The
-default is `"*"`, and that default is deliberate: authorisation is not the
-request's job. A request states intent, and a service decides what a given
-caller may have, by clamping with `intersect` before the request is run. Baking
-fail-closed in here would make callers authorise themselves.
+default is `"*"` deliberately: authorisation is not the request's job. A request
+states intent; a service decides what a caller may have by clamping with
+`intersect` before the run. Baking fail-closed in here would make callers
+authorise themselves.
 
 `None` used to mean "no opinion, so everything", with an empty tuple for none.
-Two things were wrong with it. A JSON caller cannot tell an absent key from a
-null one, and both had to mean "everything" -- the least safe reading of a
-missing field. And narrowing needed a three-state rule at every step, because
-"no opinion" is neither a set nor the absence of one. Spelled `"*"` and `None`,
-the two ends are an ordinary lattice and narrowing is set intersection.
+Two things were wrong. A JSON caller cannot tell an absent key from a null one,
+and both had to mean "everything" -- the least safe reading of a missing field.
+And narrowing needed a three-state rule at every step, because "no opinion" is
+neither a set nor the absence of one. Spelled `"*"` and `None`, the two ends are
+an ordinary lattice and narrowing is set intersection.
 """
 
 from __future__ import annotations
@@ -93,16 +94,16 @@ class Capabilities:
         Capabilities(tools=("read_file", "glob"))       # read-only
         Capabilities(memory=False)                      # do not read the memory file
 
-    Five of these name things and one is a switch, because memory has no names
-    to choose between -- it is one file, either mounted or not. The switch keeps
-    its own three states: `None` there is still "no opinion", because a bool has
-    no `"*"` to be the top of.
+    Every field but `memory` names things; `memory` is a switch, because it has
+    no names to choose between -- one file, mounted or not. The switch keeps its
+    own three states: `None` there is still "no opinion", a bool having no `"*"`
+    to be the top of.
 
-    This is the *narrowing* axis. The other one is `Config.memory_enabled` and
-    `Config.skills_enabled`: what this deployment wired at all. Those shape the
-    system prompt and so must stay stable across requests; these do not, and
-    vary per turn. Narrowing can only ever subtract from wiring -- asking for
-    memory a deployment never wired does not conjure it.
+    This is the *narrowing* axis. The other is `Config.memory_enabled` and
+    `Config.skills_enabled`: what the deployment wired at all. Those shape the
+    system prompt and must stay stable across requests; these vary per turn.
+    Narrowing only subtracts from wiring -- asking for memory a deployment never
+    wired does not conjure it.
     """
 
     #: The tools deepagents brings -- read_file, execute, task and the rest.
@@ -117,16 +118,15 @@ class Capabilities:
     skills: Selection = ALL
     #: `"*"` like the rest, which it was not until an agent could declare a
     #: roster. It defaulted to `None` because wiring a subagent compiles a whole
-    #: graph -- 5-6ms each, depending on what the delegate declares -- so a
-    #: workspace with eight of them charged every unrestricted turn 40ms or more
-    #: for delegates it might never call. (Measured at 4.3ms in August and
-    #: re-measured 2026-09-03; the argument was never sensitive to which.)
+    #: graph -- 5-6ms each, depending on what the delegate declares -- so eight
+    #: of them charged every unrestricted turn 40ms or more for delegates it
+    #: might never call. (4.3ms in August, re-measured 2026-09-03; the argument
+    #: never turned on which.)
     #:
-    #: That cost argument has not gone away; it has moved to where it can be
-    #: answered. `"*"` means *everything this agent declares*, and an agent
-    #: declares the delegates it calls -- so the set is small and deliberate
-    #: rather than "whatever the workspace happens to hold". A request naming
-    #: none is no longer the only way to avoid paying for eight.
+    #: The cost argument has moved rather than gone: `"*"` now means *everything
+    #: this agent declares*, and an agent declares the delegates it calls, so the
+    #: set is small and deliberate rather than whatever the workspace holds.
+    #: Naming none is no longer the only way to avoid paying for eight.
     subagents: Selection = ALL
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike the three above it is never widened by `including` -- see there.
@@ -137,26 +137,26 @@ class Capabilities:
     #:
     #: Was `providers`, when a definition named an endpoint directly. It names a
     #: *model* now and the endpoint is looked up, so this is checked against
-    #: where that model resolves to -- the same question, asked one step later.
-    #: Renamed with the field it guards: `provider` is no longer a word this
-    #: format has, and a grant named after it would be the only survivor.
+    #: where that model resolves to -- the same question one step later. Renamed
+    #: with the field it guards: `provider` is no longer a word this format has,
+    #: and a grant named after it would be the only survivor.
     #:
-    #: It is not redundant against `models` below, though it overlaps: the two
-    #: have different subjects and deliberately opposite defaults. This narrows
-    #: what *reviewed definitions* may reach and starts open; that gates what an
-    #: *untrusted caller* may name and starts closed. Collapsing them would
-    #: force one default on both, and either choice is wrong for one of them.
+    #: It overlaps `models` below without being redundant: different subjects,
+    #: deliberately opposite defaults. This narrows what *reviewed definitions*
+    #: may reach and starts open; that gates what an *untrusted caller* may name
+    #: and starts closed. Collapsing them would force one default on both, wrong
+    #: for one either way.
     endpoints: Selection = ALL
     #: Models a request may put a delegate on, overriding what its file says.
     #:
-    #: `None` by default, and that default is the point. Every other axis here
-    #: only ever takes something away -- a request picks from what the
-    #: workspace offers and cannot invent anything, which is what makes an
-    #: untrusted caller safe to accept. Naming a model is the one thing that
-    #: *chooses* rather than narrows, and models differ in price by more than
-    #: an order of magnitude. So it is off until a deployment grants it, and
-    #: granted per name rather than as a switch: "on" with no list means any
-    #: caller may name the most expensive model you have credentials for.
+    #: `None` by default, and that default is the point. Every other axis only
+    #: takes something away -- a request picks from what the workspace offers and
+    #: cannot invent anything, which is what makes an untrusted caller safe to
+    #: accept. Naming a model *chooses* rather than narrows, and models differ in
+    #: price by more than an order of magnitude. So it is off until a deployment
+    #: grants it, and granted per name rather than as a switch: "on" with no list
+    #: means any caller may name the most expensive model you have credentials
+    #: for.
     models: Selection = None
     memory: bool | None = None
 
@@ -189,25 +189,24 @@ class Capabilities:
     ) -> Capabilities:
         """Widen by definitions the request brought with it.
 
-        The only thing allowed to widen, and it does not really: an uploaded
-        definition is the caller's own text, so permitting it grants nothing
-        they did not already hold. A grant list is written before an upload
-        exists and its name is unknowable then, so clamping against it would
-        strip every upload rather than authorise it.
+        The only thing allowed to widen, and it barely does: an uploaded
+        definition is the caller's own text, so permitting it grants nothing they
+        did not already hold. A grant list is written before an upload exists and
+        its name is unknowable then, so clamping against it would strip every
+        upload rather than authorise it.
 
-        What bounds an uploaded skill is the tool selection, which this does
-        not touch. A skill's `allowed-tools` is prompt text to deepagents and
-        binds nothing.
+        What bounds an uploaded skill is the tool selection, which this does not
+        touch -- a skill's `allowed-tools` is prompt text to deepagents and binds
+        nothing.
 
         **`middleware` and `endpoints` are deliberately absent**, and that
-        absence is the rule.
-        A skill or subagent an upload brings is the caller's own text; a
-        middleware *name* is a selector for code the deployment wrote. Widening
-        it here would let anyone who can upload a definition activate anything
-        the deployment registered, which is the escalation the rest of this
-        method exists to avoid. `endpoints` is the same argument with more at
-        stake: it chooses which endpoint receives the run's prompts and files,
-        and whose credentials pay for them.
+        absence is the rule. A skill or subagent an upload brings is the caller's
+        own text; a middleware *name* selects code the deployment wrote. Widening
+        it would let anyone who can upload a definition activate anything the
+        deployment registered -- the escalation the rest of this method exists to
+        avoid. `endpoints` is the same argument with more at stake: it chooses
+        which endpoint receives the run's prompts and files, and whose
+        credentials pay for them.
 
         `ALL` stays `ALL`: it already includes these. `None` stays `None` -- a
         request that asked for no skills at all did not ask for its own either,
@@ -290,17 +289,23 @@ def belongs_in(names: tuple[str, ...], *, field: str) -> str:
 def narrowed(selection: Selection, *, by: Selection) -> Selection:
     """`selection`, keeping only what `by` also allows. Never widens.
 
-    `None` on either side means "no opinion", so the other side wins; where both
-    name things only the overlap survives, in `selection`'s order.
+    `None` on either side wins outright -- nothing, narrowed by anything, is
+    still nothing. `ALL` is the identity, so the other side wins; where both name
+    things only the overlap survives, in `selection`'s order.
 
-    Public, and `by` is keyword-only, because this rule is applied at two levels
-    and used to be written twice to do it. `Capabilities.intersect` clamps a
-    request against what the deployment granted; `delegation.as_subagent` clamps
-    a definition's declared tools against what its caller was granted. The
-    second was a private copy in `infrastructure`, identical to this across
-    every input pair, with the arguments in the other order and nothing
-    comparing them -- one convention away from a delegate quietly getting more
-    than the request that summoned it.
+    This said `None` meant "no opinion, so the other side wins", which is the
+    reading the module docstring records abandoning and which the line below it
+    has never done. It described the code as more permissive than it is -- the
+    safe direction to be wrong in, and the dangerous one to correct by editing
+    the code to match.
+
+    Public, and `by` keyword-only, because the rule applies at two levels and
+    used to be written twice. `Capabilities.intersect` clamps a request against
+    what the deployment granted; `delegation.as_subagent` clamps a definition's
+    declared tools against what its caller was granted. The second was a private
+    copy in `infrastructure`, identical across every input pair but with the
+    arguments the other way round and nothing comparing them -- one convention
+    away from a delegate quietly getting more than the request that summoned it.
     """
     if selection is None or by is None:
         return None  # nothing, narrowed by anything at all, is still nothing
@@ -327,17 +332,17 @@ def _widened(selection: Selection, extra: tuple[str, ...]) -> Selection:
 def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
     """Names the workspace offers that this grant leaves out.
 
-    The mirror of `Offering.refuse_unknown`, which reports names asked for that do
-    not exist. This reports the ones that exist and were not asked for, and it
-    is reported for the same reason: a grant is a whitelist, so it can only ever
-    mean *less* than the workspace holds, and a caller cannot see how much less.
+    The mirror of `Offering.refuse_unknown`, which reports names asked for that
+    do not exist; this reports the ones that exist and were not asked for. Same
+    reason: a grant is a whitelist, so it can only mean *less* than the workspace
+    holds, and a caller cannot see how much less.
 
-    That gap widens on its own. A grant written as "everything except the
-    shell" is stored as the other names, so a tool added afterwards is outside
-    it -- refused, with nothing said, months after the list was written. The
-    alternative shape fails the other way: a deny-list would let tomorrow's new
-    tool through by default, which is the worse of the two when the new tool is
-    another `execute`. So the whitelist stays and the silence goes.
+    That gap widens on its own. A grant written as "everything except the shell"
+    is stored as the other names, so a tool added afterwards falls outside it --
+    refused, silently, months after the list was written. The alternative fails
+    the other way: a deny-list lets tomorrow's new tool through by default, worse
+    when that tool is another `execute`. So the whitelist stays and the silence
+    goes.
 
     `ALL` withholds nothing, and does not go stale, because it names nothing
     that could. `None` withholds everything, which is the whole of what it says.
@@ -353,20 +358,18 @@ def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
 def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, ...]:
     """The grant that "everything except these" means, against what is offered now.
 
-    Subtraction is what a caller usually means -- "not the shell", rather than
-    the other eleven names -- and it is the one thing a whitelist cannot say.
+    Subtraction is what a caller usually means -- "not the shell" rather than
+    the other eleven names -- and the one thing a whitelist cannot say.
 
-    It resolves here rather than being stored, and that is the point. A stored
-    subtraction *is* a deny-list: it lets tomorrow's new tool through by
-    default, which is the wrong way to fail when the new tool is another
-    `execute`. Resolved at the moment it is written, what gets stored and
-    enforced is still an ordinary whitelist, and `withheld` still reports what
-    it left out.
+    It resolves here rather than being stored, which is the point. A stored
+    subtraction *is* a deny-list, letting tomorrow's new tool through by default
+    -- the wrong way to fail when that tool is another `execute`. Resolved as it
+    is written, what gets stored and enforced is an ordinary whitelist, and
+    `withheld` still reports what it left out.
 
     A name that excludes nothing is refused. `--without-tools exec` is a typo
-    that would otherwise grant everything quietly, which is the failure this
-    area keeps being about -- the mirror of `Offering.refuse_unknown`, for the
-    other direction.
+    that would otherwise grant everything quietly -- the mirror of
+    `Offering.refuse_unknown`, for the other direction.
 
     The set difference is `withheld`'s, asked the other way round: that one
     turns a grant into what it leaves out, this one turns what to leave out
