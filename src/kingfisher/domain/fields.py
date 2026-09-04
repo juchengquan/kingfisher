@@ -69,10 +69,16 @@ def unrecognised(
     the file a deployment writes *first* -- and the only one that decides where
     prompts go -- was the one that would not tell you `defualt:` was a typo.
 
-    Returns the complaint rather than raising it. The two callers raise
-    different types on purpose, `SubagentError` against `ConfigError`, and each
-    prefixes the source in its own way; what they share is which keys are
-    wrong, what they might have meant, and what the format does define.
+    Returns the complaint rather than raising it. Its callers raise different
+    types on purpose -- `SubagentError`, `AgentError`, `ConfigError`,
+    `AccessError` -- and each prefixes the source in its own way; what they
+    share is which keys are wrong, what they might have meant, and what the
+    format does define.
+
+    This said "the two callers", naming two of those types, and there are eight
+    call sites now: both definition formats, the model catalogue, the access
+    vocabulary, and three inside this module. The types are what the sentence is
+    about and are named; the count is not, and is gone.
 
     All of them at once, not the first. Two typos used to take two runs to find,
     and the second only after fixing the first.
