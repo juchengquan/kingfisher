@@ -63,13 +63,21 @@ def test_the_readme_flow_seeds_a_workspace(tmp_path, examples):
     assert (paths.workspace / "skills").is_dir()
 
 
-def test_ensure_layout_comes_first_and_is_why(tmp_path, examples):
-    """`models.yaml.example` has to arrive whether or not anything is seeded.
+def test_laying_out_alone_writes_the_example_catalogue(tmp_path, examples):
+    """`models.yaml.example` arrives with the layout, before anything is seeded.
 
-    The ordering in the README is load-bearing rather than stylistic: a
-    deployment told to write `models.yaml` and given no example of one is the
-    dead end `ensure_layout` running first exists to avoid. Pinned here because
-    an example is exactly where an ordering silently stops mattering.
+    This used to be called `test_ensure_layout_comes_first_and_is_why` and said
+    the README's ordering was load-bearing -- "pinned here because an example is
+    exactly where an ordering silently stops mattering". It then stopped
+    mattering: `seed` lays the workspace out itself now, so the explicit call is
+    belt-and-braces for the path `seed` never reaches, and the docstring went on
+    claiming otherwise. The assertion was right the whole time; only the reason
+    was stale.
+
+    What it pins is still worth pinning: laying out is what produces the example
+    catalogue, and a deployment told to write `models.yaml` and given no example
+    of one is a dead end. That `seed` alone also gets there is
+    `test_seeding_alone_leaves_a_workspace_that_can_start`, next door.
     """
     paths = WorkspacePaths(tmp_path / "ws")
 
@@ -231,10 +239,25 @@ def test_the_example_script_reports_what_it_left(tmp_path, examples, capsys):
 
 def test_the_example_script_refuses_with_no_source_configured(tmp_path, monkeypatch, capsys):
     """The error path is part of the example -- it is what makes it pasteable
-    rather than a snippet."""
-    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
+    rather than a snippet.
 
-    code = main(["--workspace", str(tmp_path / "ws")])
+    And it is the whole reason the example still calls `ensure_layout` itself.
+    `seed` lays a workspace out, but `definitions_source` refuses *before*
+    seeding starts, so this is the one path `seed` never reaches: without the
+    explicit call the deployment gets an empty directory and a traceback, and
+    with it a laid-out workspace and an error that explains itself.
+
+    Asserted rather than left to the prose, because the prose here has already
+    gone stale once -- see `test_laying_out_alone_writes_the_example_catalogue`.
+    """
+    monkeypatch.delenv("KINGFISHER_ASSETS", raising=False)
+    workspace = tmp_path / "ws"
+
+    code = main(["--workspace", str(workspace)])
 
     assert code == 2, "a missing source is a configuration error, not an empty run"
     assert "KINGFISHER_ASSETS" in capsys.readouterr().err
+    assert (workspace / "models.yaml.example").is_file(), (
+        "the refusal left an unlaid-out workspace, so the explicit `ensure_layout` "
+        "in the example buys nothing and the README's reason for it is wrong"
+    )

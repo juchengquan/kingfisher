@@ -20,15 +20,25 @@ for left in done.skipped:
     print(f"skipped {left.label} — needs {', '.join(left.names)}")
 ```
 
-Four calls, and the order of the first two matters. `ensure_layout` writes
-`models.yaml.example`, which has to arrive whether or not there is anything to
-seed — a deployment told to write `models.yaml` and given no example of one is
-a dead end. `authored` is where that example goes: `models.yaml` and
+Four calls, and the first is belt-and-braces rather than an ordering you have to
+get right. `seed` lays the workspace out itself, so `models.yaml.example` arrives
+whether or not you call `ensure_layout` — a deployment told to write
+`models.yaml` and given no example of one is a dead end, and the library closes
+it from the inside. `authored` is where that example goes: `models.yaml` and
 `groups.yaml` both relocate, and an example a directory away from the file it
-describes is the same dead end wearing a different coat. `seed` requires a
-directory to copy from and will not invent one; `definitions_source` is what
-turns configuration into that directory, reading `KINGFISHER_ASSETS` and taking
-a path that overrides it. On the command, the same two:
+describes is the same dead end wearing a different coat.
+
+What the explicit call still buys is the path `seed` never reaches.
+`definitions_source` refuses when a deployment has named no assets, and it
+refuses *before* seeding starts — so without the line above, that deployment gets
+an empty directory and a traceback instead of a laid-out workspace and an error
+explaining itself. Cheap, idempotent, and it only shows up on the day something
+is misconfigured.
+
+`seed` requires a directory to copy from and will not invent one;
+`definitions_source` is what turns configuration into that directory, reading
+`KINGFISHER_ASSETS` and taking a path that overrides it. On the command, the
+same two:
 
     kingfisher seed                          # from KINGFISHER_ASSETS
     kingfisher seed --from ./my-definitions  # from here instead

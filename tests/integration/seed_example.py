@@ -62,11 +62,19 @@ def seed_workspace(
     """
     paths = WorkspacePaths(workspace)
 
-    # First, and not for tidiness. This writes `models.yaml.example`, which has
-    # to arrive whether or not there is anything to seed -- a deployment told to
-    # write `models.yaml` and given no example of one is a dead end. Resolving
-    # the source first would mean a misconfigured deployment got neither.
-    ensure_layout(paths.workspace)
+    # Belt-and-braces rather than an ordering that has to be got right: `seed`
+    # lays the workspace out itself, so `models.yaml.example` arrives either way.
+    #
+    # What this line buys is the path `seed` never reaches. `definitions_source`
+    # below refuses when a deployment has named no assets, and it refuses before
+    # seeding starts -- so without this, that deployment gets an empty directory
+    # and a traceback instead of a laid-out workspace and an error explaining
+    # itself. `test_the_example_script_refuses_with_no_source_configured` drives
+    # exactly that path.
+    #
+    # `authored` because both examples belong beside the file they describe, and
+    # both files relocate.
+    ensure_layout(paths.workspace, authored=paths.authored_files)
 
     # An explicit path wins, else `KINGFISHER_ASSETS`, else a `ConfigError`
     # naming both ways to say where. Nothing ships with the library, so there is
