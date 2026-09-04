@@ -322,6 +322,29 @@ def _everything_that_imports_kingfisher() -> list[Path]:
     return sorted(found)
 
 
+def _documents() -> list[Path]:
+    """The prose that is only prose, and names modules for a living.
+
+    `docs/decisions.md` exists to say where things are and why, and nothing
+    checked it -- a reference to `workspace_fs.py` sat in it through two renames
+    of that module. The rule below reads Python files because that is where it
+    started, not because a docstring is a more trustworthy place to be wrong.
+    """
+    found = [*(REPO / "docs").rglob("*.md")] if (REPO / "docs").is_dir() else []
+    found += [REPO / name for name in ("README.md", "CLAUDE.md")]
+    return sorted(p for p in found if p.is_file())
+
+
+def _prose_bearing_files() -> list[Path]:
+    """Everything the prose rule reads, named once so a companion can check it.
+
+    Both halves used to be spelled inside the rule, which left nothing able to
+    tell that it had stopped reading one of them -- a test calling `_documents()`
+    on its own passes whether or not the rule ever does.
+    """
+    return [*_everything_that_imports_kingfisher(), *_documents()]
+
+
 def _names_a_real_module(module: str) -> bool:
     """Resolved on disk rather than imported.
 
@@ -389,16 +412,36 @@ def test_the_second_distribution_is_in_scope():
     )
 
 
-#: The layers a prose reference can be rooted at, and the only form of it that
-#: can be checked. `models.yaml`, `run.py` and `uploads.provision` are shaped
-#: exactly like module paths; `infrastructure.harness.backend` cannot be
-#: anything else. Measured across this repository: the rooted form gives fifty
-#: references and finds thirteen that are wrong, while the unrestricted form
-#: gives 143 and calls 115 of them broken.
-PROSE_LAYERS = ("domain", "application", "infrastructure", "presentation")
-PROSE_REF = re.compile(
-    r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_LAYERS) + r")(?:\.[a-z_]+)+)`"
+#: What a prose reference can be rooted at, and the only form of it that can be
+#: checked. `models.yaml`, `run.py` and `uploads.provision` are shaped exactly
+#: like module paths; `infrastructure.harness.backend` cannot be anything else.
+#: Measured across this repository: the rooted form gives fifty references and
+#: finds thirteen that are wrong, while the unrestricted form gives 143 and calls
+#: 115 of them broken.
+#:
+#: Named for layers until three of these stopped being layers. `tools`, `skills`
+#: and `subagents` moved to the package root and fell out of the pattern with no
+#: rule going red, so prose about them went unchecked for as long as they have
+#: existed -- a blind spot introduced by the change that created them, which is
+#: exactly what a rule keyed to a fixed list of names will do when the list is a
+#: layout rather than a principle.
+PROSE_ROOTS = (
+    "domain", "application", "infrastructure", "presentation",
+    "tools", "skills", "subagents", "config",
 )
+PROSE_REF = re.compile(
+    r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_ROOTS) + r")(?:\.[a-z_]+)+)`"
+)
+
+#: Tails that make a reference a filename rather than a module path. Not needed
+#: while the roots were four layers, because there is no `domain.py`; needed the
+#: moment `config`, `tools`, `skills` and `subagents` joined them, since each is
+#: also a real file and `config.py` parses as a module and a segment. Thirteen
+#: references in this repository are that shape, and every one of them is prose
+#: about a file doing its job.
+NOT_A_MODULE = frozenset({
+    "py", "yaml", "yml", "md", "json", "toml", "txt", "example", "cfg", "ini",
+})
 
 #: Prose that names a module *because* it is gone, excused per file. Deny by
 #: default like the tables above, and keyed by file rather than by name for a
@@ -434,22 +477,46 @@ def _module_file(name: str) -> Path | None:
     return base / "__init__.py" if (base / "__init__.py").exists() else None
 
 
-def _top_level_names(path: Path) -> set[str]:
-    """What a module defines or imports at its top level.
+def _defined_names(path: Path) -> set[str]:
+    """What a module defines or imports, a class's own members included.
 
     Parsed rather than imported, and only ever asked about a module some comment
     already named, so the cost is a handful of files rather than the tree.
+
+    One level inside a class as well as at the top, because the rule's contract
+    is "a module, or a module and one thing defined in it" and a dataclass field
+    is defined in it. `skills.registry.misfiled` is the case that found this: a
+    documented field on the record that module returns, named in a comment two
+    packages away, and read as stale because the walk stopped at `tree.body`.
+
+    It does cost precision: a reference to a module and a name now resolves when
+    any class in that module holds the name, not only when the module itself
+    does. Accepted, because what this rule is for is catching prose left behind
+    by a module that *moved*, and a name still present somewhere in the file is
+    evidence the prose was not.
+
+    Stated without an example on purpose. The obvious way to write one is a
+    backticked dotted path naming something that does not exist, and this file is
+    one the rule reads.
     """
-    names: set[str] = set()
-    for node in ast.parse(path.read_text(encoding="utf-8")).body:
-        if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
-            names.add(node.name)
-        elif isinstance(node, ast.Assign):
-            names.update(t.id for t in node.targets if isinstance(t, ast.Name))
-        elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
-            names.add(node.target.id)
-        elif isinstance(node, (ast.Import, ast.ImportFrom)):
-            names.update(alias.asname or alias.name.split(".")[0] for alias in node.names)
+    def declared(body: list[ast.stmt]) -> set[str]:
+        found: set[str] = set()
+        for node in body:
+            if isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)):
+                found.add(node.name)
+            elif isinstance(node, ast.Assign):
+                found.update(t.id for t in node.targets if isinstance(t, ast.Name))
+            elif isinstance(node, ast.AnnAssign) and isinstance(node.target, ast.Name):
+                found.add(node.target.id)
+            elif isinstance(node, (ast.Import, ast.ImportFrom)):
+                found.update(a.asname or a.name.split(".")[0] for a in node.names)
+        return found
+
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    names = declared(tree.body)
+    for node in tree.body:
+        if isinstance(node, ast.ClassDef):
+            names |= declared(node.body)
     return names
 
 
@@ -472,11 +539,13 @@ def _prose_unresolved(text: str, excused: frozenset[str] = frozenset()) -> list[
     unresolved = []
     for ref in PROSE_REF.findall(text):
         bare = ref.removeprefix("kingfisher.")
+        if bare.rsplit(".", 1)[-1] in NOT_A_MODULE:
+            continue  # `config.py` is a file, not `config` and a segment
         if bare in excused or _module_file(bare):
             continue
         parent, _, last = bare.rpartition(".")
         target = _module_file(parent)
-        if target is None or last not in _top_level_names(target):
+        if target is None or last not in _defined_names(target):
             unresolved.append(bare)
     return unresolved
 
@@ -494,7 +563,7 @@ def test_prose_naming_a_module_names_one_that_exists():
     other distributions are where a move here lands first.
     """
     stale = []
-    for path in _everything_that_imports_kingfisher():
+    for path in _prose_bearing_files():
         rel = path.relative_to(REPO).as_posix()
         text = path.read_text(encoding="utf-8")
         excused = PROSE_GONE.get(rel, frozenset())
@@ -579,6 +648,95 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     # Not rooted at a layer, so not this rule's business: these are the shapes
     # that make the unrestricted version unusable.
     assert _prose_unresolved("`models.yaml`, `run.py`, `importlib.resources`") == []
+
+
+def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
+    """`tools`, `skills` and `subagents` left the layers and left this rule's sight.
+
+    Nothing went red when they moved, because a rule keyed to a fixed list of
+    names does not notice a name that stopped being on it -- it just checks less.
+    Every reference to the three in the tree happens to be correct, so the rule
+    above cannot distinguish covering them from ignoring them, and only a
+    reference the tree does not contain can.
+
+    The positive cases were already here and one of them was vacuous:
+    `skills.spec.split` was asserted to resolve while `skills` was not a root, so
+    the pattern never matched it and the assertion held for the wrong reason.
+    """
+    for missing in ("skills.nowhere", "tools.nowhere", "subagents.nowhere",
+                    "config.nowhere"):
+        assert _prose_unresolved(f"`{missing}`") == [missing], (
+            f"{missing} is not a module and the rule has to say so"
+        )
+
+    # And the live ones still resolve, now that they are actually being read.
+    assert _prose_unresolved("`skills.spec.split`") == []
+    assert _prose_unresolved("`tools.spec`, `subagents.harness`, `config`") == []
+
+
+def test_a_filename_is_not_read_as_a_module_and_a_segment():
+    """`config.py` parses as the module `config` plus a segment called `py`.
+
+    Harmless while the roots were four layers, since there is no `domain.py`.
+    Adding `config`, `tools`, `skills` and `subagents` made four filenames in
+    this repository ambiguous at once, and thirteen references took that shape --
+    every one of them prose about a file, correctly naming it.
+
+    Filtered on the tail rather than by making the pattern cleverer, because the
+    question being asked is whether a reader would call it a filename, and a
+    known extension is exactly that.
+    """
+    assert _prose_unresolved("`config.py` and `tools.py`") == []
+    assert _prose_unresolved("`skills.py`, `subagents.py`, `config.yaml`") == []
+    # The tail is what decides it, not the root: a real module under one of them
+    # still has to name something real. Built rather than written, because this
+    # file is one the rule reads and a literal would be a reference it refuses.
+    #
+    # This said `config.models` until class members started counting, at which
+    # point `Config.models` made it resolve and the rule was right about a test
+    # that had gone quietly wrong.
+    absent = "config.no_such_field"
+    assert _prose_unresolved(f"`{absent}`") == [absent]
+
+
+def test_a_name_a_class_holds_is_a_name_the_module_defines():
+    """`skills.registry.misfiled` is a documented field, and read as stale.
+
+    The one case in this change that was already live rather than preventive.
+    `misfiled` is declared on the record `skills.registry` returns, named in a
+    comment two packages away in `subagents.catalogue` -- correct prose about a
+    real thing, refused because the walk behind the rule stopped at the module's
+    own body and never looked inside a class.
+
+    It surfaced only on the merge with `main`, where a commit had just corrected
+    that reference from the module's older name. The rule as it stood would have
+    called the correction a mistake.
+    """
+    assert _prose_unresolved("`skills.registry.misfiled`") == []
+    assert _prose_unresolved("`config.models`") == []
+
+    # And the module's own top level still counts, which is most of the traffic.
+    assert _prose_unresolved("`skills.spec.split`") == []
+
+
+def test_the_documents_are_read_by_the_prose_rule():
+    """`decisions.md` is where this repository says where things are.
+
+    Nothing checked it. A reference to `workspace_fs.py` survived two renames of
+    that module there, and was corrected by hand rather than by anything going
+    red. The rule reads Python files because that is where it started, not
+    because a docstring is a more trustworthy place to be wrong than a document
+    whose entire subject is which module does what.
+    """
+    scanned = {p.relative_to(REPO).as_posix() for p in _prose_bearing_files()}
+
+    assert "docs/decisions.md" in scanned, "the file the rule most needs to read"
+    assert "CLAUDE.md" in scanned
+    # Asserted through what the rule reads rather than through `_documents()`,
+    # so dropping the documents from the scan fails here instead of passing.
+    assert "src/kingfisher/application/service.py" in scanned, (
+        "the Python half has to survive the documents being added to it"
+    )
 
 
 def test_no_rule_here_is_parametrized_over_nothing():
