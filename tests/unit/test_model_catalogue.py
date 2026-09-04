@@ -131,7 +131,7 @@ def test_a_model_naming_an_undefined_endpoint_is_refused(tmp_path):
 def test_an_endpoint_without_its_key_is_dropped_with_its_models(tmp_path):
     body = GOOD.replace(
         "default: main-model",
-        "  other:\n    api: openai\n    base_url: https://example.invalid/v1\n"
+        "  other:\n    api: openai_responses\n    base_url: https://example.invalid/v1\n"
         "    key_env: OTHER_API_KEY\n\ndefault: main-model",
     ).replace("  tuned:\n    endpoint: gateway", "  tuned:\n    endpoint: other")
 
@@ -141,6 +141,54 @@ def test_an_endpoint_without_its_key_is_dropped_with_its_models(tmp_path):
 
     assert set(endpoints) == {"gateway"}
     assert set(models) == {"main-model"}
+
+
+def test_an_api_kingfisher_cannot_build_is_refused_as_the_file_loads(tmp_path):
+    """`api` is a closed set that nothing checked until a turn started.
+
+    Every other closed thing in this file is checked as it is read -- an
+    unknown key, a model absent from the table, a default naming neither. This
+    one loaded, built, and failed inside the first request with an error from
+    somebody else's server.
+
+    `openai` is the case worth naming rather than a nonsense string, because it
+    is the mistake people actually make: it was the name of the Responses-API
+    row, everything else in this ecosystem means `/v1/chat/completions` by
+    "OpenAI-compatible", and a gateway configured the obvious way went all the
+    way to a live call before saying so.
+    """
+    body = GOOD.replace("api: anthropic", "api: openai", 1)
+
+    with pytest.raises(ConfigError, match="cannot build") as caught:
+        loaded(tmp_path, body)
+
+    message = str(caught.value)
+    assert "'openai'" in message, "the refusal has to quote what was written"
+    assert "openai_responses" in message and "anthropic" in message, (
+        "and name what it can build, or the reader has to go and find the list"
+    )
+
+
+def test_an_unbuildable_api_is_refused_before_a_missing_key_drops_it(tmp_path):
+    """Order matters here, and it is the whole reason this is not a warning.
+
+    An endpoint whose credential is absent is *dropped*, because a missing key
+    is a fact about one machine and a shared catalogue must survive it. An
+    unbuildable `api` is a fact about the file. Checked in the other order, a
+    typo on an endpoint whose key this machine does not hold would be dropped
+    quietly here and refused on the machine that does hold it -- the same file
+    behaving differently in two places, which is what `key_env` being dropped
+    is carefully arranged to avoid.
+    """
+    body = GOOD.replace(
+        "default: main-model",
+        "  other:\n    api: openai\n    base_url: https://example.invalid/v1\n"
+        "    key_env: NEVER_SET_ANYWHERE\n\ndefault: main-model",
+    )
+
+    # No key for `other`, so the credential path would drop it and say nothing.
+    with pytest.raises(ConfigError, match="cannot build"):
+        loaded(tmp_path, body)
 
 
 def test_the_warning_names_the_variable_not_the_endpoint(tmp_path):
@@ -257,7 +305,7 @@ endpoints:
     base_url: https://example.invalid/anthropic
     key_env: GATEWAY_API_KEY
   elsewhere:
-    api: openai
+    api: openai_responses
     base_url: https://example.invalid/v1
     key_env: ELSEWHERE_API_KEY
 
@@ -330,7 +378,7 @@ def test_a_catalogue_with_every_key_reaches_nothing_unreachable(tmp_path):
 
     assert set(models.models) == {"main-model", "far-model"}
     assert models.unreachable == {}
-    assert models.resolve("far-model")[1].api == "openai"
+    assert models.resolve("far-model")[1].api == "openai_responses"
 
 
 def test_a_removed_key_says_what_replaces_it_rather_than_looking_like_a_typo(tmp_path):

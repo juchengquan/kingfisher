@@ -76,7 +76,7 @@ def _elsewhere(cfg, url: str):
             cfg.models,
             endpoints={
                 **cfg.models.endpoints,
-                "openai": Endpoint("openai", url, "sk-test"),
+                "openai": Endpoint("openai_responses", url, "sk-test"),
             },
             models={**cfg.models.models, "gpt-5": ModelProfile("gpt-5", "openai")},
         ),

@@ -25,7 +25,7 @@ from kingfisher.domain.subagent import RunOn
 from kingfisher.infrastructure.harness.agent import build_agent
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
-ELSEWHERE = Endpoint("openai", "https://api.openai.com/v1", "sk-test")
+ELSEWHERE = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-test")
 
 PINNED = """name: second-opinion
 description: Answers again, elsewhere.
