@@ -425,10 +425,34 @@ def test_the_second_distribution_is_in_scope():
 #: existed -- a blind spot introduced by the change that created them, which is
 #: exactly what a rule keyed to a fixed list of names will do when the list is a
 #: layout rather than a principle.
-PROSE_ROOTS = (
-    "domain", "application", "infrastructure", "presentation",
-    "tools", "skills", "subagents", "config",
-)
+def _prose_roots(root: Path = SRC) -> tuple[str, ...]:
+    """Every package and root module a prose reference may be rooted at.
+
+    Read off the tree rather than written down, and the written-down form is why:
+    it named the four layers, `tools`, `skills` and `subagents` moved to the
+    package root, and all three left it in silence. A rule keyed to a fixed set
+    of names does not notice a name that has gone -- it checks less and keeps
+    passing, which is the failure this whole file exists to prevent elsewhere.
+
+    `THIRD_PARTY` cannot fail that way because `""` makes it total, so an area
+    nobody listed falls back to allowing nothing. This is a match pattern rather
+    than a lookup and has no fallback to fail closed onto, so deriving it is what
+    takes the place of one.
+
+    A directory without `__init__.py` is not a package and is skipped:
+    `templates/` and `prompts/` are data the wheel ships, deliberately not
+    importable, and a reference could not be rooted at either.
+
+    `root` is a parameter so the behaviour can be shown against a tree built for
+    the purpose, for the reason `_modules_in` gives.
+    """
+    return tuple(sorted(
+        [d.name for d in root.iterdir() if d.is_dir() and (d / "__init__.py").is_file()]
+        + [f.stem for f in root.glob("*.py") if f.stem != "__init__"]
+    ))
+
+
+PROSE_ROOTS = _prose_roots()
 PROSE_REF = re.compile(
     r"`((?:kingfisher\.)?(?:" + "|".join(PROSE_ROOTS) + r")(?:\.[a-z_]+)+)`"
 )
@@ -648,6 +672,39 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     # Not rooted at a layer, so not this rule's business: these are the shapes
     # that make the unrestricted version unusable.
     assert _prose_unresolved("`models.yaml`, `run.py`, `importlib.resources`") == []
+
+
+def test_the_prose_roots_are_read_off_the_tree_and_not_written_down(tmp_path):
+    """The list was corrected once; this is what stops it needing correcting again.
+
+    Adding the three missing names fixed the instance and left the class alone --
+    the next package at the root would fall out of a hand-written tuple exactly
+    as `tools`, `skills` and `subagents` did, with nothing going red. So the
+    question asked here is not which names are in the list today but whether the
+    list is *read*, and only a tree the repository does not have can ask it.
+
+    The data directories are the other half. `templates/` and `prompts/` are
+    shipped inside the wheel and deliberately carry no `__init__.py`, so nothing
+    can be rooted at either, and a derivation that took every directory would
+    quietly start accepting `templates.anything`.
+    """
+    (tmp_path / "newkind").mkdir()
+    (tmp_path / "newkind" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "templates").mkdir()  # shipped data, no `__init__.py`
+    (tmp_path / "templates" / "models.yaml.example").write_text("", encoding="utf-8")
+    (tmp_path / "loose.py").write_text("", encoding="utf-8")
+    (tmp_path / "__init__.py").write_text("", encoding="utf-8")
+
+    assert _prose_roots(tmp_path) == ("loose", "newkind"), (
+        "a package is found by its __init__.py and a root module by its suffix"
+    )
+
+    # And the real tree: every package that exists is one prose may name.
+    packages = {
+        d.name for d in SRC.iterdir() if d.is_dir() and (d / "__init__.py").is_file()
+    }
+    assert packages <= set(PROSE_ROOTS)
+    assert "templates" not in PROSE_ROOTS, "shipped data is not a package"
 
 
 def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
