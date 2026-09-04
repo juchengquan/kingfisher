@@ -102,11 +102,10 @@ from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED, Audience, reaching
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
-# Imported rather than restated: both formats name a model the same way, so a
-# second copy of the reader would be a second thing to keep in step, agreeing
-# by coincidence until it does not. The dependency runs this way round because
-# an agent already names delegates -- it depends on the subagent vocabulary
-# whatever happens here.
+# A `tools:` entry may be written `where::what`, so reading this format means
+# parsing a tool reference -- the format referring to itself, which is why the
+# domain may name an asset kind's `spec` at all. See the exception stated and
+# measured in `test_domain_imports_only_the_standard_library_and_itself`.
 from kingfisher.tools.spec import claimed_sources
 
 DIRECTORY = "agents"
