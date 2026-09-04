@@ -29,9 +29,9 @@ from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
-from kingfisher.infrastructure.harness.agent import _ToolSurface
 from kingfisher.infrastructure.harness.delegation import as_subagent
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.infrastructure.harness.surface import _ToolSurface
 from tests.conftest import tools_dir
 
 TOOL = """from langchain_core.tools import tool

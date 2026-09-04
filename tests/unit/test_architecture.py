@@ -895,7 +895,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     "uploads": frozenset({"skill_registry"}),
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
-    "inventory": frozenset({"agent"}),
+    "inventory": frozenset({"agent", "surface"}),
     # Reads `ADAPTERS` to refuse an `api` kingfisher cannot build, as the
     # catalogue loads rather than when a turn starts. The same argument as
     # `catalogue` above: the alternative is a second list of the wire formats
@@ -934,7 +934,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # measures against what was actually wired rather than against a list kept
     # somewhere -- so the edge is the point of it, not an accident of where it
     # used to live.
-    "reporting": frozenset({"activation", "agent"}),
+    "reporting": frozenset({"activation", "surface"}),
     # One stream chunk, read the same way by the sync and async loops. The
     # reading is deepagents' shape rather than ours -- which namespace a chunk
     # came from, which mode carries the answer -- so it is an edge wherever it
