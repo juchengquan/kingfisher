@@ -45,23 +45,20 @@ PACKAGE = "kingfisher"
 EXAMPLE = "models.yaml.example"
 
 #: The same furniture for the other file a deployment may be told to write.
+#: The one example this package places, and the reason it is the only one.
 #:
-#: `groups.yaml` is *optional* where `models.yaml` is required, so this is here
-#: for a different reason than its neighbour. Nothing refuses to start without
-#: it -- with no policy file at all, kingfisher controls nothing by group. What
-#: makes it furniture is that `seed` will name it: a definition asking for a
-#: group this workspace does not declare is skipped, and the message says to
-#: declare it. A file you are told to write and given no example of is the gap
-#: `_place_example`'s own docstring is about, and it did not stop being one
-#: because the file is optional.
+#: `groups.yaml` had one too, for two days. It went because the file it pointed
+#: at could not be the file you needed: an example ships one vocabulary and a
+#: workspace needs whichever names its own definitions ask for, so `seed` named
+#: a set of groups and then handed you a template declaring five different ones.
+#: The remedy now travels in the message, where it can name the groups actually
+#: missing -- see `presentation.cli.__main__`. `examples/groups.yaml` is the
+#: worked set, outside the wheel, for anyone reading this repository.
 #:
-#: Not `examples/groups.yaml`, which is the worked set for the shipped agents
-#: and says so. That one is outside the wheel, so an installed deployment does
-#: not have it; this one arrives with the framework.
-GROUPS_EXAMPLE = "groups.yaml.example"
-
-#: Both, in the order a reader meets them.
-EXAMPLES = (EXAMPLE, GROUPS_EXAMPLE)
+#: `models.yaml` keeps its example for the reason the two were never alike:
+#: it is required with no fallback, its example is a hundred lines of annotation
+#: about endpoints and keys, and no file anywhere else carries that.
+EXAMPLES = (EXAMPLE,)
 
 
 #: What a catalogue is made of, named once so a caller can quote it in an error

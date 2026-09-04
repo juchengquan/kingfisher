@@ -85,33 +85,28 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
     assert EXAMPLE not in seeding.seed(cfg, mine).written
 
 
-def test_the_groups_example_arrives_too_and_is_not_seeded_either(cfg, tmp_path):
-    """The same furniture for the other file `seed` tells a deployment to write.
+def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
+    """Neither a policy nor an example, and the second half is the newer half.
 
-    `seed` skips a definition naming a group this workspace does not declare and
-    says to declare it in `groups.yaml` -- a file that, until this, no example of
-    existed anywhere an installed deployment could reach. `examples/groups.yaml`
-    is the worked set for the shipped agents and lives outside the wheel, so it
-    is not that example.
+    `groups` was never a definition kind, so seeding one would make adopting
+    access control something a deployment inherits rather than does -- that part
+    has always been true. What changed is that no *example* arrives either: the
+    one that shipped declared a vocabulary of its own, which could never be the
+    vocabulary a given workspace's definitions ask for.
 
-    Optional where the catalogue example is required, which changes where it
-    comes from and not whether it arrives: nothing refuses to start without a
-    policy file, and a deployment told to write one still needs to see the shape.
-
-    Not seeded, asserted from the report, because the group work decided that
-    deliberately -- `groups` is not a definition kind and copying it would make
-    adopting access control something a deployment inherits rather than does.
+    So `seed` says what to write instead of pointing at a file, and this asserts
+    the file it stopped pointing at does not come back by another route.
     """
-    from kingfisher.infrastructure.workspace_fs import GROUPS_EXAMPLE, ensure_layout
+    from kingfisher.infrastructure.workspace_fs import ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)
+    seeding.seed(cfg, mine)
 
-    assert (cfg.workspace / GROUPS_EXAMPLE).is_file()
-    assert not (cfg.workspace / "groups.yaml").exists(), (
-        "the example became the policy -- access control is a thing you adopt"
+    assert not list(cfg.workspace.glob("groups.yaml*")), (
+        "seeding produced a groups file -- neither the policy nor an example "
+        "belongs here"
     )
-    assert GROUPS_EXAMPLE not in seeding.seed(cfg, mine).written
 
 
 # -- resolving one source from a flag and a variable -----------------------

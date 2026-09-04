@@ -35,6 +35,7 @@ import argparse
 import json
 import sys
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from dotenv import load_dotenv
 
@@ -65,6 +66,9 @@ from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show
 
+if TYPE_CHECKING:
+    from kingfisher import Seeded
+
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
 #: have -- a command should not pick up a file two directories above the one you
@@ -85,11 +89,46 @@ CANNOT = {
 #: group is declared in a file.
 REMEDY = {
     "middleware": "Register the names",
-    # Names the example as well as the file, because the file does not exist
-    # yet -- that is why the definition was skipped. `ensure_layout` puts the
-    # example beside it, so this is a copy rather than a search.
-    "groups": "Declare the groups in groups.yaml (groups.yaml.example is beside it)",
+    # No file named here any more. It used to say `groups.yaml.example is
+    # beside it`, and that example could not be the one you wanted: it shipped
+    # one vocabulary and a workspace needs whichever names its own definitions
+    # ask for. Seeding this repository's own set named three groups and pointed
+    # at a file declaring five others, none of them the same. `_declare` below
+    # prints what to write instead, using the names that are actually missing.
+    "groups": "Declare the groups in groups.yaml",
 }
+
+
+def _declare(written: Seeded) -> tuple[str, ...]:
+    """The `groups.yaml` to write, or nothing when no group was missing.
+
+    After the list rather than beside each entry, which is the placement the
+    overwrite warning already uses and for a better reason here: the union
+    across every skipped definition is one line that unblocks all of them, where
+    a copy per definition would print two overlapping lists and leave whoever
+    pasted the first one skipped again on the second.
+
+    The flat form, which is the minimum vocabulary that makes the definitions
+    load. A name meant to stand for several is `{contains: [...]}` and one meant
+    to require several is `{all_of: [...]}` -- both are the deployment's choice
+    about its own organisation, and nothing here can infer which a name wants.
+    `docs/formats.md` has them; this has the line you can paste.
+    """
+    wanted = sorted(
+        {name for left in written.skipped if left.wants == "groups" for name in left.names}
+    )
+    if not wanted:
+        return ()
+    return (
+        "",
+        # The artifact rather than the instruction. Each skipped line already
+        # says to declare them and to seed again; a third copy of that sentence
+        # would be the noise, and what none of those lines can give is the one
+        # list that covers all of them.
+        "the groups.yaml that unblocks every one of them:",
+        "",
+        f"    groups: [{', '.join(wanted)}]",
+    )
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -308,6 +347,8 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
             f"({', '.join(left.names)}) that this workspace {CANNOT[left.wants]}. "
             f"{REMEDY[left.wants]}, then seed again with --all"
         )
+    for line in _declare(written):
+        print(line)
     for name in written.overwritten:
         # After the list, not beside each entry: the point is that you edit your
         # copy, so losing one is the line that has to survive being skimmed.

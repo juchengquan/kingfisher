@@ -14,7 +14,6 @@ from kingfisher.domain.layout import (
 )
 from kingfisher.infrastructure.workspace_fs import (
     EXAMPLE,
-    GROUPS_EXAMPLE,
     LocalSessionDirs,
     ensure_layout,
     ensure_session_layout,
@@ -89,19 +88,26 @@ def test_the_example_lands_beside_a_relocated_catalogue(tmp_path):
     assert not (ws / EXAMPLE).exists(), "a second copy where nothing reads it"
 
 
-def test_a_relocated_group_policy_gets_its_example_too(tmp_path):
-    """The same rule for the other file, and it needs saying separately.
+def test_no_groups_example_is_placed_anywhere(tmp_path):
+    """`groups.yaml.example` shipped and was placed for two days, and went.
 
-    `groups.yaml` relocates by its own variable, so the two can move apart --
-    and the message that names `groups.yaml.example` is printed by `seed`,
-    which is the same run that placed it.
+    An example ships one vocabulary and a workspace needs whichever names its
+    own definitions ask for, so the file could not be the file you needed --
+    `seed` named three groups and put a template declaring five others beside
+    them. The remedy travels in the message now, where it can name the ones
+    actually missing. See `presentation.cli.__main__._declare`.
+
+    Asserted rather than left to the absence of a test: a placement that came
+    back by accident would be furniture nobody decided on, and the relocation
+    path below is exactly where a second file would quietly reappear.
     """
     ws = tmp_path / "ws"
     policy = tmp_path / "policy" / "groups.yaml"
 
     ensure_layout(ws, authored={"models.yaml": ws / "models.yaml", "groups.yaml": policy})
 
-    assert (policy.parent / GROUPS_EXAMPLE).is_file()
+    assert not list(policy.parent.glob("*.example")), "a groups example came back"
+    assert not list(ws.glob("groups.yaml*")), "a groups file appeared in the workspace"
     assert (ws / EXAMPLE).is_file(), "the catalogue did not move, so its example stays"
 
 
