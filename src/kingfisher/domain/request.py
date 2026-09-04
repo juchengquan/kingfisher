@@ -14,21 +14,26 @@ from kingfisher.subagents.spec import RunOn
 class Request:
     """One request: the turn boundary made explicit.
 
-    A stateless service receives exactly these five things and passes them
-    straight through; `cfg`, `agent` and `checkpointer` stay keyword arguments
-    on the entrypoint because they describe how this kingfisher is configured,
-    not what is being asked of it.
+    A stateless service receives exactly these fields and passes them straight
+    through; `cfg`, `graph`, `checkpointer` and `dirs` stay keyword arguments on
+    the entrypoint, because they describe how this kingfisher is configured
+    rather than what is being asked of it. `agent` is a field and not one of
+    them -- which agent runs is part of the ask, and the comment on it below
+    says why it is nonetheless optional here.
+
+    Deliberately uncounted. This said "these five things" while the record held
+    twelve, and naming today's number would only restart the same clock.
 
     `session_id` continues a conversation; omitted, a new one starts.
     `turn_id` should be the caller's own request id where one exists — it makes
     a retry idempotent rather than forking a second turn.
-    `inputs` are files supplied with this request. They are copied into the
-    turn's `input/` directory, never into `/data`: they arrive fresh each round
-    and leave with the turn.
-    `data` are files supplied to the *session*. They are copied into `/data`,
-    where they stay: the next turn still has them without being handed them
-    again. That lifetime is the only difference from `inputs`, and it is why
-    both exist rather than one flag with a mode.
+    `inputs` are files supplied with this request, copied into the turn's
+    `input/` directory and never into `/data`: they arrive fresh each round and
+    leave with the turn.
+    `data` are files supplied to the *session*, copied into `/data` where they
+    stay, so the next turn has them without being handed them again. That
+    lifetime is the only difference between the two, and why both exist rather
+    than one flag with a mode.
     Wanting files written is one kind of task among many, so there is no field
     for it: a request that wants `report.md`, a CSV, or nothing at all says so
     in `task`, in its own words. Nothing here privileges one convention.

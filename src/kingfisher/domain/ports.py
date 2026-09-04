@@ -14,12 +14,12 @@ Two kinds of port live here, and the rule above is only about the first.
 
 * **Primitives**, above -- `SessionDirs`, `ThreadStore` -- exist because a rule
   depends on what the operation guarantees.
-* **Repositories** -- `AssetRepository` and its three kinds -- exist because a
+* **Repositories** -- `AssetRepository` and its four kinds -- exist because a
   deployment may hold its definitions somewhere kingfisher did not choose. They
-  earn their place by being *swapped*, not by being depended on, and they are
-  narrow for a different reason: the port carries only what a replacement must
-  provide. Everything a local directory can also answer -- where a definition
-  sits on disk, which folders hold one too deep to load -- stays on the local
+  earn their place by being *swapped* rather than depended on, and are narrow
+  for a different reason: the port carries only what a replacement must provide.
+  Everything a local directory can also answer -- where a definition sits on
+  disk, which folders hold one too deep to load -- stays on the local
   implementation, because a store that is not a directory has no answer to give
   and should not be made to pretend.
 """
@@ -42,12 +42,11 @@ class AssetRepository(Protocol):
     """Something a deployment's definitions can be read from.
 
     One member, because one is all four kinds have in common. The capability
-    layer filters skills, subagents and tools by *name* and by nothing else --
-    and an agent is *chosen* by name rather than filtered, which wants the same
-    listing -- so `names` is the whole shared vocabulary; what a kind is made of --
-    a directory listing, parsed documents, imported Python -- differs so
-    completely that a shared `load` would unify the word and none of the
-    meaning.
+    layer filters skills, subagents and tools by *name* and nothing else, and an
+    agent is *chosen* by name rather than filtered, which wants the same listing
+    -- so `names` is the whole shared vocabulary. What a kind is made of -- a
+    directory listing, parsed documents, imported Python -- differs so completely
+    that a shared `load` would unify the word and none of the meaning.
 
     A property rather than a method because reading is what these are for, and
     because an implementation is expected to read once and answer from that.
