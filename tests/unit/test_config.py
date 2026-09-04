@@ -506,3 +506,57 @@ def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
     (workspace / "groups.yaml").write_text("groups: [A\n", encoding="utf-8")
     with pytest.raises(AccessError):
         config_from_env(env)
+
+
+# -- the environment, bound once -------------------------------------------
+
+
+def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
+    """The property that makes it testable at all: it reads what it was handed,
+    never the process. A reader reaching for `os.environ` would pass every test
+    that supplied its own mapping and then behave differently in a run."""
+    from kingfisher.application.config import Environment
+
+    monkeypatch.setenv("KINGFISHER_RECURSION_LIMIT", "9999")
+    reading = Environment({"KINGFISHER_RECURSION_LIMIT": "7"})
+
+    assert reading.number("KINGFISHER_RECURSION_LIMIT", 150) == 7
+
+
+def test_one_path_reading_now_rather_than_two(tmp_path):
+    """`_optional_path` was defined twice -- once inside `paths_from_env`, once
+    inside `config_from_env` -- because a closure over `environ` was the only
+    way to share it while `environ` was a parameter.
+
+    Asserted through both entry points rather than on the method, because what
+    the duplication risked was the two drifting: a `~` or a relative path
+    expanded on one route and not the other.
+    """
+    from kingfisher.application.config import Environment
+
+    reading = Environment({"KINGFISHER_WORKSPACE": "ws", "KINGFISHER_TOOLS_DIR": "tools"})
+
+    assert reading.optional_path("KINGFISHER_TOOLS_DIR") == Path("tools").resolve()
+    assert reading.paths().tools_root == reading.optional_path("KINGFISHER_TOOLS_DIR")
+    assert reading.optional_path("KINGFISHER_UNSET") is None
+
+
+def test_the_exported_functions_are_the_class(tmp_path, monkeypatch):
+    """`paths_from_env` stays a function because callers import it, and it has
+    to keep answering identically -- so it is asserted against the reader rather
+    than left to look obvious."""
+    from kingfisher.application.config import Environment, paths_from_env
+
+    environ = {"KINGFISHER_WORKSPACE": str(tmp_path / "ws")}
+
+    assert paths_from_env(environ) == Environment(environ).paths()
+
+
+def test_a_reader_with_no_mapping_reads_the_process(monkeypatch, tmp_path):
+    """The default that `os.environ if environ is None` used to express, now in
+    one place instead of at the top of every function."""
+    from kingfisher.application.config import Environment
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+
+    assert Environment.current().paths().workspace == (tmp_path / "ws").resolve()
