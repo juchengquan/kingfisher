@@ -405,12 +405,12 @@ class Reader:
     def groups(self, value: object, *, key: str = "groups") -> Audience:
         """A definition's own audience: who may reach it at all.
 
-        Its own reader rather than `selection`, and not only for the type. A
-        selection names things the *workspace* offers and may be `None` for
-        "none of them"; this names groups, and there is no "none" -- a
-        definition nobody may reach is written by giving it a group nobody
-        holds. Absent means everyone, which is what an absent optional field
-        means everywhere else in these formats.
+        `audience_list` below does the reading and gives the reasons; this adds
+        the one thing true only here. Absent means everyone, which is what an
+        absent optional field means everywhere else in these formats -- and it
+        is why this returns `ALL` rather than asking about an empty line.
+
+        `lone_name=True`, because a definition's own line takes `groups: A`.
         """
         if value is None:
             return ALL
