@@ -20,16 +20,35 @@ __version__ = "0.1.0"
 
 #: Public name -> the module that defines it. The single source for both
 #: `__getattr__` and `__all__`, so the two cannot drift.
+#:
+#: Eleven names left this table without leaving the package: `build_agent`,
+#: `build_backend`, `build_model`, `system_prompt`,
+#: `writable_data`, `protect_data`, `shell_env`, `normalize_answer`,
+#: `AccessReport`, `Groups` and `Stated`. Every one is live -- `build_backend`
+#: alone has 88 callers -- and every one of those callers imports it from the
+#: module that defines it. Nothing had ever come through the front door for
+#: them.
+#:
+#: That is the distinction this table exists to draw and had stopped drawing.
+#: The comments below record why a name is public one at a time -- "the fourth
+#: name the consumer rule has forced public", "public because it reached" --
+#: and nothing recorded the opposite, so a name added on a guess looked exactly
+#: like a name added on a caller. A door advertising what nobody walks through
+#: cannot answer the only question asked of it, which is what a caller may rely
+#: on.
+#:
+#: Narrowed rather than deleted. `from kingfisher.infrastructure.harness.agent
+#: import build_agent` still works and is what the package itself does. An
+#: outside caller on the old spelling changes one import line, which is a real
+#: cost measured against users this repository cannot see -- accepted at 0.1.0,
+#: and noted here rather than discovered later.
 _EXPORTS = {
     "ALL": "kingfisher.domain.capabilities",
     "AUDIENCED": "kingfisher.domain.access",
     "spell": "kingfisher.domain.access",
     "Audience": "kingfisher.domain.access",
-    "Stated": "kingfisher.domain.access",
     "Held": "kingfisher.domain.access",
-    "Groups": "kingfisher.domain.access",
     "AccessError": "kingfisher.domain.access",
-    "AccessReport": "kingfisher.domain.access",
     "UNSCOPED": "kingfisher.domain.access",
     "Capabilities": "kingfisher.domain.capabilities",
     "CapabilityError": "kingfisher.domain.capabilities",
@@ -44,6 +63,12 @@ _EXPORTS = {
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.uploads",
     "async_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
+    # Kept when its eleven neighbours went. Off the door it is defined for
+    # tests alone -- `tests/unit/test_checkpointing.py` is its only caller,
+    # and `test_nothing_is_defined_for_tests_alone` said so the moment it was
+    # dropped. The sync twin of `async_checkpointer` above, for a deployment
+    # whose graph is not async; being public is the whole of its job.
+    "build_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     "Config": "kingfisher.config",
     # The fourth name the consumer rule has forced public, and the first
     # that improved the library on its own: `resolve` takes six arguments
@@ -60,10 +85,6 @@ _EXPORTS = {
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
-    "build_agent": "kingfisher.infrastructure.harness.agent",
-    "build_backend": "kingfisher.infrastructure.harness.backend",
-    "build_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
-    "build_model": "kingfisher.infrastructure.harness.models",
     "definitions_source": "kingfisher.infrastructure.seeding",
     "ensure_layout": "kingfisher.infrastructure.workspace_fs",
     "kinds_at": "kingfisher.infrastructure.seeding",
@@ -104,13 +125,8 @@ _EXPORTS = {
     "Origins": "kingfisher.application.origins",
     "config_from_env": "kingfisher.application.config",
     "paths_from_env": "kingfisher.application.config",
-    "normalize_answer": "kingfisher.domain.result",
-    "protect_data": "kingfisher.infrastructure.workspace_fs",
     "run": "kingfisher.application.run",
-    "shell_env": "kingfisher.infrastructure.harness.backend",
     "stream": "kingfisher.application.run",
-    "system_prompt": "kingfisher.infrastructure.prompting",
-    "writable_data": "kingfisher.infrastructure.workspace_fs",
 }
 
 __all__ = [
@@ -121,14 +137,12 @@ __all__ = [
     "SKILL_LAYOUT",
     "UNSCOPED",
     "AccessError",
-    "AccessReport",
     "Audience",
     "Capabilities",
     "CapabilityError",
     "Config",
     "ConfigError",
     "Confinement",
-    "Groups",
     "Held",
     "Inventory",
     "Kingfisher",
@@ -145,7 +159,6 @@ __all__ = [
     "SessionBusyError",
     "SessionInfo",
     "SkillError",
-    "Stated",
     "SubagentError",
     "UnknownReferenceError",
     "UnknownSessionError",
@@ -154,10 +167,7 @@ __all__ = [
     "WorkspacePaths",
     "async_checkpointer",
     "bubblewrap_available",
-    "build_agent",
-    "build_backend",
     "build_checkpointer",
-    "build_model",
     "config_from_env",
     "definitions_source",
     "ensure_layout",
@@ -165,20 +175,15 @@ __all__ = [
     "kinds_at",
     "landlock_abi",
     "memory_backing",
-    "normalize_answer",
     "offered",
     "paths_from_env",
-    "protect_data",
     "run",
     "seed",
     "shell_confinement",
-    "shell_env",
     "spell",
     "split_reference",
     "stream",
-    "system_prompt",
     "unrunnable_delegates",
-    "writable_data",
 ]
 
 if TYPE_CHECKING:
@@ -200,11 +205,8 @@ if TYPE_CHECKING:
     from kingfisher.domain.access import AUDIENCED as AUDIENCED
     from kingfisher.domain.access import UNSCOPED as UNSCOPED
     from kingfisher.domain.access import AccessError as AccessError
-    from kingfisher.domain.access import AccessReport as AccessReport
     from kingfisher.domain.access import Audience as Audience
-    from kingfisher.domain.access import Groups as Groups
     from kingfisher.domain.access import Held as Held
-    from kingfisher.domain.access import Stated as Stated
     from kingfisher.domain.capabilities import ALL as ALL
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
@@ -215,7 +217,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.result import RunEvent as RunEvent
     from kingfisher.domain.result import RunResult as RunResult
-    from kingfisher.domain.result import normalize_answer as normalize_answer
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
@@ -235,20 +236,15 @@ if TYPE_CHECKING:
         shell_confinement as shell_confinement,
     )
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
-    from kingfisher.infrastructure.harness.agent import build_agent as build_agent
     from kingfisher.infrastructure.harness.agent import (
         unrunnable_delegates as unrunnable_delegates,
     )
-    from kingfisher.infrastructure.harness.backend import build_backend as build_backend
-    from kingfisher.infrastructure.harness.backend import shell_env as shell_env
     from kingfisher.infrastructure.harness.checkpointing import (
         async_checkpointer as async_checkpointer,
     )
     from kingfisher.infrastructure.harness.checkpointing import (
         build_checkpointer as build_checkpointer,
     )
-    from kingfisher.infrastructure.harness.models import build_model as build_model
-    from kingfisher.infrastructure.prompting import system_prompt as system_prompt
     from kingfisher.infrastructure.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.seeding import Seeded as Seeded
     from kingfisher.infrastructure.seeding import (
@@ -262,8 +258,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.uploads import UploadError as UploadError
     from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace_fs import memory_backing as memory_backing
-    from kingfisher.infrastructure.workspace_fs import protect_data as protect_data
-    from kingfisher.infrastructure.workspace_fs import writable_data as writable_data
 
 
 def __getattr__(name: str) -> Any:

@@ -1170,8 +1170,7 @@ LIGHT_EXPORTS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
     "UnknownReferenceError", "LocalFileStore", "async_checkpointer",
-    "build_checkpointer", "build_model", "ensure_layout", "config_from_env",
-    "normalize_answer", "protect_data", "system_prompt", "writable_data",
+    "build_checkpointer", "ensure_layout", "config_from_env",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",
     # Asking the kernel what it can fence with. `ctypes` and a syscall, no
@@ -1212,8 +1211,7 @@ LIGHT_EXPORTS = frozenset({
     # `domain.capabilities` and nothing else, which is the point of it being a
     # domain module: deciding who reaches what must not cost a provider SDK,
     # because a deployment resolves a grant on every turn.
-    "Groups", "AccessError", "AccessReport", "UNSCOPED", "Held", "AUDIENCED",
-    "Audience", "Stated",
+    "AccessError", "UNSCOPED", "Held", "AUDIENCED", "Audience",
     # Writing one out. Published for the same reason `ALL` below is: the command
     # prints audiences, an audience entry may be a conjunction, and a second
     # spelling in the printer is how a refusal quoting one stops matching the
@@ -1235,7 +1233,7 @@ HEAVY_EXPORTS = frozenset({
     # modules, measured -- which is why `doctor` imports it inside the check
     # rather than at the top of `health`, where every other verb would pay it.
     "unrunnable_delegates",
-    "Kingfisher", "build_agent", "build_backend", "run", "shell_env", "stream",
+    "Kingfisher", "run", "stream",
 })
 
 PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")
