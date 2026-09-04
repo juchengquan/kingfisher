@@ -1143,3 +1143,108 @@ def test_the_listing_is_clean_when_every_group_is_declared(cfg, monkeypatch, cap
 
     assert main(["list"]) == 0
     assert "cannot load" not in capsys.readouterr().out
+
+
+# -- `run`, the verb the command existed for years without ------------------
+
+
+def _ran(monkeypatch, events, cfg):
+    """Point `run` at a scripted stream, so nothing reaches a model."""
+    from kingfisher.presentation.cli import __main__ as entry
+
+    class Stub:
+        def __init__(self, *a, **k) -> None:
+            self.seen: list = []
+
+        def stream(self, request, *, groups=None):
+            self.seen.append((request, groups))
+            yield from events
+
+    stub = Stub()
+    monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: stub)
+    monkeypatch.setattr(entry, "config_from_env", lambda: cfg)
+    return stub
+
+
+def _finished(stop_reason="end_turn"):
+    from kingfisher import RunEvent, RunResult
+
+    return RunEvent(
+        kind="finished",
+        result=RunResult(
+            session_id="s1", turn_id="t001", answer="42",
+            virtual_dir="/runs/t001", stop_reason=stop_reason,
+        ),
+    )
+
+
+def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, capsys):
+    """What makes the verb compose. `> answer.md` has to hold the answer and
+    nothing else, and `2>/dev/null` has to give silence."""
+    from kingfisher import RunEvent
+
+    _ran(monkeypatch, [RunEvent(kind="run_start", text="/runs/t001"),
+                       RunEvent(kind="token", text="forty two"),
+                       _finished()], cfg)
+
+    assert main(["run", "do a thing", "--agent", "assistant"]) == 0
+
+    shown = capsys.readouterr()
+    assert shown.out == "forty two"
+    assert "/runs/t001" in shown.err
+    assert "forty two" not in shown.err
+
+
+def test_a_delegates_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):
+    """A reviewer's working notes are not what you asked for. On one stream the
+    speaker tag is what keeps them apart; on two, the streams are."""
+    from kingfisher import RunEvent
+
+    _ran(monkeypatch, [RunEvent(kind="token", text="mine"),
+                       RunEvent(kind="token", text="theirs", agent="reviewer"),
+                       _finished()], cfg)
+
+    main(["run", "t", "--agent", "assistant"])
+
+    shown = capsys.readouterr()
+    assert shown.out == "mine"
+    assert "theirs" in shown.err
+
+
+def test_a_turn_stopped_at_a_bound_exits_non_zero(cfg, monkeypatch, capsys):
+    """`kingfisher run ... > report.md && publish report.md` must not publish a
+    report that stopped halfway. stdout is prose, so the exit code is the only
+    thing a script has to read."""
+    _ran(monkeypatch, [_finished(stop_reason="max_steps")], cfg)
+
+    assert main(["run", "t", "--agent", "assistant"]) == 1
+    assert "max_steps" in capsys.readouterr().err
+
+
+def test_the_agent_is_required_because_there_is_no_honest_default(cfg, monkeypatch):
+    """An agent decides which endpoint the prompts go to and whose credentials
+    pay. A default would put that choice where the command line never says it."""
+    _ran(monkeypatch, [_finished()], cfg)
+
+    with pytest.raises(SystemExit) as exit_code:
+        main(["run", "do a thing"])
+
+    assert exit_code.value.code == 2
+
+
+def test_a_file_that_is_not_there_is_refused_before_the_model(cfg, monkeypatch, capsys):
+    """The one mistake that would otherwise cost money to discover."""
+    _ran(monkeypatch, [_finished()], cfg)
+
+    assert main(["run", "t", "--agent", "a", "--data", "/nope/missing.csv"]) == 2
+    assert "no such file" in capsys.readouterr().err
+
+
+def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
+    """`--as` is not decoration: on a workspace that declares groups the library
+    refuses a turn that names nobody, and names this flag when it does."""
+    stub = _ran(monkeypatch, [_finished()], cfg)
+
+    main(["run", "t", "--agent", "a", "--as", "A,B"])
+
+    assert stub.seen[0][1] == ("A", "B")

@@ -117,10 +117,8 @@ from uuid import uuid4
 from dotenv import load_dotenv
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable
-    from typing import TextIO
 
-    from kingfisher.domain.result import RunEvent, RunResult
+    pass
 
 # The repository root, so `evals` imports when this is run by path. Python puts
 # the *script's* directory on `sys.path`, which was the root while this file was
@@ -159,6 +157,7 @@ from kingfisher.infrastructure.workspace_fs import (
     ensure_session_layout,
     is_new_workspace,
 )
+from kingfisher.presentation.cli.progress import show
 
 #: The grants this driver exposes, in the order they are listed and reported.
 #: `builtin_tools` and `tools` are two axes rather than one because they are
@@ -248,73 +247,6 @@ def warn_if_unconfined(cfg: Config) -> None:
     confined = confinement.shell_confinement(cfg)
     if confined.warning:
         print(f"WARNING   : {confined.warning}", file=sys.stderr)
-
-
-class Progress:
-    """Print run events as they arrive, and keep the terminal readable.
-
-    Token events are fragments, not lines: written with no newline and no tag,
-    so the model owns the left margin and its own formatting survives. Progress
-    stays tagged and aligned. That mix is the whole reason for `_owed` -- a
-    newline is owed before the next tagged line, or it lands on the end of a
-    half-finished sentence.
-
-    A class rather than a loop because there are two loops: `stream` is
-    synchronous and `astream` is not, and the formatting is the same either
-    way. Writing it twice is how the two would come to disagree about when a
-    newline is owed.
-    """
-
-    def __init__(self, out: TextIO) -> None:
-        self._out = out
-        self._owed = False
-        self._speaker: str | None = None
-
-    def write(self, event: RunEvent) -> RunResult | None:
-        """Show one event. Returns the `RunResult` if this was the last."""
-        if event.kind == "token":
-            # Prose from a delegate arrives on the same stream as the caller's
-            # own, as the same type, with nothing between them -- so without a
-            # marker the two answers read as one. It cannot go on the fragment
-            # itself: chunks split mid-word, and there is no line to tag. So it
-            # goes at the seam, which is the only place a boundary exists.
-            if event.agent != self._speaker:
-                if self._owed:
-                    self._out.write("\n")
-                    self._owed = False
-                self._speaker = event.agent
-                print(f"[{event.agent or 'main'}]", file=self._out, flush=True)
-            self._out.write(event.text)
-            self._out.flush()
-            self._owed = True
-            return None
-        if self._owed:
-            self._out.write("\n")
-            self._owed = False
-        # The terminal event carries the result and is not itself printed. Nor
-        # is `result.answer` printed afterwards: it already arrived, a word at
-        # a time, and saying it again would read as the model answering twice.
-        if event.kind == "finished":
-            return event.result
-        print(event, file=self._out, flush=True)
-        return None
-
-    def close(self) -> None:
-        """Settle any newline still owed, so the next writer starts clean."""
-        if self._owed:
-            self._out.write("\n")
-            self._out.flush()
-            self._owed = False
-
-
-def render(events: Iterable[RunEvent], out: TextIO) -> RunResult | None:
-    """Drain a synchronous stream through `Progress`."""
-    progress = Progress(out)
-    result: RunResult | None = None
-    for event in events:
-        result = progress.write(event) or result
-    progress.close()
-    return result
 
 
 def build_parser() -> argparse.ArgumentParser:
@@ -640,7 +572,7 @@ def main(argv: list[str]) -> int:
 
     result = None
     try:
-        result = render(stream(request, cfg=cfg), sys.stdout)
+        result = show(stream(request, cfg=cfg), sys.stdout)
     except CapabilityError as exc:
         # A named capability the workspace does not offer. Reported here rather
         # than as a traceback because it is a usage error, not a crash.

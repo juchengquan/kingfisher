@@ -1829,7 +1829,20 @@ BLOCKING_METHODS = frozenset({"run", "stream"})
 NOT_KINGFISHER = frozenset({"uvicorn"})
 
 
-@pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
+#: The consumer this is about. It was every consumer until `kingfisher run`
+#: existed, at which point the rule caught the first caller it was never written
+#: for: its own reason is that the sync pair blocks "every other turn sharing the
+#: process", and a command has one turn and one process and exits after. Blocking
+#: is what a command wants. Narrowed by name rather than by loosening the
+#: predicate, so the server is held exactly as tightly as before.
+ON_AN_EVENT_LOOP = "kingfisher_service"
+
+
+def _server_modules() -> list[Path]:
+    return sorted(CONSUMERS[ON_AN_EVENT_LOOP].rglob("*.py"))
+
+
+@pytest.mark.parametrize("path", _server_modules(), ids=_module_id)
 def test_the_server_calls_the_async_turn_methods(path):
     """`arun` and `astream`, never `run` and `stream`.
 

@@ -22,13 +22,21 @@ from kingfisher.infrastructure import workspace_fs
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness import agent as main_agent_module
+from kingfisher.presentation.cli.progress import show
 from tests.conftest import subagents_dir, tools_dir
 from tests.integration import driver as main
 
 
 def _render(events: list[RunEvent]) -> tuple[str, RunResult | None]:
+    """One stream, which is what the driver passes and what these tests are about.
+
+    The renderer moved into the wheel when `kingfisher run` needed one --
+    shipping a second copy is how the two would have come to disagree about a
+    new event kind. These stay here because they are the driver's rendering
+    contract; the two-stream split `run` uses is tested beside the verb.
+    """
     out = io.StringIO()
-    result = main.render(iter(events), out)
+    result = show(iter(events), out)
     return out.getvalue(), result
 
 
@@ -695,7 +703,9 @@ def _intercepted(monkeypatch) -> list:
         return iter(())
 
     monkeypatch.setattr("kingfisher.stream", _stream, raising=False)
-    monkeypatch.setattr(driver, "render", lambda events, out: None)
+    # The driver imports `show` by name, so the patch goes on the driver's own
+    # binding -- patching the module it came from would leave this one bound.
+    monkeypatch.setattr(driver, "show", lambda events, out: None)
     return seen
 
 
