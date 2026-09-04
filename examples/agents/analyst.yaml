@@ -81,6 +81,36 @@ tools:
 # own tools, so kingfisher can filter them but never leave them out of a graph.
 # What gates them is the line at the top of this file -- an agent declaring a
 # read-only builtin set cannot hand anyone the shell, whoever they are.
+#
+# **The same long form, on the other two fields that take one.** `tools:` above
+# is where an audience is most often wanted, but nothing about it is special:
+# `skills:` and `subagents:` read identically, and one long form across all
+# three is the whole reason the entry is `{name, groups}` rather than a shape
+# per field.
+skills:
+  # Narrower than this definition. An auditor opens this agent and is never
+  # told the profiling procedure exists; an analyst is.
+  #
+  # Worth being exact about what that does and does not buy. Removing a skill
+  # means the agent is not *told* about it -- the file is still on disk, and a
+  # skill was never a boundary. The boundary is the tools the procedure would
+  # need, which carry audiences of their own, two fields up.
+  - name: tabular-qa
+    groups: [analysts]
+  # Bare, so it inherits `[analysts, auditors]` -- reviewing the code that
+  # produced a figure is for whoever may open this agent at all.
+  - code-review
+subagents:
+  # A delegate, restricted the same way. `auditor` is reachable by three groups
+  # in its own file; this line says which of them may reach it *through this
+  # agent*, which is the sense in which an audience is a property of the use
+  # rather than of the thing used.
+  #
+  # `kingfisher list` prints a roll-up by delegate for exactly that reason: the
+  # same auditor may be opened wider somewhere else, and a call site quietly
+  # wider than its neighbours is what the roll-up exists to show.
+  - name: auditor
+    groups: [analysts]
 memory: false
 system_prompt: |
   You answer questions about the data in this workspace.
