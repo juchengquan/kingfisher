@@ -14,6 +14,7 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.presentation.cli.__main__ import main
 from tests.conftest import subagents_dir, verbs
 
@@ -1248,3 +1249,62 @@ def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
     main(["run", "t", "--agent", "a", "--as", "A,B"])
 
     assert stub.seen[0][1] == ("A", "B")
+
+
+# -- seeding lands where the catalogue is, not where the workspace is --------
+#
+# These moved off the driver when `--seed` did. They were always about where
+# `seeding.seed` puts things, which is the shipped verb's job -- and testing it
+# through a driver that is not in the wheel meant the thing anybody installs was
+# the thing nothing covered.
+
+
+def test_seeding_lands_in_the_catalogue_not_the_workspace(
+    cfg, tmp_path, shipped, monkeypatch, capsys
+):
+    """They are the same directory until a deployment moves them, and a preset
+    written to `workspace/skills` is invisible to an agent reading the relocated
+    one -- the bug this has caught before."""
+    catalogue = tmp_path / "catalogue"
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+    monkeypatch.setenv("KINGFISHER_SKILLS_DIR", str(catalogue / "skills"))
+    monkeypatch.setenv("KINGFISHER_SUBAGENTS_DIR", str(catalogue / "subagents"))
+
+    assert main(["seed"]) == 0
+
+    assert LocalSkillRepository(catalogue / "skills").names
+    assert not LocalSkillRepository(cfg.workspace / "skills").names
+    assert "seeded" in capsys.readouterr().out
+
+
+def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, monkeypatch):
+    """The default, and the case the old code got right -- worth keeping, or the
+    fix above could quietly break the ordinary setup."""
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+
+    assert main(["seed"]) == 0
+    assert LocalSkillRepository(cfg.skills_dir).names
+
+
+def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkeypatch):
+    """The third catalogue, and the third chance to seed where nothing reads.
+
+    `KINGFISHER_TOOLS_DIR` relocates it the way the other two do, so a tool
+    written to `workspace/tools` would be invisible to the agent for exactly the
+    reason that was fixed for skills.
+    """
+    from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
+
+    catalogue = tmp_path / "catalogue"
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
+    monkeypatch.setenv("KINGFISHER_TOOLS_DIR", str(catalogue / "tools"))
+
+    assert main(["seed"]) == 0
+
+    assert "http_fetch" in LocalToolRepository(catalogue / "tools").names
+    # `ensure_layout` still makes the workspace directory, so the place to put
+    # one is obvious. What must not happen is a preset landing in it.
+    assert LocalToolRepository(cfg.workspace / "tools").names == ()
