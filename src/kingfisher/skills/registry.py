@@ -50,7 +50,7 @@ if TYPE_CHECKING:
 # had already made this exact move for the separator and said why: one
 # separator both kinds import beats two that agree by coincidence. It named
 # skills as the other kind; this is skills. Re-exported by the import, so
-# `skill_registry.SEPARATOR` still resolves for readers who look here first.
+# `skills.registry.SEPARATOR` still resolves for readers who look here first.
 
 #: The key a qualified id travels under inside deepagents' own metadata. Added
 #: beside `name` rather than replacing it: `name` is what the file says and what
