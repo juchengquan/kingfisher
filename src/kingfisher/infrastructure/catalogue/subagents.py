@@ -18,7 +18,6 @@ from pathlib import Path
 
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.subagent.reading import EXPORT, SUFFIX, declared
-from kingfisher.domain.tool import reference
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.catalogue.importing import (
     PACKAGE_MARKER,
@@ -26,6 +25,7 @@ from kingfisher.infrastructure.catalogue.importing import (
     modules_in,
     skipped,
 )
+from kingfisher.tools.spec import reference
 
 #: The spelling people reach for, and the one that used to vanish. `.yml` is
 #: valid YAML everywhere else, so a file named that way is a definition someone

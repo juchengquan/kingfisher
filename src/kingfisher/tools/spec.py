@@ -1,6 +1,6 @@
 """What a tool is, seen from the domain: an object, and where it came from.
 
-Here rather than in `infrastructure.catalogue.tools` because `ToolRepository` is
+Here rather than in `tools.catalogue` because `ToolRepository` is
 a port, and a port
 in `domain/ports.py` cannot name a type that lives one layer out. Nothing
 foreign travels with it: `tool` is `Any` on purpose and `tool_name` is three
@@ -411,44 +411,6 @@ class Offering:
         )
 
 
-def ceiling(
-    asked_builtin: Selection,
-    asked_tools: Selection,
-    *,
-    granted_builtin: Selection,
-    granted_tools: Selection,
-    subject: str,
-) -> Selection:
-    """Every tool a delegate may call, from the two lists it may narrow.
-
-    Not a method on `Offering`, and the reason is worth stating because putting
-    it there is the obvious move and it is wrong: a delegate is narrowed by what
-    the *request was granted*, not by what the workspace offers. Those differ
-    exactly when a request narrowed something, which is the case this exists
-    for. An `Offering.ceiling` would silently widen a delegate back to the
-    workspace.
-
-    Answers `ALL` for "narrowed by nobody" where `Offering.permitted` answers
-    `None`. Two consumers, two conventions: a delegate's selection is narrowed
-    again downstream, a request's is handed to a middleware. Folding them would
-    make one of the two lie.
-    """
-    from_builtin = narrowed(asked_builtin, by=granted_builtin)
-    from_workspace = narrowed(asked_tools, by=granted_tools)
-    if from_builtin == ALL and from_workspace == ALL:
-        return ALL
-    if ALL in (from_builtin, from_workspace):
-        # Quiet if unguarded: `ALL` is the string `"*"`, so unpacking it into
-        # the union contributes a tool *named* `*` and drops the axis it stood
-        # for. An allowlist is one flat set of names and cannot say "all of
-        # those, plus these".
-        msg = (
-            f"{subject}: one tool axis resolved to {ALL!r} while the other named "
-            f"tools ({from_builtin!r} / {from_workspace!r}). Resolve both against "
-            f"what is offered before calling this, or neither"
-        )
-        raise ValueError(msg)
-    return (*(from_builtin or ()), *(from_workspace or ()))
 
 
 def claimed_sources(written: Selection) -> Mapping[str, str]:

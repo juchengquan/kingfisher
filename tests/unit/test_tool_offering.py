@@ -10,8 +10,8 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.tool import Found, Offering, ceiling
+from kingfisher.domain.capabilities import ALL, CapabilityError, ceiling
+from kingfisher.tools.spec import Found, Offering
 
 WORKSPACE = Offering(
     builtin=("read_file", "execute"),

@@ -28,9 +28,9 @@ from kingfisher.domain.capabilities import (
     Selection,
     narrowed,
 )
-from kingfisher.domain.tool import Found, Offering
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.delegation import TASK_TOOL
+from kingfisher.tools.spec import Found, Offering
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

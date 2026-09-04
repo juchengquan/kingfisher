@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, ToolError, tool_name
+from kingfisher.tools.catalogue import LocalToolRepository, ToolError, tool_name
 
 MODULE = '''
 from langchain_core.tools import tool

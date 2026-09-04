@@ -323,7 +323,7 @@ def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
     prints "no tools" for a graph it could not read has stated a fact it does
     not have.
     """
-    from kingfisher.infrastructure.harness.surface import registered_tools
+    from kingfisher.tools.harness import registered_tools
 
     assert registered_tools(object()) is None
 
@@ -566,13 +566,13 @@ def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
     The `model` node is what separates them."""
     from langchain.agents import create_agent
 
-    from kingfisher.infrastructure.harness.surface import registered_tools
+    from kingfisher.tools.harness import registered_tools
 
     assert registered_tools(create_agent(fake_model, tools=[])) == ()
 
 
 def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
-    from kingfisher.infrastructure.harness.surface import registered_tools
+    from kingfisher.tools.harness import registered_tools
 
     assert registered_tools(_hand_written_graph()) is None
 
@@ -586,7 +586,7 @@ def test_a_real_build_is_readable(cfg, session_dir):
     readable, and must dispatch something.
     """
     from kingfisher.infrastructure.harness.agent import build_agent
-    from kingfisher.infrastructure.harness.surface import registered_tools
+    from kingfisher.tools.harness import registered_tools
 
     names = registered_tools(build_agent(cfg, session_dir=session_dir, model=None))
 
@@ -599,13 +599,13 @@ def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch
     graph it failed to read, which is a fact it did not have -- and it looked
     exactly like a deployment that genuinely had none.
 
-    Patched at `harness.surface`, which is where `inventory` imports it from at
+    Patched at `tools.harness`, which is where `inventory` imports it from at
     call time -- it moved there with the rest of the tool picture, and this test
     patches the module rather than the caller's name precisely so that a move
     like that surfaces here rather than passing against a stale attribute.
     """
     from kingfisher.application import inventory as inventory_module
-    from kingfisher.infrastructure.harness import surface as surface_module
+    from kingfisher.tools import harness as surface_module
 
     monkeypatch.setattr(surface_module, "registered_tools", lambda _graph: None)
 

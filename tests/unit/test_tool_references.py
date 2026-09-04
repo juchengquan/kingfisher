@@ -24,14 +24,14 @@ import pytest
 from langchain_core.tools import tool
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.domain.tool import Found, Offering, reference, split_reference, tool_name
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.documents import read_subagent
-from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from kingfisher.infrastructure.harness.delegation import as_subagent
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
-from kingfisher.infrastructure.harness.surface import _ToolSurface
 from kingfisher.infrastructure.workspace import seeding
+from kingfisher.tools.catalogue import LocalToolRepository
+from kingfisher.tools.harness import _ToolSurface
+from kingfisher.tools.spec import Found, Offering, reference, split_reference, tool_name
 from tests.conftest import tools_dir
 
 TOOL = """from langchain_core.tools import tool

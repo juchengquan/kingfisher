@@ -16,9 +16,8 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.agent import AgentSpec
-from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, narrowed
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, ceiling, narrowed
 from kingfisher.domain.subagent import SubagentError
-from kingfisher.domain.tool import ceiling
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.delegation import as_subagent, subagent_skills

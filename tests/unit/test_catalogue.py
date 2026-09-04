@@ -29,7 +29,7 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend
-from kingfisher.infrastructure.harness.surface import workspace_tool_names
+from kingfisher.tools.harness import workspace_tool_names
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
 
 SUBAGENT = """name: reviewer

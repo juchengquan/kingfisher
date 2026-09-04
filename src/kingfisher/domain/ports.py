@@ -34,7 +34,7 @@ from typing import Protocol, runtime_checkable
 
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.subagent import SubagentSpec
-from kingfisher.domain.tool import Found
+from kingfisher.tools.spec import Found
 
 
 @runtime_checkable

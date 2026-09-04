@@ -108,7 +108,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 # an agent already names delegates -- it depends on the subagent vocabulary
 # whatever happens here.
 from kingfisher.domain.subagent.reading import wanted_model
-from kingfisher.domain.tool import claimed_sources
+from kingfisher.tools.spec import claimed_sources
 
 DIRECTORY = "agents"
 

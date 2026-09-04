@@ -107,12 +107,12 @@ _EXPORTS = {
     # block a *refusal* prints is the block a listing prints, so a name two
     # files define reads the same in both. A consumer rendering its own
     # would be the drift that rule exists to stop.
-    "offered": "kingfisher.domain.tool",
+    "offered": "kingfisher.tools.spec",
     # The third name a consumer turned out to need, and it arrived the same
     # way: two folders may each define a `surveyor`, so a listing has to tell
     # a bare name from a `where::what` reference before deciding whether to
     # print the file it came from.
-    "split_reference": "kingfisher.domain.tool",
+    "split_reference": "kingfisher.tools.spec",
     # Said once "so callers can quote it without knowing the filename
     # themselves", by its own comment. It was `skill_store.LAYOUT` with one
     # caller; renamed because a bare `LAYOUT` at the top level sits next to
@@ -227,8 +227,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.domain.subagent import RunOn as RunOn
     from kingfisher.domain.subagent import SubagentError as SubagentError
-    from kingfisher.domain.tool import offered as offered
-    from kingfisher.domain.tool import split_reference as split_reference
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
@@ -266,6 +264,8 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
     from kingfisher.skills.catalogue import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.skills.spec import SkillError as SkillError
+    from kingfisher.tools.spec import offered as offered
+    from kingfisher.tools.spec import split_reference as split_reference
 
 
 def __getattr__(name: str) -> Any:

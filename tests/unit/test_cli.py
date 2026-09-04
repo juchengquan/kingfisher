@@ -1326,7 +1326,7 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkey
     written to `workspace/tools` would be invisible to the agent for exactly the
     reason that was fixed for skills.
     """
-    from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
+    from kingfisher.tools.catalogue import LocalToolRepository
 
     catalogue = tmp_path / "catalogue"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
