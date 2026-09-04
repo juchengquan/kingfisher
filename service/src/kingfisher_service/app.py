@@ -19,7 +19,7 @@ from typing import TYPE_CHECKING
 
 from fastapi import FastAPI, Request, status
 
-from kingfisher import Config, Kingfisher, LocalFileStore, async_checkpointer, config_from_env
+from kingfisher import Config, Kingfisher, LocalFileStore, config_from_env
 from kingfisher_service import access, errors, sessions
 from kingfisher_service.config import ServiceConfig
 from kingfisher_service.identity import GroupsFrom
@@ -80,10 +80,23 @@ def create_app(
     toward patching `create_deep_agent` instead -- which this repo forbids,
     because three live bugs got through while construction was stubbed out.
 
-    Given nothing, it builds one in the lifespan from the environment, holding
-    the async saver open for the process. That saver is not optional: `astream`
-    needs async methods and `SqliteSaver` raises on `aget_tuple`, so a sync one
-    does not merely block the loop, it refuses.
+    Given nothing, it builds one in the lifespan from the environment and wires
+    no saver at all.
+
+    It used to hold one async SQLite database open for the life of the process,
+    because `astream` needs async methods and `SqliteSaver` raises on
+    `aget_tuple` -- so a sync saver did not merely block the loop, it refused.
+    That stopped being true when the default became `InMemorySaver`, which
+    implements both halves of the protocol. What was left was the shape the
+    library had deliberately moved away from: one database shared by every
+    session, which is the contention `_async_checkpointer_for` describes the
+    per-session default as avoiding.
+
+    Nothing durable was lost with it. A checkpoint holds one turn's working
+    state; what a later turn reads is `read_transcript`, kingfisher's own
+    records in the session directory -- see *Sessions: what persists and where*
+    in `docs/decisions.md`. A deployment that does want durable graph state
+    still passes `threads=` its own saver.
     """
     settings = config or ServiceConfig.from_env()
     if kingfisher is not None:
@@ -96,19 +109,18 @@ def create_app(
             return
         cfg: Config = config_from_env()
         files = LocalFileStore(settings.file_store_dir) if settings.file_store_dir else None
-        async with async_checkpointer(cfg) as threads:
-            built = Kingfisher(cfg, threads=threads, files=files)
-            # The same check, at the only other moment it can be made. Given an
-            # instance it runs at construction; building one from the
-            # environment, there is nothing to check until here -- and here is
-            # still before the first request, which is the whole of what
-            # "refuses to start" has to mean.
-            _refuse_mismatch(built, groups_from)
-            app.state.kingfisher = built
-            try:
-                yield
-            finally:
-                app.state.kingfisher = None
+        built = Kingfisher(cfg, files=files)
+        # The same check, at the only other moment it can be made. Given an
+        # instance it runs at construction; building one from the environment,
+        # there is nothing to check until here -- and here is still before the
+        # first request, which is the whole of what "refuses to start" has to
+        # mean.
+        _refuse_mismatch(built, groups_from)
+        app.state.kingfisher = built
+        try:
+            yield
+        finally:
+            app.state.kingfisher = None
 
     app = FastAPI(
         title="kingfisher",

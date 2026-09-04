@@ -227,3 +227,50 @@ def test_turning_on_the_startup_line_does_not_turn_on_the_audit_trail(monkeypatc
     main()
 
     assert logging.getLogger("kingfisher.audit").getEffectiveLevel() == logging.WARNING
+
+
+def test_the_app_builds_its_own_service_without_a_shared_thread_store(cfg, monkeypatch):
+    """The lifespan branch, which nothing drove until this.
+
+    `create_app()` given no instance builds one from the environment, and that
+    is the only path a real deployment takes -- every other test here hands in a
+    `Kingfisher` with a stub agent, so the branch the server actually runs was
+    the one branch never exercised. It held one async SQLite database open for
+    the life of the process, and kept doing so after the reason expired.
+
+    `threads is None` is the whole assertion. It means each turn takes the
+    per-session in-memory saver rather than sharing one database across every
+    session in the process -- the contention `_async_checkpointer_for` describes
+    the default as avoiding. What a later turn reads is `read_transcript`, so
+    nothing durable rides on this.
+    """
+    from fastapi.testclient import TestClient
+    from kingfisher_service import create_app
+
+    # The fixture builds a `Config` directly and hands it a fake catalogue; this
+    # path reads the environment, so the workspace needs the file a real one
+    # has. The minimal catalogue is the one `load` prints when it is missing.
+    (cfg.workspace / "models.yaml").write_text(
+        "endpoints:\n"
+        "  minimax:\n"
+        "    api: anthropic\n"
+        "    base_url: https://api.minimaxi.com/anthropic\n"
+        "    key_env: MINIMAX_API_KEY\n"
+        "\n"
+        "default: MiniMax-M3\n"
+        "\n"
+        "models:\n"
+        "  MiniMax-M3:\n"
+        "    endpoint: minimax\n",
+        encoding="utf-8",
+    )
+    monkeypatch.setenv("MINIMAX_API_KEY", "not-a-real-key")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+
+    with TestClient(create_app()) as http:
+        built = http.app.state.kingfisher
+        assert built is not None, "the lifespan built nothing"
+        assert built.threads is None, (
+            "the server wired a shared thread store; every session in this "
+            "process would share one database"
+        )
