@@ -1,9 +1,11 @@
 """Subagent definitions: `/subagents/<name>.yaml`.
 
-A YAML document. `name`, `description` and `system_prompt` are required;
-`tools`, `skills`, `middleware` and `model` are optional and all
-select by name from what the deployment already offers — how each selection is
-enforced is the adapter's problem, not this format's.
+A YAML document. `name`, `description` and `system_prompt` are required. The
+rest are optional, and `builtin_tools`, `tools`, `skills`, `subagents`,
+`middleware` and `model` all select by name from what the deployment already
+offers — how each selection is enforced is the adapter's problem, not this
+format's. `groups` and `metadata` are optional too and select nothing. `KNOWN`
+below is the whole set, and is the one place that stays right when it grows.
 
     name: reviewer
     description: Checks an analysis for arithmetic errors and unsupported claims.
@@ -247,13 +249,15 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
 
     The Python sibling of `parse`, and it reads the same fields by the same
     rules: `tools` narrows the same way, `model` resolves the same way, `metadata`
-    refuses the same way. What differs is one key -- `build` where a document
-    writes `system_prompt` -- and four the other format has that this one
-    cannot honour.
+    refuses the same way. What differs is `build`, which a document writes as
+    `system_prompt`, and the fields a compiled graph cannot be handed at all.
 
-    Those four are refused rather than ignored for the reason the whole
-    `REFUSED` table exists: a definition writing a line that does nothing reads
-    tighter than the delegate it produces, and nothing in the output says so.
+    `NOT_COMPILED` is that set with a reason on each, and `system_prompt` is in
+    it: the swap is not a rename, since a compiled delegate carries its prompt
+    inside the graph. All of them are refused rather than ignored, for the
+    reason the whole `REFUSED` table exists -- a definition writing a line that
+    does nothing reads tighter than the delegate it produces, and nothing in the
+    output says so.
 
     `source` is a string rather than a `Path` because a declaration is one entry
     of a list in a file, not a file -- `researcher.py` names it as precisely as
@@ -432,7 +436,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
 # so a definition keeps what it wrote, and the flattening happens at the two
 # places that genuinely need a bare name: `ToolAllowlist`, and `permitted`.
 #
-# `_claimed_sources` still reads the same entries to check the claim is true.
+# `claimed_sources` still reads the same entries to check the claim is true.
 # One reference, doing two jobs now rather than one.
 
 
