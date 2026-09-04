@@ -148,9 +148,12 @@ def reaches(audience: Audience, held: frozenset[str]) -> bool:
     Overlap, not containment: a longer list means *more* people, which is what
     everyone reads an access list as meaning.
 
-    Public because three readers ask it -- both definition formats and the
-    listing -- and a private copy in each is one convention away from them
-    disagreeing about who reaches what.
+    Public because several readers ask it, and a private copy in each is one
+    convention away from them disagreeing about who reaches what. Said without
+    naming them: this listed "both definition formats and the listing", which
+    are `reaching`'s callers rather than this one's -- the formats ask that, and
+    it asks this. Its own callers have since become three in `application/`, and
+    a list of them here goes stale every time a fourth appears.
 
     A *named* compound needs no case here: `Groups.expand` has already put it
     into `held` if the caller's groups add up to it, so by the time an audience
