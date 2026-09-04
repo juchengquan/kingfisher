@@ -25,7 +25,8 @@ from kingfisher.infrastructure.harness.backend import build_backend
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import BubblewrapRunner
 from kingfisher.infrastructure.sandbox.fence import LandlockRunner
-from kingfisher.infrastructure.workspace.fs import ensure_layout, ensure_session_layout
+from kingfisher.infrastructure.workspace.layout import ensure_layout
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"

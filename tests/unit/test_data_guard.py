@@ -5,14 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.workspace.fs import (
-    DataError,
-    LocalSessionDirs,
-    place_data,
-    place_inputs,
-    protect_data,
-    writable_data,
-)
+from kingfisher.infrastructure.workspace.permissions import protect_data, writable_data
+from kingfisher.infrastructure.workspace.placement import DataError, place_data, place_inputs
+from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 
 
 def test_data_becomes_read_only_to_the_os(workspace):
@@ -147,7 +142,7 @@ def test_data_is_read_only_again_even_when_a_copy_fails(session_dir, tmp_path, m
     def explode(*_args, **_kwargs):
         raise OSError(gone)
 
-    monkeypatch.setattr("kingfisher.infrastructure.workspace.fs.shutil.copy", explode)
+    monkeypatch.setattr("kingfisher.infrastructure.workspace.placement.shutil.copy", explode)
 
     with pytest.raises(OSError, match=gone):
         place_data((source,), session_dir)

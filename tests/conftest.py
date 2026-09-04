@@ -7,7 +7,8 @@ from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.config import Config, Endpoint, ModelProfile, Models
-from kingfisher.infrastructure.workspace.fs import ensure_layout, ensure_session_layout
+from kingfisher.infrastructure.workspace.layout import ensure_layout
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
@@ -36,7 +37,7 @@ class StubCheckpointer:
 def dirs():
     """The real `SessionDirs`. A test that wants to watch or break an
     individual call substitutes its own object -- that is what the port buys."""
-    from kingfisher.infrastructure.workspace.fs import LocalSessionDirs
+    from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 
     return LocalSessionDirs()
 
@@ -116,7 +117,7 @@ def start(cfg, session_id: str) -> str:
     called the service -- so a test that wants to name its session has to open
     it the way the service does.
     """
-    from kingfisher.infrastructure.workspace.fs import ensure_session_layout
+    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 
     ensure_session_layout(cfg.workspace / "sessions" / session_id)
     return session_id

@@ -295,11 +295,8 @@ def test_the_writers_refuse_a_hostile_key_on_their_own(tmp_path, name):
     for it. These are the calls that actually touch the disk, so the guard is
     here as well as at the fetch -- one is about ordering, this one is about the
     syscall."""
-    from kingfisher.infrastructure.workspace.fs import (
-        ensure_session_layout,
-        place_data,
-        place_inputs,
-    )
+    from kingfisher.infrastructure.workspace.placement import place_data, place_inputs
+    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 
     session = tmp_path / "session"
     ensure_session_layout(session)

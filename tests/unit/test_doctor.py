@@ -519,7 +519,7 @@ def test_the_description_names_its_own_limit():
 
 def _backing(monkeypatch, **fields):
     """Answer as a given machine would, without needing to be one."""
-    from kingfisher.infrastructure.workspace.fs import MemoryBacking
+    from kingfisher.infrastructure.workspace.backing import MemoryBacking
 
     monkeypatch.setattr(
         "kingfisher.presentation.cli.health.memory_backing",

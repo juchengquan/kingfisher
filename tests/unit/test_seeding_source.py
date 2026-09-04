@@ -76,7 +76,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
     still has to be told where to write `models.yaml`, and that instruction is
     this file.
     """
-    from kingfisher.infrastructure.workspace.fs import EXAMPLE, ensure_layout
+    from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)
@@ -97,7 +97,7 @@ def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
     So `seed` says what to write instead of pointing at a file, and this asserts
     the file it stopped pointing at does not come back by another route.
     """
-    from kingfisher.infrastructure.workspace.fs import ensure_layout
+    from kingfisher.infrastructure.workspace.layout import ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
     ensure_layout(cfg.workspace)

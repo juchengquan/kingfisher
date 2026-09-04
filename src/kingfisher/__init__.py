@@ -90,9 +90,9 @@ _EXPORTS = {
     # `doctor` both tell a reader where their own definitions go, and two
     # spellings of that is how the advice starts disagreeing with itself.
     "destination_hint": "kingfisher.infrastructure.workspace.seeding",
-    "ensure_layout": "kingfisher.infrastructure.workspace.fs",
+    "ensure_layout": "kingfisher.infrastructure.workspace.layout",
     "kinds_at": "kingfisher.infrastructure.workspace.seeding",
-    "memory_backing": "kingfisher.infrastructure.workspace.fs",
+    "memory_backing": "kingfisher.infrastructure.workspace.backing",
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
     "inventory": "kingfisher.application.inventory",
@@ -246,9 +246,9 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )
+    from kingfisher.infrastructure.workspace.backing import memory_backing as memory_backing
     from kingfisher.infrastructure.workspace.files import LocalFileStore as LocalFileStore
-    from kingfisher.infrastructure.workspace.fs import ensure_layout as ensure_layout
-    from kingfisher.infrastructure.workspace.fs import memory_backing as memory_backing
+    from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
     from kingfisher.infrastructure.workspace.seeding import (

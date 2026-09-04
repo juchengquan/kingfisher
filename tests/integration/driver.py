@@ -154,11 +154,8 @@ from kingfisher.domain.session import Session
 from kingfisher.infrastructure.harness.runlog import read_usage
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.workspace import seeding
-from kingfisher.infrastructure.workspace.fs import (
-    LocalSessionDirs,
-    ensure_session_layout,
-    is_new_workspace,
-)
+from kingfisher.infrastructure.workspace.layout import is_new_workspace
+from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs, ensure_session_layout
 from kingfisher.presentation.cli.progress import show
 
 #: The grants this driver exposes, in the order they are listed and reported.

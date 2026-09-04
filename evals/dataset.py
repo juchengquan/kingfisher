@@ -17,7 +17,7 @@ from datetime import date, timedelta
 from pathlib import Path
 from random import Random
 
-from kingfisher.infrastructure.workspace.fs import writable_data
+from kingfisher.infrastructure.workspace.permissions import writable_data
 
 SAMPLE_NAME = "orders.csv"
 

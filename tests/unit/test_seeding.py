@@ -19,7 +19,7 @@ from kingfisher.infrastructure.harness.agent import (
     build_agent,
 )
 from kingfisher.infrastructure.workspace import seeding
-from kingfisher.infrastructure.workspace.fs import ensure_session_layout
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.skills.catalogue import LocalSkillRepository
 from tests.conftest import repository_root, subagents_dir, tools_dir
 

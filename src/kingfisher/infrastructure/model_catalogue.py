@@ -34,7 +34,7 @@ import yaml
 from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
 from kingfisher.domain import fields
 from kingfisher.infrastructure.harness.models import ADAPTERS
-from kingfisher.infrastructure.workspace.fs import EXAMPLE
+from kingfisher.infrastructure.workspace.layout import EXAMPLE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
