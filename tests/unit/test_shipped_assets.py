@@ -1101,6 +1101,52 @@ def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
         _vocabulary(shipped).expand(["senior-analysts"])
 
 
+def test_the_long_entry_form_is_shown_on_every_field_that_takes_one(shipped):
+    """`tools`, `subagents` and `skills` read identically, and the set showed
+    that on one of the three.
+
+    One long form across all three fields is the reason an entry is
+    `{name, groups}` rather than a shape per field -- a claim `docs/formats.md`
+    makes and nothing held the examples to. Asserted by parsing the files rather
+    than the specs, because what is being checked is how somebody *wrote* it.
+    """
+    import yaml
+
+    written = {
+        field: set()
+        for field in ("tools", "subagents", "skills")
+    }
+    for path in sorted((shipped / "agents").rglob("*.yaml")) + sorted(
+        (shipped / "subagents").rglob("*.yaml")
+    ):
+        document = yaml.safe_load(path.read_text(encoding="utf-8"))
+        if not isinstance(document, dict):
+            continue
+        for field, files in written.items():
+            entries = document.get(field)
+            if isinstance(entries, list) and any(isinstance(e, dict) for e in entries):
+                files.add(path.name)
+
+    missing = sorted(field for field, files in written.items() if not files)
+    assert not missing, f"no preset shows the long form on: {', '.join(missing)}"
+
+
+def test_a_bare_entry_sits_beside_a_long_one(shipped):
+    """Mixing the two spellings in one list is the ordinary case, not a special
+    one -- an entry with nothing to attach writes nothing. A set where every
+    list was uniformly long would teach the opposite."""
+    import yaml
+
+    document = yaml.safe_load(
+        (shipped / "agents" / "analyst.yaml").read_text(encoding="utf-8")
+    )
+
+    for field in ("tools", "skills"):
+        entries = document[field]
+        assert any(isinstance(e, str) for e in entries), f"{field}: no bare entry"
+        assert any(isinstance(e, dict) for e in entries), f"{field}: no long entry"
+
+
 def test_the_other_presets_still_restrict_nobody(shipped):
     """Adding a policied set must not quietly narrow the ones that were here.
     Every other preset carries no `groups:` line and stays reachable by all."""
