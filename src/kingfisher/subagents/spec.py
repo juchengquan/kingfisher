@@ -180,7 +180,7 @@ class SubagentSpec:
     #: For a compiled delegate this narrows what is *handed* to `build` and is
     #: no more of a boundary than the plain `tools` list already is there --
     #: deepagents applies no allowlist to a graph it did not build, which
-    #: `delegation.compiled` says out loud and `--list` flags.
+    #: `subagents.harness.compiled` says out loud and `--list` flags.
     #:
     #: `derived`, because no definition writes `audiences:` -- it is read
     #: *out of* the three selection fields, the way `tool_sources` is read out
