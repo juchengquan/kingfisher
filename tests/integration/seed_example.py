@@ -25,8 +25,8 @@ Nothing here reaches a model or spends anything -- seeding copies files. It sits
 on this shelf for what it is, not what it costs.
 
     uv run tests/integration/seed_example.py                    # from KINGFISHER_ASSETS
-    uv run tests/integration/seed_example.py --from ./examples
-    uv run tests/integration/seed_example.py --from ./examples --all
+    uv run tests/integration/seed_example.py --from ./assets_examples
+    uv run tests/integration/seed_example.py --from ./assets_examples --all
 
 **Driven, not just readable.** `test_the_example_script_seeds_a_workspace` in
 `tests/unit/test_seeding_from_python.py` imports `seed_workspace` and runs it,

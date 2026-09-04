@@ -48,8 +48,8 @@ definition naming middleware or groups this deployment has not registered is
 refused when it is built, so seeding one produces a file that cannot run.
 `seed` leaves those behind and says which names each would have needed;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
-registered the names. Seeding the shipped `examples/` on a bare checkout leaves
-five behind and writes thirteen.
+registered the names. Seeding the shipped `assets_examples/` on a bare checkout
+leaves five behind and writes thirteen.
 
 `seed` takes a *destination* rather than a whole `Config` — anything with a
 `workspace` and `catalogue_roots`, which both `WorkspacePaths` and `Config`
@@ -79,6 +79,6 @@ step.
 
 The cost is real and is not hidden. A fresh install seeds nothing, and since a
 request must name an agent, it cannot run until definitions arrive from
-somewhere. This repository keeps a worked set in `examples/` — one agent, skill,
-subagent and tool, each demonstrating a distinct feature — and `assets/` is
-where a deployment puts content it fetched from elsewhere.
+somewhere. This repository keeps a worked set in `assets_examples/` — one agent,
+skill, subagent and tool, each demonstrating a distinct feature — and `assets/`
+is where a deployment puts content it fetched from elsewhere.

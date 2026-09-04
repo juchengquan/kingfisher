@@ -153,7 +153,7 @@ def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_p
 
     Non-zero, which it was not. This was nearly unreachable while a set shipped
     -- it always held all four kinds -- and is now among the likelier mistakes,
-    since `--from ./examples/skills` names a directory that exists, is readable
+    since `--from ./assets_examples/skills` names a directory that exists, is readable
     and holds none of them. Exiting 0 after copying nothing is indistinguishable
     from success to the script that ran it.
 

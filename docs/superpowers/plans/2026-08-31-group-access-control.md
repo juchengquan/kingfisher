@@ -12,8 +12,8 @@
 > **What shipped instead.** The vocabulary is central and the policy is not: who
 > reaches what is written in each definition's own `groups:` line, because a
 > definition *is* the asset it is about. Read
-> [`examples/groups.yaml`](../../../examples/groups.yaml) and
-> [`examples/agents/analyst.yaml`](../../../examples/agents/analyst.yaml).
+> [`assets_examples/groups.yaml`](../../../assets_examples/groups.yaml) and
+> [`assets_examples/agents/analyst.yaml`](../../../assets_examples/agents/analyst.yaml).
 >
 > **Why.** Not taste. A central table can name an asset the workspace no longer
 > offers, and that stale entry had to be *dropped* rather than reported, because

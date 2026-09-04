@@ -52,7 +52,7 @@ EXAMPLE = "models.yaml.example"
 #: workspace needs whichever names its own definitions ask for, so `seed` named
 #: a set of groups and then handed you a template declaring five different ones.
 #: The remedy now travels in the message, where it can name the groups actually
-#: missing -- see `presentation.cli.__main__`. `examples/groups.yaml` is the
+#: missing -- see `presentation.cli.__main__`. `assets_examples/groups.yaml` is the
 #: worked set, outside the wheel, for anyone reading this repository.
 #:
 #: `models.yaml` keeps its example for the reason the two were never alike:

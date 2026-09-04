@@ -1,7 +1,7 @@
 """A ceiling on how many tools one turn may call, and the thing it demonstrates.
 
 This is the only example here that a workspace does **not** load. Every other
-file under `examples/` is a definition -- an agent, a skill, a subagent, a tool
+file under `assets_examples/` is a definition -- an agent, a skill, a subagent, a tool
 -- copied into a workspace by `kingfisher seed` and found there by name.
 Middleware is not, and cannot be: `DEFINITION_KINDS` is the fields of
 `Definitions`, this is not one of them, and `seed` walks exactly those. Nothing
@@ -19,7 +19,7 @@ definition's, and naming is all a definition may do.
 
 ## Wiring it
 
-    from examples.middleware.call_cap import CallCap, CallCapGenerous
+    from assets_examples.middleware.call_cap import CallCap, CallCapGenerous
 
     kingfisher = Kingfisher(
         cfg,
@@ -37,8 +37,8 @@ and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
 
     middleware: [call-cap-strict]
 
-Both halves of that are written out: `examples/agents/researcher.yaml` and
-`examples/subagents/sweeper.yaml` are an agent and its delegate, naming the
+Both halves of that are written out: `assets_examples/agents/researcher.yaml` and
+`assets_examples/subagents/sweeper.yaml` are an agent and its delegate, naming the
 registry entries above -- the only definitions in this repository that name
 middleware at all.
 

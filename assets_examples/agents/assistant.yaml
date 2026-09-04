@@ -39,7 +39,7 @@ subagents: [extractor, reviewer, profiler]
 # registered for one narrow purpose arrives here too. When that is wrong, narrow
 # the axis on the request -- a star resolves smaller when the caller withheld
 # something, and raises nothing then either -- or delete this line and name what
-# you want, which is what `examples/middleware/` shows.
+# you want, which is what `assets_examples/middleware/` shows.
 middleware: ["*"]
 # No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships

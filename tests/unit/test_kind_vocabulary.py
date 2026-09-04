@@ -160,7 +160,7 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
 
 
-#: Directories under `examples/` that are not a catalogue kind, and why each is
+#: Directories under `assets_examples/` that are not a catalogue kind, and why each is
 #: there in spite of that.
 #:
 #: The rule below is that this repository's worked set holds only what a
@@ -201,12 +201,12 @@ def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):
 
     assert found, "this repository's worked set is empty -- this asserts nothing"
     assert found <= set(DEFINITION_KINDS) | set(NOT_A_KIND), (
-        f"examples/ holds {sorted(found - set(DEFINITION_KINDS) - set(NOT_A_KIND))}, which "
+        f"assets_examples/ holds {sorted(found - set(DEFINITION_KINDS) - set(NOT_A_KIND))}, which "
         "is not a catalogue kind and would be copied where nothing looks. If it belongs "
         "there anyway, write it in NOT_A_KIND above with the reason"
     )
     assert set(NOT_A_KIND) <= found, (
-        f"NOT_A_KIND names {sorted(set(NOT_A_KIND) - found)}, which examples/ does not "
+        f"NOT_A_KIND names {sorted(set(NOT_A_KIND) - found)}, which assets_examples/ does not "
         "hold -- an exception outliving the thing it excepted"
     )
     assert not set(NOT_A_KIND) & set(DEFINITION_KINDS), "an exception for a kind that is one"

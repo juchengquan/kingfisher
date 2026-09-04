@@ -52,7 +52,7 @@ jobs:
       # bar as the library: it is code that ships, and a tool nobody lints is a
       # tool whose example teaches whatever slipped through.
       - name: ruff
-        run: uv run ruff check src/ tests/ service/ examples/
+        run: uv run ruff check src/ tests/ service/ assets_examples/
 
       - name: ty
         run: uv run ty check
@@ -108,7 +108,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: ruff
-        run: uv run ruff check src/ tests/ service/ examples/
+        run: uv run ruff check src/ tests/ service/ assets_examples/
 
       - name: ty
         run: uv run ty check

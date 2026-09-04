@@ -149,7 +149,7 @@ packages = ["src/kingfisher"]
 # `pip install kingfisher` followed by `kingfisher seed` wrote a workspace that
 # already worked; they are content, and where a deployment gets its content is a
 # setting now -- `KINGFISHER_ASSETS`. This repository keeps a worked set in
-# `examples/`, outside this list and outside the wheel.
+# `assets_examples/`, outside this list and outside the wheel.
 #
 # What that costs is real and is written down rather than glossed: a fresh
 # install seeds nothing, and since a request must name an agent, it cannot run
@@ -318,11 +318,12 @@ python-version = "3.12"
 python = ".venv"
 
 [tool.ty.src]
-# `examples` is here because it holds Python -- shipped-looking tools that an
-# agent imports. Under `src/` it was checked by accident; at the root it would
-# fall out of this list silently, which is the kind of check that stops running
-# without ever going red.
-include = ["src", "tests", "examples", "spikes"]
+# `assets_examples` is here because it holds Python -- shipped-looking tools
+# that an agent imports. Under `src/` it was checked by accident; at the root it
+# would fall out of this list silently, which is the kind of check that stops
+# running without ever going red. It was `examples` until the directory was
+# renamed, and this comment naming the old one would have been the same silence.
+include = ["src", "tests", "assets_examples", "spikes"]
 
 [tool.ty.terminal]
 output-format = "concise"

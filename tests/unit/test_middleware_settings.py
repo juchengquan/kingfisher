@@ -152,7 +152,7 @@ def test_the_long_form_may_write_no_settings_at_all():
 
 def test_a_subagent_reads_the_same_field_the_same_way():
     """One field, two formats. A definition writing settings has to mean the
-    same thing in either file, or the pairing in `examples/middleware/` would
+    same thing in either file, or the pairing in `assets_examples/middleware/` would
     be two features wearing one name."""
     spec = subagent_spec(
         "name: sweeper\ndescription: d\n"
