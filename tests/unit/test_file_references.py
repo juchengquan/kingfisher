@@ -23,7 +23,7 @@ from kingfisher import (
     UnsafeReferenceError,
 )
 from kingfisher.domain.references import within
-from kingfisher.infrastructure.files import MissingStoreError, fetch_refs
+from kingfisher.infrastructure.workspace.files import MissingStoreError, fetch_refs
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 
@@ -295,7 +295,7 @@ def test_the_writers_refuse_a_hostile_key_on_their_own(tmp_path, name):
     for it. These are the calls that actually touch the disk, so the guard is
     here as well as at the fetch -- one is about ordering, this one is about the
     syscall."""
-    from kingfisher.infrastructure.workspace_fs import (
+    from kingfisher.infrastructure.workspace.fs import (
         ensure_session_layout,
         place_data,
         place_inputs,

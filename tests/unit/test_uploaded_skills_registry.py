@@ -25,7 +25,7 @@ from kingfisher.infrastructure.harness.agent import (
     available_skills,
     build_agent,
 )
-from kingfisher.infrastructure.uploads import UploadError, materialise_skills
+from kingfisher.infrastructure.workspace.uploads import UploadError, materialise_skills
 from tests.conftest import FakeToolCallingModel
 from tests.unit.test_uploads import FakeStore
 

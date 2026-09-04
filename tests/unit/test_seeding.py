@@ -13,14 +13,14 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     available_skills,
     build_agent,
 )
-from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+from kingfisher.infrastructure.workspace import seeding
+from kingfisher.infrastructure.workspace.fs import ensure_session_layout
 from tests.conftest import repository_root, subagents_dir, tools_dir
 
 #: The pack the seeding tests below use. A real one, reached the way a shipped

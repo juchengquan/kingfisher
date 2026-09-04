@@ -253,7 +253,7 @@ def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     added later would otherwise reintroduce exactly the thing the file exists to
     prevent, and every test above would still pass.
     """
-    from kingfisher.infrastructure.workspace_fs import agent_started_with, remember_agent
+    from kingfisher.infrastructure.workspace.fs import agent_started_with, remember_agent
 
     remember_agent(tmp_path, "s", "name: first\ndescription: One.\n")
     remember_agent(tmp_path, "s", "name: second\ndescription: Two.\n")

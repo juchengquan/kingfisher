@@ -19,7 +19,7 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.workspace_fs import ensure_session_layout
+from kingfisher.infrastructure.workspace.fs import ensure_session_layout
 from tests.conftest import an_agent, capture_build, tools_dir
 
 TOOL = '''

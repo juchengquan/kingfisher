@@ -2,7 +2,7 @@
 
 Every name and tier here is policy: which directories exist, which hold what a
 person wrote, which are disposable. None of it creates anything -- making the
-layout real is `infrastructure.workspace_fs`, and this is what it is told to make.
+layout real is `infrastructure.workspace.fs`, and this is what it is told to make.
 
 The split matters because the tiers are a decision that wants reviewing, and it
 was previously buried among mkdir calls and subprocess invocations.

@@ -151,10 +151,10 @@ from kingfisher import (
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import ALL, CapabilityError, all_but
 from kingfisher.domain.session import Session
-from kingfisher.infrastructure import seeding
 from kingfisher.infrastructure.harness.runlog import read_usage
 from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.infrastructure.workspace_fs import (
+from kingfisher.infrastructure.workspace import seeding
+from kingfisher.infrastructure.workspace.fs import (
     LocalSessionDirs,
     ensure_session_layout,
     is_new_workspace,

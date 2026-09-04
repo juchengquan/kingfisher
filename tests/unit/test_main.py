@@ -18,10 +18,10 @@ from kingfisher.config import ConfigError
 from kingfisher.domain import skill
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
-from kingfisher.infrastructure import workspace_fs
 from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.harness import agent as main_agent_module
+from kingfisher.infrastructure.workspace import fs as workspace_fs
 from kingfisher.presentation.cli.progress import show
 from tests.conftest import subagents_dir, tools_dir
 from tests.integration import driver as main
@@ -510,7 +510,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
     workspace grant, so `--without-tools execute,delete`, the example this
     driver's own docstring gives, came back as "those are builtin tools".
     """
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
 
@@ -529,7 +529,7 @@ def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
 
 def test_the_two_tool_axes_subtract_independently(cfg, shipped):
     """A workspace tool is subtracted from the workspace set, and only that."""
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
 
@@ -550,7 +550,7 @@ def test_subtracting_skills_and_subagents_too(cfg, shipped):
     tested is that the named one is gone and the others are enumerated, which
     is true at any catalogue size.
     """
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
     # `_offered`, not `LocalSkillRepository.names`, and the difference is the
@@ -581,7 +581,7 @@ def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg, shipped):
     unknown name(s): execute" beside a list not containing it -- true, and no
     help at all if you do not know a second flag exists.
     """
-    from kingfisher.infrastructure import seeding
+    from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
 

@@ -125,7 +125,6 @@ from kingfisher.domain.session import (
 )
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.catalogue.documents import read_agent
-from kingfisher.infrastructure.files import fetch_refs
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
@@ -141,7 +140,6 @@ from kingfisher.infrastructure.harness.checkpointing import (
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.middleware import MiddlewareFactory
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
-from kingfisher.infrastructure.seeding import SEED_HINT
 from kingfisher.infrastructure.session_store import (
     TRANSCRIPT,
     LocalSessionStore,
@@ -150,8 +148,8 @@ from kingfisher.infrastructure.session_store import (
     restore_into,
     write_transcript,
 )
-from kingfisher.infrastructure.uploads import provision
-from kingfisher.infrastructure.workspace_fs import (
+from kingfisher.infrastructure.workspace.files import fetch_refs
+from kingfisher.infrastructure.workspace.fs import (
     LocalSessionDirs,
     LocalSessionRoot,
     agent_snapshot,
@@ -166,6 +164,8 @@ from kingfisher.infrastructure.workspace_fs import (
     remember_agent,
     session_bytes,
 )
+from kingfisher.infrastructure.workspace.seeding import SEED_HINT
+from kingfisher.infrastructure.workspace.uploads import provision
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

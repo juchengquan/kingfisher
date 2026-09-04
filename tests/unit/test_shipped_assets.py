@@ -560,7 +560,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     their kind. Driven against the real tree rather than asserted over it,
     because what could regress is the copying rather than the wording.
     """
-    from kingfisher.infrastructure.seeding import seed
+    from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
         workspace = tmp_path
@@ -613,7 +613,7 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     cannot build these -- rather than a judgement about the files, so a
     deployment that has done the registering says so and gets them.
     """
-    from kingfisher.infrastructure.seeding import seed
+    from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
         workspace = tmp_path
@@ -646,7 +646,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
     this red without anybody remembering to list it.
     """
     from kingfisher.infrastructure.catalogue.documents import middleware_named
-    from kingfisher.infrastructure.seeding import seed
+    from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
         workspace = tmp_path

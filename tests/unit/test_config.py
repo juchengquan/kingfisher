@@ -454,7 +454,7 @@ def test_a_config_is_a_seeding_destination(tmp_path):
     without either being told about it. `Config` is what an ordinary run seeds
     with; `WorkspacePaths` is what a first run has."""
     from kingfisher.config import WorkspacePaths
-    from kingfisher.infrastructure.seeding import Destination
+    from kingfisher.infrastructure.workspace.seeding import Destination
 
     assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
 

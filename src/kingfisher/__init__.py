@@ -58,10 +58,10 @@ _EXPORTS = {
     "SubagentError": "kingfisher.domain.subagent",
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
-    "LocalFileStore": "kingfisher.infrastructure.files",
+    "LocalFileStore": "kingfisher.infrastructure.workspace.files",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     "UnknownSessionError": "kingfisher.domain.session",
-    "UploadError": "kingfisher.infrastructure.uploads",
+    "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "async_checkpointer": "kingfisher.infrastructure.harness.checkpointing",
     # Kept when its eleven neighbours went. Off the door it is defined for
     # tests alone -- `tests/unit/test_checkpointing.py` is its only caller,
@@ -85,16 +85,16 @@ _EXPORTS = {
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
-    "definitions_source": "kingfisher.infrastructure.seeding",
+    "definitions_source": "kingfisher.infrastructure.workspace.seeding",
     # A sentence, for the reason `SEED_HINT` is one: the refusal and
     # `doctor` both tell a reader where their own definitions go, and two
     # spellings of that is how the advice starts disagreeing with itself.
-    "destination_hint": "kingfisher.infrastructure.seeding",
-    "ensure_layout": "kingfisher.infrastructure.workspace_fs",
-    "kinds_at": "kingfisher.infrastructure.seeding",
-    "memory_backing": "kingfisher.infrastructure.workspace_fs",
-    "seed": "kingfisher.infrastructure.seeding",
-    "Seeded": "kingfisher.infrastructure.seeding",
+    "destination_hint": "kingfisher.infrastructure.workspace.seeding",
+    "ensure_layout": "kingfisher.infrastructure.workspace.fs",
+    "kinds_at": "kingfisher.infrastructure.workspace.seeding",
+    "memory_backing": "kingfisher.infrastructure.workspace.fs",
+    "seed": "kingfisher.infrastructure.workspace.seeding",
+    "Seeded": "kingfisher.infrastructure.workspace.seeding",
     "inventory": "kingfisher.application.inventory",
     # The fifth name a consumer has forced public. A purpose-built answer
     # rather than `model_for` itself, which the design named: `doctor` wants
@@ -118,7 +118,7 @@ _EXPORTS = {
     # caller; renamed because a bare `LAYOUT` at the top level sits next to
     # `LAYOUT_DIRS` and means something else.
     "DEFINITION_KINDS": "kingfisher.infrastructure.catalogue",
-    "SEED_HINT": "kingfisher.infrastructure.seeding",
+    "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "SKILL_LAYOUT": "kingfisher.infrastructure.catalogue.skills",
     "Inventory": "kingfisher.application.inventory",
     # Where this deployment reads from, as against what it offers. Public
@@ -232,7 +232,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.tool import split_reference as split_reference
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
-    from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
     )
@@ -250,22 +249,23 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.sandbox.confinement import (
         shell_confinement as shell_confinement,
     )
-    from kingfisher.infrastructure.seeding import SEED_HINT as SEED_HINT
-    from kingfisher.infrastructure.seeding import Seeded as Seeded
-    from kingfisher.infrastructure.seeding import (
-        definitions_source as definitions_source,
-    )
-    from kingfisher.infrastructure.seeding import (
-        destination_hint as destination_hint,
-    )
-    from kingfisher.infrastructure.seeding import kinds_at as kinds_at
-    from kingfisher.infrastructure.seeding import seed as seed
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )
-    from kingfisher.infrastructure.uploads import UploadError as UploadError
-    from kingfisher.infrastructure.workspace_fs import ensure_layout as ensure_layout
-    from kingfisher.infrastructure.workspace_fs import memory_backing as memory_backing
+    from kingfisher.infrastructure.workspace.files import LocalFileStore as LocalFileStore
+    from kingfisher.infrastructure.workspace.fs import ensure_layout as ensure_layout
+    from kingfisher.infrastructure.workspace.fs import memory_backing as memory_backing
+    from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
+    from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
+    from kingfisher.infrastructure.workspace.seeding import (
+        definitions_source as definitions_source,
+    )
+    from kingfisher.infrastructure.workspace.seeding import (
+        destination_hint as destination_hint,
+    )
+    from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
+    from kingfisher.infrastructure.workspace.seeding import seed as seed
+    from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
 
 
 def __getattr__(name: str) -> Any:

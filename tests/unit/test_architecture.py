@@ -892,7 +892,12 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     "catalogue": frozenset({"skill_registry"}),
     # Asks the registry what names are taken before accepting an upload, which
     # is the same question `catalogue` asks and the same answer.
-    "uploads": frozenset({"skill_registry"}),
+    #
+    # Keyed `workspace.uploads` since the module moved into a subpackage: the
+    # key is a module's path below its layer, so grouping files renames their
+    # entries. That is the table working -- a move that silently kept an old key
+    # would be an edge nobody had named any more.
+    "workspace.uploads": frozenset({"skill_registry"}),
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
     "inventory": frozenset({"agent", "surface"}),
@@ -1427,7 +1432,7 @@ def test_the_application_layer_does_not_write_to_disk_itself():
 
     assert not offenders, (
         f"{offenders} write to disk from the application layer — put it in "
-        "infrastructure/workspace_fs.py, where the guards already are"
+        "infrastructure/workspace/fs.py, where the guards already are"
     )
 
 
@@ -1603,7 +1608,7 @@ def test_the_package_ships_the_catalogue_example():
     """
     from importlib import resources
 
-    from kingfisher.infrastructure import workspace_fs
+    from kingfisher.infrastructure.workspace import fs as workspace_fs
 
     # Both, from `EXAMPLES` rather than named here, so the file added next is
     # covered by having been added rather than by somebody remembering. The
