@@ -1,10 +1,15 @@
 # A store a deployment can name
 
-**Status:** proposed, to be built on four branches off `main` -- none of them
-written yet. It stays here until they land, because from `main` this is still an
-argument rather than a description. When they merge, its decisions belong in
-`docs/decisions.md` and this file goes, per the rule in `docs/README.md`.
+**Status:** proposed. Slice 1 of 4 is open; the other three are unwritten. It
+stays here until they land, because from `main` this is still an argument rather
+than a description. When they merge, its decisions belong in `docs/decisions.md`
+and this file goes, per the rule in `docs/README.md`.
 **Date:** 2026-09-04
+**Corrected 2026-09-04, while building slice 1.** One argument below stopped
+being true between this file being merged and its first slice being written --
+`48cd457` took the shared async database out of the server. It is struck through
+rather than deleted, and *What building it changed* at the foot says why the
+conclusion survives it.
 
 Kingfisher has twelve ports and two entry points. Between them, the entry points
 can wire two of the twelve, and the only two settings that reach a store at all
@@ -28,10 +33,12 @@ Now count what the shipped surfaces pass.
 
 * **The CLI**, `presentation/cli/__main__.py:415`: `Kingfisher(config_from_env())`.
   None of the eleven.
-* **The service**, `kingfisher_service/app.py:100`:
-  `Kingfisher(cfg, threads=threads, files=files)`. Two -- and `files` is
-  `LocalFileStore(settings.file_store_dir)` or `None`, so the only one a
-  deployment influences resolves to a directory on this host.
+* **The service**, `kingfisher_service/app.py:112`:
+  `Kingfisher(cfg, files=files)`. One -- and `files` is
+  `LocalFileStore(settings.file_store_dir)` or `None`, so the only collaborator a
+  deployment influences resolves to a directory on this host. It was two until
+  `48cd457`, which stopped the server holding one database open for every
+  session; the count moved in this proposal's favour while it sat unbuilt.
 
 Two settings reach a store. `KINGFISHER_SESSION_STORE` is read at
 `application/config.py:204` through `optional_path`;
@@ -74,18 +81,16 @@ the service *"on the same footing as anyone outside the package"*. There is no
 equivalent for `kingfisher run`. The CLI builds its own instance and there is
 nowhere to point it.
 
-Even for the server it is awkward. `create_app` takes an already-built
+~~Even for the server it is awkward. `create_app` takes an already-built
 `Kingfisher`, but a real one needs the async checkpointer, which is a context
-manager that must be held open for the life of the process:
+manager that must be held open for the life of the process, and that cannot run
+at import -- which is where the app is built (`asgi.py`).~~
 
-    async with async_checkpointer(cfg) as threads:
-        service = Kingfisher(cfg, threads=threads, sessions=...)
-
-That cannot run at import, and import is where the app is built (`asgi.py`).
-`create_app` owns the FastAPI object and therefore its startup hook, so a
-deployment is left overriding FastAPI internals or reassembling every router and
-middleware by hand. The tests do not hit this because they pass a stub saver
-that needs no cleanup (`service/tests/test_server_entry_point.py:24`).
+**No longer true, and it was never the load-bearing half.** `48cd457` made the
+default `InMemorySaver`, per session, so `create_app` holds nothing open and a
+deployment writing its own entry point has only to call `Kingfisher(...)`. What
+survives is the paragraph above it: an entry point is a thing a deployment
+*replaces*, and there are two, and `kingfisher run` is not one it can reach.
 
 A setting is read **inside `Kingfisher.__init__`**. One resolution point, and
 every construction site inherits it -- CLI, service, tests, and a deployment's
@@ -238,8 +243,9 @@ at all.
 
 **A builder parameter on `create_app`.** Designed, and dropped in the same
 conversation once the resolution point moved. With the store resolved inside
-`Kingfisher.__init__`, `app.py:100` picks it up unchanged and the builder has
-nothing left to do. Kept out on the repository's own grounds: two ways to wire
+`Kingfisher.__init__`, `app.py:112` picks it up unchanged and the builder has
+nothing left to do -- more cheaply than when this was written, since that line no
+longer manages a saver either. Kept out on the repository's own grounds: two ways to wire
 one thing is what it distrusts.
 
 **Giving the CLI its own injection.** Unnecessary after this, and it was the
@@ -286,6 +292,29 @@ depend on each other and must not be stacked.
    and how to run the kit against it. `docs/decisions.md` gains the decisions
    above. `docs/README.md`'s table gains the guide, and the sentence saying
    `docs/design/` is empty goes back to being true. This file is deleted.
+
+## What building it changed
+
+**Slice 1, 2026-09-04.** Two facts and no decisions, which is the useful shape
+for this section to have.
+
+*The server's awkwardness argument is gone.* Recorded above where it was made.
+`48cd457` landed between this file merging and slice 1 being written, and a
+document one commit old was already describing a `create_app` that no longer
+exists. That is not a warning about this file; it is the thing `docs/README.md`
+says happens, happening on the shortest timescale anyone has seen it.
+
+*`ty` refuses a test double that narrows a protocol's parameters.* Writing
+`Recording` in `tests/unit/test_named_store.py` with `files: dict[str, bytes]`
+was rejected: a protocol's parameters are contravariant, so `Mapping` is what an
+implementation must accept. Worth recording because it is the check earning its
+place rather than an inconvenience -- a double that does not really satisfy the
+port proves nothing about a deployment's store that does, and the conformance
+kit in slice 2 rests entirely on doubles.
+
+*What did not change.* The precedence, the refusal of a double configuration,
+the zero-argument convention, and the line between checking a name and building
+a store all survived contact with the implementation as written.
 
 ## What this does not do
 
