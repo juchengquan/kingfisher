@@ -933,6 +933,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
             "runtime",
         }
     ),
+    # The disposal half of `service`, which took this edge with it: reaping a
+    # session deletes the thread behind it, and `thread_ids` is how it learns
+    # which threads no session owns any more.
+    "disposal": frozenset({"checkpointing"}),
     # The withheld report, which left `service` and took one of its four edges
     # along. It has to ask the *assembled* agent what it registered and the
     # workspace what it offers, because the whole claim of the report is that it
@@ -2144,16 +2148,40 @@ def _referenced_in_code() -> set[str]:
     return seen
 
 
+def _mixed_into(public: frozenset[str]) -> frozenset[str]:
+    """Classes an exported class inherits from, which are exported through it.
+
+    `Kingfisher(Sessions, Disposal)` publishes `delete_session` and `reap` as
+    surely as if they were written in its own body -- a caller outside this
+    repository reaches them through the exported name and cannot tell which
+    file they live in.
+
+    Without this the rule below reads a mixin as an ordinary class, finds its
+    public methods called by nothing but tests, and asks for them to be deleted.
+    That is the rule working from a stale premise rather than a wrong one: it
+    was written when `Kingfisher` had no bases, and "an exported class" and "the
+    class holding the exported methods" were the same thing.
+    """
+    found: set[str] = set()
+    for path in SRC.rglob("*.py"):
+        for node in ast.parse(path.read_text(encoding="utf-8")).body:
+            if isinstance(node, ast.ClassDef) and node.name in public:
+                found.update(b.id for b in node.bases if isinstance(b, ast.Name))
+    return frozenset(found)
+
+
 def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
     """Module-level functions and classes, plus methods of classes that stand alone.
 
     Two kinds are skipped, for two different reasons. Methods of a *subclass*,
     because overriding something is a contract with whatever declared it and
     "nobody here calls it" is the ordinary state of a hook. Methods of an
-    *exported* class, because exporting `Kingfisher` exports `arun` and `reap`
-    with it -- their callers are outside this repository by design, which is
-    what publishing them meant.
+    *exported* class -- or of one an exported class mixes in, see `_mixed_into`
+    -- because exporting `Kingfisher` exports `arun` and `reap` with it, and
+    their callers are outside this repository by design, which is what
+    publishing them meant.
     """
+    published = public | _mixed_into(public)
     found: dict[str, Path] = {}
     for path in sorted(SRC.rglob("*.py")):
         for node in ast.parse(path.read_text(encoding="utf-8")).body:
@@ -2162,7 +2190,7 @@ def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
                     found[node.name] = path
             elif isinstance(node, ast.ClassDef):
                 found[node.name] = path
-                if node.bases or node.name in public:
+                if node.bases or node.name in published:
                     continue
                 for inner in node.body:
                     if not isinstance(inner, ast.FunctionDef | ast.AsyncFunctionDef):
@@ -2171,6 +2199,20 @@ def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
                         continue
                     found[inner.name] = path
     return found
+
+
+def test_a_mixin_of_an_exported_class_is_published_through_it():
+    """The exemption above, asserted rather than left to the rule passing.
+
+    A mixin whose methods stopped being recognised as published would not fail
+    loudly -- it would ask for `delete_session` to be deleted, and the obvious
+    reading of that message is that the method is dead.
+    """
+    import kingfisher
+
+    mixed = _mixed_into(frozenset(kingfisher.__all__))
+
+    assert {"Sessions", "Disposal"} <= mixed, "Kingfisher's mixins are not seen as bases"
 
 
 def test_nothing_is_defined_for_tests_alone():
