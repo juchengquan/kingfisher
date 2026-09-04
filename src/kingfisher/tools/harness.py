@@ -243,7 +243,8 @@ def _tool_objects(graph: Any) -> Mapping[str, Any]:
 
 
 def _resolve_tools(
-    # answers came from; folding them up would hide what each one is for.
+    # Separate parameters rather than one bundle: folding them up would hide
+    # what each one is for.
     where: str,
     capabilities: Capabilities,
     workspace_tools: Sequence[Found],
