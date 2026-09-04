@@ -8,8 +8,8 @@ question from whether any one of them is well-formed: two of a name, a cycle,
 a model that resolves to the thing a delegate exists not to be.
 
 The values stay here, which is the same shape `infrastructure.catalogue` took.
-They are what the rest of the codebase means by "a subagent" -- `SubagentSpec`
-nine times over, `SubagentError` seven, `RunOn` five -- so
+They are what the rest of the codebase means by "a subagent" -- `SubagentSpec`,
+`SubagentError` and `RunOn`, imported by name from every layer -- so
 `kingfisher.subagents.spec` goes on answering to them and those imports never
 learned this happened. Nothing here imports `reading` or `rules`; a value knows
 nothing about where it came from or what is refused about it, which is why the
@@ -69,7 +69,8 @@ class SubagentSpec:
     #: built-ins come with deepagents, `tools` is what this workspace wrote.
     #: One list meant a delegate could not ask for a workspace tool without
     #: giving up every built-in, and nothing in the file showed it happening --
-    #: the same trade `_permitted_tools` split for a request.
+    #: the same trade `Offering.permitted` splits for a request, resolving each
+    #: axis against its own offered set.
     builtin_tools: Selection = ALL
     tools: Selection = ALL
     #: Where each `tools:` entry claimed its tool lives, by name, for the
@@ -179,7 +180,7 @@ class SubagentSpec:
     #: For a compiled delegate this narrows what is *handed* to `build` and is
     #: no more of a boundary than the plain `tools` list already is there --
     #: deepagents applies no allowlist to a graph it did not build, which
-    #: `delegation.as_compiled` says out loud and `--list` flags.
+    #: `delegation.compiled` says out loud and `--list` flags.
     #:
     #: `derived`, because no definition writes `audiences:` -- it is read
     #: *out of* the three selection fields, the way `tool_sources` is read out
