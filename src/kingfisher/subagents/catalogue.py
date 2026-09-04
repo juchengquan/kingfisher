@@ -332,7 +332,7 @@ class LocalSubagentRepository:
     def orphaned_assets(self) -> tuple[str, ...]:
         """Folders holding `tools/` or `skills/` that no definition is named for.
 
-        Reported, never refused, which is the split `skill_registry.misfiled`
+        Reported, never refused, which is the split `skills.registry.misfiled`
         already draws: a grouping folder is allowed to have directories in it,
         so this is legal and the catalogue loads. It is also, nine times in ten,
         a bundle whose definition was renamed -- and the symptom otherwise is a
