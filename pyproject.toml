@@ -40,6 +40,40 @@ dependencies = [
     # transitively through deepagents, but a transitive dep is not a promise.
     "langchain-anthropic>=1.5.4",
     "langchain-openai>=1.5.1",
+    # The four the harness imports by name and this file never named. Each
+    # arrived transitively, which is the reason given three times above for
+    # naming a package anyway -- and the reason was never applied to the
+    # packages the harness leans on hardest.
+    #
+    # `langchain-core` is the one that matters outside this repository.
+    # `docs/formats.md` tells a tool author to write `from langchain_core.tools
+    # import tool`, so it is the only dependency here that *users* write code
+    # against -- and until now nothing said which version their code was
+    # written for. That is the promise the range makes.
+    #
+    # `langgraph` looks declared and is not: `langgraph-checkpoint-sqlite` below
+    # shares the top-level name but ships none of `langgraph.errors`,
+    # `langgraph.types` or `langgraph.graph.state`, which the harness imports.
+    # The same holds for `langgraph-checkpoint`, whose `InMemorySaver` and
+    # `BaseCheckpointSaver` come from a different distribution than the sqlite
+    # one. A shared import name is not a declaration.
+    #
+    # Capped at the major rather than the minor, which is where these differ
+    # from `langchain-quickjs` above: that one is 0.x, where the minor is where
+    # breaks land, and these are all past 1.0, where semver puts them in the
+    # major.
+    #
+    # Floors measured, not copied from the lock. Each is the lowest the rest of
+    # the resolution already forces -- `langchain` and its two siblings pin
+    # `langchain-core>=1.5.4`, `deepagents` pins `langchain>=1.3.14`, `langchain`
+    # pins `langgraph>=1.2.11`, and `langgraph` pins `langgraph-checkpoint>=4.1`
+    # -- and the suite was run against all four together at exactly those
+    # versions: 2176 passed. A version below any of them fails `uv pip check`
+    # rather than resolving, so these are the floor rather than a guess at one.
+    "langchain-core>=1.5.4,<2",
+    "langchain>=1.3.14,<2",
+    "langgraph>=1.2.11,<2",
+    "langgraph-checkpoint>=4.1,<5",
     # Imported directly by infrastructure/harness/checkpointing.py for the async
     # saver. It arrives transitively through langgraph-checkpoint-sqlite, and a
     # transitive dep is not a promise.

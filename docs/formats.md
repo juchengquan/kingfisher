@@ -290,6 +290,18 @@ A `.py` file in `$KINGFISHER_WORKSPACE/tools/` defining `TOOLS` — the list of
 tools it contributes. Nothing is inferred: a helper in the same file stays a
 helper.
 
+**A kingfisher tool is a LangChain tool.** That is the contract, and it is worth
+stating plainly because it is a dependency you take on: the import below is
+`langchain_core`, not `kingfisher`, and what `@tool` accepts and returns is
+LangChain's to define. Kingfisher supports **`langchain-core` 1.x** and declares
+that range in its own `pyproject.toml`, so a tool written against 1.x keeps
+working across kingfisher upgrades. If a 2.0 arrives it is a breaking change
+here too, and this line is where it will be said.
+
+Nothing wraps it. A kingfisher-flavoured decorator would be a second name for
+someone else's rule, and the loader accepts what LangChain accepts — a `BaseTool`
+from `@tool`, an instantiated `BaseTool` subclass, or a plain function.
+
 ```python
 from langchain_core.tools import tool
 

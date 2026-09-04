@@ -2558,3 +2558,140 @@ def test_no_value_is_written_down_twice():
         "second thing to keep in step, and the two will agree by coincidence "
         "until they do not."
     )
+
+
+#: Import name -> distribution, for the two `packages_distributions()` cannot
+#: answer here. Both are absent from a macOS checkout for reasons that are the
+#: point rather than an oversight: `sandlock` ships Linux-only wheels and
+#: `kingfisher-service` is the workspace sibling, installed as a path rather
+#: than resolved from an index. A guard that only worked where everything
+#: happened to be installed would report success on the machine where the
+#: dependency is missing, which is the one case worth catching.
+PROVIDED_BY: dict[str, str] = {
+    "sandlock": "sandlock",
+    "kingfisher_service": "kingfisher-service",
+}
+
+
+def _canonical(requirement: str) -> str:
+    """The distribution name inside a requirement string, PEP 503 normalised.
+
+    `langchain-quickjs>=0.3.3,<0.4` and `sandlock>=0.8.6; sys_platform ==
+    'linux'` both reduce to the name, so the comparison below is between names
+    and never between a name and a range.
+    """
+    name = re.split(r"[<>=!~;\[ ]", requirement, maxsplit=1)[0]
+    return name.strip().lower().replace("_", "-")
+
+
+def _declared_distributions() -> set[str]:
+    """Every distribution `pyproject.toml` names, extras included.
+
+    Extras count. `sandlock` is a real declaration of a real dependency; that
+    it is optional says when it is installed, not whether it was declared.
+    """
+    import tomllib
+
+    manifest = tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))
+    named = list(manifest["project"]["dependencies"])
+    for extra in manifest["project"].get("optional-dependencies", {}).values():
+        named.extend(extra)
+    return {_canonical(name) for name in named}
+
+
+def _providers(module: str) -> set[str]:
+    """Which installed distributions ship this exact module, not merely its root.
+
+    By the module rather than its top-level name, and that distinction is the
+    whole guard. Four distributions answer to `langgraph` -- `langgraph`,
+    `langgraph-checkpoint`, `langgraph-checkpoint-sqlite` and
+    `langgraph-prebuilt` -- so a check on the root name calls `langgraph.errors`
+    declared on the strength of `langgraph-checkpoint-sqlite`, which does not
+    ship it. That is exactly the hole this rule was written to close, and a
+    version of it matching on the root would pass while leaving the hole open.
+
+    Falls back to `PROVIDED_BY` for what is not installed here, and returns the
+    empty set for what is neither -- which fails the rule, as an import nobody
+    can account for should.
+    """
+    from importlib.metadata import files, packages_distributions
+
+    root, _, _ = module.partition(".")
+    candidates = packages_distributions().get(root)
+    if not candidates:
+        named = PROVIDED_BY.get(root)
+        return {named} if named else set()
+
+    wanted = Path(*module.split("."))
+    shipping = set()
+    for dist in candidates:
+        for path in files(dist) or ():
+            carried = Path(*Path(str(path)).parts)
+            if carried == wanted.with_suffix(".py") or wanted / "__init__.py" == carried:
+                shipping.add(_canonical(dist))
+                break
+    return shipping
+
+
+def _foreign_imports() -> dict[str, Path]:
+    """Every non-stdlib module `src/` imports, and one file that imports it."""
+    found: dict[str, Path] = {}
+    for path in _package_modules():
+        for module in _imported_modules(path):
+            if module.split(".")[0] in sys.stdlib_module_names:
+                continue
+            if module == "kingfisher" or module.startswith("kingfisher."):
+                continue
+            found.setdefault(module, path)
+    return found
+
+
+def test_every_package_the_library_imports_is_a_declared_dependency():
+    """A transitive dependency is not a promise, checked rather than repeated.
+
+    `pyproject.toml` says this three times in its own comments -- on
+    `langchain-anthropic`, on `pyyaml`, on `aiosqlite` -- and nothing enforced
+    it. Four packages the harness imports by name were undeclared when this was
+    written: `langchain-core`, `langchain`, `langgraph` and
+    `langgraph-checkpoint`, every one of them arriving through somebody else's
+    requirements.
+
+    `langchain-core` is the one with a cost outside this repository.
+    `docs/formats.md` tells a tool author to import it, so a resolver handing
+    them a different major breaks code this project invited them to write.
+
+    The rule reads what is imported rather than `THIRD_PARTY` above, which is a
+    table of what each *area* may import and would be a second thing to keep
+    true. Two lists of the same fact is the arrangement this file distrusts.
+    """
+    declared = _declared_distributions()
+    undeclared = {
+        module: path
+        for module, path in _foreign_imports().items()
+        if not (_providers(module) & declared)
+    }
+    assert not undeclared, (
+        "imported but not declared in pyproject.toml: "
+        + ", ".join(f"{m} ({_module_id(p)})" for m, p in sorted(undeclared.items()))
+        + " -- it may resolve today through another package's requirements, and "
+        "that is not a promise it will resolve tomorrow"
+    )
+
+
+def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
+    """The mutation the rule above cannot catch by passing.
+
+    Everything imported is declared now, so matching on the root name instead
+    of the module passes the rule just as well -- and gives back the hole that
+    let `langgraph` look declared while `langgraph.errors` came from a
+    distribution nobody had named. These are the questions the tree cannot ask.
+    """
+    assert "langgraph" in _providers("langgraph.errors")
+    assert "langgraph-checkpoint-sqlite" not in _providers("langgraph.errors")
+
+    assert "langgraph-checkpoint" in _providers("langgraph.checkpoint.memory")
+    assert "langgraph" not in _providers("langgraph.checkpoint.memory")
+
+    assert _providers("kingfisher_service.app") == {"kingfisher-service"}
+    assert _providers("sandlock") == {"sandlock"}
+    assert _providers("nothing_ships_this") == set()
