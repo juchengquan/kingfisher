@@ -23,10 +23,12 @@ from kingfisher.domain.ports import SubagentRepository
 from kingfisher.domain.request import Request
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
-from kingfisher.infrastructure.harness.agent import (
+from kingfisher.infrastructure.harness.activation import (
     available_skills,
-    build_agent,
     defined_subagents,
+)
+from kingfisher.infrastructure.harness.agent import (
+    build_agent,
     workspace_tool_names,
 )
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend

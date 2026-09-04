@@ -100,7 +100,7 @@ _EXPORTS = {
     # rather than `model_for` itself, which the design named: `doctor` wants
     # *which definitions cannot run*, and exporting the two calls it would
     # need to combine would promise a recipe instead of an answer.
-    "unrunnable_delegates": "kingfisher.infrastructure.harness.agent",
+    "unrunnable_delegates": "kingfisher.infrastructure.harness.activation",
     # Reached for by `kingfisher.presentation.cli`, and public because it
     # reached. A
     # renderer in the domain looks odd until you see what it is for: the
@@ -241,7 +241,7 @@ if TYPE_CHECKING:
         shell_confinement as shell_confinement,
     )
     from kingfisher.infrastructure.files import LocalFileStore as LocalFileStore
-    from kingfisher.infrastructure.harness.agent import (
+    from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
     )
     from kingfisher.infrastructure.harness.checkpointing import (

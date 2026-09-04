@@ -19,9 +19,11 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
-from kingfisher.infrastructure.harness.agent import (
+from kingfisher.infrastructure.harness.activation import (
     available_skills,
     defined_subagents,
+)
+from kingfisher.infrastructure.harness.agent import (
     registered_tools,
     workspace_tool_names,
 )
