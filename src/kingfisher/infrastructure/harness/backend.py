@@ -542,8 +542,9 @@ def _fence_for(
 
     The policy is generated here from what this session already has: writable is
     the session and the scratch directory `TMPDIR` points at, readable is the
-    shared catalogue. A deployment never writes one -- see `fence.py` for the
-    hand-written policy that failed open and why that is the rule.
+    shared catalogue and the toolchain. A deployment never writes one -- see
+    `fence.py` for the hand-written policy that failed open and why that is the
+    rule.
     """
     if confined.mechanism not in ("bubblewrap", "Landlock"):
         return None
@@ -555,7 +556,25 @@ def _fence_for(
     # and the suite would not catch it, because a run only ever exercises the
     # one mechanism its own kernel offers. That is the divergence this function
     # already avoids one question earlier by deriving from `Confinement`.
-    readable = [skills_dir] if skills_dir is not None else []
+    #
+    # The toolchain, because `shell_env` puts this venv's `bin` first on the
+    # agent's `PATH` and an allow-list that has not heard of it does not refuse
+    # -- it falls through to whatever interpreter is under `/usr`, which is a
+    # different Python without the `agent` dependency group, and the venv's
+    # `site-packages` is unreadable besides. Silent, and invisible on macOS,
+    # where the profile is `(allow default)` and has granted the same roots
+    # through `readable_roots` since the day denying the home broke Python
+    # there.
+    #
+    # Not `readable_roots`, which is the obvious call and the wrong one: it also
+    # returns the *workspace*, which is right where the home is denied and the
+    # workspace re-allowed inside it, and catastrophic here. Sessions live under
+    # the workspace, so granting it hands every tenant back the directory this
+    # fence exists to take away -- measured, before the fence: tenant B read
+    # tenant A's `derived/secret.txt` with `cat ../<A>/...`, exit 0.
+    readable = [*confinement.toolchain_roots(cfg.shell_path_extra)]
+    if skills_dir is not None:
+        readable.append(skills_dir)
     writable = [cfg.scratch_dir]
 
     if confined.mechanism == "bubblewrap":
