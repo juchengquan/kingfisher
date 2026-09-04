@@ -7,7 +7,18 @@ tools: []
 # Omitting this would leave the delegate with no skills at all, which is
 # not what omitting `tools` means. Its body is its procedure; this adds the
 # one shared procedure it genuinely re-uses.
-skills: [tabular-qa]
+skills:
+  # Two spellings, both resolving to the same procedure. `tabular-qa` sits
+  # directly under `skills/`; `incident::postmortem` sits in the `incident`
+  # folder, which makes that folder a *source* and the qualifier available.
+  #
+  # The bare `postmortem` would work today, because the name is unique. Written
+  # out here because this file is an example: the qualified form is what you
+  # want the habit of once a catalogue has more than one party in it, and it is
+  # the only form that keeps meaning the same thing after somebody else ships a
+  # `postmortem` of their own.
+  - tabular-qa
+  - incident::postmortem
 # Neither `provider:` nor `model:`. Checking a number is where being wrong costs
 # most, so this one wants the deployment's own model -- which is what omitting
 # them means. Pinning the default would read as a decision and behave as a

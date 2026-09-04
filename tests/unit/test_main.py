@@ -608,7 +608,12 @@ def test_subtracting_skills_and_subagents_too(cfg, shipped):
     from kingfisher.infrastructure import seeding
 
     seeding.seed(cfg, shipped)
-    seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
+    # `_offered`, not `LocalSkillRepository.names`, and the difference is the
+    # point: the repository lists the directories directly under `skills/`,
+    # while a run is offered whatever the *registry* resolves -- which includes
+    # a skill in a source folder, `incident::postmortem`. Asking the wrong one
+    # made this a test that passed until somebody shipped a sourced skill.
+    seeded_skills = set(main._offered(cfg)["skills"])
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: subtracting a name the catalogue does not offer would leave
     # "the rest" equal to the whole of it, and this would still pass.

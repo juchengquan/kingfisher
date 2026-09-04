@@ -14,7 +14,6 @@ from kingfisher.application.turn import turn_message
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.workspace_fs import DataError
 from tests.conftest import StubCheckpointer, an_agent, start, subagents_dir
@@ -367,7 +366,13 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # so adding a preset failed a test about *reporting* for a reason having
     # nothing to do with reporting. Sortedness is still asserted -- this is a
     # line a person reads -- but the membership comes from the catalogue.
-    seeded_skills = set(LocalSkillRepository(cfg.skills_dir).names)
+    # `available_skills`, not `LocalSkillRepository.names`: the report measures
+    # against what the *run* was offered, which resolves a skill in a source
+    # folder -- `incident::postmortem` -- that the directory listing does not
+    # show. The two agreed until a sourced skill shipped.
+    from kingfisher.infrastructure.harness.agent import available_skills
+
+    seeded_skills = set(available_skills(cfg, None))
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: the granted name has to be one the catalogue offers, or
     # "everything except it" would be the whole catalogue by accident.
