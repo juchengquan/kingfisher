@@ -11,7 +11,10 @@ being narrower than the definition and is dropped.
 
 Split out of `agent.py`, which was 657 lines doing four jobs. This was the
 largest of them and the most self-contained: nothing in here calls anything in
-`agent.py`, and `build_agent` is the only caller of anything in here.
+`agent.py`. It has since grown other callers -- `activation` reports with
+`model_for` and `indistinct`, and `TASK_TOOL` is read wherever delegation has to
+be recognised -- so the one-caller claim that used to sit here is gone rather
+than corrected, being the kind that goes stale in another file.
 """
 
 from __future__ import annotations
@@ -50,8 +53,8 @@ from kingfisher.tools.spec import Found, Offering, select, split_reference
 #: Here rather than in `agent`, which is where it was written and is no longer
 #: the only module that needs it: the interpreter decides whether a sandbox may
 #: dispatch one, and the tool surface hides it from a compiled graph's roster.
-#: Three readers and one of them assembles the other two, so it cannot live in
-#: the assembler without the other two importing their own caller.
+#: Neither of those may import the module that assembles them, which is what
+#: puts the name here rather than beside the assembly.
 TASK_TOOL = "task"
 
 if TYPE_CHECKING:
@@ -391,10 +394,6 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     #: answer. `None` is the ordinary case: the file decides.
     run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
-    #: The model whoever summoned this delegate is running, by name. `None`
-    #: means the main agent on the deployment's own model, which is what a
-    #: top-level delegate under an unpinned agent has. It is what a definition
-    #: naming no model inherits, and what `indistinct` compares against.
 ) -> dict[str, Any]:
     """Translate kingfisher's definition into deepagents' `SubAgent`.
 
