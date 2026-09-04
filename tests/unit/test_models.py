@@ -14,7 +14,7 @@ import pytest
 from kingfisher.config import ConfigError, Endpoint, ModelProfile
 from kingfisher.infrastructure.harness.models import ADAPTERS, Adapter, build_model
 
-OPENAI = Endpoint("openai", "https://api.openai.com/v1", "sk-not-real")
+OPENAI = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-not-real")
 
 
 def test_openai_uses_the_responses_api(cfg):
@@ -39,7 +39,7 @@ def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
     rather than as a deployment that quietly ignores its own `max_tokens`.
     """
     colliding = Adapter("langchain_openai:ChatOpenAI", {"max_tokens": 1})
-    monkeypatch.setitem(ADAPTERS, "openai", colliding)
+    monkeypatch.setitem(ADAPTERS, "openai_responses", colliding)
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
         build_model(cfg.models.models["fake-model"], OPENAI)
@@ -98,7 +98,7 @@ LANDING_SITES = {
         "max_tokens": "max_tokens",
         "timeout_s": "default_request_timeout",
     },
-    "openai": {
+    "openai_responses": {
         "model": "model_name",
         "base_url": "openai_api_base",
         "api_key": "openai_api_key",

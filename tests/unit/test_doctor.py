@@ -339,7 +339,7 @@ endpoints:
     base_url: https://example.invalid/anthropic
     key_env: GATEWAY_KEY
   elsewhere:
-    api: openai
+    api: openai_responses
     base_url: https://example.invalid/v1
     key_env: ELSEWHERE_KEY
 

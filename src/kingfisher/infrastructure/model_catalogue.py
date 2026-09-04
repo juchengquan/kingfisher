@@ -33,6 +33,7 @@ import yaml
 
 from kingfisher.config import ConfigError, Endpoint, ModelProfile, Models
 from kingfisher.domain import fields
+from kingfisher.infrastructure.harness.models import ADAPTERS
 from kingfisher.infrastructure.workspace_fs import EXAMPLE
 
 if TYPE_CHECKING:
@@ -130,6 +131,28 @@ def _endpoints(
             if not str(entry.get(required) or "").strip():
                 msg = f"{source}: endpoint {name!r} is missing required key {required!r}"
                 raise ConfigError(msg)
+        api = str(entry["api"]).strip()
+        if api not in ADAPTERS:
+            # Refused here rather than in `build_model`, which is where it used
+            # to happen -- meaning a wire format kingfisher cannot speak loaded
+            # without complaint and failed when a turn started, from inside a
+            # request. Every other closed set in this file is checked as it is
+            # read: an unknown key is refused, a model absent from the table is
+            # refused, a default naming neither is refused. `api` was the one
+            # that was not.
+            #
+            # Before the credential check below, deliberately. Checked after it,
+            # a typo on an endpoint whose key this machine happens not to hold
+            # would be dropped rather than refused -- so the same file would
+            # load here and fail on the machine that *does* hold the key, which
+            # is precisely the machine-dependence a shared catalogue must not
+            # have. A missing key is a fact about a machine; an unbuildable
+            # `api` is a fact about the file.
+            msg = (
+                f"{source}: endpoint {name!r} names api {api!r}, which kingfisher "
+                f"cannot build; known: {tuple(sorted(ADAPTERS))}"
+            )
+            raise ConfigError(msg)
         key = (environ.get(str(entry["key_env"])) or "").strip()
         if not key:
             # Named, not hinted at. "endpoint 'minimax' has no credentials"
@@ -141,7 +164,7 @@ def _endpoints(
             dropped[name] = str(entry["key_env"])
             continue
         resolved[name] = Endpoint(
-            api=str(entry["api"]),
+            api=api,
             base_url=str(entry["base_url"]),
             api_key=key,
         )

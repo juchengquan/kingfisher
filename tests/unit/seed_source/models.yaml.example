@@ -17,11 +17,24 @@
 # name you invent -- adding one needs a LangChain chat class and a kingfisher
 # release, which is why it is not open data like the rest of this file:
 #
-#   anthropic  Anthropic's wire format. This is the gateway path; MiniMax and
-#              anything else imitating it goes here.
-#   openai     OpenAI proper, on the Responses API (/v1/responses). NOT a
-#              general OpenAI-compatible client -- gateways do not implement
-#              that endpoint, so point them at the anthropic api instead.
+#   anthropic         Anthropic's wire format. This is the gateway path;
+#                     MiniMax and anything else imitating it goes here.
+#   openai_responses  OpenAI proper, on the Responses API (/v1/responses).
+#
+# Note what the second one is not. It is **not** a general OpenAI-compatible
+# client, which is why it is not called `openai`: it was, and that name
+# promised the thing almost every gateway speaks while delivering the one
+# almost none of them do. `/v1/responses` is OpenAI's own; a gateway
+# advertising an "OpenAI-compatible" API means `/v1/chat/completions` and will
+# fail here.
+#
+# So a gateway goes on `anthropic`, whatever its vendor calls itself. MiniMax
+# publishes both wire formats and the Anthropic one is the entry above; the
+# same is true of most gateways worth pointing at.
+#
+# An `api` this list does not name is refused when the catalogue loads, not
+# when a turn starts -- so a typo, or the `openai` this field used to accept,
+# stops the deployment with a message naming what it can build.
 #
 # `base_url` is written here rather than read from a variable, because it is
 # topology and not a secret -- and because two gateways speaking one wire format
@@ -46,7 +59,7 @@ endpoints:
   #   key_env: VLLM_API_KEY
 
   openai:
-    api: openai
+    api: openai_responses
     base_url: https://api.openai.com/v1
     key_env: OPENAI_API_KEY
 

@@ -390,6 +390,33 @@ identical to a shared catalogue naming an endpoint this machine cannot reach.
 nowhere, and a file shipped inside a wheel cannot name one.
 *(2026-08-16, `model-catalogue.md`.)*
 
+**A wire format is named after what it speaks, and an unbuildable one is
+refused as the file loads.** The Responses-API row was called `openai`, which
+promised the thing every gateway speaks and delivered the one almost none of
+them do -- `/v1/responses`. Written the obvious way for a gateway, `api: openai`
+loaded, built, and failed inside the first turn with an error from somebody
+else's server. It is `openai_responses` now, and `model_catalogue.load` refuses
+an `api` that names no adapter, quoting what was written and listing what can be
+built.
+
+The two halves only work together: the check alone catches typos, which were
+already cheap to find, and the rename alone is a breaking change with nothing
+enforcing it. Together they turn the one dangerous line in this file into a
+refusal at startup that names its own fix.
+
+Refused rather than dropped, unlike an endpoint whose `key_env` is unset, and
+checked *before* that drop. A missing key is a fact about one machine, which is
+why a shared catalogue survives it; an unbuildable `api` is a fact about the
+file, and checking it second would make the same catalogue load here and fail on
+the machine that holds the key.
+
+**No Chat-Completions row was added**, though it is the wire format those
+gateways actually speak. Nothing needs one: MiniMax and every gateway worth
+pointing at publish an Anthropic-compatible endpoint, which is the recommended
+path and where the example sends them. Adding a row means an adapter, a
+`LANDING_SITES` entry and a release, and the table is built to take one the day
+something measures the need. *(2026-09-04.)*
+
 **`doctor` answers "why will this not start?" and nothing else.** It never makes a
 model call: no probe, and it points at the caller's own task as the end-to-end
 test. *(2026-08-18, `what-the-catalogue-dropped.md`; 2026-08-17,
