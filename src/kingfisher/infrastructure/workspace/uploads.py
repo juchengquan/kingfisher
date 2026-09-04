@@ -18,10 +18,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.domain import skill
+from kingfisher.domain import layout
 from kingfisher.domain.subagent.reading import SUFFIX
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
+from kingfisher.skills import spec as skill
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -117,7 +118,7 @@ def materialise_skills(
     if not refs:
         return ()
 
-    root = session_dir / skill.DIRECTORY / skill.UPLOADED
+    root = session_dir / layout.SKILLS / layout.UPLOADED_SKILL_DIR
     names: list[str] = []
     wrote: dict[str, str] = {}
     for ref in refs:
@@ -151,7 +152,7 @@ def materialise_skills(
     # The other checks in this loop are the same shape: a collision and a
     # duplicate are both refused when the request arrives rather than left for
     # something downstream to notice.
-    from kingfisher.infrastructure.harness.skill_registry import (  # noqa: PLC0415
+    from kingfisher.skills.registry import (  # noqa: PLC0415
         read_uploaded,
         split_qualified,
     )

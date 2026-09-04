@@ -3,7 +3,7 @@
 Skills were the one kind pinned to the filesystem, and not because the route
 demanded a path — deepagents reads them through `BackendProtocol` — but because
 `SkillRepository` could answer only with names, and a route needs file contents.
-`files` closes that, and `skills_backend` mounts what it returns.
+`files` closes that, and `skills.backend` mounts what it returns.
 
 What is *not* closed, and is tested here so it stays visible: a skill's scripts
 are run by the shell against `$KINGFISHER_SKILLS`, and a store has no path for
@@ -18,9 +18,9 @@ import pytest
 
 from kingfisher.domain.ports import SkillRepository
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
-from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend, shell_env
-from kingfisher.infrastructure.harness.skills_backend import skills_backend
+from kingfisher.skills.backend import skills_backend
+from kingfisher.skills.catalogue import LocalSkillRepository
 
 SKILL = "---\nname: {name}\ndescription: A skill.\n---\n\nbody of {name}\n"
 
@@ -161,7 +161,7 @@ def test_the_async_half_refuses_too(cfg, session_dir, operation):
     This codebase has the scar: overriding both `execute` and `aexecute` on
     `LocalShellBackend` nested the sandbox twice and thirteen tests still
     passed, because none of them drove the async path. That story is quoted in
-    `skills_backend`'s own docstring as the reason it is built on upstream
+    `skills.backend`'s own docstring as the reason it is built on upstream
     rather than hand-written, and then the async half went untested anyway.
     """
     import asyncio
@@ -228,7 +228,7 @@ def test_the_shell_is_told_nothing_rather_than_told_a_lie(cfg, session_dir):
 
 
 def test_a_skill_reaches_the_store_with_every_file_it_ships(tmp_path):
-    """Straight through `skills_backend`, so the mount is checked apart from the
+    """Straight through `skills.backend`, so the mount is checked apart from the
     wiring that chooses it."""
     repo = _on_disk(tmp_path, "demo")
     (tmp_path / "demo" / "run.sh").write_text("echo hi\n", encoding="utf-8")

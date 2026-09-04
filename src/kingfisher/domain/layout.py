@@ -33,9 +33,6 @@ authored tier is an operator's business, best done wherever
 
 from __future__ import annotations
 
-from kingfisher.domain.skill import DIRECTORY as SKILLS
-from kingfisher.domain.skill import UPLOADED
-
 #: Created once in the workspace. What remains here is what a session does not
 #: own: the definitions the sessions share, and the harness's own directory.
 LAYOUT_DIRS: tuple[str, ...] = (
@@ -72,11 +69,24 @@ SESSION_DIRS: tuple[str, ...] = (
 #: Folding them in would make one name mean two things, and a reader asking what
 #: a prompt can refer to would have to filter the answer.
 #:
-#: Composed from `domain.skill` rather than spelled again: the leaf names are
-#: already declared there, and a second spelling is how the two halves of this
-#: layout drifted apart in the first place.
+#: Composed from the two leaves below rather than spelled again: a second
+#: spelling is how the two halves of this layout drifted apart in the first
+#: place.
 AGENT_HOME = ".home"
-UPLOADED_SKILLS = f"{SKILLS}/{UPLOADED}"
+
+#: Where skills live, and the reserved name an upload goes under inside a
+#: session. Declared here rather than in `skills.spec`, which is where they
+#: were: they are facts about the layout, and this module *is* the layout as
+#: data. While both lived in `domain/` nothing had to choose; `skills` becoming
+#: a module of its own made the domain import it to learn where a directory
+#: was, which is the wrong way round and is what named the owner.
+#:
+#: A catalogue skill called `uploaded` would shadow the route and hide every
+#: upload, which is why the name is reserved rather than merely used.
+SKILLS = "skills"
+UPLOADED_SKILL_DIR = "uploaded"
+
+UPLOADED_SKILLS = f"{SKILLS}/{UPLOADED_SKILL_DIR}"
 
 SESSION_PLUMBING: tuple[str, ...] = (
     AGENT_HOME,

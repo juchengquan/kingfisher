@@ -22,7 +22,7 @@ import shutil
 from pathlib import Path
 
 from evals.dataset import seed_sample_data
-from kingfisher.domain.skill import FILENAME
+from kingfisher.skills.spec import FILENAME
 
 SKILL_NAME = "tabular-qa"
 

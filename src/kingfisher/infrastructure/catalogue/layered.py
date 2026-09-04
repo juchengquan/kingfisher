@@ -31,11 +31,11 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain import skill
+from kingfisher.domain import layout
 from kingfisher.domain.subagent.reading import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+from kingfisher.skills.catalogue import LocalSkillRepository
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 
 def uploaded_skills(session_dir: Path) -> Path:
     """Where this session's own skills were unpacked."""
-    return Path(session_dir) / skill.DIRECTORY / skill.UPLOADED
+    return Path(session_dir) / layout.SKILLS / layout.UPLOADED_SKILL_DIR
 
 
 def uploaded_subagents(session_dir: Path) -> Path:

@@ -14,8 +14,8 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.presentation.cli.__main__ import main
+from kingfisher.skills.catalogue import LocalSkillRepository
 from tests.conftest import subagents_dir, verbs
 
 
