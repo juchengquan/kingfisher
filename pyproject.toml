@@ -46,7 +46,7 @@ dependencies = [
     # packages the harness leans on hardest.
     #
     # `langchain-core` is the one that matters outside this repository.
-    # `docs/formats.md` tells a tool author to write `from langchain_core.tools
+    # `docs/guides/tools.md` tells a tool author to write `from langchain_core.tools
     # import tool`, so it is the only dependency here that *users* write code
     # against -- and until now nothing said which version their code was
     # written for. That is the promise the range makes.

@@ -1,18 +1,36 @@
 # The documents
 
-Four files and one proposal. It used to be thirty-eight, and the difference is
-the point: agents were grepping their way through ninety thousand tokens of
-design history to answer questions that a page could answer.
+This folder held thirty-eight documents once, and the difference is the point:
+agents were grepping their way through ninety thousand tokens of design history
+to answer questions that a page could answer.
+
+No count of what is here now. The table is the count, and a number written above
+it is one more thing to keep true -- the same rule `CLAUDE.md` applies to the
+file count it refuses to print.
 
 | File | What it answers | When to read it |
 |---|---|---|
-| [`formats.md`](formats.md) | What an agent, subagent, tool or skill file may say. | Writing or changing a definition. |
+| [`guides/formats.md`](guides/formats.md) | What an agent, subagent, tool or skill file may say. | Writing or changing a definition. |
+| [`guides/tools.md`](guides/tools.md) | How to write a workspace tool: the shapes, what it returns, what the loader refuses. | Writing or changing a tool. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
 
-`formats.md` is kept current. The other two are records: `decisions.md` says what
+The guides are kept current. The other two are records: `decisions.md` says what
 was settled and when, `findings.md` says what was measured and when. Neither is a
 manual, and an entry old enough to doubt is one to re-check rather than trust.
+
+## `guides/`
+
+How to build something that runs on kingfisher, which is a different question
+from why the code is shaped this way. The split inside the folder is what the
+reader is holding: `formats.md` is a definition -- YAML, fields, what each one
+may say -- and `tools.md` is Python, which has rules of its own because it is
+code this process imports and calls rather than data it reads.
+
+Another guide belongs here when there is another thing to build. Anything
+arguing for a shape goes to `decisions.md` and anything measured about upstream
+to `findings.md`; a guide that starts arguing with itself is one of those two
+wearing the wrong hat.
 
 ## `design/`
 

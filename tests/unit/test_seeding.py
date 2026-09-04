@@ -49,7 +49,7 @@ def fixture_pack():
 
 @pytest.fixture(scope="session")
 def formats_doc():
-    """`docs/formats.md` -- the format reference these tests check against.
+    """`docs/guides/formats.md` -- the format reference these tests check against.
 
     A repository path now, not package data. It lived in `kingfisher.reference`
     beside the catalogue example and shipped in the wheel, where nothing in
@@ -60,7 +60,7 @@ def formats_doc():
     `shipped`, then `reference_tree`, and both names meant a different directory
     from the `shipped` in `conftest` -- which is the definitions `seed` copies.
     """
-    return REPO / "docs" / "formats.md"
+    return REPO / "docs" / "guides" / "formats.md"
 
 
 def test_a_seeded_skill_is_discovered(cfg):

@@ -135,7 +135,7 @@ def test_every_preset_tool_loads(shipped):
 
 
 def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
-    """`docs/formats.md` documents three ways to write a tool, and a reference
+    """`docs/guides/tools.md` documents three ways to write a tool, and a reference
     that describes a shape nothing ships is a shape somebody has to take on
     trust. Asserted by shape rather than by name so that renaming a preset does
     not quietly drop the coverage it was carrying.
@@ -1106,7 +1106,7 @@ def test_the_long_entry_form_is_shown_on_every_field_that_takes_one(shipped):
     that on one of the three.
 
     One long form across all three fields is the reason an entry is
-    `{name, groups}` rather than a shape per field -- a claim `docs/formats.md`
+    `{name, groups}` rather than a shape per field -- a claim `docs/guides/formats.md`
     makes and nothing held the examples to. Asserted by parsing the files rather
     than the specs, because what is being checked is how somebody *wrote* it.
     """

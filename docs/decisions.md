@@ -598,6 +598,32 @@ kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
 **A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
 before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
 
+## What a tool returns
+
+**A workspace tool's return type is langchain's rule, and kingfisher adds none.**
+The loader checks that `TOOLS` holds tools and stops; nothing reads a return
+annotation, and `WorkspaceToolErrors` passes the value through untouched because
+it catches exceptions and nothing else. A dict therefore reaches the model as
+`json.dumps`, and a `ToolMessage` or a langgraph `Command` is not wrapped at all
+-- the graph applies it.
+
+**Refusing the `Command` was considered and rejected**, which is the half worth
+recording, because it will be proposed again. The wrapper that would do it
+already exists and the check is five lines. What stops it is what the loader's
+other refusals have in common: each catches a *near miss* that produces a
+successful wrong answer -- `TOOLS = [Shout]` for `[Shout()]` is one character,
+loads, and answers with the repr of a new instance. Returning a `Command` takes
+an import of `langgraph.types` and means it. A rule there would make kingfisher a
+second name for someone else's contract, which is the thing `guides/tools.md`
+refuses to be in its opening lines.
+
+Documented instead, with the cost stated where an author reads it: a `Command`
+that writes its own message leaves the run log naming no tool, and a `files`
+update reaches nothing, because this harness puts the file tools on a real
+filesystem rather than in graph state. `findings.md` has the measurement and
+`tests/unit/test_tool_returns.py` pins the behaviour, so a langchain change lands
+there rather than at a deployment's first tool call. *(2026-09-04.)*
+
 ## Tool failure
 
 **A workspace tool's exception is a failed tool result, not a dead run.**
