@@ -135,8 +135,8 @@ directory, and the only carve-out is `protected=(skills,)`. So `models.yaml`,
 agent's shell. The rule is already stated one function up, at
 `confinement.py:519`: *"it is host-side configuration, and a file the agent could
 edit is not a boundary."* The agent cannot reach environment variables -- its
-shell gets an allowlist of five, plus the skills directory when there is one (`backend.shell_env`) and cannot set any on the
-parent process.
+shell gets an allowlist of five, plus the skills directory when there is one
+(`backend.shell_env`), and cannot set any on the parent process.
 
 **A zero-argument factory, not a class and not an instance.** A class would have
 to be constructed, and kingfisher does not know whether a store wants a bucket, a
@@ -287,11 +287,31 @@ depend on each other and must not be stacked.
    `app.py`; `@runtime_checkable` on the port; `FILE_STORE_CONTRACT` from the
    five store-level tests now in `tests/unit/test_file_references.py:88-118`.
 
-4. **The guide, and the records.** `docs/guides/` gains a page on writing a
-   store: the two settings, the factory convention, a worked S3 `SessionStore`,
-   and how to run the kit against it. `docs/decisions.md` gains the decisions
-   above. `docs/README.md`'s table gains the guide, and the sentence saying
-   `docs/design/` is empty goes back to being true. This file is deleted.
+4. **The guide, and the records.** `docs/guides/` gains a page on the ports a
+   deployment replaces: the settings, the factory convention, a worked S3
+   `SessionStore`, and how to run the kit against it. `docs/decisions.md` gains
+   the decisions above. `docs/README.md`'s table gains the guide, and the
+   sentence saying `docs/design/` is empty goes back to being true. This file is
+   deleted.
+
+   **Widened 2026-09-04, before it was written.** This said "a page on writing a
+   store", covering the two ports the slices above touch. It covers all of them
+   a deployment can replace instead, because the narrow version leaves the hole
+   it was measured against: there is no deployment documentation *at all* today
+   -- twelve ports, and `SessionStore` appears in no guide, no README and no
+   page except `.env.example`. Both existing guides are for somebody *authoring
+   content for the agent*, which the README says in as many words; this is for
+   somebody *hosting* kingfisher, and that audience has nowhere to be sent.
+
+   Two of them are more work than the four this proposal argued about.
+   `SessionRoot` and `CommandRunner` have no dedicated tests and no prose
+   anywhere, so writing their half of the page means pinning a contract rather
+   than describing one -- the per-turn lifetime, the refusal of a symlink out of
+   the root, who closes what. That is the cost, stated here so the slice is not
+   started under the impression it is a page about two settings.
+
+   `docs/README.md`'s section header comes with it: *"How to build something
+   that runs on kingfisher"* does not describe a page about running kingfisher.
 
 ## What building it changed
 
