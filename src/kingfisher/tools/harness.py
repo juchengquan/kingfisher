@@ -40,16 +40,6 @@ if TYPE_CHECKING:
     from kingfisher.config import Config
 
 
-#: One entry of a deployment's middleware registry.
-#:
-#: `Callable` is imported at run time for this line, rather than under
-#: `TYPE_CHECKING` with `Mapping` and `Sequence`: this is a module-level
-#: assignment rather than an annotation, and `from __future__ import
-#: annotations` makes annotations strings while doing nothing for a value.
-#:
-#: Two shapes, and the ellipsis is the honest way to say so. An entry may be a
-#: zero-argument factory, which is what a registry has held since before
-#: settings existed; or a class, which `_instantiate` calls with its own
 def registered_tools(graph: Any) -> tuple[str, ...] | None:
     """Tool names the compiled agent can actually dispatch, or `None` if unreadable.
 
