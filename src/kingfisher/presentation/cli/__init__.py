@@ -1,10 +1,16 @@
-"""`kingfisher`: seed a workspace, and see what is in it.
+"""`kingfisher`: fill a workspace, see what is in it, and check it over.
 
-Two verbs, and deliberately no more. A pip-installed kingfisher already has
-`Kingfisher`, `run` and `stream` for running a task, and `kingfisher-server` for
-serving one; what it had no way to do was fill a workspace or look at one,
-because both lived behind flags in `main.py`, which is a development driver and
-is not in the wheel.
+Four verbs. It said "two verbs, and deliberately no more" until this line was
+written, by which point there were five -- the sentence justifying the restraint
+outlived the restraint, and nobody adding the third or fourth went back to it.
+That is the failure worth naming rather than the count: a charter nothing
+enforces is a claim, and this one had been false for weeks.
+
+The rule that produced "two" was that the command exists for what the library
+cannot do for itself. It is being replaced -- see
+`docs/design/2026-09-04-the-verb-that-runs-a-task.md` -- because it measures the
+library's completeness rather than the user's, and under it the one thing a
+person installs this to do is the one thing the command cannot.
 
 `main.py` keeps its flags and its default. Bare invocation there runs the eval
 smoke -- a real model call against whatever key the deployment holds -- which is

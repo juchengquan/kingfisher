@@ -280,3 +280,23 @@ def subagents_dir(cfg) -> Path:
 def tools_dir(cfg) -> Path:
     """Where this config's tool modules live. See `subagents_dir`."""
     return cfg.catalogue_roots["tools"]
+
+
+def verbs(parser) -> dict:
+    """Every subcommand a parser offers, keyed by name.
+
+    Lived in `__main__` as `_verbs` while the `help` verb read it to print one
+    verb's own help. That verb is gone -- it repeated `<verb> --help` exactly --
+    and this was left with two callers, both tests. A helper whose only users
+    are tests belongs with the tests, which is what
+    `test_nothing_is_defined_for_tests_alone` says by failing otherwise.
+
+    Read off the parser rather than listed beside it, which is the property both
+    callers want: a second list of verb names goes stale the first time somebody
+    adds one.
+    """
+    return {
+        name: subparser
+        for action in parser._actions
+        for name, subparser in (getattr(action, "choices", None) or {}).items()
+    }
