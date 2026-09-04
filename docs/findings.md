@@ -122,6 +122,58 @@ cost an experiment to establish.
   reported on every run by `tests/linux/test_a_fence_was_exercised.py`.
   *(2026-08-27.)*
 
+## Memory-backed workspaces
+
+*Measured for `nothing-at-rest-on-this-machine.md`, removed 2026-09-04 once what
+it proposed had shipped. The rule is enforced in `presentation/cli/health.py` and
+stated in `decisions.md`; what is kept here is the evidence, which neither of
+those carries.*
+
+Against Docker 29.5.3, alpine, cgroup v2:
+
+| tmpfs vs the container's memory limit | swap | result |
+| --- | --- | --- |
+| larger | on | **203 MB silently swapped to disk.** No error, and the write succeeded |
+| larger | off | **`Killed`** -- the container dies, taking every session in it |
+| smaller | off | a clean `No space left on device`, nothing swapped, container survives |
+
+- **Deleting frees the memory.** 200 MB written moved `memory.current` from 1 MB
+  to 202 MB; deleting the file returned it to 3 MB, so reaping genuinely
+  reclaims rather than merely unlinking. *(2026-08-21.)*
+- **A tmpfs counts 1:1 against the limit**, so "smaller" is not sufficient on its
+  own -- the mount plus the process's own working set must fit, and the process
+  was using memory before any file existed. *(2026-08-21.)*
+
+## mirage, and why it was not adopted
+
+*From the same document. `mirage-ai==0.0.5` installed into a throwaway venv,
+scripts written into a RAM mount and executed -- not read from the documentation,
+which was wrong or silent on three of these. Kept because the question returns
+whenever somebody wants S3 or Postgres mounted as a path, and old enough that it
+deserves re-measuring before it decides anything.*
+
+- **A script in memory runs, but cannot both import a package and read the
+  mount.** Under the default `monty` runtime it reads the mount and cannot import
+  a third-party package; under `local` it imports and cannot see the mount
+  (`FileNotFoundError`). Only a real sandbox reconciles the two, so a skill
+  shipping code that needs real packages cannot run. *(2026-08-21.)*
+- **`MountMode.EXEC` is undocumented and is not a capability boundary.** `EXEC`
+  implies write -- a directory mounted `EXEC` accepted a shell redirect and the
+  file landed on host disk -- and it is not scoped to its own mount: a script on
+  a `WRITE` mount is refused while nothing is `EXEC`, and runs as soon as any
+  *other* mount is. *(2026-08-21.)*
+- **The driverless macOS backend corrupts writes.** FSKIT flushes pages a file
+  did not already have -- a new file, or truncate-then-write -- as NUL bytes, a
+  limit that lives in a docstring rather than in the documentation. FUSE avoids
+  it and wants a kernel driver on every machine that runs the code, developers'
+  included. *(2026-08-21.)*
+- **"No subshell" does not mean no processes.** `monty` is a spawned worker
+  binary, so arguments resting on there being nothing left to confine were weaker
+  than they looked. *(2026-08-21.)*
+
+A sized tmpfs supplies what mirage was wanted for -- memory-backed files at real
+paths, with a kernel-enforced limit -- and puts no library under every turn.
+
 ## Costs worth knowing
 
 *Re-measured 2026-09-03. All three had drifted, and one of them was never the

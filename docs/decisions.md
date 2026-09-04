@@ -738,9 +738,29 @@ tool-call hook because kingfisher already wraps every tool call. It cannot.
 `execute` writes without any file tool seeing it, so a turn already running can
 exceed the bound and only a filesystem quota underneath could stop it. What the
 check prevents is the next turn making it worse.
-*(All 2026-08-21 as `nothing-at-rest-on-this-machine.md`, N11 and N13 to N16, N20
-and N22; built separately from the rest of that document, which is still a
-proposal.)*
+**A session's files reach a store the deployment wired, and its directory is a
+port too.** `SessionStore` -- `fetch`, `save`, `knows`, `forget` -- is the missing
+half of a symmetry this package already had: bytes arrived through a door
+(`FileStore`, `DefinitionStore`) and left through a host path, which only ever
+worked for a caller sharing that host. `SessionRoot` is the other half, handing
+back the one directory a turn addresses everything from, as a context manager so
+that a mount is released when the turn ends however it ended. `LocalSessionStore`
+and `LocalSessionRoot` are the defaults, and **a local directory is a perfectly
+good implementation of either** -- what the constraint forbids is kingfisher
+*assuming* a disk, not a deployment choosing one.
+
+**Containerise and use a sized tmpfs; do not adopt mirage for the filesystem.**
+That was *Nothing at rest*'s closing recommendation and it is what shipped. A
+tmpfs inside a container gives memory-backed files that are *real paths* -- any
+program opens them, any package reads them -- with a size limit the kernel
+enforces, and no library, no driver and no version risk. Mirage was measured
+rather than argued about, and `findings.md` carries what it does. What it would
+still be good for is the question that exploration opened with and set aside: S3,
+Drive and Postgres mounted as paths, which kingfisher has no story for and which
+is a far smaller change than replacing the filesystem.
+*(N11, N13 to N16, N20 and N22 built through 2026-09-01; the store and the session
+root on 2026-08-26, `A session that survives the machine it ran on`. All from
+`nothing-at-rest-on-this-machine.md`, removed 2026-09-04.)*
 
 ## Layering
 
@@ -807,8 +827,8 @@ while the service is stateful. `sweep()` came off the request path.
 
 ## Still proposed, not built
 
-One document survives in `docs/design/`, because it describes work that has not
-happened. It is a proposal, not history.
+Nothing. `docs/design/` is empty, which is a state rather than a gap: a document
+belongs there while it is arguing for something.
 
 *A second one was there until 2026-08-31. `a-tool-failure-is-not-a-crash` had
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
@@ -828,6 +848,12 @@ built, and that half is worth keeping in git rather than here: two of its
 decisions were wrong in ways that would have shipped a fault, and the commit that
 fixed them says how each was caught.*
 
-- [**Nothing at rest on this machine**](design/2026-08-21-nothing-at-rest-on-this-machine.md)
-  -- no session data on local disk, reached through a door kingfisher does not
-  look behind. Several of its claims are still unmeasured, and it says so.
+*`nothing-at-rest-on-this-machine` was the last one out, on 2026-09-04, and its
+removal is the sharpest example this file has of why a status line is not
+evidence. It was audited decision by decision on 2026-09-01 and still reported
+"no store port in `domain/ports.py`" -- six days after `SessionStore` and
+`SessionRoot` shipped in #254. It was describing a codebase that had moved
+underneath it. Its decisions are under *Sessions: what persists and where* above
+and its measurements in `findings.md`; what stayed unbuilt is what it deferred on
+purpose -- admission control, the run log ceasing to be a file -- plus mirage,
+which it recommended against.*

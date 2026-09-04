@@ -81,6 +81,10 @@ def test_design_holds_only_what_is_still_proposed() -> None:
     So a document here that says it was built has finished its job: its decisions
     belong in `decisions.md`, anything it measured about deepagents belongs in
     `findings.md`, and the file belongs in git history. This fails when one stays.
+
+    The folder is empty as of 2026-09-04, so this is a standing guard rather than
+    a live check -- kept because the rule is about what happens when somebody adds
+    the next proposal, and that is exactly when nobody is thinking about it.
     """
     settled = []
     for path in sorted((DOCS / "design").glob("*.md")):
@@ -133,9 +137,9 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 #: The split is the one `CLAUDE.md` already draws. A document describing what
 #: exists can be checked against it. **A proposal names things that do not exist
 #: yet, which is what makes it a proposal** -- so resolving its imports would
-#: fail for the one reason that is not a defect, and the plan below is worse
-#: still: twenty of its forty-three blocks are excerpts lifted from inside a
-#: function and do not parse as modules at all.
+#: fail for the one reason that is not a defect. Every entry is checked today,
+#: because every document left describes what exists; the `False` case is kept
+#: in the type rather than deleted, since the next proposal will need it.
 #:
 #: Deny by default. A new document with Python in it fails
 #: `test_every_document_with_python_is_classified` until it appears here, which
@@ -145,10 +149,6 @@ CHECKED_SNIPPETS: dict[str, bool] = {
     "README.md": True,
     "docs/guides/formats.md": True,
     "docs/guides/tools.md": True,
-    # Proposals. Neither is checked, and the entries are here so that silence
-    # is a decision rather than an oversight.
-    "docs/design/2026-08-21-nothing-at-rest-on-this-machine.md": False,
-    "docs/superpowers/plans/2026-08-31-group-access-control.md": False,
 }
 
 
