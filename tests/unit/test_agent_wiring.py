@@ -8,13 +8,13 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.infrastructure.harness.agent import (
+from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.backend import skills_sources
+from kingfisher.infrastructure.harness.middleware import (
     REQUIRED_BY_DEEPAGENTS,
     _deepagents_middleware_names,
-    build_agent,
     declared_middleware,
 )
-from kingfisher.infrastructure.harness.backend import skills_sources
 from kingfisher.infrastructure.prompting import system_prompt
 from tests.conftest import FakeToolCallingModel, capture_build
 from tests.unit.test_confinement import needs_a_real_toolchain

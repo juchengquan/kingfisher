@@ -917,7 +917,9 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # leaking a handle. Splitting a harness module widens the consumer's list
     # without widening what the consumer does -- worth knowing before reading
     # five as more coupling than four.
-    "service": frozenset({"agent", "checkpointing", "interpreter", "runlog", "runtime"}),
+    "service": frozenset(
+        {"agent", "checkpointing", "interpreter", "middleware", "runlog", "runtime"}
+    ),
     # The withheld report, which left `service` and took one of its four edges
     # along. It has to ask the *assembled* agent what it registered and the
     # workspace what it offers, because the whole claim of the report is that it
