@@ -197,13 +197,27 @@ def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
     assert subagents_dir(cfg) == tmp_path / "catalogue" / "subagents"
 
 
-def test_every_variable_read_is_documented():
-    """`.env.example` is the only place a deployment learns a knob exists.
+def test_the_file_shows_exactly_the_knobs_that_exist():
+    """`.env.example` is the only place a deployment learns a knob exists --
+    and, since nothing anywhere warns about an unknown `KINGFISHER_` variable,
+    the only place it learns one does not.
 
     Both KINGFISHER_TOOLS_DIR and KINGFISHER_SHELL_PATH_EXTRA shipped without a
     line here, and the second one is why an agent could not find `pdftotext`:
     the shell PATH is an allowlist, so an unnamed directory looks like the tool
-    not existing rather than like configuration.
+    not existing rather than like configuration. That is one direction of this.
+
+    The other is a knob shown here that nothing reads, which is the fault
+    `test_no_message_names_a_variable_nothing_reads` catches for runtime
+    strings. It was one containment before, and the loose half asked the wrong
+    question: it searched `config.py` for any `KINGFISHER_` name, comments
+    included, so three variables that have not existed since endpoints and
+    models split were pinned into this file by a regex rather than by anyone
+    deciding they belonged.
+
+    Over assignment lines rather than the whole text, and that is what keeps the
+    block naming the retired variables possible -- prose carries no `NAME=`, so
+    telling somebody their setting is inert does not re-document it.
     """
     import re
     from pathlib import Path as _Path
@@ -220,12 +234,19 @@ def test_every_variable_read_is_documented():
     # naming `src/kingfisher/app/config.py`, one rename after that directory
     # stopped existing, and went red on main rather than at review.
     source = _Path(config_module.__file__).read_text()
-    read = set(re.findall(r"KINGFISHER_[A-Z_]+", source))
-    documented = set(re.findall(r"KINGFISHER_[A-Z_]+", (root / ".env.example").read_text()))
+    # Quoted, so this is a name the module looks *up* rather than one it
+    # mentions in a comment -- which is the half the old rule got wrong.
+    read = set(re.findall(r'"(KINGFISHER_[A-Z_]+)"', source))
+    # `#?` because a knob with no sensible default is shown commented out, and
+    # a line nobody uncommented still documents it.
+    shown = set(
+        re.findall(r"^#?\s*(KINGFISHER_[A-Z_]+)=", (root / ".env.example").read_text(), re.M)
+    )
 
-    missing = read - documented
-
-    assert not missing, f"read by config.py but absent from .env.example: {sorted(missing)}"
+    assert shown == read, (
+        f"read by config.py but not shown in .env.example: {sorted(read - shown)}; "
+        f"shown in .env.example but read by nothing: {sorted(shown - read)}"
+    )
 
 
 def test_no_message_names_a_variable_nothing_reads():

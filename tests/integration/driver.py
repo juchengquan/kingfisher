@@ -100,9 +100,10 @@ Output is live. The model's prose is printed as it is written, untagged and
 keeping its own formatting, while progress stays tagged and aligned. The
 answer is not repeated at the end -- you watched it arrive.
 
-Configuration comes from .env (copy .env.example). KINGFISHER_API_STYLE has no
-default on purpose: the Anthropic-compatible and OpenAI-compatible endpoints of
-the same gateway do not behave identically.
+Configuration comes from .env (copy .env.example). Where prompts go is
+models.yaml: an endpoint names the wire format it speaks and a model names an
+endpoint. An `api` no adapter can build is refused as the file loads, so a
+gateway on the wrong row fails at startup rather than mid-turn.
 """
 
 from __future__ import annotations
