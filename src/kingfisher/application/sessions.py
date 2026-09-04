@@ -206,14 +206,15 @@ class Sessions:
         """Name this request's session and make sure its directory exists.
 
         Public, and `_graph_for` beside it is not, which is a distinction worth
-        stating because it was nearly made the other way. Nothing calls this on
-        a `Kingfisher` -- every use in the tree goes through `for_groups(...)`
-        -- so it reads as private-able. It is not: `Caller.open_session_for`
-        delegates here, and making this private leaves a public method on the
-        handle reaching through `_kf` into a private on its own composition
-        root. `test_nothing_is_defined_for_tests_alone` then reports the
-        delegate as orphaned, which is true and is a fact about `Caller` having
-        no in-repo consumer rather than about this method.
+        stating because it was nearly made the other way. `Kingfisher` inherits
+        this from `Sessions` and `_admit` calls it on `self`, so it is reached
+        in-tree and by name.
+
+        The argument here used to be a different one: that nothing called it on
+        a `Kingfisher`, that every use went through `for_groups`, and that a
+        `Caller` handle delegating in was what kept it public. None of those
+        three survives -- `for_groups` became `held_for`, the handle is gone,
+        and the call is direct -- so what is left is the plain reason.
 
         Split out of `_admit` because the async path needs the directory before
         it can open anything: an aiosqlite connection belongs to the event loop,
