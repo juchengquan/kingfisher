@@ -917,6 +917,23 @@ three do not appear in its history at all: they have never been edited since
 they landed. Moving them relocates 250 lines nobody touches and leaves
 `build_backend`, at 25 commits, exactly where it was.
 
+**A cluster that size means two different things and this one is the harmless
+one.** Everything joined to everything is what a cohesive unit and a rippling
+one both produce, so the co-change test alone does not settle `service.py` --
+which the paragraph above stated as though it did. What separates them is how
+*wide* one commit has to be: a cohesive unit is edited a method at a time and
+merely covers the same ground repeatedly, and a tangled one cannot be touched
+anywhere without being touched in six places. `service.py` averages 2.9
+definitions per commit, and 44 of its 68 commits touch one or two. The wide ones
+are all features -- group access at 17, per-session thread databases at 13, a
+session surviving its machine at 10 -- and the hub is `__init__`, which is the
+composition root's constructor and is what every new dependency arrives through.
+
+Splitting it would not narrow any of those. A feature reaching 17 methods reaches
+17 methods across four files instead, and `application/` is already split five
+ways: of 86 commits touching that package, 59 open exactly one file and none
+opens more than four.
+
 **The split cost one invariant its structure.** *Nothing outside this module
 should ever chmod `/data`* was a fact about a file while `place_data` and the
 `chmod` were the same 700 lines. It is now a rule --
