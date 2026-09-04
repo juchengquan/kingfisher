@@ -509,8 +509,8 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         # Flattened to bare names, because the middleware compares against
         # `tool.name` and a tool is called `fetch` however a definition spelled
         # it. Safe here for the same reason it is safe for the parent: what this
-        # delegate holds was just selected, and `refuse_ambiguous` would have
-        # stopped a definition naming two of a name.
+        # delegate holds was just selected, and `Offering.carried` drops a name
+        # two files both define rather than letting one of them win in silence.
         #
         # Private names are added rather than filtered against, and leaving them
         # out was a silent failure rather than a missing feature: the tool is
