@@ -606,11 +606,37 @@ proposal.)*
 ## Layering
 
 **`infrastructure/harness/` holds every module that imports deepagents, langchain
-or langgraph**, and only that package may. The rule states the swap boundary:
-replace the harness and exactly those files are rewritten. The other thirteen
-modules stay flat -- a second subpackage would advertise a distinction no test
-could hold. Registries and DTOs did *not* move to `application/`, and the package
-root did not change. *(2026-08-17, `layer-boundaries.md`.)*
+or langgraph**, and only that package may. The rest of the layer stays flat -- a
+second subpackage would advertise a distinction no test could hold. (This said
+"the other thirteen modules"; it is eleven now, and the count was never the
+point.)
+Registries and DTOs did *not* move to `application/`, and the package root did
+not change. *(2026-08-17, `layer-boundaries.md`.)*
+
+**The rule is not a portability claim, and used to read like one.** It said the
+rule "states the swap boundary: replace the harness and exactly those files are
+rewritten", which is true and was the wrong thing to lead with -- it invites the
+next reader to plan around a second harness. Kingfisher is an adapter over
+deepagents. Supporting another framework is *out of scope*, not scheduled, and
+recorded here so the question is not re-opened as though it were open.
+
+What the rule buys, today and repeatedly, is the blast radius of an *upgrade*.
+Not swapping deepagents is not the same as not upgrading it, and `pyproject.toml`
+says what that costs: it "is beta and says so at every construction ... this one
+has moved through 0.1, 0.2 and 0.3 in under two months". A minor bump rewrites
+the same files a swap would, and the rule is what makes that a list of ten
+modules instead of a search. It also keeps the harness off the paths that never
+needed it, which is what lets `kingfisher seed` cost 20ms rather than importing
+three provider SDKs.
+
+Worth knowing before that scope changes: **nothing declares what a harness is.**
+The twelve Protocols in `domain/ports.py` abstract storage and the OS -- stores,
+repositories, a command runner -- and not one of them abstracts the runtime;
+`application/` reaches it as `infrastructure.harness.runtime`, a module rather
+than a port. So a second harness does not begin by rewriting ten files, it begins
+by discovering the interface, which is not written down anywhere. That is the
+right order: an interface derived from a single implementation comes out shaped
+like that implementation. *(2026-09-04.)*
 
 **Architecture rules are mutation-tested, not trusted.** All 44 were audited;
 43 held and one had lost its subject. Three of them exist *because* a rule had
