@@ -1605,6 +1605,12 @@ def test_the_package_ships_the_catalogue_example():
     example of it, and nothing noticed. Both paths are asserted because they
     fail separately: the first catches it moving back out of the package, the
     second catches it not being reachable the way an install reaches it.
+
+    It moved again on 2026-09-04, from the package root into `templates/`, for
+    looking like a stray file among modules and layers. That is exactly the kind
+    of tidying this guards: the destination is one directory further in and a
+    wheel that missed it would fail nothing else, because `_place_example` skips
+    a source it cannot find without a word.
     """
     from importlib import resources
 
@@ -1618,8 +1624,8 @@ def test_the_package_ships_the_catalogue_example():
     # missing furniture rather than as anything failing.
     assert workspace_fs.EXAMPLES, "nothing is asserted if the tuple is empty"
     for name in workspace_fs.EXAMPLES:
-        assert (SRC / name).is_file(), f"{name} left the package"
-        installed = resources.files(workspace_fs.PACKAGE).joinpath(name)
+        assert (SRC / "templates" / name).is_file(), f"{name} left the package"
+        installed = resources.files(workspace_fs.TEMPLATES).joinpath(name)
         assert installed.is_file(), f"{name} is not reachable the way an install reaches it"
 
 

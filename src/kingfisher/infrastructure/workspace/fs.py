@@ -28,15 +28,24 @@ from kingfisher.domain.layout import (
 from kingfisher.domain.references import within
 from kingfisher.domain.session import sessions_root
 
-#: Where the catalogue example sits, as an import path rather than a filesystem
+#: Where the shipped templates sit, as an import path rather than a filesystem
 #: one -- an installed package is not in this repository's directory tree.
-PACKAGE = "kingfisher"
+#:
+#: A directory of its own, beside `kingfisher/prompts/`, because the package root
+#: is modules and layers and a `.yaml.example` sitting among them reads as
+#: something nobody meant to commit. Data-only and deliberately not a package:
+#: `resources.files` reaches it either way, and an `__init__.py` would invite an
+#: import of what is furniture rather than code.
+TEMPLATES = "kingfisher.templates"
 
 #: The worked example of the one file a deployment *must* write. It lived at the
 #: repository root once, which meant it existed only in a checkout: `packages =
 #: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
 #: mistake `test_the_package_ships_the_catalogue_example` guards against, made
-#: for the file a new deployment needs first.
+#: for the file a new deployment needs first. Moving it into `templates/` is the
+#: same file one directory in, and that guard asserts both halves of it -- inside
+#: the package, and reachable the way an install reaches it -- so the tidying
+#: cannot quietly repeat the mistake.
 #:
 #: Read from here by `model_catalogue`, which names it in the error a deployment
 #: without a `models.yaml` hits. It moved out of `seeding` with the code that
@@ -197,7 +206,7 @@ def _place_example(workspace: Path, authored: Mapping[str, Path] | None = None) 
     """
     beside = dict(authored or {})
     for name in EXAMPLES:
-        source = resources.files(PACKAGE).joinpath(name)
+        source = resources.files(TEMPLATES).joinpath(name)
         if not source.is_file():  # a packaging fault, caught by a test
             continue
         text = source.read_text(encoding="utf-8")
