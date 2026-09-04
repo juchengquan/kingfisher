@@ -525,7 +525,7 @@ def _documented_registry(shipped):
 
 
 def test_the_middleware_example_is_not_a_definition_kind(shipped):
-    """It sits under `examples/` and `seed` does not copy it, which is the one
+    """It sits under `assets_examples/` and `seed` does not copy it, which is the one
     surprising thing about this folder and therefore the thing to pin.
 
     `DEFINITION_KINDS` is the fields of `Definitions`, and `seed` walks exactly
@@ -548,7 +548,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     cannot run and no reason why.
 
     This used to be a rule about *folders*: the two definitions naming
-    middleware lived under `examples/middleware/`, which `seed` does not walk,
+    middleware lived under `assets_examples/middleware/`, which `seed` does not walk,
     and this test asserted that nothing in `agents/` or `subagents/` named one.
     That kept a fresh checkout working and cost the thing it was checking --
     an agent and a delegate filed away from their own kinds, hand-parsed by

@@ -374,7 +374,7 @@ def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
     a deployment that has not registered the name, so copying one into a fresh
     workspace produces a file that cannot run and says nothing about why.
 
-    Planted rather than read off `examples/`, so this holds whatever that tree
+    Planted rather than read off `assets_examples/`, so this holds whatever that tree
     happens to contain.
     """
     source = tmp_path / "presets"

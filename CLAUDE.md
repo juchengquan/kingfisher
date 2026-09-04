@@ -4,7 +4,7 @@
 
 Exactly what CI runs, and all three must pass before a commit:
 
-    uv run ruff check src/ tests/ service/ examples/
+    uv run ruff check src/ tests/ service/ assets_examples/
     uv run ty check
     uv run pytest -q
 

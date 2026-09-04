@@ -116,9 +116,9 @@ number it looked like -- an agent rebuild costs what the workspace holds, and th
 figure recorded had been taken against an empty one.*
 
 - **A whole agent rebuild costs what the catalogue holds.** 8ms in an empty
-  workspace; **54ms** in one seeded with the shipped `examples/`, where the
-  default agent compiles every delegate it is offered. Between them, 25ms for a
-  seeded workspace whose agent names no delegates.
+  workspace; **54ms** in one seeded with the shipped `assets_examples/`, where
+  the default agent compiles every delegate it is offered. Between them, 25ms
+  for a seeded workspace whose agent names no delegates.
 
   The conclusion it was recorded for still stands -- against a turn of 1.5-1.9s
   even the worst of those is under 4%, so "loaded once" was never the argument

@@ -201,7 +201,7 @@ def shipped():
     A test about the examples in *this* repository has to find this repository.
     A deployment setting is the wrong thing to ask.
     """
-    return repository_root() / "examples"
+    return repository_root() / "assets_examples"
 
 
 @pytest.fixture

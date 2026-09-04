@@ -11,7 +11,7 @@ they were their own distribution found through a `kingfisher.assets` entry
 point so anyone could publish a pack. Both are gone: where a deployment gets
 its definitions is a setting now, `KINGFISHER_ASSETS`, and a directory needs no
 wheel, no metadata and no publish step. This repository keeps a worked set in
-`examples/` for the same reason it keeps documentation.
+`assets_examples/` for the same reason it keeps documentation.
 
 What that costs is written down rather than glossed: `pip install kingfisher`
 followed by `kingfisher seed` no longer produces a working workspace, and since
@@ -42,10 +42,10 @@ from kingfisher.infrastructure.workspace_fs import ensure_layout
 #:
 #: A path inside this repository is true for someone standing in a checkout and
 #: false for everyone else, and the reader most likely to hit that refusal is the
-#: one who installed the package -- who has no `examples/` anywhere. Advice that
+#: one who installed the package -- who has no `assets_examples/` anywhere. Advice that
 #: fails the way the thing it is advising about failed is the fault four other
 #: messages here were rewritten to stop making.
-SUGGESTION = Path("examples")
+SUGGESTION = Path("assets_examples")
 
 #: Named beside `SUGGESTION`, and conditional for exactly the same reason.
 #:
@@ -345,7 +345,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
     any more, so there is no set to fall back to, and inventing one would mean
     seeding a workspace from somewhere the caller never named.
 
-    The refusal names `./examples` and `./assets` only when there is one to
+    The refusal names `./assets_examples` and `./assets` only when there is one to
     name -- see `SUGGESTION` and `destination_hint`. It says both because a
     reader stopped here has two things to learn and the messages only ever
     taught the first: where to point, but never where to put.

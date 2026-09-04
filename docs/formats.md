@@ -1147,11 +1147,11 @@ it, not loading it is the mechanism working.
 
 ## Access — `groups:` in the definitions, `groups.yaml` for the vocabulary
 
-There is a worked set to read alongside this section: `examples/groups.yaml`,
-`examples/agents/analyst.yaml` and `examples/subagents/auditor.yaml`. Between
-them they show a vocabulary with a containing group, a definition where only the
-restricted entry carries an audience, and a delegate that runs with fewer tools
-for a narrower caller.
+There is a worked set to read alongside this section:
+`assets_examples/groups.yaml`, `assets_examples/agents/analyst.yaml` and
+`assets_examples/subagents/auditor.yaml`. Between them they show a vocabulary
+with a containing group, a definition where only the restricted entry carries
+an audience, and a delegate that runs with fewer tools for a narrower caller.
 
 `seed` leaves those three behind by default, the way it leaves a definition
 naming middleware behind: a workspace that has not declared `analysts` cannot

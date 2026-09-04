@@ -22,8 +22,8 @@ This reversed twice. The current answer is the third one.
 **Definitions live outside the wheel, and where a deployment gets them is a
 setting.** `KINGFISHER_ASSETS` names one path, read in `application/config.py`;
 `seed(into, source)` takes it as a required argument with no `None` branch. This
-repository's own set is `examples/`, which is *not* shipped and exists to be read
-and copied. `assets/` is committed holding only a `README.md` and ignores
+repository's own set is `assets_examples/`, which is *not* shipped and exists to
+be read and copied. `assets/` is committed holding only a `README.md` and ignores
 everything else, because it is where a deployment puts content it did not write.
 *(2026-08-19, `examples-are-ours-assets-are-yours.md`.)*
 
@@ -354,15 +354,16 @@ partial lists and whoever pastes the first is skipped again on the second. The
 flat form only: `contains` and `all_of` are a deployment's choices about its own
 organisation, and nothing can infer which a name wants.
 
-`examples/groups.yaml` is now the only groups example, and it is named the thing
-the message points at rather than a `.example` beside it.
+`assets_examples/groups.yaml` is now the only groups example, and it is named
+the thing the message points at rather than a `.example` beside it.
 
 **`models.yaml.example` stays, and the asymmetry is the point.** The two were
 never alike: `models.yaml` is required with no fallback, its example is a
 hundred lines of annotation about endpoints and keys, and nothing else anywhere
-carries that -- where deleting the groups example leaves `examples/groups.yaml`
-standing. Its error message already prints a minimal working catalogue inline,
-so the getting-started path exists and the file is the reference beside it.
+carries that -- where deleting the groups example leaves
+`assets_examples/groups.yaml` standing. Its error message already prints a
+minimal working catalogue inline, so the getting-started path exists and the
+file is the reference beside it.
 
 Still not seeded, which is unchanged. `groups` is not a definition kind, and
 copying a policy would make adopting access control something a deployment

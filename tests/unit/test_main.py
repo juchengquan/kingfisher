@@ -319,7 +319,7 @@ def _driver_on(monkeypatch, target, source=None):
     from tests.conftest import repository_root
     from tests.integration import driver
 
-    configured = replace(target, assets=source or repository_root() / "examples")
+    configured = replace(target, assets=source or repository_root() / "assets_examples")
     monkeypatch.setattr(driver, "config_from_env", lambda: configured)
     monkeypatch.setattr(driver, "paths_from_env", lambda: configured)
     return driver
@@ -400,7 +400,7 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
 
     workspace = tmp_path / "brand-new"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
-    monkeypatch.setenv("KINGFISHER_ASSETS", str(repository_root() / "examples"))
+    monkeypatch.setenv("KINGFISHER_ASSETS", str(repository_root() / "assets_examples"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
     assert driver.main(["driver.py", "--list"]) == 2  # no catalogue, as expected

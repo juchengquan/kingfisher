@@ -34,11 +34,11 @@ RUN uv sync --frozen --no-dev
 
 # The worked definitions. Not in the wheel -- `KINGFISHER_ASSETS` names a
 # directory and this image ships one so `kingfisher seed` has somewhere to point.
-COPY examples/ ./examples/
+COPY assets_examples/ ./assets_examples/
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     KINGFISHER_WORKSPACE=/workspace \
-    KINGFISHER_ASSETS=/app/examples \
+    KINGFISHER_ASSETS=/app/assets_examples \
     # The container is the boundary. Wrapping the shell again inside it would
     # pay twice for one guarantee.
     KINGFISHER_SHELL_SANDBOX=external

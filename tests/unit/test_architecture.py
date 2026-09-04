@@ -1493,7 +1493,7 @@ def test_no_definitions_live_inside_the_package():
     package carried content and this file needed a `CONTENT` exclusion to keep
     every other rule off it.
 
-    Now they are `examples/`, outside the wheel, and the rule can be the simple
+    Now they are `assets_examples/`, outside the wheel, and the rule can be the simple
     one it never could be before: **no definition kind exists under `src/`**.
     Easier to state, impossible to satisfy by accident, and it needs no
     exclusion anywhere -- the separation stopped being a rule and became the
@@ -1515,7 +1515,7 @@ def test_no_definitions_live_inside_the_package():
     assert not stray, (
         f"{stray} hold definitions inside the package — they ship in the wheel "
         f"and are read by no rule in this file, which is what made the old "
-        f"`CONTENT` exclusion necessary. Definitions belong in examples/."
+        f"`CONTENT` exclusion necessary. Definitions belong in assets_examples/."
     )
 
 
@@ -1537,7 +1537,7 @@ def test_this_repository_still_has_a_worked_set(shipped):
     missing = sorted(kind for kind in DEFINITION_KINDS if not (shipped / kind).is_dir())
 
     assert not missing, (
-        f"examples/ holds no {', '.join(missing)} — this is the set the format "
+        f"assets_examples/ holds no {', '.join(missing)} — this is the set the format "
         "tests read and the one a reader learns from"
     )
 

@@ -1,11 +1,11 @@
 """Putting the smoke's fixtures into a workspace.
 
-The sample skill is copied from `examples/skills/tabular-qa`, not held here
+The sample skill is copied from `assets_examples/skills/tabular-qa`, not held here
 as a string. It used to be both -- a constant in `smoke.py` *and* files under
 the presets directory -- which meant two homes for sample content and no way to
 tell which one a run had actually used.
 
-From `examples/` in this repository, found by marker rather than counted.
+From `assets_examples/` in this repository, found by marker rather than counted.
 It came through `importlib.resources` while the definitions rode inside the
 wheel; nothing ships them now, so that route resolves to a package that is not
 there.
@@ -32,7 +32,7 @@ EXAMPLES = next(
     parent
     for parent in Path(__file__).resolve().parents
     if (parent / "pyproject.toml").is_file() and (parent / "src" / "kingfisher").is_dir()
-) / "examples"
+) / "assets_examples"
 
 
 def seed_sample_skill(workspace: Path) -> bool:

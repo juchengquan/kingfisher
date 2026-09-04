@@ -36,7 +36,7 @@ What it scales with, per item added at construction:
 Re-measured 2026-09-03. The baseline above held -- 8.1ms median, 9.2ms p95, 124
 builds a second -- and the subagent row did not: 4.3ms became 5.1ms for a
 delegate declaring one built-in tool and nothing else, and 6.2ms for the shipped
-`examples/`. It is the largest term, so the additive prediction below now runs
+`assets_examples/`. It is the largest term, so the additive prediction below now runs
 low, and the drift is not decay: a delegate costs what a delegate declares, and
 one number cannot say that. Every figure here is *per item added to an otherwise
 identical build*, which is the only form of it that transfers.

@@ -356,7 +356,7 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
 
     # Non-zero, and this changed with the definitions leaving the wheel. It was
     # nearly unreachable before -- the shipped set always held all four kinds --
-    # and is now one of the likelier mistakes: `--from ./examples/skills` names
+    # and is now one of the likelier mistakes: `--from ./assets_examples/skills` names
     # a directory that exists, is readable, and holds none of them.
     #
     # `doctor` only warns about the same state, and that is not an

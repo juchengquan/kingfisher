@@ -44,7 +44,7 @@ def test_nothing_ships_to_seed_from(shipped):
 
     `kinds_at` answers about a directory now, because that is the only kind of
     answer there is: no set arrives with the install, so the question "did they
-    come with it" has no subject. It is `examples/` this reads, which is where
+    come with it" has no subject. It is `assets_examples/` this reads, which is where
     a reader is pointed.
 
     Agents come first, and the order is `Definitions`' field order rather than
@@ -181,7 +181,7 @@ def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
 def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, monkeypatch):
     """The advice has to be true from where the reader is standing.
 
-    `./examples` exists in a checkout and nowhere else, and the reader most
+    `./assets_examples` exists in a checkout and nowhere else, and the reader most
     likely to hit this refusal is the one who installed the package -- who has
     none. Naming it unconditionally would repeat the fault the four "try
     `kingfisher seed`" messages were rewritten to stop making: advice that fails
