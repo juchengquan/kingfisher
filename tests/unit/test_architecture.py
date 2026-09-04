@@ -911,7 +911,13 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # because the rule only walked `infrastructure/`. Running a turn *is* driving
     # the harness: an agent to run, a checkpointer to resume it, a run log to
     # record it, and the runtime that turns its stream into events.
-    "service": frozenset({"agent", "checkpointing", "runlog", "runtime"}),
+    # `interpreter` joined the four when it left `agent`, and the edge is the
+    # same one it always had: a turn opens a QuickJS runtime and must close it,
+    # which is the one of the three closables that hangs the process rather than
+    # leaking a handle. Splitting a harness module widens the consumer's list
+    # without widening what the consumer does -- worth knowing before reading
+    # five as more coupling than four.
+    "service": frozenset({"agent", "checkpointing", "interpreter", "runlog", "runtime"}),
     # The withheld report, which left `service` and took one of its four edges
     # along. It has to ask the *assembled* agent what it registered and the
     # workspace what it offers, because the whole claim of the report is that it

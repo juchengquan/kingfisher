@@ -132,7 +132,6 @@ from kingfisher.infrastructure.harness.agent import (
     build_agent,
     defined_subagents,
     indistinct_delegates,
-    release_interpreter,
 )
 from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
@@ -140,6 +139,7 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
     thread_ids,
 )
+from kingfisher.infrastructure.harness.interpreter import release_interpreter
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.seeding import SEED_HINT
 from kingfisher.infrastructure.session_store import (

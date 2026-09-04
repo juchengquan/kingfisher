@@ -44,6 +44,15 @@ from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
 
+#: Delegation, wherever it is dispatched from.
+#:
+#: Here rather than in `agent`, which is where it was written and is no longer
+#: the only module that needs it: the interpreter decides whether a sandbox may
+#: dispatch one, and the tool surface hides it from a compiled graph's roster.
+#: Three readers and one of them assembles the other two, so it cannot live in
+#: the assembler without the other two importing their own caller.
+TASK_TOOL = "task"
+
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
