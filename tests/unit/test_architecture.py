@@ -896,6 +896,17 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
     "inventory": frozenset({"agent"}),
+    # Reads `ADAPTERS` to refuse an `api` kingfisher cannot build, as the
+    # catalogue loads rather than when a turn starts. The same argument as
+    # `catalogue` above: the alternative is a second list of the wire formats
+    # living in the config layer, and two lists of one fact drift -- here into
+    # a file that loads and a deployment that cannot run.
+    #
+    # Cheap in the terms this package measures. `models.py` names its chat
+    # classes as strings and resolves them on demand, so importing it costs
+    # 1.2ms and two modules on top of `model_catalogue`, and pulls in no
+    # provider SDK at all.
+    "model_catalogue": frozenset({"models"}),
     # The service is the harness's largest consumer, and was never in this table
     # because the rule only walked `infrastructure/`. Running a turn *is* driving
     # the harness: an agent to run, a checkpointer to resume it, a run log to

@@ -19,7 +19,7 @@ endpoints:
     base_url: https://example.invalid/anthropic
     key_env: GATEWAY_API_KEY
   openai:
-    api: openai
+    api: openai_responses
     base_url: https://example.invalid/v1
     key_env: OPENAI_API_KEY
 
