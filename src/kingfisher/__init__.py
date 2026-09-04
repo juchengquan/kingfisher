@@ -60,6 +60,13 @@ _EXPORTS = {
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalFileStore": "kingfisher.infrastructure.workspace.files",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
+    # The port's contract, for a deployment checking its own adapter against it.
+    # Public because it is the one thing in `testing` anybody outside this
+    # repository is meant to import -- and public *here* rather than left to
+    # `import kingfisher.testing`, because `READ_ELSEWHERE` says a name this
+    # package publishes belongs in `__all__` and reaching for that table instead
+    # is how something gets published without saying so.
+    "SESSION_STORE_CONTRACT": "kingfisher.testing",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "Config": "kingfisher.config",
@@ -131,6 +138,7 @@ __all__ = [
     "AUDIENCED",
     "DEFINITION_KINDS",
     "SEED_HINT",
+    "SESSION_STORE_CONTRACT",
     "SKILL_LAYOUT",
     "UNSCOPED",
     "AccessError",
@@ -249,6 +257,7 @@ if TYPE_CHECKING:
     from kingfisher.skills.spec import SkillError as SkillError
     from kingfisher.subagents.spec import RunOn as RunOn
     from kingfisher.subagents.spec import SubagentError as SubagentError
+    from kingfisher.testing import SESSION_STORE_CONTRACT as SESSION_STORE_CONTRACT
     from kingfisher.tools.spec import offered as offered
     from kingfisher.tools.spec import split_reference as split_reference
 

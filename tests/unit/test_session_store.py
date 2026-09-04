@@ -4,16 +4,22 @@ The missing half of a symmetry the domain already commits to: `FileStore` is how
 bytes arrive, and until now nothing was how they leave. `artifacts()` hands back
 a list of paths, which serves a caller sharing the host and nobody else.
 
-These are about the port's contract rather than about a directory. Everything
-here should read the same against a bucket.
+This file used to hold the port's contract inline, above a fixture hardwired to
+`LocalSessionStore`, under a docstring saying *"everything here should read the
+same against a bucket"*. It could not: nothing outside this repository could run
+a line of it. The contract now lives in `kingfisher.testing` where a deployment
+can import it, and what stays here is the two things that are genuinely local --
+proving the kit against the implementation it was written from, and testing
+`restore_into` and `keep_from`, which are kingfisher's own functions over a store
+rather than anything a store has to provide.
 """
 
 from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.references import UnsafeReferenceError
 from kingfisher.infrastructure.session_store import LocalSessionStore
+from kingfisher.testing import SESSION_STORE_CONTRACT
 
 
 @pytest.fixture
@@ -21,105 +27,42 @@ def store(tmp_path):
     return LocalSessionStore(tmp_path / "kept")
 
 
-def test_what_was_saved_comes_back(store):
-    """The whole point, and the shape: paths relative to the session root.
+@pytest.mark.parametrize("check", SESSION_STORE_CONTRACT, ids=lambda c: c.__name__)
+def test_the_local_store_keeps_the_port_contract(check, tmp_path):
+    """The kit, run against the store it was extracted from.
 
-    The same vocabulary `artifacts()` returns, deliberately. A caller diffing
-    one turn against the last needs names it can compare, and an absolute path
-    names a machine rather than a file.
+    Which is the only thing that keeps the kit honest. A contract nothing
+    satisfies is a contract nobody has read, and a deployment's first sight of a
+    failing check should not be the first time anybody ran it.
+
+    A counter rather than a shared directory, because several checks build more
+    than one store and two of them landing on the same root would let one
+    check's leftovers answer another's `fetch`.
     """
-    store.save("s1", {"derived/report.md": b"hello", "memory/notes.md": b"note"})
+    made = 0
 
-    assert store.fetch("s1") == {"derived/report.md": b"hello", "memory/notes.md": b"note"}
+    def make():
+        nonlocal made
+        made += 1
+        return LocalSessionStore(tmp_path / f"kept-{made}")
 
-
-def test_a_session_the_store_has_never_seen_is_empty_rather_than_an_error(store):
-    """A first turn has nothing to restore, and that is the common case.
-
-    Raising here would make every caller write the same `try` around the one
-    path that always happens.
-    """
-    assert store.fetch("never-opened") == {}
+    check(make)
 
 
-def test_saving_merges_rather_than_mirrors(store):
-    """What lets a caller send only the files that changed.
-
-    A mirror would mean every save costs the whole session, which is the cost
-    the design is trying not to pay on each tool call. The price of merging is
-    that nothing here can delete -- which is what `forget` is for, and why
-    deletion is a separate verb rather than an omission.
-    """
-    store.save("s1", {"derived/a.md": b"one", "derived/b.md": b"two"})
-    store.save("s1", {"derived/a.md": b"changed"})
-
-    assert store.fetch("s1") == {"derived/a.md": b"changed", "derived/b.md": b"two"}
+def test_the_contract_is_not_quietly_empty():
+    """The kit is a tuple somebody maintains by hand, so it can be emptied by an
+    edit that looks like tidying -- and every parametrised test above would then
+    pass by not existing. This is the guard that notices."""
+    assert len(SESSION_STORE_CONTRACT) >= 12
+    assert all(callable(check) for check in SESSION_STORE_CONTRACT)
 
 
-def test_forgetting_removes_everything_and_says_nothing_twice(store):
-    """`reap`'s side of the port, and the only granularity it ever needs.
-
-    Idempotent because a janitor runs on its own schedule against a list it
-    read earlier, so a session already gone is the ordinary case rather than a
-    fault.
-    """
-    store.save("s1", {"derived/a.md": b"one"})
-    store.forget("s1")
-    store.forget("s1")
-
-    assert store.fetch("s1") == {}
-
-
-def test_one_session_cannot_read_another(store):
-    """The isolation `build_backend` gets from rooting a backend at a session,
-    which a store has to provide for itself: there are no directories here to
-    be unable to route across."""
-    store.save("s1", {"derived/mine.md": b"mine"})
-    store.save("s2", {"derived/theirs.md": b"theirs"})
-
-    assert store.fetch("s1") == {"derived/mine.md": b"mine"}
-    assert store.fetch("s2") == {"derived/theirs.md": b"theirs"}
-
-
-@pytest.mark.parametrize("escape", ["../elsewhere", "/etc", "..", ""])
-def test_a_session_id_that_names_somewhere_else_is_refused(store, escape):
-    """Checked even though session ids are kingfisher's own today.
-
-    "The caller cannot reach this argument" is a claim about every call site
-    rather than about the one in front of you, and a store handed an id from a
-    request later would be checked by nobody. `FileStore`'s refs are checked
-    for exactly this reason and those *are* caller-supplied.
-    """
-    with pytest.raises(UnsafeReferenceError):
-        store.fetch(escape)
-
-
-@pytest.mark.parametrize("escape", ["../outside.md", "/etc/passwd"])
-def test_a_filename_that_climbs_out_is_refused(store, escape):
-    """The second half. A key is a path, and a path from anywhere can climb."""
-    with pytest.raises(UnsafeReferenceError):
-        store.save("s1", {escape: b"x"})
-
-
-def test_nesting_survives_a_round_trip(store):
-    """Sessions hold `subagents/redactor/skills/redaction/SKILL.md` and deeper.
-    A store that flattened would lose which folder a definition belonged to."""
-    deep = {"derived/reports/2026/q1/summary.md": b"deep"}
-    store.save("s1", deep)
-
-    assert store.fetch("s1") == deep
-
-
-def test_bytes_are_returned_unchanged(store):
-    """Not text. A session holds PDFs and images, and a store that decoded
-    would corrupt the first one it met."""
-    payload = bytes(range(256))
-    store.save("s1", {"data/raw.bin": payload})
-
-    assert store.fetch("s1")["data/raw.bin"] == payload
-
-
-# -- what the store is for --------------------------------------------------
+# -- kingfisher's own functions over a store --------------------------------
+#
+# Not part of the contract, and the distinction took a moment to see: these
+# exercise `restore_into` and `keep_from`, which any store is *passed to*. A
+# deployment's store does not implement them and cannot fail them except by
+# failing the contract above first.
 
 
 def test_a_session_survives_losing_its_directory(store, tmp_path):

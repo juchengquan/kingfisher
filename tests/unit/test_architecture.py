@@ -940,7 +940,12 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # the table is total and an unlisted area cannot mean "anything goes".
     "domain": frozenset(),
     "application": frozenset(),
-    # `__init__.py` and `config.py`, which belong to no layer.
+    # The modules at the package root, which belong to no layer: `__init__.py`,
+    # `config.py`, and `testing.py` -- the port contracts a deployment runs
+    # against its own adapter. Nothing, and `testing.py` is the one that has to
+    # stay that way on purpose rather than by luck: a kit importing pytest would
+    # put a test framework in the runtime wheel, which is why it raises
+    # `AssertionError` by hand instead.
     "": frozenset(),
 }
 
@@ -1457,6 +1462,13 @@ LIGHT_EXPORTS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
     "UnknownReferenceError", "LocalFileStore",
+    # The `SessionStore` contract, for a deployment checking its own adapter.
+    # Light, and it has to stay light: a deployment runs this from its own test
+    # suite, and a kit that pulled three provider SDKs in to check four methods
+    # over bytes would be a cost paid on every CI run for nothing. `testing`
+    # imports `domain.references` and the standard library, and no test
+    # framework either -- see its docstring for why that one is deliberate.
+    "SESSION_STORE_CONTRACT",
     "ensure_layout", "config_from_env",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",
@@ -2249,7 +2261,13 @@ def test_a_consumer_uses_the_library_only_through_its_public_api(path):
 @pytest.mark.parametrize(
     "path",
     [p for layer in ("domain", "application", "infrastructure") for p in _modules_in(layer)]
-    + [SRC / "__init__.py", SRC / "config.py"],
+    # Every module at the package root, globbed rather than named. It listed
+    # `__init__.py` and `config.py` while those were the only two, and `testing.py`
+    # arriving is what showed the cost of that: a new root module joins the
+    # library and this rule does not notice, which is the drift this file
+    # distrusts everywhere else. The two it named are still the two it finds on
+    # a tree without the kit.
+    + sorted(SRC.glob("*.py")),
     ids=_module_id,
 )
 def test_no_part_of_the_library_imports_the_server(path):
