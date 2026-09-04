@@ -15,7 +15,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.presentation.cli.__main__ import main
-from tests.conftest import subagents_dir
+from tests.conftest import subagents_dir, verbs
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
@@ -250,59 +250,50 @@ def _seed_something(cfg) -> None:
         )
 
 
-# -- `help`, which repeats what four other routes already say ---------------
-
-
-def test_help_lists_the_verbs(capsys):
-    """The same text `--help` prints, reached by typing the word.
-
-    It was argued against and added anyway: `-h`, `--help`, bare `kingfisher`
-    and `<verb> --help` all reach this already. What it buys is that a reader
-    looking for help finds the word listed beside the verbs it describes.
-    """
-    assert main(["help"]) == 0
-
-    printed = capsys.readouterr().out
-    assert "seed" in printed
-    assert "list" in printed
-
-
-def test_help_explains_one_verb(capsys):
-    """`kingfisher help seed`, which is `kingfisher seed --help` by another road."""
-    assert main(["help", "seed"]) == 0
-
-    printed = capsys.readouterr().out
-    assert "usage: kingfisher seed" in printed
-    assert "Overwrites" in printed  # its own description, not the top-level one
-
-
-def test_help_reads_the_verbs_from_the_parser(capsys):
-    """Not from a list beside it.
-
-    A second list of names goes stale the first time somebody adds a verb and
-    does not think about `help` -- and `help` is precisely the thing nobody
-    thinks about. Asserted by comparing against the parser rather than against
-    words in a docstring.
-    """
-    from kingfisher.presentation.cli.__main__ import _verbs, build_parser
-
-    parser = build_parser()
-    for verb in _verbs(parser):
-        assert main(["help", verb]) == 0
-        assert f"usage: kingfisher {verb}" in capsys.readouterr().out
+# -- an unknown verb, now that `help` no longer answers for one --------------
 
 
 def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
-    """The one thing this does better than `--help`.
+    """`help` was kept for this one case, and argparse already covers it.
 
-    argparse refuses an unknown subcommand with a usage line. Here the reader
-    mistyped a word and the useful answer is which words there are.
+    `kingfisher help teleport` answered "no such command: teleport. kingfisher
+    knows doctor, help, list, seed, serve", which is the only thing that verb
+    did better than `--help`. argparse refuses an unknown subcommand with the
+    valid choices listed and the same exit code, so what was lost is the
+    wording, not the answer.
+
+    It *raises* `SystemExit(2)` where the verb *returned* 2. From a shell the
+    two are indistinguishable -- the exit code is the same -- and in process
+    they are not, which is the whole of what removing the verb changed for a
+    caller of `main`.
     """
-    assert main(["help", "teleport"]) == 2
+    with pytest.raises(SystemExit) as exit_code:
+        main(["teleport"])
 
+    assert exit_code.value.code == 2
     printed = capsys.readouterr().err
     assert "teleport" in printed
     assert "seed" in printed and "list" in printed
+
+
+def test_the_help_verb_is_gone_and_the_four_other_routes_are_not(capsys):
+    """`-h`, `--help`, a bare invocation and `<verb> --help` all reach the same
+    text; a fifth road to it was a verb that could go stale on its own."""
+    from kingfisher.presentation.cli.__main__ import build_parser
+
+    assert "help" not in verbs(build_parser())
+
+    assert main([]) == 0
+    assert "seed" in capsys.readouterr().out
+
+    # `--help` is argparse's, so it exits rather than returning -- zero either way.
+    with pytest.raises(SystemExit) as exit_code:
+        main(["seed", "--help"])
+
+    assert exit_code.value.code == 0
+    assert "usage: kingfisher seed" in capsys.readouterr().out
+
+
 # -- `serve`, a second door onto one server --------------------------------
 
 
@@ -548,9 +539,9 @@ def test_every_verb_the_parser_offers_has_something_to_run_it():
     louder and still only at runtime, in front of whoever typed the verb. This
     is what makes it neither.
     """
-    from kingfisher.presentation.cli.__main__ import HANDLERS, _verbs, build_parser
+    from kingfisher.presentation.cli.__main__ import HANDLERS, build_parser
 
-    offered = set(_verbs(build_parser()))
+    offered = set(verbs(build_parser()))
 
     assert offered == set(HANDLERS), (
         f"offered but unwired: {sorted(offered - set(HANDLERS))}; "

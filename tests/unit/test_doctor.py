@@ -17,7 +17,7 @@ import platform
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
-from tests.conftest import subagents_dir, tools_dir
+from tests.conftest import subagents_dir, tools_dir, verbs
 
 BROKEN_TOOL = '''
 from langchain_core.tools import tool
@@ -477,9 +477,9 @@ def test_the_description_names_its_own_limit():
     of the pipeline -- so the honest thing is to name it and point at the test
     that does prove it.
     """
-    from kingfisher.presentation.cli.__main__ import _verbs, build_parser
+    from kingfisher.presentation.cli.__main__ import build_parser
 
-    description = _verbs(build_parser())["doctor"].description or ""
+    description = verbs(build_parser())["doctor"].description or ""
 
     assert "may still be" in description  # present is not working
     assert "kingfisher.run" in description  # and here is what would prove it
