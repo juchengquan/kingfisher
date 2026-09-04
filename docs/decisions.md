@@ -765,12 +765,46 @@ root on 2026-08-26, `A session that survives the machine it ran on`. All from
 ## Layering
 
 **`infrastructure/harness/` holds every module that imports deepagents, langchain
-or langgraph**, and only that package may. The rest of the layer stays flat -- a
-second subpackage would advertise a distinction no test could hold. (This said
-"the other thirteen modules"; it is eleven now, and the count was never the
-point.)
-Registries and DTOs did *not* move to `application/`, and the package root did
-not change. *(2026-08-17, `layer-boundaries.md`.)*
+or langgraph**, and only that package may. Registries and DTOs did *not* move to
+`application/`, and the package root did not change.
+*(2026-08-17, `layer-boundaries.md`.)*
+
+**Reversed: "the rest of the layer stays flat."** The clause read *a second
+subpackage would advertise a distinction no test could hold*, and by the time
+anyone looked there were three of them -- `catalogue/` had arrived without the
+sentence being revisited, which is the drift the sentence was written to
+prevent. `sandbox/` and `workspace/` joined it deliberately.
+*(2026-08-17, reversed 2026-09-04.)*
+
+What makes a group rather than a folder, since the original worry was real: the
+modules have to share a *subject*, not a layer. `confinement`, `fence` and
+`bubblewrap` are one policy and the two kernels that carry it -- the only corner
+of `infrastructure/` where being wrong is a security failure rather than a bug.
+`fs`, `seeding`, `uploads` and `files` all write into one directory, and three
+of them have a rule about not destroying what another put there.
+
+And the harness rule is what bounds them. The backend that *applies* a
+confinement, and the registry `uploads` asks about a name, both import
+deepagents -- so they stay in `harness/` and the groups are "everything about
+this subject that does not need the agent runtime". A grouping that had pulled
+them in would have traded an enforced rule for a tidier directory.
+
+Two mechanical facts worth knowing before the next one. `HARNESS_EDGES` is keyed
+by a module's path below its layer, so moving a file into a subpackage renames
+its entry and the table goes red until told -- which is the table working.
+And `tool.ty.overrides` lists files by path: the block ignoring the optional
+Linux-only `sandlock` import named `fence.py` and `confinement.py`, and left
+behind would have stopped matching and gone silently useless.
+
+**Rejected with it: inverting the nesting to `function/layer.py`.** Drawn in
+full -- fourteen modules, every file placed -- and measured rather than argued.
+The asset kinds are 26% of the tree; a concept's files change together in only
+13-29% of the commits that touch them; and the tightest co-change pair in the
+repository, `subagent` with `harness/agent.py` at 18, runs straight across the
+boundary such a slice would draw. It would have put a deepagents import in 8 of
+14 modules, turning "only this package" into a list of fourteen filenames, and
+`application/config.py` -- which must not pull the harness in, at 39ms against
+888ms -- would have sat beside a sibling that does. *(2026-09-04.)*
 
 **The rule is not a portability claim, and used to read like one.** It said the
 rule "states the swap boundary: replace the harness and exactly those files are
