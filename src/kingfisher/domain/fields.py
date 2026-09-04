@@ -39,10 +39,6 @@ if TYPE_CHECKING:
 #: behaviour would be the silent-drop bug wearing a spellchecker.
 SIMILARITY = 0.7
 
-#: What one entry of a `selection_with_settings` list may write when it is
-#: written long. Two keys, and deliberately no third: an entry says which thing
-#: and what to pass it, and anything else it wanted to say belongs to the field
-#: as a whole rather than to one name in it.
 def entry_fields(extra: str) -> tuple[str, ...]:
     """The keys one long-form entry may write, for a field carrying `extra`.
 
@@ -50,6 +46,10 @@ def entry_fields(extra: str) -> tuple[str, ...]:
     for middleware, `groups` for the audienced three. Two extras and one shape,
     which is the whole of this arrangement: a reader who has met one long form
     has met the other.
+
+    Two keys and deliberately no third: an entry says which thing and what to
+    pass it, and anything else it wanted to say belongs to the field as a whole
+    rather than to one name in it.
     """
     return ("name", extra)
 
