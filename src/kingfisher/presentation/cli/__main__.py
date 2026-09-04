@@ -17,7 +17,7 @@ alone at first, on the grounds that `load_dotenv()` with no argument searches
 
 That objection is sound and it is about the search, not about the file. The two
 were run together and the conclusion was too broad: a checkout keeps its keys in
-`.env`, so `kingfisher list` failed on a deployment where `main.py --list`
+`.env`, so `kingfisher list` failed on a deployment where `driver.py --list`
 worked, with the key sitting in a file three lines away. Naming the path takes
 the search away and leaves the file, which is what was wanted.
 
