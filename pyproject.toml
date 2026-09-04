@@ -121,12 +121,21 @@ fence = ["sandlock>=0.8.6; sys_platform == 'linux'"]
 # The pointer lives on `kingfisher serve` instead, which collides with nothing
 # and is in `--help` whether or not the service is installed.
 
-# Seeding a workspace and looking at one, which are the two things the
-# library cannot do for itself: running a task is `kingfisher.run`, and
-# serving one is the script above. Deliberately not a general CLI --
-# `tests/integration/driver.py` stays the development driver, keeps its
-# flags, and keeps a bare invocation that runs the eval smoke, which is a
-# fine default for a driver and a wrong one for a stranger's first command.
+# `run`, `seed`, `list`, `doctor` and `serve`.
+#
+# This said "seeding a workspace and looking at one, which are the two things
+# the library cannot do for itself" -- a rule that excluded `run` on the grounds
+# that `kingfisher.run` already existed. It measured the library's completeness
+# rather than the user's, and it was replaced: see *The command line* in
+# `docs/decisions.md`. Left as a comment rather than deleted, because the rule
+# held for weeks and the next person to want a sixth verb should meet the test
+# it was replaced with -- what does a person at a terminal need to do -- rather
+# than an empty line.
+#
+# What did not change: `tests/integration/driver.py` stays the development
+# driver and keeps a bare invocation that runs the eval smoke, which is a fine
+# default for a driver and a wrong one for a stranger's first command. `run`
+# requires a task argument and cannot be reached by accident.
 kingfisher = "kingfisher.presentation.cli.__main__:main"
 
 [tool.hatch.build.targets.wheel]
