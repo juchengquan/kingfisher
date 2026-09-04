@@ -27,8 +27,13 @@ That rule is the point of the split. It puts the service on the same footing as
 anyone outside the package, so when it needs something the library does not
 export, the answer is to export it deliberately. It found three such things
 before a line of this was written: the errors a caller must tell apart were all
-private, `async_checkpointer` was private while `astream` refuses to run
-without it, and there is still no way for a remote caller to send a file.
+private, `async_checkpointer` was private while `astream` refused to run without
+it, and there is still no way for a remote caller to send a file.
+
+The second of those has since answered itself. `astream` takes the in-memory
+saver the library now defaults to, so this holds no database open and passes no
+`threads=` at all -- which also drops the one-database-per-process shape that
+came with it.
 """
 
 from kingfisher_service.app import create_app
