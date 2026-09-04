@@ -301,8 +301,9 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
 
     Public, and `by` keyword-only, because the rule applies at two levels and
     used to be written twice. `Capabilities.intersect` clamps a request against
-    what the deployment granted; `delegation.as_subagent` clamps a definition's
-    declared tools against what its caller was granted. The second was a private
+    what the deployment granted; `subagents.harness.as_subagent` clamps a
+    definition's declared tools against what its caller was granted. The second
+    was a private
     copy in `infrastructure`, identical across every input pair but with the
     arguments the other way round and nothing comparing them -- one convention
     away from a delegate quietly getting more than the request that summoned it.
