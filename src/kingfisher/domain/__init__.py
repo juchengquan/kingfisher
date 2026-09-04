@@ -6,5 +6,6 @@ that a filesystem does — a rule that needs a value is passed the value, and a
 rule that genuinely needs a primitive takes a port from `domain.ports`.
 
 Enforced rather than remembered: a domain module may import the standard
-library and `kingfisher.domain`, nothing else. See `tests/test_architecture.py`.
+library and `kingfisher.domain`, nothing else. See
+`tests/unit/test_architecture.py`.
 """
