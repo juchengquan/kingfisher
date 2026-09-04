@@ -34,9 +34,10 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import agent, skill, subagent
+from kingfisher.domain import agent, subagent
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.subagent import reading
+from kingfisher.skills import spec as skill
 
 if TYPE_CHECKING:
     from pathlib import Path

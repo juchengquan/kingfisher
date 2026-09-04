@@ -35,7 +35,7 @@ which was true when it was written and had stopped being true well before
 anyone read it again — the same decay the table exists to stop, in the prose
 describing the table.
 
-`catalogue` and `uploads` both import `skill_registry`, to ask deepagents which
+`catalogue` and `uploads` both import `skills.registry`, to ask deepagents which
 skills it will actually load rather than re-implement the parse and drift
 against it. `inventory` builds an agent to enumerate what it registered.
 `service` drives the whole thing: an agent to run, a checkpointer to resume it,

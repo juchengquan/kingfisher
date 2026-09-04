@@ -458,7 +458,7 @@ def _prose_unresolved(text: str, excused: frozenset[str] = frozenset()) -> list[
 
     Two answers count as resolved, and the second is why this reads the target
     file instead of a set of module names. A reference may name a module, or a
-    module and one thing defined in it -- `domain.skill.split` and
+    module and one thing defined in it -- `skills.spec.split` and
     `infrastructure.harness.backend.prepare_scratch` are both correct prose about
     a real function, and refusing them would refuse the most useful thing a
     comment can say.
@@ -563,7 +563,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     commit actually removed -- asserted gone rather than merely absent.
     """
     assert _prose_unresolved("`infrastructure.harness.backend`") == []
-    assert _prose_unresolved("`domain.skill.split` and `application.inventory`") == []
+    assert _prose_unresolved("`skills.spec.split` and `application.inventory`") == []
     assert _prose_unresolved("`infrastructure.harness.backend.prepare_scratch`") == []
 
     assert _prose_unresolved("`infrastructure.backend.prepare_scratch`") == [
@@ -664,8 +664,11 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
 #:
 #: Measured, not declared -- every entry is a package some module imports today.
 THIRD_PARTY: dict[str, frozenset[str]] = {
-    # The agent runtime. This is the swap boundary: replace deepagents and the
-    # rewrite stops at this directory.
+    # The agent runtime. This *was* the swap boundary in one directory, and is
+    # now the larger half of it: `skills/` reaches the runtime too, and the
+    # entry below says so. What the boundary buys is unchanged in kind and
+    # weaker in degree -- an upgrade is still a list of files rather than a
+    # search, and the list now spans two directories instead of one.
     "infrastructure/harness": frozenset({
         "aiosqlite",
         "deepagents",
@@ -683,6 +686,17 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # functions behind an `ImportError` or a platform check, and a macOS install
     # never sees it.
     "infrastructure": frozenset({"sandlock", "yaml"}),
+    # Registering skills means handing them to the runtime that reads them:
+    # `registry` asks deepagents which skills an agent will actually have, and
+    # `backend` mounts the directory it reads them from. Neither can be done
+    # from outside, and inverting them behind a port would put one
+    # implementation behind an interface derived from it.
+    #
+    # This is the price of a kind owning its own registration, paid once here
+    # rather than argued at each import. `docs/decisions.md` records the trade;
+    # what this entry does is keep it *named*, so a third directory reaching the
+    # runtime is a line somebody writes rather than a thing that happens.
+    "skills": frozenset({"deepagents", "langchain_core", "langgraph"}),
     # The one consumer still in this distribution. `presentation` was the other
     # and is now `kingfisher-service`, a package of its own with its own rules --
     # so fastapi and uvicorn are no longer anything this table has an opinion
@@ -777,7 +791,7 @@ def test_a_subpackage_is_judged_by_its_own_area():
     instead.
     """
     catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
-    buried = SRC / "infrastructure" / "catalogue" / "skills.py"
+    buried = SRC / "infrastructure" / "catalogue" / "subagents.py"
     for path in (catalogue, buried, SRC / "domain" / "tool.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
@@ -889,7 +903,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # offers. Left a direct import rather than inverted through a port: the port
     # would have exactly one implementation, forever, whose whole purpose is to
     # be deepagents-specific.
-    "catalogue": frozenset({"skill_registry"}),
+    # `catalogue` asked `harness.skill_registry` which names were taken; the
+    # registry is `skills.registry` now, which is not the harness, so this is
+    # no longer an edge into it at all.
+    "catalogue": frozenset(),
     # Asks the registry what names are taken before accepting an upload, which
     # is the same question `catalogue` asks and the same answer.
     #
@@ -897,7 +914,8 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # key is a module's path below its layer, so grouping files renames their
     # entries. That is the table working -- a move that silently kept an old key
     # would be an edge nobody had named any more.
-    "workspace.uploads": frozenset({"skill_registry"}),
+    # The same edge, from the other asker, and gone the same way.
+    "workspace.uploads": frozenset(),
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
     "inventory": frozenset({"agent", "surface"}),
@@ -1480,14 +1498,19 @@ def test_only_one_module_decides_what_a_skill_is():
     byte-identical copy of the lookup, so a change to the definition would have
     left `--list` advertising names the validator then rejected.
 
-    `domain.skill` owns the filename and `infrastructure.catalogue.skills` owns the
-    listing. Asserting they *agree* with a caller is tautological once the
-    caller imports them; what is worth asserting is that nothing else decides.
+    `skills.spec` owns the filename and `skills.catalogue` owns the listing.
+    Asserting they *agree* with a caller is tautological once the caller imports
+    them; what is worth asserting is that nothing else decides.
+
+    Both owners are now in one directory, which is the module the kind became.
+    That does not weaken the rule -- two files still decide and the rest still
+    may not -- but it is worth saying that "one module per concern" and "one
+    directory per kind" are different claims, and only the second changed.
     """
     repo = REPO
     owners = {
-        SRC / "domain" / "skill.py",
-        SRC / "infrastructure" / "catalogue" / "skills.py",
+        SRC / "skills" / "spec.py",
+        SRC / "skills" / "catalogue.py",
     }
 
     searched = [
@@ -1524,23 +1547,70 @@ def test_no_definitions_live_inside_the_package():
     exclusion anywhere -- the separation stopped being a rule and became the
     layout, which is the best argument the move had.
 
-    It is also what stops the move regressing. A `skills/` reappearing under
+    It is also what stops the move regressing. A definition reappearing under
     `src/` would be content read as code: shipped, and skipped by nothing here
     because there is no longer anything to skip.
-    """
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
-    stray = sorted(
-        str(path.relative_to(SRC))
-        for kind in DEFINITION_KINDS
-        for path in SRC.rglob(kind)
-        if path.is_dir() and "__pycache__" not in path.parts
+    **Asked of documents rather than of directory names**, and that is a
+    strengthening rather than a loosening. The name check was a proxy: it
+    refused a directory called `skills/` whatever was inside it, and permitted a
+    directory called anything else however full of `SKILL.md` it was. Since
+    `skills/` became a package of registration code -- Python, no documents --
+    the proxy started refusing the wrong thing, which is what showed it was one.
+
+    What ships as content is a `SKILL.md`, or a definition document, or a tool
+    module in a kind directory. Looking for those catches a definitions folder
+    under any name, which the old form could not.
+    """
+
+    documents = sorted(str(p.relative_to(SRC)) for p in _definition_documents(SRC))
+
+    assert not documents, (
+        f"{documents} are definitions inside the package — they ship in the "
+        f"wheel and are read by no rule in this file, which is what made the "
+        f"old `CONTENT` exclusion necessary. Definitions belong in "
+        f"assets_examples/."
     )
 
-    assert not stray, (
-        f"{stray} hold definitions inside the package — they ship in the wheel "
-        f"and are read by no rule in this file, which is what made the old "
-        f"`CONTENT` exclusion necessary. Definitions belong in assets_examples/."
+
+def test_the_content_rule_can_tell_a_document_from_a_package(tmp_path):
+    """The proxy this replaced could not, which is why it had to change.
+
+    Asserted on a planted tree rather than on `src/`, because the rule above
+    passes on an empty search and a search looking for the wrong thing is
+    indistinguishable from a clean tree. That is the failure this repository has
+    already been bitten by twice, so the predicate is exercised where there is
+    something to find.
+    """
+    (tmp_path / "pkg").mkdir()
+    (tmp_path / "pkg" / "registry.py").write_text("X = 1\n", encoding="utf-8")
+    (tmp_path / "pkg" / "__init__.py").write_text("", encoding="utf-8")
+
+    assert _definition_documents(tmp_path) == [], "code is not content"
+
+    (tmp_path / "pkg" / "SKILL.md").write_text("---\nname: x\n---\n", encoding="utf-8")
+    (tmp_path / "reviewer.yaml").write_text("name: reviewer\n", encoding="utf-8")
+
+    found = {p.name for p in _definition_documents(tmp_path)}
+    assert found == {"SKILL.md", "reviewer.yaml"}, "a document under any name is content"
+
+
+def _definition_documents(root: Path) -> list[Path]:
+    """Every definition document below `root`, whatever directory it sits in.
+
+    A document rather than a directory name, which is what the rule is about:
+    `skills/` under `src/` is a package of registration code and ships as code,
+    while a `SKILL.md` ships as content wherever it is filed.
+    """
+    from kingfisher.domain.subagent.reading import SUFFIX
+    from kingfisher.skills.spec import FILENAME as SKILL_FILE
+
+    return sorted(
+        path
+        for path in root.rglob("*")
+        if path.is_file()
+        and "__pycache__" not in path.parts
+        and (path.name == SKILL_FILE or path.suffix in {SUFFIX, ".yml"})
     )
 
 
@@ -1567,6 +1637,40 @@ def test_this_repository_still_has_a_worked_set(shipped):
     )
 
 
+def _kinds_without_a_reader(
+    kinds: tuple[str, ...], *, package: Path, root: Path
+) -> list[str]:
+    """Kinds with no module reading them, in either place one may live.
+
+    Its own function so the rule below can be asked a question it can answer
+    wrongly. Inline, a mutation that stopped looking left `missing` empty on a
+    clean tree, which is indistinguishable from finding nothing -- the failure
+    this file has already been bitten by twice.
+    """
+    return sorted(
+        kind
+        for kind in kinds
+        if not (package / f"{kind}.py").is_file()
+        and not (root / kind / "catalogue.py").is_file()
+    )
+
+
+def test_the_kind_rule_can_tell_a_missing_reader_from_a_present_one(tmp_path):
+    """Exercised where there is something to find, because the rule above runs
+    on a tree where there is not."""
+    package = tmp_path / "catalogue"
+    package.mkdir()
+    (package / "tools.py").write_text("", encoding="utf-8")
+    (tmp_path / "skills").mkdir()
+    (tmp_path / "skills" / "catalogue.py").write_text("", encoding="utf-8")
+
+    found = _kinds_without_a_reader(
+        ("tools", "skills", "ghosts"), package=package, root=tmp_path
+    )
+
+    assert found == ["ghosts"], "a kind read from neither place is the one to report"
+
+
 def test_the_catalogue_holds_one_module_per_kind():
     """The third place the three kinds are written down, bound to the first.
 
@@ -1582,15 +1686,26 @@ def test_the_catalogue_holds_one_module_per_kind():
 
     Subset rather than equality: `layered`, `documents` and `importing` are in
     this package for good reasons and are not kinds.
+
+    A kind counts as read from either of two places now. `skills` became a
+    module of its own -- `skills/catalogue.py` -- so the reader for that kind
+    left this package, and a rule looking only here would have reported a kind
+    nothing reads while something read it. What the rule is about is that every
+    kind has exactly one reader, not where the file sits.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
     package = SRC / "infrastructure" / "catalogue"
-    modules = {p.stem for p in package.glob("*.py")}
+    assert list(package.glob("*.py")), f"{package} holds no modules — this is about nothing"
 
-    assert modules, f"{package} holds no modules — this rule is about nothing"
-    assert set(DEFINITION_KINDS) <= modules, (
-        f"{sorted(set(DEFINITION_KINDS) - modules)} is a kind the catalogue reads "
+    # A *file that exists*, not a name in a set. Stated as a set of stems, this
+    # rule could be satisfied by widening the set -- a mutation adding every
+    # kind to it left the assertion trivially true and nothing went red. Two
+    # candidate paths per kind, and at least one has to be there.
+    missing = _kinds_without_a_reader(DEFINITION_KINDS, package=package, root=SRC)
+
+    assert not missing, (
+        f"{missing} is a kind the catalogue reads "
         "with no module in catalogue/ named for it"
     )
 
@@ -2135,9 +2250,42 @@ def _names_read(source: str) -> set[str]:
             seen.add(node.id)
         elif isinstance(node, ast.Attribute):
             seen.add(node.attr)
-        elif isinstance(node, ast.alias):
-            seen.add(node.asname or node.name.split(".")[-1])
+        elif isinstance(node, ast.ImportFrom):
+            # Both halves, and the two forms differ. `from x import DIRECTORY as
+            # AGENT_DIRECTORY` reads `DIRECTORY` as surely as a bare import
+            # does; recording only the alias made the original invisible, so a
+            # constant reached this way by its only caller read as dead.
+            #
+            # It was invisible and harmless while *some other* constant of the
+            # same name was read plainly: `domain.agent.DIRECTORY` was aliased
+            # here and `domain.skill.DIRECTORY` was not, and this matches by
+            # bare name, so one sighting covered both. Moving the second one out
+            # is what removed the cover.
+            for alias in node.names:
+                seen.add(alias.name.split(".")[-1])
+                if alias.asname:
+                    seen.add(alias.asname)
+        elif isinstance(node, ast.Import):
+            # `import a.b as ROUTE` is not the same shape: the last segment is a
+            # *module*, not a name defined in one, so recording it would sight
+            # constants that merely share a module's name.
+            for alias in node.names:
+                seen.add(alias.asname or alias.name.split(".")[-1])
     return seen
+
+
+def test_an_aliased_import_reads_the_name_it_renames():
+    """The scanner recorded the alias and dropped the original, which made a
+    constant reached only through `import X as Y` look like one nothing reads.
+
+    Asserted rather than left to the rules passing: what the bug produces is a
+    request to delete live code, and the obvious reading of that message is that
+    the code is dead.
+    """
+    read = _names_read("from kingfisher.domain.agent import DIRECTORY as AGENT_DIRECTORY")
+
+    assert "DIRECTORY" in read, "the original name is what the constant is called"
+    assert "AGENT_DIRECTORY" in read, "and the alias is what this module now reads"
 
 
 def _referenced_in_code() -> set[str]:
@@ -2438,6 +2586,10 @@ def test_a_constant_is_not_counted_as_its_own_reader():
     assert _names_read("SOURCES: list[str] = [ROUTE]\n") == {"list", "str", "ROUTE"}
     assert _names_read("x = mod.KINDS\n") == {"mod", "KINDS"}
     assert _names_read("from m import KINDS\nimport a.b as ROUTE\n") == {"KINDS", "ROUTE"}
+    # An aliased `from` import reads both: the name in the other module, and the
+    # one this module then uses. `import a.b as ROUTE` reads only `ROUTE`,
+    # because `b` is a module rather than a name inside one.
+    assert _names_read("from m import KINDS as K\n") == {"KINDS", "K"}
     assert _names_read('"""KINDS is named here in prose only."""\n') == set()
 
 

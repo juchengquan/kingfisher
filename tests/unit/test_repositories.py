@@ -25,9 +25,9 @@ from kingfisher.domain.ports import (
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import subagents as store
-from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
+from kingfisher.skills.catalogue import LocalSkillRepository
 
 NOISY = """
 import sys

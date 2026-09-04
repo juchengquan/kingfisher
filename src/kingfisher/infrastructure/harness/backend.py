@@ -38,8 +38,8 @@ from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.references import UnsafeReferenceError, within
 from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
-from kingfisher.infrastructure.harness.skills_backend import skills_backend
 from kingfisher.infrastructure.sandbox import confinement
+from kingfisher.skills.backend import skills_backend
 
 if TYPE_CHECKING:
 
@@ -108,7 +108,7 @@ def shell_env(
         "TMPDIR": str(cfg.scratch_dir),
     }
     # Only when there is a directory to name. A catalogue held in a store is
-    # readable by the file tools -- `skills_backend` mounts it -- but a skill's
+    # readable by the file tools -- `skills.backend` mounts it -- but a skill's
     # *scripts* are run by the shell, and a store has no path for the shell to
     # reach. Setting this to something that is not there would turn "this
     # deployment cannot run skill scripts" into `no such file or directory` on
@@ -486,7 +486,7 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     The labels are not decoration. They are the first half of a skill's
     `source::name`, which is what a request grants when two parties both ship a
     `lookup` -- so what is written here is what a caller types, and it has to
-    match what `skill_registry` computed from the same folders.
+    match what `skills.registry` computed from the same folders.
 
     `uploaded` is last, and that is the one place deepagents' own precedence
     still shows: it merges later sources over earlier ones. Nothing relies on

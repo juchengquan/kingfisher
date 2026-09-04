@@ -32,10 +32,10 @@ from dataclasses import dataclass
 from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain import skill
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
-from kingfisher.domain.skill import UPLOADED
-from kingfisher.infrastructure.catalogue.skills import reachable
+from kingfisher.domain.layout import UPLOADED_SKILL_DIR as UPLOADED
+from kingfisher.skills import spec as skill
+from kingfisher.skills.catalogue import reachable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -309,7 +309,7 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
     repository does not need to know what a catalogue is.
 
     A repository with a real directory behind it is read as a filesystem,
-    because `skills_backend`
+    because `skills.backend`
     says why not to do otherwise -- a store "holds every skill's contents for
     the life of the deployment", which is a copy worth making only when there is
     no path to read instead.
@@ -332,7 +332,7 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
         _list_skills_with_errors,
     )
 
-    from kingfisher.infrastructure.harness.skills_backend import skills_backend  # noqa: PLC0415
+    from kingfisher.skills.backend import skills_backend  # noqa: PLC0415
 
     backend = FilesystemBackend(root_dir=str(root)) if root else skills_backend(repository)
 

@@ -26,16 +26,16 @@ from typing import TYPE_CHECKING, Any
 from deepagents import FilesystemPermission
 
 from kingfisher.config import ConfigError
-from kingfisher.domain import skill
+from kingfisher.domain import layout
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.domain.subagent import RunOn, SubagentSpec
 from kingfisher.domain.subagent.rules import refuse_cycles, refuse_two_of_a_name
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
-from kingfisher.infrastructure.harness import skill_registry
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, bundled_skills_route
 from kingfisher.infrastructure.harness.delegation import indistinct, model_for
-from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
+from kingfisher.skills import registry as skill_registry
+from kingfisher.skills.registry import SkillRegistry
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -85,7 +85,11 @@ def activatable_skills(
     directory holding at most a handful of skills.
     """
     resolved = catalogue or Definitions.from_config(cfg)
-    uploaded = None if session_dir is None else session_dir / skill.DIRECTORY / skill.UPLOADED
+    uploaded = (
+        None
+        if session_dir is None
+        else session_dir / layout.SKILLS / layout.UPLOADED_SKILL_DIR
+    )
     return resolved.registry.merged(skill_registry.read_uploaded(uploaded))
 
 
@@ -224,7 +228,7 @@ def _private_skills(
     """The skills a delegate brings itself, and where they are mounted.
 
     Answered from `bundled_skills`, which asked deepagents what it will actually
-    load rather than listing directories -- the distinction `skill_registry`
+    load rather than listing directories -- the distinction `skills.registry`
     exists for, and the reason a delegate is never told about a skill that will
     not load.
 

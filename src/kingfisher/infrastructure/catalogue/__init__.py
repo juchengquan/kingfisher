@@ -22,7 +22,7 @@ the shared offering has, so a bundle is the only place a capability can sit that
 the top-level agent cannot reach.
 
 Two things that belong to this subject are deliberately elsewhere.
-`infrastructure.harness.skill_registry` answers which skills deepagents actually
+`skills.registry` answers which skills deepagents actually
 loaded, which is a different question from what exists to mount -- running the
 two together is the bug it was written to end -- and its answer carries
 deepagents' own skill objects, so it lives where foreign types may be named.
@@ -67,11 +67,11 @@ from kingfisher.domain.ports import (
 )
 from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
-from kingfisher.infrastructure.catalogue.skills import LocalSkillRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
-from kingfisher.infrastructure.harness import skill_registry
-from kingfisher.infrastructure.harness.skill_registry import SkillRegistry
+from kingfisher.skills import registry as skill_registry
+from kingfisher.skills.catalogue import LocalSkillRepository
+from kingfisher.skills.registry import SkillRegistry
 
 
 @dataclass(frozen=True)
@@ -160,7 +160,7 @@ class Definitions:
         """Each subagent's own skills, as deepagents will actually load them.
 
         A registry rather than a repository, which is the opposite choice from
-        `bundled_tools` and made for the reason `skill_registry` exists at all:
+        `bundled_tools` and made for the reason `skills.registry` exists at all:
         kingfisher does not parse skills, so "what is on disk" and "what the
         agent will be told about" are different questions, and running them
         together is what once advertised four skills while three loaded.
@@ -324,7 +324,7 @@ def catalogue_root(repository: object) -> Path | None:
 
     This used to refuse rather than answer `None`, because the `/skills` route
     was a `FilesystemBackend` over a real path and a repository with no path was
-    unmountable. `SkillRepository.files` ended that: `skills_backend` mounts
+    unmountable. `SkillRepository.files` ended that: `skills.backend` mounts
     whatever a repository can hand over, so a missing directory is now a fact
     about *which backend to build*, not a wiring error.
 

@@ -8,7 +8,7 @@ envelopes: turning whatever YAML produced into the string or the tuple of names
 the format asked for.
 
 Splitting a markdown header off a body lives with the format that still has one
-— `domain.skill.split` — because it is deepagents' rule about deepagents'
+— `skills.spec.split` — because it is deepagents' rule about deepagents'
 document, not a thing both formats do.
 
 What does *not* live here is the YAML decode, which needs a third-party

@@ -54,7 +54,7 @@ _EXPORTS = {
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
-    "SkillError": "kingfisher.domain.skill",
+    "SkillError": "kingfisher.skills.spec",
     "SubagentError": "kingfisher.domain.subagent",
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
@@ -119,7 +119,7 @@ _EXPORTS = {
     # `LAYOUT_DIRS` and means something else.
     "DEFINITION_KINDS": "kingfisher.infrastructure.catalogue",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
-    "SKILL_LAYOUT": "kingfisher.infrastructure.catalogue.skills",
+    "SKILL_LAYOUT": "kingfisher.skills.catalogue",
     "Inventory": "kingfisher.application.inventory",
     # Where this deployment reads from, as against what it offers. Public
     # because the answer was assembled three times and agreed nowhere: the
@@ -225,13 +225,11 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
-    from kingfisher.domain.skill import SkillError as SkillError
     from kingfisher.domain.subagent import RunOn as RunOn
     from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.domain.tool import offered as offered
     from kingfisher.domain.tool import split_reference as split_reference
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
-    from kingfisher.infrastructure.catalogue.skills import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
     )
@@ -266,6 +264,8 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace.seeding import seed as seed
     from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
+    from kingfisher.skills.catalogue import SKILL_LAYOUT as SKILL_LAYOUT
+    from kingfisher.skills.spec import SkillError as SkillError
 
 
 def __getattr__(name: str) -> Any:
