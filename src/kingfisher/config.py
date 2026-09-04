@@ -1,26 +1,24 @@
 """Deployment configuration. Belongs to no layer, which is why it sits here.
 
-`Config` lived in `domain/` for a while, on the reasoning that both `application/` and
-`infrastructure/` could then read it without depending on each other. That reasoning
-is about import direction, not about modelling: no domain rule reads a `Config`,
-and `base_url`, `api_key` and `timeout_s` are not kingfisher's vocabulary. It
-was the innermost layer holding a record for the outer ones.
+`Config` lived in `domain/` so `application/` and `infrastructure/` could read
+it without depending on each other -- reasoning about import direction, not
+modelling. No domain rule reads a `Config`, and `base_url`, `api_key` and
+`timeout_s` are not kingfisher's vocabulary: it was the innermost layer holding
+a record for the outer ones.
 
-So it lives at the package root, above the layers and outside them. `application/` and
-`infrastructure/` may read it; `domain/` may not, and a test enforces that -- a domain
-rule that needs a value takes the value, not the record.
+So it sits at the package root, above the layers. `application/` and
+`infrastructure/` may read it; `domain/` may not, and a test enforces that -- a
+domain rule that needs a value takes the value, not the record. Reading it out
+of the environment stays in `application/config.py`; the file describing
+endpoints and models lives in the workspace, and
+`infrastructure/model_catalogue.py` reads it.
 
-Reading it out of the environment is a separate job and stays in `application/config.py`:
-the file that describes the endpoints and models lives in the workspace, and
-`infrastructure/model_catalogue.py` is what reads it.
-
-There was an `ApiStyle` literal here, naming the endpoint styles a deployment
-could choose between. It conflated two things: which *wire format* to construct
-and which *endpoint* to send to, welded 1:1 -- so a deployment had exactly one
-endpoint per wire format and two Anthropic-compatible gateways were
-unconfigurable. The wire formats are now a closed registry in
-`infrastructure.harness.models`, keyed by `api`, and endpoints are open data
-read from `models.yaml`. See *Models and endpoints* in `docs/decisions.md`.
+An `ApiStyle` literal here once named the endpoint styles to choose between,
+welding two things 1:1 -- which *wire format* to construct, which *endpoint* to
+send to -- so a deployment had one endpoint per wire format and two
+Anthropic-compatible gateways were unconfigurable. Wire formats are now a closed
+registry in `infrastructure.harness.models` keyed by `api`; endpoints are open
+data from `models.yaml`. See *Models and endpoints* in `docs/decisions.md`.
 """
 
 from __future__ import annotations
@@ -34,12 +32,11 @@ from typing import Any
 from kingfisher.domain.access import Groups
 
 #: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
-#: rather than written twice: the two are spread into one `build_model` call
-#: and carry one rule between them -- additive only, may not name a value the
-#: deployment configured -- so a reader meeting one should find the other.
-#:
-#: Public for that reason alone. An empty mapping cannot drift in value, so
-#: this buys no safety; what it buys is that the pairing is visible.
+#: rather than written twice: both spread into one `build_model` call and carry
+#: one rule between them -- additive only, may not name a value the deployment
+#: configured -- so a reader meeting one should find the other. Public for that
+#: reason alone: an empty mapping cannot drift, so this buys visibility of the
+#: pairing rather than safety.
 NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
 
@@ -47,17 +44,14 @@ NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 class Endpoint:
     """One place to send a model call, and the credentials for it.
 
-    `api` names a wire format from `infrastructure.models.ADAPTERS`, which is
-    closed and ships with kingfisher; everything else here is open data a
-    deployment writes. Several endpoints may share one `api` -- that is the
-    point of the split, and what the old `api_style` could not express.
+    `api` names a wire format from `infrastructure.models.ADAPTERS` -- closed,
+    and shipped; everything else here is open data a deployment writes. Several
+    endpoints may share one `api`, which the old `api_style` could not express.
 
-    Credentials and wire format, and no name. It carried one for a while, so an
-    error about where a prompt would have gone could say which entry it came
-    from -- but that name is already written on the other side of the pair:
-    `ModelProfile.endpoint` is how a model *reaches* here, and every caller
-    holding an `Endpoint` was handed the profile beside it. Two fields saying
-    one thing, one of them able to disagree with its own mapping key.
+    No name field. It had one, so an error could name the entry a prompt would
+    have gone to -- but `ModelProfile.endpoint` already says that, and every
+    caller holding an `Endpoint` was handed the profile beside it. Two fields
+    saying one thing, one able to disagree with its own mapping key.
     """
 
     api: str
@@ -245,26 +239,25 @@ class Models:
     itself.
 
     The same move `Definitions` made, for the same two reasons its docstring
-    gives. This comes from a file that is deliberately relocatable and shared
-    across a fleet, and it is addressed by name everywhere, so a type is what
-    makes `.defualt` an error before the code runs rather than a `KeyError`
-    while it does.
+    gives: this comes from a file deliberately relocatable and shared across a
+    fleet, and it is addressed by name everywhere, so a type makes `.defualt` an
+    error before the code runs rather than a `KeyError` while it does.
 
-    Still not named by analogy with `Definitions`, but the difference is no longer
-    the one this used to give. `Definitions` held three paths and deliberately did
-    not read them; it holds a repository per kind now, and they do the reading.
-    What separates the two is *when* and *how often*: a catalogue is read when
-    the deployment is wired, answers every turn from what it held, and is layered
-    per turn with whatever a session uploaded. This is read once, at config time,
-    and never again -- there is no per-turn half for a model catalogue to have,
-    because nothing a request carries adds a model.
+    Still not named by analogy with `Definitions`, but the difference is no
+    longer the one this used to give. `Definitions` held three paths and
+    deliberately did not read them; it holds a repository per kind now, and they
+    do the reading. What separates the two is *when* and *how often*: a catalogue
+    is read when the deployment is wired, answers every turn from what it held,
+    and is layered per turn with whatever a session uploaded. This is read once,
+    at config time, and never again -- there is no per-turn half for a model
+    catalogue to have, because nothing a request carries adds a model.
 
-    Which is also why this stayed a record rather than becoming a repository.
-    `model_catalogue` is one public function called once, its helpers are steps
-    in a single parse rather than views over a directory, and the seam a
-    repository would have added is already here: a deployment holding its models
-    somewhere else builds one of these and passes `Config(models=...)`, touching
-    no file and no loader. The test suite runs that way.
+    Which is also why this stayed a record rather than a repository.
+    `model_catalogue` is one public function called once, its helpers steps in a
+    single parse rather than views over a directory, and the seam a repository
+    would have added is already here: a deployment holding its models elsewhere
+    builds one of these and passes `Config(models=...)`, touching no file and no
+    loader. The test suite runs that way.
 
     It lives here rather than in `infrastructure` for the reason
     `Config.catalogue_roots` does *not* return a `Definitions`: this file sits
@@ -340,11 +333,11 @@ class Models:
             where = f" defined in {self.source}" if self.source else ""
             # Asked before "no such model", because for a model on an endpoint
             # with no key that answer is false and sends its reader to the wrong
-            # file. The catalogue defines it; this machine cannot use it. Both
-            # The branch below said this was how it would read,
-            # and until `unreachable` existed neither could deliver it: the
-            # model had already been filtered out one step earlier, so the
-            # lookup failed here and answered a question nobody asked.
+            # file. The catalogue defines it; this machine cannot use it.
+            # The branch below said this was how it would read, and until
+            # `unreachable` existed it could not deliver: the model had already
+            # been filtered out one step earlier, so the lookup failed here and
+            # answered a question nobody asked.
             if reason := self.unreachable.get(wanted):
                 msg = f"model {wanted!r} runs on {reason}; this deployment can run {known}"
                 raise ConfigError(msg)
@@ -535,21 +528,21 @@ class Config:
         is taken over so a process that *died* cannot lock a session out
         forever; it must never be taken from a turn that is merely stopping.
 
-        The two were the same number, so the claim became takeable at the exact
-        instant the run's deadline passed -- and a run stops *between stream
-        chunks*, then still has to emit its result, collect what the turn left
-        behind, and let go. Measured in that window: a second caller took the
-        session while the first turn was still running, and the first turn then
+        The two were the same number, so the claim became takeable the instant
+        the run's deadline passed -- and a run stops *between stream chunks*,
+        then still has to emit its result, collect what the turn left behind,
+        and let go. Measured in that window: a second caller took the session
+        while the first turn was still running, and the first turn then
         finished. Two turns in one session is what the claim exists to prevent,
         and what `SessionBusyError` records having seen once already, where "a
         turn simply vanished".
 
         The grace is the longest a single model call may take, because that is
-        exactly what a stopping turn is waiting on: it is inside one chunk, and
-        a chunk ends when the call does. Derived rather than chosen -- a fixed
-        number would be a guess that a deployment raising a model's `timeout_s`
-        would quietly invalidate. What follows the chunk is filesystem work and
-        is not bounded here; it is also milliseconds against a bound in minutes.
+        what a stopping turn is waiting on: it is inside one chunk, and a chunk
+        ends when the call does. Derived rather than chosen -- a fixed number
+        would be a guess a deployment raising a model's `timeout_s` would
+        quietly invalidate. What follows the chunk is filesystem work, unbounded
+        here and milliseconds against a bound in minutes.
         """
         return self.turn_timeout_s + max(
             (profile.timeout_s for profile in self.models.models.values()),
@@ -593,28 +586,25 @@ class Config:
 
         The only one of the three left, and the asymmetry is the point rather
         than an oversight. `subagents_dir` and `tools_dir` sat beside it with no
-        reader in the package: `catalogue_roots` took both over when it became
-        the one answer to "where are the definitions". They stayed on because the
-        trio looked symmetrical, which is the argument a vestige makes for
-        itself.
-
-        This one has a caller. `confinement.shell_confinement` needs the skills
-        root on its own, because the shell boundary is built per directory and
+        reader in the package -- `catalogue_roots` took both over when it became
+        the one answer to "where are the definitions" -- and stayed on because
+        the trio looked symmetrical, which is the argument a vestige makes for
+        itself. This one has a caller: `confinement.shell_confinement` needs the
+        skills root alone, because the shell boundary is built per directory and
         not from a mapping.
         """
         return self.skills_root or self.workspace / "skills"
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
-        """The three definition directories, together, as one answer.
+        """The four definition directories, together, as one answer.
 
-        `skills_root` and its two siblings are what a deployment *sets*; this is
-        what everything that reads a catalogue *asks for* -- and now the only
-        way to ask, since the two per-directory properties that used to sit
-        above had no reader left. Kept as a mapping rather than a tuple
-        of paths because the three are relocatable apart -- `skills_root` and
-        its siblings are separate overrides on purpose -- so there is no tree to
-        name them by position under.
+        `skills_root` and its three siblings are what a deployment *sets*; this
+        is what everything reading a catalogue *asks for*, and now the only way
+        to ask, since the two per-directory properties above it had no reader
+        left. A mapping rather than a tuple because the four relocate apart --
+        separate overrides on purpose -- so there is no tree to name them by
+        position under.
 
         A `Kingfisher` may be handed a different mapping, which is the whole
         seam: this is the fallback, not the only source. See
