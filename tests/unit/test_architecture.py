@@ -1524,8 +1524,76 @@ def test_the_application_layer_does_not_write_to_disk_itself():
 
     assert not offenders, (
         f"{offenders} write to disk from the application layer — put it in "
-        "infrastructure/workspace/fs.py, where the guards already are"
+        "infrastructure/workspace/, where the guards already are"
     )
+
+
+def _mode_changes(path: Path) -> list[int]:
+    """The lines on which a module changes a file's mode.
+
+    A predicate rather than a loop inside the test, so it can be shown to bite
+    against a file built for the purpose. The rule below runs over a tree where
+    the answer is currently "none", and a rule with no cases passes whether or
+    not it works.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    return sorted(
+        node.lineno
+        for node in ast.walk(tree)
+        if isinstance(node, ast.Call)
+        and isinstance(node.func, ast.Attribute)
+        and node.func.attr == "chmod"
+    )
+
+
+def test_only_one_workspace_module_changes_a_mode():
+    """`permissions` owns the write bits on `/data`, and used to own them by being a file.
+
+    While all of this was `fs.py`, *nothing outside this module should ever
+    chmod `/data`* was a fact about a file, and `place_data` could state it in a
+    docstring because the docstring and the `chmod` were the same 700 lines.
+    Splitting the file left the sentence true and unenforced: the code that
+    copies into `/data` sits in `placement` now, one import away from lifting the
+    write bits itself.
+
+    Worth a rule because of what breaking it costs rather than because it is
+    tidy. Reaching for a mode change when a directory refused a copy is what
+    once left root-owned files in a workspace and made a session permanently
+    unusable. The unlock that *is* allowed, `writable_data`, puts the bits back
+    in a `finally` that reaches every path out of the block; an open-coded chmod
+    beside a `shutil.copy` is how `/data` silently stays writable after a raise.
+
+    `harness/backend.py` chmods too and is not in scope: `prepare_scratch` makes
+    a scratch directory private inside a world-writable `/tmp`, which is the
+    opposite operation on a tree the agent's data never enters.
+    """
+    offenders = [
+        f"{_module_id(path)}:{line}"
+        for path in _modules_in("infrastructure/workspace")
+        if path.name != "permissions.py"
+        for line in _mode_changes(path)
+    ]
+
+    assert not offenders, (
+        f"{offenders} change a file mode inside the workspace package — "
+        "`permissions` is the one module allowed to, and `writable_data` is how "
+        "the rest of it asks"
+    )
+
+
+def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
+    """The rule above runs over a tree with no offenders, so it has to be shown to bite.
+
+    Both directions, because a predicate answering "yes" to everything would
+    pass the first half of this on its own.
+    """
+    guilty = tmp_path / "placement.py"
+    guilty.write_text("def place(path):\n    path.mkdir()\n    path.chmod(0o600)\n")
+    innocent = tmp_path / "layout.py"
+    innocent.write_text("def place(path):\n    path.mkdir()\n    path.touch()\n")
+
+    assert _mode_changes(guilty) == [3], "a chmod two calls in is the case this exists for"
+    assert _mode_changes(innocent) == [], "the neighbouring filesystem calls are not modes"
 
 
 def test_infrastructure_is_the_layer_doing_the_touching():
@@ -1803,7 +1871,7 @@ def test_the_package_ships_the_catalogue_example():
     """
     from importlib import resources
 
-    from kingfisher.infrastructure.workspace import fs as workspace_fs
+    from kingfisher.infrastructure.workspace import layout as workspace_layout
 
     # Both, from `EXAMPLES` rather than named here, so the file added next is
     # covered by having been added rather than by somebody remembering. The
@@ -1811,10 +1879,10 @@ def test_the_package_ships_the_catalogue_example():
     # changes nothing about this: `_place_example` skips a missing source
     # silently, so a packaging fault would show up as a workspace quietly
     # missing furniture rather than as anything failing.
-    assert workspace_fs.EXAMPLES, "nothing is asserted if the tuple is empty"
-    for name in workspace_fs.EXAMPLES:
+    assert workspace_layout.EXAMPLES, "nothing is asserted if the tuple is empty"
+    for name in workspace_layout.EXAMPLES:
         assert (SRC / "templates" / name).is_file(), f"{name} left the package"
-        installed = resources.files(workspace_fs.TEMPLATES).joinpath(name)
+        installed = resources.files(workspace_layout.TEMPLATES).joinpath(name)
         assert installed.is_file(), f"{name} is not reachable the way an install reaches it"
 
 
@@ -3024,7 +3092,7 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
 #:
 #:   `Config.resolve_model`     it is `cfg.models.resolve`
 #:   `Capabilities.unknown`     it is `Offering.refuse_unknown`, a file away
-#:   `Kingfisher._snapshot`     it is `workspace_fs.agent_snapshot`
+#:   `Kingfisher._snapshot`     it is `workspace_snapshots.agent_snapshot`
 #:
 #: -- while the unrestricted form, matching any capitalised head, cannot tell a
 #: class this package owns from one it is describing in someone else's library.

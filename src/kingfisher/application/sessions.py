@@ -42,12 +42,8 @@ from kingfisher.domain.session import (
 )
 from kingfisher.infrastructure.catalogue.documents import read_agent
 from kingfisher.infrastructure.session_store import restore_into
-from kingfisher.infrastructure.workspace.fs import (
-    agent_snapshot,
-    agent_started_with,
-    ensure_session_layout,
-    session_bytes,
-)
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout, session_bytes
+from kingfisher.infrastructure.workspace.snapshots import agent_snapshot, agent_started_with
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

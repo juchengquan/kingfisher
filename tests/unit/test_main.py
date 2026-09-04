@@ -18,7 +18,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure.harness import agent as main_agent_module
-from kingfisher.infrastructure.workspace import fs as workspace_fs
+from kingfisher.infrastructure.workspace import layout as workspace_layout
 from kingfisher.presentation.cli.progress import show
 from kingfisher.skills import spec as skill
 from kingfisher.skills.catalogue import LocalSkillRepository
@@ -406,7 +406,7 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
     assert driver.main(["driver.py", "--list"]) == 2  # no catalogue, as expected
 
     assert LocalSkillRepository(workspace / "skills").names
-    assert (workspace / workspace_fs.EXAMPLE).is_file()
+    assert (workspace / workspace_layout.EXAMPLE).is_file()
 
 
 def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
@@ -424,7 +424,7 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
 
     with pytest.raises(ConfigError) as without:
         model_catalogue.load(absent, {})
-    (tmp_path / workspace_fs.EXAMPLE).write_text("# annotated\n", encoding="utf-8")
+    (tmp_path / workspace_layout.EXAMPLE).write_text("# annotated\n", encoding="utf-8")
     with pytest.raises(ConfigError) as with_example:
         model_catalogue.load(absent, {})
 
@@ -464,9 +464,9 @@ def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkey
     driver.main(["driver.py", "--list"])
 
     printed = capsys.readouterr().out
-    assert f"seeded {workspace_fs.EXAMPLE}" not in printed
+    assert f"seeded {workspace_layout.EXAMPLE}" not in printed
     assert "seeded skills/" not in printed
-    assert (fresh.workspace / workspace_fs.EXAMPLE).is_file()
+    assert (fresh.workspace / workspace_layout.EXAMPLE).is_file()
 
 
 # -- --without-tools and friends ------------------------------------------

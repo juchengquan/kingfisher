@@ -36,7 +36,7 @@ from typing import Protocol, runtime_checkable
 from kingfisher.config import ConfigError
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.catalogue.documents import groups_named, middleware_named
-from kingfisher.infrastructure.workspace.fs import ensure_layout
+from kingfisher.infrastructure.workspace.layout import ensure_layout
 
 #: Named in the refusal below, and only when it is really there.
 #:

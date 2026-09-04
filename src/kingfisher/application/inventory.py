@@ -32,7 +32,7 @@ from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
-from kingfisher.infrastructure.workspace.fs import ensure_session_layout
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.subagents.rules import refuse_cycles
 from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.catalogue import ToolError

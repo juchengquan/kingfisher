@@ -139,20 +139,20 @@ from kingfisher.infrastructure.session_store import (
     write_transcript,
 )
 from kingfisher.infrastructure.workspace.files import fetch_refs
-from kingfisher.infrastructure.workspace.fs import (
+from kingfisher.infrastructure.workspace.layout import ensure_layout
+from kingfisher.infrastructure.workspace.permissions import protect_data
+from kingfisher.infrastructure.workspace.placement import check_placeable, place_data, place_inputs
+from kingfisher.infrastructure.workspace.seeding import SEED_HINT
+from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
     LocalSessionRoot,
+    collect_artifacts,
+)
+from kingfisher.infrastructure.workspace.snapshots import (
     agent_snapshot,
     agent_started_with,
-    check_placeable,
-    collect_artifacts,
-    ensure_layout,
-    place_data,
-    place_inputs,
-    protect_data,
     remember_agent,
 )
-from kingfisher.infrastructure.workspace.seeding import SEED_HINT
 from kingfisher.infrastructure.workspace.uploads import provision
 
 if TYPE_CHECKING:

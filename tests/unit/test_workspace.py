@@ -12,12 +12,8 @@ from kingfisher.domain.layout import (
     SESSION_DIRS,
     SESSION_PLUMBING,
 )
-from kingfisher.infrastructure.workspace.fs import (
-    EXAMPLE,
-    LocalSessionDirs,
-    ensure_layout,
-    ensure_session_layout,
-)
+from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
+from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs, ensure_session_layout
 from tests.conftest import StubCheckpointer
 
 
