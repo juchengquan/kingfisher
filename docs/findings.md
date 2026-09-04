@@ -71,6 +71,34 @@ wrong.*
   a skills middleware added to it. *(2026-08-18.)*
 - **A skill's `allowed-tools` is prompt text, not enforcement.** *(2026-08-16.)*
 
+## Tool shapes
+
+What a workspace tool may be written as is pinned by `tests/unit/test_tool_shapes.py`
+-- a `BaseTool` from `@tool`, a `BaseTool` subclass, or a plain function -- so it is
+not repeated here. What that file does not say is what the decorator is *for*, which
+cost an experiment to establish.
+
+- **`@tool` buys control, not capability.** A plain function reaches the graph, is
+  offered to the model, dispatches, and is covered by `WorkspaceToolErrors` exactly
+  as a decorated one is -- deepagents wraps whatever it is handed, so by the time a
+  tool is in the graph it has `.name` and `.invoke` either way. The decorator is
+  worth reaching for when the name or description must *differ* from the function as
+  written, and for nothing else. *(2026-09-04.)*
+- **A docstring is required in both forms**, which is the part that surprises: it is
+  langchain that insists, not the decorator, and leaving it off raises
+  `ValueError: Function must have a docstring if description not provided.` either
+  way. *(2026-09-04.)*
+- **The two forms differ in where that failure lands.** `@tool` runs at import, so
+  the catalogue's loader catches it and names the file --
+  `ToolError: shout.py: ValueError: ...`. A plain function is not wrapped until the
+  agent is built, so the same `ValueError` arrives from inside langchain with no
+  filename on it. That is the decorator's one real advantage, and it is about
+  diagnosis rather than behaviour. *(2026-09-04.)*
+- **Annotations are optional and worth writing anyway.** `def shout(text):` loads
+  and runs; the schema comes back as `{'text': {'title': 'Text'}}` -- an argument
+  the model is told the name of and not the type. A silent degradation rather than a
+  refusal. *(2026-09-04.)*
+
 ## The Linux fence
 
 - **GitHub's `ubuntu-latest` runs Landlock ABI 7** against the 6 a full ruleset
