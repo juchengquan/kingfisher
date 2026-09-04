@@ -33,7 +33,7 @@ from dotenv import load_dotenv
 # installed, and the driver is not part of it.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from tests.integration.driver import Progress
+from kingfisher.presentation.cli.progress import Progress
 
 WORDS = ("sea", "grass", "sun")
 
@@ -99,7 +99,7 @@ async def main() -> int:
             # pause followed by an answer. What arrives live is the code the
             # model wrote, then its prose a word at a time.
             #
-            # `Progress` is the driver's, so this and `main.py` agree about
+            # `Progress` is the shipped one, so this, the driver and
             # when a newline is owed between tagged lines and model text.
             progress = Progress(sys.stdout)
             result = None

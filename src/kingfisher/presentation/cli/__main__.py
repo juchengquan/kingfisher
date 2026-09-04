@@ -42,8 +42,18 @@ from kingfisher import (
     DEFINITION_KINDS,
     UNSCOPED,
     AccessError,
+    CapabilityError,
     ConfigError,
     Held,
+    QuotaExceededError,
+    Request,
+    SessionBusyError,
+    SkillError,
+    SubagentError,
+    UnknownReferenceError,
+    UnknownSessionError,
+    UnsafeReferenceError,
+    UploadError,
     config_from_env,
     definitions_source,
     ensure_layout,
@@ -53,6 +63,7 @@ from kingfisher import (
 )
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
+from kingfisher.presentation.cli.progress import show
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
@@ -126,6 +137,71 @@ def build_parser() -> argparse.ArgumentParser:
             "also copy definitions that name middleware, which are left behind "
             "by default because a workspace that has not registered those names "
             "cannot build them"
+        ),
+    )
+    doing = sub.add_parser(
+        "run",
+        help="run one task",
+        # Wrapped by hand, like `doctor`: the raw formatter is what keeps the
+        # blank lines, and it does no wrapping of its own.
+        description=(
+            "Runs one task and prints the answer.\n"
+            "\n"
+            "The answer goes to stdout and everything you watch goes to stderr, so\n"
+            "`kingfisher run ... > answer.md` keeps the answer alone and\n"
+            "`2>/dev/null` keeps the quiet.\n"
+            "\n"
+            "The exit code says how the turn ended, because stdout is prose and\n"
+            "there is nowhere else to put it:\n"
+            "\n"
+            "  0  finished\n"
+            "  1  stopped at a bound -- the answer is what was reached, and what\n"
+            "     it wrote is still there\n"
+            "  2  never ran"
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    doing.add_argument("task", help="what to do, in your own words")
+    # Required, and refused downstream rather than defaulted anywhere: an agent
+    # decides which endpoint the session's prompts go to and whose credentials
+    # pay, so a default would put that choice somewhere the command line never
+    # mentions. `kingfisher list` shows what this workspace offers.
+    doing.add_argument(
+        "--agent",
+        required=True,
+        help="which agent runs this, from the workspace's agents/ (`kingfisher list` shows them)",
+    )
+    doing.add_argument("--session", metavar="ID", help="continue an existing session")
+    # Two flags for one idea, and the difference is how long the file lives.
+    # `--data` is not a convenience: /data is read-only to the agent, so this is
+    # the only supported way to put a file where the next turn still finds it.
+    doing.add_argument(
+        "--input",
+        metavar="PATH",
+        action="append",
+        default=[],
+        help="a file for this turn only, in /runs/<turn>/input; repeatable",
+    )
+    doing.add_argument(
+        "--data",
+        metavar="PATH",
+        action="append",
+        default=[],
+        help="a file kept for the whole session, in /data (read-only); repeatable",
+    )
+    # Unlike `list --as`, an absent one is not the operator's view. A listing is
+    # read-only and whoever runs it is on the host with the policy in front of
+    # them; a turn acts, so this is left to the library to refuse -- which it
+    # does, naming this flag.
+    doing.add_argument(
+        "--as",
+        dest="held",
+        type=_held,
+        default=None,
+        metavar="GROUPS",
+        help=(
+            "who is calling: comma-separated group names, or UNSCOPED to run "
+            "with no caller. Required where the workspace declares groups"
         ),
     )
     sub.add_parser(
@@ -268,6 +344,59 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
     return 0
 
 
+def _run(args: argparse.Namespace) -> int:
+    """Run one task, and say how it ended in the only channel that is left.
+
+    stdout is the answer, a word at a time, so there is no room on it for a
+    machine-readable field -- no `--json` here and no wire format. The exit code
+    is what a script has, which is why it carries `stop_reason` rather than
+    merely distinguishing a crash from a run.
+
+    `0` finished, `1` ran and stopped at a bound, `2` never ran. The case `1`
+    exists for is `kingfisher run ... > report.md && publish report.md`, which
+    must not publish a report that stopped halfway. A code per reason was
+    considered and dropped: it encodes in the exit status what the line below
+    already says, in a vocabulary that grows every time `STOP_REASONS` does.
+    """
+    missing = [p for p in (*args.input, *args.data) if not Path(p).expanduser().is_file()]
+    if missing:
+        # Before the model, because this is the one mistake that would otherwise
+        # cost money to discover.
+        print(f"no such file: {', '.join(missing)}", file=sys.stderr)
+        return 2
+
+    # Imported here, not at module scope. `Kingfisher` pulls deepagents and
+    # three provider SDKs -- about a second -- and
+    # `test_reaching_the_cli_stays_free_of_provider_sdks` holds every other verb
+    # to not paying it. `seed`, `list` and `doctor` do not build one.
+    from kingfisher import Kingfisher  # noqa: PLC0415
+
+    kf = Kingfisher(config_from_env())
+    request = Request(
+        task=args.task,
+        agent=args.agent,
+        session_id=args.session,
+        inputs=tuple(Path(p).expanduser() for p in args.input),
+        data=tuple(Path(p).expanduser() for p in args.data),
+    )
+    result = show(kf.stream(request, groups=args.held), sys.stdout, sys.stderr)
+    if result is None:
+        # The stream ended without a terminal event, which is not a shape the
+        # library produces -- said out loud rather than reported as success.
+        print("the run ended without a result", file=sys.stderr)
+        return 2
+
+    print(f"\nsession {result.session_id}  turn {result.turn_id}", file=sys.stderr)
+    if result.stop_reason != "end_turn":
+        print(
+            f"stopped: {result.stop_reason} -- the answer above is what was "
+            f"reached, and what it wrote is in {result.virtual_dir}",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
 def _held(raw: str) -> Held:
     """`--as A,B` as the groups it names, or the explicit absence of any.
 
@@ -375,6 +504,24 @@ def _doctor(*, as_document: bool = False) -> int:
     return 1 if worst(checks) == "fail" else 0
 
 
+#: What a caller can put wrong, as against what a deployment can. Every one is
+#: reported rather than raised: a traceback out of langgraph in front of somebody
+#: who mistyped an agent name buries the one line that would have helped.
+#:
+#: `SessionBusyError` is handled before these and not among them -- see `main`.
+#: `AccessError` and `ConfigError` keep their own branches too, because each has
+#: something extra to say.
+REFUSALS = (
+    CapabilityError,
+    QuotaExceededError,
+    SkillError,
+    SubagentError,
+    UnknownReferenceError,
+    UnknownSessionError,
+    UnsafeReferenceError,
+    UploadError,
+)
+
 #: Verb -> what runs it. A table rather than a chain of `if`s, which four verbs
 #: made worth it twice over. The chain needed one branch per verb *in the right
 #: order*, because only two of them take `--json` and the fallthrough read
@@ -382,6 +529,7 @@ def _doctor(*, as_document: bool = False) -> int:
 #: on somebody reordering two blocks that looked interchangeable. Here each verb
 #: names the arguments it has, and the order of this table means nothing.
 HANDLERS = {
+    "run": _run,
     "seed": lambda args: _seed(args.source, everything=args.everything),
     "serve": lambda args: _serve(),  # noqa: ARG005
     "doctor": lambda args: _doctor(as_document=args.json),
@@ -404,6 +552,25 @@ def main(argv: list[str] | None = None) -> int:
 
     try:
         return HANDLERS[args.command](args)
+    except SessionBusyError as exc:
+        # Its own branch, and the only one of these that is not the caller's
+        # mistake: another turn holds the session and waiting fixes it. The code
+        # is still 2 -- it does not earn one of its own -- so the line has to be
+        # what says "wait" rather than "edit something".
+        print(f"session busy: {exc}", file=sys.stderr)
+        print("nothing to change -- run it again when that turn finishes", file=sys.stderr)
+        return 2
+    except REFUSALS as exc:
+        # Nine errors that reached a stranger as a traceback until `run` existed,
+        # because nothing but `run` could raise them from a command. Every one is
+        # the same shape as `ConfigError` below: something the person at the
+        # terminal wrote and can fix -- an agent they cannot reach, a session id
+        # that is not there, a file reference that does not resolve.
+        #
+        # Named by type, because "what went wrong" is the useful half and the
+        # class is what says which kind of thing it was.
+        print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
+        return 2
     except AccessError as exc:
         # Beside `ConfigError` because it is the same kind of thing: something
         # the person at the terminal wrote and can fix, in a file or on the
