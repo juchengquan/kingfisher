@@ -32,55 +32,42 @@ arguing for a shape goes to `decisions.md` and anything measured about upstream
 to `findings.md`; a guide that starts arguing with itself is one of those two
 wearing the wrong hat.
 
-## `design/`
+## `design/`, when there is something to argue
 
-One document, and it is a **proposal that has not been built**. This folder is no
-longer history -- history was condensed into `decisions.md`.
+Empty, and that is a state rather than a gap. A document belongs there while it
+is arguing for something; once it is built its decisions move to `decisions.md`,
+anything it measured about upstream moves to `findings.md`, and the file goes --
+which is what happened to every one of them.
 
-- [Nothing at rest on this machine](design/2026-08-21-nothing-at-rest-on-this-machine.md)
-
-A document belongs here while it is arguing for something. Once it is built, its
-decisions move to `decisions.md`, anything measured about upstream moves to
-`findings.md`, and the file goes -- which is what happened to the other
-twenty-six.
-
-The twenty-sixth is worth naming, because it is the failure this folder now has
-one job to avoid. *A tool failure is not a crash* sat here saying **designed, not
+Two are worth naming, because between them they are the failure this rule exists
+to prevent. *A tool failure is not a crash* sat here saying **designed, not
 implemented** while `WorkspaceToolErrors` and its test file had been in the tree
-for some time. A proposal that has quietly shipped is worse than a missing
-document: it reads as work still to do, and the next person to pick it up
-rediscovers their own codebase. A status line is only true on the day it is
-written -- check it against the code before trusting it.
+for some time. *Nothing at rest on this machine* was audited decision by decision
+on 2026-09-01 and still reported "no store port in `domain/ports.py`" six days
+after one shipped, and was removed on 2026-09-04 once each remaining claim was
+checked against the code.
 
-## `superpowers/plans/`
+A proposal that has quietly shipped is worse than a missing document: it reads as
+work still to do, and the next person to pick it up rediscovers their own
+codebase. **A status line is only true on the day it was written -- check it
+against the code before trusting it.**
 
-One document, and it is a plan that was **built and then reversed**. It is not
-`design/`, which is for arguments still being made, and it is not history that
-belongs only in git — it is the one case those two categories do not cover.
-
-- [Group access control (`access.yaml`)](superpowers/plans/2026-08-31-group-access-control.md)
-  — **reversed 2026-08-31, the day it was written.** Do not implement it. The
-  central `access.yaml` it specifies is now refused by name at startup; what
-  shipped writes the policy in each definition's own `groups:` line.
-  `decisions.md` has the reversal and what survived it.
-
-Kept for one reason: the argument it lost is a good one to have read before
-proposing a central table again. It opens with a notice saying so, because a
-plan full of unticked checkboxes reads as work to do, and this one is not.
-
-A second document here would be a mistake. A plan that was *built* has its
-decisions in `decisions.md` and belongs in git history; a plan still being
-argued belongs in `design/`. This folder is for the narrow case of a
-worked-out design that was tried and rejected, and one is enough to make the
-point.
+`superpowers/plans/` held one more and is gone for a neighbouring reason: a plan
+for group access control, built and reversed on the day it was written. Its 2,224
+lines were implementation steps for a design the loader now refuses by name, and
+the part worth keeping -- the argument it lost, which is worth having read before
+anyone proposes a central table again -- is in `decisions.md` under *Group
+access*.
 
 ## What was removed, and how to get it back
 
 Twenty-five design documents, three specs and seven implementation plans, in the
-commit that created this page. They are in git in full:
+commit that created this page, and the last two proposals on 2026-09-04. They are
+in git in full, each recoverable from the commit that removed it:
 
     git log --diff-filter=D -- docs/design/ docs/specs/ docs/superpowers/
-    git show <commit>^:docs/design/2026-08-17-assets-as-packages.md
+    git show <commit>^:docs/design/2026-08-21-nothing-at-rest-on-this-machine.md
+    git show <commit>^:docs/superpowers/plans/2026-08-31-group-access-control.md
 
 The rule this replaces was "`docs/design/` is history and is not rewritten",
 written in a plan that is itself now removed. It was right about the danger and
