@@ -473,10 +473,34 @@ class Config:
     # host is allowed to hold data and is a silent disaster where it is not --
     # `doctor` says so when the workspace turns out to be in memory.
     #
-    # A directory, because that is what a deployment can name in an environment
-    # variable. Somewhere else entirely is what `SessionStore` is for, and a
-    # deployment reaching for that passes an object rather than a path.
+    # A directory, which is the shape a deployment keeping sessions on this host
+    # names. Somewhere else entirely is `session_store_factory` below.
+    #
+    # This comment used to end "a deployment reaching for that passes an object
+    # rather than a path", and both halves of that were wrong. An environment
+    # variable can name a factory -- `models.yaml` already reaches a chat class
+    # through a `module:Name` string -- and passing an object only reaches the
+    # one construction site a deployment controls, which is neither of the two
+    # kingfisher ships.
     session_store: Path | None = None
+    # The same port, named rather than built here: `module:name` for something
+    # callable with no arguments that returns a `SessionStore`.
+    #
+    # A factory rather than a class, because kingfisher does not know whether a
+    # store wants a bucket, a DSN or a mount point, and inventing a URL grammar
+    # for stores it knows nothing about is the version of this that ages worst.
+    # The deployment's own configuration stays the deployment's.
+    #
+    # Read here rather than only by the service, so that both entry points get
+    # it. That is the whole reason this is a setting and not a constructor
+    # argument -- `presentation/cli/__main__.py` builds its own `Kingfisher` and
+    # there is nowhere to point it.
+    #
+    # An environment variable and never a workspace file. `confinement`'s
+    # writable roots are the whole workspace with only `skills/` carved out, so
+    # a settings file naming code to import would be code the agent can edit --
+    # the rule `confinement.resolve` already states about its own profile.
+    session_store_factory: str | None = None
     # What this deployment *wires*. Distinct from `Capabilities`, which is what
     # a single request may *use* of it -- and the distinction is not stylistic:
     # these two flags shape `render_system_prompt`, which is the cached prefix
@@ -519,6 +543,31 @@ class Config:
     # and reads one answer. Measured: with it on, a two-turn workspace carries a
     # ~0.4MB database it never reads back.
     conversation_enabled: bool = True
+
+    def __post_init__(self) -> None:
+        """Refuse a deployment that named its session store twice.
+
+        Not precedence, which was the first spelling and is the wrong shape: two
+        answers to one question is what this codebase refuses everywhere else,
+        and a deployment with both set has a mistake worth being told about
+        rather than a preference worth honouring. Silently preferring one would
+        put a deployment's sessions in the directory it stopped meaning to use,
+        which is the failure that does not announce itself until somebody looks
+        for a session that is somewhere else.
+
+        Here rather than in the reader, so a `Config` assembled in Python is held
+        to the same rule as one read from the environment. `config_from_env` is
+        the common path and not the only one -- tests build these directly, and
+        so does anyone embedding the library.
+        """
+        if self.session_store is not None and self.session_store_factory is not None:
+            msg = (
+                "session storage is configured twice: KINGFISHER_SESSION_STORE names "
+                f"{str(self.session_store)!r} and KINGFISHER_SESSION_STORE_FACTORY names "
+                f"{self.session_store_factory!r}. Set one -- the factory for a store that "
+                "is not a directory on this host, the directory for one that is"
+            )
+            raise ConfigError(msg)
 
     @property
     def claim_stale_after(self) -> float:

@@ -136,6 +136,7 @@ from kingfisher.infrastructure.session_store import (
     LocalSessionStore,
     keep_from,
     read_transcript,
+    store_named,
     write_transcript,
 )
 from kingfisher.infrastructure.workspace.files import fetch_refs
@@ -189,6 +190,30 @@ logger = logging.getLogger("kingfisher.origins")
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
 #: run without a checkpointer at all.
 _UNSET: Any = object()
+
+
+def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore | None:
+    """Which store this deployment gets: the one passed, the one named, or none.
+
+    A function rather than three lines in `__init__`, because the middle rung
+    imports and calls code the deployment wrote and that is more than an
+    expression should be doing in a constructor. What it decides stays here in
+    the application layer; how a named store is actually built is
+    `store_named`'s, an adapter's job -- the same split
+    `test_the_application_layer_does_not_write_to_disk_itself` already holds the
+    neighbouring code to.
+
+    `None` is a real answer and the common one. It means the session directory
+    is the only copy, which is correct wherever the host is allowed to keep
+    data.
+    """
+    if supplied is not None:
+        return supplied
+    if cfg.session_store_factory is not None:
+        return store_named(cfg.session_store_factory)
+    if cfg.session_store is not None:
+        return LocalSessionStore(cfg.session_store)
+    return None
 
 
 class Kingfisher(Sessions, Disposal):
@@ -259,12 +284,19 @@ class Kingfisher(Sessions, Disposal):
 
         # Injected, or derived from configuration, or nothing -- the same
         # order `catalogue` follows and for the same reason: derive from `cfg`,
-        # never invent. A deployment keeping sessions somewhere that is not a
-        # directory passes the object; one keeping them in a directory names it
-        # and this builds the adapter.
-        self.sessions_store: SessionStore | None = sessions or (
-            LocalSessionStore(self.cfg.session_store) if self.cfg.session_store else None
-        )
+        # never invent.
+        #
+        # Configuration now has two ways to say it, and this is where they meet:
+        # a factory for a store that is not a directory on this host, a
+        # directory for one that is. `Config.__post_init__` has already refused
+        # a deployment that set both, so the order here settles nothing -- it
+        # reads as precedence and never acts as any.
+        #
+        # Written out rather than chained with `or`, which is how the middle
+        # rung was first spelled and is a bug waiting for the first store that
+        # defines `__len__`: an empty one would be falsy, and a deployment's
+        # store would be silently replaced by the fallback below it.
+        self.sessions_store: SessionStore | None = _session_store(sessions, self.cfg)
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
         # Where a session's files are for the length of a turn. The default
         # keeps them under the workspace and leaves them there, which is what

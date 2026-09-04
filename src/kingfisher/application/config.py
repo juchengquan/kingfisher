@@ -109,6 +109,19 @@ class Environment:
         raw = (self.values.get(key) or "").strip()
         return Path(raw).expanduser().resolve() if raw else None
 
+    def optional_text(self, key: str) -> str | None:
+        """A string this deployment may or may not have set.
+
+        Distinct from `self.values.get(key)`, which is what the one existing
+        string reading does: that one has a default to fall back to, so an empty
+        variable and an unset one mean the same thing anyway. Here they must
+        not. `KINGFISHER_SESSION_STORE_FACTORY=` set to nothing is a deployment
+        that configured no factory, and letting `""` through would make it a
+        deployment that named one and cannot be told which.
+        """
+        raw = (self.values.get(key) or "").strip()
+        return raw or None
+
     def paths(self) -> WorkspacePaths:
         """Where this deployment keeps things, without reading the model catalogue.
 
@@ -202,6 +215,7 @@ class Environment:
             agents_root=paths.agents_root,
             assets=paths.assets,
             session_store=self.optional_path("KINGFISHER_SESSION_STORE"),
+            session_store_factory=self.optional_text("KINGFISHER_SESSION_STORE_FACTORY"),
             skills_enabled=self.flag("KINGFISHER_SKILLS"),
             memory_enabled=self.flag("KINGFISHER_MEMORY"),
             interpreter_enabled=self.flag("KINGFISHER_INTERPRETER"),

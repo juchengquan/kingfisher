@@ -222,6 +222,7 @@ class DefinitionStore(Protocol):
         ...
 
 
+@runtime_checkable
 class SessionStore(Protocol):
     """Where a session's files live when the machine may not keep them.
 
@@ -248,6 +249,13 @@ class SessionStore(Protocol):
 
     Ids stop here, as they do for the other two. What the agent sees is
     `/derived/report.md`; how a store spells that is its own business.
+
+    `runtime_checkable` because this is one of the two ports a deployment can
+    now name from configuration, and a name resolved at startup produces an
+    object nothing has type-checked. It buys the shallow check only -- method
+    names, not signatures -- which is exactly the mistake worth catching here:
+    a factory that returned the wrong thing entirely, told at the moment it was
+    wired rather than at the first turn that tried to save anything.
     """
 
     def fetch(self, session_id: str) -> Mapping[str, bytes]:
