@@ -132,7 +132,8 @@ class LocalAgentRepository:
         Not on `AgentRepository`, for the reason `sources` is not: a repository
         backed by a service can answer with specs and need not have a document
         to hand back. A deployment supplying one gets no snapshot and the
-        behaviour it had before -- see `Kingfisher._snapshot`.
+        behaviour it had before -- see `workspace_fs.agent_snapshot`, which is
+        where the text is kept, and `agent_started_with`, which reads it back.
         """
         return {name: text for name, (_, _, text) in self._defined.items()}
 

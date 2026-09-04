@@ -120,7 +120,7 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
 
     No role parameter. A delegate that runs somewhere else says so in its own
     definition, and `delegation.as_subagent` resolves it through
-    `Config.resolve_model` — so "which model, where" is one question with one
+    `cfg.models.resolve` — so "which model, where" is one question with one
     answer, asked of whatever names the model.
     """
     try:

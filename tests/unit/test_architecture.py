@@ -2693,3 +2693,110 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
     assert _providers("kingfisher_service.app") == {"kingfisher-service"}
     assert _providers("sandlock") == {"sandlock"}
     assert _providers("nothing_ships_this") == set()
+
+
+#: Prose naming an attribute of a class this package exports. The complement to
+#: `PROSE_REF` above, which is rooted at a *layer* and therefore cannot see
+#: `Config.resolve_model` at all -- the head is a class, not a package.
+#:
+#: Restricted to exported classes on purpose, and that is what makes it sound
+#: rather than noisy. Measured across this repository when it was written: this
+#: form gives a handful of references and found three that were wrong, every one
+#: of them naming something that has never existed --
+#:
+#:   `Config.resolve_model`     it is `cfg.models.resolve`
+#:   `Capabilities.unknown`     it is `Offering.refuse_unknown`, a file away
+#:   `Kingfisher._snapshot`     it is `workspace_fs.agent_snapshot`
+#:
+#: -- while the unrestricted form, matching any capitalised head, cannot tell a
+#: class this package owns from one it is describing in someone else's library.
+PROSE_ATTR = re.compile(r"`([A-Z][A-Za-z0-9]*)\.([a-z_][a-z0-9_]*)`")
+
+#: Prose naming a class attribute *because* it is gone, excused per file. Empty,
+#: and kept for the reason `PROSE_GONE` is keyed by file: the day a docstring
+#: explains which rename removed an attribute, that is the rule working rather
+#: than a defect, and there has to be somewhere to say so.
+PROSE_ATTR_GONE: dict[str, frozenset[str]] = {}
+
+
+def _exported_classes() -> dict[str, type]:
+    """The public names that are classes, resolved through the lazy front door.
+
+    Imported rather than parsed, unlike `_module_file` above, and the trade is
+    the opposite one. That rule avoids `find_spec` because reaching a module can
+    execute a web framework on the way; this one needs the *attribute set* of a
+    class, and the class object is what has one -- parsing would re-implement
+    inheritance to answer the same question.
+
+    Said as the reason it is, and no stronger: mutating `hasattr` to a `vars()`
+    lookup, which stops at the class's own body, leaves this suite green. So
+    nothing in the tree resolves through a base class today and the inheritance
+    argument is about the next reference rather than any current one. The import
+    is already paid for regardless -- the suite imports `Kingfisher` in a dozen
+    places.
+    """
+    import kingfisher
+
+    found = {}
+    for name in kingfisher.__all__:
+        value = getattr(kingfisher, name)
+        if isinstance(value, type):
+            found[name] = value
+    return found
+
+
+def test_prose_names_class_attributes_that_exist():
+    """A docstring pointing at a method nobody has is a wrong map, not a typo.
+
+    Three were wrong when this rule was written, and one of them --
+    `Config.resolve_model` -- sat in `models.py` explaining the signature that
+    module exists to justify. Every one had been wrong since before anybody last
+    read the file, and nothing could have said so: a docstring is not executed,
+    `PROSE_REF` is rooted at a layer and cannot match a class head, and the
+    documentation guard added alongside it reads fenced blocks in `docs/`.
+
+    The same decay as `subagent_store` in `docs/formats.md`, one layer in. The
+    difference is who it costs: that one misled a stranger extending kingfisher,
+    and this one misleads whoever is changing the code.
+    """
+    classes = _exported_classes()
+    wrong: list[str] = []
+    for path in _package_modules():
+        relative = path.relative_to(REPO).as_posix()
+        excused = PROSE_ATTR_GONE.get(relative, frozenset())
+        for head, attr in PROSE_ATTR.findall(path.read_text(encoding="utf-8")):
+            reference = f"{head}.{attr}"
+            if head not in classes or reference in excused:
+                continue
+            if not hasattr(classes[head], attr):
+                wrong.append(f"{relative}: `{reference}`")
+
+    assert not wrong, (
+        "prose names an attribute the class does not have: "
+        + ", ".join(sorted(wrong))
+        + " -- correct it, or add it to PROSE_ATTR_GONE with the rename that "
+        "removed it"
+    )
+
+
+def test_the_class_attribute_rule_is_looking_at_something():
+    """A rule that resolves no classes passes every module it is pointed at.
+
+    `_exported_classes` reads `kingfisher.__all__` through a lazy `__getattr__`,
+    so a table that emptied -- or a front door that stopped resolving -- would
+    leave this rule green and blind. That is not hypothetical here: eleven names
+    left `__all__` in one commit.
+
+    The positives are asserted as well as the count, because "some classes were
+    found" is satisfied by finding the wrong ones.
+    """
+    classes = _exported_classes()
+    assert len(classes) >= 10, f"only {len(classes)} exported classes resolved"
+    for name in ("Config", "Capabilities", "Kingfisher", "Request"):
+        assert name in classes, f"{name} is exported and is a class, but was not collected"
+
+    # And the matcher has to find the shape it is about.
+    assert PROSE_ATTR.findall("see `Config.resolve_model` for this") == [
+        ("Config", "resolve_model")
+    ]
+    assert PROSE_ATTR.findall("`models.yaml` and `infrastructure.harness`") == []
