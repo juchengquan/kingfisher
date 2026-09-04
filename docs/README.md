@@ -34,10 +34,14 @@ wearing the wrong hat.
 
 ## `design/`, when there is something to argue
 
-Empty, and that is a state rather than a gap. A document belongs there while it
-is arguing for something; once it is built its decisions move to `decisions.md`,
-anything it measured about upstream moves to `findings.md`, and the file goes --
-which is what happened to every one of them.
+One document, and it is an argument rather than a description until its four
+slices land: [a store a deployment can
+name](design/2026-09-04-a-store-a-deployment-can-name.md), on why the storage
+ports are swappable and the wiring that reaches them is not.
+
+A document belongs there while it is arguing for something; once it is built its
+decisions move to `decisions.md`, anything it measured about upstream moves to
+`findings.md`, and the file goes -- which is what happened to every one of them.
 
 Two are worth naming, because between them they are the failure this rule exists
 to prevent. *A tool failure is not a crash* sat here saying **designed, not

@@ -82,9 +82,10 @@ def test_design_holds_only_what_is_still_proposed() -> None:
     belong in `decisions.md`, anything it measured about deepagents belongs in
     `findings.md`, and the file belongs in git history. This fails when one stays.
 
-    The folder is empty as of 2026-09-04, so this is a standing guard rather than
-    a live check -- kept because the rule is about what happens when somebody adds
-    the next proposal, and that is exactly when nobody is thinking about it.
+    It stopped being a standing guard on 2026-09-04, when `a store a deployment
+    can name` was added: there is a document here to check again. That is the
+    moment the rule was written for -- nobody is thinking about the folder's
+    emptiness while adding the thing that ends it.
     """
     settled = []
     for path in sorted((DOCS / "design").glob("*.md")):
