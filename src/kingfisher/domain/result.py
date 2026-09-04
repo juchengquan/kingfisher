@@ -62,7 +62,7 @@ class RunResult:
     #: They name a directory on the server's disk, which a remote caller cannot
     #: read and should not be told about -- `backend` refuses host paths coming
     #: the other way for the same reason. They are here because a *local*
-    #: caller is on the host: `main.py` prints `run_dir` to say where your files
+    #: caller is on the host: the driver prints `run_dir` to say where your files
     #: landed, and that is the whole point of it.
     #:
     #: A consequence worth knowing before reaching for `json.dumps`: it raises

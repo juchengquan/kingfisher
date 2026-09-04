@@ -1,7 +1,8 @@
 """Turning an `Inventory` into the block someone reads.
 
-The only place either driver formats a listing. `main.py` prints through this
-too, so `kingfisher list` and `main.py --list` cannot come apart -- which is
+The only place either driver formats a listing. `tests/integration/driver.py`
+prints through this too, so `kingfisher list` and `driver.py --list` cannot
+come apart -- which is
 what makes keeping both doors safe: two entry points, one implementation.
 
 Lines rather than prints, so a caller decides where they go. A library that
