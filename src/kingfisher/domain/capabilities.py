@@ -327,7 +327,7 @@ def _widened(selection: Selection, extra: tuple[str, ...]) -> Selection:
 def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
     """Names the workspace offers that this grant leaves out.
 
-    The mirror of `Capabilities.unknown`, which reports names asked for that do
+    The mirror of `Offering.refuse_unknown`, which reports names asked for that do
     not exist. This reports the ones that exist and were not asked for, and it
     is reported for the same reason: a grant is a whitelist, so it can only ever
     mean *less* than the workspace holds, and a caller cannot see how much less.
@@ -365,7 +365,7 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
 
     A name that excludes nothing is refused. `--without-tools exec` is a typo
     that would otherwise grant everything quietly, which is the failure this
-    area keeps being about -- the mirror of `Capabilities.unknown`, for the
+    area keeps being about -- the mirror of `Offering.refuse_unknown`, for the
     other direction.
 
     The set difference is `withheld`'s, asked the other way round: that one
