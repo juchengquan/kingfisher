@@ -23,7 +23,7 @@ from kingfisher.infrastructure.harness.activation import (
     available_skills,
     defined_subagents,
 )
-from kingfisher.infrastructure.harness.surface import (
+from kingfisher.tools.harness import (
     registered_tools,
     workspace_tool_names,
 )
@@ -172,8 +172,8 @@ def delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tupl
     because the graph has already dropped them by the time it exists -- which is
     exactly why it has to be said from somewhere that still knows.
     """
-    from kingfisher.domain.tool import Offering  # noqa: PLC0415
     from kingfisher.infrastructure.catalogue import Definitions  # noqa: PLC0415
+    from kingfisher.tools.spec import Offering  # noqa: PLC0415
 
     found = (catalogue or Definitions.from_config(cfg)).tools.found
     return Offering.of(found).ambiguous(allowed.tools, found)

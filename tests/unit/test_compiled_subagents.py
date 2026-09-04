@@ -492,8 +492,8 @@ def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
     from langchain_core.tools import tool
 
     from kingfisher.domain.subagent import SubagentSpec
-    from kingfisher.domain.tool import Found, tool_name
     from kingfisher.infrastructure.harness.delegation import compiled
+    from kingfisher.tools.spec import Found, tool_name
 
     @tool
     def probe(x: str) -> str:

@@ -131,7 +131,7 @@ from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
-from kingfisher.domain.tool import claimed_sources
+from kingfisher.tools.spec import claimed_sources
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"

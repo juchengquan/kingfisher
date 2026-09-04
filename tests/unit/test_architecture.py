@@ -292,7 +292,7 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     `capabilities.py` drifted apart for exactly this reason: they existed to be
     read, and no test held them to reading well.
     """
-    assert _module_id(SRC / "domain" / "tool.py") == "domain/tool.py"
+    assert _module_id(SRC / "tools" / "spec.py") == "tools/spec.py"
     assert _module_id(SRC / "infrastructure" / "harness" / "tool.py") == (
         "infrastructure/harness/tool.py"
     )
@@ -367,7 +367,7 @@ def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
     removed, so they keep being asserted gone rather than merely absent.
     """
     assert _names_a_real_module("kingfisher")
-    assert _names_a_real_module("kingfisher.domain.tool")
+    assert _names_a_real_module("kingfisher.tools.spec")
     assert _names_a_real_module("kingfisher.infrastructure.harness")
     assert _names_a_real_module("kingfisher.infrastructure.harness.agent")
 
@@ -645,16 +645,71 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
         domain rule that needs a value takes the value, as `sweep(workspace,
         keep)` always did
       * a library -- the case the other three could not see
+
+    **One exception, and it is measured rather than granted.** A domain module
+    may name an asset kind's `spec` -- `tools.spec`, `subagents.spec` -- because
+    a spec is the *format's* vocabulary and has no adapter behind it. An agent
+    definition writes `csv_profile::csv_profile` in its `tools:` list, so the
+    document reader has to parse a tool reference; that is the format referring
+    to itself, not the domain reaching for a layer.
+
+    What made this an exception rather than a hole is that it costs nothing on
+    either property the direction was protecting. Importing `domain.ports` and
+    `domain.agent` on this rule takes 39ms and loads 101 modules with no part of
+    the agent runtime among them -- the same 39ms `decisions.md` quotes as the
+    good case against 888ms. A `catalogue` or a `harness` would not be free, and
+    those stay refused.
     """
     outside = {
         module
         for module in _imported_modules(path)
-        if module.split(".")[0] not in sys.stdlib_module_names and not _inside_domain(module)
+        if module.split(".")[0] not in sys.stdlib_module_names
+        and not _inside_domain(module)
+        and not _is_asset_spec(module)
     }
     assert not outside, (
         f"{_module_id(path)} imports {sorted(outside)} -- the domain takes the standard "
-        "library and itself; have an adapter do that part and hand it the result"
+        "library, itself, and an asset kind's `spec`; have an adapter do the rest "
+        "and hand it the result"
     )
+
+
+def _is_asset_spec(module: str) -> bool:
+    """Whether a module is an asset kind's format vocabulary.
+
+    `kingfisher.tools.spec`, and nothing else under `tools`. The narrowness is
+    the point: `spec` holds what a definition *says*, while `catalogue` reaches
+    the disk and `harness` reaches the runtime, and only the first is free for
+    the domain to name.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    parts = module.split(".")
+    return (
+        len(parts) == 3
+        and parts[0] == "kingfisher"
+        and parts[1] in DEFINITION_KINDS
+        and parts[2] == "spec"
+    )
+
+
+def test_the_domain_may_name_a_spec_but_not_a_catalogue():
+    """The exception above, asserted at its edges rather than trusted.
+
+    A predicate that answered `True` too widely would let the domain import a
+    catalogue -- which walks the disk -- and nothing in the rule above would
+    notice, because it would simply stop reporting.
+    """
+    assert _is_asset_spec("kingfisher.tools.spec")
+    assert _is_asset_spec("kingfisher.skills.spec")
+    assert not _is_asset_spec("kingfisher.tools.catalogue"), "the disk is not free"
+    assert not _is_asset_spec("kingfisher.tools.harness"), "the runtime is not free"
+    assert not _is_asset_spec("kingfisher.application.service")
+    assert not _is_asset_spec("kingfisher.tools.spec.inner")
+    # The kind check on its own: three parts ending in `spec`, under something
+    # that is not an asset kind. Without this the predicate could drop
+    # `DEFINITION_KINDS` and every assertion above would still hold.
+    assert not _is_asset_spec("kingfisher.application.spec"), "only a kind has a spec"
 
 
 #: Which third-party packages each area may import. Deny by default: a package
@@ -697,6 +752,11 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # what this entry does is keep it *named*, so a third directory reaching the
     # runtime is a line somebody writes rather than a thing that happens.
     "skills": frozenset({"deepagents", "langchain_core", "langgraph"}),
+    # `tools.harness` reads the tool roster off a compiled graph, which is a
+    # langgraph object, and resolves what a request may call against it. The
+    # same trade `skills` made one entry up, and the third directory the swap
+    # boundary now spans.
+    "tools": frozenset({"langchain_core", "langgraph"}),
     # The one consumer still in this distribution. `presentation` was the other
     # and is now `kingfisher-service`, a package of its own with its own rules --
     # so fastapi and uvicorn are no longer anything this table has an opinion
@@ -792,11 +852,14 @@ def test_a_subpackage_is_judged_by_its_own_area():
     """
     catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
     buried = SRC / "infrastructure" / "catalogue" / "subagents.py"
-    for path in (catalogue, buried, SRC / "domain" / "tool.py", SRC / "config.py"):
+    for path in (catalogue, buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
-    assert _area_of(SRC / "domain" / "tool.py") == "domain"
+    assert _area_of(SRC / "domain" / "capabilities.py") == "domain"
+    # A kind's module is its own area, which is what lets `tools/harness.py`
+    # name the runtime without `domain/` inheriting the permission.
+    assert _area_of(SRC / "tools" / "harness.py") == "tools"
     assert _area_of(SRC / "config.py") == ""
 
     # A subpackage with no entry of its own is judged by its parent, which is
@@ -918,7 +981,7 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     "workspace.uploads": frozenset(),
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
-    "inventory": frozenset({"agent", "surface"}),
+    "inventory": frozenset({"agent"}),
     # Reads `ADAPTERS` to refuse an `api` kingfisher cannot build, as the
     # catalogue loads rather than when a turn starts. The same argument as
     # `catalogue` above: the alternative is a second list of the wire formats
@@ -961,7 +1024,9 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # measures against what was actually wired rather than against a list kept
     # somewhere -- so the edge is the point of it, not an accident of where it
     # used to live.
-    "reporting": frozenset({"activation", "surface"}),
+    # `surface` became `tools.harness`, which is not the harness package, so
+    # what is left of this edge is the activation half.
+    "reporting": frozenset({"activation"}),
     # One stream chunk, read the same way by the sync and async loops. The
     # reading is deepagents' shape rather than ours -- which namespace a chunk
     # came from, which mode carries the answer -- so it is an edge wherever it
@@ -2767,7 +2832,7 @@ def test_every_path_rule_starts_from_the_same_two_names():
 def test_no_value_is_written_down_twice():
     """One definition per value, across the library.
 
-    `domain.tool` made this move for `SEPARATOR` and said why -- "one separator
+    `tools.spec` made this move for `SEPARATOR` and said why -- "one separator
     both kinds import beats two that agree by coincidence" -- and named skills
     as the other kind. `harness.skill_registry` kept its copy anyway, along with
     a second copy of `domain.skill.UPLOADED`, and both carried comments claiming

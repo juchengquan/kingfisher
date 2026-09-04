@@ -20,15 +20,15 @@ import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.documents import skill_name
 from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
-from kingfisher.infrastructure.catalogue.tools import LocalToolRepository, tool_name
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from kingfisher.skills import spec as skill
 from kingfisher.skills.catalogue import LocalSkillRepository
+from kingfisher.tools.catalogue import LocalToolRepository, tool_name
+from kingfisher.tools.spec import Offering
 from tests.conftest import FakeToolCallingModel, repository_root
 
 

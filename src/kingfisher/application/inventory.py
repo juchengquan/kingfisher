@@ -20,7 +20,7 @@ lives in infrastructure and cannot sit any higher.
 from __future__ import annotations
 
 import tempfile
-from collections.abc import Callable, Iterable, Mapping
+from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
@@ -33,10 +33,10 @@ from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import refuse_cycles
-from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
-from kingfisher.infrastructure.catalogue.tools import ToolError
 from kingfisher.infrastructure.workspace.fs import ensure_session_layout
+from kingfisher.tools.catalogue import ToolError
+from kingfisher.tools.spec import Found, Offering
 
 #: An empty mapping that cannot be written to, so a default is shared safely.
 _NOTHING: Mapping[str, str] = MappingProxyType({})
@@ -350,6 +350,42 @@ def _reaching(
     return keep
 
 
+def _builtin_tools(
+    cfg: Config, resolved: Definitions, found: Sequence[Found] | None
+) -> tuple[str, ...] | None:
+    """The built-in set, which is only knowable from an assembled graph.
+
+    Its own function because `inventory` reached the statement cap, and the cap
+    was right: this is one self-contained question with two imports of its own,
+    and the caller wants only the answer.
+
+    Rooted at a throwaway directory. An agent needs a session to root its backend
+    at, but what a workspace *offers* is a question about the workspace, and
+    answering it must not leave a session behind for `keep_runs` to reap. Given
+    its layout, because a backend is built against a session that exists rather
+    than one it makes for itself -- `ensure_session_layout` is the only thing
+    that makes a session now.
+    """
+    from kingfisher.infrastructure.harness import agent  # noqa: PLC0415
+    from kingfisher.tools import harness as surface  # noqa: PLC0415
+
+    with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
+        return surface.registered_tools(
+            agent.build_agent(
+                cfg,
+                session_dir=ensure_session_layout(Path(scratch)),
+                catalogue=resolved,
+                workspace_tools=found,
+                # No delegates. What a workspace *offers* is answered from the
+                # catalogue by the caller; this build exists solely to read the
+                # built-in tool set off a compiled graph, and wiring a roster to
+                # do it would make a listing refuse the very things it is meant
+                # to report -- two definitions of a name are printed, not raised.
+                capabilities=Capabilities(subagents=None),
+            )
+        )
+
+
 def inventory(
     cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
 ) -> Inventory:
@@ -367,11 +403,6 @@ def inventory(
     listing is for and is why a listing is not refused the way a turn is: it
     is read-only, and whoever runs it can read the policy file anyway.
     """
-    # The modules rather than the names: two imports where there was one tipped
-    # this function over the statement cap, and naming where each half comes
-    # from reads better than a bare `registered_tools` did anyway.
-    from kingfisher.infrastructure.harness import agent, surface  # noqa: PLC0415
-
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
 
     builtin: tuple[str, ...] = ()
@@ -392,29 +423,7 @@ def inventory(
         # built-in set, which is only knowable from an assembled graph -- and a
         # tool module is Python, so fetching them apart ran every one twice.
         #
-        # Rooted at a throwaway directory. An agent needs a session to root its
-        # backend at, but what a workspace *offers* is a question about the
-        # workspace, and answering it must not leave a session behind for
-        # `keep_runs` to reap.
-        # Given its layout, because a backend is built against a session that
-        # exists rather than one it makes for itself -- `ensure_session_layout`
-        # is the only thing that makes a session now.
-        with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-            introspected = surface.registered_tools(
-                agent.build_agent(
-                    cfg,
-                    session_dir=ensure_session_layout(Path(scratch)),
-                    catalogue=resolved,
-                    workspace_tools=found,
-                    # No delegates. What a workspace *offers* is answered from
-                    # the catalogue a few lines down; this build exists solely to
-                    # read the built-in tool set off a compiled graph, and wiring
-                    # a roster to do it would make a listing refuse the very
-                    # things it is meant to report -- two definitions of a name
-                    # are printed here, not raised.
-                    capabilities=Capabilities(subagents=None),
-                )
-            )
+        introspected = _builtin_tools(cfg, resolved, found)
         if introspected is None:
             # The graph compiled and then could not be read, which means the
             # built-in set is unknown rather than empty. Carried as an error for

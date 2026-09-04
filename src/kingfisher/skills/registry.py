@@ -46,7 +46,7 @@ if TYPE_CHECKING:
 # `SEPARATOR` and `UPLOADED` are imported above rather than defined here.
 # Both were written out again with a comment saying they matched something
 # else -- the separator tools already use, and the string the backend mounts
-# uploads at -- which is a claim a copied literal cannot keep. `domain.tool`
+# uploads at -- which is a claim a copied literal cannot keep. `tools.spec`
 # had already made this exact move for the separator and said why: one
 # separator both kinds import beats two that agree by coincidence. It named
 # skills as the other kind; this is skills. Re-exported by the import, so

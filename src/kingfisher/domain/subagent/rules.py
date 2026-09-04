@@ -17,7 +17,7 @@ from collections.abc import Mapping, Sequence
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
-from kingfisher.domain.tool import split_reference
+from kingfisher.tools.spec import split_reference
 
 
 def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:

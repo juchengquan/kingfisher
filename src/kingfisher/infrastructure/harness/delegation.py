@@ -28,13 +28,13 @@ from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     ALL,
     Selection,
+    ceiling,
     narrowed,
     refuse_ungranted_endpoint,
     refuse_unoffered,
 )
 from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
 from kingfisher.domain.subagent.rules import resolved_model
-from kingfisher.domain.tool import Found, Offering, ceiling, select, split_reference
 from kingfisher.infrastructure.harness.backend import (
     HostPathGuard,
     WorkspaceToolErrors,
@@ -43,6 +43,7 @@ from kingfisher.infrastructure.harness.backend import (
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
+from kingfisher.tools.spec import Found, Offering, select, split_reference
 
 #: Delegation, wherever it is dispatched from.
 #:

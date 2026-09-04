@@ -65,13 +65,13 @@ from kingfisher.domain.ports import (
     SubagentRepository,
     ToolRepository,
 )
-from kingfisher.domain.tool import Offering
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
-from kingfisher.infrastructure.catalogue.tools import LocalToolRepository
 from kingfisher.skills import registry as skill_registry
 from kingfisher.skills.catalogue import LocalSkillRepository
 from kingfisher.skills.registry import SkillRegistry
+from kingfisher.tools.catalogue import LocalToolRepository
+from kingfisher.tools.spec import Offering
 
 
 @dataclass(frozen=True)

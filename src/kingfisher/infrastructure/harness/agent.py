@@ -39,7 +39,6 @@ from kingfisher.domain.capabilities import (
 )
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.subagent import RunOn
-from kingfisher.domain.tool import Found
 from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,
@@ -73,11 +72,12 @@ from kingfisher.infrastructure.harness.narrowing import (
     NarrowedSkills,
     ToolAllowlist,
 )
-from kingfisher.infrastructure.harness.surface import (
+from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.tools.harness import (
     _private_tools,
     _resolve_tools,
 )
-from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.tools.spec import Found
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence
