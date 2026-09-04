@@ -117,9 +117,13 @@ def _render_call(name: str, args: Mapping[str, Any]) -> str:
 #: A tuple rather than prose, because this is the closest thing to a wire
 #: contract the package has and as prose it was wrong in both directions. It
 #: named `swept` and `sweep_failed`, which have not fired since retention moved
-#: off the request path, and it was missing five: the four warnings a turn can
-#: open with, and `cut_short`, which is how a caller learns its answer is
+#: off the request path, and it was missing the warnings a turn can open with
+#: along with `cut_short`, which is how a caller learns its answer is
 #: incomplete. An API author would have published that list verbatim.
+#:
+#: Written without counting them, because the count is what went wrong twice:
+#: the prose this replaced named the wrong events, and this replacement said
+#: "the four warnings" until a fifth was added below it.
 #:
 #: A consumer switching on `kind` should ignore one it does not recognise
 #: rather than fail: this tuple grows.
