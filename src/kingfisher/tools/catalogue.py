@@ -92,12 +92,12 @@ class LocalToolRepository:
     same reason `LocalSkillRepository` is: a catalogue may be deployed outside
     any workspace and shared by all of them.
 
-    A class rather than four functions, and here that is not tidying. These
-    modules are *executed* to be read, and `load_tools`, `names` and `sources`
-    each funnelled back into a fresh walk -- so a caller wanting two of them
-    imported every tool file twice, paying twice the import cost and running any
-    module-level side effect twice over. One instance reads once and all four
-    answers come from that.
+    A class rather than a set of free functions, and here that is not tidying.
+    These modules are *executed* to be read, and each function funnelled back
+    into a fresh walk -- so a caller wanting two answers imported every tool file
+    twice, paying twice the import cost and running any module-level side effect
+    twice over. One instance reads once, and `found`, `tools` and `names` all
+    come from that one read.
     """
 
     root: Path
