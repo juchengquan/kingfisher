@@ -22,10 +22,10 @@ from kingfisher.domain.ports import (
     SubagentRepository,
     ToolRepository,
 )
-from kingfisher.domain.subagent import SubagentError
-from kingfisher.infrastructure.catalogue import subagents as store
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.skills.catalogue import LocalSkillRepository
+from kingfisher.subagents import catalogue as store
+from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.subagents.spec import SubagentError
 from kingfisher.tools.catalogue import LocalToolRepository
 from kingfisher.tools.spec import Offering
 

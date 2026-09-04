@@ -4,12 +4,12 @@ from dataclasses import replace
 from pathlib import Path
 
 from kingfisher.infrastructure.catalogue.documents import read_subagent
-from kingfisher.infrastructure.harness.delegation import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
     render_system_prompt,
     system_prompt,
 )
+from kingfisher.subagents.harness import as_subagent
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():

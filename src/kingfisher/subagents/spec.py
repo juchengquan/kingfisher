@@ -10,7 +10,7 @@ a model that resolves to the thing a delegate exists not to be.
 The values stay here, which is the same shape `infrastructure.catalogue` took.
 They are what the rest of the codebase means by "a subagent" -- `SubagentSpec`
 nine times over, `SubagentError` seven, `RunOn` five -- so
-`kingfisher.domain.subagent` goes on answering to them and those imports never
+`kingfisher.subagents.spec` goes on answering to them and those imports never
 learned this happened. Nothing here imports `reading` or `rules`; a value knows
 nothing about where it came from or what is refused about it, which is why the
 split has no cycle in it and needs no import placed out of order to avoid one.
@@ -151,7 +151,7 @@ class SubagentSpec:
     #: rather than YAML. Called with a model and the tools it was granted, and
     #: it returns a graph deepagents runs as given.
     #:
-    #: `Any` for the same reason `domain.tool.Found.tool` is, and it is worth
+    #: `Any` for the same reason `tools.spec.Found.tool` is, and it is worth
     #: being as honest about it here. What this holds is, in practice, a
     #: callable returning a LangGraph graph. The domain never calls one, never
     #: imports the type and never depends on its shape -- it carries the thing

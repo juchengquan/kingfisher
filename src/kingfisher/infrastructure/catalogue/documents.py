@@ -34,10 +34,11 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import agent, subagent
+from kingfisher.domain import agent
 from kingfisher.domain.access import AUDIENCED
-from kingfisher.domain.subagent import reading
 from kingfisher.skills import spec as skill
+from kingfisher.subagents import reading
+from kingfisher.subagents import spec as subagent
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -244,7 +245,7 @@ def _require_literal_prompt(text: str, source: Path, error: type[ValueError]) ->
     refuses to load. Checking it would mean reading the document a second time
     by hand, to catch something that is not silent.
 
-    Here rather than in `domain.subagent.reading` because a scalar's style is a fact
+    Here rather than in `subagents.reading` because a scalar's style is a fact
     about the document, not about what a subagent means. The domain is handed
     fields; by then every style looks alike.
 

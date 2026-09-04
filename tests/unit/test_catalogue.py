@@ -21,7 +21,6 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import SubagentRepository
 from kingfisher.domain.request import Request
-from kingfisher.domain.subagent import SubagentError, SubagentSpec
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness.activation import (
     available_skills,
@@ -29,6 +28,7 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend
+from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.harness import workspace_tool_names
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
 
@@ -344,7 +344,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
 
     from kingfisher.infrastructure import catalogue as catalogue_module
     from kingfisher.infrastructure.catalogue import layered as layered_module
-    from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+    from kingfisher.subagents.catalogue import LocalSubagentRepository
     from tests.unit.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):

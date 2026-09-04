@@ -38,7 +38,7 @@ if TYPE_CHECKING:
 # `SEPARATOR` is imported above rather than defined here, where it started:
 # skills spell a source the same way, and one separator both kinds import
 # beats two that agree by coincidence. Re-exported by the import, so
-# `domain.tool.SEPARATOR` still resolves for readers who look here first.
+# `tools.spec.SEPARATOR` still resolves for readers who look here first.
 
 
 def reference(source: str, name: str) -> str:

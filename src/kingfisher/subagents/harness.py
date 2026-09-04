@@ -1,7 +1,7 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
-`domain.subagent` owns what a definition is and `domain.subagent.reading` what
-it means; `infrastructure.catalogue.subagents` finds the files and
+`subagents.spec` owns what a definition is and `subagents.reading` what
+it means; `subagents.catalogue` finds the files and
 `infrastructure.catalogue.documents` reads one. This resolves what a delegate
 actually runs with.
 Each field a definition may narrow -- skills, tools, middleware, endpoint -- has
@@ -33,8 +33,6 @@ from kingfisher.domain.capabilities import (
     refuse_ungranted_endpoint,
     refuse_unoffered,
 )
-from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
-from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.infrastructure.harness.backend import (
     HostPathGuard,
     WorkspaceToolErrors,
@@ -43,6 +41,8 @@ from kingfisher.infrastructure.harness.backend import (
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
+from kingfisher.subagents.rules import resolved_model
+from kingfisher.subagents.spec import RunOn, SubagentError, SubagentSpec
 from kingfisher.tools.spec import Found, Offering, select, split_reference
 
 #: Delegation, wherever it is dispatched from.

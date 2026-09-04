@@ -32,16 +32,16 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain import layout
-from kingfisher.domain.subagent.reading import DIRECTORY as SUBAGENT_DIRECTORY
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
 from kingfisher.skills.catalogue import LocalSkillRepository
+from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.subagents.reading import DIRECTORY as SUBAGENT_DIRECTORY
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from kingfisher.domain.ports import SkillRepository, SubagentRepository
-    from kingfisher.domain.subagent import SubagentSpec
+    from kingfisher.subagents.spec import SubagentSpec
 
 
 def uploaded_skills(session_dir: Path) -> Path:

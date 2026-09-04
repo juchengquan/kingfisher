@@ -17,11 +17,11 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, ceiling, narrowed
-from kingfisher.domain.subagent import SubagentError
 from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.delegation import as_subagent, subagent_skills
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.subagents.harness import as_subagent, subagent_skills
+from kingfisher.subagents.spec import SubagentError
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 HELPER = """name: helper

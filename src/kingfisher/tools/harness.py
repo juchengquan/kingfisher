@@ -29,7 +29,7 @@ from kingfisher.domain.capabilities import (
     narrowed,
 )
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.delegation import TASK_TOOL
+from kingfisher.subagents.harness import TASK_TOOL
 from kingfisher.tools.spec import Found, Offering
 
 if TYPE_CHECKING:

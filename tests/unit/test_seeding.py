@@ -525,7 +525,7 @@ def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
     It had gone stale three times over -- `skills`, `middleware` and `provider`
     all shipped without a row.
     """
-    from kingfisher.domain.subagent.reading import KNOWN
+    from kingfisher.subagents.reading import KNOWN
 
     readme = (formats_doc).read_text(encoding="utf-8")
     table = readme.split("## Subagents")[1].split("\n---")[0]

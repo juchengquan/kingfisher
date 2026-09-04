@@ -7,11 +7,11 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import ALL
-from kingfisher.domain.subagent import RunOn, SubagentError, SubagentSpec
-from kingfisher.domain.subagent.reading import KNOWN, REFUSED
-from kingfisher.domain.subagent.rules import resolved_model
 from kingfisher.infrastructure.catalogue.documents import read_subagent, skill_name
-from kingfisher.infrastructure.catalogue.subagents import LocalSubagentRepository
+from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.subagents.reading import KNOWN, REFUSED
+from kingfisher.subagents.rules import resolved_model
+from kingfisher.subagents.spec import RunOn, SubagentError, SubagentSpec
 
 MINIMAL = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -234,7 +234,7 @@ def test_every_known_field_still_parses(tmp_path):
 #: instead of one named after them. `model:` is read into `wanted`, which is the
 #: derived field the resolution works on, so it has no field of its own.
 #:
-#: Here rather than in `domain.subagent.reading` because only this test needs it, and a
+#: Here rather than in `subagents.reading` because only this test needs it, and a
 #: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
 #: exists to refuse.
 FOLDED_INTO = {"model": "wanted"}
@@ -381,7 +381,7 @@ def test_the_description_may_still_be_folded(tmp_path):
 
 # -- where a delegate runs ------------------------------------------------
 #
-# The rule used to sit in `infrastructure.harness.delegation` and take a whole
+# The rule used to sit in `subagents.harness` and take a whole
 # `Config` to read two values out of. It takes the two values now, so it is reachable
 # without a deployment -- which is the same "a domain rule that needs a value
 # takes the value" that `test_domain_imports_only_the_standard_library_and_itself`

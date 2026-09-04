@@ -642,3 +642,34 @@ class Reader:
             )
             raise self.error(msg)
         return dict(value)
+
+
+#: The `model:` line, which is one field and two formats.
+#:
+#: Here rather than in `subagents.reading`, which is where it was written and is
+#: no longer the only reader: an agent definition names a model too, so
+#: `domain.agent` imported the subagent format to read its own document. That is
+#: a field reader, this module is the field readers, and the shared line is what
+#: said so -- a helper two formats need belongs to neither of them.
+
+def wanted_model(document: Mapping[str, object], read: Reader) -> str | None:
+    """The model a definition names, or `None` for whatever summoned it.
+
+    One name. `model:` took a list while `alias:` existed, because an alias this
+    deployment had not bound was passed over and the next candidate tried -- so
+    a list was a definition naming the deployments it could still be useful in.
+    Nothing passes over a *model*: one this deployment cannot run refuses on the
+    spot, and always did. With `alias` gone every entry after the first was
+    unreachable, so a list here would be a shape that cannot mean anything.
+
+    Read through `Reader.one_name`, which refuses that list where the file can
+    still be named. It said `text` for a while, and `text` is the
+    `str()` that produced the shape rather than the check that stops it: a
+    definition writing `model: [gpt-5, claude-4]` was read as a model called
+    `"['gpt-5', 'claude-4']"`.
+
+    Takes the `Reader` both formats already build, rather than a bare error
+    type, because that is the pair -- the file's name and the format's
+    exception -- and it is bound once at each call site.
+    """
+    return read.one_name(document.get("model"), key="model")

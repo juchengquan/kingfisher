@@ -55,7 +55,7 @@ _EXPORTS = {
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
     "SkillError": "kingfisher.skills.spec",
-    "SubagentError": "kingfisher.domain.subagent",
+    "SubagentError": "kingfisher.subagents.spec",
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalFileStore": "kingfisher.infrastructure.workspace.files",
@@ -81,7 +81,7 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
-    "RunOn": "kingfisher.domain.subagent",
+    "RunOn": "kingfisher.subagents.spec",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
@@ -225,8 +225,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
-    from kingfisher.domain.subagent import RunOn as RunOn
-    from kingfisher.domain.subagent import SubagentError as SubagentError
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
     from kingfisher.infrastructure.harness.activation import (
         unrunnable_delegates as unrunnable_delegates,
@@ -264,6 +262,8 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
     from kingfisher.skills.catalogue import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.skills.spec import SkillError as SkillError
+    from kingfisher.subagents.spec import RunOn as RunOn
+    from kingfisher.subagents.spec import SubagentError as SubagentError
     from kingfisher.tools.spec import offered as offered
     from kingfisher.tools.spec import split_reference as split_reference
 
