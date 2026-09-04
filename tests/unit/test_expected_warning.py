@@ -16,7 +16,7 @@ from __future__ import annotations
 
 import logging
 
-from kingfisher.infrastructure.harness.agent import quieten_expected_snapshot_drop
+from kingfisher.infrastructure.harness.interpreter import quieten_expected_snapshot_drop
 
 LOGGER = "langchain_quickjs.middleware"
 
