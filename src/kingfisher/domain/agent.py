@@ -82,9 +82,9 @@ the same model to think harder names a second entry.
 
 **A field this format does not define is refused, not ignored**, for the reason
 the subagent format gives: a key we ignore is a key the author believes took
-effect. The four that another format defines and this one declines are named
-individually, because the generic message reads as "not supported yet" and sends
-someone looking for a workaround.
+effect. The ones another format defines and this one declines are named
+individually in `REFUSED` below, because the generic message reads as "not
+supported yet" and sends someone looking for a workaround.
 
 Parsing lives in the domain because this is kingfisher's format. Nothing here
 knows deepagents exists and nothing here reads a disk -- finding the files is
