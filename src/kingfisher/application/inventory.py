@@ -361,7 +361,7 @@ def _builtin_tools(
 
     Rooted at a throwaway directory. An agent needs a session to root its backend
     at, but what a workspace *offers* is a question about the workspace, and
-    answering it must not leave a session behind for `keep_runs` to reap. Given
+    answering it must not leave a session behind for `reap` to collect. Given
     its layout, because a backend is built against a session that exists rather
     than one it makes for itself -- `ensure_session_layout` is the only thing
     that makes a session now.
