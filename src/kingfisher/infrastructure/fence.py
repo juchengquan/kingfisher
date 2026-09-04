@@ -92,10 +92,19 @@ def policy_for(
 ) -> Any:
     """The `Sandbox` one session's commands run under, generated from it.
 
-    Writable is the session and nothing else. Readable is what a shell needs
-    plus the shared catalogue, because skills are workspace-level and their
-    scripts are run by the shell against `$KINGFISHER_SKILLS` -- a fence that
-    hid them would break the feature it was protecting.
+    Writable is the session plus whatever the caller adds, which today is the
+    scratch directory `TMPDIR` points at: a shell that cannot write its own
+    temporary directory fails on the first command that wants one. This said
+    "the session and nothing else" from the day it was written, while the body
+    below spread `writable` in and the only caller passed one -- a fence
+    claiming to grant less than it grants, which is the worse of the two
+    directions for the claim to be wrong in. `argv_for` describes the same
+    arrangement correctly and is the wording to keep the two in step with.
+
+    Readable is what a shell needs plus the shared catalogue, because skills are
+    workspace-level and their scripts are run by the shell against
+    `$KINGFISHER_SKILLS` -- a fence that hid them would break the feature it was
+    protecting.
 
     Filesystem fields and nothing else, because that is all `confine` accepts.
     Measured: `cwd`, `workdir`, `clean_env` and `env` each make it raise

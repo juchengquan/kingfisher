@@ -288,3 +288,56 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     runner = _fence_for(cfg, session, fenced, None, {})
     assert isinstance(runner, LandlockRunner)
     assert str(session) in runner.policy.fs_writable
+
+
+def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
+    """The two mechanisms must fence the same shell the same way.
+
+    `argv_for` and `policy_for` take the same arguments and mean the same thing
+    by them, and `_fence_for` used to build those arguments separately in each
+    branch. Three identical lines twice is a path added to one and forgotten in
+    the other, and nothing would have said so: a run exercises whichever
+    mechanism its own kernel offers, so the branch that drifted is the branch
+    this machine never takes.
+
+    Recorded rather than compared through the built objects, which are a bwrap
+    argv and a `Sandbox` and not the same shape. What has to agree is the input.
+
+    Stubbing `policy_for` is also what lets this run off Linux -- `sandlock`
+    ships Linux-only wheels, and the real one imports it.
+    """
+    from kingfisher.infrastructure import bubblewrap, fence
+    from kingfisher.infrastructure.confinement import _unwrapped
+    from kingfisher.infrastructure.harness.backend import _fence_for
+
+    seen: dict[str, tuple[Path, list[Path], list[Path]]] = {}
+
+    def recorder(mechanism, result):
+        def fake(session_dir, *, readable=(), writable=()):
+            seen[mechanism] = (session_dir, list(readable), list(writable))
+            return result
+
+        return fake
+
+    monkeypatch.setattr(bubblewrap, "argv_for", recorder("bubblewrap", ["bwrap"]))
+    monkeypatch.setattr(fence, "policy_for", recorder("Landlock", object()))
+
+    session = tmp_path / "sessions" / "s1"
+    session.mkdir(parents=True)
+    skills = tmp_path / "skills"
+    skills.mkdir()
+
+    for mechanism in ("bubblewrap", "Landlock"):
+        _fence_for(
+            cfg, session, Confinement(wrap=_unwrapped, mechanism=mechanism), skills, {}
+        )
+
+    assert set(seen) == {"bubblewrap", "Landlock"}, f"a branch was not reached: {sorted(seen)}"
+    assert seen["bubblewrap"] == seen["Landlock"], (
+        "the two fences were handed different paths, so a shell is confined "
+        f"differently depending on the host: {seen}"
+    )
+    # And that the paths are the ones meant, so agreeing on nothing would fail.
+    _, readable, writable = seen["Landlock"]
+    assert readable == [skills], "the shared catalogue is what a skill's scripts are read from"
+    assert writable == [cfg.scratch_dir], "$TMPDIR has to be writable or the first command fails"
