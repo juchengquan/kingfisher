@@ -13,6 +13,7 @@ file count it refuses to print.
 | [`guides/formats.md`](guides/formats.md) | What an agent, subagent, tool or skill file may say. | Writing or changing a definition. |
 | [`guides/tools.md`](guides/tools.md) | How to write a workspace tool: the shapes, what it returns, what the loader refuses. | Writing or changing a tool. |
 | [`guides/configuration.md`](guides/configuration.md) | Every setting a deployment reads from the environment, and what it defaults to. | Standing one up, or wondering what a variable does. |
+| [`guides/ports.md`](guides/ports.md) | How to write an adapter for one of the twelve ports, and how to check it. | Putting sessions, files or commands somewhere kingfisher did not choose. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
 
@@ -26,9 +27,17 @@ How to build and run something on kingfisher, which is a different question
 from why the code is shaped this way. The split inside the folder is what the
 reader is holding: `formats.md` is a definition -- YAML, fields, what each one
 may say; `tools.md` is Python, which has rules of its own because it is code
-this process imports and calls rather than data it reads; and
-`configuration.md` is the environment around both, which belongs to the
-deployment rather than to any file in the workspace.
+this process imports and calls rather than data it reads; `configuration.md` is
+the environment around both, which belongs to the deployment rather than to any
+file in the workspace; and `ports.md` is for a deployment that has to put
+sessions, files or commands somewhere this package did not choose.
+
+Two audiences, and the second one arrived late. The first two pages are for
+somebody authoring content *for* the agent; the last two are for somebody
+hosting kingfisher. This section said "build something that runs *on*
+kingfisher" while both of the latter were being written, and each of them
+widened it independently -- which is the sentence doing its job late rather than
+twice.
 
 Another guide belongs here when there is another thing to build. Anything
 arguing for a shape goes to `decisions.md` and anything measured about upstream
@@ -37,10 +46,10 @@ wearing the wrong hat.
 
 ## `design/`, when there is something to argue
 
-One document, and it is an argument rather than a description until its four
-slices land: [a store a deployment can
-name](design/2026-09-04-a-store-a-deployment-can-name.md), on why the storage
-ports are swappable and the wiring that reaches them is not.
+Empty again, and that is a state rather than a gap. *A store a deployment can
+name* was there from 2026-09-04 to 2026-09-05 and left the way the rule says:
+built in four slices, its decisions now under *Sessions and storage* in
+`decisions.md`.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to

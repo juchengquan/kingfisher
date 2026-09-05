@@ -82,10 +82,10 @@ def test_design_holds_only_what_is_still_proposed() -> None:
     belong in `decisions.md`, anything it measured about deepagents belongs in
     `findings.md`, and the file belongs in git history. This fails when one stays.
 
-    It stopped being a standing guard on 2026-09-04, when `a store a deployment
-    can name` was added: there is a document here to check again. That is the
-    moment the rule was written for -- nobody is thinking about the folder's
-    emptiness while adding the thing that ends it.
+    A standing guard again as of 2026-09-05, the folder having emptied when *a
+    store a deployment can name* was built. It was a live check for one day, and
+    that is the shape to expect: this fires while somebody is mid-way through a
+    proposal, which is exactly when nobody is thinking about the folder.
     """
     settled = []
     for path in sorted((DOCS / "design").glob("*.md")):
@@ -227,6 +227,7 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 CHECKED_SNIPPETS: dict[str, bool] = {
     "README.md": True,
     "docs/guides/formats.md": True,
+    "docs/guides/ports.md": True,
     "docs/guides/tools.md": True,
 }
 
@@ -327,7 +328,12 @@ def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
     about collection.
     """
     collected = {name for name, _, _ in _snippets()}
-    assert collected == {"README.md", "docs/guides/formats.md", "docs/guides/tools.md"}
+    assert collected == {
+        "README.md",
+        "docs/guides/formats.md",
+        "docs/guides/ports.md",
+        "docs/guides/tools.md",
+    }
     assert len(_snippets()) >= 11, "the fences stopped being found"
 
     # The classifier has to actually read files, not trust the table: a document

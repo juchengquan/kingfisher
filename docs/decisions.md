@@ -1070,6 +1070,100 @@ session creation, writes come back as a manifest, and processes are stateless
 while the service is stateful. `sweep()` came off the request path.
 *(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)*
 
+**A deployment names its store in a setting; it does not pass an object.**
+`Config.session_store` could only be a directory and its comment said why -- *"a
+deployment reaching for that passes an object rather than a path"* -- and both
+halves were wrong. An environment variable can name a factory, which is how
+`models.yaml` has always reached a chat class; and passing an object only reaches
+the one construction site a deployment controls, which is neither of the two
+kingfisher ships. `presentation/cli/__main__.py` builds its own `Kingfisher` and
+there is nowhere to point it. A setting resolved inside `Kingfisher.__init__` is
+inherited by every entry point at once.
+
+**A zero-argument factory, not a class and not an instance.** `module:name`, the
+same string `Adapter.chat_class` uses. Kingfisher does not know whether a store
+wants a bucket, a DSN or a pool, so it asks for none of them and the factory
+reads its own configuration; inventing a URL grammar for stores it knows nothing
+about is the version that ages worst, and a ready-made instance moves
+construction to import time, where "cannot reach the bucket" arrives as an
+`ImportError` from a module nobody was reading.
+
+**What is checked is the name, not the building.** A spec that will not parse, a
+module that will not import, an attribute that is not there, a result of the
+wrong shape: `ConfigError`, naming the setting. A factory raising its *own*
+exception passes through untouched -- that is the deployment's code failing at
+the deployment's job, its type may be one their handling knows, and `store_named`
+is already on the traceback saying which setting reached it.
+
+**Naming a store twice is refused at startup, not resolved by precedence**, and
+on the record rather than in the reader, so a config assembled in Python obeys
+the same rule. Preferring one silently leaves a deployment's sessions in the
+directory it stopped meaning to use, and nothing says so until somebody goes
+looking.
+
+**Environment variables, never a workspace file.** Measured rather than assumed:
+`confinement.writable_roots` returns the whole workspace plus scratch, carving
+out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` are
+writable by the agent's shell. The rule is already stated at
+`confinement.resolve` -- *"host-side configuration, and a file the agent could
+edit is not a boundary"*. This is why a store as a workspace *asset* is closed
+rather than deferred: it is the middleware decision again, one object further in.
+The agent cannot reach environment variables at all -- its shell gets an
+allowlist of five plus the skills directory.
+
+**A port a deployment can name gets a runnable contract.** `SESSION_STORE_CONTRACT`
+and `FILE_STORE_CONTRACT` in `kingfisher.testing` are the checks
+`tests/unit/` runs, exported so a deployment runs them against its own adapter. A
+setting inviting somebody to write an implementation without a way to check it is
+worse than no setting, and the parts easiest to get wrong are the ones that
+matter: extracting the session kit found `knows()` -- the method the port calls a
+security question -- with no test anywhere, and a store answering `True` for
+every id passes 2,255 other tests while letting a caller resume a session they
+invented.
+
+**The kit imports no test framework**, which is what lets it live in the library
+rather than a second wheel: `pip install kingfisher` gains a module and no test
+dependency. Each check raises `AssertionError` with the whole story, because
+pytest's assertion rewriting does not reach an imported library and `python -O`
+strips a bare `assert` -- a conformance kit passing while checking nothing is
+worse than no kit.
+
+**The two kits take different arguments, because the ports differ.**
+`SessionStore` writes, so its checks are handed a factory and fill their own.
+`FileStore` is one method and that method reads: kingfisher never writes to a
+file store, so a check cannot plant the file it then fetches, and the deployment
+hands over a `Planted` describing what it planted.
+
+**`FileStore`'s setting is the service's, `SessionStore`'s is the library's.** An
+asymmetry, kept deliberately: a `FileStore` resolves *refs*, the vocabulary of a
+caller with no host paths, and `kingfisher run` takes `--input` as a path on this
+machine and neither builds one nor could use one. The setting belongs where the
+port is used. Flagged while proposed as the decision most likely to be wrong, and
+it survived being built.
+
+**The backend stays kingfisher's, and a store as a workspace asset is refused.**
+The backend is not "where files live": it wraps every shell command in
+`sandbox-exec` or Landlock, it is what refuses a host path, and its route table
+is what makes `DATA_IS_READ_ONLY` legal at all -- deepagents refuses
+`permissions=` outright on a backend that executes unless every rule is
+route-scoped. Routing `/data` to a store would also break the promise
+`prompts/system.md` makes the model in a table -- *"nothing in the workspace is
+out of the shell's reach"* -- leaving the agent able to read its inputs and unable
+to run anything over them. Object storage reaches a session as a mount
+(`SessionRoot`) or by being copied in and out, and both work today.
+
+**Considered and rejected with it:** a backend factory on `Kingfisher` (deferred,
+and if ever opened then routes only, never the default slot); kingfisher shipping
+an S3 store behind a closed table like `ADAPTERS`, which would put this package in
+the business of owning every backing store anyone asks for; and a builder
+parameter on `create_app`, designed and dropped once the resolution point moved
+inside `Kingfisher.__init__` and left it nothing to do.
+*(2026-09-04 to 2026-09-05, `a-store-a-deployment-can-name.md`, built in four
+slices. Its one correction is worth keeping: an argument about `create_app`
+needing a checkpointer held open for the process was true when written and false
+a day later, `48cd457` having made the default `InMemorySaver`. The conclusion
+did not rest on it.)*
+
 ## Still proposed, not built
 
 Nothing. `docs/design/` is empty, which is a state rather than a gap: a document
