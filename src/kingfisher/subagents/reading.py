@@ -132,13 +132,28 @@ from types import MappingProxyType
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import ALL
+from kingfisher.infrastructure import documents
 from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.spec import claimed_sources
 
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
 
-
+#: The spelling people reach for, and the one that used to vanish. `.yml` is
+#: valid YAML everywhere else, so a file named that way is a definition someone
+#: wrote and kingfisher silently did not read.
+#:
+#: Named rather than "any extension we do not recognise", which was the first
+#: draft. A folder here may now be a Python package, and a package is entitled
+#: to hold whatever it needs beside its `__init__.py` -- a JSON fixture, a CSV,
+#: a prompt in a text file. Refusing every unfamiliar suffix would break that
+#: for the sake of one confusion, so the one confusion is named.
+NEAR_MISS = ".yml"
+#:
+#: Here rather than in `catalogue`, which is where it was: it is a fact
+#: about what the format's files are called, like `SUFFIX` directly above,
+#: and the agent repository needs both. Reaching a catalogue for the second
+#: one closed an import loop through this package.
 #: Every field this format defines. A key outside it is refused rather than
 #: ignored, because ignoring one is indistinguishable from honouring it: a
 #: definition writing `tolls:` got a delegate holding *every* tool its parent
@@ -343,14 +358,31 @@ def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
         raise SubagentError(msg)
 
 
-def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
-    """One definition, from its decoded fields.
+def read(text: str, source: Path) -> SubagentSpec:
+    """One definition, from its document. Raises `SubagentError` on anything malformed.
 
-    Raises `SubagentError` on anything the format forbids. Whether the document
-    decoded at all was settled before this — reading YAML needs a library, so
-    `infrastructure.catalogue.documents` does that half.
+    The whole document, not a header and a body: a subagent is YAML through and
+    through, so there is no envelope to open. A skill still has one -- that
+    format is deepagents', and it is markdown with a header.
+
+    Decoding and parsing were two functions in two packages, and the split had
+    one reason: reading YAML needs a library and this file was in `domain/`,
+    which may import neither. It is not in `domain/` any more. The wrapper that
+    did the first half was this function's only caller and is folded in here,
+    which also removes the round trip a subagent catalogue used to make through
+    `infrastructure` to reach its own parser.
+
+    `require_literal_prompt` stays where it is and is called rather than moved:
+    a scalar's style is a fact about the document, and the agent format needs
+    the same check.
     """
-    read = fields.Reader(source=source.name, error=SubagentError)
+    document = documents.decode(text)
+    if isinstance(document, str):
+        msg = f"{source.name}: cannot read definition ({document})"
+        raise SubagentError(msg)
+    documents.require_literal_prompt(text, source, SubagentError)
+
+    reader = fields.Reader(source=source.name, error=SubagentError)
     # Before the required-field check, so `nmae:` is reported as the typo it is
     # rather than as a missing `name` the author plainly tried to write.
     _refuse_unknown(document, source)
@@ -374,18 +406,18 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
     # only `what` may reach the rest of kingfisher -- a grant, an allowlist and
     # the dictionary the agent dispatches through all key on the plain name.
     # Where it claims to live travels beside it, for whoever checks the claim.
-    written_tools, tool_audiences = read.audienced(
+    written_tools, tool_audiences = reader.audienced(
         document.get("tools"), absent=ALL, key="tools"
     )
     # Same two-in-one read as the agent format, and the same field: a
     # definition writing settings has to mean the same thing in either file.
-    written_middleware, middleware_settings = read.selection_with_settings(
+    written_middleware, middleware_settings = reader.selection_with_settings(
         document.get("middleware"), absent=None, key="middleware"
     )
-    written_skills, skill_audiences = read.audienced(
+    written_skills, skill_audiences = reader.audienced(
         document.get("skills"), absent=None, key="skills"
     )
-    written_delegates, delegate_audiences = read.audienced(
+    written_delegates, delegate_audiences = reader.audienced(
         document.get("subagents"),
         absent=None,
         key="subagents",
@@ -401,7 +433,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         )
         if entries
     }
-    groups = read.groups(document.get("groups"))
+    groups = reader.groups(document.get("groups"))
 
     return SubagentSpec(
         name=fields.text(document["name"]),
@@ -412,7 +444,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         # Absent means inherit for tools and none for skills -- the
         # asymmetry the format has always had, now said in the values
         # rather than in a reader that special-cases one of them.
-        builtin_tools=read.selection(
+        builtin_tools=reader.selection(
             document.get("builtin_tools"), absent=ALL, key="builtin_tools"
         ),
         tools=written_tools,
@@ -422,7 +454,7 @@ def parse(document: Mapping[str, object], source: Path) -> SubagentSpec:
         middleware_settings=middleware_settings,
         subagents=written_delegates,
         wanted=wanted,
-        metadata=read.mapping(document.get("metadata"), key="metadata"),
+        metadata=reader.mapping(document.get("metadata"), key="metadata"),
         groups=groups,
         audiences=audiences,
     )

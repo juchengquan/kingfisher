@@ -82,7 +82,9 @@ def agent_spec(body: str):
 
 
 def subagent_spec(body: str):
-    return subagent_format.parse(yaml.safe_load(body), Path("sweeper.yaml"))
+    # The document rather than decoded fields: reading one is a single call now,
+    # and the YAML step this used to do by hand is inside it.
+    return subagent_format.read(body, Path("sweeper.yaml"))
 
 
 def written(middleware: str) -> str:

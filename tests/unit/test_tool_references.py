@@ -25,9 +25,9 @@ from langchain_core.tools import tool
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
 from kingfisher.infrastructure.workspace import seeding
+from kingfisher.subagents import reading
 from kingfisher.subagents.harness import as_subagent
 from kingfisher.tools.catalogue import LocalToolRepository
 from kingfisher.tools.harness import _ToolSurface
@@ -62,7 +62,7 @@ def _offering(sources):
 
 
 def _spec(name="d", tools="csv_columns"):
-    return read_subagent(
+    return reading.read(
         SUBAGENT.format(name=name, tools=tools, body="x" * 220), Path(f"{name}.yaml")
     )
 
@@ -138,7 +138,7 @@ def test_the_derived_field_cannot_be_written_by_hand():
     """It is read out of `tools`. A definition writing it is refused like any
     other name this format does not define."""
     with pytest.raises(Exception, match="unknown field 'tool_sources'"):
-        read_subagent(
+        reading.read(
             "name: a\ndescription: d\ntool_sources: {}\nsystem_prompt: |\n  b\n",
             Path("a.yaml"),
         )

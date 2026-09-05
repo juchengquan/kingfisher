@@ -19,8 +19,8 @@ from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
-from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.activation import indistinct_delegates
+from kingfisher.subagents import reading
 from kingfisher.subagents.harness import model_for
 from kingfisher.subagents.spec import RunOn
 from tests.conftest import an_agent, subagents_dir
@@ -292,7 +292,7 @@ system_prompt: |
 
 
 def _spec_from(text):
-    return read_subagent(text, Path("elsewhere.yaml"))
+    return reading.read(text, Path("elsewhere.yaml"))
 
 
 

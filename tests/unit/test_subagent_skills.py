@@ -13,9 +13,9 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.subagents import reading
 from tests.conftest import FakeToolCallingModel, capture_build
 
 
@@ -143,10 +143,10 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch)
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
     """A block list is the skill spec's own form, and both reach the domain
     already parsed now that a definition is read as YAML."""
-    inline = read_subagent(
+    inline = reading.read(
         "name: r\ndescription: d\nskills: [a, b]\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md"
     )
-    block = read_subagent(
+    block = reading.read(
         "name: r\ndescription: d\nskills:\n  - a\n  - b\n"
         "system_prompt: |\n  Body.\n", tmp_path / "r.md"
     )

@@ -1,8 +1,11 @@
 """Agent definitions held in a directory on this host.
 
 `domain.agent` owns the format -- what a definition means and what makes one
-malformed -- and `documents` turns a document into one. Finding the files is a
-third job, and it is this one.
+malformed. Turning a document into one and finding the documents are both here,
+which is the arrangement the other kinds have inside their own packages: a
+kind's reader sits with its catalogue. An agent has no package of its own,
+because it is selected by name rather than registered, so this file is where
+that rule lands for it.
 
 The subagent repository's shape, minus a half it does not need. There is no
 Python-declared form here: a compiled subagent exists because a workspace may
@@ -21,15 +24,38 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
+from kingfisher.domain import agent
 from kingfisher.domain.agent import AgentError, AgentSpec
-from kingfisher.infrastructure.catalogue.documents import read_agent
-from kingfisher.infrastructure.catalogue.importing import skipped
-from kingfisher.subagents.catalogue import NEAR_MISS
+from kingfisher.infrastructure import documents
+from kingfisher.infrastructure.importing import skipped
 
 # `SUFFIX` comes from the format that already names it rather than being
 # restated here: both are YAML documents kingfisher reads, and a second copy of
 # the extension is a second thing to keep in step.
-from kingfisher.subagents.reading import SUFFIX
+from kingfisher.subagents.reading import NEAR_MISS, SUFFIX
+
+
+def read_agent(text: str, source: Path) -> AgentSpec:
+    """One agent definition. Raises `AgentError` on anything malformed.
+
+    The same steps a subagent takes, and deliberately not a shared function
+    taking a parser: what differs is the exception, and that is the one thing a
+    caller reading a traceback needs to be right. `AgentError` and
+    `SubagentError` are not interchangeable to someone finding out which of two
+    folders holds the broken file.
+
+    It sat beside `subagents.reading.read` in `infrastructure` while both were
+    one file, which made the pair visible at the cost of that file knowing two
+    kinds. The pair is now a sentence in each docstring instead, and the two
+    checks it shares -- `decode` and `require_literal_prompt` -- are still one
+    implementation, called rather than copied.
+    """
+    document = documents.decode(text)
+    if isinstance(document, str):
+        msg = f"{source.name}: cannot read definition ({document})"
+        raise AgentError(msg)
+    documents.require_literal_prompt(text, source, AgentError)
+    return agent.parse(document, source)
 
 
 def _definitions_in(directory: Path) -> list[Path]:

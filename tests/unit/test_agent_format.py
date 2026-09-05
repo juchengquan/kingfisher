@@ -19,8 +19,8 @@ import pytest
 
 from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL
-from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
-from kingfisher.infrastructure.catalogue.documents import read_agent, read_subagent
+from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository, read_agent
+from kingfisher.subagents import reading
 from kingfisher.subagents.spec import SubagentError
 
 WHOLE = """name: surveyor
@@ -145,7 +145,7 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
 
     delegate = 'name: d\ndescription: A delegate.\nsubagents: ["*"]\nsystem_prompt: |\n  Go.\n'
     with pytest.raises(SubagentError, match="always a loop"):
-        read_subagent(delegate, Path("d.yaml"))
+        reading.read(delegate, Path("d.yaml"))
 
 
 

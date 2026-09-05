@@ -16,27 +16,16 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.infrastructure.catalogue.documents import read_subagent
-from kingfisher.infrastructure.catalogue.importing import (
+from kingfisher.infrastructure.importing import (
     PACKAGE_MARKER,
     load,
     modules_in,
     skipped,
 )
-from kingfisher.subagents.reading import EXPORT, SUFFIX, declared
+from kingfisher.subagents import reading
+from kingfisher.subagents.reading import EXPORT, NEAR_MISS, SUFFIX, declared
 from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.spec import reference
-
-#: The spelling people reach for, and the one that used to vanish. `.yml` is
-#: valid YAML everywhere else, so a file named that way is a definition someone
-#: wrote and kingfisher silently did not read.
-#:
-#: Named rather than "any extension we do not recognise", which was the first
-#: draft. A folder here may now be a Python package, and a package is entitled
-#: to hold whatever it needs beside its `__init__.py` -- a JSON fixture, a CSV,
-#: a prompt in a text file. Refusing every unfamiliar suffix would break that
-#: for the sake of one confusion, so the one confusion is named.
-NEAR_MISS = ".yml"
 
 #: What a bundle's own assets are kept in, and therefore the two directory
 #: names that are not organisation here. A folder under `subagents/` is
@@ -249,7 +238,7 @@ class LocalSubagentRepository:
             # Relative to the catalogue: `reviewer.yaml` stops identifying a
             # file once two folders may each hold one.
             where = str(path.relative_to(directory))
-            read.append((read_subagent(path.read_text(encoding="utf-8"), path), where))
+            read.append((reading.read(path.read_text(encoding="utf-8"), path), where))
         # The Python half, keyed and counted with the documents rather than
         # beside them: the two kinds share one namespace, so two definitions
         # claiming `reviewer` are told apart the same way whichever formats they

@@ -8,14 +8,15 @@ That last part is not our rule. deepagents validates `name` against the parent
 directory and rejects the skill if they differ, so a definition arriving from a
 catalogue cannot be dropped into a directory of our choosing — it has to be
 unpacked under the name it declares.
+
+Vocabulary only: where the header ends, what the file is called, which exception
+a mistake raises. Reading a document is `reading`, one file over, because that
+needs `yaml` and a domain module is allowed to name this one.
 """
 
 from __future__ import annotations
 
 import re
-from collections.abc import Mapping
-
-from kingfisher.domain import fields
 
 FILENAME = "SKILL.md"
 
@@ -32,25 +33,6 @@ FILENAME = "SKILL.md"
 
 class SkillError(ValueError):
     """Raised when a skill definition cannot be read."""
-
-
-def name_of(document: Mapping[str, object], source: str = FILENAME) -> str:
-    """The skill's declared name, which is also its directory name.
-
-    Takes decoded fields rather than the document. Reading YAML needs a
-    library, so `infrastructure.catalogue.documents` does that half and hands
-    the result here — see `domain.fields` for where the seam falls and why.
-    """
-    name = fields.text(document.get("name"))
-    if not name:
-        msg = f"{source}: frontmatter is missing required field 'name'"
-        raise SkillError(msg)
-    if "/" in name or name in {".", ".."}:
-        # It becomes a directory name, so a path separator here would write
-        # outside the directory the caller believes it is filling.
-        msg = f"{source}: {name!r} is not usable as a directory name"
-        raise SkillError(msg)
-    return name
 
 
 #: A skill is markdown with a `---` header. Kingfisher does not own that shape

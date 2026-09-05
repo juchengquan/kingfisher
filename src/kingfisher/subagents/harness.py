@@ -1,9 +1,8 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
-`subagents.spec` owns what a definition is and `subagents.reading` what
-it means; `subagents.catalogue` finds the files and
-`infrastructure.catalogue.documents` reads one. This resolves what a delegate
-actually runs with.
+`subagents.spec` owns what a definition is and `subagents.reading` what it
+means and how one is read; `subagents.catalogue` finds the files. This resolves
+what a delegate actually runs with.
 Each field a definition may narrow -- skills, tools, middleware, endpoint -- has
 its own rule here, and every one of them shares a shape: a name nothing defines
 is a mistake and raises, while a name the *request* did not activate is a caller

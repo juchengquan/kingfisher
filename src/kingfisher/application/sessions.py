@@ -40,7 +40,7 @@ from kingfisher.domain.session import (
     known,
     sessions_root,
 )
-from kingfisher.infrastructure.catalogue.documents import read_agent
+from kingfisher.infrastructure.catalogue.agents import read_agent
 from kingfisher.infrastructure.session_store import restore_into
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout, session_bytes
 from kingfisher.infrastructure.workspace.snapshots import agent_snapshot, agent_started_with

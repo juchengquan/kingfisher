@@ -120,13 +120,16 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
     each came from -- parsed the whole catalogue twice.
     """
     parsed = []
-    real = store.read_subagent
+    # Patched on the reading module rather than on a name the catalogue imported:
+    # the catalogue calls `reading.read` through the module now, so a name bound
+    # into its own namespace is no longer the thing that runs.
+    real = store.reading.read
 
     def counting(text, path):
         parsed.append(path)
         return real(text, path)
 
-    monkeypatch.setattr(store, "read_subagent", counting)
+    monkeypatch.setattr(store.reading, "read", counting)
 
     subagents = LocalSubagentRepository(catalogue / "subagents")
     assert set(subagents.specs) == {"alpha"}
