@@ -47,7 +47,9 @@ claims is a type boundary: a consumer depends on `read()`'s signature, not on
 deepagents, so a harness swap still stops here.
 
 Nothing is imported at this level, and that is load-bearing rather than tidy.
-`_EXPORTS` names six things in this package and promises the light ones cost
-nothing to reach; a single import here would execute on the way to any of them
-and pull three provider SDKs in behind it.
+`_EXPORTS` reaches into this package and promises the light names cost nothing
+to touch; a single import here would execute on the way to any of them and pull
+three provider SDKs in behind it. It reaches one name today and reached more
+before the table was narrowed -- the argument holds at either, so it is not
+counted here.
 """
