@@ -1526,6 +1526,10 @@ LIGHT_EXPORTS = frozenset({
     # imports `domain.references` and the standard library, and no test
     # framework either -- see its docstring for why that one is deliberate.
     "SESSION_STORE_CONTRACT",
+    # The other port's contract, and the record a check is handed. Light for the
+    # same reason and by the same route -- `testing` imports the two reference
+    # errors and the standard library.
+    "FILE_STORE_CONTRACT", "Planted",
     # Turning `KINGFISHER_SERVICE_FILE_STORE_FACTORY` into a store. Light, and
     # it has to be: the service resolves it in its lifespan, and the whole point
     # of a named factory is that kingfisher has never imported what it names.
