@@ -1,10 +1,8 @@
-"""A `SessionStore` over a directory, and the one a deployment names instead.
+"""A `SessionStore` over a directory.
 
-Two ways to arrive at the port, kept together because they are alternatives to
-each other: `LocalSessionStore` is what a deployment gets for naming a
-directory, and `store_named` is what it gets for naming a factory. Which one a
-deployment reaches is `Config`'s question and `Kingfisher.__init__` asks it;
-both answers are built here, because building one is an adapter's job.
+The one a deployment gets for naming a directory. Naming a *factory* instead is
+`wiring.store_named`, which lived here until a second port wanted the same
+thing -- see that module for why one copy beats two.
 
 The implementation a deployment gets when it wires nothing, and the one that
 makes the port's claim checkable: *a local directory is a perfectly good
@@ -28,19 +26,14 @@ from __future__ import annotations
 
 import shutil
 from collections.abc import Mapping, Sequence
-from importlib import import_module
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-from kingfisher.config import ConfigError
-
-# At runtime, not under `TYPE_CHECKING`, because `store_named` is an
-# `isinstance` against it rather than only an annotation. That is what
-# `runtime_checkable` on the port is for, and importing the protocol costs
-# nothing this module was not already paying -- `domain/ports.py` imports the
-# standard library and three of kingfisher's own domain modules.
-from kingfisher.domain.ports import SessionStore
 from kingfisher.domain.references import within
 from kingfisher.domain.transcript import Message, as_json, from_json
+
+if TYPE_CHECKING:
+    from kingfisher.domain.ports import SessionStore
 
 
 class LocalSessionStore:
@@ -98,75 +91,6 @@ class LocalSessionStore:
     def forget(self, session_id: str) -> None:
         """Drop everything kept for this session. Idempotent."""
         shutil.rmtree(self._held(session_id), ignore_errors=True)
-
-
-def store_named(spec: str) -> SessionStore:
-    """The store a deployment named in `KINGFISHER_SESSION_STORE_FACTORY`.
-
-    `module:name` for something callable with no arguments. The same string
-    `Adapter.chat_class` uses, resolved the same way, and for a related reason:
-    naming the thing rather than holding it is what lets a deployment supply an
-    implementation kingfisher has never imported.
-
-    Zero arguments is the whole convention. Kingfisher does not know whether a
-    store wants a bucket, a region, a DSN or a pool, so it asks for none of them
-    and the factory reads its own configuration. A class with a no-argument
-    `__init__` satisfies this as readily as a function.
-
-    **What is checked here is the name, not the building.** A spec that will not
-    parse, a module that will not import, an attribute that is not there, a
-    result that is not a `SessionStore` -- those are wiring mistakes, and a
-    `ConfigError` naming the variable is what an operator can act on. A factory
-    that raises *its own* exception is left alone: that is the deployment's code
-    failing at the deployment's job, its type may be something their own
-    handling knows, and this function is already on the traceback saying which
-    setting reached it. Wrapping it would replace a `NoCredentialsError` with a
-    sentence about configuration that is not what went wrong.
-
-    Called once, when the service is constructed, which is the same moment the
-    catalogue is read and for the same reason: a store that cannot be built is a
-    wiring mistake, and this is the last point at which saying so is cheap.
-    """
-    module_name, separator, attribute = spec.partition(":")
-    if not separator or not module_name or not attribute:
-        msg = (
-            f"KINGFISHER_SESSION_STORE_FACTORY is {spec!r}, which does not name "
-            "anything. Write it as 'module:name' -- the import path of a module, a "
-            "colon, and something in it callable with no arguments"
-        )
-        raise ConfigError(msg)
-    try:
-        module = import_module(module_name)
-    except ImportError as exc:
-        msg = (
-            f"KINGFISHER_SESSION_STORE_FACTORY names module {module_name!r}, which "
-            f"cannot be imported ({exc}). It has to be importable by this process, so "
-            "an installed package or something already on the path"
-        )
-        raise ConfigError(msg) from exc
-    try:
-        factory = getattr(module, attribute)
-    except AttributeError as exc:
-        msg = (
-            f"KINGFISHER_SESSION_STORE_FACTORY names {attribute!r} in {module_name!r}, "
-            "which does not define it"
-        )
-        raise ConfigError(msg) from exc
-
-    store = factory()
-    # Shallow -- `runtime_checkable` compares method names and not signatures --
-    # and shallow is the mistake worth catching. A factory returning the class
-    # instead of an instance, or a config object, or `None` from a function that
-    # forgot to return, is told so here rather than at the first turn that tried
-    # to save anything.
-    if not isinstance(store, SessionStore):
-        msg = (
-            f"KINGFISHER_SESSION_STORE_FACTORY names {spec!r}, which returned "
-            f"{type(store).__name__} -- not a SessionStore. It has to answer to "
-            "fetch, save, knows and forget"
-        )
-        raise ConfigError(msg)
-    return store
 
 
 def restore_into(store: SessionStore, session_id: str, directory: Path) -> tuple[str, ...]:

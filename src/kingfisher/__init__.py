@@ -59,6 +59,14 @@ _EXPORTS = {
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalFileStore": "kingfisher.infrastructure.workspace.files",
+    # The sixth name a consumer has forced public. The service owns
+    # `KINGFISHER_SERVICE_FILE_STORE_FACTORY` -- a `FileStore` resolves refs,
+    # which is the vocabulary of a caller with no host paths, and the library's
+    # own command has no use for one -- so the service is what turns that
+    # setting into a store, and it takes `kingfisher` and nothing deeper. A
+    # wrapper rather than the generic `wiring.store_named`, which would need
+    # `FileStore` exported too for the caller to pass as `port=`.
+    "file_store_named": "kingfisher.infrastructure.workspace.files",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     # The port's contract, for a deployment checking its own adapter against it.
     # Public because it is the one thing in `testing` anybody outside this
@@ -175,6 +183,7 @@ __all__ = [
     "definitions_source",
     "destination_hint",
     "ensure_layout",
+    "file_store_named",
     "inventory",
     "kinds_at",
     "landlock_abi",
@@ -241,6 +250,9 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.workspace.backing import memory_backing as memory_backing
     from kingfisher.infrastructure.workspace.files import LocalFileStore as LocalFileStore
+    from kingfisher.infrastructure.workspace.files import (
+        file_store_named as file_store_named,
+    )
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded

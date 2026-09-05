@@ -18,6 +18,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
+from kingfisher import ConfigError
+
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping
 
@@ -102,9 +104,25 @@ class ServiceConfig:
     #: Unset by default, and a request naming files by id is then a 500 saying
     #: no store is wired -- which is the honest answer, because it is the
     #: deployment that has not decided where files come from. Set it and the
-    #: default app serves the shipped local store; wire something else by
-    #: building the `Kingfisher` yourself and handing it to `create_app`.
+    #: default app serves the shipped local store.
+    #:
+    #: This said "wire something else by building the `Kingfisher` yourself and
+    #: handing it to `create_app`", which is the advice `file_store_factory`
+    #: below replaces. It was never wrong so much as narrow: a deployment that
+    #: writes its own entry point can do anything, and one that would rather
+    #: not had no way to name a store that is not a directory.
     file_store_dir: Path | None = None
+    #: The same port, named rather than built: `module:name` for something
+    #: callable with no arguments that returns a `FileStore`.
+    #:
+    #: Here rather than on `Config`, unlike `KINGFISHER_SESSION_STORE_FACTORY`,
+    #: and the asymmetry is the point rather than an oversight. A `FileStore`
+    #: resolves *refs* -- the vocabulary of a caller who has no host paths --
+    #: and `kingfisher run` takes `--input` and `--data` as paths on this
+    #: machine, so it neither builds one nor could use one. The setting belongs
+    #: where the port is used, and both halves of this port's configuration
+    #: staying together is worth more than matching the shape of the other one.
+    file_store_factory: str | None = None
     #: Whether the audit log carries the task and the answer, or only what
     #: happened. Off, because what may be kept and for how long is a question
     #: about a deployment's obligations rather than about kingfisher -- so it is
@@ -135,5 +153,30 @@ class ServiceConfig:
             file_store_dir=(
                 Path(where) if (where := read("FILE_STORE_DIR", None)) else None
             ),
+            file_store_factory=(named.strip() or None)
+            if (named := read("FILE_STORE_FACTORY", None))
+            else None,
             audit_content=str(read("AUDIT_CONTENT", "")).lower() == "true",
         )
+
+    def __post_init__(self) -> None:
+        """Refuse a deployment that named its file store twice.
+
+        Not precedence, and the same argument `Config.__post_init__` makes for
+        sessions: two answers to one question is what this codebase refuses
+        everywhere else, and a deployment with both set has a mistake worth
+        being told about rather than a preference worth honouring. Silently
+        preferring one would serve a caller's refs out of the store it stopped
+        meaning to use, and nothing would say so.
+
+        On the record rather than in `from_env`, so a `ServiceConfig` a test or
+        an embedding deployment assembles in Python is held to the same rule.
+        """
+        if self.file_store_dir is not None and self.file_store_factory is not None:
+            msg = (
+                f"the file store is configured twice: {PREFIX}FILE_STORE_DIR names "
+                f"{str(self.file_store_dir)!r} and {PREFIX}FILE_STORE_FACTORY names "
+                f"{self.file_store_factory!r}. Set one -- the factory for a store that "
+                "is not a directory on this host, the directory for one that is"
+            )
+            raise ConfigError(msg)

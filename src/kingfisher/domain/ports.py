@@ -307,6 +307,7 @@ class SessionStore(Protocol):
         ...
 
 
+@runtime_checkable
 class FileStore(Protocol):
     """Where a request's files are fetched from, by id.
 
@@ -323,6 +324,10 @@ class FileStore(Protocol):
 
     Ids stop here, as they do for definitions: what the agent sees is a filename
     in `/data` or the turn's `input/`, never the id it was fetched by.
+
+    `runtime_checkable` for the same reason `SessionStore` is: a deployment can
+    name this one from configuration, and a name resolved at startup produces an
+    object nothing has type-checked.
     """
 
     def fetch(self, file_id: str) -> Mapping[str, bytes]:

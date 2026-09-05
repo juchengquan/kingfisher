@@ -15,13 +15,19 @@ assembling only goes one way.
 from __future__ import annotations
 
 from contextlib import asynccontextmanager
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from fastapi import FastAPI, Request, status
 
-from kingfisher import Config, Kingfisher, LocalFileStore, config_from_env
+from kingfisher import (
+    Config,
+    Kingfisher,
+    LocalFileStore,
+    config_from_env,
+    file_store_named,
+)
 from kingfisher_service import access, errors, sessions
-from kingfisher_service.config import ServiceConfig
+from kingfisher_service.config import PREFIX, ServiceConfig
 from kingfisher_service.identity import GroupsFrom
 from kingfisher_service.turns import turn_router
 
@@ -66,6 +72,26 @@ def _refuse_mismatch(kf: Kingfisher, groups_from: GroupsFrom | None) -> None:
     raise RuntimeError(msg)
 
 
+def _file_store(settings: ServiceConfig) -> Any:
+    """Where `input_refs` and `data_refs` are fetched from, or nowhere.
+
+    Two ways to say it and `ServiceConfig.__post_init__` has already refused
+    both at once, so the order here settles nothing -- it reads as precedence
+    and never acts as any.
+
+    `None` is a real answer and the default: a request naming files by id then
+    fails saying no store is wired, which is the honest reply, because it is the
+    deployment that has not decided where files come from.
+    """
+    if settings.file_store_factory is not None:
+        return file_store_named(
+            settings.file_store_factory, setting=f"{PREFIX}FILE_STORE_FACTORY"
+        )
+    if settings.file_store_dir is not None:
+        return LocalFileStore(settings.file_store_dir)
+    return None
+
+
 def create_app(
     kingfisher: Kingfisher | None = None,
     config: ServiceConfig | None = None,
@@ -108,8 +134,7 @@ def create_app(
             yield
             return
         cfg: Config = config_from_env()
-        files = LocalFileStore(settings.file_store_dir) if settings.file_store_dir else None
-        built = Kingfisher(cfg, files=files)
+        built = Kingfisher(cfg, files=_file_store(settings))
         # The same check, at the only other moment it can be made. Given an
         # instance it runs at construction; building one from the environment,
         # there is nothing to check until here -- and here is still before the
