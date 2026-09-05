@@ -18,7 +18,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.agent import AgentError
-from kingfisher.domain.capabilities import ALL
+from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository, read_agent
 from kingfisher.subagents import reading
 from kingfisher.subagents.spec import SubagentError
@@ -456,3 +456,70 @@ def test_long_entries_that_restrict_nothing_mean_what_the_list_means():
 
     assert mapped.declares(frozenset({"A"})).tools == listed.declares(frozenset({"A"})).tools
     assert mapped.declares(frozenset({"B"})).tools == listed.declares(frozenset({"B"})).tools
+
+
+# -- the starter printed when a workspace has no agent at all ----------------
+
+
+def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
+    """The whole risk of printing a file, and the reason `groups.yaml.example`
+    was deleted.
+
+    That example shipped one vocabulary while a workspace needs whichever its
+    own definitions ask for, so following the pointer led away from the answer.
+    A starter that did not parse -- or parsed and was refused for a field it
+    left out -- would be the same fault by another route, and worse: nothing
+    would notice, because a string in an error message is not executed.
+
+    So the message is parsed rather than trusted. The YAML is lifted straight
+    out of the text the refusal prints, which is what makes this a test of the
+    message and not of a copy of it.
+    """
+    import textwrap
+
+    import yaml
+
+    from kingfisher.domain.agent import parse
+    from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT
+
+    block = STARTER_AGENT.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]
+    document = yaml.safe_load(textwrap.dedent(block))
+
+    spec = parse(document, Path("agents/assistant.yaml"))
+
+    assert spec.name == "assistant"
+    assert spec.system_prompt.strip()
+
+
+def test_a_workspace_with_no_agents_is_told_how_to_write_one(cfg):
+    """`--from DIR` needs a DIR, and an installed kingfisher has none -- the
+    hint is correct and terminal. The file itself is what that reader needs
+    next, which is the treatment `models.yaml`'s own error already gives."""
+    from kingfisher import Kingfisher
+
+    kf = Kingfisher(cfg)
+
+    with pytest.raises(CapabilityError) as refused:
+        kf.agent_named("assistant")
+
+    said = str(refused.value)
+    assert "offers none" in said
+    assert "name: assistant" in said, "the starter is not in the refusal"
+    assert "system_prompt" in said
+
+
+def test_a_workspace_that_has_agents_is_not_lectured(cfg):
+    """The starter is for an empty workspace. Printing it beside a real listing
+    would bury the names the reader actually wanted."""
+    from kingfisher import Kingfisher
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "only")
+    kf = Kingfisher(cfg)
+
+    with pytest.raises(CapabilityError) as refused:
+        kf.agent_named("missing")
+
+    said = str(refused.value)
+    assert "only" in said
+    assert "system_prompt" not in said
