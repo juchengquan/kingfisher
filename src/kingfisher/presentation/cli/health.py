@@ -279,7 +279,7 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
 
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
-        detail += ", and KINGFISHER_SKILLS is off so none will be offered"
+        detail += ", and KINGFISHER_SKILLS_ENABLED is off so none will be offered"
     # `misfiled` is not hidden -- the agent has it. It is a warning of its own
     # because the failure is a caller typing the directory name and being told
     # there is no such skill.

@@ -698,7 +698,7 @@ def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeyp
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")  # or the endpoint is dropped
-    monkeypatch.setenv("KINGFISHER_SKILLS", "1")
+    monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "1")
 
     assert main(["list"]) == 0, "a misfiled skill loads, so this is not a failure"
 

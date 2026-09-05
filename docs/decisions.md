@@ -912,6 +912,39 @@ removable as the three that went. *(2026-09-04, same document.)*
 
 ## Where a deployment reads from
 
+**The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read
+for a deprecation.** `KINGFISHER_SKILLS` answered two questions at once: whether
+a deployment wired skills, and -- exported into the agent's shell by `shell_env`
+-- *where* the catalogue is, which is how a skill's own scripts reach their
+neighbours. A deployment writing the path, which is what the name means
+everywhere the agent can see it, set a flag to a value no parser recognises. The
+flag reads `1`, `true`, `yes`, `on` and treats everything else as false, so
+skills went off with no error and nothing logged. Measured rather than reasoned
+about: `'/workspace/skills' -> skills enabled: False`.
+
+All four were renamed, not only the one that collided. Four flags that read
+identically should not need a reader to remember which one carries a suffix, and
+`_ENABLED` beside `KINGFISHER_SKILLS_DIR` says plainly that "whether" and
+"where" are different questions.
+
+Both names are read, the new one wins, and the old one warns once -- the
+arrangement `kingfisher_service` already made when its prefix changed, for the
+reason it gives: renaming an environment variable is the one rename that fails
+in silence, where a moved import stops the program and says which.
+`.env.example` lists them under an arrow rather than as assignments, so the file
+does not re-advertise the spelling being replaced, and
+`test_the_file_shows_exactly_the_knobs_that_exist` subtracts `RENAMED` for that
+reason rather than being loosened.
+
+**Not solved by inferring the flag from the catalogue**, which was the obvious
+alternative and is worse in four ways: the skills section lives in the system
+prompt, which is the cached prefix, so a prompt derived from directory contents
+changes when a file appears; `KINGFISHER_SKILLS_DIR` exists so several
+deployments can share one reviewed catalogue, and inference would opt every one
+of them in; the failure mode inverts from "I set it and it is off" to "I set
+nothing and it turned on", which leaves nothing to grep; and a capability would
+be derived from data rather than from configuration. *(2026-09-05.)*
+
 **One record, `Origins`, and every surface prints it.** Kingfisher reads from
 eleven places and nothing could say what they were: `kingfisher list` named four,
 `doctor` named one, and the library named none. `tools` was in no answer at all,
