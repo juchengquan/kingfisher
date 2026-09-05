@@ -24,6 +24,7 @@ from kingfisher import (
 )
 from kingfisher.domain.references import within
 from kingfisher.infrastructure.workspace.files import MissingStoreError, fetch_refs
+from kingfisher.testing import FILE_STORE_CONTRACT, Planted
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 
@@ -85,15 +86,32 @@ def test_the_rule_never_asks_the_filesystem(tmp_path):
 # -- the shipped adapter ---------------------------------------------------
 
 
-def test_the_local_store_returns_what_it_was_asked_for(store):
-    assert LocalFileStore(store).fetch("sales.csv") == {"sales.csv": b"a,b\n1,2\n"}
+@pytest.mark.parametrize("check", FILE_STORE_CONTRACT, ids=lambda c: c.__name__)
+def test_the_local_store_keeps_the_port_contract(check, store):
+    """The kit, run against the store it was extracted from -- which is the only
+    thing that keeps the kit honest. A contract nothing satisfies is a contract
+    nobody has read.
+
+    `Planted` rather than a factory, because `FileStore` has no verb for
+    writing: kingfisher never puts anything into a file store, it resolves what
+    a caller already put there. So the fixture plants and the kit is told what
+    was planted.
+    """
+    check(
+        Planted(
+            store=LocalFileStore(store),
+            ref="sales.csv",
+            contents={"sales.csv": b"a,b\n1,2\n"},
+        )
+    )
 
 
-def test_the_local_store_refuses_a_name_that_climbs_out(store, tmp_path):
-    (tmp_path / "secret").write_bytes(b"not yours")
-
-    with pytest.raises(UnsafeReferenceError):
-        LocalFileStore(store).fetch("../secret")
+def test_the_file_store_contract_is_not_quietly_empty():
+    """A hand-maintained tuple can be emptied by an edit that looks like
+    tidying, and every parametrised test above would then pass by not
+    existing."""
+    assert len(FILE_STORE_CONTRACT) >= 4
+    assert all(callable(check) for check in FILE_STORE_CONTRACT)
 
 
 def test_the_local_store_refuses_a_symlink_pointing_out_of_it(store, tmp_path):

@@ -75,6 +75,12 @@ _EXPORTS = {
     # package publishes belongs in `__all__` and reaching for that table instead
     # is how something gets published without saying so.
     "SESSION_STORE_CONTRACT": "kingfisher.testing",
+    # The same, for the other port a deployment can now name. `Planted` comes
+    # with it and is not optional: `FileStore` has no verb for writing, so a
+    # check cannot put the file it then reads there, and the deployment has to
+    # hand over what it planted.
+    "FILE_STORE_CONTRACT": "kingfisher.testing",
+    "Planted": "kingfisher.testing",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "Config": "kingfisher.config",
@@ -145,6 +151,7 @@ __all__ = [
     "ALL",
     "AUDIENCED",
     "DEFINITION_KINDS",
+    "FILE_STORE_CONTRACT",
     "SEED_HINT",
     "SESSION_STORE_CONTRACT",
     "SKILL_LAYOUT",
@@ -163,6 +170,7 @@ __all__ = [
     "LocalSessionStore",
     "Origin",
     "Origins",
+    "Planted",
     "QuotaExceededError",
     "Request",
     "RunEvent",
@@ -269,7 +277,9 @@ if TYPE_CHECKING:
     from kingfisher.skills.spec import SkillError as SkillError
     from kingfisher.subagents.spec import RunOn as RunOn
     from kingfisher.subagents.spec import SubagentError as SubagentError
+    from kingfisher.testing import FILE_STORE_CONTRACT as FILE_STORE_CONTRACT
     from kingfisher.testing import SESSION_STORE_CONTRACT as SESSION_STORE_CONTRACT
+    from kingfisher.testing import Planted as Planted
     from kingfisher.tools.spec import offered as offered
     from kingfisher.tools.spec import split_reference as split_reference
 
