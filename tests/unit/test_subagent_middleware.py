@@ -12,9 +12,9 @@ from langchain_core.messages import AIMessage
 
 from kingfisher import Kingfisher
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
-from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.subagents import reading
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, capture_build
 
 
@@ -173,11 +173,11 @@ def test_including_cannot_be_asked_to_widen_middleware():
 
 
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
-    inline = read_subagent(
+    inline = reading.read(
         "name: r\ndescription: d\nmiddleware: [a, b]\n"
         "system_prompt: |\n  Body.\n", tmp_path / "r.md"
     )
-    block = read_subagent(
+    block = reading.read(
         "name: r\ndescription: d\nmiddleware:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n",
         tmp_path / "r.md",
     )
@@ -186,7 +186,7 @@ def test_the_field_parses_in_both_yaml_forms(tmp_path):
 
 
 def test_omitting_it_means_none(tmp_path):
-    spec = read_subagent("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md")
+    spec = reading.read("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md")
 
     assert spec.middleware is None
 

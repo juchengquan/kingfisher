@@ -21,8 +21,8 @@ import pytest
 from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
-from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.subagents import reading
 from kingfisher.subagents.rules import refuse_cycles
 from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
@@ -127,7 +127,7 @@ def _tools_of(graph) -> set[str]:
 def test_a_definition_may_name_delegates(tmp_path):
     """It was refused, with a reason that turned out to be wrong about what the
     format could express."""
-    spec = read_subagent(REVIEWER, tmp_path / "reviewer.yaml")
+    spec = reading.read(REVIEWER, tmp_path / "reviewer.yaml")
 
     assert spec.subagents == ("second-opinion",)
 
@@ -135,7 +135,7 @@ def test_a_definition_may_name_delegates(tmp_path):
 def test_naming_none_is_the_default(tmp_path):
     """Like `skills` and unlike `tools`: a delegate that needed the whole
     catalogue would not have been worth defining."""
-    spec = read_subagent(HELPER, tmp_path / "second-opinion.yaml")
+    spec = reading.read(HELPER, tmp_path / "second-opinion.yaml")
 
     assert spec.subagents is None
 
@@ -181,9 +181,9 @@ def test_a_definition_reached_twice_is_not_a_cycle():
     path being walked. Testing `seen` before the path is what made an earlier
     version of this pass every cycle."""
     specs = {
-        "reviewer": read_subagent(REVIEWER, Path("reviewer.yaml")),
-        "second-opinion": read_subagent(NESTING_HELPER, Path("second-opinion.yaml")),
-        "checker": read_subagent(CHECKER, Path("checker.yaml")),
+        "reviewer": reading.read(REVIEWER, Path("reviewer.yaml")),
+        "second-opinion": reading.read(NESTING_HELPER, Path("second-opinion.yaml")),
+        "checker": reading.read(CHECKER, Path("checker.yaml")),
     }
 
     refuse_cycles(specs)  # no raise
@@ -194,7 +194,7 @@ def test_a_definition_naming_itself_is_a_cycle():
     body = HELPER.replace("system_prompt:", "subagents: [second-opinion]\nsystem_prompt:")
 
     with pytest.raises(SubagentError, match="second-opinion -> second-opinion"):
-        refuse_cycles({"second-opinion": read_subagent(body, Path("second-opinion.yaml"))})
+        refuse_cycles({"second-opinion": reading.read(body, Path("second-opinion.yaml"))})
 
 
 def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
@@ -399,7 +399,7 @@ def _spec(name, subagents=None):
     body = f"name: {name}\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
     if subagents is not None:
         body += f"subagents: {subagents}\n"
-    return read_subagent(body, Path(f"{name}.yaml"))
+    return reading.read(body, Path(f"{name}.yaml"))
 
 
 def test_a_definition_may_not_ask_for_every_delegate():
@@ -427,7 +427,7 @@ def test_the_refusal_says_why_rather_than_only_no():
 def test_the_other_selections_still_take_a_star():
     """The refusal is one field, not a change to the format. A delegate asking
     for every skill or every workspace tool is ordinary and stays so."""
-    spec = read_subagent(
+    spec = reading.read(
         "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
         'skills: ["*"]\ntools: ["*"]\n',
         Path("broad.yaml"),

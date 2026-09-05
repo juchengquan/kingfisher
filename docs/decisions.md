@@ -828,6 +828,62 @@ or langgraph**, and only that package may. Registries and DTOs did *not* move to
 say, how they are found on disk, and how they reach the runtime. Kingfisher
 fetches from them; they do not answer to a layer. *(2026-09-04.)*
 
+**A kind reads its own documents.** `subagents.reading.read`,
+`skills.reading.name_from`, and `catalogue.agents.read_agent` for the kind that
+has no module. Each was two functions in two packages: an envelope opener in
+`infrastructure` and the format's own parser, with the opener calling straight
+back into the module it was called from. *(2026-09-05.)*
+
+**The split was left by a constraint that had already lapsed.** The domain
+imports the standard library and `kingfisher.domain` and nothing else, so when
+these formats lived in `domain/` the `yaml.safe_load` had to sit elsewhere and
+hand fields back. Two of the three formats stopped being in `domain/` when they
+became modules, and the wrapper stayed. Each half had exactly one caller, and
+`decisions.md` already cut a seam on that ground once -- a `CatalogueSource`
+protocol, "designed in full and cut before building, on the grounds that one
+implementation is not a seam".
+
+**What could not follow them stayed, and it is not much.** `decode` and
+`require_literal_prompt` are shared by all three: a scalar's style is a fact
+about a document rather than about what any kind means, and the agent and
+subagent formats reflow a prompt identically. `documents` is now that, plus two
+scans that read a document without parsing it, and it names no kind at all --
+one kingfisher import where it had five.
+
+**`skills` gained a `reading` beside its `spec`, and the reason is a rule.** A
+domain module may name a kind's `spec` and nothing else of it, on the stated
+grounds that a spec is format vocabulary with no adapter behind it. Reading a
+document needs `yaml`, so folding the reader into `skills.spec` would have made
+that sentence false while leaving it written down -- and the architecture test
+checks direct imports, so nothing would have said so.
+
+**Two modules came up a directory, and an import cycle is why.**
+`catalogue/__init__` imports three kind modules; `documents` and `importing`
+sat inside that package and were imported *by* those kinds. The loop resolved by
+luck of import ordering and stopped resolving when the readers moved -- a cold
+`import kingfisher.subagents.catalogue` failed outright. Both files are generic:
+`importing` imports nothing from kingfisher whatsoever, and `documents` now
+imports one thing. `infrastructure/__init__` imports nothing, so moving them up
+removes the edge instead of reordering around it.
+
+**Not moved: `layered`.** `LayeredSkills` and `LayeredSubagents` stay in one
+file because it exists so that two *differing* merge rules can be read against
+each other -- a sorted set union for one, a right-wins `dict |` for the other.
+They were once two inline expressions in `agent.py` that silently did different
+things, and putting them in separate packages for symmetry would restore exactly
+the arrangement that let that happen. "Kinds do not share" is about shared
+implementation; a deliberate comparison is the opposite.
+
+**Three things were in the wrong place, and the move found them.** `NEAR_MISS`
+-- the `.yml` a `.yaml` gets mistaken for -- sat in the subagent *catalogue*
+while `SUFFIX` sat in `reading`, so the agent repository had to import a
+catalogue to get the second one, which is the edge that closed the loop. The
+`documents` docstring described sitting inside `catalogue/` and gave that as the
+reason for its own name, while sitting flat in `infrastructure/`. And two of the
+skill reader's refusals -- a missing `---` header, a name that is a path --
+turned out to be exercised by no test at all: mutating either left the whole
+suite green. That gap is older than the move and is now covered.
+
 **They deliberately do not share.** All three resolve a `source::name` and all
 three do it their own way -- `tools.spec.split_reference` and
 `skills.registry.split_qualified` differ today by one call that strips a

@@ -1,9 +1,18 @@
-"""Reading a definition document into the value the domain works with.
+"""The YAML step, and the two scans that read a document without parsing it.
 
-`domain.fields` owns what a field means; this owns the one step that
-needs a library. `yaml.safe_load` sat in the domain until the boundary was made
+`domain.fields` owns what a field means; this owns the one step that needs a
+library. `yaml.safe_load` sat in the domain until the boundary was made
 deny-by-default — a domain module imports the standard library and
 `kingfisher.domain`, nothing else — and this is where it landed.
+
+It reads no kind. `read_subagent`, `skill_name` and `read_agent` each opened an
+envelope here and then called back into the format's own module to do the rest,
+so a subagent catalogue reached into infrastructure for a wrapper that reached
+straight back at it. Each of those is now one function where its format lives:
+`subagents.reading.read`, `skills.reading.name_from`, and `catalogue.agents` for
+the kind that has no module of its own. What could not follow them is here:
+`decode` and `require_literal_prompt` are shared by all three, and a scalar's
+style is a fact about a document rather than about what any kind means.
 
 It is YAML, parsed as YAML. This used to hand-roll a `key: value` reader, on
 the reasoning that a YAML dependency would accept anchors, multi-line blocks and
@@ -18,14 +27,19 @@ ones are, so a skill that loaded fine could not be uploaded.
 arrive from a catalogue service under `DefinitionStore`, which makes them input
 rather than something we wrote.
 
-Named `documents` rather than `definitions`, which is what it was called while
-it sat flat in `infrastructure/`. The old name was chosen against `domain.fields`
+Named `documents` rather than `definitions`, and the name is what survived two
+moves. `definitions` was the first one and it was chosen against `domain.fields`
 -- one name across two layers makes every import a small act of guessing, which
-is why `narrowing` is not called `capabilities` either -- and the move gave it a
-nearer collision than the one it was avoiding: `Definitions`, the deployment's
-three repositories, is defined one file away in this package's `__init__`. Two
-unrelated things a directory listing apart is worse than two related things a
-layer apart. `documents` is what the first line already said it does.
+is why `narrowing` is not called `capabilities` either. Moving into `catalogue/`
+then put it a directory listing away from `Definitions`, the deployment's three
+repositories, so it was renamed to what its first line already said it does.
+
+Flat in `infrastructure/` again, which is where it started, and the reason is an
+import cycle rather than tidiness: `catalogue/__init__` imports three kind
+modules, and two of them needed this. A kind reaching a submodule of a package
+that imports the kind back resolved by luck of ordering, and stopped resolving
+when the readers moved. `importing` came up for the same reason and imports
+nothing from kingfisher at all.
 """
 
 from __future__ import annotations
@@ -34,11 +48,7 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain import agent
 from kingfisher.domain.access import AUDIENCED
-from kingfisher.skills import spec as skill
-from kingfisher.subagents import reading
-from kingfisher.subagents import spec as subagent
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -46,7 +56,6 @@ if TYPE_CHECKING:
 #: The scalar style that keeps a prompt's line breaks. `|`, `|2`, `|-` and
 #: `|+` are all this one style once parsed -- the suffix never reaches the node.
 LITERAL = "|"
-
 
 
 def groups_named(text: str) -> tuple[str, ...]:
@@ -175,59 +184,7 @@ def decode(header: str) -> dict[str, object] | str:
     return {str(key): value for key, value in parsed.items()}
 
 
-def _opened(text: str, label: str, error: type[ValueError]) -> tuple[dict[str, object], str]:
-    """The envelope: a header that decodes, and a body.
-
-    Both formats fail the same two ways here and say so in their own exception
-    type, because `SkillError` and `SubagentError` are not interchangeable to
-    someone reading a traceback.
-    """
-    parts = skill.split(text)
-    if parts is None:
-        msg = f"{label}: expected YAML frontmatter delimited by ---"
-        raise error(msg)
-
-    header, body = parts
-    fields = decode(header)
-    if isinstance(fields, str):
-        msg = f"{label}: cannot read frontmatter ({fields})"
-        raise error(msg)
-    return fields, body
-
-
-def read_subagent(text: str, source: Path) -> subagent.SubagentSpec:
-    """One subagent definition. Raises `SubagentError` on anything malformed.
-
-    The whole document, not a header and a body: a subagent is YAML through
-    and through, so there is no envelope to open. A skill still has one --
-    that format is deepagents', and it is markdown with a header.
-    """
-    fields = decode(text)
-    if isinstance(fields, str):
-        msg = f"{source.name}: cannot read definition ({fields})"
-        raise subagent.SubagentError(msg)
-    _require_literal_prompt(text, source, subagent.SubagentError)
-    return reading.parse(fields, source)
-
-
-def read_agent(text: str, source: Path) -> agent.AgentSpec:
-    """One agent definition. Raises `AgentError` on anything malformed.
-
-    The same three steps a subagent takes, and deliberately not a shared
-    function taking a parser: what differs is the exception, and that is the
-    one thing a caller reading a traceback needs to be right. `AgentError`
-    and `SubagentError` are not interchangeable to someone finding out which
-    of two folders holds the broken file.
-    """
-    fields = decode(text)
-    if isinstance(fields, str):
-        msg = f"{source.name}: cannot read definition ({fields})"
-        raise agent.AgentError(msg)
-    _require_literal_prompt(text, source, agent.AgentError)
-    return agent.parse(fields, source)
-
-
-def _require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> None:
+def require_literal_prompt(text: str, source: Path, error: type[ValueError]) -> None:
     """Refuse a `system_prompt` written in a style that reflows it.
 
     `>` folds consecutive lines into one, so
@@ -268,9 +225,3 @@ def _require_literal_prompt(text: str, source: Path, error: type[ValueError]) ->
             )
             raise error(msg)
         return
-
-
-def skill_name(text: str, source: str = skill.FILENAME) -> str:
-    """A skill's declared name, which is also its directory name."""
-    fields, _ = _opened(text, source, skill.SkillError)
-    return skill.name_of(fields, source=source)

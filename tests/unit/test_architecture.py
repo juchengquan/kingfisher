@@ -1076,7 +1076,7 @@ def test_a_subpackage_is_judged_by_its_own_area():
     instead.
     """
     catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
-    buried = SRC / "infrastructure" / "catalogue" / "documents.py"
+    buried = SRC / "infrastructure" / "catalogue" / "agents.py"
     for path in (catalogue, buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 

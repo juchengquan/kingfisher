@@ -117,7 +117,7 @@ from kingfisher.domain.session import (
     Session,
 )
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
-from kingfisher.infrastructure.catalogue.documents import read_agent
+from kingfisher.infrastructure.catalogue.agents import read_agent
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
     defined_subagents,

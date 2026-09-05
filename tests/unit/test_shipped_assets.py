@@ -21,11 +21,11 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
-from kingfisher.infrastructure.catalogue.documents import skill_name
-from kingfisher.infrastructure.catalogue.importing import load
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
+from kingfisher.infrastructure.importing import load
 from kingfisher.skills import spec as skill
 from kingfisher.skills.catalogue import LocalSkillRepository
+from kingfisher.skills.reading import name_from
 from kingfisher.subagents.catalogue import LocalSubagentRepository
 from kingfisher.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.tools.spec import Offering
@@ -95,7 +95,7 @@ def test_every_preset_skill_parses(shipped):
 
         assert parts is not None, f"{name}: no `---` header"
         header, body = parts
-        assert skill_name(text) == name  # header and directory agree
+        assert name_from(text) == name  # header and directory agree
         assert yaml.safe_load(header)["description"].strip()
         # A real procedure, not a stub. The same threshold the subagent version
         # uses; the shipped bodies measure 1222-1366 characters.
@@ -645,7 +645,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
     an empty registry. A definition added later that names middleware turns
     this red without anybody remembering to list it.
     """
-    from kingfisher.infrastructure.catalogue.documents import middleware_named
+    from kingfisher.infrastructure.documents import middleware_named
     from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
@@ -1012,7 +1012,7 @@ def test_every_group_the_presets_name_is_declared(shipped):
     are not seeded by default and a workspace without `groups.yaml` never
     resolves them at all.
     """
-    from kingfisher.infrastructure.catalogue.documents import groups_named
+    from kingfisher.infrastructure.documents import groups_named
 
     declared = set(_vocabulary(shipped).names)
     named = {

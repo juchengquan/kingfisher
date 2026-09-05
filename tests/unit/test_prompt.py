@@ -3,12 +3,12 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
-from kingfisher.infrastructure.catalogue.documents import read_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
     render_system_prompt,
     system_prompt,
 )
+from kingfisher.subagents import reading
 from kingfisher.subagents.harness import as_subagent
 
 
@@ -193,7 +193,7 @@ system_prompt: |
 
 
 def _delegate(cfg):
-    spec = read_subagent(DELEGATE, Path("reviewer.yaml"))
+    spec = reading.read(DELEGATE, Path("reviewer.yaml"))
     return as_subagent(spec, cfg)["system_prompt"]
 
 

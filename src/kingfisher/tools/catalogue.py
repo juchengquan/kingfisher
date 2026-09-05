@@ -52,7 +52,7 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.infrastructure.catalogue.importing import (
+from kingfisher.infrastructure.importing import (
     PACKAGE_MARKER,
     LoadError,
     load,
