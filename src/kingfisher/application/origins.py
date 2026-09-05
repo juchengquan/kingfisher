@@ -1,7 +1,8 @@
 """Where this deployment reads from, as one record.
 
-Eleven places: the four definition catalogues, `models.yaml`, `groups.yaml`,
-the directory seeding copies from, and the three working roots. Nothing could
+The four definition catalogues, `models.yaml`, `groups.yaml`, the directory
+seeding copies from, and the three working roots -- each with what kind of place
+it turned out to be, under the workspace they resolve against. Nothing could
 say what they were. `kingfisher list` printed four, `doctor` printed one, the
 library printed none, and each assembled its own answer -- so the catalogue a
 listing named and the one a diagnosis counted were two reads that nobody held
