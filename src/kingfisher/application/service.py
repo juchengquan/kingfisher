@@ -110,6 +110,7 @@ from kingfisher.domain.capabilities import (
     Capabilities,
     CapabilityError,
 )
+from kingfisher.domain.ports import SessionStore
 from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import (
@@ -136,9 +137,9 @@ from kingfisher.infrastructure.session_store import (
     LocalSessionStore,
     keep_from,
     read_transcript,
-    store_named,
     write_transcript,
 )
+from kingfisher.infrastructure.wiring import store_named
 from kingfisher.infrastructure.workspace.files import fetch_refs
 from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.permissions import protect_data
@@ -165,7 +166,6 @@ if TYPE_CHECKING:
         FileStore,
         SessionDirs,
         SessionRoot,
-        SessionStore,
         ThreadStore,
     )
 
@@ -206,11 +206,19 @@ def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore |
     `None` is a real answer and the common one. It means the session directory
     is the only copy, which is correct wherever the host is allowed to keep
     data.
+
+    `SessionStore` is imported at runtime here, unlike its six neighbours under
+    `TYPE_CHECKING`, because this hands it to `store_named` as the protocol to
+    check the result against -- a use rather than an annotation.
     """
     if supplied is not None:
         return supplied
     if cfg.session_store_factory is not None:
-        return store_named(cfg.session_store_factory)
+        return store_named(
+            cfg.session_store_factory,
+            setting="KINGFISHER_SESSION_STORE_FACTORY",
+            port=SessionStore,
+        )
     if cfg.session_store is not None:
         return LocalSessionStore(cfg.session_store)
     return None

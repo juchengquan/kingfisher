@@ -22,10 +22,22 @@ import pytest
 from kingfisher.application.config import Environment
 from kingfisher.application.service import _session_store
 from kingfisher.config import Config, ConfigError
-from kingfisher.infrastructure.session_store import LocalSessionStore, store_named
+from kingfisher.domain.ports import SessionStore
+from kingfisher.infrastructure.session_store import LocalSessionStore
+from kingfisher.infrastructure.wiring import store_named
 from tests.conftest import FAKE_CATALOGUE
 
 HERE = __name__
+
+#: The setting these are about. `store_named` is generic now -- the file store
+#: passes its own -- so the name a message must carry is an argument, and a test
+#: that spelled it at every call would stop checking that the caller passes it.
+SETTING = "KINGFISHER_SESSION_STORE_FACTORY"
+
+
+def named(spec: str):
+    """`store_named` as `_session_store` calls it."""
+    return store_named(spec, setting=SETTING, port=SessionStore)
 
 
 class Recording:
@@ -101,7 +113,7 @@ def test_a_named_factory_is_called_and_its_store_returned():
     ready-made instance precisely so that construction happens when kingfisher
     is wired rather than as an import side effect.
     """
-    store = store_named(f"{HERE}:make_store")
+    store = named(f"{HERE}:make_store")
 
     assert isinstance(store, Recording)
     assert built == [store]
@@ -111,14 +123,14 @@ def test_a_class_with_no_arguments_is_a_factory_too():
     """Zero-argument callable, not zero-argument *function*. A deployment whose
     store needs nothing at construction should not have to write a wrapper that
     only says `return Recording()`."""
-    assert isinstance(store_named(f"{HERE}:Recording"), Recording)
+    assert isinstance(named(f"{HERE}:Recording"), Recording)
 
 
 def test_the_factory_is_called_once_per_resolution():
     """A store may hold a connection pool, and resolving twice would open two
     while only one is ever used. `Kingfisher.__init__` resolves once; this pins
     that `store_named` does not call again on its own."""
-    store_named(f"{HERE}:make_store")
+    named(f"{HERE}:make_store")
 
     assert len(built) == 1
 
@@ -132,7 +144,7 @@ def test_a_spec_that_does_not_name_two_things_is_refused(spec):
     naming: it looks like a plausible setting and there is nothing in it to
     call."""
     with pytest.raises(ConfigError, match="does not name anything"):
-        store_named(spec)
+        named(spec)
 
 
 def test_a_module_that_will_not_import_is_refused():
@@ -140,14 +152,14 @@ def test_a_module_that_will_not_import_is_refused():
     image -- and it has to say which module, because the setting is a string
     nobody sees in a traceback."""
     with pytest.raises(ConfigError, match="cannot be imported"):
-        store_named("not_a_real_package_anybody_installed:build")
+        named("not_a_real_package_anybody_installed:build")
 
 
 def test_an_attribute_that_is_not_there_is_refused():
     """A renamed factory, or a typo in half of the string. The module imported
     fine, so nothing else would have complained."""
     with pytest.raises(ConfigError, match="which does not define it"):
-        store_named(f"{HERE}:no_such_factory")
+        named(f"{HERE}:no_such_factory")
 
 
 def test_a_factory_returning_the_wrong_shape_is_refused():
@@ -159,7 +171,7 @@ def test_a_factory_returning_the_wrong_shape_is_refused():
     that caused it.
     """
     with pytest.raises(ConfigError, match="returned NoneType -- not a SessionStore"):
-        store_named(f"{HERE}:make_nothing")
+        named(f"{HERE}:make_nothing")
 
 
 def test_a_factory_that_raises_is_left_alone():
@@ -172,7 +184,7 @@ def test_a_factory_that_raises_is_left_alone():
     the traceback saying which setting reached it.
     """
     with pytest.raises(BoomError, match=NO_CREDENTIALS):
-        store_named(f"{HERE}:explode")
+        named(f"{HERE}:explode")
 
 
 # -- which store a deployment gets -----------------------------------------

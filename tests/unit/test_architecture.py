@@ -1526,6 +1526,10 @@ LIGHT_EXPORTS = frozenset({
     # imports `domain.references` and the standard library, and no test
     # framework either -- see its docstring for why that one is deliberate.
     "SESSION_STORE_CONTRACT",
+    # Turning `KINGFISHER_SERVICE_FILE_STORE_FACTORY` into a store. Light, and
+    # it has to be: the service resolves it in its lifespan, and the whole point
+    # of a named factory is that kingfisher has never imported what it names.
+    "file_store_named",
     "ensure_layout", "config_from_env",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",

@@ -15,7 +15,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.references import (
     UnknownReferenceError,
@@ -134,3 +134,22 @@ class LocalFileStore:
             msg = f"no such reference: {file_id!r}"
             raise UnknownReferenceError(msg)
         return {path.name: path.read_bytes()}
+
+
+def file_store_named(spec: str, *, setting: str) -> Any:
+    """The `FileStore` a deployment named, imported and built.
+
+    A named wrapper over `wiring.store_named` rather than the generic call,
+    because the caller is `kingfisher_service` and a consumer takes `kingfisher`
+    and nothing deeper. Exporting this exports one narrow function; exporting
+    the generic one would mean exporting `FileStore` as well, for the caller to
+    pass as `port=` -- and a port is a much larger promise than a wrapper.
+
+    `setting` comes from the caller because the caller owns the variable's name.
+    It is `KINGFISHER_SERVICE_FILE_STORE_FACTORY` today, and this package should
+    not be the second place that decides so.
+    """
+    from kingfisher.domain.ports import FileStore  # noqa: PLC0415
+    from kingfisher.infrastructure.wiring import store_named  # noqa: PLC0415
+
+    return store_named(spec, setting=setting, port=FileStore)
