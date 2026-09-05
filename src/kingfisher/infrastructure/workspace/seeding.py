@@ -67,6 +67,42 @@ DESTINATION = Path("assets")
 #: need and the bare verb no longer has.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
+#: The other half of that answer, for the reader `SEED_HINT` cannot help.
+#:
+#: `--from DIR` needs a DIR, and `SUGGESTION` deliberately names none to
+#: somebody who installed the package -- correctly, because neither directory it
+#: could name exists for them. Correct and terminal: an empty workspace, a hint
+#: that needs something they have not got, and `docs/guides/formats.md` to read before
+#: anything runs.
+#:
+#: So the smallest agent that works, printed where the refusal is. The pattern is
+#: `model_catalogue`'s, which prints a working catalogue inline for the same
+#: reason and in the same situation -- a file you cannot start without and have
+#: not written.
+#:
+#: Not a shipped `agents/assistant.yaml.example`. `groups.yaml.example` was
+#: deleted for being a *choice* wearing a template's clothes: it shipped one
+#: vocabulary while a workspace needs whichever its own definitions ask for, so
+#: following the pointer led away from the answer. This has no such content --
+#: three fields, no delegates that must exist, no middleware to register, no
+#: groups -- which is the same property that let `models.yaml.example` survive
+#: that cull.
+#:
+#: Verified rather than assumed: an agent with exactly these three fields loads,
+#: is listed, and compiles to a real graph. A minimal example that turned out to
+#: be refused would be `groups.yaml.example` again.
+STARTER_AGENT = """\
+An agent is a file in agents/, and three fields are required. A minimal one:
+
+    # agents/assistant.yaml
+    name: assistant
+    description: General-purpose agent.
+    system_prompt: |
+      You work in this workspace, on whatever the caller asks for.
+
+Omitting `tools:` grants every tool there is; omitting `skills:` and
+`subagents:` grants none. See docs/guides/formats.md for the rest."""
+
 
 @runtime_checkable
 class Destination(Protocol):

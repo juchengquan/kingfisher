@@ -144,7 +144,7 @@ from kingfisher.infrastructure.workspace.files import fetch_refs
 from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.permissions import protect_data
 from kingfisher.infrastructure.workspace.placement import check_placeable, place_data, place_inputs
-from kingfisher.infrastructure.workspace.seeding import SEED_HINT
+from kingfisher.infrastructure.workspace.seeding import SEED_HINT, STARTER_AGENT
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
     LocalSessionRoot,
@@ -658,18 +658,22 @@ class Kingfisher(Sessions, Disposal):
                     n: spec for n, spec in offered.items() if reaches(spec.groups, held)
                 }
         listing = ", ".join(sorted(offered)) if offered else "none"
+        # Two refusals, one remedy, and the remedy is different when there is
+        # nothing at all. `SEED_HINT` says `--from DIR`, which needs a DIR --
+        # and `SUGGESTION` names none to a reader who installed the package,
+        # because neither directory it could name exists for them. Correct, and
+        # a dead end: the next thing that reader needs is the file itself.
+        #
+        # `model_catalogue` answers the same shape of question the same way,
+        # printing a working catalogue inline. This is that, for the other file
+        # a workspace cannot run without.
+        empty = "" if offered else f" -- try {SEED_HINT}, or write one:\n\n{STARTER_AGENT}"
         if name is None:
-            msg = (
-                f"this request names no agent; this workspace offers {listing}"
-                + ("" if offered else f" -- try {SEED_HINT}")
-            )
+            msg = f"this request names no agent; this workspace offers {listing}{empty}"
             raise CapabilityError(msg)
         spec = offered.get(name)
         if spec is None:
-            msg = (
-                f"no agent named {name!r}; this workspace offers {listing}"
-                + ("" if offered else f" -- try {SEED_HINT}")
-            )
+            msg = f"no agent named {name!r}; this workspace offers {listing}{empty}"
             raise CapabilityError(msg)
         return spec
 
