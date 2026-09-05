@@ -229,7 +229,8 @@ class Kingfisher(Sessions, Disposal):
     graph to drive a scripted conversation.
 
     `catalogue` follows that shape too, and takes either form. A deployment
-    pointing at three directories passes the mapping and names no classes; one
+    pointing at the catalogue directories passes the mapping and names no
+    classes; one
     holding its definitions somewhere kingfisher did not choose passes a
     `Definitions` of its own repositories. Both settle to the same object here, so
     nothing downstream knows which arrived -- and swapping a single kind is
@@ -271,8 +272,10 @@ class Kingfisher(Sessions, Disposal):
         )
 
         # Where the reviewed definitions are read from, settled once. Omitted,
-        # it is the three directories `cfg` names, which is what it has always
-        # been; supplied, a deployment has staged them somewhere itself and this
+        # it is the catalogue directories `cfg` names -- one per definition kind,
+        # which `DEFINITION_KINDS` is the list of -- and that is what it has
+        # always been; supplied, a deployment has staged them somewhere itself
+        # and this
         # is the only place that has to know. Resolved here rather than per
         # request so a deployment that fetches them pays once, and so a
         # catalogue that cannot be read fails at startup rather than serving an
