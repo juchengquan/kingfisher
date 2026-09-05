@@ -12,6 +12,7 @@ file count it refuses to print.
 |---|---|---|
 | [`guides/formats.md`](guides/formats.md) | What an agent, subagent, tool or skill file may say. | Writing or changing a definition. |
 | [`guides/tools.md`](guides/tools.md) | How to write a workspace tool: the shapes, what it returns, what the loader refuses. | Writing or changing a tool. |
+| [`guides/configuration.md`](guides/configuration.md) | Every setting a deployment reads from the environment, and what it defaults to. | Standing one up, or wondering what a variable does. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
 
@@ -21,11 +22,13 @@ manual, and an entry old enough to doubt is one to re-check rather than trust.
 
 ## `guides/`
 
-How to build something that runs on kingfisher, which is a different question
+How to build and run something on kingfisher, which is a different question
 from why the code is shaped this way. The split inside the folder is what the
 reader is holding: `formats.md` is a definition -- YAML, fields, what each one
-may say -- and `tools.md` is Python, which has rules of its own because it is
-code this process imports and calls rather than data it reads.
+may say; `tools.md` is Python, which has rules of its own because it is code
+this process imports and calls rather than data it reads; and
+`configuration.md` is the environment around both, which belongs to the
+deployment rather than to any file in the workspace.
 
 Another guide belongs here when there is another thing to build. Anything
 arguing for a shape goes to `decisions.md` and anything measured about upstream
