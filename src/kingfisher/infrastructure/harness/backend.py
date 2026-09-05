@@ -229,9 +229,9 @@ class ConfinedLocalShellBackend(LocalShellBackend):
     A `runner` moves the last step -- actually running the command -- out of
     this process, without moving file access with it. The two are one object
     upstream: `LocalShellBackend` *is* a `FilesystemBackend`, adding only
-    `execute` and `id` to the ten file operations it inherits, and this object
-    sits in the composite's default slot where those ten serve every path no
-    route matches. So a deployment that supplied "the shell" would be supplying
+    `execute`, its async twin and `id` to the file operations it inherits, and
+    this object sits in the composite's default slot where those operations
+    serve every path no route matches. So a deployment that supplied "the shell" would be supplying
     `/derived` as well, and a session's files belong to whoever supplies the
     directory.
 

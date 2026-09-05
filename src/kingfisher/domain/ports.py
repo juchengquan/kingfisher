@@ -367,7 +367,7 @@ class CommandRunner(Protocol):
     """How a shell command is run, for a deployment that runs them elsewhere.
 
     One method, and no path in it. The shell backend it sits behind is also the
-    filesystem for everything unrouted -- ten operations it inherits -- so
+    filesystem for everything unrouted -- every operation it inherits -- so
     handing over "the shell" would hand over file access with it, which belongs
     to whoever supplies the session directory instead.
 
