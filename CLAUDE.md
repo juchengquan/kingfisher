@@ -31,6 +31,7 @@ distribution, which has its own suite and its own CI job.
 |---|---|
 | What can an agent/subagent/tool/skill file say? | `docs/guides/formats.md` |
 | How do I write a workspace tool? What may it return? | `docs/guides/tools.md` |
+| What does this environment variable do? | `docs/guides/configuration.md` |
 | Why is it built this way? Can I change it? | `docs/decisions.md` |
 | What does deepagents/langchain actually do? | `docs/findings.md` |
 
