@@ -1010,6 +1010,22 @@ every probe it makes and coming through the door for the five names that are
 still promises. `list`'s eight are slice three. 57 has become 49, and will be
 41. *(Slice two, 2026-09-06.)*
 
+**The stub block is a third listing of these names, and is bound to the other
+two.** `__all__` and `_EXPORTS` were held to each other; the `if TYPE_CHECKING:`
+re-exports were held to nothing, and had already drifted -- `spell` and
+`SessionInfo` exported with no entry. Measured rather than assumed: `__getattr__`
+returns `Any`, so a name with no stub imports fine, passes every test, and is
+simply untyped. `reveal_type` says `<class 'Capabilities'>` for a name with a
+stub and `Any` for one without, and the drifted one was `SessionInfo`, which the
+service imports.
+
+The module string is compared as well as the name, for the reason the layer and
+the root are: two tables agreeing a name exists while disagreeing where it comes
+from would type-check against one object and import another. So is the redundant
+`X as X`, which under PEP 484 is what marks a name as re-exported at all -- and
+which reads like something to tidy away. Both packages with a lazy table are
+covered, `kingfisher` and `kingfisher.application`. *(2026-09-06.)*
+
 **What it costs, stated rather than discovered.** A deployment embedding
 kingfisher and wanting its own health endpoint loses the promise on the sandbox
 probes; the names still work, at addresses that may move. There is no measured

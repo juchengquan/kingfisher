@@ -213,6 +213,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.access import AccessError as AccessError
     from kingfisher.domain.access import Audience as Audience
     from kingfisher.domain.access import Held as Held
+    from kingfisher.domain.access import spell as spell
     from kingfisher.domain.capabilities import ALL as ALL
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
@@ -225,6 +226,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.result import RunResult as RunResult
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
+    from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,

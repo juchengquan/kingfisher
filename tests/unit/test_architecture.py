@@ -1462,6 +1462,107 @@ def test_the_public_api_list_matches_the_lazy_export_table():
     assert sorted(kingfisher.__all__) == sorted(kingfisher._EXPORTS)
 
 
+#: Every package that re-exports through a `__getattr__` table, and the file
+#: holding it. Both, because both have the same two halves that can disagree and
+#: only one of them had ever been checked against anything.
+LAZY_TABLES: dict[str, Path] = {
+    "kingfisher": SRC / "__init__.py",
+    "kingfisher.application": SRC / "application" / "__init__.py",
+}
+
+
+def _stub_reexports(path: Path) -> tuple[dict[str, str], list[str]]:
+    """The `if TYPE_CHECKING:` block: `{name: module}`, and what is not re-exported.
+
+    Read with `ast` because the block never runs. That is the whole reason it
+    can drift -- an entry here is invisible to the interpreter, to the test
+    suite, and to anything that imports the package.
+
+    The second half is the names written `from x import y` rather than
+    `from x import y as y`. Under PEP 484 the redundant alias is what marks a
+    name as re-exported, so dropping it is a silent change of meaning rather
+    than a tidy-up, and it looks like an improvement to anyone reading quickly.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    found: dict[str, str] = {}
+    bare: list[str] = []
+    for node in ast.walk(tree):
+        guard = node.test if isinstance(node, ast.If) else None
+        named = getattr(guard, "id", None) or getattr(guard, "attr", None)
+        if named != "TYPE_CHECKING":
+            continue
+        for sub in ast.walk(node):
+            if isinstance(sub, ast.ImportFrom) and sub.module:
+                for alias in sub.names:
+                    found[alias.name] = sub.module
+                    if alias.asname != alias.name:
+                        bare.append(alias.name)
+    return found, bare
+
+
+@pytest.mark.parametrize(
+    ("package", "path"), sorted(LAZY_TABLES.items()), ids=sorted(LAZY_TABLES)
+)
+def test_the_stub_block_and_the_export_table_name_the_same_things(package, path):
+    """The third table, and the one nothing had ever held to the other two.
+
+    `__all__` and `_EXPORTS` are checked against each other above. The stub
+    block is a third listing of the same names and was checked against nothing,
+    which is exactly the arrangement the comment on `_EXPORTS` distrusts -- and
+    it had already drifted twice by the time anybody looked: `spell` and
+    `SessionInfo` were exported with no entry here.
+
+    What that costs is not cosmetic, and was measured rather than assumed.
+    `__getattr__` returns `Any`, so a name with no stub still imports and still
+    passes every test -- it is simply untyped. Asking `ty` for both:
+
+        reveal_type(Capabilities)  # <class 'Capabilities'>  -- has a stub
+        reveal_type(SessionInfo)   # Any                     -- had none
+
+    So the drifted name was the one the *service* imports, and a service holding
+    it wrongly would have been told nothing by the checker that runs on every
+    commit.
+
+    The module string is compared too, for the reason
+    `test_the_layer_and_the_root_agree_about_this_layer` gives: two tables
+    agreeing that a name exists while disagreeing about where it comes from
+    would type-check against one object and import another.
+    """
+    import importlib
+
+    table = importlib.import_module(package)._EXPORTS
+    stubs, bare = _stub_reexports(path)
+
+    assert stubs, (
+        f"no `if TYPE_CHECKING:` re-exports found in {path.name} -- this rule is "
+        "about nothing, which is how the collector in this file has failed twice"
+    )
+
+    missing = sorted(set(table) - set(stubs))
+    assert not missing, (
+        f"{missing} are exported by {package} and have no stub, so a type checker "
+        f"sees `Any` for them. Add `from <module> import X as X` to the "
+        "`if TYPE_CHECKING:` block"
+    )
+
+    extra = sorted(set(stubs) - set(table))
+    assert not extra, (
+        f"{extra} have a stub in {package} and are not exported -- a type checker "
+        "believes they are importable and `__getattr__` raises AttributeError"
+    )
+
+    disagree = sorted(n for n in table if table[n] != stubs[n])
+    assert not disagree, (
+        f"{package} and its stub block disagree about where {disagree} come from: "
+        + ", ".join(f"{n}: {table[n]!r} against {stubs[n]!r}" for n in disagree)
+    )
+
+    assert not bare, (
+        f"{sorted(bare)} are imported into {package}'s stub block without the "
+        "`as X` alias, which under PEP 484 means they are not re-exported at all"
+    )
+
+
 #: Why each public name is public: who outside this wheel asked for it.
 #:
 #: `_EXPORTS` says what a name *is*, one comment at a time, and that is the
