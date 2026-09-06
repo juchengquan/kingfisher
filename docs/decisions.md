@@ -15,59 +15,26 @@ the most useful thing on the page.
 
 ---
 
-## Packaging: where the definitions live
+Ordered outside-in: what a deployment writes, what a request may do with it, what
+a run then meets, the surfaces it is reached through, and last the shape of the
+code itself. Arrival order was what put two sections about sessions four hundred
+lines apart.
 
-This reversed twice. The current answer is the third one.
+| | |
+|---|---|
+| **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
+| **What a request may do** | [Capabilities](#capabilities) · [Group access](#group-access) · [Models and endpoints](#models-and-endpoints) |
+| **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
+| **The surfaces** | [The command line](#the-command-line) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) |
+| **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) |
+| | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
-**Definitions live outside the wheel, and where a deployment gets them is a
-setting.** `KINGFISHER_ASSETS` names one path, read in `application/config.py`;
-`seed(into, source)` takes it as a required argument with no `None` branch. This
-repository's own set is `assets_examples/`, which is *not* shipped and exists to
-be read and copied. `assets/` is committed holding only a `README.md` and ignores
-everything else, because it is where a deployment puts content it did not write.
-*(2026-08-19, `examples-are-ours-assets-are-yours.md`.)*
+*Sessions* and *Wiring a store* sit together and are not one section: the first is
+what survives a turn, the second is how a deployment names a storage port -- and
+that one covers `FileStore` as well, which is why it is no longer called
+*Sessions and storage*.
 
-**Reversed: definitions as separate pip packages.** Assets were to leave the
-repository entirely, become distributions of their own, and be found through
-entry points that kingfisher named none of. Built in full, then taken back out.
-What survived it: the framework still does not decide what a definition says, and
-a fresh workspace still seeds itself on first run.
-*(2026-08-17, `assets-as-packages.md`. Reversed 2026-08-18.)*
-
-**Reversed: definitions shipped inside the wheel.** The reversal of the above went
-one step too far -- `src/kingfisher/assets/`, shipped to everyone, excluded from
-every architecture rule. Its D1 was itself reversed the next day by the entry at
-the top of this section. Its D5 held: the tree went back to `src/`, `tests/` and
-`service/` at the root.
-*(2026-08-18, `the-definitions-ship-with-the-library.md`. D1 reversed 2026-08-19.)*
-
-**Reversed: one `packages/` folder for three distributions.** Tidiness only, no
-caller saw it, and it went with the packaging reversal above.
-*(2026-08-17, `one-folder-for-the-packages.md`. Reversed 2026-08-18.)*
-
-**Seeding lays the workspace out itself, and its parameter says what it is.**
-`seed(into: Destination, source: Path) -> Seeded`. `into` rather than `cfg`,
-because `Destination` is a Protocol precisely so seeding can run before a
-`Config` exists -- the model catalogue is a file inside the workspace, so
-reading one raises before the directory does -- and naming the parameter after
-the type it deliberately does not take undid that where a reader most needed it.
-`Seeded` rather than `Seeding`, because it is a record of something finished.
-
-And it calls `ensure_layout` first. Seeding into a workspace that was never laid
-out used to succeed, report every definition written, and leave no
-`models.yaml.example` -- the dead end that write was moved into `ensure_layout`
-to avoid. The CLI had the ordering and a docstring explaining it; a library
-caller reading the signature had neither. Not a new responsibility so much as
-the rest of one seeding already had: it was already creating the four catalogue
-directories and omitting only the file that makes the result usable.
-*(2026-09-01.)*
-
-**`config_from_env`, not `from_env`.** It returns a `Config` and the bare name
-said none of that -- imported at package level, which is how most calls read, it
-could have returned anything, and it sat beside a qualified `paths_from_env`.
-Inside `application/config.py` the old name read well because the module
-qualified it, and that one call site now stutters; fifty-two others got clearer.
-*(2026-09-01.)*
+---
 
 ## The definition format
 
@@ -162,6 +129,60 @@ model and tools rather than choosing them. An unrecognised extension in
 indistinct one is refused rather than reported. `model` may take a list, tried in
 order. A subagent naming no model runs its caller's.
 *(2026-08-18, `compiled-subagents.md`, `agents-as-definitions.md`.)*
+
+## Packaging: where the definitions live
+
+This reversed twice. The current answer is the third one.
+
+**Definitions live outside the wheel, and where a deployment gets them is a
+setting.** `KINGFISHER_ASSETS` names one path, read in `application/config.py`;
+`seed(into, source)` takes it as a required argument with no `None` branch. This
+repository's own set is `assets_examples/`, which is *not* shipped and exists to
+be read and copied. `assets/` is committed holding only a `README.md` and ignores
+everything else, because it is where a deployment puts content it did not write.
+*(2026-08-19, `examples-are-ours-assets-are-yours.md`.)*
+
+**Reversed: definitions as separate pip packages.** Assets were to leave the
+repository entirely, become distributions of their own, and be found through
+entry points that kingfisher named none of. Built in full, then taken back out.
+What survived it: the framework still does not decide what a definition says, and
+a fresh workspace still seeds itself on first run.
+*(2026-08-17, `assets-as-packages.md`. Reversed 2026-08-18.)*
+
+**Reversed: definitions shipped inside the wheel.** The reversal of the above went
+one step too far -- `src/kingfisher/assets/`, shipped to everyone, excluded from
+every architecture rule. Its D1 was itself reversed the next day by the entry at
+the top of this section. Its D5 held: the tree went back to `src/`, `tests/` and
+`service/` at the root.
+*(2026-08-18, `the-definitions-ship-with-the-library.md`. D1 reversed 2026-08-19.)*
+
+**Reversed: one `packages/` folder for three distributions.** Tidiness only, no
+caller saw it, and it went with the packaging reversal above.
+*(2026-08-17, `one-folder-for-the-packages.md`. Reversed 2026-08-18.)*
+
+**Seeding lays the workspace out itself, and its parameter says what it is.**
+`seed(into: Destination, source: Path) -> Seeded`. `into` rather than `cfg`,
+because `Destination` is a Protocol precisely so seeding can run before a
+`Config` exists -- the model catalogue is a file inside the workspace, so
+reading one raises before the directory does -- and naming the parameter after
+the type it deliberately does not take undid that where a reader most needed it.
+`Seeded` rather than `Seeding`, because it is a record of something finished.
+
+And it calls `ensure_layout` first. Seeding into a workspace that was never laid
+out used to succeed, report every definition written, and leave no
+`models.yaml.example` -- the dead end that write was moved into `ensure_layout`
+to avoid. The CLI had the ordering and a docstring explaining it; a library
+caller reading the signature had neither. Not a new responsibility so much as
+the rest of one seeding already had: it was already creating the four catalogue
+directories and omitting only the file that makes the result usable.
+*(2026-09-01.)*
+
+**`config_from_env`, not `from_env`.** It returns a `Config` and the bare name
+said none of that -- imported at package level, which is how most calls read, it
+could have returned anything, and it sat beside a qualified `paths_from_env`.
+Inside `application/config.py` the old name read well because the module
+qualified it, and that one call site now stutters; fifty-two others got clearer.
+*(2026-09-01.)*
 
 ## Capabilities
 
@@ -438,166 +459,6 @@ model call: no probe, and it points at the caller's own task as the end-to-end
 test. *(2026-08-18, `what-the-catalogue-dropped.md`; 2026-08-17,
 `a-command-worth-shipping.md`.)*
 
-## The command line
-
-**The command is a consumer of the library, not an insider.** Seeding and the
-inventory became public API to make that true. The library answers "what does
-this workspace offer" with a record rather than a list of names. Bare
-`kingfisher` prints help. Publishing was deferred, deliberately, and asked
-twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
-
-**Reversed: the command is for what the library cannot do for itself.** That
-rule was written above the console script and kept the surface at `seed` and
-`list`; running a task was `kingfisher.run` and therefore not the command's job.
-It measures the library's completeness rather than the user's -- "the library
-can already do it, in Python" is true of every command-line tool ever written,
-and here it meant an editor, four lines, and knowing a bare task string is
-refused because a request must name an agent. Replaced by *what does a person at
-a terminal need to do*, under which `run` is the first verb and the others exist
-to get somebody to it.
-
-The half that survives: a bare invocation of the driver spends real money on the
-smoke, which is a fine default for a driver and a wrong one for a stranger's
-first command. A verb with a required task argument cannot be reached by
-accident. *(2026-09-04, `the-verb-that-runs-a-task.md`.)*
-
-**`run` takes six flags, and the eight that narrow capabilities are not among
-them.** `task`, `--agent`, `--session`, `--input`, `--data`, `--as`. Narrowing
-what a request may activate is a deployment's concern with two better homes --
-the service clamps with `grants`, an agent file declares what it holds -- and
-`--without-*` freezes what the workspace offers *now*, which is a subtlety for
-somebody wiring a service rather than running a first task. The cost is that you
-cannot say "without the shell" from the command line; write an agent that
-declares it.
-
-`--data` was never a candidate for cutting: `/data` is read-only to the agent,
-so it is the only supported way to hand one a file at all. Nor was `--as`,
-measured rather than assumed -- on a workspace declaring groups, a run that
-names nobody is refused by the library, so a `run` without it would be broken on
-exactly the deployments that took access control seriously. Unlike `list --as`,
-an absent one is not the operator's view: a listing is read-only, and a turn
-acts. *(2026-09-04, same document.)*
-
-**The answer goes to stdout and everything watched goes to stderr**, so
-`kingfisher run ... > answer.md` keeps the answer alone and `2>/dev/null` keeps
-the quiet. A `--quiet` flag was rejected: it asks the caller for correct
-behaviour and does nothing for whoever forgets it.
-
-That split settled something the design had not reached. **A delegate's prose is
-progress, not answer.** On one stream the speaker tag is what keeps two voices
-apart; on two, the streams do it better, and an extractor's working notes are
-not what anybody redirected stdout for. `Progress` moved out of the unshipped
-driver rather than being copied -- two renderers would have disagreed about a
-new event kind the first time one was added. *(2026-09-04, same document.)*
-
-**The exit code carries `stop_reason`, because prose on stdout leaves nowhere
-else to put it.** `0` finished, `1` ran and stopped at a bound, `2` never ran.
-The case `1` exists for is `kingfisher run ... > report.md && publish
-report.md`, which must not publish a report that stopped halfway. A code per
-reason was rejected: it encodes in the exit status what one stderr line already
-says, in a vocabulary that grows every time `STOP_REASONS` does.
-
-Nine errors that could only ever have reached a stranger as a traceback are
-reported instead, all as `2`. `SessionBusyError` keeps its own branch: it is the
-one that is not the caller's mistake, and "wait" is different advice from "fix
-something". *(2026-09-04, same document.)*
-
-**`help` went, and `--seed`, `--from` and `--all` went off the driver.**
-`kingfisher help seed` was byte-for-byte `kingfisher seed --help`; its only
-unique contribution was naming the valid words for a mistyped verb, which
-argparse already does. The driver's seeding flags duplicated `kingfisher seed`
-and were kept on the argument that it is "the driver you already have open" --
-true while nothing else could run a task.
-
-**`--list` stayed on the driver, and not as a listing.** The plan said all four
-go; building it found the fourth does a second job nothing else there does -- it
-is the only way to reach the driver's `main` and have it return without calling
-a model, which six tests covering workspace creation and first-run seeding are
-built on. Written into the flag, because from outside it looks exactly as
-removable as the three that went. *(2026-09-04, same document.)*
-
-## Where a deployment reads from
-
-**One record, `Origins`, and every surface prints it.** Kingfisher reads from
-eleven places and nothing could say what they were: `kingfisher list` named four,
-`doctor` named one, and the library named none. `tools` was in no answer at all,
-because the listing header was three hand-written lines and `Inventory` carried
-three loose strings -- a fourth of each is a thing somebody has to remember, and
-nobody did. `Inventory` carries one of these now and both commands print it, so a
-place added to the record appears in both without either being touched.
-*(2026-09-02, `where-this-deployment-reads-from.md`.)*
-
-**It reports what was loaded, not what was configured.**
-`Config.catalogue_roots` is the fallback, not the answer -- a `Kingfisher` may be
-handed a mapping or a `Definitions` of its own -- so a report derived from
-configuration alone is right for the simple deployment and quietly wrong for the
-one that moved something. `Origins.of` does not call `resolve_definitions`, which
-creates derived roots: a report must not bring into being what it reports on.
-
-**Each entry carries a kind, not a formatted string.** `default` is the derived
-location, decided by comparing against it rather than by asking whether an
-override was set -- so a deployment naming the default path explicitly is
-`default`, which is what it is. `relocated` is any other configured path,
-`overridden` means the configuration is not what is being read, `supplied` is a
-repository with no directory, and `unset` carries where it looked. `--json` and
-the service read this, so "nothing is configured" and "you handed me a store"
-must not arrive as two spellings a consumer has to match on.
-
-**`Config` remembers where it looked for `groups.yaml`.** The path was read,
-used for error-message prefixes and discarded. It sits on `Config` rather than on
-`Groups` because of the absent case: with no file there is no record to hang a
-path on, and "not set, and here is where I looked" is the one line that makes a
-policy written one directory off visible at all -- otherwise the deployment comes
-up reachable by everyone and says nothing.
-
-**The library's first logger is `kingfisher.origins`, and not `kingfisher`.**
-One INFO record per construction, and that is the whole budget. `print` is not an
-option -- a library that writes to stdout cannot be used by a server -- and
-`warnings.warn` means "this is probably not what you meant", which a summary is
-not. The name is the load-bearing part: `kingfisher.audit` is left unconfigured
-so that writing session ids stays a deployment's decision, a logger named
-`kingfisher` is its *parent*, and the server raises this one to INFO -- so asking
-where the definitions live would have turned the audit trail on. A test in the
-service holds the two apart.
-
-**`doctor` gained two checks a path alone could not express.** An empty
-catalogue at a path somebody typed is not an empty workspace: resolving one
-*creates* the directory it was pointed at rather than refusing an absent one, so
-a mistyped root yields a real empty one and `ok  subagents  0 defined` is what a
-correct fresh workspace says too. And a configuration that is being ignored is
-said out loud, or somebody edits the setting and watches nothing change. The
-second needed `examine` to take the inventory rather than build one -- a
-catalogue it resolves from `cfg` agrees with `cfg` by construction, so nothing it
-examined could ever be overriding it.
-
-**Rejected along the way, and each for its own reason.** Opening in-code
-configuration as a first-class path -- `Models`, `Endpoint` and `ModelProfile`
-are constructible and the test suite wires a `Config` that way, but setup stays
-YAML and directories and this was about making that legible, not replacing it.
-Merging `WorkspacePaths` into `Config` -- `Config` requires a `Models` and
-`models.yaml` lives inside the workspace, so merging means making it optional and
-taking `Models.resolve()` from total to partial. Nesting one inside the other to
-end the six duplicated fields -- measured at 7 constructions and 38 reads, both
-cheap, against 17 `replace(cfg, ...)` calls that would become nested. Serving the
-record over the HTTP surface, which authenticates nobody. And a `Config.paths`
-property, which nothing would have read.
-
-## The HTTP service
-
-**Transport only -- the server never interprets identity**, and lives in its own
-wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
-web service on disk. One request per turn, streamed, with no result persistence;
-files arrive as ids resolved through a `FileStore` port; the turn stops on
-disconnect and there is no cancel endpoint. An explicit error-to-status map, with
-a test that it is total. *(2026-08-16, `http-surface.md`; 2026-08-17,
-`the-service-as-its-own-package.md`.)*
-
-**Session ids are issued, not accepted**, and the tenancy boundary is outside
-kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
-
-**A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
-before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
-
 ## What a tool returns
 
 **A workspace tool's return type is langchain's rule, and kingfisher adds none.**
@@ -816,7 +677,269 @@ is a far smaller change than replacing the filesystem.
 root on 2026-08-26, `A session that survives the machine it ran on`. All from
 `nothing-at-rest-on-this-machine.md`, removed 2026-09-04.)*
 
+## Wiring a store
+
+**The session directory is the backend root**, `/data` is materialised once at
+session creation, writes come back as a manifest, and processes are stateless
+while the service is stateful. `sweep()` came off the request path.
+*(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)*
+
+**A deployment names its store in a setting; it does not pass an object.**
+`Config.session_store` could only be a directory and its comment said why -- *"a
+deployment reaching for that passes an object rather than a path"* -- and both
+halves were wrong. An environment variable can name a factory, which is how
+`models.yaml` has always reached a chat class; and passing an object only reaches
+the one construction site a deployment controls, which is neither of the two
+kingfisher ships. `presentation/cli/__main__.py` builds its own `Kingfisher` and
+there is nowhere to point it. A setting resolved inside `Kingfisher.__init__` is
+inherited by every entry point at once.
+
+**A zero-argument factory, not a class and not an instance.** `module:name`, the
+same string `Adapter.chat_class` uses. Kingfisher does not know whether a store
+wants a bucket, a DSN or a pool, so it asks for none of them and the factory
+reads its own configuration; inventing a URL grammar for stores it knows nothing
+about is the version that ages worst, and a ready-made instance moves
+construction to import time, where "cannot reach the bucket" arrives as an
+`ImportError` from a module nobody was reading.
+
+**What is checked is the name, not the building.** A spec that will not parse, a
+module that will not import, an attribute that is not there, a result of the
+wrong shape: `ConfigError`, naming the setting. A factory raising its *own*
+exception passes through untouched -- that is the deployment's code failing at
+the deployment's job, its type may be one their handling knows, and `store_named`
+is already on the traceback saying which setting reached it.
+
+**Naming a store twice is refused at startup, not resolved by precedence**, and
+on the record rather than in the reader, so a config assembled in Python obeys
+the same rule. Preferring one silently leaves a deployment's sessions in the
+directory it stopped meaning to use, and nothing says so until somebody goes
+looking.
+
+**Environment variables, never a workspace file.** Measured rather than assumed:
+`confinement.writable_roots` returns the whole workspace plus scratch, carving
+out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` are
+writable by the agent's shell. The rule is already stated at
+`confinement.resolve` -- *"host-side configuration, and a file the agent could
+edit is not a boundary"*. This is why a store as a workspace *asset* is closed
+rather than deferred: it is the middleware decision again, one object further in.
+The agent cannot reach environment variables at all -- its shell gets an
+allowlist of five plus the skills directory.
+
+**A port a deployment can name gets a runnable contract.** `SESSION_STORE_CONTRACT`
+and `FILE_STORE_CONTRACT` in `kingfisher.testing` are the checks
+`tests/unit/` runs, exported so a deployment runs them against its own adapter. A
+setting inviting somebody to write an implementation without a way to check it is
+worse than no setting, and the parts easiest to get wrong are the ones that
+matter: extracting the session kit found `knows()` -- the method the port calls a
+security question -- with no test anywhere, and a store answering `True` for
+every id passes 2,255 other tests while letting a caller resume a session they
+invented.
+
+**The kit imports no test framework**, which is what lets it live in the library
+rather than a second wheel: `pip install kingfisher` gains a module and no test
+dependency. Each check raises `AssertionError` with the whole story, because
+pytest's assertion rewriting does not reach an imported library and `python -O`
+strips a bare `assert` -- a conformance kit passing while checking nothing is
+worse than no kit.
+
+**The two kits take different arguments, because the ports differ.**
+`SessionStore` writes, so its checks are handed a factory and fill their own.
+`FileStore` is one method and that method reads: kingfisher never writes to a
+file store, so a check cannot plant the file it then fetches, and the deployment
+hands over a `Planted` describing what it planted.
+
+**`FileStore`'s setting is the service's, `SessionStore`'s is the library's.** An
+asymmetry, kept deliberately: a `FileStore` resolves *refs*, the vocabulary of a
+caller with no host paths, and `kingfisher run` takes `--input` as a path on this
+machine and neither builds one nor could use one. The setting belongs where the
+port is used. Flagged while proposed as the decision most likely to be wrong, and
+it survived being built.
+
+**The backend stays kingfisher's, and a store as a workspace asset is refused.**
+The backend is not "where files live": it wraps every shell command in
+`sandbox-exec` or Landlock, it is what refuses a host path, and its route table
+is what makes `DATA_IS_READ_ONLY` legal at all -- deepagents refuses
+`permissions=` outright on a backend that executes unless every rule is
+route-scoped. Routing `/data` to a store would also break the promise
+`prompts/system.md` makes the model in a table -- *"nothing in the workspace is
+out of the shell's reach"* -- leaving the agent able to read its inputs and unable
+to run anything over them. Object storage reaches a session as a mount
+(`SessionRoot`) or by being copied in and out, and both work today.
+
+**Considered and rejected with it:** a backend factory on `Kingfisher` (deferred,
+and if ever opened then routes only, never the default slot); kingfisher shipping
+an S3 store behind a closed table like `ADAPTERS`, which would put this package in
+the business of owning every backing store anyone asks for; and a builder
+parameter on `create_app`, designed and dropped once the resolution point moved
+inside `Kingfisher.__init__` and left it nothing to do.
+*(2026-09-04 to 2026-09-05, `a-store-a-deployment-can-name.md`, built in four
+slices. Its one correction is worth keeping: an argument about `create_app`
+needing a checkpointer held open for the process was true when written and false
+a day later, `48cd457` having made the default `InMemorySaver`. The conclusion
+did not rest on it.)*
+
+## The command line
+
+**The command is a consumer of the library, not an insider.** Seeding and the
+inventory became public API to make that true. The library answers "what does
+this workspace offer" with a record rather than a list of names. Bare
+`kingfisher` prints help. Publishing was deferred, deliberately, and asked
+twice. *(2026-08-17, `a-command-worth-shipping.md`.)*
+
+**Reversed: the command is for what the library cannot do for itself.** That
+rule was written above the console script and kept the surface at `seed` and
+`list`; running a task was `kingfisher.run` and therefore not the command's job.
+It measures the library's completeness rather than the user's -- "the library
+can already do it, in Python" is true of every command-line tool ever written,
+and here it meant an editor, four lines, and knowing a bare task string is
+refused because a request must name an agent. Replaced by *what does a person at
+a terminal need to do*, under which `run` is the first verb and the others exist
+to get somebody to it.
+
+The half that survives: a bare invocation of the driver spends real money on the
+smoke, which is a fine default for a driver and a wrong one for a stranger's
+first command. A verb with a required task argument cannot be reached by
+accident. *(2026-09-04, `the-verb-that-runs-a-task.md`.)*
+
+**`run` takes six flags, and the eight that narrow capabilities are not among
+them.** `task`, `--agent`, `--session`, `--input`, `--data`, `--as`. Narrowing
+what a request may activate is a deployment's concern with two better homes --
+the service clamps with `grants`, an agent file declares what it holds -- and
+`--without-*` freezes what the workspace offers *now*, which is a subtlety for
+somebody wiring a service rather than running a first task. The cost is that you
+cannot say "without the shell" from the command line; write an agent that
+declares it.
+
+`--data` was never a candidate for cutting: `/data` is read-only to the agent,
+so it is the only supported way to hand one a file at all. Nor was `--as`,
+measured rather than assumed -- on a workspace declaring groups, a run that
+names nobody is refused by the library, so a `run` without it would be broken on
+exactly the deployments that took access control seriously. Unlike `list --as`,
+an absent one is not the operator's view: a listing is read-only, and a turn
+acts. *(2026-09-04, same document.)*
+
+**The answer goes to stdout and everything watched goes to stderr**, so
+`kingfisher run ... > answer.md` keeps the answer alone and `2>/dev/null` keeps
+the quiet. A `--quiet` flag was rejected: it asks the caller for correct
+behaviour and does nothing for whoever forgets it.
+
+That split settled something the design had not reached. **A delegate's prose is
+progress, not answer.** On one stream the speaker tag is what keeps two voices
+apart; on two, the streams do it better, and an extractor's working notes are
+not what anybody redirected stdout for. `Progress` moved out of the unshipped
+driver rather than being copied -- two renderers would have disagreed about a
+new event kind the first time one was added. *(2026-09-04, same document.)*
+
+**The exit code carries `stop_reason`, because prose on stdout leaves nowhere
+else to put it.** `0` finished, `1` ran and stopped at a bound, `2` never ran.
+The case `1` exists for is `kingfisher run ... > report.md && publish
+report.md`, which must not publish a report that stopped halfway. A code per
+reason was rejected: it encodes in the exit status what one stderr line already
+says, in a vocabulary that grows every time `STOP_REASONS` does.
+
+Nine errors that could only ever have reached a stranger as a traceback are
+reported instead, all as `2`. `SessionBusyError` keeps its own branch: it is the
+one that is not the caller's mistake, and "wait" is different advice from "fix
+something". *(2026-09-04, same document.)*
+
+**`help` went, and `--seed`, `--from` and `--all` went off the driver.**
+`kingfisher help seed` was byte-for-byte `kingfisher seed --help`; its only
+unique contribution was naming the valid words for a mistyped verb, which
+argparse already does. The driver's seeding flags duplicated `kingfisher seed`
+and were kept on the argument that it is "the driver you already have open" --
+true while nothing else could run a task.
+
+**`--list` stayed on the driver, and not as a listing.** The plan said all four
+go; building it found the fourth does a second job nothing else there does -- it
+is the only way to reach the driver's `main` and have it return without calling
+a model, which six tests covering workspace creation and first-run seeding are
+built on. Written into the flag, because from outside it looks exactly as
+removable as the three that went. *(2026-09-04, same document.)*
+
+## Where a deployment reads from
+
+**One record, `Origins`, and every surface prints it.** Kingfisher reads from
+eleven places and nothing could say what they were: `kingfisher list` named four,
+`doctor` named one, and the library named none. `tools` was in no answer at all,
+because the listing header was three hand-written lines and `Inventory` carried
+three loose strings -- a fourth of each is a thing somebody has to remember, and
+nobody did. `Inventory` carries one of these now and both commands print it, so a
+place added to the record appears in both without either being touched.
+*(2026-09-02, `where-this-deployment-reads-from.md`.)*
+
+**It reports what was loaded, not what was configured.**
+`Config.catalogue_roots` is the fallback, not the answer -- a `Kingfisher` may be
+handed a mapping or a `Definitions` of its own -- so a report derived from
+configuration alone is right for the simple deployment and quietly wrong for the
+one that moved something. `Origins.of` does not call `resolve_definitions`, which
+creates derived roots: a report must not bring into being what it reports on.
+
+**Each entry carries a kind, not a formatted string.** `default` is the derived
+location, decided by comparing against it rather than by asking whether an
+override was set -- so a deployment naming the default path explicitly is
+`default`, which is what it is. `relocated` is any other configured path,
+`overridden` means the configuration is not what is being read, `supplied` is a
+repository with no directory, and `unset` carries where it looked. `--json` and
+the service read this, so "nothing is configured" and "you handed me a store"
+must not arrive as two spellings a consumer has to match on.
+
+**`Config` remembers where it looked for `groups.yaml`.** The path was read,
+used for error-message prefixes and discarded. It sits on `Config` rather than on
+`Groups` because of the absent case: with no file there is no record to hang a
+path on, and "not set, and here is where I looked" is the one line that makes a
+policy written one directory off visible at all -- otherwise the deployment comes
+up reachable by everyone and says nothing.
+
+**The library's first logger is `kingfisher.origins`, and not `kingfisher`.**
+One INFO record per construction, and that is the whole budget. `print` is not an
+option -- a library that writes to stdout cannot be used by a server -- and
+`warnings.warn` means "this is probably not what you meant", which a summary is
+not. The name is the load-bearing part: `kingfisher.audit` is left unconfigured
+so that writing session ids stays a deployment's decision, a logger named
+`kingfisher` is its *parent*, and the server raises this one to INFO -- so asking
+where the definitions live would have turned the audit trail on. A test in the
+service holds the two apart.
+
+**`doctor` gained two checks a path alone could not express.** An empty
+catalogue at a path somebody typed is not an empty workspace: resolving one
+*creates* the directory it was pointed at rather than refusing an absent one, so
+a mistyped root yields a real empty one and `ok  subagents  0 defined` is what a
+correct fresh workspace says too. And a configuration that is being ignored is
+said out loud, or somebody edits the setting and watches nothing change. The
+second needed `examine` to take the inventory rather than build one -- a
+catalogue it resolves from `cfg` agrees with `cfg` by construction, so nothing it
+examined could ever be overriding it.
+
+**Rejected along the way, and each for its own reason.** Opening in-code
+configuration as a first-class path -- `Models`, `Endpoint` and `ModelProfile`
+are constructible and the test suite wires a `Config` that way, but setup stays
+YAML and directories and this was about making that legible, not replacing it.
+Merging `WorkspacePaths` into `Config` -- `Config` requires a `Models` and
+`models.yaml` lives inside the workspace, so merging means making it optional and
+taking `Models.resolve()` from total to partial. Nesting one inside the other to
+end the six duplicated fields -- measured at 7 constructions and 38 reads, both
+cheap, against 17 `replace(cfg, ...)` calls that would become nested. Serving the
+record over the HTTP surface, which authenticates nobody. And a `Config.paths`
+property, which nothing would have read.
+
+## The HTTP service
+
+**Transport only -- the server never interprets identity**, and lives in its own
+wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
+web service on disk. One request per turn, streamed, with no result persistence;
+files arrive as ids resolved through a `FileStore` port; the turn stops on
+disconnect and there is no cancel endpoint. An explicit error-to-status map, with
+a test that it is total. *(2026-08-16, `http-surface.md`; 2026-08-17,
+`the-service-as-its-own-package.md`.)*
+
+**Session ids are issued, not accepted**, and the tenancy boundary is outside
+kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
+
+**A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
+before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
+
 ## Layering
+
 
 **`infrastructure/harness/` holds every module that imports deepagents, langchain
 or langgraph**, and only that package may. Registries and DTOs did *not* move to
@@ -942,6 +1065,88 @@ and `infrastructure/catalogue/agents.py` stay where they are, and
 `harness/agent.py` with them -- assembling a graph out of the three kinds is
 kingfisher's own job, not any kind's.
 
+**Reversed: "the rest of the layer stays flat."** The clause read *a second
+subpackage would advertise a distinction no test could hold*, and by the time
+anyone looked there were three of them -- `catalogue/` had arrived without the
+sentence being revisited, which is the drift the sentence was written to
+prevent. `sandbox/` and `workspace/` joined it deliberately.
+*(2026-08-17, reversed 2026-09-04.)*
+
+What makes a group rather than a folder, since the original worry was real: the
+modules have to share a *subject*, not a layer. `confinement`, `fence` and
+`bubblewrap` are one policy and the two kernels that carry it -- the only corner
+of `infrastructure/` where being wrong is a security failure rather than a bug.
+`fs`, `seeding`, `uploads` and `files` all write into one directory, and three
+of them have a rule about not destroying what another put there.
+
+And the harness rule is what bounds them. The backend that *applies* a
+confinement, and the registry `uploads` asks about a name, both import
+deepagents -- so they stay in `harness/` and the groups are "everything about
+this subject that does not need the agent runtime". A grouping that had pulled
+them in would have traded an enforced rule for a tidier directory.
+
+Two mechanical facts worth knowing before the next one. `HARNESS_EDGES` is keyed
+by a module's path below its layer, so moving a file into a subpackage renames
+its entry and the table goes red until told -- which is the table working.
+And `tool.ty.overrides` lists files by path: the block ignoring the optional
+Linux-only `sandlock` import named `fence.py` and `confinement.py`, and left
+behind would have stopped matching and gone silently useless.
+
+**Rejected with it: inverting the nesting to `function/layer.py`.** Drawn in
+full -- fourteen modules, every file placed -- and measured rather than argued.
+The asset kinds are 26% of the tree; a concept's files change together in only
+13-29% of the commits that touch them; and the tightest co-change pair in the
+repository, `subagent` with `harness/agent.py` at 18, runs straight across the
+boundary such a slice would draw. It would have put a deepagents import in 8 of
+14 modules, turning "only this package" into a list of fourteen filenames, and
+`application/config.py` -- which must not pull the harness in, at 39ms against
+888ms -- would have sat beside a sibling that does. *(2026-09-04.)*
+
+**The rule is not a portability claim, and used to read like one.** It said the
+rule "states the swap boundary: replace the harness and exactly those files are
+rewritten", which is true and was the wrong thing to lead with -- it invites the
+next reader to plan around a second harness. Kingfisher is an adapter over
+deepagents. Supporting another framework is *out of scope*, not scheduled, and
+recorded here so the question is not re-opened as though it were open.
+
+What the rule buys, today and repeatedly, is the blast radius of an *upgrade*.
+Not swapping deepagents is not the same as not upgrading it, and `pyproject.toml`
+says what that costs: it "is beta and says so at every construction ... this one
+has moved through 0.1, 0.2 and 0.3 in under two months". A minor bump rewrites
+the same files a swap would, and the rule is what makes that a list of ten
+modules instead of a search. It also keeps the harness off the paths that never
+needed it, which is what lets `kingfisher seed` cost 20ms rather than importing
+three provider SDKs.
+
+Worth knowing before that scope changes: **nothing declares what a harness is.**
+The twelve Protocols in `domain/ports.py` abstract storage and the OS -- stores,
+repositories, a command runner -- and not one of them abstracts the runtime;
+`application/` reaches it as `infrastructure.harness.runtime`, a module rather
+than a port. So a second harness does not begin by rewriting ten files, it begins
+by discovering the interface, which is not written down anywhere. That is the
+right order: an interface derived from a single implementation comes out shaped
+like that implementation. *(2026-09-04.)*
+
+**A layer may answer for its own names, lazily.** `from kingfisher.application
+import Kingfisher` works alongside the root import, and resolves through a
+`__getattr__` table rather than plain imports at the top of the file.
+
+That is not a style preference. A package's `__init__` runs before any of its
+submodules, so nine eager imports there would make `application.config` -- which
+needs no harness at all -- pay for `service`, which imports deepagents, which
+imports three provider SDKs at module level. Measured both ways: 39ms lazy,
+888ms eager, and the eager form pulls deepagents into a process that only wanted
+to read environment variables. `kingfisher seed` is 20ms today and would have
+become fifty times slower while staying correct.
+
+The cost is a second table, and two tables that can disagree is what this
+repository distrusts everywhere else -- so they are held to each other in both
+directions, on the module string as well as the name. Only `application/` has
+one, because only it was asked for. *(2026-09-03.)*
+
+## Splitting a file
+
+
 **`workspace/fs.py` became six modules; four other long files did not.**
 `layout` makes the tree and places the furniture that ships in it, `sessions` is
 one session's directory and the ports over it, `permissions` owns the write bits
@@ -1036,67 +1241,8 @@ because five fields on `Config` had invariants between them that siblings of
 `shell_sandbox` could not express. That split ran along a rule, not along a size,
 and it happened inside the file. *(Measured 2026-09-04.)*
 
-**Reversed: "the rest of the layer stays flat."** The clause read *a second
-subpackage would advertise a distinction no test could hold*, and by the time
-anyone looked there were three of them -- `catalogue/` had arrived without the
-sentence being revisited, which is the drift the sentence was written to
-prevent. `sandbox/` and `workspace/` joined it deliberately.
-*(2026-08-17, reversed 2026-09-04.)*
+## The architecture rules
 
-What makes a group rather than a folder, since the original worry was real: the
-modules have to share a *subject*, not a layer. `confinement`, `fence` and
-`bubblewrap` are one policy and the two kernels that carry it -- the only corner
-of `infrastructure/` where being wrong is a security failure rather than a bug.
-`fs`, `seeding`, `uploads` and `files` all write into one directory, and three
-of them have a rule about not destroying what another put there.
-
-And the harness rule is what bounds them. The backend that *applies* a
-confinement, and the registry `uploads` asks about a name, both import
-deepagents -- so they stay in `harness/` and the groups are "everything about
-this subject that does not need the agent runtime". A grouping that had pulled
-them in would have traded an enforced rule for a tidier directory.
-
-Two mechanical facts worth knowing before the next one. `HARNESS_EDGES` is keyed
-by a module's path below its layer, so moving a file into a subpackage renames
-its entry and the table goes red until told -- which is the table working.
-And `tool.ty.overrides` lists files by path: the block ignoring the optional
-Linux-only `sandlock` import named `fence.py` and `confinement.py`, and left
-behind would have stopped matching and gone silently useless.
-
-**Rejected with it: inverting the nesting to `function/layer.py`.** Drawn in
-full -- fourteen modules, every file placed -- and measured rather than argued.
-The asset kinds are 26% of the tree; a concept's files change together in only
-13-29% of the commits that touch them; and the tightest co-change pair in the
-repository, `subagent` with `harness/agent.py` at 18, runs straight across the
-boundary such a slice would draw. It would have put a deepagents import in 8 of
-14 modules, turning "only this package" into a list of fourteen filenames, and
-`application/config.py` -- which must not pull the harness in, at 39ms against
-888ms -- would have sat beside a sibling that does. *(2026-09-04.)*
-
-**The rule is not a portability claim, and used to read like one.** It said the
-rule "states the swap boundary: replace the harness and exactly those files are
-rewritten", which is true and was the wrong thing to lead with -- it invites the
-next reader to plan around a second harness. Kingfisher is an adapter over
-deepagents. Supporting another framework is *out of scope*, not scheduled, and
-recorded here so the question is not re-opened as though it were open.
-
-What the rule buys, today and repeatedly, is the blast radius of an *upgrade*.
-Not swapping deepagents is not the same as not upgrading it, and `pyproject.toml`
-says what that costs: it "is beta and says so at every construction ... this one
-has moved through 0.1, 0.2 and 0.3 in under two months". A minor bump rewrites
-the same files a swap would, and the rule is what makes that a list of ten
-modules instead of a search. It also keeps the harness off the paths that never
-needed it, which is what lets `kingfisher seed` cost 20ms rather than importing
-three provider SDKs.
-
-Worth knowing before that scope changes: **nothing declares what a harness is.**
-The twelve Protocols in `domain/ports.py` abstract storage and the OS -- stores,
-repositories, a command runner -- and not one of them abstracts the runtime;
-`application/` reaches it as `infrastructure.harness.runtime`, a module rather
-than a port. So a second harness does not begin by rewriting ten files, it begins
-by discovering the interface, which is not written down anywhere. That is the
-right order: an interface derived from a single implementation comes out shaped
-like that implementation. *(2026-09-04.)*
 
 **Architecture rules are mutation-tested, not trusted.** All 44 were audited;
 43 held and one had lost its subject. Three of them exist *because* a rule had
@@ -1127,128 +1273,14 @@ A caution for whoever measures this again: a first pass counted 40 of 45
 unresolved, and three of the resolutions it did find came out of `.venv` --
 `deepagents/middleware/skills.py` made `skills.py` look real. *(2026-09-06.)*
 
-**A layer may answer for its own names, lazily.** `from kingfisher.application
-import Kingfisher` works alongside the root import, and resolves through a
-`__getattr__` table rather than plain imports at the top of the file.
+## Proposals, and what became of them
 
-That is not a style preference. A package's `__init__` runs before any of its
-submodules, so nine eager imports there would make `application.config` -- which
-needs no harness at all -- pay for `service`, which imports deepagents, which
-imports three provider SDKs at module level. Measured both ways: 39ms lazy,
-888ms eager, and the eager form pulls deepagents into a process that only wanted
-to read environment variables. `kingfisher seed` is 20ms today and would have
-become fifty times slower while staying correct.
+Nothing is open. `docs/design/` is empty, which is a state rather than a gap: a
+document belongs there while it is arguing for something, and everything that
+argued here was built and its decisions moved up.
 
-The cost is a second table, and two tables that can disagree is what this
-repository distrusts everywhere else -- so they are held to each other in both
-directions, on the module string as well as the name. Only `application/` has
-one, because only it was asked for. *(2026-09-03.)*
-
-## Sessions and storage
-
-**The session directory is the backend root**, `/data` is materialised once at
-session creation, writes come back as a manifest, and processes are stateless
-while the service is stateful. `sweep()` came off the request path.
-*(2026-08-16, `session-scoped-api.md`, `durable-session-data.md`.)*
-
-**A deployment names its store in a setting; it does not pass an object.**
-`Config.session_store` could only be a directory and its comment said why -- *"a
-deployment reaching for that passes an object rather than a path"* -- and both
-halves were wrong. An environment variable can name a factory, which is how
-`models.yaml` has always reached a chat class; and passing an object only reaches
-the one construction site a deployment controls, which is neither of the two
-kingfisher ships. `presentation/cli/__main__.py` builds its own `Kingfisher` and
-there is nowhere to point it. A setting resolved inside `Kingfisher.__init__` is
-inherited by every entry point at once.
-
-**A zero-argument factory, not a class and not an instance.** `module:name`, the
-same string `Adapter.chat_class` uses. Kingfisher does not know whether a store
-wants a bucket, a DSN or a pool, so it asks for none of them and the factory
-reads its own configuration; inventing a URL grammar for stores it knows nothing
-about is the version that ages worst, and a ready-made instance moves
-construction to import time, where "cannot reach the bucket" arrives as an
-`ImportError` from a module nobody was reading.
-
-**What is checked is the name, not the building.** A spec that will not parse, a
-module that will not import, an attribute that is not there, a result of the
-wrong shape: `ConfigError`, naming the setting. A factory raising its *own*
-exception passes through untouched -- that is the deployment's code failing at
-the deployment's job, its type may be one their handling knows, and `store_named`
-is already on the traceback saying which setting reached it.
-
-**Naming a store twice is refused at startup, not resolved by precedence**, and
-on the record rather than in the reader, so a config assembled in Python obeys
-the same rule. Preferring one silently leaves a deployment's sessions in the
-directory it stopped meaning to use, and nothing says so until somebody goes
-looking.
-
-**Environment variables, never a workspace file.** Measured rather than assumed:
-`confinement.writable_roots` returns the whole workspace plus scratch, carving
-out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` are
-writable by the agent's shell. The rule is already stated at
-`confinement.resolve` -- *"host-side configuration, and a file the agent could
-edit is not a boundary"*. This is why a store as a workspace *asset* is closed
-rather than deferred: it is the middleware decision again, one object further in.
-The agent cannot reach environment variables at all -- its shell gets an
-allowlist of five plus the skills directory.
-
-**A port a deployment can name gets a runnable contract.** `SESSION_STORE_CONTRACT`
-and `FILE_STORE_CONTRACT` in `kingfisher.testing` are the checks
-`tests/unit/` runs, exported so a deployment runs them against its own adapter. A
-setting inviting somebody to write an implementation without a way to check it is
-worse than no setting, and the parts easiest to get wrong are the ones that
-matter: extracting the session kit found `knows()` -- the method the port calls a
-security question -- with no test anywhere, and a store answering `True` for
-every id passes 2,255 other tests while letting a caller resume a session they
-invented.
-
-**The kit imports no test framework**, which is what lets it live in the library
-rather than a second wheel: `pip install kingfisher` gains a module and no test
-dependency. Each check raises `AssertionError` with the whole story, because
-pytest's assertion rewriting does not reach an imported library and `python -O`
-strips a bare `assert` -- a conformance kit passing while checking nothing is
-worse than no kit.
-
-**The two kits take different arguments, because the ports differ.**
-`SessionStore` writes, so its checks are handed a factory and fill their own.
-`FileStore` is one method and that method reads: kingfisher never writes to a
-file store, so a check cannot plant the file it then fetches, and the deployment
-hands over a `Planted` describing what it planted.
-
-**`FileStore`'s setting is the service's, `SessionStore`'s is the library's.** An
-asymmetry, kept deliberately: a `FileStore` resolves *refs*, the vocabulary of a
-caller with no host paths, and `kingfisher run` takes `--input` as a path on this
-machine and neither builds one nor could use one. The setting belongs where the
-port is used. Flagged while proposed as the decision most likely to be wrong, and
-it survived being built.
-
-**The backend stays kingfisher's, and a store as a workspace asset is refused.**
-The backend is not "where files live": it wraps every shell command in
-`sandbox-exec` or Landlock, it is what refuses a host path, and its route table
-is what makes `DATA_IS_READ_ONLY` legal at all -- deepagents refuses
-`permissions=` outright on a backend that executes unless every rule is
-route-scoped. Routing `/data` to a store would also break the promise
-`prompts/system.md` makes the model in a table -- *"nothing in the workspace is
-out of the shell's reach"* -- leaving the agent able to read its inputs and unable
-to run anything over them. Object storage reaches a session as a mount
-(`SessionRoot`) or by being copied in and out, and both work today.
-
-**Considered and rejected with it:** a backend factory on `Kingfisher` (deferred,
-and if ever opened then routes only, never the default slot); kingfisher shipping
-an S3 store behind a closed table like `ADAPTERS`, which would put this package in
-the business of owning every backing store anyone asks for; and a builder
-parameter on `create_app`, designed and dropped once the resolution point moved
-inside `Kingfisher.__init__` and left it nothing to do.
-*(2026-09-04 to 2026-09-05, `a-store-a-deployment-can-name.md`, built in four
-slices. Its one correction is worth keeping: an argument about `create_app`
-needing a checkpointer held open for the process was true when written and false
-a day later, `48cd457` having made the default `InMemorySaver`. The conclusion
-did not rest on it.)*
-
-## Still proposed, not built
-
-Nothing. `docs/design/` is empty, which is a state rather than a gap: a document
-belongs there while it is arguing for something.
+The heading said *Still proposed, not built* while listing only things that
+were, which is the drift this page exists to catch, on the page itself.
 
 *A second one was there until 2026-08-31. `a-tool-failure-is-not-a-crash` had
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
@@ -1277,3 +1309,4 @@ underneath it. Its decisions are under *Sessions: what persists and where* above
 and its measurements in `findings.md`; what stayed unbuilt is what it deferred on
 purpose -- admission control, the run log ceasing to be a file -- plus mirage,
 which it recommended against.*
+

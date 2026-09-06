@@ -48,7 +48,7 @@ wearing the wrong hat.
 
 Empty again, and that is a state rather than a gap. *A store a deployment can
 name* was there from 2026-09-04 to 2026-09-05 and left the way the rule says:
-built in four slices, its decisions now under *Sessions and storage* in
+built in four slices, its decisions now under *Wiring a store* in
 `decisions.md`.
 
 A document belongs there while it is arguing for something; once it is built its
