@@ -235,10 +235,13 @@ work.
 
 ## What this does not do
 
-**The `TYPE_CHECKING` block stays unguarded.** Nothing binds those re-exports to
-`_EXPORTS`, so a stale entry leaves `ty` believing a name is importable that
-raises `AttributeError` at runtime. The gap predates this and is a fix of its
-own; smuggling it in here would hide it in a diff about something else.
+**The `TYPE_CHECKING` block was left unguarded here, and fixed separately.**
+Nothing bound those re-exports to `_EXPORTS`, and the gap predated this work, so
+smuggling it in would have hidden it in a diff about something else. It got its
+own change on the same day, and the drift was real when the rule first ran:
+`spell` and `SessionInfo` were exported with no stub, which a measurement showed
+means `Any` to a type checker rather than the class. The direction named above --
+a stub for a name that is *not* exported -- turned out to be the rarer half.
 
 **The CLI stays in the wheel, and this only works while it does.** Every eviction
 here depends on the CLI being family. Move it to its own distribution afterwards
