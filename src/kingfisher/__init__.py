@@ -37,6 +37,21 @@ __version__ = "0.1.0"
 #: cannot answer the only question asked of it, which is what a caller may rely
 #: on.
 #:
+#: **A caller means a caller outside this wheel.** That is new, and it is the
+#: rule the eleven above were removed under without anyone saying so. The command
+#: ships in this distribution and is family: it reaches a name this table does
+#: not carry at the module defining it, exactly as `build_backend`'s callers do,
+#: and still comes through the front door for every name that *is* here. The
+#: service is a distribution of its own and keeps the strict rule, because a
+#: promise is what it has instead of a shared wheel.
+#:
+#: Applied to the command, the old reading did the opposite of what a door is
+#: for: `doctor` wanting a sandbox probe turned the probe into a promise made to
+#: everybody. `Confinement` and `unrunnable_delegates` are the first two out --
+#: both were recorded here as forced public by a consumer, which was this table
+#: saying out loud that nobody outside had asked. See *The front door* in
+#: `docs/decisions.md`.
+#:
 #: Narrowed rather than deleted. `from kingfisher.infrastructure.harness.agent
 #: import build_agent` still works and is what the package itself does. An
 #: outside caller on the old spelling changes one import line, which is a real
@@ -84,10 +99,6 @@ _EXPORTS = {
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "Config": "kingfisher.config",
-    # The fourth name the consumer rule has forced public, and the first
-    # that improved the library on its own: `resolve` takes six arguments
-    # and two callers were assembling them from the same `Config`.
-    "Confinement": "kingfisher.infrastructure.sandbox.confinement",
     "bubblewrap_available": "kingfisher.infrastructure.sandbox.bubblewrap",
     "landlock_abi": "kingfisher.infrastructure.sandbox.confinement",
     "shell_confinement": "kingfisher.infrastructure.sandbox.confinement",
@@ -110,11 +121,6 @@ _EXPORTS = {
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
     "inventory": "kingfisher.application.inventory",
-    # The fifth name a consumer has forced public. A purpose-built answer
-    # rather than `model_for` itself, which the design named: `doctor` wants
-    # *which definitions cannot run*, and exporting the two calls it would
-    # need to combine would promise a recipe instead of an answer.
-    "unrunnable_delegates": "kingfisher.infrastructure.harness.activation",
     # Reached for by `kingfisher.presentation.cli`, and public because it
     # reached. A
     # renderer in the domain looks odd until you see what it is for: the
@@ -162,7 +168,6 @@ __all__ = [
     "CapabilityError",
     "Config",
     "ConfigError",
-    "Confinement",
     "Held",
     "Inventory",
     "Kingfisher",
@@ -204,7 +209,6 @@ __all__ = [
     "spell",
     "split_reference",
     "stream",
-    "unrunnable_delegates",
 ]
 
 if TYPE_CHECKING:
@@ -242,13 +246,9 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
-    from kingfisher.infrastructure.harness.activation import (
-        unrunnable_delegates as unrunnable_delegates,
-    )
     from kingfisher.infrastructure.sandbox.bubblewrap import (
         bubblewrap_available as bubblewrap_available,
     )
-    from kingfisher.infrastructure.sandbox.confinement import Confinement as Confinement
     from kingfisher.infrastructure.sandbox.confinement import landlock_abi as landlock_abi
     from kingfisher.infrastructure.sandbox.confinement import (
         shell_confinement as shell_confinement,
