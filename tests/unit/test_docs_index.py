@@ -70,6 +70,79 @@ def test_the_index_links_nothing_that_moved() -> None:
     assert not dead, f"docs/README.md links {dead}, which are not there"
 
 
+#: `decisions.md` carries its own index, one row per section, and the page is
+#: long enough that the index is what a reader trusts instead of scrolling.
+DECISIONS = DOCS / "decisions.md"
+
+#: A GitHub heading anchor: lowercased, punctuation dropped, spaces to hyphens.
+#: Enough for the headings this page has -- none of them repeat, which is what
+#: would otherwise need a `-1` suffix.
+def _anchor(heading: str) -> str:
+    return re.sub(r"[^a-z0-9 -]", "", heading.lower()).replace(" ", "-")
+
+
+def _sections(text: str) -> list[str]:
+    return [line[3:].strip() for line in text.splitlines() if line.startswith("## ")]
+
+
+def test_the_decisions_index_and_its_sections_agree() -> None:
+    """An index that has quietly stopped being complete is worse than none.
+
+    The page was ordered by arrival until it had seventeen sections and two
+    about sessions four hundred lines apart, and the index is what replaced
+    scrolling. Nothing held the two together: a section added without a row goes
+    unfound by whoever trusts the index, and a row left behind by a rename
+    points at nothing while looking like an answer.
+
+    Both directions, because the two fail differently and only one of them is
+    visible when you read the page top to bottom.
+
+    Named rather than counted, for the reason the rule above it gives: "19 != 20"
+    does not say which section to go and look at.
+    """
+    text = DECISIONS.read_text(encoding="utf-8")
+    preamble = text.split("\n## ", 1)[0]
+
+    linked = set(re.findall(r"\]\(#([a-z0-9-]+)\)", preamble))
+    present = {_anchor(h): h for h in _sections(text)}
+
+    unindexed = sorted(present[a] for a in present.keys() - linked)
+    assert not unindexed, (
+        f"{unindexed} are sections of decisions.md with no row in its index — "
+        "the index is what a reader trusts instead of scrolling, so a section it "
+        "omits is one nobody finds"
+    )
+
+    dangling = sorted(linked - present.keys())
+    assert not dangling, (
+        f"the decisions index links {dangling}, which are not headings — a row "
+        "left behind by a rename points at nothing while looking like an answer"
+    )
+
+
+def test_the_page_index_does_not_cite_a_decisions_section_that_moved() -> None:
+    """`docs/README.md` names sections of `decisions.md` to send a reader to one.
+
+    Renaming a section is exactly the edit that leaves those behind, and it has:
+    `README.md` said *Sessions and storage* after that section became *Wiring a
+    store*, because the two files are edited by different tasks.
+
+    Only italicised names that the sentence marks as a destination -- "under *X*
+    in `decisions.md`". A looser match reads every emphasis on the page as a
+    citation, which is the false-positive class that got a rule for stale module
+    references rejected outright; see `decisions.md`, *The architecture rules*.
+    """
+    cited = set(re.findall(r"under \*([^*]+)\* in\s+`?decisions\.md",
+                           INDEX.read_text(encoding="utf-8")))
+    headings = set(_sections(DECISIONS.read_text(encoding="utf-8")))
+
+    assert cited, "no section citations found — this rule is about nothing"
+    assert cited <= headings, (
+        f"docs/README.md sends a reader to {sorted(cited - headings)} in "
+        "decisions.md, which has no such section"
+    )
+
+
 def test_design_holds_only_what_is_still_proposed() -> None:
     """The rule that stops the folder becoming an archive again.
 
