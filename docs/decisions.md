@@ -945,7 +945,8 @@ to somebody holding `pip install kingfisher` and nothing else. The command ships
 in the same distribution, so it is family: it reaches a name the door does not
 carry at the module defining it, and still comes through the door for every name
 that is there. The service is its own distribution and keeps the strict rule.
-*(2026-09-06, `the-front-door-is-for-outsiders.md`. Slice one of three.)*
+*(2026-09-06, `the-front-door-is-for-outsiders.md`. Three slices, all landed
+the same day.)*
 
 **It started as a proposal to move the CLI into its own wheel, and the
 measurement reversed it.** The stated reason was keeping the library's import
@@ -1000,15 +1001,31 @@ union rather than a swap is deliberate: nine public names are imported by
 neither consumer and one of them is heavy, so replacing would have quietly
 dropped them out of a guard they were already inside.
 
-**Sixteen names come off, and eight have.** `Confinement` (light) and
+**Sixteen names came off, in three slices.** `Confinement` (light) and
 `unrunnable_delegates` (heavy) landed with the rules, so each new guard had a
 live case in both branches -- a rule with no cases passes whatever it says, which
-this suite has shipped twice. `doctor`'s remaining six followed:
-`bubblewrap_available`, `landlock_abi`, `shell_confinement`, `memory_backing`,
-`destination_hint` and `DEFINITION_KINDS`, which leaves `health.py` reaching for
-every probe it makes and coming through the door for the five names that are
-still promises. `list`'s eight are slice three. 57 has become 49, and will be
-41. *(Slice two, 2026-09-06.)*
+this suite has shipped twice. Then `doctor`'s six -- `bubblewrap_available`,
+`landlock_abi`, `shell_confinement`, `memory_backing`, `destination_hint`,
+`DEFINITION_KINDS` -- and then `list`'s eight: `ALL`, `AUDIENCED`, `Audience`,
+`SEED_HINT`, `SKILL_LAYOUT`, `offered`, `spell`, `split_reference`.
+
+What that leaves is the shape worth keeping. `health.py` and `listing.py` each
+reach for every name they render or probe with, and each takes from `kingfisher`
+only the names that are answers the library gives anybody -- `Config`,
+`inventory`, `Inventory`, `Origins`, `kinds_at`. The two kinds of name are told
+apart by where the import points, in the two files that used to cost the door
+most. 57 became 41.
+
+**The fourth witness went with the last of them.** `command` was never a witness:
+it was the eviction list wearing the table's shape, so that the work remaining
+lived in the code rather than only in a proposal, and so a mislabelled entry --
+the service importing one, or the command not -- was refused. Sixteen names
+carried it and none does now, so it is gone rather than kept as a value that is
+always an error. What stops the list growing back is the deny-by-default rule and
+nothing else, which is enough: a name whose only caller is the command can be
+given none of the three remaining witnesses without somebody writing down a
+reason that is false, and the reason is the part a reader can check.
+*(Slices two and three, 2026-09-06.)*
 
 **The stub block is a third listing of these names, and is bound to the other
 two.** `__all__` and `_EXPORTS` were held to each other; the `if TYPE_CHECKING:`
@@ -1378,12 +1395,25 @@ unresolved, and three of the resolutions it did find came out of `.venv` --
 
 ## Proposals, and what became of them
 
-Nothing is open. `docs/design/` is empty, which is a state rather than a gap: a
-document belongs there while it is arguing for something, and everything that
-argued here was built and its decisions moved up.
+What is still being argued is in `docs/design/`, and `docs/README.md` lists it.
+Everything else that argued here was built and its decisions moved up.
+
+That sentence used to say how many were open and whether the folder was empty,
+and it is written this way now because both were wrong for four commits -- see
+below.
 
 The heading said *Still proposed, not built* while listing only things that
 were, which is the drift this page exists to catch, on the page itself.
+
+*And it caught it again on this very section, twice over. The front-door
+proposal was added to `docs/design/` on 2026-09-06 while these lines went on
+saying the folder was empty, and the schema proposal arrived four commits later
+and made it wronger. Nothing checks a claim like that against the directory, and
+the rule that would -- grepping prose for the word "empty" -- is more fragile
+than the thing it guards. So the claim went instead. The paragraph above points
+at the folder and at the index, and the index is held to the folder by
+`test_the_index_lists_every_document`: a sentence that cannot go stale beats a
+sentence that needs a test.*
 
 *A second one was there until 2026-08-31. `a-tool-failure-is-not-a-crash` had
 shipped -- `WorkspaceToolErrors` and `tests/unit/test_workspace_tool_errors.py` --
