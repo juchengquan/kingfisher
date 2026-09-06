@@ -1,19 +1,30 @@
-"""Where a deployment's definitions are read from.
+"""What reading a deployment's definitions needs that no one kind owns.
 
-A package, and the kinds are the point of it: `agents`, `skills`, `subagents`
-and `tools` are one module each, so the layer's top level names the concepts
-rather than the mechanisms it used to spell them with -- `skill_store`,
-`subagent_store`, `tool_store`. It said "the three kinds" until `agents` became
-one; `test_the_catalogue_holds_one_module_per_kind` binds the modules to
-`DEFINITION_KINDS` and would have refused a missing module, but a count written
-out in prose is not something any rule here reads.
+The charter changed under this file and the sentence describing it did not.
+It said "the kinds are the point of it: `agents`, `skills`, `subagents` and
+`tools` are one module each" -- true when written, and false since three of the
+four became modules at the package root. `documents` and `importing` were named
+here as neighbours and are now at the top of the layer. A reader who trusted any
+of that went looking for five files, of which one is here.
 
-`documents` reads one definition document, `layered` puts a session's own
-definitions over the deployment's, and `importing` loads a module from a path
-for the kinds that need one. Nothing else in the codebase reaches past this
-front door: outside these files, `documents` and `importing` have no callers at
-all, `layered` has one, and the repositories are reached for `ToolError`,
-`SKILL_LAYOUT` and one function.
+What is left has a subject of its own, and it is the complement of the kinds
+rather than a remnant of them. `Definitions` and `resolve_definitions` settle
+where *all four* are read from; `DEFINITION_KINDS` is derived from that record's
+fields, which is what stops it drifting from them; `bundled_tools` and
+`bundled_skills` read what one subagent keeps for itself, which is two kinds at
+once and neither kind's to own. `layered` puts a session's uploads over the
+deployment's, one merge rule per kind, written where the difference between them
+is legible.
+
+`agents` is here because it is the kind with no module, and that is a decision
+rather than an omission -- `docs/decisions.md`, *Not a module: agents*: an agent
+is selected one per request and is the thing the graph *is*, not something it
+holds.
+
+`test_the_catalogue_holds_one_module_per_kind` is what binds the modules to
+`DEFINITION_KINDS`, and it accepts a kind read from its own package or from
+here. It is also the reason this stayed a folder: "one module per kind" is not a
+shape anything can ask about a flat layer.
 
 A subagent may keep tools and skills of its own in a folder named after it, and
 those are read here too -- `bundled_tools` and `bundled_skills`, kept apart from

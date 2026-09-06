@@ -2050,26 +2050,31 @@ def test_the_kind_rule_can_tell_a_missing_reader_from_a_present_one(tmp_path):
 
 
 def test_the_catalogue_holds_one_module_per_kind():
-    """The third place the three kinds are written down, bound to the first.
+    """Every kind has a reader, bound to the constant that says which kinds exist.
 
     `DEFINITION_KINDS` is derived from `Definitions`' fields, so those two
-    cannot drift. The module names are the copy with no type and no constant
-    behind it: `skills.py`, `subagents.py` and `tools.py` say "there are three
-    kinds and these are they" as loudly as either, and nothing was holding them
-    to it. A fourth kind added to `Definitions` with no module to read it, or a
-    module renamed out from under the constant, would both have passed.
+    cannot drift. A module named for a kind is the copy with no type and no
+    constant behind it, and nothing was holding it to them: a fourth kind added
+    to `Definitions` with no module to read it, or a module renamed out from
+    under the constant, would both have passed.
 
-    The folder is what makes this checkable at all. Flat among thirteen other
-    modules, "one module per kind" was not a shape anything could ask about.
+    **Either of two places, and by now that is the ordinary case rather than the
+    exception it was written as.** `skills`, `subagents` and `tools` each became
+    a module at the package root and took their readers with them; `agents` is
+    the one still here, by the decision in `docs/decisions.md` under *Not a
+    module: agents*. A rule looking only in `catalogue/` would now report three
+    kinds as unread while three modules read them. What this is about is that
+    every kind has exactly one reader, not where the file sits.
 
-    Subset rather than equality: `layered`, `documents` and `importing` are in
-    this package for good reasons and are not kinds.
+    The folder is still what makes the question askable. Flat among the layer's
+    other modules, "one module per kind" is not a shape anything can ask about
+    -- which is the reason `catalogue/` stayed a package after three of the four
+    kinds left it.
 
-    A kind counts as read from either of two places now. `skills` became a
-    module of its own -- `skills/catalogue.py` -- so the reader for that kind
-    left this package, and a rule looking only here would have reported a kind
-    nothing reads while something read it. What the rule is about is that every
-    kind has exactly one reader, not where the file sits.
+    Subset rather than equality: `layered` is in that package for a good reason
+    and is not a kind. It said "`layered`, `documents` and `importing`" until
+    the latter two moved up a level, which is the same drift this rule exists to
+    catch, one directory over and in prose that nothing reads.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
