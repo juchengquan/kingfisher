@@ -58,10 +58,6 @@ __version__ = "0.1.0"
 #: cost measured against users this repository cannot see -- accepted at 0.1.0,
 #: and noted here rather than discovered later.
 _EXPORTS = {
-    "ALL": "kingfisher.domain.capabilities",
-    "AUDIENCED": "kingfisher.domain.access",
-    "spell": "kingfisher.domain.access",
-    "Audience": "kingfisher.domain.access",
     "Held": "kingfisher.domain.access",
     "AccessError": "kingfisher.domain.access",
     "UNSCOPED": "kingfisher.domain.access",
@@ -113,20 +109,6 @@ _EXPORTS = {
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
     "inventory": "kingfisher.application.inventory",
-    # Reached for by `kingfisher.presentation.cli`, and public because it
-    # reached. A
-    # renderer in the domain looks odd until you see what it is for: the
-    # block a *refusal* prints is the block a listing prints, so a name two
-    # files define reads the same in both. A consumer rendering its own
-    # would be the drift that rule exists to stop.
-    "offered": "kingfisher.tools.spec",
-    # The third name a consumer turned out to need, and it arrived the same
-    # way: two folders may each define a `surveyor`, so a listing has to tell
-    # a bare name from a `where::what` reference before deciding whether to
-    # print the file it came from.
-    "split_reference": "kingfisher.tools.spec",
-    "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
-    "SKILL_LAYOUT": "kingfisher.skills.catalogue",
     "Inventory": "kingfisher.application.inventory",
     # Where this deployment reads from, as against what it offers. Public
     # because the answer was assembled three times and agreed nowhere: the
@@ -141,15 +123,10 @@ _EXPORTS = {
 }
 
 __all__ = [
-    "ALL",
-    "AUDIENCED",
     "FILE_STORE_CONTRACT",
-    "SEED_HINT",
     "SESSION_STORE_CONTRACT",
-    "SKILL_LAYOUT",
     "UNSCOPED",
     "AccessError",
-    "Audience",
     "Capabilities",
     "CapabilityError",
     "Config",
@@ -183,12 +160,9 @@ __all__ = [
     "file_store_named",
     "inventory",
     "kinds_at",
-    "offered",
     "paths_from_env",
     "run",
     "seed",
-    "spell",
-    "split_reference",
     "stream",
 ]
 
@@ -208,13 +182,9 @@ if TYPE_CHECKING:
     from kingfisher.config import Config as Config
     from kingfisher.config import ConfigError as ConfigError
     from kingfisher.config import WorkspacePaths as WorkspacePaths
-    from kingfisher.domain.access import AUDIENCED as AUDIENCED
     from kingfisher.domain.access import UNSCOPED as UNSCOPED
     from kingfisher.domain.access import AccessError as AccessError
-    from kingfisher.domain.access import Audience as Audience
     from kingfisher.domain.access import Held as Held
-    from kingfisher.domain.access import spell as spell
-    from kingfisher.domain.capabilities import ALL as ALL
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.references import (
@@ -236,7 +206,6 @@ if TYPE_CHECKING:
         file_store_named as file_store_named,
     )
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
-    from kingfisher.infrastructure.workspace.seeding import SEED_HINT as SEED_HINT
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
     from kingfisher.infrastructure.workspace.seeding import (
         definitions_source as definitions_source,
@@ -244,15 +213,12 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace.seeding import seed as seed
     from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
-    from kingfisher.skills.catalogue import SKILL_LAYOUT as SKILL_LAYOUT
     from kingfisher.skills.spec import SkillError as SkillError
     from kingfisher.subagents.spec import RunOn as RunOn
     from kingfisher.subagents.spec import SubagentError as SubagentError
     from kingfisher.testing import FILE_STORE_CONTRACT as FILE_STORE_CONTRACT
     from kingfisher.testing import SESSION_STORE_CONTRACT as SESSION_STORE_CONTRACT
     from kingfisher.testing import Planted as Planted
-    from kingfisher.tools.spec import offered as offered
-    from kingfisher.tools.spec import split_reference as split_reference
 
 
 def __getattr__(name: str) -> Any:

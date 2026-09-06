@@ -54,14 +54,11 @@ slices land.
   when a caller wants a schema, and why the format that prompted it is not
   named in the source. Its first slice stands alone; the rest waits for
   something that renders.
-- [The front door is for
-  outsiders](design/2026-09-06-the-front-door-is-for-outsiders.md) — why the CLI
-  stays in this wheel rather than becoming a second distribution, and what the
-  export list promises once only outsiders count.
 
-It was empty for a day before either. *A store a deployment can name* was there
-from 2026-09-04 to 2026-09-05 and left the way the rule says: built in four
-slices, its decisions now under *Wiring a store* in `decisions.md`.
+Two have passed through and left the way the rule says. *A store a deployment
+can name* was built in four slices; its decisions are under *Wiring a store* in
+`decisions.md`. *The front door is for outsiders* was built in three; its
+decisions are under *The front door* in `decisions.md`.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to

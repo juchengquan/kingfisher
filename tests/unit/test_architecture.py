@@ -1580,10 +1580,17 @@ def test_the_stub_block_and_the_export_table_name_the_same_things(package, path)
 #:               gets thirty-one, every one of them the English word.
 #: `embedder` -- nothing in this repository asks and it is kept anyway. These
 #:               are the entries worth arguing about, so each says why.
-#: `command`  -- nothing outside this wheel asks, and the command is the only
-#:               caller. Under the rule this table states that is not a witness
-#:               at all: these are the work that remains, in slices two and
-#:               three of *The front door* in `docs/decisions.md`.
+#:
+#: There was a fourth, `command`, for a name nothing outside this wheel asked
+#: for. It was never a witness -- it was the eviction list wearing the table's
+#: shape, so that the work remaining lived in the code rather than only in a
+#: proposal. Sixteen names carried it and all sixteen have gone; it went with
+#: the last of them rather than staying as a value that is always an error.
+#:
+#: What replaces it is the rule below and nothing else, which is enough: a name
+#: whose only caller is the command can be given none of the three above without
+#: somebody writing a false reason, and the reason is the part a reader can
+#: check. *The front door* in `docs/decisions.md`.
 #:
 #: Deny by default. A name in `_EXPORTS` and not here fails the rule below,
 #: which is where somebody decides which kind it is rather than discovering a
@@ -1661,16 +1668,6 @@ WITNESSES: dict[str, str] = {
     # standing proposal about deployments naming their own store, which is a
     # reason to leave it reachable while that argument is live.
     "LocalSessionStore": "embedder",
-    # Everything below is reached by the command and by nothing else. Slice two
-    # took `doctor`'s six; slice three takes `list`'s.
-    "ALL": "command",
-    "AUDIENCED": "command",
-    "Audience": "command",
-    "SEED_HINT": "command",
-    "SKILL_LAYOUT": "command",
-    "offered": "command",
-    "spell": "command",
-    "split_reference": "command",
 }
 
 
@@ -1727,30 +1724,6 @@ def test_the_service_witnesses_are_read_not_claimed():
         "WITNESSES and the service disagree about who imports what: "
         f"claimed and not imported {sorted(claimed - actual)}, "
         f"imported and labelled otherwise {sorted(actual - claimed)}"
-    )
-
-
-def test_the_command_witnesses_are_what_is_left_to_do():
-    """`command` means nobody outside asked -- so nothing outside may be asking.
-
-    The bucket is a list of scheduled removals, and a mislabelled entry is a
-    name that gets removed while a real caller depends on it. Two ways to be
-    wrong, both checked: the service importing one of these, and one of these
-    not actually being imported by the command at all.
-    """
-    leaving = {name for name, why in WITNESSES.items() if why == "command"}
-
-    assert leaving, "nothing is left to take off the door -- slices two and three landed"
-    assert not leaving & _through_the_front_door(CONSUMERS["kingfisher_service"]), (
-        "the service imports a name labelled `command`, which is a witness saying "
-        "nobody outside this wheel asked"
-    )
-
-    unused = leaving - _through_the_front_door(CONSUMERS["cli"])
-    assert not unused, (
-        f"{sorted(unused)} are labelled `command` and the command does not import "
-        "them -- nobody reaches them at all, which is a stronger reason to go, not "
-        "a weaker one, but the label is wrong"
     )
 
 

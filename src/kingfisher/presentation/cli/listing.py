@@ -13,18 +13,25 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 
-from kingfisher import (
-    ALL,
-    AUDIENCED,
-    SEED_HINT,
-    SKILL_LAYOUT,
-    Audience,
-    Inventory,
-    Origins,
-    offered,
-    spell,
-    split_reference,
-)
+from kingfisher import Inventory, Origins
+
+# The renderer's own vocabulary, taken where it lives. A listing prints
+# audiences, tells a bare name from a `where::what` reference, and quotes the
+# sentence a refusal quotes -- none of which anybody outside this wheel has ever
+# asked for, and all of which were on the front door because *this file* was
+# forbidden to reach for them. `offered` is the one worth naming: a renderer in
+# the domain looks odd until you see that the block a refusal prints is the
+# block a listing prints, so a name two files define reads the same in both.
+# Shared for that reason, not promised for it.
+#
+# `Inventory` and `Origins` stay above because they are answers the library
+# gives anybody who asks, and `test_architecture` refuses the other spelling for
+# them. See *The front door* in `docs/decisions.md`.
+from kingfisher.domain.access import AUDIENCED, Audience, spell
+from kingfisher.domain.capabilities import ALL
+from kingfisher.infrastructure.workspace.seeding import SEED_HINT
+from kingfisher.skills.catalogue import SKILL_LAYOUT
+from kingfisher.tools.spec import offered, split_reference
 
 
 def _from(source: str | None, expected: str) -> str:
