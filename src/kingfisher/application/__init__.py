@@ -7,7 +7,7 @@ reaches deepagents only through `infrastructure/`.
 
 `run.py` and `runlog.py` each once carried their own copy of LangChain's
 usage-metadata shape, kept in sync by nobody. That is the failure the rule
-exists to prevent, and `tests/test_architecture.py` enforces it.
+exists to prevent, and `tests/unit/test_architecture.py` enforces it.
 
 Names are re-exported here as well as from the package root, so a caller that
 wants to say where something lives can. `from kingfisher.application import

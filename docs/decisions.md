@@ -1102,6 +1102,31 @@ like that implementation. *(2026-09-04.)*
 43 held and one had lost its subject. Three of them exist *because* a rule had
 stopped working silently. *(2026-08-18, `mutating-the-architecture-rules.md`.)*
 
+**Rejected: a rule against prose naming a module that is not there.** Four stale
+claims were found in one session -- the CLI's charter, a refusal naming
+`access.yaml`, `pyproject.toml` citing a rule it had reversed, and
+`catalogue/`'s docstring describing three modules that had left it. Three were
+caught by a test and the fourth by reading, so a rule for the fourth looked
+worth having. Measured before building, and it is not.
+
+Sixty-one module paths appear in `src/` prose. Resolved the way a reader does --
+sibling first, then the package root, then the tree -- twelve do not exist:
+**seven are illustrative** (`vendor_a/fetch.py` is a *workspace's* layout, not
+kingfisher's), **three are deliberate history** ("it *was* `subagent_middleware`
+in `delegation.py`"), and **two are rot**. Ten false positives to two true ones,
+separated by tense and intent, which no pattern sees. `test_no_code_cites_a_document_that_is_not_there`
+works because `docs/` holds few paths and none of them illustrate anything.
+
+What settles it: the rule would not have caught the case that motivated it.
+`catalogue/`'s docstring said "`agents`, `skills`, `subagents` and `tools` are
+one module each" -- backticked bare words, no `.py`, invisible to anything
+matching a path. Loose enough to catch those, it would fire on every ordinary
+use of the words this codebase is *about*.
+
+A caution for whoever measures this again: a first pass counted 40 of 45
+unresolved, and three of the resolutions it did find came out of `.venv` --
+`deepagents/middleware/skills.py` made `skills.py` look real. *(2026-09-06.)*
+
 **A layer may answer for its own names, lazily.** `from kingfisher.application
 import Kingfisher` works alongside the root import, and resolves through a
 `__getattr__` table rather than plain imports at the top of the file.
