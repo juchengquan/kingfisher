@@ -5,11 +5,16 @@ they sit at the package root with `Config` itself. `models` owns the closed
 adapter table and construction. This owns the step in between: turning one
 authored document into those records, and refusing the ways it can be wrong.
 
-Not `definitions.py`, whose charter is stated and narrow -- "reading a
-definition document into the value *the domain* works with". A model profile is
-not a domain value: `domain/` may not read deployment configuration at all, and
-a test enforces it. Widening that module to cover both would make its name a
-guess, which its own closing paragraph refuses.
+Not folded into anything that reads a *definition*, and there is no longer a
+single module to be folded into: each kind reads its own documents --
+`subagents.reading`, `skills.reading`, `catalogue.agents.read_agent` -- and
+`documents` is the yaml step underneath them plus two scans that never parse.
+
+This paragraph said "not `definitions.py`, whose charter is stated and narrow",
+quoting a module that has since been renamed *and* had that charter taken off
+it. Both halves were wrong and neither could fail. A model profile is still not
+a definition: it names no kind, no request activates it, and `domain/` may not
+read deployment configuration at all.
 
 `safe_load`, for a different reason than there. Definitions arrive from a
 catalogue service, which makes them input rather than something we wrote; this
