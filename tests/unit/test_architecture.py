@@ -130,6 +130,43 @@ def _imported_modules(path: Path) -> set[str]:
     return modules
 
 
+def _imported_names(path: Path) -> dict[str, frozenset[str]]:
+    """Every module this file imports, and the names it takes from each.
+
+    A sibling of `_imported_modules` rather than a replacement. Eleven rules
+    read that one and care only about which modules were named; this is for the
+    one rule that has to weigh *what* was taken.
+
+    `import kingfisher.tools.spec` maps to the empty set, and that is
+    load-bearing rather than a gap: the form names nothing at the import, so a
+    rule about names has nothing to weigh and refuses it outright below. The two
+    collectors are held to the same keys by
+    `test_both_import_collectors_see_the_same_modules`, because a rule reading
+    one while another reads the other is how an import becomes invisible to
+    half this file.
+    """
+    tree = ast.parse(path.read_text(encoding="utf-8"))
+    package = _package_of(path)
+    taken: dict[str, set[str]] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                taken.setdefault(alias.name, set())
+        elif isinstance(node, ast.ImportFrom):
+            names = {alias.name for alias in node.names}
+            if not node.level:
+                if node.module:
+                    taken.setdefault(node.module, set()).update(names)
+                continue
+            base = package[: max(len(package) - (node.level - 1), 0)]
+            if node.module:
+                taken.setdefault(".".join((*base, node.module)), set()).update(names)
+            else:
+                for alias in node.names:
+                    taken.setdefault(".".join((*base, alias.name)), set())
+    return {module: frozenset(names) for module, names in taken.items()}
+
+
 def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     """Every module in a layer, subpackages included.
 
@@ -1425,6 +1462,203 @@ def test_the_public_api_list_matches_the_lazy_export_table():
     assert sorted(kingfisher.__all__) == sorted(kingfisher._EXPORTS)
 
 
+#: Why each public name is public: who outside this wheel asked for it.
+#:
+#: `_EXPORTS` says what a name *is*, one comment at a time, and that is the
+#: right place for it. This says who is owed it, which is a different question
+#: and the one the list could not answer -- eleven names left it in a single
+#: commit because nothing told a name added on a caller from a name added on a
+#: guess, and two more left on this rule.
+#:
+#: Four witnesses:
+#:
+#: `service`  -- `kingfisher-service` imports it. Read off the service's own
+#:               imports below, so this half cannot rot.
+#: `document` -- a page tells a reader to write it. Checked by a person and
+#:               never by grep: `offered` gets five hits in the guides and `run`
+#:               gets thirty-one, every one of them the English word.
+#: `embedder` -- nothing in this repository asks and it is kept anyway. These
+#:               are the entries worth arguing about, so each says why.
+#: `command`  -- nothing outside this wheel asks, and the command is the only
+#:               caller. Under the rule this table states that is not a witness
+#:               at all: these are the work that remains, in slices two and
+#:               three of *The front door* in `docs/decisions.md`.
+#:
+#: Deny by default. A name in `_EXPORTS` and not here fails the rule below,
+#: which is where somebody decides which kind it is rather than discovering a
+#: year later that nothing looked.
+WITNESSES: dict[str, str] = {
+    # The nineteen the service imports. Nothing to argue about and nothing to
+    # maintain: `test_the_service_witnesses_are_read_not_claimed` compares this
+    # against what `kingfisher_service` actually writes, both directions.
+    "AccessError": "service",
+    "Capabilities": "service",
+    "CapabilityError": "service",
+    "Config": "service",
+    "Kingfisher": "service",
+    "LocalFileStore": "service",
+    "QuotaExceededError": "service",
+    "Request": "service",
+    "RunEvent": "service",
+    "RunResult": "service",
+    "SessionBusyError": "service",
+    "SessionInfo": "service",
+    "SkillError": "service",
+    "SubagentError": "service",
+    "UnknownReferenceError": "service",
+    "UnknownSessionError": "service",
+    "UnsafeReferenceError": "service",
+    "UploadError": "service",
+    "config_from_env": "service",
+    # Was `embedder` on this branch -- "raised by `config_from_env`, so a caller
+    # that builds a `Config` must be able to catch it" -- and the service picked
+    # it up before the branch landed. The rule read the service rather than the
+    # label and said so, which is the half of it that is not decoration.
+    "ConfigError": "service",
+    "file_store_named": "service",
+    # `README.md` opens on these four and the package docstring on `run`. A
+    # reader who copied either is owed them.
+    "definitions_source": "document",
+    "ensure_layout": "document",
+    "paths_from_env": "document",
+    "seed": "document",
+    "run": "document",
+    # `formats.md` writes them out: `groups=UNSCOPED` at line 1042, and
+    # `from kingfisher import Request, RunOn` at line 74.
+    "UNSCOPED": "document",
+    "RunOn": "document",
+    # `guides/ports.md` writes `from kingfisher import SESSION_STORE_CONTRACT`
+    # and `from kingfisher import FILE_STORE_CONTRACT, Planted` -- a deployment
+    # runs them against a store of its own, so they exist for nobody else.
+    "SESSION_STORE_CONTRACT": "document",
+    "FILE_STORE_CONTRACT": "document",
+    "Planted": "document",
+    # The type of `Kingfisher.run`'s `groups=`. `UNSCOPED` is one of its two
+    # members and is documented; the type that admits it cannot be private.
+    "Held": "embedder",
+    # Seeding and the inventory, plus what each returns.
+    # `test_the_whole_job_is_reachable_through_the_front_door` in
+    # `test_inventory.py` is the written form of the claim in
+    # `cli/__init__.py`, and names these five as the job it walks. Whether
+    # `kinds_at` belongs in that job is an argument about the proof rather than
+    # about this door.
+    "Seeded": "embedder",
+    "Inventory": "embedder",
+    "inventory": "embedder",
+    "kinds_at": "embedder",
+    "WorkspacePaths": "embedder",
+    # Where a deployment reads from. Made public on 2026-09-02 for a library
+    # caller who "had no way to ask at all" -- see *Where a deployment reads
+    # from* in `docs/decisions.md`. No such caller has appeared; the decision is
+    # recent and deliberate enough to leave alone.
+    "Origins": "embedder",
+    "Origin": "embedder",
+    # The async half of `run`, which is documented. A server-shaped caller
+    # streams, and the two are one decision.
+    "stream": "embedder",
+    # A directory of sessions, and the port it satisfies. The subject of a
+    # standing proposal about deployments naming their own store, which is a
+    # reason to leave it reachable while that argument is live.
+    "LocalSessionStore": "embedder",
+    # Everything below is reached by the command and by nothing else. Slice two
+    # takes `doctor`'s, slice three takes `list`'s.
+    "bubblewrap_available": "command",
+    "landlock_abi": "command",
+    "shell_confinement": "command",
+    "memory_backing": "command",
+    "destination_hint": "command",
+    "DEFINITION_KINDS": "command",
+    "ALL": "command",
+    "AUDIENCED": "command",
+    "Audience": "command",
+    "SEED_HINT": "command",
+    "SKILL_LAYOUT": "command",
+    "offered": "command",
+    "spell": "command",
+    "split_reference": "command",
+}
+
+
+def _through_the_front_door(root: Path) -> frozenset[str]:
+    """Every name a consumer takes from `kingfisher` itself."""
+    taken: set[str] = set()
+    for path in sorted(root.rglob("*.py")):
+        taken |= _imported_names(path).get("kingfisher", frozenset())
+    return frozenset(taken)
+
+
+def test_every_public_name_has_a_witness():
+    """A name nobody can name a caller for is a promise nobody asked for.
+
+    This is the rule the whole table exists to be. `__all__` grew to
+    fifty-three one good reason at a time, and the export table's own comment
+    says what that cost: "A door advertising what nobody walks through cannot
+    answer the only question asked of it, which is what a caller may rely on."
+
+    Both directions. A name here and not exported is a witness for something
+    that no longer exists, which is how a table stops describing the thing it
+    is bound to.
+    """
+    import kingfisher
+
+    unwitnessed = sorted(set(kingfisher._EXPORTS) - set(WITNESSES))
+    stale = sorted(set(WITNESSES) - set(kingfisher._EXPORTS))
+
+    assert not unwitnessed, (
+        f"{unwitnessed} are public and WITNESSES does not say who asked. Name the "
+        "caller: `service` if kingfisher-service imports it, `document` if a page "
+        "tells a reader to write it, `embedder` with a reason if neither -- and if "
+        "the honest answer is `command`, it does not belong on the door"
+    )
+    assert not stale, f"{stale} are in WITNESSES and are not exported any more"
+
+
+def test_the_service_witnesses_are_read_not_claimed():
+    """The half of the table that must never be maintained by hand.
+
+    A witness somebody typed is worth what their memory was worth on the day.
+    This one is read off `kingfisher_service`, so the day the service stops
+    importing a name, the name loses its witness here rather than keeping it
+    for years.
+
+    Both directions again, and the second is the useful one: a name the service
+    picks up later, still labelled `embedder` or `command`, is a name somebody
+    would evict on the strength of a witness that has been wrong since.
+    """
+    claimed = {name for name, why in WITNESSES.items() if why == "service"}
+    actual = _through_the_front_door(CONSUMERS["kingfisher_service"]) & set(WITNESSES)
+
+    assert claimed == actual, (
+        "WITNESSES and the service disagree about who imports what: "
+        f"claimed and not imported {sorted(claimed - actual)}, "
+        f"imported and labelled otherwise {sorted(actual - claimed)}"
+    )
+
+
+def test_the_command_witnesses_are_what_is_left_to_do():
+    """`command` means nobody outside asked -- so nothing outside may be asking.
+
+    The bucket is a list of scheduled removals, and a mislabelled entry is a
+    name that gets removed while a real caller depends on it. Two ways to be
+    wrong, both checked: the service importing one of these, and one of these
+    not actually being imported by the command at all.
+    """
+    leaving = {name for name, why in WITNESSES.items() if why == "command"}
+
+    assert leaving, "nothing is left to take off the door -- slices two and three landed"
+    assert not leaving & _through_the_front_door(CONSUMERS["kingfisher_service"]), (
+        "the service imports a name labelled `command`, which is a witness saying "
+        "nobody outside this wheel asked"
+    )
+
+    unused = leaving - _through_the_front_door(CONSUMERS["cli"])
+    assert not unused, (
+        f"{sorted(unused)} are labelled `command` and the command does not import "
+        "them -- nobody reaches them at all, which is a stronger reason to go, not "
+        "a weaker one, but the label is wrong"
+    )
+
+
 def test_the_layer_and_the_root_agree_about_this_layer():
     """Two tables naming the same nine things, held to each other.
 
@@ -1606,13 +1840,69 @@ HEAVY_EXPORTS = frozenset({
 PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")
 
 
-def test_every_export_is_classified_light_or_heavy():
-    """So a new export cannot slip past the rule below by not being listed."""
+def _cli_reaches() -> dict[str, str]:
+    """Names the command takes at their own address, and where each one lives."""
+    found: dict[str, str] = {}
+    for path in sorted(CONSUMERS["cli"].rglob("*.py")):
+        for module, names in _imported_names(path).items():
+            if _reaches_past_the_public_api(module):
+                found.update(dict.fromkeys(names, module))
+    return found
+
+
+def _watched() -> dict[str, str]:
+    """Every name a consumer pays to import, and the module that defines it.
+
+    Keyed on consumers rather than on `__all__`, because that is what the two
+    rules below were always about: what a *consumer* pays to touch a name. The
+    export list was standing in for that and stopped being able to the moment a
+    name left it -- `Confinement` is on `LIGHT_EXPORTS` precisely because
+    `doctor` reaches it, and going private did not make `doctor` stop.
+
+    A union rather than a swap, and the difference is nine names: `run`,
+    `stream`, `RunOn`, `WorkspacePaths`, `LocalSessionStore`, `Origin`,
+    `SESSION_STORE_CONTRACT`, `FILE_STORE_CONTRACT` and `Planted` are public and
+    imported by neither consumer, and `run` is heavy. Replacing
+    rather than adding would have dropped them out of a guard they were already
+    inside, which is the quiet half of a re-keying and the reason this says
+    `**`.
+
+    Neither *consumer* -- `stream` is imported by `tests/integration/driver.py`,
+    which is not one and does not ship.
+    """
     import kingfisher
 
-    assert set(kingfisher._EXPORTS) == LIGHT_EXPORTS | HEAVY_EXPORTS, (
-        "a new export must be added to LIGHT_EXPORTS or HEAVY_EXPORTS — if it "
-        "needs deepagents it is heavy, otherwise keep it light and say so here"
+    return {**kingfisher._EXPORTS, **_cli_reaches()}
+
+
+def test_every_watched_name_is_classified_light_or_heavy():
+    """So a new export cannot slip past the rule below by not being listed."""
+    assert set(_watched()) == LIGHT_EXPORTS | HEAVY_EXPORTS, (
+        "a name a consumer imports must be in LIGHT_EXPORTS or HEAVY_EXPORTS — if "
+        "it needs deepagents it is heavy, otherwise keep it light and say so here"
+    )
+
+
+def test_a_name_the_command_took_private_is_still_watched():
+    """The half of the re-keying that a passing tree cannot show.
+
+    `set(_EXPORTS)` and `set(_watched())` agree on every name but the two the
+    command took at their own address, so the rule above passes under either
+    key -- and reverting to the old one is a mutation that removes the coverage
+    silently, on exactly the names most likely to lose it.
+    """
+    import kingfisher
+
+    private = set(_watched()) - set(kingfisher._EXPORTS)
+
+    assert private, (
+        "no name is reached past the front door, so this rule is about nothing -- "
+        "if the last one came back on, the union in `_watched` can go too"
+    )
+    assert private <= LIGHT_EXPORTS | HEAVY_EXPORTS
+    assert "Confinement" in private, (
+        "`Confinement` is the worked example: private, still imported by `doctor`, "
+        "and light only for as long as something checks"
     )
 
 
@@ -1631,14 +1921,24 @@ def test_a_light_export_stays_light():
     silently. This is what notices.
 
     One subprocess for all of them -- they are light, so it costs about 100ms.
+
+    Reached the way each name's own consumer reaches it: through `kingfisher`
+    for a public one, so the lazy `__getattr__` path is exercised, and at its
+    defining module for one the command took private. Touching a private name
+    through the front door would raise `AttributeError` and the whole probe
+    would die on the first of them, reporting no SDK and passing.
     """
     import subprocess
     import sys
 
+    light = {name: module for name, module in _watched().items() if name in LIGHT_EXPORTS}
     probe = (
-        "import sys, kingfisher\n"
-        f"for name in {sorted(LIGHT_EXPORTS)!r}:\n"
-        "    getattr(kingfisher, name)\n"
+        "import sys, importlib, kingfisher\n"
+        f"for name, module in sorted({light!r}.items()):\n"
+        "    if name in kingfisher.__all__:\n"
+        "        getattr(kingfisher, name)\n"
+        "    else:\n"
+        "        getattr(importlib.import_module(module), name)\n"
         f"print(','.join(m for m in {PROVIDER_SDKS!r} if m in sys.modules))"
     )
     out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
@@ -2266,6 +2566,61 @@ def _reaches_past_the_public_api(module: str) -> bool:
     return not module.startswith("kingfisher.presentation.cli")
 
 
+#: Consumers that ship in this wheel, and may therefore reach for a name the
+#: front door does not carry.
+#:
+#: The door is a promise to callers *outside* the distribution, which is what
+#: makes the two rules below different rules rather than one applied unevenly.
+#: A stranger holding `pip install kingfisher` has the export list and nothing
+#: else; the command has the source tree it ships in.
+#:
+#: Named rather than derived from where the file sits, so a second family
+#: member is a decision somebody makes here -- the same reason `MAY_NAME_IT` in
+#: `test_the_base_stands_alone.py` lists a path instead of waving a rule
+#: through.
+FAMILY = frozenset({"cli"})
+
+
+def _consumer_of(path: Path) -> str:
+    """Which consumer this module belongs to."""
+    for name, root in CONSUMERS.items():
+        if path.is_relative_to(root):
+            return name
+    msg = f"{path} is under no consumer in CONSUMERS"
+    raise AssertionError(msg)
+
+
+def _public_names() -> frozenset[str]:
+    """What the front door promises, read from the door itself."""
+    import kingfisher
+
+    return frozenset(kingfisher.__all__)
+
+
+def _taken_by_the_back_door(
+    module: str, names: frozenset[str], *, family: bool
+) -> frozenset[str]:
+    """What this import takes past the front door that it should not have.
+
+    For a consumer outside the wheel that is the module itself: it has no
+    business reaching at all, whatever it reached for. For one shipping inside,
+    it is the *public* names it reached for -- a name the door carries must come
+    through it, or the claim that a stranger could do the same job stops being
+    tested by the consumer best placed to test it.
+
+    `import kingfisher.tools.spec` is refused for family too, and the empty set
+    is why: the form takes no name at the import, so nothing here can weigh what
+    it took, and a public name reached through `spec.offered` would pass a rule
+    about names without ever being one. Refusing the form is cheaper than
+    resolving attributes, and the CLI does not use it.
+    """
+    if not _reaches_past_the_public_api(module):
+        return frozenset()
+    if not family:
+        return frozenset({module})
+    return names & _public_names() if names else frozenset({module})
+
+
 @pytest.mark.parametrize(
     ("module", "reaches"),
     [
@@ -2320,12 +2675,83 @@ def test_a_consumer_uses_the_library_only_through_its_public_api(path):
     unexported has quietly made a private name load-bearing -- and the next
     person to move it breaks an HTTP contract, or a command, without touching
     anything that looks like one.
+
+    Two rules, because there are two kinds of consumer. Outside the wheel the
+    rule is the old one and reaches are refused outright. Inside it -- `FAMILY`
+    -- a reach is refused only for a name the door already carries, which is the
+    half that keeps the claim in `cli/__init__.py` under test. The other half is
+    what this rule was costing: `doctor` wanting a sandbox probe made the probe
+    a promise to everybody, because reaching for it was the one thing forbidden.
+    See *The front door* in `docs/decisions.md`.
     """
-    reaching = {m for m in _imported_modules(path) if _reaches_past_the_public_api(m)}
-    assert not reaching, (
-        f"{_module_id(path)} imports {sorted(reaching)} — a consumer takes `kingfisher` "
-        "and nothing deeper; if it needs something private, export it on purpose"
+    family = _consumer_of(path) in FAMILY
+    taken = frozenset().union(
+        *(
+            _taken_by_the_back_door(module, names, family=family)
+            for module, names in _imported_names(path).items()
+        ),
+        frozenset(),
     )
+    assert not taken, (
+        f"{_module_id(path)} reaches for {sorted(taken)} — "
+        + (
+            "a name the front door carries comes through the front door, even for a "
+            "consumer shipping in this wheel; that is what keeps the claim testable"
+            if family
+            else "a consumer outside this wheel takes `kingfisher` and nothing deeper; "
+            "if it needs something private, export it on purpose"
+        )
+    )
+
+
+@pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
+def test_both_import_collectors_see_the_same_modules(path):
+    """`_imported_names` may add names; it may not lose an import.
+
+    The rule above reads one collector and eleven others read the second. A
+    module visible to one and not the other is an import that half this file
+    stops looking at, and every one of those rules keeps passing -- which is the
+    shape of every scar in this file. Cheap to check, so it is checked on every
+    consumer module rather than argued about.
+    """
+    assert set(_imported_names(path)) == _imported_modules(path)
+
+
+def test_the_back_door_rule_tells_the_two_consumers_apart():
+    """The questions the tree cannot ask.
+
+    Every consumer module passes today, so the rule passes whether it
+    distinguishes family from stranger or waves both through -- and "return
+    frozenset()" is the mutation that removes the whole point while going green.
+    `test_an_area_is_refused_another_areas_dependencies` exists a thousand lines
+    up for the same reason.
+
+    `Kingfisher` is the case worth naming twice: public, so reaching for it is
+    refused for *both* kinds of consumer. That is the half of this change that
+    is not a relaxation.
+    """
+    deep = "kingfisher.application.service"
+    private = "kingfisher.infrastructure.sandbox.confinement"
+
+    # A stranger may not reach, whatever it reached for.
+    assert _taken_by_the_back_door(deep, frozenset({"Kingfisher"}), family=False) == {deep}
+    assert _taken_by_the_back_door(private, frozenset({"Confinement"}), family=False) == {
+        private
+    }
+
+    # Family may reach for what the door does not carry, and not for what it does.
+    assert _taken_by_the_back_door(private, frozenset({"Confinement"}), family=True) == set()
+    assert _taken_by_the_back_door(deep, frozenset({"Kingfisher"}), family=True) == {
+        "Kingfisher"
+    }
+
+    # `import kingfisher.x.y` names nothing, so neither kind may write it.
+    assert _taken_by_the_back_door(private, frozenset(), family=True) == {private}
+    assert _taken_by_the_back_door(private, frozenset(), family=False) == {private}
+
+    # The front door itself is not a reach for anybody.
+    assert _taken_by_the_back_door("kingfisher", frozenset({"Kingfisher"}), family=True) == set()
+    assert _taken_by_the_back_door("kingfisher", frozenset({"Kingfisher"}), family=False) == set()
 
 
 @pytest.mark.parametrize(

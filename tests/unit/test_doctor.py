@@ -745,8 +745,7 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
     confined branch is only reachable on a host with `sandbox-exec` -- and a
     test that quietly asserts nothing on the CI runner is worse than no test.
     """
-    from kingfisher import Confinement
-    from kingfisher.infrastructure.sandbox.confinement import _unwrapped
+    from kingfisher.infrastructure.sandbox.confinement import Confinement, _unwrapped
 
     assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
         "sandbox-exec"
@@ -779,7 +778,7 @@ def test_a_supplied_local_runner_is_named_beside_the_mechanism():
     """It still receives the confined command, so the mechanism holds and has
     only gained company. An operator asking what runs their commands is asking
     about the runner, not only about the fence."""
-    from kingfisher import Confinement
+    from kingfisher.infrastructure.sandbox.confinement import Confinement
 
     said = health._mechanism(
         Confinement(wrap=lambda c: c, mechanism="sandbox-exec", supplied=True)

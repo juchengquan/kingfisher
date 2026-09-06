@@ -25,7 +25,7 @@ lines apart.
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Group access](#group-access) · [Models and endpoints](#models-and-endpoints) |
 | **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
-| **The surfaces** | [The command line](#the-command-line) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) |
+| **The surfaces** | [The command line](#the-command-line) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
@@ -937,6 +937,89 @@ kingfisher with one guard inside. *(2026-08-16, `session-scoped-api.md`.)*
 
 **A skill's `allowed-tools` is prompt text, not enforcement.** Worth knowing
 before trusting it for anything. *(2026-08-16, `session-scoped-api.md`.)*
+
+## The front door
+
+**A caller means a caller outside this wheel.** `kingfisher.__all__` is a promise
+to somebody holding `pip install kingfisher` and nothing else. The command ships
+in the same distribution, so it is family: it reaches a name the door does not
+carry at the module defining it, and still comes through the door for every name
+that is there. The service is its own distribution and keeps the strict rule.
+*(2026-09-06, `the-front-door-is-for-outsiders.md`. Slice one of three.)*
+
+**It started as a proposal to move the CLI into its own wheel, and the
+measurement reversed it.** The stated reason was keeping the library's import
+surface clean, and the split would have made that strictly worse: `CONSUMERS` in
+`test_architecture.py` already holds `kingfisher_service` -- a separate wheel --
+to the front door, so a `kingfisher-cli` would be the second out-of-tree consumer
+and every name it reaches would be locked public permanently, as a
+cross-distribution promise rather than an in-tree convention. The packaging
+argument does not carry either: the service left because a library caller should
+not pay 2.7MB of fastapi and uvicorn to import `Request`, and the CLI's whole
+foreign cost is `python-dotenv` at 100KB, never imported by `import kingfisher`.
+
+What the measurement found instead: of 57 exported names, 25 were reached by the
+CLI and no other shipped consumer, and the export table's own comments recorded
+five of them as forced public by a consumer reaching. `doctor` wanting a sandbox
+probe had made the probe a promise to everybody.
+
+**Enforced by name, not by file.** The line could have run between CLI modules --
+`__main__.py` and `progress.py` held, `health.py` and `listing.py` free, which is
+where the claim in `cli/__init__.py` actually lives. Rejected: those two files
+also use `Config`, `inventory`, `Origins` and `Inventory`, so freeing the files
+lets them drift to deep imports for real public names with nothing going red. The
+rule is that the door is mandatory for anything on it, which is self-maintaining
+-- put a name back on the list and every deep import of it goes red without
+anyone remembering to move a file between buckets.
+
+**Every public name carries a witness, and the service's half is read rather
+than claimed.** `WITNESSES` says who asked for each name: `service` (verified by
+parsing the service's imports, both directions), `document` (a page tells a
+reader to write it -- checked by a person, because `offered` gets five hits in
+the guides and `run` thirty-one, all of them the English word), `embedder` (kept
+deliberately, with the reason), and `command` (nobody outside asked; the work
+that remains). Deny by default: a name in `_EXPORTS` and not in the table fails.
+
+It earned itself before it landed. `ConfigError` was written down as `embedder`
+-- "raised by `config_from_env`, so a caller that builds a `Config` must be able
+to catch it" -- and the service picked it up while this branch was open. The
+rule reads the service rather than the label, so it said so, on the direction
+that is easy to leave out: not a claimed witness that is false, but a real one
+that arrived after somebody wrote a weaker reason down.
+
+It is the fifth list of these names, in a file whose own docstring says a second
+table is what it exists to distrust. Accepted on the precedent beside it --
+`LIGHT_EXPORTS | HEAVY_EXPORTS` is a second table made safe by a test that it is
+*total*, and this one is held the same way.
+
+**The light/heavy partition is re-keyed on consumers, as a union.** It watches
+what a consumer pays to import, and was standing on `__all__`, which stopped
+being the same set the moment a name left it -- `Confinement` is classified light
+*because* `doctor` reaches it, and going private did not make `doctor` stop. The
+union rather than a swap is deliberate: nine public names are imported by
+neither consumer and one of them is heavy, so replacing would have quietly
+dropped them out of a guard they were already inside.
+
+**Sixteen names come off, and two have.** `Confinement` (light) and
+`unrunnable_delegates` (heavy) landed with the rules, so each new guard has a
+live case in both branches -- a rule with no cases passes whatever it says, which
+this suite has shipped twice. `doctor`'s remaining six and `list`'s eight follow
+in slices two and three. 57 becomes 41.
+
+**What it costs, stated rather than discovered.** A deployment embedding
+kingfisher and wanting its own health endpoint loses the promise on the sandbox
+probes; the names still work, at addresses that may move. There is no measured
+caller who wants that today, which is what makes it defensible -- and *Where a
+deployment reads from* declined to serve `Origins` over HTTP because the service
+"authenticates nobody" rather than because nobody wanted the answer, so that is
+the entry to re-read if one appears. No deprecation window, on the precedent the
+export table set for the eleven names that left before these: at 0.1.0 an outside
+caller on the old spelling changes one import line.
+
+**`kinds_at` stays**, on `test_the_whole_job_is_reachable_through_the_front_door`
+in `test_inventory.py`, which is the written form of the claim and names it as
+part of the job. Whether it belongs there is an argument about the proof, not
+about the door.
 
 ## Layering
 

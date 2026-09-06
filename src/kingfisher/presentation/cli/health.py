@@ -28,7 +28,6 @@ from kingfisher import (
     DEFINITION_KINDS,
     Config,
     ConfigError,
-    Confinement,
     Inventory,
     bubblewrap_available,
     destination_hint,
@@ -38,6 +37,16 @@ from kingfisher import (
     memory_backing,
     shell_confinement,
 )
+
+# Past the front door on purpose, and the import to read if you want to know
+# what that door is now for. `Confinement` was public because *this file*
+# reached for it -- the export table says so in as many words -- and a probe
+# that only `doctor` has ever wanted is not a promise worth making to everybody
+# who runs `pip install kingfisher`. The command ships in this wheel, so it
+# takes the name where it lives instead. A name the door does carry still comes
+# through it, which is what the rule in `test_architecture` checks and what
+# keeps the claim above honest. See *The front door* in `docs/decisions.md`.
+from kingfisher.infrastructure.sandbox.confinement import Confinement
 
 #: `fail` means this deployment will not run. `warn` means it will, and
 #: something about it is worth knowing -- an unconfined shell runs fine.
@@ -379,7 +388,9 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
         )
         return
 
-    from kingfisher import unrunnable_delegates  # noqa: PLC0415
+    from kingfisher.infrastructure.harness.activation import (  # noqa: PLC0415
+        unrunnable_delegates,
+    )
 
     unrunnable = unrunnable_delegates(cfg)
     if not unrunnable:
