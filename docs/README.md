@@ -46,13 +46,20 @@ wearing the wrong hat.
 
 ## `design/`, when there is something to argue
 
-[The front door is for
-outsiders](design/2026-09-06-the-front-door-is-for-outsiders.md) is here, and is
-an argument rather than a description until its remaining slices land: why the
-CLI stays in this wheel rather than becoming a second distribution, and what the
-export list promises once only outsiders count.
+Each of these is an argument rather than a description until its remaining
+slices land.
 
-It was empty for a day before that. *A store a deployment can name* was there
+- [An answer that is not
+  prose](design/2026-09-05-an-answer-that-is-not-prose.md) — what a run returns
+  when a caller wants a schema, and why the format that prompted it is not
+  named in the source. Its first slice stands alone; the rest waits for
+  something that renders.
+- [The front door is for
+  outsiders](design/2026-09-06-the-front-door-is-for-outsiders.md) — why the CLI
+  stays in this wheel rather than becoming a second distribution, and what the
+  export list promises once only outsiders count.
+
+It was empty for a day before either. *A store a deployment can name* was there
 from 2026-09-04 to 2026-09-05 and left the way the rule says: built in four
 slices, its decisions now under *Wiring a store* in `decisions.md`.
 
