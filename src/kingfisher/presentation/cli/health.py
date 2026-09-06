@@ -24,29 +24,31 @@ from collections.abc import Iterator
 from dataclasses import dataclass
 from typing import Literal
 
-from kingfisher import (
-    DEFINITION_KINDS,
-    Config,
-    ConfigError,
-    Inventory,
-    bubblewrap_available,
-    destination_hint,
-    inventory,
-    kinds_at,
+from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
+
+# Everything below is past the front door on purpose, and this is the file to
+# read if you want to know what that door is now for. These are `doctor`'s
+# probes: what fences this host offers, what the kernel supports, what the
+# cgroup files say, and the sentence that tells a reader where their own
+# definitions go. Every one of them was public because *this file* reached for
+# it -- the export table said so in as many words -- and a probe only `doctor`
+# has ever wanted is not a promise worth making to everybody who runs
+# `pip install kingfisher`. The command ships in this wheel, so it takes each
+# name where it lives.
+#
+# What stays above is the half that is not a relaxation: `Config`, `inventory`
+# and the rest are names the door does carry, so they still come through it.
+# `test_architecture` refuses the other spelling, which is what keeps the claim
+# in `cli/__init__.py` honest. See *The front door* in `docs/decisions.md`.
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
+from kingfisher.infrastructure.sandbox.confinement import (
+    Confinement,
     landlock_abi,
-    memory_backing,
     shell_confinement,
 )
-
-# Past the front door on purpose, and the import to read if you want to know
-# what that door is now for. `Confinement` was public because *this file*
-# reached for it -- the export table says so in as many words -- and a probe
-# that only `doctor` has ever wanted is not a promise worth making to everybody
-# who runs `pip install kingfisher`. The command ships in this wheel, so it
-# takes the name where it lives instead. A name the door does carry still comes
-# through it, which is what the rule in `test_architecture` checks and what
-# keeps the claim above honest. See *The front door* in `docs/decisions.md`.
-from kingfisher.infrastructure.sandbox.confinement import Confinement
+from kingfisher.infrastructure.workspace.backing import memory_backing
+from kingfisher.infrastructure.workspace.seeding import destination_hint
 
 #: `fail` means this deployment will not run. `warn` means it will, and
 #: something about it is worth knowing -- an unconfined shell runs fine.

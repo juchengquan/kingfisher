@@ -1000,11 +1000,15 @@ union rather than a swap is deliberate: nine public names are imported by
 neither consumer and one of them is heavy, so replacing would have quietly
 dropped them out of a guard they were already inside.
 
-**Sixteen names come off, and two have.** `Confinement` (light) and
-`unrunnable_delegates` (heavy) landed with the rules, so each new guard has a
+**Sixteen names come off, and eight have.** `Confinement` (light) and
+`unrunnable_delegates` (heavy) landed with the rules, so each new guard had a
 live case in both branches -- a rule with no cases passes whatever it says, which
-this suite has shipped twice. `doctor`'s remaining six and `list`'s eight follow
-in slices two and three. 57 becomes 41.
+this suite has shipped twice. `doctor`'s remaining six followed:
+`bubblewrap_available`, `landlock_abi`, `shell_confinement`, `memory_backing`,
+`destination_hint` and `DEFINITION_KINDS`, which leaves `health.py` reaching for
+every probe it makes and coming through the door for the five names that are
+still promises. `list`'s eight are slice three. 57 has become 49, and will be
+41. *(Slice two, 2026-09-06.)*
 
 **What it costs, stated rather than discovered.** A deployment embedding
 kingfisher and wanting its own health endpoint loses the promise on the sandbox

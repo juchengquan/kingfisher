@@ -1561,13 +1561,7 @@ WITNESSES: dict[str, str] = {
     # reason to leave it reachable while that argument is live.
     "LocalSessionStore": "embedder",
     # Everything below is reached by the command and by nothing else. Slice two
-    # takes `doctor`'s, slice three takes `list`'s.
-    "bubblewrap_available": "command",
-    "landlock_abi": "command",
-    "shell_confinement": "command",
-    "memory_backing": "command",
-    "destination_hint": "command",
-    "DEFINITION_KINDS": "command",
+    # took `doctor`'s six; slice three takes `list`'s.
     "ALL": "command",
     "AUDIENCED": "command",
     "Audience": "command",

@@ -133,7 +133,7 @@ def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
     the puzzle this message exists to stop being."""
     from dataclasses import replace
 
-    from kingfisher import DEFINITION_KINDS
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
     empty = tmp_path / "empty"
     empty.mkdir()
