@@ -1,11 +1,11 @@
 # The front door is for outsiders
 
-**Status:** proposed, in part. Slice one landed on 2026-09-06 -- the three rules
-and two evictions -- and its decisions are under *The front door* in
-`decisions.md`. Slices two and three are the remaining fourteen names and are
-still an argument, so this stays until they land or are withdrawn. Anything below
-that slice one settled is description now; check it against the code rather than
-trusting it.
+**Status:** proposed, in part. Slices one and two landed on 2026-09-06 -- the
+three rules, then `doctor`'s vocabulary, eight names in all -- and their
+decisions are under *The front door* in `decisions.md`. Slice three is `list`'s
+eight and is still an argument, so this stays until it lands or is withdrawn.
+Everything the first two settled is description now; check it against the code
+rather than trusting it.
 **Date:** 2026-09-06
 **Occasion:** a question about moving the CLI into its own distribution, the way
 the service went. The measurement answered it the other way round, and what it
@@ -222,6 +222,10 @@ public.
 
 **Two -- `doctor`'s remaining six.** `bubblewrap_available`, `landlock_abi`,
 `shell_confinement`, `memory_backing`, `destination_hint`, `DEFINITION_KINDS`.
+Landed, and it was mechanical as predicted: the six left the export table, the
+witness table lost six `command` rows, and `health.py` and `__main__.py` took
+each name where it lives. Nothing outside `src/` moved but one import line in
+`test_doctor.py`.
 
 **Three -- `list`'s eight.** Mechanical once the guards exist.
 

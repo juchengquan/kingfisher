@@ -99,9 +99,6 @@ _EXPORTS = {
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "Config": "kingfisher.config",
-    "bubblewrap_available": "kingfisher.infrastructure.sandbox.bubblewrap",
-    "landlock_abi": "kingfisher.infrastructure.sandbox.confinement",
-    "shell_confinement": "kingfisher.infrastructure.sandbox.confinement",
     "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
@@ -111,13 +108,8 @@ _EXPORTS = {
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
     "definitions_source": "kingfisher.infrastructure.workspace.seeding",
-    # A sentence, for the reason `SEED_HINT` is one: the refusal and
-    # `doctor` both tell a reader where their own definitions go, and two
-    # spellings of that is how the advice starts disagreeing with itself.
-    "destination_hint": "kingfisher.infrastructure.workspace.seeding",
     "ensure_layout": "kingfisher.infrastructure.workspace.layout",
     "kinds_at": "kingfisher.infrastructure.workspace.seeding",
-    "memory_backing": "kingfisher.infrastructure.workspace.backing",
     "seed": "kingfisher.infrastructure.workspace.seeding",
     "Seeded": "kingfisher.infrastructure.workspace.seeding",
     "inventory": "kingfisher.application.inventory",
@@ -133,11 +125,6 @@ _EXPORTS = {
     # a bare name from a `where::what` reference before deciding whether to
     # print the file it came from.
     "split_reference": "kingfisher.tools.spec",
-    # Said once "so callers can quote it without knowing the filename
-    # themselves", by its own comment. It was `skill_store.LAYOUT` with one
-    # caller; renamed because a bare `LAYOUT` at the top level sits next to
-    # `LAYOUT_DIRS` and means something else.
-    "DEFINITION_KINDS": "kingfisher.infrastructure.catalogue",
     "SEED_HINT": "kingfisher.infrastructure.workspace.seeding",
     "SKILL_LAYOUT": "kingfisher.skills.catalogue",
     "Inventory": "kingfisher.application.inventory",
@@ -156,7 +143,6 @@ _EXPORTS = {
 __all__ = [
     "ALL",
     "AUDIENCED",
-    "DEFINITION_KINDS",
     "FILE_STORE_CONTRACT",
     "SEED_HINT",
     "SESSION_STORE_CONTRACT",
@@ -191,21 +177,16 @@ __all__ = [
     "UnsafeReferenceError",
     "UploadError",
     "WorkspacePaths",
-    "bubblewrap_available",
     "config_from_env",
     "definitions_source",
-    "destination_hint",
     "ensure_layout",
     "file_store_named",
     "inventory",
     "kinds_at",
-    "landlock_abi",
-    "memory_backing",
     "offered",
     "paths_from_env",
     "run",
     "seed",
-    "shell_confinement",
     "spell",
     "split_reference",
     "stream",
@@ -245,18 +226,9 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import QuotaExceededError as QuotaExceededError
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
-    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS as DEFINITION_KINDS
-    from kingfisher.infrastructure.sandbox.bubblewrap import (
-        bubblewrap_available as bubblewrap_available,
-    )
-    from kingfisher.infrastructure.sandbox.confinement import landlock_abi as landlock_abi
-    from kingfisher.infrastructure.sandbox.confinement import (
-        shell_confinement as shell_confinement,
-    )
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )
-    from kingfisher.infrastructure.workspace.backing import memory_backing as memory_backing
     from kingfisher.infrastructure.workspace.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.workspace.files import (
         file_store_named as file_store_named,
@@ -266,9 +238,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
     from kingfisher.infrastructure.workspace.seeding import (
         definitions_source as definitions_source,
-    )
-    from kingfisher.infrastructure.workspace.seeding import (
-        destination_hint as destination_hint,
     )
     from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace.seeding import seed as seed

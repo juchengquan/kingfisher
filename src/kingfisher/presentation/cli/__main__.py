@@ -40,7 +40,6 @@ from typing import TYPE_CHECKING
 from dotenv import load_dotenv
 
 from kingfisher import (
-    DEFINITION_KINDS,
     UNSCOPED,
     AccessError,
     CapabilityError,
@@ -62,6 +61,13 @@ from kingfisher import (
     paths_from_env,
     seed,
 )
+
+# The one name here the door does not carry: the four kinds a catalogue holds,
+# used to say what a directory has none of. It went private with `doctor`'s
+# probes -- see *The front door* in `docs/decisions.md` -- and this is the only
+# reach in the file, which is the shape to keep. Everything above is public and
+# comes through the front door because it is.
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show
