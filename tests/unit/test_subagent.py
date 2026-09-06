@@ -213,6 +213,34 @@ def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
     assert "read-only" in message
 
 
+def test_response_format_does_not_claim_deepagents_has_nowhere_to_put_one(tmp_path):
+    """The other one worth its own test, and for the opposite reason.
+
+    This reason was false. It said a delegate "returns prose to its caller" and
+    that "there is nothing here to hand a schema to", and deepagents 0.7.6 does
+    both things it denies: `_compile_spec` takes a `response_format`, and
+    `middleware/subagents.py` serialises the structured response into the
+    `ToolMessage` the parent reads.
+
+    The refusal survived the check and the reason did not, so what is pinned
+    here is the true one -- that the shape is flattened to text at the boundary,
+    which is why kingfisher gains nothing by exposing the field. A refusal
+    stating a reason upstream contradicts is worse than the generic message
+    this table exists to replace: whoever checks it has no reason to trust the
+    rest of the table.
+    """
+    with pytest.raises(SubagentError) as raised:
+        reading.read(_definition("response_format: {}"), tmp_path / "reviewer.yaml")
+
+    message = str(raised.value)
+    assert "nothing here to hand a schema to" not in message, (
+        "the claim deepagents disproves -- `_compile_spec` takes one"
+    )
+    assert "serialised into the tool result" in message, (
+        "and the reader has to be told what actually happens to it instead"
+    )
+
+
 def test_every_known_field_still_parses(tmp_path):
     """The negative control: strictness that rejected a valid definition would
     be a worse bug than the one it fixes."""
