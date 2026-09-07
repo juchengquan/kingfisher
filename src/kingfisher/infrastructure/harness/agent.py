@@ -47,6 +47,7 @@ from kingfisher.infrastructure.harness.interpreter import _interpreter
 from kingfisher.infrastructure.harness.middleware import (
     MiddlewareFactory,
     declared_middleware,
+    offered_middleware,
 )
 from kingfisher.infrastructure.harness.models import build_model
 from kingfisher.infrastructure.harness.narrowing import (
@@ -335,7 +336,13 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     # Both kinds read it, so it is resolved before either branch. It used to
     # be bound inside the delegates' block, which meant an agent with no
     # delegates never reached a registry at all.
-    registry = middleware_registry or {}
+    #
+    # Two sources since `middleware/` became a definition kind: what this
+    # deployment wired in its own program, and what its workspace defines.
+    # Merged once here for the same reason it was hoisted -- an agent and its
+    # delegates must select from one mapping, or a name would mean different
+    # things one level apart.
+    registry = offered_middleware(middleware_registry or {}, roots.middleware)
 
     if capabilities.subagents is not None:
         offered = available_skills(cfg, session_dir, catalogue=roots)

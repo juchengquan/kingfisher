@@ -57,6 +57,86 @@ Registering is not permitting. A name a request withheld is refused even though
 the deployment registered it, and `grants` is where a deployment says what its
 definitions may reach by default.
 
+## When it needs something YAML cannot hold
+
+An HTTP client, a database connection, a metrics handle. None of them can be a
+`settings:` value, and the answer is not a different naming scheme — it is a
+**class that closes over the object**, registered in your own program:
+
+```python
+client = httpx.Client(base_url=...)          # yours, made once
+
+
+class Traced(AgentMiddleware):
+    defaults = {"level": "info"}
+    yaml_settable = frozenset({"level"})
+
+    def __init__(self, level: str) -> None:
+        self._client = client                # captured, not configured
+        self._level = level
+
+
+kingfisher = Kingfisher(cfg, middleware={"traced": Traced})
+```
+
+A definition still writes `settings: {level: debug}`, because it is a class and
+`yaml_settable` still applies. Every graph gets its own middleware; every one of
+them shares the client. A zero-argument factory closing over the same object
+would work too, and costs you `settings:` — a factory has already chosen its
+values, so a definition writing one is refused.
+
+**This cannot be a workspace file**, and not by rule — by construction. A
+`middleware/` module is executed each time the repository reads it, and a
+repository is built per request, so a client made at module level would be a new
+client on every turn. Put the object where it is made once: in the program that
+constructs `Kingfisher`.
+
+## Or put it in the workspace
+
+`middleware/` is a definition kind, so a deployment that does not need to wire
+anything in Python can write a file instead and `kingfisher seed` will copy it:
+
+```python
+from langchain.agents.middleware import AgentMiddleware
+
+
+class CallCap(AgentMiddleware):
+    name = "call-cap-strict"
+    defaults = {"limit": 20}
+    yaml_settable = ()
+    ...
+
+
+MIDDLEWARE = [CallCap]
+```
+
+`MIDDLEWARE` is declared rather than inferred, exactly as `TOOLS` is, so a class
+imported to build a variant is not offered as a second entry nobody meant to
+expose.
+
+**The name comes from the class.** `AgentMiddleware.name` is a property that
+answers the class's own name, so `CallCap` is selected as `CallCap` unless the
+class overrides it with a string — which the shipped examples do, because
+`call-cap-strict` is the name they have always taught.
+
+**Classes only, here.** A registry may hold a zero-argument factory; a file may
+not, and the difference is not tidiness. A file is imported once, so an object
+in `MIDDLEWARE` would be built once and shared by every graph in the process —
+the state leak that makes a cap stop capping. A class in a file does everything
+a factory does and takes settings besides.
+
+**Both sources answer one field**, and a name in both is refused rather than
+resolved: a definition names one, and nothing would say which it got. The code
+registry is not going away — a middleware closing over a live object, a
+connection or a metrics client, cannot be a file in a directory.
+
+**A workspace middleware is not the caller's.** A definition still only names,
+an upload still cannot widen `middleware`, and the file is put there by whoever
+administers the workspace. What makes this safe at all is that the definition
+roots are denied to the agent's shell — `decisions.md`, under *Confining the
+shell*. Before that, a `middleware/` directory would have been a cap the capped
+thing could rewrite.
+
 ## What a definition may configure
 
 Two class attributes, and neither is required:
@@ -157,6 +237,9 @@ agent is built, before the model is reached.
 | What happened | What it says |
 |---|---|
 | A registry entry that cannot be called — an already-built middleware, most often | `register the class itself, or a zero-argument factory returning one`, and why one shared object would be wrong |
+| A `middleware/` file exports something that is not an `AgentMiddleware` class | what `MIDDLEWARE` takes, refused as the directory is read rather than at the first turn |
+| Two `middleware/` files define one name | both files, and to rename a class or give one an explicit `name` |
+| A name is both registered in code and defined in the workspace | both sources, and to rename the class or its registry key |
 | A definition names middleware nothing registered | `names unregistered middleware`, with what this deployment did register |
 | A definition names middleware the request withheld | `names middleware this request may not use` |
 | A definition writes a setting outside `yaml_settable` | what that entry does accept, or that it accepts nothing at all |

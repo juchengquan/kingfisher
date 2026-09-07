@@ -31,6 +31,26 @@ if TYPE_CHECKING:
 MiddlewareFactory = Callable[..., Any]
 
 
+def offered_middleware(registered: Mapping[str, Any], workspace: Any) -> dict[str, Any]:
+    """Both sources of middleware, as the one mapping a definition selects from.
+
+    Merged once, so an agent and its delegates select from the same thing. A name
+    in both is refused rather than resolved: both belong to the same deployment,
+    so renaming is available -- unlike a tool clash between two vendors, which is
+    why that one is qualified instead.
+    """
+    offered = getattr(workspace, "classes", None) or {}
+    if clashing := sorted(set(registered) & set(offered)):
+        names = ", ".join(repr(name) for name in clashing)
+        msg = (
+            f"middleware {names} is both registered by this deployment and defined "
+            f"in its workspace. A definition names one and there is nothing to tell "
+            f"them apart, so rename the class or its registry key"
+        )
+        raise CapabilityError(msg)
+    return {**offered, **registered}
+
+
 def declared_middleware(
     spec: Any,
     registry: Mapping[str, MiddlewareFactory],

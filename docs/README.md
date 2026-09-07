@@ -58,16 +58,14 @@ slices land.
   when a caller wants a schema, and why the format that prompted it is not
   named in the source. Its first slice has landed; the rest waits for something
   that renders.
-- [Middleware as a definition
-  kind](design/2026-09-07-middleware-as-a-definition-kind.md) — why the one kind
-  a workspace cannot offer can become an ordinary fifth directory, now that the
-  definition roots are denied to the agent.
 
 Three have passed through and left the way the rule says. *A store a deployment
 can name* was built in four slices; its decisions are under *Wiring a store* in
 `decisions.md`. *The front door is for outsiders* was built in three; its
 decisions are under *The front door* in `decisions.md`. *A definition is not the
 agent's to edit* lasted a day and was built in one, under *Confining the shell*.
+*Middleware as a definition kind* lasted the same day and is under *The
+catalogue*.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to

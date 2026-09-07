@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import platform
+import re
 
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
@@ -214,7 +215,12 @@ def test_both_forms_of_doctor_say_where_it_read_from(cfg, monkeypatch, capsys):
     printed = capsys.readouterr().out
     # The catalogue `doctor` could count and never name. It reported "12 in the
     # workspace" and had no way to say which workspace.
-    assert "tools     :" in printed
+    #
+    # Matched without its padding, which is not laziness. The column is as wide
+    # as the longest key, so this read `tools     :` until `middleware` arrived
+    # and widened every row by one -- a test that failed because the alignment
+    # improved, asserting a fact about spacing while claiming one about naming.
+    assert re.search(r"^tools +:", printed, re.M)
     assert str(cfg.workspace) in printed
 
 

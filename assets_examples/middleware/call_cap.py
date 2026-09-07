@@ -59,10 +59,22 @@ An agent that names nothing gets nothing: `middleware` omits to none, like
 `skills` and `subagents` and unlike the two tool axes. A name this deployment
 did not register is refused when the agent is built, not discovered mid-run.
 
-## Two names, one class, and why that is the whole lesson
+## Two names, two classes, and why that is the whole lesson
 
-`call-cap-strict` and `call-cap-generous` are two registry entries over one
-class. The obvious alternative is one entry and a number in the yaml:
+`call-cap-strict` and `call-cap-generous` are two *classes*, and the wording used
+to say "two registry entries over one class", which reads true and is not. A
+registry key cannot vary a configuration: the build path calls
+`cls(**cls.defaults, **settings)`, and `defaults` lives on the class -- so
+registering this one class under two keys gives two objects with the same
+ceiling and two labels. Varying it has always meant a second class, which is why
+`CallCapGenerous` is a subclass and not a second key.
+
+(Written without a dict literal on purpose. The first draft illustrated it with
+one, and `test_the_wiring_block_and_the_registry_the_tests_paste_are_one_fact`
+read the example as a fourth registry entry -- the guard doing its job on the
+prose that describes it.)
+
+The obvious alternative is one entry and a number in the yaml:
 
     middleware: [call-cap]
     metadata:
@@ -132,6 +144,13 @@ class CallCap(AgentMiddleware):
     is the right default for a middleware whose entire job is to say no.
     """
 
+    #: What a definition writes to select this class, and what the wiring block
+    #: below registers it as. `AgentMiddleware.name` is a property answering the
+    #: class's own name, so leaving this out would make the selector `CallCap`;
+    #: the name this example has always taught is `call-cap-strict`, and a class
+    #: that says so is what makes the two the same fact rather than two.
+    name = "call-cap-strict"
+
     #: What the deployment passes when a definition wrote nothing -- which,
     #: since `yaml_settable` is empty here, is always. Copied before the merge,
     #: so nothing a definition writes can reach this dictionary.
@@ -183,9 +202,9 @@ class CallCap(AgentMiddleware):
 class CallCapGenerous(CallCap):
     """The same cap with a bigger number, as a class rather than a setting.
 
-    This is what "two registry entries over one class" looks like once the
-    registry holds classes: the variant is a subclass overriding `defaults`,
-    and a definition chooses between the two by name.
+    The variant is a subclass overriding `defaults`, and a definition chooses
+    between the two by name. Not a second registry key over this class: keys are
+    labels, and `defaults` is the class's, so two keys would be one ceiling twice.
 
     A subclass rather than `{"limit": 100}` written in a yaml file, for the
     reason `CallCap.yaml_settable` is empty -- the ceiling is the deployment's
@@ -195,6 +214,21 @@ class CallCapGenerous(CallCap):
 
     The cost is one class per variant, which is the honest price of keeping the
     decision in code. A deployment wanting a third writes a third.
+
+    It names itself, like its parent, or it would inherit `call-cap-strict` and
+    two classes would answer to one selector -- which the workspace catalogue
+    refuses outright and a code registry would resolve by whichever key you
+    happened to write.
     """
 
+    name = "call-cap-generous"
+
     defaults: ClassVar[dict[str, Any]] = {"limit": 100}
+
+
+#: What this file contributes, declared rather than inferred -- the rule
+#: `TOOLS` makes one directory over, and here for its reason: a class imported
+#: to build a variant would otherwise be offered as a second entry nobody meant
+#: to expose. Both, because the pair *is* the lesson: two selectors over one behaviour,
+# varying in code rather than in a definition's `settings:`.
+MIDDLEWARE = [CallCap, CallCapGenerous]

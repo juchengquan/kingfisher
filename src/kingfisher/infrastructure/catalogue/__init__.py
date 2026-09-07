@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Mapping
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
 
@@ -12,10 +12,12 @@ from kingfisher.agents.spec import DIRECTORY as AGENT_DIRECTORY
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import (
     AgentRepository,
+    MiddlewareRepository,
     SkillRepository,
     SubagentRepository,
     ToolRepository,
 )
+from kingfisher.middleware.catalogue import LocalMiddlewareRepository, NoMiddleware
 from kingfisher.skills import registry as skill_registry
 from kingfisher.skills.catalogue import LocalSkillRepository
 from kingfisher.skills.registry import SkillRegistry
@@ -32,6 +34,12 @@ class Definitions:
     skills: SkillRepository
     subagents: SubagentRepository
     tools: ToolRepository
+    #: Last and defaulted, unlike its four siblings, because it arrived after
+    #: them. `NoMiddleware` says what a deployment that offers none is offering;
+    #: a required field would have made every caller spelling the other four out
+    #: stop working, which is the breakage `from_config` reads roots with `.get`
+    #: to avoid.
+    middleware: MiddlewareRepository = field(default_factory=NoMiddleware)
 
     @cached_property
     def registry(self) -> SkillRegistry:
@@ -104,6 +112,12 @@ class Definitions:
             agents=LocalAgentRepository(
                 Path(roots.get("agents", Path(roots["skills"]).parent / AGENT_DIRECTORY))
             ),
+            # `.get` with a fallback, the same as `agents` above and for the
+            # reason written there: a deployment that spelled out the roots it
+            # knew about should not stop starting because a fifth kind exists.
+            middleware=LocalMiddlewareRepository(
+                Path(roots.get("middleware", Path(roots["skills"]).parent / "middleware"))
+            ),
             skills=LocalSkillRepository(Path(roots["skills"])),
             subagents=LocalSubagentRepository(Path(roots["subagents"])),
             tools=LocalToolRepository(Path(roots["tools"])),
@@ -114,7 +128,14 @@ class Definitions:
 DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 
 #: The kinds a *supplied* catalogue has to name and stage itself.
-STAGED_KINDS: tuple[str, ...] = tuple(k for k in DEFINITION_KINDS if k != AGENT_DIRECTORY)
+#:
+#: `agents` and `middleware` are both outside it, and for one reason: each
+#: arrived after this seam was published, so a deployment that spelled out the
+#: kinds it knew about must not stop starting because another exists. Left in,
+#: `middleware` stopped every supplied catalogue in the tree loading at once.
+STAGED_KINDS: tuple[str, ...] = tuple(
+    k for k in DEFINITION_KINDS if k not in (AGENT_DIRECTORY, "middleware")
+)
 
 
 def _root_of(repository: object) -> Path | None:

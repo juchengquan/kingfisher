@@ -96,7 +96,10 @@ class ToolNote(AgentMiddleware):
     and would read as something the *workspace* said.
     """
 
-    name = "ToolNote"
+    #: The selector, and the same string the wiring block registers. It was
+    #: `ToolNote`, which was the class's own name restated; `tool-note` is what
+    #: every definition here already writes.
+    name = "tool-note"
 
     #: The deployment's values, applied whole when a definition writes nothing.
     #: `text` is a working default rather than an empty string, so naming this
@@ -159,3 +162,11 @@ class ToolNote(AgentMiddleware):
         # are two loops over one turn, and a note that appeared on only one of
         # them would depend on which the caller reached for.
         return self._annotate(await handler(request))
+
+
+#: What this file contributes, declared rather than inferred -- the rule
+#: `TOOLS` makes one directory over, and here for its reason: a class imported
+#: to build a variant would otherwise be offered as a second entry nobody meant
+#: to expose. One, where the cap needed two -- this class varies by `settings:` instead,
+# which is the other half of that same lesson.
+MIDDLEWARE = [ToolNote]

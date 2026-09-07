@@ -70,9 +70,15 @@ class Source(Protocol):
 
 
 def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
-    """Each kind of definition, and the catalogue it belongs in."""
+    """Each kind of definition, and the catalogue it belongs in.
+
+    A kind the destination does not name is skipped rather than raised on: a
+    `Destination` is satisfied by shape, so one written when there were four
+    kinds hands over four roots, and indexing every kind made adding a fifth
+    a `KeyError` for all of them.
+    """
     roots = cfg.catalogue_roots
-    return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
+    return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS if kind in roots)
 
 
 #: The kinds whose definitions are YAML documents with a `middleware:` field.

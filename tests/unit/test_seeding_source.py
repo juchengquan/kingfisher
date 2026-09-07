@@ -23,7 +23,13 @@ def _definitions(root: Path, *entries: str) -> Path:
 
 def test_nothing_ships_to_seed_from(shipped):
     """This asserted the opposite until the definitions left the wheel."""
-    assert seeding.kinds_at(shipped) == ("agents", "skills", "subagents", "tools")
+    assert seeding.kinds_at(shipped) == (
+        "agents",
+        "skills",
+        "subagents",
+        "tools",
+        "middleware",
+    )
     # What the claim actually is, rather than "no such directory". A stale
     # `__pycache__` left by a checkout from before the move would fail that
     # spelling for a reason the rule is not about, and `kinds_at` asks the

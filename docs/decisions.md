@@ -100,6 +100,62 @@ a caller could activate a skill the agent was never told about. A directory the
 agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
+**Middleware is a definition kind.** `middleware/*.py` declaring `MIDDLEWARE`,
+read like `tools/`, seeded like everything else, and named from a definition in
+the long form that already existed. It was the one kind a workspace could not
+offer, on the argument that a middleware read out of the workspace would be code
+the agent can edit wrapped around the agent that edited it -- true while the
+shell could write into a definition root, and false the moment `protected` was
+widened to every one of them. The premise moved, so this followed.
+
+**The name comes from the class**, the way a tool's comes from the tool.
+`AgentMiddleware.name` is a *property* answering the class's own name, so
+`getattr(cls, "name")` is a `str` exactly when a subclass overrode it with one --
+checked rather than trusted, or the selector would stringify into `<property
+object at 0x...>`. The shipped examples now declare `name = "call-cap-strict"`
+and its two siblings, which is what keeps every existing definition valid and
+makes the wiring block's keys the strings the classes answer to.
+
+**Classes only in a file, where a registry may also hold a zero-argument
+factory.** A file is imported once, so an object in `MIDDLEWARE` would be built
+once and shared by every graph in the process -- the state leak that makes a cap
+stop capping. A class in a file does everything a factory does and takes
+settings besides, so the second shape would be a spelling with no capability
+behind it. The registry keeps the factory because a factory can close over a
+live object, which a file cannot.
+
+**Both sources are merged once, and a name in both is refused.** `build_agent`
+resolves the registry before either branch reads it, so an agent and its
+delegates select from one mapping; merging twice would be a second chance to
+disagree. A clash is refused rather than resolved because both sources belong to
+the same deployment and renaming is available -- unlike a tool clash between two
+vendors, which is why that one is qualified instead.
+
+**`middleware` is outside `STAGED_KINDS`, like `agents`**, and it was the test of
+whether that rule held. Added to `Definitions` and left in, every supplied
+catalogue in the tree stopped loading at once -- *"catalogue is missing
+middleware"* -- which is the breakage the `agents` exclusion was written to
+prevent, arriving on the first kind added after it. `seeding.definition_roots`
+now skips a kind the destination does not name, for the same reason: a
+`Destination` is satisfied by shape, so one written when there were four kinds
+hands over four roots.
+
+**A deferred `langchain` import**, because the module-level one made nine light
+exports heavy at once -- `seed`, `inventory`, `Origins` and the rest pulling the
+agent runtime for names that never reach it. The trade `models.py` already makes
+by naming its chat classes as strings.
+
+**The shipped pairing had never been built, and did not work.** `researcher`
+granted `call-cap-strict` and `tool-note` while its delegate `sweeper` named
+`call-cap-generous` -- and an agent's `middleware:` is the ceiling its delegates
+are clamped by, so the parent refused it. Invisible for as long as the example
+existed: with nothing registered anywhere it failed earlier for want of a
+registry, and every test that touched the pair either replaced the spec or
+supplied its own registry. `researcher` grants all three now, and runs under both
+caps with the stricter deciding, which the file says out loud.
+`test_the_middleware_pairing_builds_from_the_workspace_alone` builds it with no
+registry at all. *(2026-09-07.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that
