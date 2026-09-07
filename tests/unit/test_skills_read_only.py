@@ -2,10 +2,6 @@
 
 It was writable. Measured against a catalogue on disk, `backend.write` created
 `/skills/demo/PWNED.md` and `backend.edit` tampered with `/skills/demo/SKILL.md`.
-
-Two enforcement points, because neither is sufficient: the deny rule derived for
-`/skills/**` is a tool permission and the shell bypasses those entirely, while the
-sandbox profile covers the shell and is macOS-only and disableable.
 """
 
 from __future__ import annotations

@@ -241,13 +241,8 @@ def prepare_scratch(cfg: Config) -> Path:
     Scratch defaults inside the workspace, where ownership is not in question.
     Pointing it at `/tmp` -- mode 1777, one fixed location per machine -- means
     anything the agent derives from `/data` is readable by every local user unless
-    the directory is private, and another user can pre-create the name, so finding
-    it already there is not proof that we own it.
-
-    So it is created `0o700` and then checked: `mkdir(mode=...)` alone is subject to
-    umask and is ignored entirely when the directory already exists. Loose
-    permissions on a directory we own are tightened rather than rejected; one that
-    is not ours, or not a directory at all, raises instead of being touched.
+    the directory is private, and another user can pre-create the name, so finding it
+    already there is not proof that we own it.
     """
     scratch = cfg.scratch_dir
     scratch.mkdir(mode=0o700, parents=True, exist_ok=True)

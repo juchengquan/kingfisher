@@ -1,21 +1,10 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
-`subagents.spec` owns what a definition is and `subagents.reading` what it
-means and how one is read; `subagents.catalogue` finds the files. This resolves
-what a delegate actually runs with.
-Each field a definition may narrow -- skills, tools, middleware, endpoint -- has
-its own rule here, and every one of them shares a shape: a name nothing defines
-is a mistake and raises, while a name the *request* did not activate is a caller
-being narrower than the definition and is dropped.
-
-Split out of `agent.py`, which was 657 lines doing four jobs. This was the
-largest of them and the most self-contained: nothing in here calls anything in
-`agent.py`. It has since grown other callers -- `activation` reports with
-`model_for` and `indistinct` -- so the one-caller claim that used to sit here is
-gone rather than corrected, being the kind that goes stale in another file.
-
-`TASK_TOOL` was defined here and is `subagents.TASK_TOOL` now. Both readers were
-outside this module and paying its deepagents import for four characters.
+Split out of `agent.py`, which was 657 lines doing four jobs. This was the largest of
+them and the most self-contained: nothing in here calls anything in `agent.py`. It has
+since grown other callers -- `activation` reports with `model_for` and `indistinct` --
+so the one-caller claim that used to sit here is gone rather than corrected, being the
+kind that goes stale in another file.
 """
 
 from __future__ import annotations
