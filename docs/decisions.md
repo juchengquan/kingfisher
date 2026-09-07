@@ -576,6 +576,60 @@ The guard is stated as the property rather than as the fix:
 entry of `shell_env`'s `PATH` falls inside something the fence grants, so a path
 added later by another route is caught by having been added. *(2026-09-04.)*
 
+**A definition is not the agent's to edit.** Every directory in
+`catalogue_roots` is denied to the confined shell, not only `skills/`. It used to
+be only `skills/` -- one call site, one value -- on the reasoning that a skill is
+prompt text the agent follows. The premise was always broader than the rule.
+
+`writable_roots` returns the whole workspace, so `tools/` was writable by the
+shell, and `LocalToolRepository` *executes* its modules to read them. A graph is
+built per request, so a `.py` file the shell wrote was imported and run -- in this
+process, outside this profile -- on the next turn. Measured rather than reasoned
+about: a write to `skills/` was denied and a write to `tools/` succeeded under the
+profile a deployment actually builds, and a fresh repository ran the module-level
+code of a file that had not been there.
+
+The other three roots decide rather than execute, and are denied for the same
+reason one step along. An agent that edits its own `agents/*.yaml` strikes out the
+`groups:` line saying who may reach it, and groups are read when the catalogue
+loads -- which is per request.
+
+Half of this was already recorded under *Wiring a store*, which quotes the same
+`writable_roots` sentence to argue that a store must be named by an environment
+variable because *"a file the agent could edit is not a boundary"*. That entry
+reasoned about integrity; the same premise carries execution, and it even named
+the neighbour -- *"it is the middleware decision again, one object further in."*
+
+**Nothing relied on the hole**, checked four ways before closing it, because a
+capability somebody uses is a different argument from a side effect nobody asked
+for. A caller cannot add tools: uploads layer skills and subagents and there is no
+`LayeredTools`. The agent's file tools cannot reach a catalogue root -- the
+backend is rooted at the session and no route addresses one, so the shell was the
+only path. The prompt never mentions `tools/`. And `guides/tools.md` is written
+throughout to a person authoring before a run.
+
+**Writes, not reads**, which is what `skills/` already did: an agent reading the
+skill it was told to follow is ordinary, and `execute` runs scripts the catalogue
+ships. The cheap way to pass the write test is to deny the directory outright, so
+the read control is parametrised beside it.
+
+**An absent root is still named.** The profile is written once when the
+confinement resolves and `kingfisher seed` runs after that at least once, so
+filtering directories that do not exist would leave a workspace seeded afterwards
+with a protection nobody removed and nothing applied.
+
+**Stated as the property, not the four names.**
+`test_every_definition_root_is_protected` walks `catalogue_roots` rather than a
+list, so a fifth kind is covered the day it exists rather than the day somebody
+remembers. That test is what makes *Middleware as a definition kind* buildable at
+all.
+
+**`models.yaml` and `groups.yaml` are deliberately not included.** Both are
+workspace files and both are writable, but `config_from_env` runs once when
+`Kingfisher` is constructed, so an edit lands at the next restart rather than the
+next request. A different shape, and its own argument about who writes
+`groups.yaml` and when. *(2026-09-07.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built

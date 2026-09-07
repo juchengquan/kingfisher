@@ -296,6 +296,7 @@ def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement
         scratch_dir=cfg.scratch_dir,
         extra=cfg.shell_path_extra,
         skills=cfg.skills_dir if skills is None else skills,
+        definitions=tuple(cfg.catalogue_roots.values()),
     )
 
 
@@ -499,6 +500,24 @@ def writable_roots(workspace: Path, scratch: Path) -> tuple[Path, ...]:
     return tuple(dict.fromkeys(p.resolve() for p in roots))
 
 
+def protected_roots(skills: Path | None, definitions: tuple[Path, ...]) -> tuple[Path, ...]:
+    """Everywhere inside a writable root the shell must still not write.
+
+    Deduplicated the way `writable_roots` deduplicates, and for the same reason:
+    `skills` is normally *also* `catalogue_roots["skills"]`, so the ordinary
+    deployment passes one directory twice and the profile would name it twice.
+
+    A root that does not exist is kept rather than filtered. A rule naming an
+    absent directory is inert, and dropping it would mean a workspace seeded
+    after the profile was written had a protection nobody removed and nothing
+    applied -- the profile is written once when the confinement resolves, and
+    `kingfisher seed` runs after that at least once, on the first deployment
+    anybody sets up.
+    """
+    roots = (*((Path(skills),) if skills is not None else ()), *definitions)
+    return tuple(dict.fromkeys(p.resolve() for p in roots))
+
+
 def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
     def wrap(command: str) -> str:
         # The inner `/bin/sh -c` is what deepagents would have run anyway; the
@@ -513,6 +532,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
     # and each is separately relocatable by its own environment variable
     mode: str, *, workspace: Path, state_dir: Path, scratch_dir: Path,
     extra: tuple[str, ...] = (), skills: Path | None = None,
+    definitions: tuple[Path, ...] = (),
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs.
 
@@ -561,7 +581,17 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
             # including in the other deployments sharing a relocated one. Read at
             # the tool level too, by `SKILLS_ARE_READ_ONLY`; both are needed,
             # because the shell bypasses tool permissions entirely.
-            protected=(Path(skills).resolve(),) if skills is not None else (),
+            #
+            # Every definition root, for the same reason and one worse. `tools/`
+            # holds Python that `LocalToolRepository` *executes* to read, and a
+            # graph is built per request -- so a file the shell wrote was
+            # imported and run, in this process and outside this profile, on the
+            # next turn. The others decide rather than execute: an agent that
+            # edits its own `agents/*.yaml` strikes out the `groups:` line
+            # saying who may reach it, and groups are read when the catalogue
+            # loads. `skills/` is passed separately because the backend derives
+            # a session's own, which is not always the workspace's.
+            protected=protected_roots(skills, definitions),
         ),
         encoding="utf-8",
     )

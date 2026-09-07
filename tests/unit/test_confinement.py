@@ -643,3 +643,139 @@ def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg,
 def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
     """The case every existing deployment is in."""
     assert not build_backend(cfg, session_dir).default.confinement.supplied
+
+
+# -- the definition roots are not the agent's to edit ---------------------
+
+
+@macos
+@pytest.mark.parametrize("kind", ["agents", "skills", "subagents", "tools"])
+def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir, kind):
+    """A definition the agent can rewrite says whatever the agent likes.
+
+    `tools/` is the loud one: `LocalToolRepository` *executes* its modules to
+    read them and a graph is built per request, so a file the shell wrote was
+    imported and run -- in this process, outside this profile -- on the next
+    turn. That is a route from a confined shell to unconfined execution, using a
+    directory `writable_roots` deliberately includes.
+
+    The other three decide rather than execute, and are here for the same
+    reason one level along: an agent that edits its own `agents/*.yaml` strikes
+    out the `groups:` line saying who may reach it, and groups are read when the
+    catalogue loads.
+
+    Only `skills/` was protected before this, and only because a skill is prompt
+    text the agent follows. The premise was always broader than the rule.
+    """
+    root = cfg.catalogue_roots[kind]
+    # Created first, or the write fails for want of a directory and the test
+    # passes without the profile doing anything. `agents/` is not in the
+    # fixture's layout, and that vacuity was real: dropping the protection
+    # entirely left this parametrisation green for `agents`.
+    root.mkdir(parents=True, exist_ok=True)
+    backend = build_backend(cfg, session_dir)
+    target = root / "written-by-the-agent"
+
+    backend.execute(f'printf x > "{target}"')
+
+    assert not target.exists(), (
+        f"the shell wrote into {kind}/, so a definition is still the agent's to edit"
+    )
+
+
+@macos
+@pytest.mark.parametrize("kind", ["agents", "skills", "subagents", "tools"])
+def test_a_definition_root_stays_readable(cfg, session_dir, kind):
+    """Denied writes, not denied access. The agent reads what it was granted.
+
+    The negative control that matters, because the cheap way to pass the test
+    above is to deny the directory outright -- which would stop an agent reading
+    the skill it was told to follow, and stop `execute` running a script the
+    catalogue ships beside one.
+    """
+    root = cfg.catalogue_roots[kind]
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "readable.txt").write_text("from the catalogue\n", encoding="utf-8")
+    backend = build_backend(cfg, session_dir)
+
+    result = backend.execute(f'cat "{root / "readable.txt"}"')
+
+    assert result.exit_code == 0, f"the shell cannot read {kind}/: {result.output}"
+    assert "from the catalogue" in str(result.output)
+
+
+@macos
+def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
+    """The bound on the rule. A turn's work happens in the workspace.
+
+    Protecting four directories inside a writable root is only correct if the
+    root stays writable -- the mistake in the other direction is a profile that
+    reads as tighter and stops an agent doing its job.
+    """
+    backend = build_backend(cfg, session_dir)
+    target = cfg.workspace / "ordinary-work.txt"
+
+    backend.execute(f'printf x > "{target}"')
+
+    assert target.exists(), "the workspace itself stopped being writable"
+
+
+def test_every_definition_root_is_protected(cfg):
+    """The property, not the four names, so a fifth kind arrives covered.
+
+    `DEFINITION_KINDS` is derived from the fields of `Definitions`, so adding a
+    kind adds a directory to `catalogue_roots` without anyone editing a list.
+    The parametrised tests above would not notice; this is what does.
+
+    It is the reason *Middleware as a definition kind* can be written at all: a
+    `middleware/` directory has to be denied to the shell the day it exists, not
+    the day somebody remembers to add it here.
+
+    No `@macos`: this reads the tuple the profile is built from rather than the
+    profile, so it holds the rule on every platform, including the ones where
+    the confinement is bubblewrap or nothing at all.
+    """
+    protected = confinement.protected_roots(
+        cfg.skills_dir, tuple(cfg.catalogue_roots.values())
+    )
+
+    missing = [
+        kind
+        for kind, root in cfg.catalogue_roots.items()
+        if root.resolve() not in protected
+    ]
+
+    assert not missing, (
+        f"{missing} are definition roots the profile would leave writable; every "
+        f"kind in `catalogue_roots` belongs in `protected`"
+    )
+
+
+def test_a_root_named_twice_is_protected_once(cfg):
+    """`skills` is passed separately *and* is a catalogue root.
+
+    The backend derives a session's own skills directory, which is not always
+    the workspace's, so both have to reach `protected` -- and in the ordinary
+    deployment they are the same path. Deduplicated the way `writable_roots`
+    deduplicates, or the profile names one directory twice.
+    """
+    roots = tuple(cfg.catalogue_roots.values())
+
+    protected = confinement.protected_roots(cfg.catalogue_roots["skills"], roots)
+
+    assert len(protected) == len(set(protected))
+    assert len(protected) == len(roots), "a duplicate survived, or a root was dropped"
+
+
+def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
+    """A profile is written once, and `seed` runs after it at least once.
+
+    Filtering absent directories would mean a workspace seeded after the
+    confinement resolved had a protection nobody removed and nothing applied.
+    A rule naming a directory that is not there is inert; a missing rule is not.
+    """
+    absent = tmp_path / "not-created"
+
+    protected = confinement.protected_roots(None, (absent,))
+
+    assert protected == (absent.resolve(),)

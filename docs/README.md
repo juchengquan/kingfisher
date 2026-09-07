@@ -58,19 +58,16 @@ slices land.
   when a caller wants a schema, and why the format that prompted it is not
   named in the source. Its first slice has landed; the rest waits for something
   that renders.
-- [A definition is not the agent's to
-  edit](design/2026-09-07-a-definition-is-not-the-agents-to-edit.md) — the
-  confined shell can write into `tools/`, and what appears there is executed
-  unconfined on the next request. One tuple closes it.
 - [Middleware as a definition
   kind](design/2026-09-07-middleware-as-a-definition-kind.md) — why the one kind
-  a workspace cannot offer could become an ordinary fifth directory, and why it
-  has to wait for the document above.
+  a workspace cannot offer can become an ordinary fifth directory, now that the
+  definition roots are denied to the agent.
 
-Two have passed through and left the way the rule says. *A store a deployment
+Three have passed through and left the way the rule says. *A store a deployment
 can name* was built in four slices; its decisions are under *Wiring a store* in
 `decisions.md`. *The front door is for outsiders* was built in three; its
-decisions are under *The front door* in `decisions.md`.
+decisions are under *The front door* in `decisions.md`. *A definition is not the
+agent's to edit* lasted a day and was built in one, under *Confining the shell*.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to
