@@ -100,6 +100,66 @@ def declared_middleware(
     return built
 
 
+def _described(entry: Any) -> str:
+    """What was registered, in words a deployment can match against its own code.
+
+    `AgentMiddleware` is named because it is the mistake worth naming: nobody
+    registers a `dict` by accident, and everybody's first instinct is to build
+    the thing before handing it over.
+    """
+    if isinstance(entry, AgentMiddleware):
+        return f"a built {type(entry).__name__} rather than the class"
+    return f"a {type(entry).__name__}, which cannot be called"
+
+
+def _uncallable(entry: Any, *, registered_as: str, subject: str | None = None) -> str:
+    """Why an entry cannot be built, and what to register instead.
+
+    One wording for both doors, because they are the same mistake found at two
+    moments -- `Kingfisher` walking its registry, and a definition naming an
+    entry nobody had walked. Only the opening differs, and only because at build
+    time there is a definition to name and at construction there is not.
+
+    The reason is the last clause and it is the load-bearing one. A registered
+    object is built again for every graph -- the agent's, each delegate's -- so
+    one shared instance accumulates across all of them and across turns.
+    `assets_examples/middleware/call_cap.py` counts tool calls in `self._made`;
+    registered as an instance it spends its budget once and refuses everything
+    afterwards, for the life of the process. `test_a_registered_class_is_built
+    _again_for_every_graph` is what keeps that sentence true.
+    """
+    opening = (
+        f"{subject} names middleware {registered_as!r}, which this deployment registered as"
+        if subject is not None
+        else f"middleware {registered_as!r} is registered as"
+    )
+    return (
+        f"{opening} {_described(entry)}. Register the class itself, or a "
+        f"zero-argument factory returning one: a middleware is built again for "
+        f"every graph, so a single shared object would carry one graph's state "
+        f"into the next and one turn's into the turn after"
+    )
+
+
+def refuse_unbuildable_middleware(registry: Mapping[str, Any]) -> None:
+    """Refuse a registry entry nothing can build, as the registry arrives.
+
+    Called where a deployment hands its registry over rather than where a
+    definition names one, and the difference is the whole point: an entry no
+    definition names yet is still wrong, and waiting for the request that names
+    it means finding out weeks later in somebody else's deployment. The same
+    argument `model_catalogue` makes for refusing an unbuildable `api` as the
+    file loads rather than when a turn starts.
+
+    `callable` rather than a check against `AgentMiddleware`, because callable is
+    what `MiddlewareFactory` promises and a narrower gate would let every other
+    uncallable entry through to the `TypeError` this replaces.
+    """
+    for name, entry in registry.items():
+        if not callable(entry):
+            raise CapabilityError(_uncallable(entry, registered_as=name))
+
+
 def _instantiate(
     entry: Any, wrote: Mapping[str, object], *, registered_as: str, subject: str
 ) -> Any:
@@ -127,6 +187,14 @@ def _instantiate(
     down and harder to see: the file says a value and the object does not have
     it.
     """
+    if not callable(entry):
+        # Reached when `Kingfisher` was not the door -- `build_agent` takes a
+        # registry directly. `refuse_unbuildable_middleware` catches this at
+        # construction for everyone who comes the ordinary way; this is what
+        # stops the other path raising `TypeError: 'X' object is not callable`
+        # out of the `entry()` below, which named neither the entry nor the
+        # definition that asked for it.
+        raise CapabilityError(_uncallable(entry, registered_as=registered_as, subject=subject))
     if not isinstance(entry, type):
         if wrote:
             msg = (

@@ -130,7 +130,10 @@ from kingfisher.infrastructure.harness.checkpointing import (
     release_checkpointer,
 )
 from kingfisher.infrastructure.harness.interpreter import release_interpreter
-from kingfisher.infrastructure.harness.middleware import MiddlewareFactory
+from kingfisher.infrastructure.harness.middleware import (
+    MiddlewareFactory,
+    refuse_unbuildable_middleware,
+)
 from kingfisher.infrastructure.harness.runlog import JsonlRunLogger, log_path
 from kingfisher.infrastructure.session_store import (
     TRANSCRIPT,
@@ -375,6 +378,13 @@ class Kingfisher(Sessions, Disposal):
         # middleware is. Registering is not the same as permitting: `grants`
         # still clamps which registered names a request may reach.
         self.middleware: Mapping[str, MiddlewareFactory] = middleware or {}
+        # Walked here rather than when a definition names one. An entry nothing
+        # can build is a fact about this deployment's own code, true before any
+        # request arrives and true of entries no definition names yet -- so the
+        # deployment hears it where it wired the registry, not from the first
+        # caller unlucky enough to reach the wrong name. `_instantiate` keeps
+        # its own guard for `build_agent`, which takes a registry directly.
+        refuse_unbuildable_middleware(self.middleware)
         self._graph = graph
         # There is nothing to reconcile, and that is the shape of the design
         # rather than an omission. Audiences live in the definitions, so a
