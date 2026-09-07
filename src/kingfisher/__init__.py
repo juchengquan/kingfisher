@@ -92,6 +92,20 @@ _EXPORTS = {
     # hand over what it planted.
     "FILE_STORE_CONTRACT": "kingfisher.testing",
     "Planted": "kingfisher.testing",
+    # The other two ports a deployment replaces. Both kits do more than read --
+    # one creates directories, one runs commands -- which is a property of the
+    # ports rather than of the kits: there is no way to check that a runner runs
+    # things without running things.
+    "SESSION_ROOT_CONTRACT": "kingfisher.testing",
+    "COMMAND_RUNNER_CONTRACT": "kingfisher.testing",
+    # The seventh name a consumer has forced public, and the plainest: a
+    # `CommandRunner` returns one of these, so a deployment writing a runner
+    # cannot write one without it. `docs/guides/ports.md` documents the port and
+    # the only way to satisfy it was `from kingfisher.domain.ports import
+    # CommandResult` -- reaching past the front door, which the consumer rule
+    # forbids. Found by the kit: the reference runner in
+    # `test_root_and_runner_contracts` had to import it from somewhere.
+    "CommandResult": "kingfisher.domain.ports",
     "UnknownSessionError": "kingfisher.domain.session",
     "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "Config": "kingfisher.config",
@@ -123,12 +137,15 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "COMMAND_RUNNER_CONTRACT",
     "FILE_STORE_CONTRACT",
+    "SESSION_ROOT_CONTRACT",
     "SESSION_STORE_CONTRACT",
     "UNSCOPED",
     "AccessError",
     "Capabilities",
     "CapabilityError",
+    "CommandResult",
     "Config",
     "ConfigError",
     "Held",
@@ -187,6 +204,7 @@ if TYPE_CHECKING:
     from kingfisher.domain.access import Held as Held
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
+    from kingfisher.domain.ports import CommandResult as CommandResult
     from kingfisher.domain.references import (
         UnknownReferenceError as UnknownReferenceError,
     )
@@ -216,7 +234,9 @@ if TYPE_CHECKING:
     from kingfisher.skills.spec import SkillError as SkillError
     from kingfisher.subagents.spec import RunOn as RunOn
     from kingfisher.subagents.spec import SubagentError as SubagentError
+    from kingfisher.testing import COMMAND_RUNNER_CONTRACT as COMMAND_RUNNER_CONTRACT
     from kingfisher.testing import FILE_STORE_CONTRACT as FILE_STORE_CONTRACT
+    from kingfisher.testing import SESSION_ROOT_CONTRACT as SESSION_ROOT_CONTRACT
     from kingfisher.testing import SESSION_STORE_CONTRACT as SESSION_STORE_CONTRACT
     from kingfisher.testing import Planted as Planted
 

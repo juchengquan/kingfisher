@@ -1641,6 +1641,13 @@ WITNESSES: dict[str, str] = {
     "SESSION_STORE_CONTRACT": "document",
     "FILE_STORE_CONTRACT": "document",
     "Planted": "document",
+    # The other two kits, and the type a runner returns. The same page writes
+    # all three; `CommandResult` is the one that would have been missed, because
+    # nothing *imports* it in a snippet -- a runner's `run` returns one, so a
+    # deployment cannot write the port without it and had no public spelling.
+    "SESSION_ROOT_CONTRACT": "document",
+    "COMMAND_RUNNER_CONTRACT": "document",
+    "CommandResult": "document",
     # The type of `Kingfisher.run`'s `groups=`. `UNSCOPED` is one of its two
     # members and is documented; the type that admits it cannot be private.
     "Held": "embedder",
@@ -1832,6 +1839,10 @@ LIGHT_EXPORTS = frozenset({
     # same reason and by the same route -- `testing` imports the two reference
     # errors and the standard library.
     "FILE_STORE_CONTRACT", "Planted",
+    # The remaining two kits and the result type a runner builds. Light by the
+    # same route: `testing` reaches `domain.references` and the standard
+    # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
+    "SESSION_ROOT_CONTRACT", "COMMAND_RUNNER_CONTRACT", "CommandResult",
     # Turning `KINGFISHER_SERVICE_FILE_STORE_FACTORY` into a store. Light, and
     # it has to be: the service resolves it in its lifespan, and the whole point
     # of a named factory is that kingfisher has never imported what it names.
