@@ -443,7 +443,13 @@ def with_private_skill(cfg, name="sampling"):
 
 
 def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir, monkeypatch):
-    """`skills:` defaults to none, so a delegate saying nothing gets no index at all."""
+    """`skills:` defaults to none, so a delegate saying nothing gets no index at all.
+
+    Rendered rather than read off `_allowed`, and that is the whole guard: the
+    grant was recorded under the label the bundle was *read* under and the index
+    is keyed by the label it is *mounted* under, so this delegate was handed
+    "No skills available yet" while `_allowed` looked right.
+    """
     workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
     with_private_skill(cfg)
 
@@ -451,6 +457,7 @@ def test_a_delegate_is_told_about_the_skill_in_its_own_folder(cfg, session_dir, 
 
     (narrowed,) = [m for m in subagent["middleware"] if isinstance(m, NarrowedSkills)]
     assert any(key.endswith("sampling") for key in narrowed._allowed)
+    assert "sampling" in narrowed._format_skills_list(narrowed._qualified())
 
 
 def test_a_bundles_skill_is_mounted_read_only(cfg, session_dir):

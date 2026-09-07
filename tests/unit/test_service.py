@@ -365,7 +365,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # against what the *run* was offered, which resolves a skill in a source
     # folder -- `incident::postmortem` -- that the directory listing does not
     # show. The two agreed until a sourced skill shipped.
-    from kingfisher.infrastructure.harness.agent import available_skills
+    from kingfisher.infrastructure.harness.activation import available_skills
 
     seeded_skills = set(available_skills(cfg, None))
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)

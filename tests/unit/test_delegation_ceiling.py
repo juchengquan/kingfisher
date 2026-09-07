@@ -13,6 +13,7 @@ from kingfisher.agents.spec import AgentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, ceiling, narrowed
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.skills.registry import SkillRegistry
 from kingfisher.subagents import reading
 from kingfisher.subagents.harness import as_subagent, subagent_skills
 from kingfisher.subagents.spec import SubagentError
@@ -402,12 +403,29 @@ def test_one_axis_unresolved_is_refused_rather_than_guessed():
 DECLARED = [case for case in NARROWING if case[0] is not None]
 
 
+def offering(*names: str) -> SkillRegistry:
+    """A registry of skills sitting directly under the root, which is one source."""
+    return SkillRegistry(offered={f"catalogue::{name}": {"name": name} for name in names})
+
+
+def as_identities(selection):
+    """The rule's names in the vocabulary `subagent_skills` answers in.
+
+    Spelled out rather than run through the code under test: the narrowing rule
+    is unchanged and only the vocabulary moved, so the table above stays the one
+    table every level shares.
+    """
+    if selection is None or selection == ALL:
+        return selection
+    return tuple(f"catalogue::{name}" for name in selection)
+
+
 @pytest.mark.parametrize(("selection", "cap", "expected"), DECLARED)
 def test_a_delegates_skills_are_narrowed_by_it(selection, cap, expected):
     """The fourth place, and the one the whole-function hash could not see."""
     spec = replace(reading.read(HELPER, Path("helper.yaml")), skills=selection)
 
-    assert subagent_skills(spec, ("a", "b", "c"), cap) == expected
+    assert subagent_skills(spec, offering("a", "b", "c"), cap) == as_identities(expected)
 
 
 def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
@@ -416,7 +434,7 @@ def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
 
     assert parsed.skills is None  # declared none, so none
     assert parsed.tools == ALL  # declared nothing, so whatever the caller has
-    assert subagent_skills(parsed, ("a", "b"), ("a", "b")) is None
+    assert subagent_skills(parsed, offering("a", "b"), ("a", "b")) is None
     assert narrowed(parsed.tools, by=("a", "b")) == ("a", "b")
 
 

@@ -10,8 +10,9 @@ import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.agents.catalogue import LocalAgentRepository
-from kingfisher.domain.capabilities import ALL, CapabilityError
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
+from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
 from kingfisher.infrastructure.importing import load
 from kingfisher.skills import spec as skill
 from kingfisher.skills.catalogue import LocalSkillRepository
@@ -19,7 +20,7 @@ from kingfisher.skills.reading import name_from
 from kingfisher.subagents.catalogue import LocalSubagentRepository
 from kingfisher.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.tools.spec import Offering
-from tests.conftest import FakeToolCallingModel, repository_root
+from tests.conftest import FakeToolCallingModel, capture_build, repository_root
 
 
 def test_every_preset_subagent_parses(shipped):
@@ -51,11 +52,29 @@ def test_every_preset_subagent_parses(shipped):
 def test_every_preset_skill_parses(shipped):
     """The mirror of the subagent version, and absent until a probe went looking."""
     root = shipped / "skills"
-    shipped_skills = LocalSkillRepository(root).names
 
-    assert set(shipped_skills) == {"code-review", "release-notes", "tabular-qa"}
-    for name in shipped_skills:
-        text = (root / name / skill.FILENAME).read_text(encoding="utf-8")
+    # What sits directly under the root. A folder under it is a *source*, whose
+    # skills this listing does not reach.
+    assert set(LocalSkillRepository(root).names) == {
+        "code-review",
+        "release-notes",
+        "tabular-qa",
+    }
+    # So the files are found by walking for `SKILL.md` rather than by that
+    # listing. `incident/postmortem` is the one preset demonstrating that a
+    # folder is a source, and going by name made it the one preset skill nothing
+    # here opened -- the file with a structural job was the file with no check.
+    found = sorted(root.glob(f"*/{skill.FILENAME}")) + sorted(root.glob(f"*/*/{skill.FILENAME}"))
+    assert {path.parent.name for path in found} == {
+        "code-review",
+        "postmortem",
+        "release-notes",
+        "tabular-qa",
+    }
+
+    for path in found:
+        name = path.parent.name
+        text = path.read_text(encoding="utf-8")
         parts = skill.split(text)
 
         assert parts is not None, f"{name}: no `---` header"
@@ -226,6 +245,55 @@ def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
     for name, spec in defined.items():
         offering.refuse_unknown(ALL, spec.tools, subject=f"preset {name!r}")
         offering.refuse_moved(spec.tool_sources, subject=f"preset {name!r}")
+
+
+def test_every_preset_names_skills_this_distribution_actually_offers(
+    workspace_with_presets, session_dir, fake_model
+):
+    """The skills half of the test above, absent for the same reason and found the
+    same way -- at a terminal rather than in CI.
+
+    `reviewer` grants `incident::postmortem`, a skill's own identity and the
+    spelling its own file is here to demonstrate. Nothing built an agent against
+    the shipped skills, so the grant was refused as an unknown name and
+    `kingfisher run --agent assistant` -- the first command the README hands a
+    reader -- died before the model was called.
+    """
+    cfg = replace(workspace_with_presets, skills_enabled=True)
+    # What `agents/assistant.yaml` declares. Written out rather than read from
+    # the file, because `build_agent` takes capabilities and this test is about
+    # what the delegates resolve to, not about how an agent becomes a request.
+    granted = Capabilities(subagents=("extractor", "reviewer", "profiler"))
+
+    build_agent(cfg, session_dir=session_dir, model=fake_model, capabilities=granted)
+
+
+def test_the_preset_that_grants_a_skill_is_told_about_it(
+    workspace_with_presets, session_dir, monkeypatch, fake_model
+):
+    """Resolving is not being offered, and only one of the two was ever checked.
+
+    Every `skills:` a shipped delegate declared was recorded under the words the
+    file wrote while the index was keyed by `source::name`, so `reviewer` read
+    "No skills available yet" and its prompt's *follow the shared procedure* had
+    nothing behind it.
+    """
+    cfg = replace(workspace_with_presets, skills_enabled=True)
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=fake_model,
+        capabilities=Capabilities(subagents=("reviewer",)),
+    )
+
+    (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
+    (scoped,) = [m for m in spec.get("middleware", []) if isinstance(m, NarrowedSkills)]
+    rendered = scoped._format_skills_list(scoped._qualified())
+    # Both the spellings `reviewer.yaml` writes, which is why it writes two.
+    assert "postmortem" in rendered
+    assert "tabular-qa" in rendered
 
 
 # -- the compiled preset ----------------------------------------------------

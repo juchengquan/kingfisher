@@ -17,6 +17,11 @@ skills:
   # want the habit of once a catalogue has more than one party in it, and it is
   # the only form that keeps meaning the same thing after somebody else ships a
   # `postmortem` of their own.
+  #
+  # **Keep both entries.** They are the two ways a grant resolves -- a bare name
+  # against a unique one, a qualifier against a folder -- and this delegate is
+  # where the suite checks that each arrives. Collapsing them to one spelling
+  # reads as tidying and retires the only place the other is exercised.
   - tabular-qa
   - incident::postmortem
 # Neither `provider:` nor `model:`. Checking a number is where being wrong costs

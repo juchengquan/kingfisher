@@ -8,9 +8,9 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
-    available_skills,
     build_agent,
 )
 from kingfisher.infrastructure.workspace import seeding

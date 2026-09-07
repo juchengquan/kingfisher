@@ -42,19 +42,45 @@ if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from kingfisher.config import Config
+    from kingfisher.skills.registry import SkillRegistry
+
+def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
+    """A selection as the skills it means, rather than as the words somebody wrote.
+
+    A name nothing offers is kept as written. It narrows to nothing either way,
+    and this also resolves a *request's* ceiling -- refusing there would fire on
+    a grant no definition's author can edit.
+    """
+    if selection is None or selection == ALL:
+        return selection
+    return tuple(registry.identity(one) or one for one in selection)
+
 
 def subagent_skills(
-    spec: SubagentSpec, available: tuple[str, ...], activated: Selection
+    spec: SubagentSpec, offered: SkillRegistry, activated: Selection
 ) -> Selection:
     """Which skills a delegate is told about, or `None` for none."""
-    if spec.skills is None or spec.skills == ALL:
-        # `None` is none, `ALL` is whatever the request itself has -- neither
+    if spec.skills is not None and spec.skills != ALL:
+        # `None` is none and `ALL` is whatever the request itself has -- neither
         # names anything, so neither can name something the workspace lacks.
-        return narrowed(spec.skills, by=activated)
-    refuse_unoffered(
-        spec.skills, offered=available, kind="skill", subject=f"subagent {spec.name!r}"
-    )
-    return narrowed(spec.skills, by=activated)
+        refuse_unoffered(
+            spec.skills,
+            offered=offered.spellings,
+            kind="skill",
+            subject=f"subagent {spec.name!r}",
+            # The listing stays what a person would write, not every spelling
+            # that resolves: printing both halves of each pair is a longer list
+            # saying less.
+            listing=f"{offered.names}",
+        )
+    # Both sides in the registry's vocabulary before they meet. `narrowed`
+    # intersects strings, and one skill has two legal spellings -- so a delegate
+    # granted `incident::postmortem` under a ceiling of `postmortem` kept
+    # neither. The identity is also what `NarrowedSkills` filters its index by,
+    # so a name left as written reached the delegate as an empty index: every
+    # `skills:` a delegate declared was inert, silently, whichever way it was
+    # spelled.
+    return narrowed(_identities(offered, spec.skills), by=_identities(offered, activated))
 
 
 def subagent_helpers(

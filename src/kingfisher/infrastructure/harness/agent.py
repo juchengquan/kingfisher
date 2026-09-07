@@ -33,7 +33,6 @@ from kingfisher.infrastructure.harness.activation import (
     _private_skills,
     _skill_denials,
     activatable_skills,
-    available_skills,
 )
 from kingfisher.infrastructure.harness.backend import (
     MEMORY_SOURCES,
@@ -345,7 +344,9 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     registry = offered_middleware(middleware_registry or {}, roots.middleware)
 
     if capabilities.subagents is not None:
-        offered = available_skills(cfg, session_dir, catalogue=roots)
+        # The registry rather than its `names`: a delegate's grant has to be
+        # resolved to the skill it means, not merely recognised as a word.
+        offered = activatable_skills(cfg, session_dir, catalogue=roots)
         for name in activated:
             subject = f"subagent {name!r}"
             surface.offers.refuse_unknown(

@@ -7,9 +7,9 @@ from dataclasses import replace
 import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
+from kingfisher.infrastructure.harness.activation import available_skills
 from kingfisher.infrastructure.harness.agent import (
     activatable_skills,
-    available_skills,
     build_agent,
 )
 from kingfisher.infrastructure.workspace.uploads import UploadError, materialise_skills
@@ -51,6 +51,38 @@ def test_validation_and_the_build_read_the_same_registry(cfg, session_dir):
     assert available_skills(scoped, session_dir) == activatable_skills(
         scoped, session_dir
     ).names
+
+
+def test_a_delegate_granted_an_uploaded_skill_is_offered_it(cfg, session_dir, monkeypatch):
+    """The fourth place a skill can come from, and the last one nothing checked.
+
+    A skill reaches a delegate from the catalogue root, a folder under it, the
+    delegate's own bundle, or an upload. Each labels its source somewhere and
+    filters the index by that label somewhere else, and a pair that disagreed
+    handed the delegate an empty index while its grant looked correct -- so this
+    renders the list rather than reading `_allowed`.
+    """
+    from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
+    from tests.conftest import capture_build
+    from tests.unit.test_subagent_skills import define
+
+    _upload(cfg, session_dir, GOOD)
+    define(
+        cfg,
+        "name: reviewer\ndescription: d\nskills: [mine]\nsystem_prompt: |\n  You review.\n",
+    )
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        _skills(cfg),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[]),
+        capabilities=Capabilities(subagents=("reviewer",)),
+    )
+
+    (spec,) = [s for s in captured["subagents"] if s["name"] == "reviewer"]
+    (scoped,) = [m for m in spec.get("middleware", []) if isinstance(m, NarrowedSkills)]
+    assert "mine" in scoped._format_skills_list(scoped._qualified())
 
 
 def test_an_upload_is_offered_beside_the_catalogue(cfg, session_dir):
