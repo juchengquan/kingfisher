@@ -16,6 +16,7 @@ anything that gets an injection into a document.
 from __future__ import annotations
 
 import ctypes
+import os
 import platform
 import shlex
 import shutil
@@ -211,6 +212,7 @@ def profile(
     home: Path,
     readable: tuple[Path, ...],
     writable: tuple[Path, ...],
+    itself: Path,
     protected: tuple[Path, ...] = (),
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
@@ -224,6 +226,14 @@ def profile(
     The known cost, and it is now measured rather than guessed at: a program that
     writes to the operating system's own temp directory stops working, even when
     everything it was *told* to write is inside the workspace.
+
+    `itself` is the path this text will be written to, and it is required rather
+    than defaulted because a caller who forgets it gets no boundary at all:
+    `sandbox-exec -f` re-reads the file for every command, so a shell that can
+    write it runs the next command under rules of its own. It was writable --
+    `state_dir` defaults inside the workspace and `writable_roots` returns the
+    whole workspace, so the rules sat in the region they declared writable, and
+    two commands took the home and the definition roots back.
     """
     lines = [
         "(version 1)",
@@ -251,6 +261,13 @@ def profile(
     # allows rather than instead of them: the workspace has to stay writable, and
     # only this carve-out inside it does not.
     lines += [f"(deny file-write* (subpath {_sb(p)}))" for p in protected]
+    # After those, because it is the rule that keeps the rest enforceable, and
+    # `path` rather than `subpath` so a relocated `TMPDIR` beside it stays
+    # writable. It covers more than an overwrite: append, unlink and
+    # rename-over are all `file-write*` against this name, and rename-over is
+    # the one a `subpath` deny on the parent directory would have been reached
+    # for to catch.
+    lines.append(f"(deny file-write* (path {_sb(itself)}))")
     return "\n".join(lines) + "\n"
 
 
@@ -348,11 +365,15 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
     home = Path.home().resolve()
     path = Path(state_dir) / "shell.sb"
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(
+    _write_atomically(
+        path,
         profile(
             home=home,
             readable=readable_roots(workspace, extra, skills),
             writable=writable_roots(workspace, scratch_dir),
+            # The profile refuses writes to itself, so the rules cannot be
+            # rewritten by the shell they bind. See `profile`.
+            itself=path,
             # The catalogue is instructions the agent follows, and by default it sits
             # inside the workspace -- so "the workspace is writable" made a skill
             # something the agent could rewrite for every later request, including in
@@ -361,6 +382,23 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
             # needed, because the shell bypasses tool permissions entirely.
             protected=protected_roots(skills, definitions),
         ),
-        encoding="utf-8",
     )
     return Confinement(wrap=_sandbox_exec(path), mechanism="sandbox-exec")
+
+
+def _write_atomically(path: Path, text: str) -> None:
+    """Replace `path` with `text`, never leaving a partial file behind.
+
+    A profile is rewritten every time a backend is built, and `sandbox-exec -f`
+    reads it at the start of every command -- so a plain write, which truncates
+    before it fills, gives a concurrent turn a window in which the file it is
+    about to be bound by is half a profile. The content is identical between
+    turns, every input to `profile` coming from one `Config`, so what this
+    prevents is a torn read rather than a disagreement.
+
+    Beside the profile rather than in a temp directory: `os.replace` is atomic
+    only within a filesystem, and the state directory is relocatable.
+    """
+    scratch = path.with_name(f"{path.name}.{os.getpid()}")
+    scratch.write_text(text, encoding="utf-8")
+    scratch.replace(path)

@@ -163,6 +163,7 @@ def test_the_profile_denies_after_it_allows(tmp_path):
         home=tmp_path / "home",
         readable=(tmp_path / "ws",),
         writable=(tmp_path / "ws",),
+        itself=tmp_path / "ws" / ".kingfisher" / "shell.sb",
         protected=(tmp_path / "ws" / "skills",),
     )
     lines = text.splitlines()
@@ -178,6 +179,7 @@ def test_a_profile_with_nothing_protected_is_unchanged(tmp_path):
     it always got.
     """
     args = {"home": tmp_path / "home", "readable": (tmp_path / "ws",),
-            "writable": (tmp_path / "ws",)}
+            "writable": (tmp_path / "ws",),
+            "itself": tmp_path / "ws" / ".kingfisher" / "shell.sb"}
 
     assert confinement.profile(**args) == confinement.profile(**args, protected=())

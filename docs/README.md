@@ -58,6 +58,11 @@ slices land.
   when a caller wants a schema, and why the format that prompted it is not
   named in the source. Its first slice has landed; the rest waits for something
   that renders.
+- [A session owns what it
+  costs](design/2026-09-08-a-session-owns-what-it-costs.md) — why every
+  per-session file moves into the session directory, where the agent may not
+  reach it, and what that removes. Carries one thing that is not a proposal: the
+  macOS shell sandbox can be escaped, and that fix is its first slice.
 
 Three have passed through and left the way the rule says. *A store a deployment
 can name* was built in four slices; its decisions are under *Wiring a store* in

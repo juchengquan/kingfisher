@@ -78,8 +78,17 @@ def test_auto_confines_and_says_nothing(cfg, tmp_path):
     assert (tmp_path / "shell.sb").is_file(), "profile not written"
 
 
-def test_the_profile_lives_in_harness_state_not_the_workspace(cfg, tmp_path):
-    """A boundary the agent can edit is not a boundary."""
+def test_the_profile_follows_the_state_directory(cfg, tmp_path):
+    """A relocated state directory takes the profile with it.
+
+    This was called `..._lives_in_harness_state_not_the_workspace`, docstringed *"a
+    boundary the agent can edit is not a boundary"*, and read as proof the profile
+    was out of the agent's reach. It never checked that: it relocates `state_dir`,
+    and the default is `<workspace>/.kingfisher`, so by default the profile does
+    live in the workspace and was writable there. What makes it a boundary is
+    `test_the_shell_cannot_rewrite_the_profile_it_runs_under`; what this checks is
+    only that the setting is honoured.
+    """
     confinement.resolve(
         confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
@@ -631,3 +640,95 @@ def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
     protected = confinement.protected_roots(None, (absent,))
 
     assert protected == (absent.resolve(),)
+
+
+# -- the profile is not the agent's to edit either ------------------------
+
+
+@macos
+@pytest.mark.parametrize(
+    "how",
+    [
+        'printf x > "{profile}"',
+        'printf x >> "{profile}"',
+        'rm -f "{profile}"',
+        'printf x > "{beside}"; mv "{beside}" "{profile}"',
+    ],
+    ids=["overwrite", "append", "unlink", "rename-over"],
+)
+def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir, how):
+    """Two commands took the sandbox apart: write the rules, then run under them.
+
+    `sandbox-exec -f` re-reads the profile for every command and `resolve` rewrites
+    it only per backend, so a shell that could write it was unconfined for the rest
+    of the turn. It could: `state_dir` defaults inside the workspace and
+    `writable_roots` returns the whole workspace, so the rules sat in the region
+    they declared writable. Measured before the fix -- the home became readable and
+    `skills/` became writable, both of which the profile above had just refused.
+
+    Four ways rather than one, because refusing an overwrite while allowing
+    `mv` over the same name is not a boundary.
+    """
+    profile = cfg.state_dir / "shell.sb"
+    backend = build_backend(cfg, session_dir)
+    before = profile.read_text(encoding="utf-8")
+
+    backend.execute(how.format(profile=profile, beside=cfg.workspace / "beside.sb"))
+
+    assert profile.read_text(encoding="utf-8") == before, (
+        "the shell rewrote the profile that confines it, so the next command in "
+        "this turn would run under rules the agent chose"
+    )
+
+
+@macos
+def test_the_home_stays_denied_after_a_shell_tries_to_open_it(cfg, session_dir):
+    """The consequence, not the mechanism: what the escape was *for*."""
+    secret = Path.home() / ".kingfisher-profile-probe"
+    secret.write_text("PRIVATE", encoding="utf-8")
+    backend = build_backend(cfg, session_dir)
+    try:
+        backend.execute(f'printf "(version 1)\\n(allow default)\\n" > "{cfg.state_dir}/shell.sb"')
+
+        result = backend.execute(f'cat "{secret}"')
+    finally:
+        secret.unlink(missing_ok=True)
+
+    assert "PRIVATE" not in str(result.output), "the shell rewrote its way into the home"
+
+
+def test_the_profile_refuses_itself_last(tmp_path):
+    """`sandbox-exec` takes the last matching rule, and this one has to beat the
+    allow that covers the directory it sits in."""
+    written = tmp_path / "ws" / ".kingfisher" / "shell.sb"
+
+    lines = confinement.profile(
+        home=tmp_path / "home",
+        readable=(tmp_path / "ws",),
+        writable=(tmp_path / "ws",),
+        itself=written,
+        protected=(tmp_path / "ws" / "skills",),
+    ).splitlines()
+
+    assert lines[-1] == f'(deny file-write* (path "{written}"))'
+
+
+@macos
+def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
+    """A turn reading the profile while another rewrites it must not see half of one.
+
+    Every input to `profile` comes from one `Config`, so concurrent writers write the
+    same bytes; what is being prevented is the window in which the file is empty.
+    """
+    state = tmp_path / "state"
+    for _ in range(2):
+        confinement.resolve(
+            confinement.AUTO,
+            workspace=tmp_path / "ws",
+            state_dir=state,
+            scratch_dir=tmp_path / "scratch",
+        )
+
+    assert sorted(p.name for p in state.iterdir()) == ["shell.sb"], (
+        "a temporary profile was left beside the real one"
+    )
