@@ -99,12 +99,10 @@ class Shout(BaseTool):
 TOOLS = [Shout()]
 ```
 
-**Note the `()`.** `TOOLS` holds tools, not classes, and the class is the one
-mistake here that used to produce a *successful* wrong answer: it loaded, was
-offered to the model under the class name `Shout` rather than the `shout` it
-declares — on a pydantic model that field is not a class attribute — and calling
-it built a new instance and handed that back as the result. It is refused now,
-naming what to write:
+**Note the `()`.** `TOOLS` holds tools, not classes. Naming the class is refused,
+because unrefused it produces a *successful* wrong answer: it loads, is offered
+to the model as `Shout` rather than the `shout` it declares, and calling it
+builds a new instance and hands that back as the result.
 
 ```
 shout.py: TOOLS names the class 'Shout' rather than a tool -- write Shout() to
@@ -135,13 +133,12 @@ only one where you decide what it says.
 
 Two shapes escape the coercion: a `ToolMessage` or a langgraph `Command` is
 returned as-is and never wrapped, so a tool can write its own result or update
-graph state. The door is open and worth knowing about, but it is LangChain's
-door rather than one kingfisher holds. A run event takes its tool name from the
-message, so a `Command` writing its own leaves the log saying a tool ran without
-saying which — and this harness puts the file tools on a real filesystem, so a
-`files` update in graph state reaches nothing that reads it.
-[`decisions.md`](../decisions.md) says why that is documented rather than
-refused, and [`findings.md`](../findings.md) has the measurement it rests on.
+graph state. That is LangChain's door rather than one kingfisher holds, and two
+things follow. A run event takes its tool name from the message, so a `Command`
+writing its own leaves the log saying a tool ran without saying which; and this
+harness puts the file tools on a real filesystem, so a `files` update in graph
+state reaches nothing that reads it. [`decisions.md`](../decisions.md) says why
+that is documented rather than refused.
 
 A two-tuple is content-and-artifact only if you asked for it with
 `@tool(response_format="content_and_artifact")`, which then *requires* the pair
@@ -221,26 +218,25 @@ subagent.
 
 ## Two files may define one name
 
-Vendors do not coordinate. Two folders may each define a `fetch`, and both load
-— the catalogue used to refuse the pair, which stopped the deployment over a
-clash and was unfixable by anyone who owned neither file.
+Vendors do not coordinate. Two folders may each define a `fetch` and both load;
+refusing the pair would stop the deployment over a clash unfixable by anyone who
+owned neither file.
 
 The bare name is then refused wherever it is granted, and a definition names
 which file's it means — `vendor_a/fetch.py::fetch`. That half is
 [`formats.md`](formats.md#two-tools-with-the-same-name). Renaming one of the two
-files is still the better answer for anyone who controls both; this is for when
-nobody does.
+files is still the better answer for anyone who controls both.
 
 ## What the loader refuses
 
-Seven things, all for the same reason: an agent quietly holding different tools
-than the workspace defines is worse than a run that stops.
+All for the same reason: an agent quietly holding different tools than the
+workspace defines is worse than a run that stops.
 
 | Refused | Why |
 | --- | --- |
 | A module with no `TOOLS` | Scanning for callables would guess at intent |
-| An entry that is not a tool | `TOOLS = ["line_count"]` — the *name* of the tool, where the tool goes, by analogy with every other format here, which is data. It was offered to the model under the name `'line_count'`, quotes and all, and the build died later naming no file |
-| A class where an instance was meant | `TOOLS = [Shout]` for `[Shout()]`. See [the note above](#or-a-class-when-you-want-to-declare-the-schema) — the one mistake here that produced a *successful* wrong answer |
+| An entry that is not a tool | `TOOLS = ["line_count"]` — the tool's *name* where the tool goes. Unrefused it reaches the model as `'line_count'`, quotes and all, and the build dies later naming no file |
+| A class where an instance was meant | `TOOLS = [Shout]` for `[Shout()]`. See [the note above](#or-a-class-when-you-want-to-declare-the-schema) |
 | A module that will not import | Skipping it gives the agent silently fewer tools |
 | Two modules claiming one tool name | `tools_by_name` is a dict; the later would win in silence. Checked across folders, so two people cannot each add a `find_company` |
 | A tool named like a built-in | Same, except the thing that vanishes is `read_file` |
