@@ -19,6 +19,7 @@ time kingfisher is pointed somewhere new.
 from __future__ import annotations
 
 import os
+import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -30,6 +31,29 @@ from kingfisher.infrastructure import access_policy, model_catalogue
 # not re-exported. One blessed import path for the record — `kingfisher.config`
 # — is the whole point of it sitting where it does.
 __all__ = ["config_from_env", "enforce_local_only_tracing"]
+
+#: What each capability flag used to be called, new name to old. Read for the
+#: length of a deprecation, warned about once per read, and then removed.
+#:
+#: `KINGFISHER_SKILLS` is why this exists rather than being tidiness. It named
+#: two different things at once: a deployment's yes/no here, and the *path* to
+#: the skills catalogue that `shell_env` exports into the agent's shell, which
+#: is how a skill's own scripts find their neighbours. A deployment writing the
+#: path -- the natural mistake, since that is what the name means everywhere the
+#: agent can see it -- set a value no flag parser recognises, and skills went
+#: off with no error anywhere. `_ENABLED` says which question is being answered,
+#: and reads correctly beside `KINGFISHER_SKILLS_DIR`, which answers the other.
+#:
+#: The other three did not collide with anything and were renamed anyway: four
+#: flags that read identically should not need a reader to remember which one
+#: carries a suffix. A set with one bad name is fixed by renaming one; a set
+#: with no rule is worse than either.
+RENAMED = {
+    "KINGFISHER_SKILLS_ENABLED": "KINGFISHER_SKILLS",
+    "KINGFISHER_MEMORY_ENABLED": "KINGFISHER_MEMORY",
+    "KINGFISHER_INTERPRETER_ENABLED": "KINGFISHER_INTERPRETER",
+    "KINGFISHER_CONVERSATION_ENABLED": "KINGFISHER_CONVERSATION",
+}
 
 
 @dataclass(frozen=True)
@@ -67,10 +91,37 @@ class Environment:
         return value
 
     def flag(self, key: str, default: bool = False) -> bool:
-        raw = (self.values.get(key) or "").strip().lower()
+        raw = self._renamed(key).lower()
         if not raw:
             return default
         return raw in {"1", "true", "yes", "on"}
+
+    def _renamed(self, key: str) -> str:
+        """This setting's value, under its name or the one it used to have.
+
+        The new name wins where both are set, because a deployment mid-migration
+        has the new one for a reason. The old one is honoured so nothing breaks
+        on upgrade, and reported so it does not quietly become a second name
+        nobody knows is load-bearing. The same arrangement `kingfisher_service`
+        made when its prefix changed, and for the same reason: renaming an
+        environment variable is the one rename that fails in silence, where a
+        moved import stops the program and says which.
+
+        A warning rather than a log line. This is read before any logging is
+        configured, and the caller is a process starting up.
+        """
+        if value := (self.values.get(key) or "").strip():
+            return value
+        was = RENAMED.get(key)
+        if was and (value := (self.values.get(was) or "").strip()):
+            warnings.warn(
+                f"{was} is the old name for {key} and is still read; rename it, "
+                f"since the old one will stop being read.",
+                DeprecationWarning,
+                stacklevel=3,
+            )
+            return value
+        return ""
 
     def number(self, key: str, default: int) -> int:
         raw = (self.values.get(key) or "").strip()
@@ -216,10 +267,10 @@ class Environment:
             assets=paths.assets,
             session_store=self.optional_path("KINGFISHER_SESSION_STORE"),
             session_store_factory=self.optional_text("KINGFISHER_SESSION_STORE_FACTORY"),
-            skills_enabled=self.flag("KINGFISHER_SKILLS"),
-            memory_enabled=self.flag("KINGFISHER_MEMORY"),
-            interpreter_enabled=self.flag("KINGFISHER_INTERPRETER"),
-            conversation_enabled=self.flag("KINGFISHER_CONVERSATION", default=True),
+            skills_enabled=self.flag("KINGFISHER_SKILLS_ENABLED"),
+            memory_enabled=self.flag("KINGFISHER_MEMORY_ENABLED"),
+            interpreter_enabled=self.flag("KINGFISHER_INTERPRETER_ENABLED"),
+            conversation_enabled=self.flag("KINGFISHER_CONVERSATION_ENABLED", default=True),
         )
 
 

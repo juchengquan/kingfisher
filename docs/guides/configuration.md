@@ -56,13 +56,26 @@ says so when it finds that arrangement without a cap.
 
 | Variable | What it does | Default |
 | --- | --- | --- |
-| `KINGFISHER_SKILLS` | Skills the agent may read and run. | `false` |
-| `KINGFISHER_MEMORY` | The memory directory a session carries between turns. | `false` |
-| `KINGFISHER_INTERPRETER` | A JavaScript sandbox the agent can compute in: no filesystem, no network, capped memory and time. | `false` |
-| `KINGFISHER_CONVERSATION` | Whether a session remembers earlier turns. **The one flag that is on unless you turn it off.** | `true` |
+| `KINGFISHER_SKILLS_ENABLED` | Skills the agent may read and run. Costs ~450 tokens of preamble on every turn before a single skill is named, which is why it is a switch. | `false` |
+| `KINGFISHER_MEMORY_ENABLED` | The memory directory a session carries between turns. On means runs stop being repeatable: the agent writes notes that come back. | `false` |
+| `KINGFISHER_INTERPRETER_ENABLED` | A JavaScript sandbox the agent can compute in: no filesystem, no network, capped memory and time. | `false` |
+| `KINGFISHER_CONVERSATION_ENABLED` | Whether a session remembers earlier turns. **The one flag that is on unless you turn it off.** | `true` |
 
-A flag reads as true for `1`, `true`, `yes` or `on`. Anything else is false,
-including a value that looks deliberate — see the trap below.
+A flag reads as true for `1`, `true`, `yes` or `on`. **Anything else is false**,
+including a value that looks entirely deliberate: `y`, `enabled` and a path are
+all off, with no error. That is worth knowing before you write one from memory.
+
+All four carry `_ENABLED` so that "whether" is visibly a different question from
+"where" — `KINGFISHER_SKILLS_ENABLED` beside `KINGFISHER_SKILLS_DIR`. The bare
+names are still read and warn once on startup; they will stop being read.
+
+These two are the only capabilities with a flag, and the reason is the prompt.
+Each splices a section into the base prompt, which is the cached prefix every
+turn is compared against — so whether they are on has to be a deployment-stable
+fact, decided once. Tools, subagents and agents are attached per request through
+capabilities instead, and leave the prefix alone. A request may decline memory
+this deployment wired, and when it does the *reads* are denied rather than the
+prompt rewritten, for the same reason.
 
 ## Keeping the shell in its place
 
@@ -101,13 +114,12 @@ import stops the program and says which.
 
 ## Two things that catch people
 
-**`KINGFISHER_SKILLS` means two different things.** To a deployment it is a
-yes/no that turns skills on. To the agent's shell it is the *path* to the skills
-catalogue, exported under that same name so a skill's own scripts can find their
-neighbours. Set it to a path in your own environment — the natural mistake,
-since that is what the name means everywhere the agent can see it — and the flag
-parser reads a value that is not `1/true/yes/on`, which is **false**. Skills go
-off, with no error and nothing in the log.
+**The bare `KINGFISHER_SKILLS` still means two things, until it stops being
+read.** The agent's shell gets it holding the *path* to the skills catalogue,
+which is how a skill's scripts reach their neighbours. A deployment that sets the
+old name to that path is setting a flag to a value no parser recognises, so
+skills go **off** with no error — the trap `_ENABLED` was introduced to end. Use
+the new name and the two never meet.
 
 **A deployment configured by reading `.env.example` will miss the service
 settings**, including the port. The file covers the library and stops there.

@@ -218,6 +218,13 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     Over assignment lines rather than the whole text, and that is what keeps the
     block naming the retired variables possible -- prose carries no `NAME=`, so
     telling somebody their setting is inert does not re-document it.
+
+    A renamed knob is the third case, and it is read *and* must not be shown.
+    `RENAMED` holds a name for the length of a deprecation so that a deployment
+    on the old spelling keeps working; `.env.example` names those with an arrow
+    rather than an assignment, for the same reason the retired block does. A
+    rule that demanded a `KINGFISHER_SKILLS=` line back would be asking the file
+    to advertise the spelling the suffix exists to replace.
     """
     import re
     from pathlib import Path as _Path
@@ -237,6 +244,10 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     # Quoted, so this is a name the module looks *up* rather than one it
     # mentions in a comment -- which is the half the old rule got wrong.
     read = set(re.findall(r'"(KINGFISHER_[A-Z_]+)"', source))
+    # Read, deliberately undocumented as something to set, and listed under an
+    # arrow instead. Subtracted from what the file must show rather than added
+    # to it: see the docstring.
+    read -= set(config_module.RENAMED.values())
     # `#?` because a knob with no sensible default is shown commented out, and
     # a line nobody uncommented still documents it.
     shown = set(

@@ -229,7 +229,9 @@ def _catalogue(found: Inventory) -> Iterator[str]:
     the person seeing it is by definition looking at a broken workspace, which
     is the worst moment to be shown less of it.
     """
-    yield "\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS is off)"
+    yield (
+        "\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS_ENABLED is off)"
+    )
     # A description each, which subagents have always had here and skills never
     # did -- it is what deepagents will actually put in front of the model.
     for name, described in found.skills.items():
