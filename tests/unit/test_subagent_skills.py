@@ -54,7 +54,47 @@ def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir, mo
     captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
 
     (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
-    assert set(scoped._allowed) == {"tabular-qa"}
+    assert set(scoped._allowed) == {"catalogue::tabular-qa"}
+
+
+def test_a_delegate_may_name_a_skill_by_its_full_identity(cfg, session_dir, monkeypatch):
+    """`incident::postmortem` was refused as an unknown skill, and it is the skill's
+    own identity -- the one spelling that keeps meaning this skill after somebody
+    else ships a `postmortem`. The shipped `reviewer` writes it, so seeding the
+    examples and running anything that declared that delegate died at build.
+    """
+    (cfg.skills_dir / "incident" / "postmortem").mkdir(parents=True)
+    (cfg.skills_dir / "incident" / "postmortem" / "SKILL.md").write_text(
+        "---\nname: postmortem\ndescription: A procedure.\n---\nBody.\n", encoding="utf-8"
+    )
+    define(cfg, "name: reviewer\ndescription: d\nskills: [incident::postmortem]\n"
+        "system_prompt: |\n  You review.\n")
+
+    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+
+    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    assert set(scoped._allowed) == {"incident::postmortem"}
+
+
+def test_a_delegate_is_actually_told_about_the_skill_it_named(cfg, session_dir, monkeypatch):
+    """The grant reaching the index, rather than the grant being recorded.
+
+    `_allowed` held what the definition wrote and the index is keyed by
+    `source::name`, so every one of these sets was disjoint from the thing it
+    filtered: a delegate naming a skill was told "No skills available yet". That
+    is invisible to any assertion about `_allowed` alone, which is why this one
+    renders the list.
+    """
+    offer_skills(cfg, "tabular-qa", "code-review")
+    define(cfg, "name: reviewer\ndescription: d\nskills: [tabular-qa]\n"
+        "system_prompt: |\n  You review.\n")
+
+    captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
+
+    (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
+    rendered = scoped._format_skills_list(scoped._qualified())
+    assert "tabular-qa" in rendered
+    assert "code-review" not in rendered  # and only the one it named
 
 
 def test_omitting_skills_grants_none(cfg, session_dir, monkeypatch):
@@ -133,7 +173,9 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch)
     )
 
     (scoped,) = [m for m in middleware_of(captured, "reviewer") if isinstance(m, NarrowedSkills)]
-    assert set(scoped._allowed) == {"tabular-qa"}, "the delegate kept a skill its caller lacked"
+    assert set(scoped._allowed) == {"catalogue::tabular-qa"}, (
+        "the delegate kept a skill its caller lacked"
+    )
 
 
 # -- the format -----------------------------------------------------------

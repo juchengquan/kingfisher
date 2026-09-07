@@ -155,7 +155,13 @@ def workspace_with_presets(cfg, shipped):
     """A workspace holding the shipped definitions, as `kingfisher seed` leaves one."""
     import shutil
 
-    for kind in ("skills", "subagents"):
+    # `tools` too, because a delegate that names one is refused before its
+    # skills are looked at -- so leaving them out would make a skills test pass
+    # by never reaching the check.
+    #
+    # `agents` stays out: `build_agent` takes capabilities rather than an agent
+    # definition, and two of the shipped agents cannot run on a bare checkout.
+    for kind in ("skills", "subagents", "tools"):
         shutil.copytree(shipped / kind, cfg.workspace / kind, dirs_exist_ok=True)
     return cfg
 

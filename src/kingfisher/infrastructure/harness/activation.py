@@ -140,7 +140,17 @@ def _private_skills(
         return None
     bundles = getattr(catalogue.subagents, "bundles", None) or {}
     where = bundles[name].where
-    return tuple(registry.offered), (bundled_skills_route(where), where)
+    # Re-labelled from the source it was *read* under to the one it is *mounted*
+    # under. `skill_registry.read` calls a root source `catalogue`, and a bundle
+    # is mounted under the folder's own name -- so the two halves of this return
+    # value named one skill two ways, and the delegate was told about none of it.
+    return (
+        tuple(
+            skill_registry.qualified(where, skill_registry.split_qualified(key)[1])
+            for key in registry.offered
+        ),
+        (bundled_skills_route(where), where),
+    )
 
 
 def _activated_subagents(

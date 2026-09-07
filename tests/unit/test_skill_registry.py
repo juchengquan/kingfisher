@@ -8,7 +8,8 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.harness.agent import available_skills, build_agent
+from kingfisher.infrastructure.harness.activation import available_skills
+from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.skills import registry as skill_registry
 from kingfisher.skills.catalogue import LocalSkillRepository
 from tests.conftest import FakeToolCallingModel

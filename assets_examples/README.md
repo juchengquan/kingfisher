@@ -1,10 +1,20 @@
 # assets_examples
 
-This repository's worked set: one agent, skill, subagent and tool, each
-demonstrating a distinct feature of the formats. It is committed, and it is held
-to working -- the tests open every file here and check that it parses, loads and
-runs, so a feature that stops being demonstrated fails the suite rather than
+This repository's worked set: every kind the formats define, each file
+demonstrating a distinct feature of one. It is committed, and it is held to
+working. The tests parse every file here, load every tool, build an agent from
+what `assistant` declares, and render the skills index each delegate is actually
+handed, so a feature that stops being demonstrated fails the suite rather than
 quietly rotting.
+
+Rendering the index is the part worth naming. Granting a skill and being offered
+one are different facts, a definition shows only the first, and nothing you can
+read in this directory distinguishes a delegate that holds a procedure from one
+handed an empty index.
+
+What none of it covers is a model. Nothing here is called against an endpoint,
+which is what keeps the suite cheap enough to run on every commit and is equally
+its edge: a definition can parse, build, and still be a bad prompt.
 
 It is a curriculum rather than a bag of assets. Read it, copy what you need, and
 change the copy:

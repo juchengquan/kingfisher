@@ -137,37 +137,56 @@ class SkillRegistry:
             if offered_name == name and source is not None
         )
 
-    def resolve(self, written: str) -> str:
-        """One grant into the `source::name` it means, or a refusal saying why."""
+    @property
+    def spellings(self) -> tuple[str, ...]:
+        """Every spelling a grant may legally write, for a caller checking one.
+
+        `names` is what a listing shows and is not that set: it gives the bare
+        name wherever it is unique, and the qualified form is legal there too --
+        it is the skill's identity, and the one spelling that still means the
+        same skill after somebody else ships that name.
+        """
+        return tuple(sorted({*self.names, *self.offered}))
+
+    def identity(self, written: str) -> str | None:
+        """The one skill this grant means, or `None` when it means no one skill."""
         source, name = split_qualified(written)
         if source is not None:
-            if written in self.offered:
-                return written
+            return written if written in self.offered else None
+        found = self._sources_of(name)
+        return qualified(found[0], name) if len(found) == 1 else None
+
+    def resolve(self, written: str) -> str:
+        """One grant into the `source::name` it means, or a refusal saying why."""
+        if (found := self.identity(written)) is not None:
+            return found
+
+        source, name = split_qualified(written)
+        if source is not None:
             msg = (
                 f"no skill {name!r} in {source!r}; this workspace offers "
                 f"{self.names}"
             )
             raise CapabilityError(msg)
 
-        found = self._sources_of(name)
-        if not found:
+        sources = self._sources_of(name)
+        if not sources:
             msg = f"unknown skill: {name!r}; this workspace offers {self.names}"
             raise CapabilityError(msg)
-        if len(found) > 1:
-            spelt = ", ".join(qualified(s, name) for s in sorted(found))
-            msg = (
-                f"{name!r} is offered by more than one source, so naming it alone "
-                f"would silently pick one: write {spelt}"
-            )
-            raise CapabilityError(msg)
-        return qualified(found[0], name)
+        # More than one, necessarily: `identity` resolves the single-source case
+        # above, so reaching here with any source at all means several. A further
+        # reason for `identity` to return `None` needs its own branch, or it is
+        # reported as an ambiguity it is not.
+        spelt = ", ".join(qualified(s, name) for s in sorted(sources))
+        msg = (
+            f"{name!r} is offered by more than one source, so naming it alone "
+            f"would silently pick one: write {spelt}"
+        )
+        raise CapabilityError(msg)
 
     def description(self, written: str) -> str:
         """What a skill says it is for. Empty for anything this does not hold."""
-        key = written if written in self.offered else None
-        if key is None:
-            found = self._sources_of(written)
-            key = qualified(found[0], written) if len(found) == 1 else None
+        key = self.identity(written)
         return str(self.offered.get(key, {}).get("description", "")) if key else ""
 
 
