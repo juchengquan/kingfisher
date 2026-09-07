@@ -19,10 +19,9 @@ with was `delegation` beside this file and is `subagents.harness` now, a package
 of its own. Neither calls anything here.
 
 `build_agent` was the only caller of either when they moved, and is not now:
-`activation` takes `model_for` and `indistinct` to report with, `tools.harness`
-and `interpreter` take `TASK_TOOL`, and `subagents.harness` reaches `prompting`
-directly. The property that holds is the direction -- nothing they own calls
-back into this file.
+`activation` takes `model_for` and `indistinct` to report with, and
+`subagents.harness` reaches `prompting` directly. The property that holds is the
+direction -- nothing they own calls back into this file.
 """
 
 from __future__ import annotations

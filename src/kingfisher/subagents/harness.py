@@ -11,9 +11,11 @@ being narrower than the definition and is dropped.
 Split out of `agent.py`, which was 657 lines doing four jobs. This was the
 largest of them and the most self-contained: nothing in here calls anything in
 `agent.py`. It has since grown other callers -- `activation` reports with
-`model_for` and `indistinct`, and `TASK_TOOL` is read wherever delegation has to
-be recognised -- so the one-caller claim that used to sit here is gone rather
-than corrected, being the kind that goes stale in another file.
+`model_for` and `indistinct` -- so the one-caller claim that used to sit here is
+gone rather than corrected, being the kind that goes stale in another file.
+
+`TASK_TOOL` was defined here and is `subagents.TASK_TOOL` now. Both readers were
+outside this module and paying its deepagents import for four characters.
 """
 
 from __future__ import annotations
@@ -46,15 +48,6 @@ from kingfisher.infrastructure.prompting import with_user_prompt
 from kingfisher.subagents.rules import resolved_model
 from kingfisher.subagents.spec import RunOn, SubagentError, SubagentSpec
 from kingfisher.tools.spec import Found, Offering, select, split_reference
-
-#: Delegation, wherever it is dispatched from.
-#:
-#: Here rather than in `agent`, which is where it was written and is no longer
-#: the only module that needs it: the interpreter decides whether a sandbox may
-#: dispatch one, and the tool surface hides it from a compiled graph's roster.
-#: Neither of those may import the module that assembles them, which is what
-#: puts the name here rather than beside the assembly.
-TASK_TOOL = "task"
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
