@@ -1,29 +1,24 @@
 """Who reaches what: the group vocabulary, and the rule the definitions apply.
 
-Two halves, and the split is the design. **Audiences live in the definitions** --
-an agent or a subagent says who may reach it, and may say who reaches each tool,
-delegate or skill it holds. What is central is only the *vocabulary*: which
-group names exist, and which contain which. That file holds no policy at all,
-and everything it used to hold now sits beside the thing it was about.
+**Audiences live in the definitions** -- an agent or a subagent says who may reach
+it, and may say who reaches each tool, delegate or skill it holds. What is central
+is only the *vocabulary*: which group names exist, and which contain which.
 
-What that buys, beyond locality: there is nothing left to reconcile. A central
-table could name an asset the workspace no longer offers, which had to be
-detected and dropped or every turn would refuse. A definition *is* the asset, so
-that failure has no shape here -- and a definition naming a tool that does not
-exist was already refused by `Offering.refuse_unknown`, long before any of this.
+Beyond locality, that leaves nothing to reconcile. A central table could name an
+asset the workspace no longer offers, which had to be detected and dropped or
+every turn would refuse; a definition *is* the asset, so that failure has no shape
+here.
 
-The answer the rule produces is an ordinary `Capabilities`, which is unchanged
-from the central design and is what keeps everything downstream unchanged too:
-an ungranted tool is never attached to the graph, and an ungranted subagent is
-never compiled.
+The answer the rule produces is an ordinary `Capabilities`, which is what keeps
+everything downstream unchanged: an ungranted tool is never attached to the graph,
+and an ungranted subagent is never compiled.
 
-Three fields may carry audiences and one deliberately may not. `builtin_tools`
-is absent because deepagents registers those itself, so kingfisher can only
-filter them afterwards, never leave them out of a graph -- see
+Three fields may carry audiences and one deliberately may not. `builtin_tools` is
+absent because deepagents registers those itself, so kingfisher can only filter
+them afterwards, never leave them out of a graph -- see
 `kingfisher.infrastructure.harness.narrowing`, which records a live run where a
 model called `execute` from memory. Control them through which *agents* a group
-may open instead: an agent declaring a read-only builtin set cannot yield the
-shell to anyone.
+may open instead.
 
 Pure, like the rest of `domain/`: this module reads no file. The YAML half is
 `kingfisher.infrastructure.access_policy`.
@@ -79,10 +74,9 @@ Audience = Literal["*"] | tuple[str | Requires, ...]
 class Stated:
     """What one definition says about who reaches what.
 
-    A record rather than a mapping with two value shapes. It was the second for
-    one commit, keyed `groups` beside one entry table per field, and every
-    reader of it then had to narrow a union at the point of use -- which is a
-    cost paid by everybody to save one type here.
+    A record rather than a mapping with two value shapes, which would make every
+    reader narrow a union at the point of use -- a cost paid by everybody to save
+    one type here.
     """
 
     #: The definition's own audience: who may reach it at all.
@@ -130,11 +124,8 @@ UNSCOPED: Final[_Unscoped] = _Unscoped()
 #: said" is a handler that forgot the boundary. One is honoured, the other is
 #: refused.
 #:
-#: A `Sequence`, not a tuple. It was `tuple[str, ...]` while `for_groups` was
-#: the way in and coerced whatever it was handed; `groups=` is the way in now,
-#: `["A"]` is the obvious thing to write, and a type that refused it would be
-#: refusing the documented form. Every use of this alias is a *parameter*, so
-#: widening it loosens no guarantee anything returns.
+#: A `Sequence`, not a tuple: `["A"]` is the obvious thing to write, and every use
+#: of this alias is a *parameter*, so widening it loosens no guarantee.
 #:
 #: A `str` satisfies `Sequence[str]` and always will, so the type cannot catch
 #: `groups="analysts"` -- eight one-letter group names. `Kingfisher.held_for`
@@ -149,17 +140,12 @@ def reaches(audience: Audience, held: frozenset[str]) -> bool:
     everyone reads an access list as meaning.
 
     Public because several readers ask it, and a private copy in each is one
-    convention away from them disagreeing about who reaches what. Said without
-    naming them: this listed "both definition formats and the listing", which
-    are `reaching`'s callers rather than this one's -- the formats ask that, and
-    it asks this. Its own callers have since become three in `application/`, and
-    a list of them here goes stale every time a fourth appears.
+    convention away from them disagreeing about who reaches what.
 
-    A *named* compound needs no case here: `Groups.expand` has already put it
-    into `held` if the caller's groups add up to it, so by the time an audience
-    is asked, the name is either held or it is not, exactly like any other. Only
-    the inline form is resolved here, because it has no name to have been
-    derived under.
+    A *named* compound needs no case here: `Groups.expand` has already put it into
+    `held` if the caller's groups add up to it, so by the time an audience is asked
+    the name is either held or it is not. Only the inline form is resolved here,
+    because it has no name to have been derived under.
     """
     if audience == ALL:
         return True
@@ -226,29 +212,21 @@ class AccessReport:
     #: Definitions carrying no `groups:` line, and so reachable by everyone, as
     #: `(kind, name)`.
     #:
-    #: Named because default-open must not also be silent. An absent optional
-    #: field meaning "no restriction" is right -- it is what an absent field
-    #: means everywhere else in these formats, and reading it as "nobody" would
-    #: stop every unannotated definition working the moment a vocabulary file
-    #: appeared. But it makes "we have not restricted that one yet" invisible,
-    #: and this line is the whole of what stands between that and nobody
-    #: noticing.
+    #: Named because default-open must not also be silent. Reading an absent
+    #: `groups:` as "nobody" would stop every unannotated definition working the
+    #: moment a vocabulary file appeared -- but default-open makes "we have not
+    #: restricted that one yet" invisible, and this line is what stands between
+    #: that and nobody noticing.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
-    #: Entries naming a group their definition's own audience never mentions,
-    #: as `(where, audience)`. Reached only by a caller holding one of each.
+    #: Entries naming a group their definition's own audience never mentions, as
+    #: `(where, audience)`. Reached only by a caller holding one of each.
     #:
-    #: Reported rather than refused, and it was refused for two commits. The
-    #: refusal could not tell the two readings apart: `[senior]` under
-    #: `[analysts, auditors]` is a deliberate second requirement -- everyone who
-    #: opens this agent, but this tool wants seniority too -- and `[auditors]`
-    #: under `[analysts]` is somebody who meant to widen and has written
-    #: something that reaches nobody. Same shape, opposite intents, and only the
-    #: author knows which.
-    #:
-    #: So the information is kept and the veto is not. That is the trade
-    #: `unrestricted` above already makes: a thing worth noticing, said once,
-    #: where an operator sees it.
+    #: Reported rather than refused, because a refusal cannot tell the two readings
+    #: apart: `[senior]` under `[analysts, auditors]` is a deliberate second
+    #: requirement, and `[auditors]` under `[analysts]` is somebody who meant to
+    #: widen and has written something that reaches nobody. Same shape, opposite
+    #: intents, and only the author knows which.
     narrowed: tuple[tuple[str, str], ...] = ()
 
     @property
@@ -411,22 +389,20 @@ class Groups:
     ) -> tuple[tuple[str, str], ...]:
         """Entries naming a group this definition's own audience never mentions.
 
-        An entry audience is already an **and** with the definition's, because
-        the only way to reach an entry is through the definition holding it --
-        `agent_named` refuses a caller who cannot open the agent, and nothing
-        else hands out a spec. So `[senior]` under `[analysts, auditors]` means
-        "everyone who opens this agent, and is senior", which is a perfectly
-        good second requirement and has always evaluated correctly.
+        An entry audience is already an **and** with the definition's, because the
+        only way to reach an entry is through the definition holding it --
+        `agent_named` refuses a caller who cannot open the agent, and nothing else
+        hands out a spec. So `[senior]` under `[analysts, auditors]` means "everyone
+        who opens this agent, and is senior", which is a good second requirement.
 
-        This was `refuse_dead` and it refused exactly that. The refusal was
-        wrong twice over: it blocked the narrowing above, and the thing it meant
-        to catch -- `[auditors]` written under `[analysts]` by somebody trying
-        to *widen* -- is the same shape, so no rule can tell them apart. What
-        survived is the looking. See `AccessReport.narrowed`.
+        Reported, never refused: the mistake this looks for -- `[auditors]` written
+        under `[analysts]` by somebody trying to *widen* -- is the same shape as
+        that deliberate narrowing, so no rule can tell them apart. See
+        `AccessReport.narrowed`.
 
-        Judged on what the names mean rather than how they are spelled, which
-        is why it needs the vocabulary: `[analysts]` under `[reviewers]` is not
-        narrowing at all when `reviewers` contains `analysts`.
+        Judged on what the names mean rather than how they are spelled, which is why
+        it needs the vocabulary: `[analysts]` under `[reviewers]` is not narrowing
+        at all when `reviewers` contains `analysts`.
 
         Silent when the definition is `ALL`: everyone reaches it, so nothing an
         entry says can be narrower than nothing.

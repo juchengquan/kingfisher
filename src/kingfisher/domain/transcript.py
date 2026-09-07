@@ -1,29 +1,20 @@
 """What was said in a session, as records this package owns.
 
-A conversation is the most durable thing a session has and the most sensitive.
-It was a sqlite database written by langgraph's checkpointer — which preserves
-resumable *graph* state: pending writes, channel versions, a position in the
-graph. Kingfisher never resumes a graph. `service.py` passes
-`{"thread_id": session_id}` and no `checkpoint_id`, and there is no `interrupt()`
-anywhere, so a turn runs to completion or fails and the next one continues a
-*conversation*. The machinery was paid for and unused.
-
-So this is what a session's history actually is here, in kingfisher's own
-vocabulary rather than a framework's. Two things follow, and the second is the
-one worth defending.
+Not langgraph's checkpointer, which preserves resumable *graph* state: pending
+writes, channel versions, a position in the graph. Kingfisher never resumes a
+graph -- `service.py` passes `{"thread_id": session_id}` and no `checkpoint_id`,
+and there is no `interrupt()` anywhere -- so a turn runs to completion or fails
+and the next one continues a *conversation*.
 
 **A harness is a choice, and this outlives one.** Storing LangChain's classes
 would make every stored conversation a bet that the next harness reads them.
 Roles and tool calls are what every provider's wire format already carries, so a
-record of those travels; `infrastructure/harness/` translates, and if the
-framework changes that is the file that changes.
+record of those travels; `infrastructure/harness/` translates.
 
-**Tool calls are kept, not only the human and assistant text.** "Flattened" has
-a cheaper reading that keeps the question and the final answer, and it makes the
-agent forget its own work: the next turn would see *"summarise /data/x.csv"* →
-*"Done, 40 rows"* with no record that `csv_profile` ran or what it returned, so
-it re-does things and cannot refer to what it did. Portability does not require
-that loss — it requires not storing a framework's objects.
+**Tool calls are kept, not only the human and assistant text.** Keeping just the
+question and the final answer makes the agent forget its own work: the next turn
+would see *"summarise /data/x.csv"* -> *"Done, 40 rows"* with no record that
+`csv_profile` ran, so it re-does things and cannot refer to what it did.
 """
 
 from __future__ import annotations
@@ -42,10 +33,8 @@ Role = Literal["system", "user", "assistant", "tool"]
 class ToolCall:
     """One tool an assistant asked for, and the name it asked by.
 
-    `id` is what pairs a call with its result, and it comes from the model
-    rather than from here. Kept verbatim: a provider that sees its own id come
-    back is a provider that can match them, and re-minting would break exactly
-    the pairing this exists to record.
+    `id` pairs a call with its result and comes from the model. Kept verbatim:
+    re-minting would break exactly the pairing this exists to record.
     """
 
     name: str
@@ -57,11 +46,8 @@ class ToolCall:
 class Message:
     """One thing said, by one party.
 
-    Flat on purpose. `content` is text because that is what every role has;
-    an assistant additionally has `tool_calls`, and a tool result additionally
-    answers a `call_id`. Nothing here holds a provider's raw payload — a record
-    that carried one would be a record only that provider could read, which is
-    the thing this file exists to avoid.
+    Flat on purpose. Nothing here holds a provider's raw payload -- a record that
+    carried one would be a record only that provider could read.
     """
 
     role: Role
@@ -77,15 +63,12 @@ class Message:
 def as_json(messages: tuple[Message, ...]) -> str:
     """The transcript as one JSON document, newline-delimited.
 
-    One object per line rather than one array, because a transcript is appended
-    to and a line-oriented file can be appended to without rewriting it. Nothing
-    here appends yet -- the turn writes the whole thing -- and the format is
-    chosen so that the day something measures the cost, the fix does not need a
-    migration.
+    One object per line rather than one array, so the file can be appended to
+    without rewriting it. Nothing appends yet -- the turn writes the whole thing
+    -- and the format is chosen so that day needs no migration.
 
-    Readable on purpose. This is the one thing in a session a person may need to
-    inspect after the fact, and a binary format would mean writing a tool before
-    anyone could answer "what did it actually say".
+    Readable on purpose: this is the one thing in a session a person may need to
+    inspect after the fact.
     """
     return "".join(
         json.dumps(
@@ -115,14 +98,12 @@ def as_json(messages: tuple[Message, ...]) -> str:
 def from_json(document: str) -> tuple[Message, ...]:
     """Read back what `as_json` wrote.
 
-    A blank line is skipped rather than refused: a file written and re-read
-    across a crash may end in one, and losing a whole conversation over trailing
-    whitespace is a worse answer than ignoring it.
+    A blank line is skipped rather than refused: a file written and re-read across
+    a crash may end in one, and losing a whole conversation over trailing
+    whitespace is the worse answer.
 
-    A malformed line is *not* skipped. That is data loss with no error, which is
-    the failure this whole design exists to prevent -- if a transcript cannot be
-    read, the caller should be told rather than handed a shorter conversation
-    that looks complete.
+    A malformed line is *not* skipped. That would be data loss with no error --
+    a caller handed a shorter conversation that looks complete.
     """
     read: list[Message] = []
     for line in document.splitlines():

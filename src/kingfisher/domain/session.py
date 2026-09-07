@@ -1,15 +1,14 @@
 """The Session aggregate: a conversation and the turns inside it.
 
-Session is the root because that is where the hard invariants cluster — turn
-ids unique within a conversation, a turn's inputs confined to its own
-directory, and a discarded session taking its thread with it. Workspace is the
-context those sessions live in, not a root of its own: an aggregate holding
-every file in the project would be a concurrency bottleneck and the
-large-aggregate anti-pattern in one.
+Session is the root because that is where the hard invariants cluster -- turn ids
+unique within a conversation, a turn's inputs confined to its own directory, and a
+discarded session taking its thread with it. Workspace is the context those
+sessions live in, not a root of its own: an aggregate holding every file in the
+project would be a concurrency bottleneck and the large-aggregate anti-pattern in
+one.
 
-Retention is deliberately *not* here. Deciding which sessions to drop is a
-policy *across* sessions, so it lives in `domain.retention`, which names them
-and asks each to discard itself.
+Retention is deliberately *not* here. Deciding which sessions to drop is a policy
+*across* sessions, so it lives in `domain.retention`.
 """
 
 from __future__ import annotations
@@ -24,38 +23,36 @@ from kingfisher.domain.ports import SessionDirs, ThreadStore
 class UnknownSessionError(ValueError):
     """A request named a session that does not exist.
 
-    Raised rather than creating one. A session id names a conversation and the
-    files beside it, so it is a bearer credential: holding one is how a caller
-    proves the session is theirs, and they hold one by having started it. If a
-    supplied id could create a session, a service that forwarded an id from its
-    own caller would let that caller choose -- or guess -- the name, and read
-    somebody else's turn.
+    Raised rather than creating one. A session id is a bearer credential: holding
+    one is how a caller proves the session is theirs, and they hold one by having
+    started it. If a supplied id could create a session, a service forwarding an
+    id from its own caller would let that caller choose -- or guess -- the name,
+    and read somebody else's turn.
     """
 
 
 class SessionBusyError(ValueError):
     """A turn is already running in this session.
 
-    Two turns on one session share a conversation, and the checkpointer writes
-    it whole: both read the same history, both append, and the last write wins.
+    Two turns on one session share a conversation, and the checkpointer writes it
+    whole: both read the same history, both append, and the last write wins.
     Measured, a turn simply vanished -- both callers got an answer and a run
     directory, and the conversation kept no record that one of them happened.
 
-    Refused rather than queued. A queue hides a wait that is as long as whatever
-    the other turn is doing, and a caller who did not know they were racing
-    learns nothing from it. This is the same answer `allocate_turn` gives to a
-    taken name, for the same reason.
+    Refused rather than queued: a queue hides a wait as long as whatever the other
+    turn is doing, and a caller who did not know they were racing learns nothing
+    from it.
     """
 
 
 class QuotaExceededError(ValueError):
     """A session is already holding more than the deployment allows.
 
-    Raised before a turn starts rather than during one. `execute` writes
-    without any file tool seeing it, so there is nothing to intercept while a
-    turn runs -- a turn already going can exceed the bound, and only a
-    filesystem quota underneath could stop it. What this prevents is the *next*
-    turn making it worse.
+    Raised before a turn starts rather than during one. `execute` writes without
+    any file tool seeing it, so there is nothing to intercept while a turn runs --
+    a turn already going can exceed the bound, and only a filesystem quota
+    underneath could stop it. What this prevents is the *next* turn making it
+    worse.
     """
 
 
@@ -69,12 +66,12 @@ class Turn:
 
     @property
     def virtual_dir(self) -> str:
-        """The directory as the agent addresses it — machine-independent.
+        """The directory as the agent addresses it -- machine-independent.
 
-        No session segment. The session directory *is* the backend root, so
-        the agent has no name for it and cannot address outside it; naming it
-        here would also put the id into the prompt, changing the cached prefix
-        on every session.
+        No session segment. The session directory *is* the backend root, so the
+        agent has no name for it and cannot address outside it; naming it here
+        would also put the id into the prompt, changing the cached prefix on every
+        session.
         """
         return f"/runs/{self.id}"
 
@@ -82,20 +79,19 @@ class Turn:
     def shell_dir(self) -> str:
         """The same directory as `execute` addresses it.
 
-        The shell starts in the session root, which is what virtual `/` names,
-        so this is `virtual_dir` without its leading slash. Trivial, and worth
-        a name because the agent has to be *told*: measured over ten runs of one
-        task, it passed the virtual path to the shell 4 times out of 10. Every
-        one of those failed with `No such file or directory` and cost about
-        three times the whole task -- +5.2 model calls, +19s, +56k input tokens
-        -- to recover from. The 6 that started with this form never failed once.
+        The shell starts in the session root, which is what virtual `/` names, so
+        this is `virtual_dir` without its leading slash. Worth a name because the
+        agent has to be *told*: measured over ten runs of one task, it passed the
+        virtual path to the shell 4 times out of 10, and every one failed with `No
+        such file or directory` and cost about three times the whole task to
+        recover from. The 6 that started with this form never failed once.
         """
         return self.virtual_dir.lstrip("/")
 
     @property
     def input_dir(self) -> Path:
-        """Files supplied with this request. Never `/data`: they arrive fresh
-        each round and leave with the turn."""
+        """Files supplied with this request. Never `/data`: they arrive fresh each
+        round and leave with the turn."""
         return self.directory / "input"
 
     @property
@@ -106,9 +102,8 @@ class Turn:
 def sessions_root(workspace: Path | str) -> Path:
     """Where a workspace keeps its sessions.
 
-    A one-line function for a one-line rule, because the rule had six copies --
-    `Session.open` and five in the service -- and a layout the domain owns
-    should not be re-spelled by every caller that needs to look inside it.
+    A layout the domain owns should not be re-spelled by every caller that needs
+    to look inside it.
     """
     return Path(workspace) / "sessions"
 
@@ -118,29 +113,26 @@ class SessionInfo:
     """One session, as something outside kingfisher asks about it.
 
     Two fields, and the absence of a third is the point: there is no directory
-    here. A service that could read one would start reading files out of it,
-    and the layout would become a contract nobody wrote down. What a caller
-    gets back is kingfisher's own vocabulary -- a name it can pass to `run`,
-    and when it was last used.
+    here. A service that could read one would start reading files out of it, and
+    the layout would become a contract nobody wrote down.
     """
 
     id: str
     #: When a turn last ran here, as a unix timestamp.
     #:
-    #: True only since a turn began recording it. A turn writes *inside* a
-    #: session, so the timestamp this reads was not moved by use, and a
-    #: conversation in daily use looked untouched -- which is what made
-    #: retention sweep live sessions. Ordering by it was meaningless before
-    #: that and is meaningful now.
+    #: A turn writes *inside* a session, so this timestamp is meaningful only
+    #: because a turn now records it explicitly -- left to the filesystem, a
+    #: conversation in daily use looked untouched, which is what made retention
+    #: sweep live sessions.
     last_used: float
 
 
 def known(entries: Sequence[tuple[str, float]]) -> tuple[SessionInfo, ...]:
     """Every session there is, most recently used first.
 
-    Takes what `SessionDirs.listing` returns, so the read path and the sweep
-    read the same thing -- a session that retention can see is one a caller can
-    ask about, and the two cannot come to disagree about which exist.
+    Takes what `SessionDirs.listing` returns, so the read path and the sweep read
+    the same thing -- a session that retention can see is one a caller can ask
+    about, and the two cannot come to disagree about which exist.
     """
     return tuple(
         SessionInfo(id=name, last_used=modified)
@@ -152,15 +144,13 @@ def still_held(
 ) -> tuple[str, ...]:
     """Which of these claims somebody could still be holding.
 
-    The rule `claim` applies to one claim, said once so retention can apply it
-    to all of them. It could not before: it read claim *names* and treated every
-    one as a turn in progress, so a claim left behind by a process that died
-    exempted its session from retention permanently -- measured at ten years
-    idle, still there, on a workspace whose sessions are supposed to expire.
+    The rule `claim` applies to one claim, said once so retention can apply it to
+    all of them. Treating every claim name as a turn in progress is what let a
+    claim left behind by a dead process exempt its session from retention
+    permanently -- measured at ten years idle, still there.
 
     `stale_after` is the turn timeout, which already bounds how long a turn may
-    run. Past it the holder is gone or was going to be stopped anyway, which is
-    the same judgement that lets `claim` take a slot over.
+    run. Past it the holder is gone or was going to be stopped anyway.
     """
     return tuple(name for name, taken in entries if now - taken < stale_after)
 
@@ -177,9 +167,8 @@ class Session:
         """Open (creating if needed) one session's directory.
 
         Sessions live under `sessions/`, not `runs/`, because this directory is
-        now the backend root: it holds the whole vocabulary the agent addresses
-        — `data`, `derived`, `memory` and `runs` — rather than only that
-        session's turns.
+        the backend root: it holds the whole vocabulary the agent addresses rather
+        than only that session's turns.
         """
         return cls.at(session_id, sessions_root(workspace) / session_id, dirs)
 
@@ -188,10 +177,8 @@ class Session:
         """The same, for a directory chosen by something other than a workspace.
 
         A deployment may hold a session's files somewhere this process does not
-        pick -- a mount that exists for one turn, a volume attached per pod --
-        and the id stays kingfisher's either way. Splitting the two apart is
-        what lets that be a choice made outside without the rest of the session
-        rules moving with it.
+        pick -- a mount that exists for one turn, a volume attached per pod -- and
+        the id stays kingfisher's either way.
         """
         dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
@@ -206,31 +193,26 @@ class Session:
     ) -> Path:
         """Take this session's turn slot, or refuse because someone holds it.
 
-        Atomic for the same reason turn allocation is: `create_exclusive` fails
-        on a name that exists, and that failure *is* the check. Two callers
-        racing cannot both win it.
+        Atomic for the same reason turn allocation is: `create_exclusive` fails on
+        a name that exists, and that failure *is* the check.
 
-        Held in the store, not in the object. Any process may serve any request
-        -- verified: a second instance continues a session the first one
-        started -- so a lock in memory would guard one process against itself
-        and nothing else.
+        Held in the store, not in the object. Any process may serve any request,
+        so a lock in memory would guard one process against itself and nothing
+        else.
 
         A holder that died leaves its claim behind, so a claim older than a turn
-        could possibly be is taken over. `stale_after` is the turn timeout,
-        which already bounds how long a turn may run: past it, whoever held this
-        is gone or was going to be stopped anyway. The takeover is itself
-        racy -- two callers can both find it stale -- and safe for the same
-        reason as the first attempt, because only one `create_exclusive`
-        succeeds.
+        could possibly be is taken over. The takeover is itself racy -- two callers
+        can both find it stale -- and safe for the same reason as the first
+        attempt, because only one `create_exclusive` succeeds.
         """
         path = claims / self.id
         if dirs.create_exclusive(path):
             return path
 
         held = dict(dirs.listing(claims))
-        # A claim that vanished between the two calls counts as held: `now`
-        # makes its age zero, so a race resolves toward refusing rather than
-        # toward taking over a slot whose owner may be about to write.
+        # A claim that vanished between the two calls counts as held: `now` makes
+        # its age zero, so a race resolves toward refusing rather than toward
+        # taking over a slot whose owner may be about to write.
         mine = ((self.id, held.get(self.id, now)),)
         if self.id in still_held(mine, stale_after=stale_after, now=now):
             msg = (
@@ -252,14 +234,13 @@ class Session:
     def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
         """Create the next turn's directory and return it.
 
-        A caller-supplied id wins and is idempotent: the same id returns the
-        same directory, so a retried request reuses its turn rather than
-        forking a second one. A service should pass its own request id — only
-        the caller knows where the request boundary is.
+        A caller-supplied id wins and is idempotent: the same id returns the same
+        directory, so a retried request reuses its turn rather than forking a
+        second one. Only the caller knows where the request boundary is.
 
-        Otherwise the next sequential id is allocated by `mkdir`, which fails
-        if the name is taken. Scanning for the highest id and *then* creating
-        it is the race this avoids.
+        Otherwise the next sequential id is allocated by `mkdir`, which fails if
+        the name is taken. Scanning for the highest id and *then* creating it is
+        the race this avoids.
         """
         runs = self.runs_dir
         dirs.ensure(runs)
@@ -280,8 +261,8 @@ class Session:
             if dirs.create_exclusive(candidate):
                 return Turn(session_id=self.id, id=candidate.name, directory=candidate)
             # Lost the race for this id; take the next one. The retry lives here
-            # rather than in the adapter because it is the rule, not the
-            # primitive -- the port only has to refuse a name it cannot claim.
+            # rather than in the adapter because it is the rule, not the primitive
+            # -- the port only has to refuse a name it cannot claim.
 
     def discard(self, dirs: SessionDirs, threads: ThreadStore | None = None) -> str | None:
         """Delete this session's thread and directory. Returns a failure, or None.
@@ -290,11 +271,11 @@ class Session:
         chosen to make the surviving failure benign:
 
           thread first, then directory
-            a failure leaves a directory whose thread still exists — the
-            session is intact and the next sweep retries it
+            a failure leaves a directory whose thread still exists -- the session
+            is intact and the next sweep retries it
           directory first, then thread
-            a failure leaves a thread pointing at deleted files, which is
-            exactly the state that makes an agent cite paths that are not there
+            a failure leaves a thread pointing at deleted files, which is exactly
+            the state that makes an agent cite paths that are not there
 
         Nothing is half-deleted: if the thread will not go, the directory stays.
         """

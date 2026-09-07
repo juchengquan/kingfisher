@@ -2,12 +2,7 @@
 
 What a request runs. Every other format on the catalogue is something an agent
 selects from -- the tools it holds, the skills it may read, the delegates it may
-consult, the model it runs on -- and until now the answer to "which agent?" was
-assembled from four places that did not know about each other: `prompts/system.md`
-with the workspace's `PROMPT.md`, three switches in the environment, the
-`default:` line in `models.yaml`, and whatever a request's `Capabilities`
-narrowed to. Every delegate in `subagents/` was a reviewable document; the thing
-that summoned them was not.
+consult, the model it runs on.
 
     name: surveyor
     description: Reads and profiles data without changing anything.
@@ -19,23 +14,17 @@ that summoned them was not.
 
 `name`, `description` and `system_prompt` are required and nothing else is. The
 prompt is required for the reason `description` is: an agent is a file somebody
-else picks from, and those are the two fields that say what it is. A definition
-without one is a list of tools with nothing anywhere saying what they are for --
-`system.md` describes the harness and `PROMPT.md` describes the workspace, and
-neither of them has ever heard of this agent. Writing one line is the cost; a
-catalogue where every agent says what it does is what it buys.
+else picks from, and those are the two fields that say what it is. `system.md`
+describes the harness and `PROMPT.md` describes the workspace, and neither has
+ever heard of this agent.
 
 **Its own folder and its own format, sharing the readers and not the fields.**
-Two fields disagree with `subagents/`, and neither disagreement is cosmetic.
-`memory` is a switch a delegate has no use for. And `system_prompt` means the
-opposite thing -- see below. A shared folder would
-have made a field's meaning depend on the request that read it rather than on
-the file, which is exactly what nobody could then check by reading.
+Two fields disagree with `subagents/`: `memory` is a switch a delegate has no use
+for, and `system_prompt` means the opposite thing. A shared folder would have made
+a field's meaning depend on the request that read it rather than on the file.
 
 **`system_prompt` is added, never substituted.** A delegate's *is* the whole
-prompt and it gets none of `system.md`, deliberately: that document is the
-harness describing itself, and a delegate already has its own procedure. An
-agent's is the last of three parts --
+prompt and it gets none of `system.md`. An agent's is the last of three parts --
 
     prompts/system.md    what the harness is: /data is read-only, /skills is
                          loadable, where memory lives
@@ -46,45 +35,39 @@ agent's is the last of three parts --
 leaner; it is one holding tools nobody told it about, discovering its permissions
 by being denied.
 
-The field keeps the name deepagents and Anthropic both use rather than gaining a
-kingfisher-only one. What it costs is that a subagent file copied into `agents/`
-parses cleanly and behaves differently, so the warning lives in the
-documentation and in the seeded files rather than in an error.
+The field keeps the name deepagents and Anthropic both use. What that costs is
+that a subagent file copied into `agents/` parses cleanly and behaves
+differently, so the warning lives in the documentation rather than in an error.
 
-**Omission means the same thing it means in a subagent file**, which is one
-sentence per field rather than one per format: leave a *tool* field out and you
-get everything available to you -- every built-in, every tool the workspace
-defines -- and leave `skills` or `subagents` out and you get none. Tools are
-what an agent needs to *act* and it can do nothing without them. Skills and
-delegates are what it needs to *know* and to *ask*, and most agents need neither;
-the skills index alone costs ~600 tokens for three -- and ~450 of that is
-deepagents' own preamble, before a single skill is named -- while every delegate
-compiles a graph at ~6ms. Re-measured 2026-09-03; `docs/findings.md` carries
-what each figure is a measurement *of*, which is where the first pair went
-wrong.
+**Omission means the same thing it means in a subagent file:** leave a *tool*
+field out and you get everything available to you, and leave `skills` or
+`subagents` out and you get none. Tools are what an agent needs to *act* and it
+can do nothing without them; skills and delegates are what it needs to *know* and
+to *ask*, and most agents need neither. The skills index alone costs ~600 tokens
+for three -- ~450 of that deepagents' own preamble, before a single skill is named
+-- while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03;
+`docs/findings.md` carries what each figure is a measurement *of*.
 
-`subagents: ["*"]` is the one place the two formats genuinely answer differently,
-and the reason is in the files. In a subagent file "everything" includes the
-definition doing the asking, so it is always a loop and is refused. An agent is
-not one of the subagents, so here it means every delegate the workspace offers.
+`subagents: ["*"]` is the one place the two formats genuinely answer differently.
+In a subagent file "everything" includes the definition doing the asking, so it is
+always a loop and is refused. An agent is not one of the subagents, so here it
+means every delegate the workspace offers.
 
 `model` reads exactly as it does for a delegate: one name, and a model this
 deployment cannot run refuses rather than falling back. Omitted, the agent runs
-the `default:` in `models.yaml`, which is what a file travelling between
-deployments should say -- a vendor's model id is portable nowhere, so the
-shipped agents name none and say in a comment what to pin them to.
+the `default:` in `models.yaml` -- a vendor's model id is portable nowhere, so the
+shipped agents name none.
 
 Model *parameters* are not here and will not be. `models.yaml` carries
-`max_tokens`, `temperature` and an `extra` bag for things like reasoning effort,
-it has no credentials in it so it can go through review, and it is meant to be
-the one place saying where prompts go and what they cost. An agent that wants
-the same model to think harder names a second entry.
+`max_tokens`, `temperature` and an `extra` bag, has no credentials in it so it can
+go through review, and is meant to be the one place saying where prompts go and
+what they cost. An agent wanting the same model to think harder names a second
+entry.
 
-**A field this format does not define is refused, not ignored**, for the reason
-the subagent format gives: a key we ignore is a key the author believes took
-effect. The ones another format defines and this one declines are named
-individually in `REFUSED` below, because the generic message reads as "not
-supported yet" and sends someone looking for a workaround.
+**A field this format does not define is refused, not ignored:** a key we ignore
+is a key the author believes took effect. The ones another format defines and this
+one declines are named individually in `REFUSED` below, because the generic
+message reads as "not supported yet" and sends someone looking for a workaround.
 
 Parsing lives in the domain because this is kingfisher's format. Nothing here
 knows deepagents exists and nothing here reads a disk -- finding the files is
@@ -185,15 +168,14 @@ class AgentSpec:
     skills: Selection = None
     subagents: Selection = None
     middleware: Selection = None
-    #: What each `middleware:` entry wrote under `settings:`, for the entries
-    #: that wrote one. Keyed by name, beside the names rather than folded into
-    #: them, which is `tool_sources` beside `tools` and for the same reason:
-    #: granting and narrowing are operations on names, and neither has anything
-    #: to say about a value passed to one.
+    #: What each `middleware:` entry wrote under `settings:`. Beside the names
+    #: rather than folded into them, like `tool_sources` beside `tools`: granting
+    #: and narrowing are operations on names, and neither has anything to say
+    #: about a value passed to one.
     #:
-    #: Read against the class the deployment registered, by `approved_settings`
-    #: at build time. Nothing here is checked when the file is parsed, because
-    #: which keys a name accepts is declared by code this layer cannot see.
+    #: Read against the class the deployment registered, by `approved_settings` at
+    #: build time. Nothing here is checked when the file is parsed, because which
+    #: keys a name accepts is declared by code this layer cannot see.
     middleware_settings: Mapping[str, Mapping[str, object]] = field(
         default_factory=dict
     )
@@ -215,17 +197,14 @@ class AgentSpec:
     #: naming every definition with no line here.
     groups: Audience = ALL
     #: Field name -> entry name -> who reaches that entry, for the fields in
-    #: `AUDIENCED`. Empty for a definition written as plain lists, which is
-    #: every definition that predates audiences existing.
+    #: `AUDIENCED`. Empty for a definition written as plain lists.
     #:
     #: Beside the selections rather than replacing them, so `tools` stays the
-    #: `Selection` every consumer already reads -- `narrowed`, `Offering`, the
-    #: allowlist -- and this is consulted only where a caller's groups are known.
+    #: `Selection` every consumer already reads, and this is consulted only where a
+    #: caller's groups are known.
     #:
-    #: `derived`, because no definition writes `audiences:` -- it is read
-    #: *out of* the three selection fields, the way `tool_sources` is read out
-    #: of `tools`. Writing the key in a document is refused like any other the
-    #: format does not define.
+    #: `derived`, because no definition writes `audiences:` -- it is read *out of*
+    #: the three selection fields, the way `tool_sources` is read out of `tools`.
     audiences: Mapping[str, Mapping[str, Audience]] = field(
         default_factory=dict, metadata={"derived": True}
     )
@@ -233,28 +212,23 @@ class AgentSpec:
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by.
 
-        The agent file is the baseline and a request only ever subtracts from
-        it, so the two meet through the lattice that already exists rather than
-        through a second set of rules. `agent.declares.intersect(asked)` is the
-        whole of it: `ALL` on either side is the identity, `None` on either side
-        wins outright, and a request naming what the agent did not is left with
-        the overlap -- which is empty.
+        The agent file is the baseline and a request only ever subtracts from it,
+        so the two meet through the lattice that already exists rather than through
+        a second set of rules. `agent.declares.intersect(asked)` is the whole of
+        it.
 
         `endpoints` and `models` are `ALL` because an agent has no opinion about
-        either. They are grants a *deployment* makes -- which credentials may be
-        spent, which model a caller may name for a delegate -- and an agent that
-        narrowed them here would be a definition authorising itself.
+        either. They are grants a *deployment* makes, and an agent that narrowed
+        them here would be a definition authorising itself.
 
         `held` is the caller's expanded groups, or `None` where this deployment
-        declares no vocabulary or the call is `UNSCOPED`. `None` returns exactly
-        what this returned before audiences existed, which is what keeps every
-        deployment that has not adopted them unchanged -- and is why this is one
+        declares no vocabulary or the call is `UNSCOPED` -- which is what keeps a
+        deployment that has not adopted audiences unchanged, and why this is one
         method rather than a policied path beside an unpolicied one.
 
-        `builtin_tools` is never narrowed here. deepagents registers those
-        itself, so they can be filtered but never left out of a graph; what
-        gates them is which *agents* a group may open, since an agent declaring
-        a read-only builtin set cannot yield the shell to anyone.
+        `builtin_tools` is never narrowed here. deepagents registers those itself,
+        so they can be filtered but never left out of a graph; what gates them is
+        which *agents* a group may open.
         """
         return Capabilities(
             builtin_tools=self.builtin_tools,
@@ -313,10 +287,8 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         document.get("skills"), absent=None, key="skills"
     )
     written_delegates, delegate_audiences = read.audienced(
-        # No `refuse_all` here, and that is the divergence worth reading twice.
-        # A *subagent* naming every subagent names itself, which is always a
-        # loop; an agent is not one of them, so this is the ordinary "give it
-        # the run of the place".
+        # No `refuse_all` here. A *subagent* naming every subagent names itself,
+        # which is always a loop; an agent is not one of them.
         document.get("subagents"),
         absent=None,
         key="subagents",
@@ -329,13 +301,10 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         if entries
     }
     groups = read.groups(document.get("groups"))
-    # Read together, because they are one field. The names stay a `Selection`
-    # and the settings ride beside them; `Reader.selection_with_settings` has
-    # why the two halves are kept apart.
-    #
-    # `middleware` takes no audience, and that is not an oversight: it is the
-    # one field naming *code the deployment registered* rather than something
-    # the workspace offers, so it is granted rather than reachable.
+    # Read together, because they are one field. `middleware` takes no audience,
+    # and that is not an oversight: it is the one field naming *code the deployment
+    # registered* rather than something the workspace offers, so it is granted
+    # rather than reachable.
     written_middleware, middleware_settings = read.selection_with_settings(
         document.get("middleware"), absent=None, key="middleware"
     )
