@@ -1,29 +1,9 @@
 """Which skills the agent will actually have, asked of the thing that decides.
 
 Two readers looked at this catalogue and did not agree. Kingfisher listed the
-directories holding a skill file; deepagents opened each one and kept the ones
-it could parse. Measured on four directories that all held one, kingfisher
-advertised four names and deepagents loaded three -- two of them different.
-
-The consequence was the failure this codebase refuses everywhere else, sitting
-in the one kind it never parses. A skill with no `description` is dropped by
-deepagents and advertised by kingfisher, so activating it passed validation,
-allowed the name through the filter, and produced an agent with no skills at
-all. Nothing said so.
-
-So this asks deepagents. Not "parses a skill the same way deepagents does" --
-that is a second opinion wearing the first one's clothes, and it would put the
-name rules, the description limit and the size cap in this repo to drift against
-an upstream that owns them. `SkillRepository` still answers `names` and `files`,
-because *what exists to mount* is a different question from *what the agent will
-be told about*, and running the two together is what produced the bug.
-
-The private call is the price, and it is one this codebase already pays
-knowingly: `WorkspaceScopedBackend` overrides `_get_backend_and_key` and says
-so, pinned by a test "so a deepagents upgrade that renames it fails the build
-rather than quietly removing the guard". The same applies here with more force.
-A registry that silently came back empty would be the original bug again, in a
-new place -- so `test_skill_registry` pins the import.
+directories holding a skill file; deepagents opened each one and kept the ones it
+could parse. Measured on four directories that all held one, kingfisher advertised
+four names and deepagents loaded three -- two of them different.
 """
 
 from __future__ import annotations
@@ -69,12 +49,7 @@ def qualified(source: str, name: str) -> str:
 
 
 def split_qualified(text: str) -> tuple[str | None, str]:
-    """A written grant into the source it names and the skill it means.
-
-    `None` for the source when the short form was used, which stays valid
-    wherever a name is unique -- every catalogue that has no collisions, which
-    is all of them until somebody assembles one from two places.
-    """
+    """A written grant into the source it names and the skill it means."""
     source, found, name = text.rpartition(SEPARATOR)
     if not found:
         return None, text.strip()
@@ -84,20 +59,11 @@ def split_qualified(text: str) -> tuple[str | None, str]:
 def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
     """`(label, path)` for every place a skill may sit, in a stable order.
 
-    The root itself, plus each folder directly inside it that holds a skill.
-    That is the only shape deepagents offers below the top level -- it lists a
-    source one level deep and no further -- so a folder is a source or its
-    skills are invisible. Measured: one root source finds nothing in a nested
-    layout; three folder sources find all nine.
-
-    No extra backend route is needed. These are paths *inside* the one
-    `/skills/` mount, which is why folders cost a prompt line each and nothing
-    more.
-
-    Takes the directory rather than the repository, because a repository is not
-    what is being asked: a store-backed catalogue has no folders to find, hands
-    over skills by name, and a name has no folder in it. That is not a gap being
-    papered over -- it is the root and nothing else, correctly.
+    The root itself, plus each folder directly inside it that holds a skill. That is
+    the only shape deepagents offers below the top level -- it lists a source one
+    level deep and no further -- so a folder is a source or its skills are invisible.
+    Measured: one root source finds nothing in a nested layout; three folder sources
+    find all nine.
     """
     found = [(CATALOGUE, ROOT)]
     if root is None or not root.is_dir():
@@ -122,19 +88,7 @@ ROOT = "/"
 
 @dataclass(frozen=True)
 class SkillRegistry:
-    """Every skill the agent will be told about, and the ones it will not.
-
-    `offered` is the answer to "what may a request activate", and it is the
-    answer deepagents itself gave -- keyed by the name it will list the skill
-    under, which is the name in the header rather than the folder. Those differ
-    more often than they should, and when they do it is the header that wins.
-
-    `unloadable` is the gap between what looks like a skill on disk and what
-    deepagents kept. It is reported rather than refused, the way `misplaced`
-    already is: one malformed skill should not stop a deployment starting, and
-    the dangerous half -- a caller *naming* one -- is refused by validation
-    reading `offered` instead of a directory listing.
-    """
+    """Every skill the agent will be told about, and the ones it will not."""
 
     #: Every skill that loaded, keyed by `source::name`. Keyed that way rather
     #: than by name because a name is no longer unique: two parties who never
@@ -159,18 +113,7 @@ class SkillRegistry:
     folders: tuple[str, ...] = ()
 
     def merged(self, other: SkillRegistry) -> SkillRegistry:
-        """This registry and one more, as the single answer a caller needs.
-
-        The catalogue is read once when a deployment is wired; a request's own
-        skills arrive per turn. Two registries because they are read at
-        different times -- one answer because "what may this request activate"
-        has to have exactly one, and the last time it had two they disagreed:
-        validation offered an uploaded skill and the build refused it as
-        unknown, so no upload could be activated at all.
-
-        `folders` comes from this side alone. It says which folders under the
-        *catalogue* root are their own source, and uploads have none.
-        """
+        """This registry and one more, as the single answer a caller needs."""
         return SkillRegistry(
             offered={**self.offered, **other.offered},
             unloadable=tuple(sorted({*self.unloadable, *other.unloadable})),
@@ -180,13 +123,7 @@ class SkillRegistry:
 
     @property
     def names(self) -> tuple[str, ...]:
-        """What a request may write, sorted: bare where unique, qualified where not.
-
-        Both forms appear for a colliding name, because a caller reading this
-        needs to see that the short one is gone and what replaced it. A
-        catalogue with no collisions -- every one that exists today -- lists
-        exactly the bare names it always did.
-        """
+        """What a request may write, sorted: bare where unique, qualified where not."""
         bare = {name for _, name in map(split_qualified, self.offered)}
         ambiguous = {name for name in bare if len(self._sources_of(name)) > 1}
         unique = [name for name in bare if name not in ambiguous]
@@ -195,27 +132,11 @@ class SkillRegistry:
 
     @property
     def taken(self) -> tuple[str, ...]:
-        """Every name in use, unqualified, for a caller asking only "is this free".
-
-        Distinct from `names`, which answers "what may a request write" and so
-        spells a colliding name out. This answers "is this name spoken for
-        anywhere", which is what an *upload* needs: a request may not call its
-        own skill `lookup` because the catalogue has one, and it makes no
-        difference to that whether the catalogue's sits in a folder.
-
-        Reading `names` for this was the bug -- it hands back `research::lookup`
-        for a foldered skill, which no upload will ever be called.
-        """
+        """Every name in use, unqualified, for a caller asking only "is this free"."""
         return tuple(sorted({name for _, name in map(split_qualified, self.offered)}))
 
     def _sources_of(self, name: str) -> tuple[str, ...]:
-        """Which sources offer this bare name, in the order they were read.
-
-        A key with no source is skipped rather than counted as one: every key
-        `read` writes is qualified, so an unqualified one came from a registry
-        built by hand and belongs to no party. Counting it would make a name
-        look ambiguous with itself.
-        """
+        """Which sources offer this bare name, in the order they were read."""
         return tuple(
             source
             for source, offered_name in map(split_qualified, self.offered)
@@ -223,11 +144,7 @@ class SkillRegistry:
         )
 
     def resolve(self, written: str) -> str:
-        """One grant into the `source::name` it means, or a refusal saying why.
-
-        Three outcomes and each is a different message, because "no such skill"
-        and "which one did you mean" send a reader to different places.
-        """
+        """One grant into the `source::name` it means, or a refusal saying why."""
         source, name = split_qualified(written)
         if source is not None:
             if written in self.offered:
@@ -261,25 +178,7 @@ class SkillRegistry:
 
 
 def read_uploaded(root: Path | None) -> SkillRegistry:
-    """The skills this request brought with it, asked of the same reader.
-
-    Their own function rather than a flag on `read`, because they answer a
-    different question about a different directory: the catalogue is read once
-    when a deployment is wired and cached for its life, and these arrive per
-    request and are gone when the session is.
-
-    Asked of deepagents for the same reason the catalogue is. A request may
-    upload a skill deepagents will not load -- one with no `description` is the
-    easy case -- and until this existed such a skill was written to disk,
-    advertised by a directory listing, accepted by the build, and then absent
-    from an agent that reported nothing wrong. That is the exact failure this
-    module was created to remove, still live in the half it did not cover.
-
-    Flat, with no folder sources, and that is a property of how uploads are
-    written rather than a limitation: `materialise_skills` files each one under
-    the name in its own header, directly under the uploads directory. There is
-    nowhere for a folder to come from.
-    """
+    """The skills this request brought with it, asked of the same reader."""
     if root is None or not root.is_dir():
         return SkillRegistry(offered={})
 
@@ -301,26 +200,7 @@ def read_uploaded(root: Path | None) -> SkillRegistry:
 
 
 def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegistry:
-    """Ask deepagents what this repository offers.
-
-    `root` is that repository's directory when it has one, and it is passed in
-    rather than asked for: `catalogue_root` lives in `catalogue`, and importing
-    it here would have `catalogue` and this module import each other. Reading a
-    repository does not need to know what a catalogue is.
-
-    A repository with a real directory behind it is read as a filesystem,
-    because `skills.backend`
-    says why not to do otherwise -- a store "holds every skill's contents for
-    the life of the deployment", which is a copy worth making only when there is
-    no path to read instead.
-
-    A source-level failure -- the directory is missing, the store cannot be
-    reached -- comes back as no skills rather than an exception, because that is
-    what `_list_skills_with_errors` reports and because an empty catalogue is a
-    thing a deployment may legitimately have. What it must not be is an empty
-    catalogue nobody mentioned, which is why `unloadable` carries the difference
-    and `--list` prints it.
-    """
+    """Ask deepagents what this repository offers."""
     # Deferred, and the architecture test is why: `Definitions` holds a registry
     # and `Definitions` is reachable from `kingfisher`'s light exports, so a
     # module-scope import here would make `from kingfisher import Config` load

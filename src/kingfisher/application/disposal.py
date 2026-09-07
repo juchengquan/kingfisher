@@ -1,29 +1,19 @@
 """Getting rid of a session, and everything it left in other places.
 
-A session is four things in four places: a directory on disk, a thread in a
-database, a claim marking a turn in progress, and a copy in whatever durable
-store a deployment wired. Removing one means removing all four, and missing
-one does not fail -- it accumulates. One real workspace held 132 orphaned
-threads after every session had been deleted; a leftover claim made a
-reopened session refuse its first turn as busy; a process that died mid-turn
-left a session ten years idle and still there.
-
-Two triggers and one job. `delete_session` is asked for, by name;
-`reap` is the backstop for callers that never ask, by age. After that they
-do the same work and share `_forget`, which is why they are one module
-rather than a request-path half and a scheduled half.
+A session is four things in four places: a directory on disk, a thread in a database,
+a claim marking a turn in progress, and a copy in whatever durable store a deployment
+wired. Removing one means removing all four, and missing one does not fail -- it
+accumulates. One real workspace held 132 orphaned threads after every session had
+been deleted; a leftover claim made a reopened session refuse its first turn as busy;
+a process that died mid-turn left a session ten years idle and still there.
 
 **A mixin, not a collaborator, and the distinction is worth stating.** It shares
-`self` with everything else on `Kingfisher` -- it can reach any attribute and
-call any sibling method, and nothing stops it. What this buys is that a reader
-looking for how a session is disposed of opens one file instead of scrolling past a turn; what it
-does not buy is a boundary. Written as a separate object it would have needed
-five constructor arguments and a delegating method for every public name, and
-the public surface is the thing that must not move.
-
-So the contract is written down instead. The attributes below are what this
-half needs from the instance it is mixed into; declaring them is what lets `ty`
-hold the two together rather than leaving it to whoever reads both.
+`self` with everything else on `Kingfisher` -- it can reach any attribute and call
+any sibling method, and nothing stops it. What this buys is that a reader looking for
+how a session is disposed of opens one file instead of scrolling past a turn; what it
+does not buy is a boundary. Written as a separate object it would have needed five
+constructor arguments and a delegating method for every public name, and the public
+surface is the thing that must not move.
 """
 
 from __future__ import annotations
@@ -45,10 +35,7 @@ if TYPE_CHECKING:
 
 
 class Disposal:
-    """Getting rid of a session, and everything it left in other places.
-
-    See the module docstring for why this is a mixin and what it requires.
-    """
+    """Getting rid of a session, and everything it left in other places."""
 
     #: What this half needs from the instance it is mixed into. Declared rather
     #: than assumed: a mixin that read `self.dirs` without saying so would be a
@@ -62,18 +49,7 @@ class Disposal:
     _shared: Any
 
     def delete_session(self, session_id: str) -> str | None:
-        """Dispose of one session and its thread. Returns a failure, or None.
-
-        Disposal is asked for rather than inferred. Retention used to run on
-        the request path and keep the newest N sessions, which counts every
-        caller's together -- so a busy caller evicted a quiet one's
-        conversation, on a turn that had nothing to do with it.
-
-        The claim goes with it. It used to be left behind, and because
-        `start_session` takes a caller's id, re-opening a deleted one inherited
-        the leftover and had its first turn refused as busy until the staleness
-        window ran out.
-        """
+        """Dispose of one session and its thread. Returns a failure, or None."""
         root = sessions_root(self.workspace)
         if session_id not in self.dirs.children(root):
             return None
@@ -90,18 +66,10 @@ class Disposal:
     def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
         """Dispose of every session untouched for `older_than_seconds`.
 
-        The backstop under `delete_session`, for callers that never call it.
-        Meant to be run by a janitor on its own schedule, not on a request:
-        deleting somebody else's session is not part of serving a turn, and
-        putting it there is what made retention a tenancy bug.
-
-        `now` is passed in rather than read, so the decision stays testable
-        and this stays a function of its arguments.
-
-        A claim only spares a session while somebody could still be holding it.
-        This used to read claim names and spare every one, so a process that
-        died mid-turn exempted its session from retention for good -- ten years
-        idle and still there, measured.
+        A claim only spares a session while somebody could still be holding it. This
+        used to read claim names and spare every one, so a process that died mid-turn
+        exempted its session from retention for good -- ten years idle and still
+        there, measured.
         """
         root = sessions_root(self.workspace)
         age = self.cfg.session_ttl_s if older_than_seconds is None else older_than_seconds
@@ -128,31 +96,12 @@ class Disposal:
         return result
 
     def _forget(self, session_id: str) -> None:
-        """Drop this session from the store, if a deployment wired one.
-
-        Deliberately not part of `Session.discard`: that removes a directory and
-        a thread, which are things this process owns. A store is somebody
-        else's, reached through a port, and a domain object should not know one
-        exists.
-        """
+        """Drop this session from the store, if a deployment wired one."""
         if self.sessions_store is not None:
             self.sessions_store.forget(session_id)
 
     def _discard_dead_claims(self, root: Path) -> None:
-        """Drop claims whose session no longer exists.
-
-        `state/claims/` had nothing that emptied it. Bounded here rather than
-        by age, because a claim is safe to remove exactly when there is nothing
-        left to run a turn against -- taking over a *stale* claim on a session
-        that still exists stays with `claim`, where only one `create_exclusive`
-        can win the race.
-
-        After the session sweep rather than before, so one pass clears a
-        crashed holder completely: the session goes once its claim is too old
-        to spare it, which is what makes the claim residue by the time this
-        looks. Before it, the session would still exist and the claim would
-        survive until the next run.
-        """
+        """Drop claims whose session no longer exists."""
         gone = retention.orphaned(self.dirs.children(self._claims), self.dirs.children(root))
         for name in gone:
             self.dirs.remove_tree(self._claims / name)
@@ -160,16 +109,12 @@ class Disposal:
     def _reconcile_threads(self, root: Path, result: SweepResult) -> SweepResult:
         """Delete threads no session owns, and fold them into the result.
 
-        `discard` takes the thread and the directory together, so a swept
-        session leaves neither behind. A session directory that goes any other
-        way -- deleted by hand, or one of the eight that could not be removed
-        until `remove_tree` learned to unlock `/data` -- leaves its thread
-        forever, because nothing else looks. One real workspace held 132 such
-        threads and 1,894 checkpoints after every session had been reaped.
-
-        After the sweep rather than before, so a session removed by this very
-        call is already gone from the listing and its thread is already deleted;
-        what is left is genuinely residue.
+        `discard` takes the thread and the directory together, so a swept session
+        leaves neither behind. A session directory that goes any other way -- deleted
+        by hand, or one of the eight that could not be removed until `remove_tree`
+        learned to unlock `/data` -- leaves its thread forever, because nothing else
+        looks. One real workspace held 132 such threads and 1,894 checkpoints after
+        every session had been reaped.
         """
         held = thread_ids(self._shared)
         if held is None:

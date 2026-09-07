@@ -1,24 +1,10 @@
 """Deployment configuration. Belongs to no layer, which is why it sits here.
 
-`Config` lived in `domain/` so `application/` and `infrastructure/` could read
-it without depending on each other -- reasoning about import direction, not
-modelling. No domain rule reads a `Config`, and `base_url`, `api_key` and
-`timeout_s` are not kingfisher's vocabulary: it was the innermost layer holding
-a record for the outer ones.
-
-So it sits at the package root, above the layers. `application/` and
-`infrastructure/` may read it; `domain/` may not, and a test enforces that -- a
-domain rule that needs a value takes the value, not the record. Reading it out
-of the environment stays in `application/config.py`; the file describing
-endpoints and models lives in the workspace, and
-`infrastructure/model_catalogue.py` reads it.
-
-An `ApiStyle` literal here once named the endpoint styles to choose between,
-welding two things 1:1 -- which *wire format* to construct, which *endpoint* to
-send to -- so a deployment had one endpoint per wire format and two
-Anthropic-compatible gateways were unconfigurable. Wire formats are now a closed
-registry in `infrastructure.harness.models` keyed by `api`; endpoints are open
-data from `models.yaml`. See *Models and endpoints* in `docs/decisions.md`.
+`Config` lived in `domain/` so `application/` and `infrastructure/` could read it
+without depending on each other -- reasoning about import direction, not modelling.
+No domain rule reads a `Config`, and `base_url`, `api_key` and `timeout_s` are not
+kingfisher's vocabulary: it was the innermost layer holding a record for the outer
+ones.
 """
 
 from __future__ import annotations
@@ -42,17 +28,7 @@ NO_EXTRA: Mapping[str, Any] = MappingProxyType({})
 
 @dataclass(frozen=True)
 class Endpoint:
-    """One place to send a model call, and the credentials for it.
-
-    `api` names a wire format from `infrastructure.models.ADAPTERS` -- closed,
-    and shipped; everything else here is open data a deployment writes. Several
-    endpoints may share one `api`, which the old `api_style` could not express.
-
-    No name field. It had one, so an error could name the entry a prompt would
-    have gone to -- but `ModelProfile.endpoint` already says that, and every
-    caller holding an `Endpoint` was handed the profile beside it. Two fields
-    saying one thing, one able to disagree with its own mapping key.
-    """
+    """One place to send a model call, and the credentials for it."""
 
     api: str
     base_url: str
@@ -61,35 +37,7 @@ class Endpoint:
 
 @dataclass(frozen=True)
 class ModelProfile:
-    """One model this deployment can run, and how.
-
-    `model` is the id sent on the wire and is also this entry's key in
-    `models.yaml`. It stays duplicated where `Endpoint.name` did not, because
-    the two are not alike: an endpoint's name is written on the profile that
-    reaches it, so removing it lost nothing, while a profile's model id has
-    nowhere else to be. `build_model` takes a profile and an endpoint and must
-    know what to *send*; handing the name separately would make the lookup
-    return a third thing solely to carry it back.
-
-    Duplicated, then, but not able to drift -- `Models` refuses a mapping whose
-    key and `model` disagree.
-
-    Every param is optional and, apart from the two with real defaults, omitted
-    means *the kwarg is not passed at all* rather than passed as some default we
-    chose. `temperature` is why: defaulting it would silently change every
-    deployment's behaviour, in the one file whose purpose is to hand that
-    decision to the operator.
-
-    `max_tokens` and `timeout_s` keep defaults because a missing ceiling behaves
-    differently per vendor, and because a model timeout has nowhere else to fall
-    back to -- `Config.execution_timeout_s` bounds the shell and the interpreter,
-    and reusing it here would rebuild the conflation this design took apart.
-
-    `extra` is additive only, and carries kwargs peculiar to one endpoint --
-    `reasoning_effort`, a thinking budget. It may not name one of the values
-    above: Python raises on the duplicate keyword, which is the intended
-    outcome, exactly as it is for `Adapter.extra`.
-    """
+    """One model this deployment can run, and how."""
 
     model: str
     endpoint: str
@@ -100,12 +48,7 @@ class ModelProfile:
     extra: Mapping[str, Any] = NO_EXTRA
 
     def kwargs(self) -> dict[str, Any]:
-        """The model params to build with, omitting everything unset.
-
-        Not a dict comprehension over the fields: `max_tokens` and `timeout_s`
-        always go, the optional ones go only when set, and `extra` is spread
-        last so a collision raises rather than overwriting.
-        """
+        """The model params to build with, omitting everything unset."""
         params: dict[str, Any] = {"max_tokens": self.max_tokens, "timeout": self.timeout_s}
         if self.temperature is not None:
             params["temperature"] = self.temperature
@@ -121,15 +64,7 @@ def definition_roots_for(
     tools_root: Path | None = None,
     agents_root: Path | None = None,
 ) -> dict[str, Path]:
-    """The four definition directories: an override, or a name in the workspace.
-
-    A free function because two records answer this question and the answer has
-    to be the same one. `Config` is the whole configuration and needs a model
-    catalogue to exist; `WorkspacePaths` is the part you can know before reading
-    one, which is what seeding a brand-new workspace runs on. A second copy of
-    `skills_root or workspace / "skills"` is how a deployment that relocated its
-    catalogue gets seeded into the directory it stopped reading.
-    """
+    """The four definition directories: an override, or a name in the workspace."""
     return {
         "agents": agents_root or workspace / "agents",
         "skills": skills_root or workspace / "skills",
@@ -143,23 +78,8 @@ def authored_files_for(
     models_file: Path | None = None,
     groups_file: Path | None = None,
 ) -> dict[str, Path]:
-    """The two files a deployment writes itself: an override, or a name in the workspace.
-
-    A free function for the reason `definition_roots_for` is one -- two records
-    answer this and the answer has to be the same -- and a separate one because
-    these are not catalogue roots. They are single files, they relocate by their
-    own variables, and each has a shipped `.example` beside it that is only
-    useful in the directory the real file is read from.
-
-    Both default inside the workspace and both relocate, for the reason the
-    definition roots do: they hold content a person authored and reviewed, so
-    several deployments sharing one reviewed file is the point rather than an
-    accident.
-
-    Keyed by filename rather than by concept, because that is what the caller
-    with the examples needs: `models.yaml.example` finds its destination by
-    dropping the suffix. Naming them `models` and `groups` would put the mapping
-    between the two names somewhere else, where it could disagree.
+    """The two files a deployment writes itself: an override, or a name in the
+    workspace.
     """
     return {
         "models.yaml": models_file or workspace / "models.yaml",
@@ -169,18 +89,7 @@ def authored_files_for(
 
 @dataclass(frozen=True)
 class WorkspacePaths:
-    """Where a deployment keeps things, before anything has been read.
-
-    Everything else in a `Config` needs the model catalogue, and *that* file
-    lives inside the workspace — so a first run has to be able to answer "which
-    directories?" before it can answer "which models?". This is that answer, and
-    `Config` is built on top of it rather than beside it.
-
-    Said as "that file" rather than "the catalogue", which used to appear twice
-    in this sentence meaning two different things. `catalogue_roots` below is
-    the other one: where the *definitions* are kept, which is why the type it
-    resolves to is `Definitions` and not `Catalogue`.
-    """
+    """Where a deployment keeps things, before anything has been read."""
 
     workspace: Path
     skills_root: Path | None = None
@@ -227,44 +136,7 @@ class ConfigError(RuntimeError):
 
 @dataclass(frozen=True)
 class Models:
-    """What this deployment can run, where, and under which names.
-
-    Five fields on `Config` before this, and a `Config` is a flat bag a
-    deployment fills in -- which is the wrong shape for a cluster with
-    invariants between its parts. `default` is a key of `models`; every alias
-    binds a key of `models`; every profile's `endpoint` is a key of `endpoints`.
-    None of that was expressible while the five were siblings of
-    `shell_sandbox`, and the two questions worth asking of them -- what does
-    this name resolve to, what is bound here -- had nowhere to live but `Config`
-    itself.
-
-    The same move `Definitions` made, for the same two reasons its docstring
-    gives: this comes from a file deliberately relocatable and shared across a
-    fleet, and it is addressed by name everywhere, so a type makes `.defualt` an
-    error before the code runs rather than a `KeyError` while it does.
-
-    Still not named by analogy with `Definitions`, but the difference is no
-    longer the one this used to give. `Definitions` held three paths and
-    deliberately did not read them; it holds a repository per kind now, and they
-    do the reading. What separates the two is *when* and *how often*: a catalogue
-    is read when the deployment is wired, answers every turn from what it held,
-    and is layered per turn with whatever a session uploaded. This is read once,
-    at config time, and never again -- there is no per-turn half for a model
-    catalogue to have, because nothing a request carries adds a model.
-
-    Which is also why this stayed a record rather than a repository.
-    `model_catalogue` is one public function called once, its helpers steps in a
-    single parse rather than views over a directory, and the seam a repository
-    would have added is already here: a deployment holding its models elsewhere
-    builds one of these and passes `Config(models=...)`, touching no file and no
-    loader. The test suite runs that way.
-
-    It lives here rather than in `infrastructure` for the reason
-    `Config.catalogue_roots` does *not* return a `Definitions`: this file sits
-    above the layers and imports none of them. Nothing this record does needs
-    one -- `model_catalogue` reads the file and hands one back, and everything
-    after that is a lookup.
-    """
+    """What this deployment can run, where, and under which names."""
 
     #: Keyed by the id sent on the wire. **Closed**: a name absent from here is
     #: refused rather than passed to an endpoint that has never heard of it.
@@ -291,16 +163,7 @@ class Models:
     source: Path | None = None
 
     def __post_init__(self) -> None:
-        """Refuse a mapping whose key disagrees with the profile under it.
-
-        `ModelProfile.model` is the id sent on the wire and the key is what
-        everything looks up by, so a pair that disagree means a delegate asking
-        for one model and a client built for another -- silently, since both
-        names are real. `model_catalogue` builds these from the key and cannot
-        get it wrong; a test fixture or a caller assembling one by hand can.
-
-        The check `Endpoint` no longer needs, which is why it kept no name.
-        """
+        """Refuse a mapping whose key disagrees with the profile under it."""
         wrong = tuple(f"{key!r} holds {p.model!r}" for key, p in self.models.items()
                       if p.model != key)
         if wrong:
@@ -313,18 +176,12 @@ class Models:
     def resolve(self, name: str | None = None) -> tuple[ModelProfile, Endpoint]:
         """Which model to build, and where to send it. One question, one answer.
 
-        `None` is the ordinary case: whatever the deployment named as default.
-
         Raises rather than falling back, on both halves. A name this deployment
-        cannot run would otherwise reach an endpoint that has never heard of it
-        -- a 404 if you are lucky and a wrong-model run if you are not -- and a
-        model whose endpoint went missing would otherwise run somewhere its
-        author did not choose. Both decide where the prompt goes, which is the
-        one thing worth being loud about here.
-
-        Returned as a pair because they are never wanted apart: `build_model`
-        needs the params from one and the credentials from the other, and
-        splitting them into two lookups is how they drift.
+        cannot run would otherwise reach an endpoint that has never heard of it -- a
+        404 if you are lucky and a wrong-model run if you are not -- and a model
+        whose endpoint went missing would otherwise run somewhere its author did not
+        choose. Both decide where the prompt goes, which is the one thing worth being
+        loud about here.
         """
         wanted = self.default if name is None else name
         profile = self.models.get(wanted)
@@ -359,12 +216,7 @@ class Models:
 
 @dataclass(frozen=True)
 class Config:
-    """Everything kingfisher needs to build an agent for one workspace.
-
-    Frozen but *not* hashable — `endpoints` is a real `dict`, so `hash(cfg)`
-    raises. Nothing may key a cache on a `Config`; build the model once and let
-    the composition root hold the instance.
-    """
+    """Everything kingfisher needs to build an agent for one workspace."""
 
     workspace: Path
     #: What this deployment can run, where, and under which names.
@@ -545,21 +397,7 @@ class Config:
     conversation_enabled: bool = True
 
     def __post_init__(self) -> None:
-        """Refuse a deployment that named its session store twice.
-
-        Not precedence, which was the first spelling and is the wrong shape: two
-        answers to one question is what this codebase refuses everywhere else,
-        and a deployment with both set has a mistake worth being told about
-        rather than a preference worth honouring. Silently preferring one would
-        put a deployment's sessions in the directory it stopped meaning to use,
-        which is the failure that does not announce itself until somebody looks
-        for a session that is somewhere else.
-
-        Here rather than in the reader, so a `Config` assembled in Python is held
-        to the same rule as one read from the environment. `config_from_env` is
-        the common path and not the only one -- tests build these directly, and
-        so does anyone embedding the library.
-        """
+        """Refuse a deployment that named its session store twice."""
         if self.session_store is not None and self.session_store_factory is not None:
             msg = (
                 "session storage is configured twice: KINGFISHER_SESSION_STORE names "
@@ -573,25 +411,13 @@ class Config:
     def claim_stale_after(self) -> float:
         """How old a session's claim must be before another turn may take it.
 
-        Longer than `turn_timeout_s`, and that gap is the whole point. A claim
-        is taken over so a process that *died* cannot lock a session out
-        forever; it must never be taken from a turn that is merely stopping.
-
-        The two were the same number, so the claim became takeable the instant
-        the run's deadline passed -- and a run stops *between stream chunks*,
-        then still has to emit its result, collect what the turn left behind,
-        and let go. Measured in that window: a second caller took the session
-        while the first turn was still running, and the first turn then
-        finished. Two turns in one session is what the claim exists to prevent,
-        and what `SessionBusyError` records having seen once already, where "a
-        turn simply vanished".
-
-        The grace is the longest a single model call may take, because that is
-        what a stopping turn is waiting on: it is inside one chunk, and a chunk
-        ends when the call does. Derived rather than chosen -- a fixed number
-        would be a guess a deployment raising a model's `timeout_s` would
-        quietly invalidate. What follows the chunk is filesystem work, unbounded
-        here and milliseconds against a bound in minutes.
+        The two were the same number, so the claim became takeable the instant the
+        run's deadline passed -- and a run stops *between stream chunks*, then still
+        has to emit its result, collect what the turn left behind, and let go.
+        Measured in that window: a second caller took the session while the first
+        turn was still running, and the first turn then finished. Two turns in one
+        session is what the claim exists to prevent, and what `SessionBusyError`
+        records having seen once already, where "a turn simply vanished".
         """
         return self.turn_timeout_s + max(
             (profile.timeout_s for profile in self.models.models.values()),
@@ -603,66 +429,22 @@ class Config:
 
     @property
     def state_dir(self) -> Path:
-        """Where harness state lives: run logs and the thread database.
-
-        Host-side only — the agent never addresses these by path, which is why
-        they can be relocated at all. Anything the agent reaches with *both*
-        the shell and a file tool has to stay under `workspace`: file tools are
-        routed, `execute` is not, so a split root would silently give the two
-        different views of the same name.
-        """
+        """Where harness state lives: run logs and the thread database."""
         return self.state_root or self.workspace / ".kingfisher"
 
     @property
     def scratch_dir(self) -> Path:
-        """Where the agent's shell puts temporary files (`TMPDIR`).
-
-        Defaults inside the workspace so scratch is disposed of with it. Point
-        it at `/tmp` for one fixed location per machine — but see
-        `infrastructure.harness.backend.prepare_scratch`: `/tmp` is world-writable, so the
-        directory is created private and checked before use.
-        """
+        """Where the agent's shell puts temporary files (`TMPDIR`)."""
         return self.scratch_root or self.state_dir / "tmp"
 
     @property
     def skills_dir(self) -> Path:
-        """The skills catalogue. Shared by every session this workspace serves.
-
-        Unlike `/data` and the rest, definitions are not owned by a session:
-        they are authored, reviewed and deployed. Relocating them is safe for
-        the same reason the state directory is — the agent reaches `/skills`
-        through a route, and the shell has no business there.
-
-        The only one of the three left, and the asymmetry is the point rather
-        than an oversight. `subagents_dir` and `tools_dir` sat beside it with no
-        reader in the package -- `catalogue_roots` took both over when it became
-        the one answer to "where are the definitions" -- and stayed on because
-        the trio looked symmetrical, which is the argument a vestige makes for
-        itself. This one has a caller: `confinement.shell_confinement` needs the
-        skills root alone, because the shell boundary is built per directory and
-        not from a mapping.
-        """
+        """The skills catalogue. Shared by every session this workspace serves."""
         return self.skills_root or self.workspace / "skills"
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
-        """The four definition directories, together, as one answer.
-
-        `skills_root` and its three siblings are what a deployment *sets*; this
-        is what everything reading a catalogue *asks for*, and now the only way
-        to ask, since the two per-directory properties above it had no reader
-        left. A mapping rather than a tuple because the four relocate apart --
-        separate overrides on purpose -- so there is no tree to name them by
-        position under.
-
-        A `Kingfisher` may be handed a different mapping, which is the whole
-        seam: this is the fallback, not the only source. See
-        `infrastructure.catalogue.resolve_definitions`.
-
-        Delegated to `definition_roots_for` because `WorkspacePaths` answers the
-        same question before a catalogue has been read, and the two must not be
-        able to disagree.
-        """
+        """The four definition directories, together, as one answer."""
         return definition_roots_for(
             self.workspace,
             self.skills_root,
@@ -673,15 +455,5 @@ class Config:
 
     @property
     def authored_files(self) -> dict[str, Path]:
-        """Where `models.yaml` and `groups.yaml` are read from, found or not.
-
-        Assembled from the two fields that already record it rather than from a
-        pair of overrides: a `Config` has been *read*, so it knows where each
-        file was looked for -- `Models.source` and `access_source` exist to say
-        so. `WorkspacePaths` holds the overrides instead, because it is what a
-        first run has, and `authored_files_for` is where the two meet.
-
-        `None` on either means a `Config` assembled in code, which relocated
-        nothing; the workspace default is the right answer for it.
-        """
+        """Where `models.yaml` and `groups.yaml` are read from, found or not."""
         return authored_files_for(self.workspace, self.models.source, self.access_source)

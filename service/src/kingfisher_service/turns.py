@@ -1,14 +1,8 @@
 """Running a turn, streamed.
 
-Two endpoints for one thing. `POST /sessions/{id}/turns` continues a
-conversation; `POST /turns` asks one question and mints a session for it,
-because omitting the session is something the library can do and the path form
-cannot express -- and a stateless caller asking one question should not need
-two round trips to preserve URL symmetry.
-
-Both are `async def`, unlike the session routes: this is the loop's to hold,
-and the blocking part -- `_prepare`, 15-46ms of filesystem work and agent
-construction -- is already behind `asyncio.to_thread` inside `astream`.
+Both are `async def`, unlike the session routes: this is the loop's to hold, and the
+blocking part -- `_prepare`, 15-46ms of filesystem work and agent construction -- is
+already behind `asyncio.to_thread` inside `astream`.
 """
 
 from __future__ import annotations
@@ -34,16 +28,7 @@ if TYPE_CHECKING:
 
 
 class TurnBody(BaseModel):
-    """What a caller sends to start a turn.
-
-    A task, what the request asks to be allowed, and the files it brings.
-
-    No `turn_id`. The library takes one and reuses that directory, but then runs
-    the turn again in full -- so over HTTP a field of that name would read as an
-    idempotency key while quietly doubling both the conversation and the bill.
-    The id the work actually got comes back on `finished`, which is where
-    correlation belongs: the id it has, not the one you hoped for.
-    """
+    """What a caller sends to start a turn."""
 
     #: No length rule here. `Request.__post_init__` already refuses an empty or
     #: whitespace-only task, and a `min_length` beside it is a second copy of
@@ -74,15 +59,7 @@ class TurnBody(BaseModel):
 
 
 def turn_for(body: TurnBody, session_id: str | None = None) -> TurnRequest:
-    """Build the library's request, letting the library say what is valid.
-
-    The narrow catch is the point. `Request` refuses an empty or whitespace-only
-    task and that rule lives there; re-stating it in the model above would be
-    two homes for one sentence. Catching `ValueError` around *one constructor
-    whose only documented refusal is that rule* is not the same act as catching
-    `ValueError` around a turn, which is what `errors.STATUS` exists to avoid --
-    there it would swallow bugs.
-    """
+    """Build the library's request, letting the library say what is valid."""
     # An absent capabilities object and one that names no axis are the same
     # request: both come out of `selected` as `Capabilities()`, which is what
     # `Request` defaults to anyway. One path rather than two.
@@ -109,15 +86,10 @@ async def stream_turn(
     """Open the stream, having first checked there is one to open.
 
     The first event is pulled here, outside the response, because `astream` runs
-    `_prepare` before yielding anything -- so a refusal is still a status code
-    at this moment and stops being one immediately after. Handing the generator
-    to `StreamingResponse` unopened would put 200 on the wire and bury every
-    refusal in the body.
-
-    Nothing is caught by type here and no body is built. The handlers in
-    `errors` turn a refusal into a status and anything else into a 500, which is
-    what leaves one table deciding which is which and one function deciding what
-    a refusal looks like.
+    `_prepare` before yielding anything -- so a refusal is still a status code at
+    this moment and stops being one immediately after. Handing the generator to
+    `StreamingResponse` unopened would put 200 on the wire and bury every refusal in
+    the body.
     """
     attempt = audit.Attempt(
         session_id=session_id,
@@ -178,8 +150,8 @@ def turn_router(settings: ServiceConfig) -> APIRouter:
         """Run one turn in an existing session, streaming as it goes.
 
         An unknown session is a 404 rather than a new session. A supplied id may
-        resume but never create; that is what makes the id a credential instead
-        of a name anyone can pick.
+        resume but never create; that is what makes the id a credential instead of a
+        name anyone can pick.
         """
         return await stream_turn(kf, body, session_id, settings, groups)
 
@@ -189,11 +161,7 @@ def turn_router(settings: ServiceConfig) -> APIRouter:
         kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
         groups: tuple[str, ...] | None = Depends(groups_of),
     ) -> Response:
-        """Ask one question without having opened a session first.
-
-        A session is still created -- a turn needs somewhere to live -- and its
-        id comes back on `finished`, so a caller who decides to continue can.
-        """
+        """Ask one question without having opened a session first."""
         return await stream_turn(kf, body, None, settings, groups)
 
     return router

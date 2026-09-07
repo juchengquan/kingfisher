@@ -1,15 +1,9 @@
 """Unpacking a request's own definitions into its session.
 
 Fetching is the caller's business — kingfisher states the requirement as
-`DefinitionStore` and is handed something that satisfies it. What happens here
-is the part kingfisher owns: deciding where a fetched definition lands, and
-refusing the ones that would land badly.
-
-Uploads go into the session rather than being held in memory because the agent
-reads skills *through the backend*, so they have to exist somewhere it can be
-routed to. Subagents could have gone either way; writing both keeps
-`build_agent` reading definitions off disk, which is what it already does for
-the catalogue.
+`DefinitionStore` and is handed something that satisfies it. What happens here is the
+part kingfisher owns: deciding where a fetched definition lands, and refusing the
+ones that would land badly.
 """
 
 from __future__ import annotations
@@ -70,16 +64,10 @@ def provision(
 ) -> Brought:
     """Unpack everything this request brought with it, or refuse to.
 
-    Called before the agent is built, because the agent discovers definitions
-    by reading the directories these write. Refusing here rather than later is
-    deliberate: a request that names a store it was never given, or a skill
-    that shadows a reviewed one, should fail before a turn directory exists.
-
-    `catalogue` is what "already defined" is measured against, and it has to be
-    the same one the agent will read. Left to `cfg` while the agent read
-    somewhere else, an upload could take a name the catalogue already holds and
-    the collision rule below would never see it -- which is the silent override
-    it exists to refuse.
+    `catalogue` is what "already defined" is measured against, and it has to be the
+    same one the agent will read. Left to `cfg` while the agent read somewhere else,
+    an upload could take a name the catalogue already holds and the collision rule
+    below would never see it -- which is the silent override it exists to refuse.
     """
     if not request.skill_refs and not request.subagent_refs:
         return Brought()
@@ -109,13 +97,7 @@ def materialise_skills(
     session_dir: Path,
     catalogue: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Fetch each skill and unpack it under the session. Returns their names.
-
-    The name comes from the definition's own `name` field rather than from the
-    id, because deepagents validates it against the directory name and rejects
-    the skill when they differ — so there is exactly one name a skill can be
-    unpacked under, and the catalogue does not get to choose it.
-    """
+    """Fetch each skill and unpack it under the session. Returns their names."""
     if not refs:
         return ()
 
@@ -175,11 +157,7 @@ def materialise_subagents(
     session_dir: Path,
     catalogue: tuple[str, ...],
 ) -> tuple[str, ...]:
-    """Fetch each subagent and unpack it under the session. Returns their names.
-
-    A subagent is one file, and its name is the `name` field's — the filename is
-    not authoritative, so the definition is parsed before it is placed.
-    """
+    """Fetch each subagent and unpack it under the session. Returns their names."""
     if not refs:
         return ()
 

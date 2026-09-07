@@ -4,9 +4,6 @@ Two destinations and one set of rules about what may be placed. `_checked` refus
 before anything is copied, so a request naming a file that is not there leaves
 nothing half-placed behind -- and it applies to both destinations, because a rule
 that covers one is a rule the other quietly does without.
-
-The durable half goes through `permissions.writable_data`, which is the only
-sanctioned way to lift the write bits it puts back afterwards.
 """
 
 from __future__ import annotations
@@ -25,16 +22,7 @@ class DataError(ValueError):
 
 
 def _checked(sources: tuple[Path, ...]) -> dict[str, Path]:
-    """Every source keyed by the name it will land under.
-
-    Raises before anything is copied, so a request that names a file twice or
-    names one that is not there leaves nothing half-placed behind.
-
-    Shared by both destinations deliberately. Every rule here is about what the
-    caller asked for rather than about where it goes, so applying them to
-    `/data` and not to a turn's input was an accident of which one happened to
-    be written first -- and it cost the second one both guarantees.
-    """
+    """Every source keyed by the name it will land under."""
     seen: dict[str, Path] = {}
     for source in sources:
         name = Path(source).name
@@ -53,19 +41,7 @@ def _checked(sources: tuple[Path, ...]) -> dict[str, Path]:
 
 
 def check_placeable(sources: tuple[Path, ...]) -> None:
-    """Raise if these files could not be placed, without placing them.
-
-    The copying half of `place_inputs` has to happen after a turn directory
-    exists, because that is where the files go. The *refusing* half must happen
-    before, or a typo leaves a turn behind -- which it did: `--data` named a
-    missing file and left nothing, `--input` named one and left `t001`, against
-    a docstring promising neither would.
-
-    So the check is callable on its own and the service runs it while it is
-    still allowed to reject. `place_inputs` repeats it rather than trusting a
-    caller to have asked, which costs three `is_file` calls and keeps the
-    function safe to call directly.
-    """
+    """Raise if these files could not be placed, without placing them."""
     _checked(sources)
 
 
@@ -75,17 +51,7 @@ def place_inputs(
     *,
     contents: Mapping[str, bytes] | None = None,
 ) -> tuple[str, ...]:
-    """Copy a turn's supplied files into its `input/`, and name what landed.
-
-    The transient counterpart to `place_data`: these belong to one turn, where
-    `/data` survives into the next. That is the only difference, and it is why
-    there is no `writable_data` dance here -- a turn directory is ours and was
-    made moments ago.
-
-    Here rather than inline in the service, which is a layer above where the
-    filesystem is supposed to be touched -- and where it missed both of
-    `_checked`'s guarantees.
-    """
+    """Copy a turn's supplied files into its `input/`, and name what landed."""
     checked = _checked(sources)
     if not checked and not contents:
         return ()
@@ -115,21 +81,7 @@ def place_data(
     *,
     contents: Mapping[str, bytes] | None = None,
 ) -> DataPlacement:
-    """Copy caller-supplied files into a session's `/data`, and re-harden it.
-
-    The durable counterpart to a turn's `input/`: these survive the turn and
-    are there on the next one. That is the whole distinction, and the only
-    reason both exist.
-
-    Written through `writable_data`, whose `finally` drops the write bits
-    again -- including when a copy raises. Nothing outside `permissions` should
-    ever chmod `/data`, and that is the reason the two are separate modules:
-    reaching for `sudo` when the directory refused a copy is what put root-owned
-    files in a workspace and made one session unusable for good.
-
-    Everything is checked before anything is copied -- see `_checked`, which
-    the turn's input directory now shares.
-    """
+    """Copy caller-supplied files into a session's `/data`, and re-harden it."""
     if not sources and not contents:
         return DataPlacement()
 

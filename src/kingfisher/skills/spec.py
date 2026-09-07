@@ -1,17 +1,8 @@
 """Skill definitions: `<name>/SKILL.md`.
 
-kingfisher does not own this format — deepagents reads it and decides what a
-skill means. What kingfisher needs from it is one thing: the name, because that
-is what a request activates and what the directory must be called.
-
-That last part is not our rule. deepagents validates `name` against the parent
-directory and rejects the skill if they differ, so a definition arriving from a
-catalogue cannot be dropped into a directory of our choosing — it has to be
-unpacked under the name it declares.
-
-Vocabulary only: where the header ends, what the file is called, which exception
-a mistake raises. Reading a document is `reading`, one file over, because that
-needs `yaml` and a domain module is allowed to name this one.
+kingfisher does not own this format — deepagents reads it and decides what a skill
+means. What kingfisher needs from it is one thing: the name, because that is what a
+request activates and what the directory must be called.
 """
 
 from __future__ import annotations
@@ -42,10 +33,6 @@ _HEADER = re.compile(r"\A---\s*\n(.*?)\n---\s*\n(.*)\Z", re.DOTALL)
 
 
 def split(text: str) -> tuple[str, str] | None:
-    """The raw header and the body, or `None` if there is no header.
-
-    `None` rather than an exception: what a missing header *means* is the
-    caller's to say, in its own words and its own exception type.
-    """
+    """The raw header and the body, or `None` if there is no header."""
     match = _HEADER.match(text)
     return (match.group(1), match.group(2).strip()) if match else None

@@ -1,27 +1,8 @@
 """Who reaches what: the group vocabulary, and the rule the definitions apply.
 
 **Audiences live in the definitions** -- an agent or a subagent says who may reach
-it, and may say who reaches each tool, delegate or skill it holds. What is central
-is only the *vocabulary*: which group names exist, and which contain which.
-
-Beyond locality, that leaves nothing to reconcile. A central table could name an
-asset the workspace no longer offers, which had to be detected and dropped or
-every turn would refuse; a definition *is* the asset, so that failure has no shape
-here.
-
-The answer the rule produces is an ordinary `Capabilities`, which is what keeps
-everything downstream unchanged: an ungranted tool is never attached to the graph,
-and an ungranted subagent is never compiled.
-
-Three fields may carry audiences and one deliberately may not. `builtin_tools` is
-absent because deepagents registers those itself, so kingfisher can only filter
-them afterwards, never leave them out of a graph -- see
-`kingfisher.infrastructure.harness.narrowing`, which records a live run where a
-model called `execute` from memory. Control them through which *agents* a group
-may open instead.
-
-Pure, like the rest of `domain/`: this module reads no file. The YAML half is
-`kingfisher.infrastructure.access_policy`.
+it, and may say who reaches each tool, delegate or skill it holds. What is central is
+only the *vocabulary*: which group names exist, and which contain which.
 """
 
 from __future__ import annotations
@@ -72,12 +53,7 @@ Audience = Literal["*"] | tuple[str | Requires, ...]
 
 @dataclass(frozen=True)
 class Stated:
-    """What one definition says about who reaches what.
-
-    A record rather than a mapping with two value shapes, which would make every
-    reader narrow a union at the point of use -- a cost paid by everybody to save
-    one type here.
-    """
+    """What one definition says about who reaches what."""
 
     #: The definition's own audience: who may reach it at all.
     groups: Audience = ALL
@@ -134,19 +110,7 @@ Held = Sequence[str] | _Unscoped
 
 
 def reaches(audience: Audience, held: frozenset[str]) -> bool:
-    """Whether a caller holding `held` reaches something with this audience.
-
-    Overlap, not containment: a longer list means *more* people, which is what
-    everyone reads an access list as meaning.
-
-    Public because several readers ask it, and a private copy in each is one
-    convention away from them disagreeing about who reaches what.
-
-    A *named* compound needs no case here: `Groups.expand` has already put it into
-    `held` if the caller's groups add up to it, so by the time an audience is asked
-    the name is either held or it is not. Only the inline form is resolved here,
-    because it has no name to have been derived under.
-    """
+    """Whether a caller holding `held` reaches something with this audience."""
     if audience == ALL:
         return True
     return any(one <= held if isinstance(one, frozenset) else one in held for one in audience)
@@ -159,40 +123,19 @@ def reaching(
     default: Audience,
     held: frozenset[str],
 ) -> Selection:
-    """`selection`, keeping only the entries this caller reaches.
-
-    `default` is the definition's own audience, used for any entry that did not
-    state one. That is what makes a plain list under a policied definition mean
-    "these, at my audience", so every definition written before audiences
-    existed keeps its exact meaning once one is added above it.
-
-    `ALL` and `None` pass through untouched. `ALL` is "everything available",
-    which is bounded by the definition's own audience rather than by any entry;
-    `None` is nothing, and nothing narrowed is still nothing.
-    """
+    """`selection`, keeping only the entries this caller reaches."""
     if selection == ALL or selection is None:
         return selection
     return tuple(name for name in selection if reaches(audiences.get(name, default), held))
 
 
 def _singular(field_name: str) -> str:
-    """`tools` -> `tool`. `skills` is the one that does not just lose an s.
-
-    A copy of the printer's, which is the lesser of two evils: the report is
-    assembled here so that a server and the command say the same thing, and
-    `domain/` may not import `presentation/`.
-    """
+    """`tools` -> `tool`. `skills` is the one that does not just lose an s."""
     return "skill" if field_name == "skills" else field_name[:-1]
 
 
 def spell(audience: Audience) -> str:
-    """One audience, written the way the formats and the listing write it.
-
-    `a+b` for a conjunction, sorted so that two runs of the same file say the
-    same thing. Shared rather than copied because the listing shows audiences
-    and the refusals quote them, and a reader comparing an error against a
-    `kingfisher list` should not have to translate between two spellings.
-    """
+    """One audience, written the way the formats and the listing write it."""
     if audience == ALL:
         return ALL
     return ", ".join(
@@ -202,12 +145,7 @@ def spell(audience: Audience) -> str:
 
 @dataclass(frozen=True)
 class AccessReport:
-    """What a deployment's policy leaves open, said once at startup.
-
-    One half of what the central design reported, and the other half is gone
-    rather than moved: a definition *is* the asset, so there is no such thing
-    as a line naming something that is not there.
-    """
+    """What a deployment's policy leaves open, said once at startup."""
 
     #: Definitions carrying no `groups:` line, and so reachable by everyone, as
     #: `(kind, name)`.
@@ -234,12 +172,7 @@ class AccessReport:
         return not (self.unrestricted or self.narrowed)
 
     def lines(self) -> tuple[str, ...]:
-        """The report, ready to print, or nothing at all when there is nothing.
-
-        Lines rather than prints, for the reason `presentation.cli.listing`
-        gives: a library that writes to stdout cannot be used by a server, and
-        both reach this.
-        """
+        """The report, ready to print, or nothing at all when there is nothing."""
         if self.is_clean:
             return ()
         said: list[str] = ["access:"]
@@ -255,24 +188,7 @@ class AccessReport:
 
 @dataclass(frozen=True)
 class Groups:
-    """One deployment's group vocabulary: the names, and what each contains.
-
-    A dictionary rather than a policy. Nothing here says who reaches what --
-    that is in the definitions. What this buys is the two things a definition
-    cannot say for itself: that a name is real, so a typo is refused instead of
-    inventing a group nobody holds, and that one name stands for several, so a
-    broad group is written once instead of on every line forever.
-
-    `names` maps each declared group to its own transitive closure, itself
-    included, worked out when the document was read. Expansion happens once
-    rather than on every turn, and a cycle is refused where it is written.
-
-    `compounds` is the other direction, and the only place this file holds
-    something with a rule in it: `contains` says what one name *grants*, and
-    `all_of` says what a caller must hold for one to *apply*. Still vocabulary
-    -- both answer "what does this name mean" -- but the second answers it with
-    a condition, which is worth saying out loud.
-    """
+    """One deployment's group vocabulary: the names, and what each contains."""
 
     #: Declared name -> that name plus everything it contains, transitively.
     names: Mapping[str, tuple[str, ...]]
@@ -281,17 +197,7 @@ class Groups:
     compounds: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     def mentions(self, audience: Audience) -> frozenset[str]:
-        """Every group name an audience touches, following `contains` and `all_of`.
-
-        What `refuse_dead` compares, and the reason it needs a vocabulary. A
-        bare name mentions itself and everything it contains; a compound
-        mentions its parts; a conjunction mentions its members. `ALL` mentions
-        nothing, and is never asked.
-
-        A queue rather than recursion, so a vocabulary that loops across the two
-        kinds of edge cannot spin here. Each kind is separately acyclic by the
-        time this runs, but the union of two acyclic graphs need not be.
-        """
+        """Every group name an audience touches, following `contains` and `all_of`."""
         if audience == ALL:
             return frozenset()
         seen: set[str] = set()
@@ -306,23 +212,7 @@ class Groups:
         return frozenset(seen)
 
     def expand(self, held: Iterable[str]) -> frozenset[str]:
-        """Every group a caller effectively holds, following `contains` then `all_of`.
-
-        Refuses a name the vocabulary does not have. That refusal is the reason
-        the vocabulary is closed: silently expanding to nothing would turn a
-        typo in a caller's group list into a caller who reaches nothing, which
-        looks exactly like a caller who was denied.
-
-        Refuses a compound too, and for a sharper reason. A compound is what
-        holding its parts *adds up to*, so accepting it as a claim would let a
-        caller present the conclusion instead of the premises -- one assertion
-        standing in for the two that `all_of` exists to require.
-
-        Order is the whole of the rule: `contains` runs first, then compounds
-        are added against whatever is held afterwards. That is what makes an
-        `admin` who contains both parts satisfy a compound of them, rather than
-        being mysteriously weaker than the sum of what they reach.
-        """
+        """Every group a caller effectively holds, following `contains` then `all_of`."""
         wanted = tuple(held)
         if derived := sorted({name for name in wanted if name in self.compounds}):
             listed = "; ".join(
@@ -358,15 +248,7 @@ class Groups:
         return frozenset(reached)
 
     def refuse_undeclared(self, audience: Audience, *, where: str, error: type[Exception]) -> None:
-        """Refuse a definition naming a group this deployment does not declare.
-
-        The other end of the closed vocabulary. Without it a mistyped audience
-        invents a group nobody is in, and the only symptom is a tool quietly
-        reachable by no one -- found weeks later by whoever needed it.
-
-        Looks inside a conjunction, because a name typed from memory is no
-        likelier to be right for having been written next to another one.
-        """
+        """Refuse a definition naming a group this deployment does not declare."""
         if audience == ALL:
             return
         named = tuple(
@@ -394,18 +276,6 @@ class Groups:
         `agent_named` refuses a caller who cannot open the agent, and nothing else
         hands out a spec. So `[senior]` under `[analysts, auditors]` means "everyone
         who opens this agent, and is senior", which is a good second requirement.
-
-        Reported, never refused: the mistake this looks for -- `[auditors]` written
-        under `[analysts]` by somebody trying to *widen* -- is the same shape as
-        that deliberate narrowing, so no rule can tell them apart. See
-        `AccessReport.narrowed`.
-
-        Judged on what the names mean rather than how they are spelled, which is why
-        it needs the vocabulary: `[analysts]` under `[reviewers]` is not narrowing
-        at all when `reviewers` contains `analysts`.
-
-        Silent when the definition is `ALL`: everyone reaches it, so nothing an
-        entry says can be narrower than nothing.
         """
         if groups == ALL:
             return ()
@@ -423,12 +293,7 @@ _Vocabulary = tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]
 
 
 def _vocabulary(raw: object, source: str) -> _Vocabulary:
-    """The declared groups, what each contains, and what each requires.
-
-    Two spellings, because the common case has neither key and should not have
-    to write an empty mapping to say so. A list is the short form; a mapping is
-    the long one. Both produce the same thing.
-    """
+    """The declared groups, what each contains, and what each requires."""
     if raw is None:
         msg = (
             f"{source}: missing required section 'groups'; it is the closed "
@@ -488,13 +353,7 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
 
 
 def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, tuple[str, ...]]:
-    """Each group's transitive closure, itself included, with cycles refused.
-
-    Depth-first with the path carried, so a cycle is reported as the whole loop
-    rather than as one edge of it -- the same reason `subagent.rules` names
-    every link: one edge does not tell a reader which to cut, and they may own
-    none of the groups involved.
-    """
+    """Each group's transitive closure, itself included, with cycles refused."""
     for name, contains in declared.items():
         for one in contains:
             if one not in declared:
@@ -529,16 +388,7 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
 
 
 def parse(document: Mapping[str, object], source: str) -> Groups:
-    """One vocabulary document, from its decoded fields.
-
-    Takes a mapping rather than a path: reading YAML needs a library and this
-    is `domain/`. `kingfisher.infrastructure.access_policy` does that half.
-
-    The three sections the central format had are refused *by name*, each
-    saying where audiences went. A deployment upgrading has a file full of
-    policy, and reading it and dropping it would be the quiet catastrophe: the
-    server would come up believing it was locked down.
-    """
+    """One vocabulary document, from its decoded fields."""
     complaint = fields.unrecognised(document, known={"groups"}, declined=MOVED, noun="section")
     if complaint is not None:
         msg = f"{source}: {complaint}"
@@ -553,20 +403,7 @@ def parse(document: Mapping[str, object], source: str) -> Groups:
 def _refuse_granted_compounds(
     declared: Mapping[str, tuple[str, ...]], compounds: Mapping[str, tuple[str, ...]], source: str
 ) -> None:
-    """Refuse a `contains` that hands out a compound rather than its parts.
-
-    `admin: {contains: [senior-analysts]}` gives an admin the compound while
-    they hold neither `analysts` nor `senior` -- the requirement defeated by the
-    file that declares it. It is the same move `expand` already refuses from a
-    caller, made one level up: presenting the conclusion instead of the
-    premises. Refusing it in only one of the two places would have been the
-    inconsistency, not the rule.
-
-    Naming the parts instead reaches exactly the same people through the front
-    door, and has the property the shortcut lacks -- `kingfisher list` prints
-    what a compound requires, so an admin who satisfies one legibly satisfies it
-    for a reason a reader can see.
-    """
+    """Refuse a `contains` that hands out a compound rather than its parts."""
     for name, holds in declared.items():
         for one in holds:
             if one in compounds:
@@ -584,12 +421,7 @@ def _refuse_granted_compounds(
 def _refuse_undeclared_parts(
     declared: Mapping[str, tuple[str, ...]], compounds: Mapping[str, tuple[str, ...]], source: str
 ) -> None:
-    """Refuse a compound built from a name this file never declares.
-
-    The same rule `_closed` applies to `contains`, applied to the other edge.
-    Without it a mistyped part is a requirement nobody can ever meet, and the
-    only symptom is a group that quietly derives for no one.
-    """
+    """Refuse a compound built from a name this file never declares."""
     for name, parts in compounds.items():
         for part in parts:
             if part not in declared:
@@ -601,14 +433,7 @@ def _refuse_undeclared_parts(
 
 
 def _refuse_compound_loops(compounds: Mapping[str, tuple[str, ...]], source: str) -> None:
-    """Refuse a compound that requires itself, directly or through others.
-
-    Not for termination -- the fixpoint in `expand` is monotone over a finite
-    set and would stop either way. For meaning: a loop of requirements can never
-    be entered, so every name in it derives for nobody. That is the "reaches no
-    one" failure the closed vocabulary exists to prevent, written in the file
-    that defines the vocabulary itself.
-    """
+    """Refuse a compound that requires itself, directly or through others."""
     walked: set[str] = set()
 
     def walk(name: str, path: tuple[str, ...]) -> None:

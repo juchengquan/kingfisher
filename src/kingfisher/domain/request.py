@@ -12,30 +12,7 @@ from kingfisher.subagents.spec import RunOn
 
 @dataclass(frozen=True)
 class Request:
-    """One request: the turn boundary made explicit.
-
-    A stateless service receives exactly these fields and passes them straight
-    through; `cfg`, `graph`, `checkpointer` and `dirs` stay keyword arguments on
-    the entrypoint, because they describe how this kingfisher is configured rather
-    than what is being asked of it.
-
-    `session_id` continues a conversation; omitted, a new one starts.
-    `turn_id` should be the caller's own request id where one exists -- it makes a
-    retry idempotent rather than forking a second turn.
-    `inputs` are files supplied with this request, copied into the turn's `input/`
-    directory and never into `/data`: they arrive fresh each round and leave with
-    the turn.
-    `data` are files supplied to the *session*, copied into `/data` where they
-    stay. That lifetime is the only difference between the two, and why both exist
-    rather than one flag with a mode.
-    `capabilities` names the tools, skills and subagents this request activates.
-    Unset means everything the workspace offers; a service clamps it with
-    `intersect` before running, because authorising the caller is not the
-    request's job.
-
-    Wanting files written is one kind of task among many, so there is no field for
-    it: a request says so in `task`, in its own words.
-    """
+    """One request: the turn boundary made explicit."""
 
     task: str
     #: Which agent runs this. A name from the workspace's `agents/`, never a
@@ -82,10 +59,5 @@ class Request:
 
     @classmethod
     def coerce(cls, value: str | Request) -> Request:
-        """Accept a bare task string, which is a request naming no agent.
-
-        It is refused where the catalogue is known, with a message listing what
-        this workspace offers. Refusing *here* instead would tell a caller only
-        that something was missing, with no catalogue to name anything from.
-        """
+        """Accept a bare task string, which is a request naming no agent."""
         return value if isinstance(value, Request) else cls(task=value)

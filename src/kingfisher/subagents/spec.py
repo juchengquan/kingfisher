@@ -1,23 +1,11 @@
 """What a subagent is, once a definition has been read.
 
-A package rather than a module, because one file had become three subjects and
-said so only by being the longest in the layer. `reading` turns a document into
-a spec and owns the format -- every field, and what makes one malformed.
-`rules` holds what has to be true across a *set* of specs, which is a different
-question from whether any one of them is well-formed: two of a name, a cycle,
-a model that resolves to the thing a delegate exists not to be.
-
-The values stay here, which is the same shape `infrastructure.catalogue` took.
-They are what the rest of the codebase means by "a subagent" -- `SubagentSpec`,
-`SubagentError` and `RunOn`, imported by name from every layer -- so
-`kingfisher.subagents.spec` goes on answering to them and those imports never
-learned this happened. Nothing here imports `reading` or `rules`; a value knows
-nothing about where it came from or what is refused about it, which is why the
-split has no cycle in it and needs no import placed out of order to avoid one.
-
-The long tail moved, and deliberately was not re-exported: `parse` is asked of
-`reading` and `refuse_cycles` of `rules`, because a name read at its call site
-should say which of the three subjects it belongs to.
+A package rather than a module, because one file had become three subjects and said
+so only by being the longest in the layer. `reading` turns a document into a spec and
+owns the format -- every field, and what makes one malformed. `rules` holds what has
+to be true across a *set* of specs, which is a different question from whether any
+one of them is well-formed: two of a name, a cycle, a model that resolves to the
+thing a delegate exists not to be.
 """
 
 from __future__ import annotations
@@ -38,16 +26,12 @@ class SubagentError(ValueError):
 class RunOn:
     """Where a request wants one delegate to run, instead of what its file says.
 
-    One field, and it used to be two. There was a `provider` beside the model,
-    with a rule that an override had to be wholesale -- never the file's
-    endpoint joined to your model, because a model name sent somewhere that has
-    never heard of it is a 404 if you are lucky and a wrong-model run if you are
-    not. A model resolves to its own endpoint through the catalogue now, so that
-    pairing cannot be expressed and the rule has nothing left to guard.
-
-    A name, not a `"provider:model"` string: that spelling is
-    `init_chat_model`'s, and resolving a model through *it* is exactly what
-    `infrastructure.harness.models` exists to avoid.
+    One field, and it used to be two. There was a `provider` beside the model, with a
+    rule that an override had to be wholesale -- never the file's endpoint joined to
+    your model, because a model name sent somewhere that has never heard of it is a
+    404 if you are lucky and a wrong-model run if you are not. A model resolves to
+    its own endpoint through the catalogue now, so that pairing cannot be expressed
+    and the rule has nothing left to guard.
     """
 
     model: str
@@ -191,17 +175,7 @@ class SubagentSpec:
     )
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this delegate holds, narrowed to what one caller reaches.
-
-        `held` is the caller's expanded groups, or `None` where this deployment
-        declares no vocabulary or the call is `UNSCOPED` -- and `None` returns
-        the selections untouched, which is what keeps every deployment that has
-        not adopted audiences unchanged.
-
-        The same shape `AgentSpec.declares` has, and the narrowing rule itself
-        is shared rather than written twice: `access.reaching` is the one place
-        that decides what an entry with no audience of its own inherits.
-        """
+        """What this delegate holds, narrowed to what one caller reaches."""
         if held is None:
             return Capabilities(
                 builtin_tools=self.builtin_tools,
@@ -234,14 +208,7 @@ class SubagentSpec:
         )
 
     def __post_init__(self) -> None:
-        """Exactly one of `system_prompt` and `build`.
-
-        A `ValueError` rather than `SubagentError`, and deliberately: both
-        parsers refuse this case with a message naming the file, so reaching
-        here means a spec was constructed in code. That is a programming
-        mistake rather than a malformed definition, and the two should not
-        arrive at the caller looking alike.
-        """
+        """Exactly one of `system_prompt` and `build`."""
         if bool(self.system_prompt) == (self.build is not None):
             written = "both a system_prompt and a build" if self.system_prompt else "neither"
             msg = f"subagent {self.name!r} has {written}; a delegate is one or the other"

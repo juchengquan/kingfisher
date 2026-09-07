@@ -31,11 +31,7 @@ Role = Literal["system", "user", "assistant", "tool"]
 
 @dataclass(frozen=True)
 class ToolCall:
-    """One tool an assistant asked for, and the name it asked by.
-
-    `id` pairs a call with its result and comes from the model. Kept verbatim:
-    re-minting would break exactly the pairing this exists to record.
-    """
+    """One tool an assistant asked for, and the name it asked by."""
 
     name: str
     args: dict[str, Any] = field(default_factory=dict)
@@ -44,11 +40,7 @@ class ToolCall:
 
 @dataclass(frozen=True)
 class Message:
-    """One thing said, by one party.
-
-    Flat on purpose. Nothing here holds a provider's raw payload -- a record that
-    carried one would be a record only that provider could read.
-    """
+    """One thing said, by one party."""
 
     role: Role
     content: str = ""
@@ -61,15 +53,7 @@ class Message:
 
 
 def as_json(messages: tuple[Message, ...]) -> str:
-    """The transcript as one JSON document, newline-delimited.
-
-    One object per line rather than one array, so the file can be appended to
-    without rewriting it. Nothing appends yet -- the turn writes the whole thing
-    -- and the format is chosen so that day needs no migration.
-
-    Readable on purpose: this is the one thing in a session a person may need to
-    inspect after the fact.
-    """
+    """The transcript as one JSON document, newline-delimited."""
     return "".join(
         json.dumps(
             {
@@ -96,15 +80,7 @@ def as_json(messages: tuple[Message, ...]) -> str:
 
 
 def from_json(document: str) -> tuple[Message, ...]:
-    """Read back what `as_json` wrote.
-
-    A blank line is skipped rather than refused: a file written and re-read across
-    a crash may end in one, and losing a whole conversation over trailing
-    whitespace is the worse answer.
-
-    A malformed line is *not* skipped. That would be data loss with no error --
-    a caller handed a shorter conversation that looks complete.
-    """
+    """Read back what `as_json` wrote."""
     read: list[Message] = []
     for line in document.splitlines():
         if not line.strip():

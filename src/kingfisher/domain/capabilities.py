@@ -1,27 +1,11 @@
 """What a request is allowed to use.
 
-Turn-scoped: they travel with a request rather than being fixed for a workspace
-or a conversation. Construction is not the cost -- an agent rebuild is 8ms empty
-and 54ms seeded, and `docs/findings.md` records that the smaller figure is the
-misleading one. The cost is prompt caching, and only when the set actually
-*changes*, since the cache compares bytes and does not care that we rebuilt: a
-caller passing the same set every turn keeps its hits.
-
-Names, never definitions. A request activates what the workspace already offers;
-it cannot invent a tool or write a subagent's prompt. That keeps definitions
-reviewable wherever the operator keeps them, and means an untrusted caller can
-widen nothing.
-
-`"*"` means everything, a list means exactly those, `None` means none. The
-default is `"*"` deliberately: authorisation is not the request's job. A request
-states intent; a service decides what a caller may have by clamping with
-`intersect` before the run. Baking fail-closed in here would make callers
-authorise themselves.
-
-Spelled this way -- rather than `None` for "no opinion" and an empty tuple for
-none -- the two ends are an ordinary lattice and narrowing is set intersection. A
-JSON caller also cannot tell an absent key from a null one, and reading both as
-"everything" is the least safe reading of a missing field.
+Turn-scoped: they travel with a request rather than being fixed for a workspace or a
+conversation. Construction is not the cost -- an agent rebuild is 8ms empty and 54ms
+seeded, and `docs/findings.md` records that the smaller figure is the misleading one.
+The cost is prompt caching, and only when the set actually *changes*, since the cache
+compares bytes and does not care that we rebuilt: a caller passing the same set every
+turn keeps its hits.
 """
 
 from __future__ import annotations
@@ -77,24 +61,7 @@ def _normalise(value: object) -> Selection:
 
 @dataclass(frozen=True)
 class Capabilities:
-    """What one request may use, out of what the deployment has wired.
-
-        Capabilities()                                  # everything configured
-        Capabilities(tools=None)                        # no tools at all
-        Capabilities(tools=("read_file", "glob"))       # read-only
-        Capabilities(memory=False)                      # do not read the memory file
-
-    Every field but `memory` names things; `memory` is a switch, because it has
-    no names to choose between -- one file, mounted or not. The switch keeps its
-    own three states: `None` there is still "no opinion", a bool having no `"*"`
-    to be the top of.
-
-    This is the *narrowing* axis. The other is `Config.memory_enabled` and
-    `Config.skills_enabled`: what the deployment wired at all. Those shape the
-    system prompt and must stay stable across requests; these vary per turn.
-    Narrowing only subtracts from wiring -- asking for memory a deployment never
-    wired does not conjure it.
-    """
+    """What one request may use, out of what the deployment has wired."""
 
     #: The tools deepagents brings -- read_file, execute, task and the rest.
     #: Separate from `tools` because the two sets change for different reasons:
@@ -150,12 +117,7 @@ class Capabilities:
 
     @property
     def is_unrestricted(self) -> bool:
-        """True when nothing is narrowed, so the agent can be built as configured.
-
-        Compared against the defaults rather than field by field: written out,
-        this would be a list to keep in step with the fields above, and a new field
-        added without a matching line would silently count as "narrowing nothing".
-        """
+        """True when nothing is narrowed, so the agent can be built as configured."""
         return self == Capabilities()
 
     def including(
@@ -163,28 +125,14 @@ class Capabilities:
     ) -> Capabilities:
         """Widen by definitions the request brought with it.
 
-        The only thing allowed to widen, and it barely does: an uploaded
-        definition is the caller's own text, so permitting it grants nothing they
-        did not already hold. A grant list is written before an upload exists and
-        its name is unknowable then, so clamping against it would strip every
-        upload rather than authorise it.
-
-        What bounds an uploaded skill is the tool selection, which this does not
-        touch -- a skill's `allowed-tools` is prompt text to deepagents and binds
-        nothing.
-
-        **`middleware` and `endpoints` are deliberately absent**, and that
-        absence is the rule. A skill or subagent an upload brings is the caller's
-        own text; a middleware *name* selects code the deployment wrote. Widening
-        it would let anyone who can upload a definition activate anything the
-        deployment registered -- the escalation the rest of this method exists to
-        avoid. `endpoints` is the same argument with more at stake: it chooses
-        which endpoint receives the run's prompts and files, and whose
-        credentials pay for them.
-
-        `ALL` stays `ALL`: it already includes these. `None` stays `None` -- a
-        request that asked for no skills at all did not ask for its own either,
-        and an upload is not a way to reopen a door the caller shut.
+        **`middleware` and `endpoints` are deliberately absent**, and that absence is
+        the rule. A skill or subagent an upload brings is the caller's own text; a
+        middleware *name* selects code the deployment wrote. Widening it would let
+        anyone who can upload a definition activate anything the deployment
+        registered -- the escalation the rest of this method exists to avoid.
+        `endpoints` is the same argument with more at stake: it chooses which
+        endpoint receives the run's prompts and files, and whose credentials pay for
+        them.
         """
         return Capabilities(
             builtin_tools=self.builtin_tools,
@@ -198,18 +146,7 @@ class Capabilities:
         )
 
     def intersect(self, other: Capabilities) -> Capabilities:
-        """Narrow these capabilities by another set. Never widens.
-
-        This is what a service calls to clamp an incoming request against what
-        the caller is permitted:
-
-            granted.intersect(request.capabilities)
-
-        `ALL` on either side is the identity, so the other side wins; where both
-        name things, only the overlap survives; `None` on either side wins
-        outright. Because it can only remove, a caller cannot escalate by asking
-        for more.
-        """
+        """Narrow these capabilities by another set. Never widens."""
         return Capabilities(
             builtin_tools=narrowed(other.builtin_tools, by=self.builtin_tools),
             tools=narrowed(other.tools, by=self.tools),
@@ -223,12 +160,7 @@ class Capabilities:
 
 
 def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
-    """A refusal from either side wins; otherwise the side with an opinion does.
-
-    `False` is the only value that can subtract, which is what makes this
-    narrowing rather than negotiation: a caller cannot turn memory on by asking
-    when the other side said no.
-    """
+    """A refusal from either side wins; otherwise the side with an opinion does."""
     if left is False or right is False:
         return False
     if left is True or right is True:
@@ -237,11 +169,7 @@ def _narrow_switch(left: bool | None, right: bool | None) -> bool | None:
 
 
 def belongs_in(names: tuple[str, ...], *, field: str) -> str:
-    """"that is a builtin tool -- name it in builtin_tools", agreeing in number.
-
-    `field` is the plural key a name belongs under -- `builtin_tools` -- and the
-    kind is its singular, which is why the two never disagree.
-    """
+    """"that is a builtin tool -- name it in builtin_tools", agreeing in number."""
     # `split`/`join` rather than `.replace`, which `test_domain_touches_nothing`
     # forbids here: `Path.replace` renames a file, and the check reads names rather
     # than types. A blunt guard is the point of that test, so this bends to it.
@@ -252,19 +180,7 @@ def belongs_in(names: tuple[str, ...], *, field: str) -> str:
 
 
 def narrowed(selection: Selection, *, by: Selection) -> Selection:
-    """`selection`, keeping only what `by` also allows. Never widens.
-
-    `None` on either side wins outright -- nothing, narrowed by anything, is still
-    nothing. `ALL` is the identity, so the other side wins; where both name things
-    only the overlap survives, in `selection`'s order.
-
-    Public, and `by` keyword-only, because the rule applies at two levels:
-    `Capabilities.intersect` clamps a request against what the deployment granted,
-    and `subagents.harness.as_subagent` clamps a definition's declared tools
-    against what its caller was granted. Written twice with the arguments the other
-    way round, it is one convention away from a delegate quietly getting more than
-    the request that summoned it.
-    """
+    """`selection`, keeping only what `by` also allows. Never widens."""
     if selection is None or by is None:
         return None  # nothing, narrowed by anything at all, is still nothing
     if selection == ALL:
@@ -276,33 +192,14 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
 
 
 def _widened(selection: Selection, extra: tuple[str, ...]) -> Selection:
-    """`selection` plus names the caller brought with it -- see `including`.
-
-    The two ends are left alone for opposite reasons. `ALL` already has them.
-    `None` asked for none, and an upload is not a way back through a door the
-    request itself closed.
-    """
+    """`selection` plus names the caller brought with it -- see `including`."""
     if selection is None or selection == ALL:
         return selection
     return (*selection, *extra)
 
 
 def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
-    """Names the workspace offers that this grant leaves out.
-
-    The mirror of `Offering.refuse_unknown`, which reports names asked for that
-    do not exist; this reports the ones that exist and were not asked for. Same
-    reason: a grant is a whitelist, so it can only mean *less* than the workspace
-    holds, and a caller cannot see how much less.
-
-    That gap widens on its own. A grant written as "everything except the shell" is
-    stored as the other names, so a tool added afterwards falls outside it --
-    refused, silently, months after the list was written. A deny-list fails the
-    other way, letting tomorrow's new tool through by default. So the whitelist
-    stays and the silence goes.
-
-    `ALL` withholds nothing and cannot go stale; `None` withholds everything.
-    """
+    """Names the workspace offers that this grant leaves out."""
     if granted == ALL:
         return ()
     if granted is None:
@@ -312,22 +209,7 @@ def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:
 
 
 def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, ...]:
-    """The grant that "everything except these" means, against what is offered now.
-
-    Subtraction is what a caller usually means -- "not the shell" rather than
-    the other eleven names -- and the one thing a whitelist cannot say.
-
-    It resolves here rather than being stored, which is the point. A stored
-    subtraction *is* a deny-list, letting tomorrow's new tool through by default
-    -- the wrong way to fail when that tool is another `execute`. Resolved as it
-    is written, what gets stored and enforced is an ordinary whitelist, and
-    `withheld` still reports what it left out.
-
-    A name that excludes nothing is refused. `--without-tools exec` is a typo that
-    would otherwise grant everything quietly.
-
-    The set difference is `withheld`'s, asked the other way round.
-    """
+    """The grant that "everything except these" means, against what is offered now."""
     known = set(offered)
     missing = [name for name in excluded if name not in known]
 
@@ -356,14 +238,7 @@ def all_but(excluded: tuple[str, ...], *, offered: Iterable[str]) -> tuple[str, 
 
 
 def refuse_ungranted_models(wanted: Iterable[str], *, granted: Selection, subject: str) -> None:
-    """Refuse a model a request may not put a delegate on.
-
-    Raised rather than dropped, which is the opposite of how a narrower caller
-    is treated elsewhere -- and deliberately. Dropping a skill leaves a
-    delegate knowing less; silently ignoring "run it on the cheap model" leaves
-    it running on the expensive one, which is the answer nobody asked for and
-    the bill nobody expected. The same reasoning `approved_middleware` gives.
-    """
+    """Refuse a model a request may not put a delegate on."""
     if granted == ALL:
         return
     permitted = set(granted or ())
@@ -383,19 +258,7 @@ def refuse_unoffered(
     subject: str,
     listing: str | None = None,
 ) -> None:
-    """Refuse a name nothing offers, whoever named it.
-
-    The sibling of `refuse_ungranted_models`.
-
-    Raised rather than dropped: a name that exists and was not activated is a
-    caller being narrower than a definition, which is ordinary; a name nothing
-    defines is a mistake, and narrowing it away leaves no trace of the typo.
-
-    `listing` is for the caller that can say more than a tuple. Tools know which
-    file each one came from, and a bare list of names is what sends a reader
-    grepping; skills and subagents have nowhere to point yet, so they pass
-    nothing and get the names.
-    """
+    """Refuse a name nothing offers, whoever named it."""
     known = set(offered)
     if unknown := tuple(name for name in asked if name not in known):
         # A name two sources offer is not a name nobody offers, and the same
@@ -423,20 +286,7 @@ def refuse_unoffered(
 
 
 def refuse_ungranted_endpoint(endpoint: str, *, granted: Selection, subject: str) -> None:
-    """Refuse an endpoint this request may not reach.
-
-    The other half of `refuse_ungranted_models`, and it is deliberately a second
-    check rather than the same one. A model grant says which names a caller may
-    ask for; this says which endpoints may receive prompts and whose credentials
-    may pay. They overlap and do not coincide -- "anything on the local gateway,
-    nothing on OpenAI" is one line here and an enumeration there, which goes
-    stale the moment a model is added.
-
-    Called with the endpoint a model *resolved to*, not one a definition wrote:
-    definitions name models now. Which is why this takes a name rather than a
-    spec -- by the time the endpoint is known, the caller has a `Config` and
-    this layer does not.
-    """
+    """Refuse an endpoint this request may not reach."""
     if granted == ALL or endpoint in (granted or ()):
         return
     msg = (
@@ -457,28 +307,9 @@ def approved_middleware(
 
     Two refusals, and both raise, **for a definition that named names**. A name
     nothing registered is a mistake in the definition. A name the deployment
-    registered but did not *grant* is an escalation attempt or a
-    misconfiguration, and running with silently less middleware than the
-    definition specified could mean running without the rate limit or the audit
-    hook it was written to have.
-
-    A wildcard is the third branch and behaves like neither. `["*"]` resolves
-    smaller when the request narrowed the axis, and to *nothing* when the request
-    withheld it -- no refusal either way. Deliberate: a star asks for a set rather
-    than for particular names, so there is nothing in particular to refuse on
-    behalf of, and a star that refused whenever anything was withheld would stop
-    any deployment keeping a hook from one caller without breaking every definition
-    that wrote one. The shortfall is not reported back either;
-    `reporting.withheld_by_kind` carries that decision.
-
-    Checked identically for a catalogue definition and an uploaded one.
-    `Capabilities.including` widens skills and subagents for an upload because
-    those are the caller's own text; a middleware name selects code the deployment
-    wrote, so an upload gets no such exemption.
-
-    What it decides is *names*, which is all this layer knows about middleware.
-    Turning an approved name into an object needs the registry, and that is the
-    caller's half.
+    registered but did not *grant* is an escalation attempt or a misconfiguration,
+    and running with silently less middleware than the definition specified could
+    mean running without the rate limit or the audit hook it was written to have.
     """
     if declared is None:
         return ()
@@ -519,28 +350,7 @@ def approved_settings(
     subject: str,
     registered_as: str,
 ) -> dict[str, object]:
-    """Which of the settings a definition wrote beside a name it may actually pass.
-
-    The second half of `approved_middleware`, on the axis that one added. A name
-    selects code the deployment wrote; a setting reaches *into* that code, so the
-    class behind the name says which of its own keys a definition is allowed to
-    write and this refuses the rest.
-
-    Refuses rather than drops, which is the same choice made one function up and
-    for a sharper reason. A definition that wrote a setting believes it took
-    effect, and the failure it is guarding against is exactly the one where it
-    did not: running with a value the deployment chose while the file says
-    otherwise is how a cap nobody raised turns out to have been raised.
-
-    `yaml_settable` is a class attribute, written once beside the code it governs,
-    and a class that declares none -- the default -- is a class no definition may
-    configure at all. `CallCap` is deliberately that: a cap a definition can set is
-    not a cap, so `limit` is absent from its `yaml_settable`, and the way to have a
-    looser one is a second registry entry over a subclass.
-
-    Takes the permitted *names* rather than the class: reading an attribute off a
-    registered object is the caller's half.
-    """
+    """Which of the settings a definition wrote beside a name it may actually pass."""
     if not wrote:
         return {}
     permitted = set(settable)
@@ -584,19 +394,7 @@ def ceiling(
     granted_tools: Selection,
     subject: str,
 ) -> Selection:
-    """Every tool a delegate may call, from the two lists it may narrow.
-
-    Not a method on `Offering`, which is the obvious move and is wrong: a delegate
-    is narrowed by what the *request was granted*, not by what the workspace
-    offers. Those differ exactly when a request narrowed something, which is the
-    case this exists for, so an `Offering.ceiling` would silently widen a delegate
-    back to the workspace.
-
-    Answers `ALL` for "narrowed by nobody" where `Offering.permitted` answers
-    `None`. Two consumers, two conventions: a delegate's selection is narrowed
-    again downstream, a request's is handed to a middleware. Folding them would
-    make one of the two lie.
-    """
+    """Every tool a delegate may call, from the two lists it may narrow."""
     from_builtin = narrowed(asked_builtin, by=granted_builtin)
     from_workspace = narrowed(asked_tools, by=granted_tools)
     if from_builtin == ALL and from_workspace == ALL:

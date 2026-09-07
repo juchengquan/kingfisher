@@ -1,14 +1,4 @@
-"""What the server needs, kept out of what the library needs.
-
-`Config` is the library's — workspace, models, timeouts, retention. A bind
-address is none of its business, and putting one there is where the split
-between the two would blur first: `Config` is passed to `Kingfisher`, and a
-field on it reads as something a turn might consult.
-
-So these live apart, read from their own environment prefix, and nothing in
-`kingfisher.domain`, `kingfisher.application` or `kingfisher.infrastructure`
-can see them.
-"""
+"""What the server needs, kept out of what the library needs."""
 
 from __future__ import annotations
 
@@ -35,16 +25,7 @@ WAS = "KINGFISHER_SERVER_"
 
 
 def _reader(source: Mapping[str, str]) -> Callable[[str, Any], Any]:
-    """One setting, under the current name or the one it used to have.
-
-    The new name wins where both are set, because a deployment mid-migration has
-    the new one for a reason. The old one is honoured and reported: honoured so
-    nothing breaks on upgrade, reported so this does not become a second name
-    nobody knows is load-bearing.
-
-    A warning rather than a log line: this is read before any logging is
-    configured, and the one caller is a process starting up.
-    """
+    """One setting, under the current name or the one it used to have."""
 
     def read(suffix: str, fallback: Any) -> Any:
         if (value := source.get(f"{PREFIX}{suffix}")) is not None:
@@ -134,14 +115,7 @@ class ServiceConfig:
 
     @classmethod
     def from_env(cls, env: Mapping[str, str] | None = None) -> ServiceConfig:
-        """Read `KINGFISHER_SERVICE_*`, falling back to the defaults above.
-
-        A prefix of its own rather than sharing `KINGFISHER_`, so that reading
-        a deployment's environment tells you which half of the split each
-        setting belongs to without consulting anything.
-
-        `KINGFISHER_SERVER_*` still works and warns -- see `WAS`.
-        """
+        """Read `KINGFISHER_SERVICE_*`, falling back to the defaults above."""
         source = os.environ if env is None else env
         defaults = cls()
         read = _reader(source)
@@ -160,18 +134,7 @@ class ServiceConfig:
         )
 
     def __post_init__(self) -> None:
-        """Refuse a deployment that named its file store twice.
-
-        Not precedence, and the same argument `Config.__post_init__` makes for
-        sessions: two answers to one question is what this codebase refuses
-        everywhere else, and a deployment with both set has a mistake worth
-        being told about rather than a preference worth honouring. Silently
-        preferring one would serve a caller's refs out of the store it stopped
-        meaning to use, and nothing would say so.
-
-        On the record rather than in `from_env`, so a `ServiceConfig` a test or
-        an embedding deployment assembles in Python is held to the same rule.
-        """
+        """Refuse a deployment that named its file store twice."""
         if self.file_store_dir is not None and self.file_store_factory is not None:
             msg = (
                 f"the file store is configured twice: {PREFIX}FILE_STORE_DIR names "

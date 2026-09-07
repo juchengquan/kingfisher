@@ -1,37 +1,9 @@
 """Applying a request's capabilities to the agent that runs it.
 
-Named `narrowing`, not `capabilities`: `domain/capabilities.py` is the value
-object a caller passes, and this is the machinery that enforces it. "Narrow" is
-the domain's own word for the operation -- `narrowed()`, `intersect`, the
-narrowing axis -- while "scope" everywhere else in this package means a lifetime.
-
-Three middleware, because the three restrictions bite in different places:
-
-`ToolAllowlist` works at two layers, and it needs both. Filtering
-`ModelRequest.tools` stops the tool being *offered*; on its own that is not a
-boundary, which a live run against MiniMax-M3 demonstrated — the model called
-`execute` anyway, from memory, because the system prompt still describes the
-shell, and `ToolNode` ran it because the tool was still registered there.
-Refusing the call in `wrap_tool_call` is what actually holds. The filter is kept
-alongside it so the model is not tempted in the first place, and so its context
-is not spent on tool schemas it may not use.
-
-`NarrowedSkills` filters what the skills index advertises. Note what that is and
-is not: removing a skill from the listing means the agent is not *told* about
-it. The file is still on disk, so this is guidance, not a boundary — the
-boundary comes from the deny rules `build_agent` adds alongside it, and even
-those are bypassable by `execute`. Stated plainly rather than implied, because
-a guarantee that quietly is not one is worse than none.
-
-`DeclaredDelegatesOnly` refuses `task` to a delegate the request did not
-declare. It is here rather than beside the subagent machinery because the thing
-it closes is a capability hole: deepagents supplies a `general-purpose` delegate
-carrying the main agent's tools and none of kingfisher's middleware, so a
-request that withheld `execute` could ask that one for it.
-
-`HostPathGuard` is deliberately not here, because it applies no capability: it
-turns a rejected host path into a `ToolMessage` the model can act on, and sits in
-`backend` beside the `reject_host_path` that raises what it catches.
+Named `narrowing`, not `capabilities`: `domain/capabilities.py` is the value object a
+caller passes, and this is the machinery that enforces it. "Narrow" is the domain's
+own word for the operation -- `narrowed()`, `intersect`, the narrowing axis -- while
+"scope" everywhere else in this package means a lifetime.
 """
 
 from __future__ import annotations
@@ -62,28 +34,7 @@ def _tool_name(tool: Any) -> str | None:
 
 
 class ToolAllowlist(AgentMiddleware):
-    """Restrict the tools the model is offered, per call.
-
-    An unnamed tool is kept: the allowlist governs kingfisher's named tool
-    surface, and silently dropping something it cannot identify would be a
-    worse failure than passing it through.
-
-    `subject` names *whose* surface this is, which on a delegate is not the
-    request. A delegate's allowlist is its own definition narrowed by the
-    request, and "this request" on a delegate names the one layer that is
-    usually innocent: `extractor` ships `builtin_tools: [read_file, ls, glob,
-    grep]`, so a run that narrowed nothing still read `execute is not available
-    for this request` -- and the flags on the command line were the first place
-    looked. Same lesson as the `subagent_type` typo below: naming the wrong
-    cause costs more than naming none.
-
-    Who, and deliberately not why. The allowlist is the intersection of two
-    layers by the time it arrives here, and a name can be missing from either
-    or both -- the middleware holds the result, not the two sides, and cannot
-    tell which one dropped it without knowing whether the name is a built-in or
-    a workspace tool, which it also does not know. So it names the wall rather
-    than guessing at who built it, and that sentence is true in both cases.
-    """
+    """Restrict the tools the model is offered, per call."""
 
     def __init__(self, allowed: tuple[str, ...], *, subject: str = "this request") -> None:
         self._allowed = set(allowed)
@@ -109,12 +60,7 @@ class ToolAllowlist(AgentMiddleware):
         return await handler(self._filter(request))
 
     def _refuse(self, request: Any) -> ToolMessage | None:
-        """A `ToolMessage` when the call must not run, `None` when it may.
-
-        Refusing as an error message rather than raising: the agent gets to see
-        that it reached for something it does not have and pick another route,
-        where an exception would end the run.
-        """
+        """A `ToolMessage` when the call must not run, `None` when it may."""
         call = request.tool_call
         name = call.get("name")
         if name in self._allowed:
@@ -140,47 +86,14 @@ class ToolAllowlist(AgentMiddleware):
 
 
 class NarrowedSkills(SkillsMiddleware):
-    """A skills index restricted to the skills a request activated.
-
-    Overrides the formatting seam rather than rewriting the assembled prompt:
-    string surgery on a system message would break the moment deepagents
-    changes its wording.
-
-    And overrides the *loading* seam, which is a bigger claim and needs its
-    reason. deepagents merges every source into a dictionary keyed by name, so
-    two parties who never met and both shipped a `lookup` end up as one skill
-    and the model is never told the other exists. Skills arriving from several
-    places is what a catalogue looks like after long enough, so the merge is
-    undone here and both survive -- addressed by `source::name`, which is what a
-    request grants and what `_allowed` holds.
-
-    A skill can survive that where a *tool* cannot, and the difference is how
-    each is reached: a tool is called by name through a dictionary, so two can
-    never coexist whatever anyone writes; a skill is read by the path the
-    listing hands the model, so two only need telling apart.
-
-    Both loaders are overridden, and that is not belt-and-braces. `before_agent`
-    and `abefore_agent` do not delegate -- each builds its own
-    `dict[str, SkillMetadata]` -- so overriding one would leave a synchronous
-    run and an `astream` run offering different skills, and it would fail *open*:
-    the async path would keep silently dropping one. `LocalShellBackend` is the
-    opposite case and worth not confusing with this one; its `aexecute` is the
-    protocol default, `await asyncio.to_thread(self.execute, ...)`, so
-    `ConfinedLocalShellBackend` overriding `execute` alone genuinely covers both.
-    """
+    """A skills index restricted to the skills a request activated."""
 
     def __init__(self, *, allowed: tuple[str, ...], **kwargs: Any) -> None:
         self._allowed = set(allowed)
         super().__init__(**kwargs)
 
     def _qualified(self) -> list[Any]:
-        """Every skill every source offers, tagged with the source it came from.
-
-        The listing deepagents would have built, minus the merge. Each entry
-        keeps its own metadata -- including `path`, which is what the model is
-        told to read and therefore what makes two same-named skills two
-        different things rather than one ambiguous one.
-        """
+        """Every skill every source offers, tagged with the source it came from."""
         found = []
         for label, path in zip(self.source_labels, self.sources, strict=True):
             skills, _error = _list_skills_with_errors(self._backend, path)
@@ -219,28 +132,7 @@ class NarrowedSkills(SkillsMiddleware):
 
 
 class DeclaredDelegatesOnly(AgentMiddleware):
-    """Refuse `task` to a delegate this request did not declare.
-
-    deepagents adds a `general-purpose` subagent of its own, with "the same
-    capabilities as the main agent" and none of kingfisher's middleware. It is
-    there whenever `task` is, so applying the caller's tool ceiling to declared
-    delegates closes only half the door: a request that withheld `execute`
-    could still ask `general-purpose` for it.
-
-    It cannot be narrowed. Declaring one by the same name *duplicates* it
-    rather than replacing it, and the switch that disables it resolves by the
-    model's *provider* through a beta registry -- so a model deepagents does
-    not recognise silently restores the unrestricted delegate. A boundary that
-    depends on provider-name inference is not a boundary.
-
-    Refusing the call is. This is the same `wrap_tool_call` seam `ToolAllowlist`
-    uses, it holds whatever model is in play, and it fails closed: a delegate
-    has to be named here to be reachable.
-
-    The built-in is still *advertised* in the task tool's description, so a
-    model may try it once and be told no. Wasteful, and much preferable to the
-    alternative of trusting it.
-    """
+    """Refuse `task` to a delegate this request did not declare."""
 
     def __init__(self, declared: tuple[str, ...]) -> None:
         self._declared = set(declared)

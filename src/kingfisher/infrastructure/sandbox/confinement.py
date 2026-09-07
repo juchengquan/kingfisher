@@ -1,28 +1,16 @@
 """Keeping the shell out of everything that is not the workspace.
 
-`virtual_mode` roots the *file tools* at a session. It does nothing to
-`execute`, which deepagents documents plainly: commands run through
-`subprocess.run(shell=True)` and can "access any file on the filesystem
-(regardless of `virtual_mode`)", with the advice to pair it with a
-human-in-the-loop. A harness that runs unattended has no such reviewer, so the
-boundary has to come from the operating system instead.
+`virtual_mode` roots the *file tools* at a session. It does nothing to `execute`,
+which deepagents documents plainly: commands run through `subprocess.run(shell=True)`
+and can "access any file on the filesystem (regardless of `virtual_mode`)", with the
+advice to pair it with a human-in-the-loop. A harness that runs unattended has no
+such reviewer, so the boundary has to come from the operating system instead.
 
-What that boundary is worth closing was measured rather than assumed. With
-nothing in place the agent's shell could read the deployment's own `.env` --
-both API keys -- along with `~/.aws` and `~/.config/gh`, where the GitHub CLI
-keeps its token. `http_fetch` is a registered tool, so reading and sending are
-one turn apart for anything that gets an injection into a document.
-
-Redirecting `HOME` at the workspace, which `shell_env` already does, is not this
-guarantee and was never able to be: it only moves where tools *resolve* `~`. The
-files stay where they are and an absolute path still reaches them.
-
-Deployments differ in who provides the boundary, which is why this is a choice
-rather than a constant. A container that mounts only the workspace has already
-provided it and should not pay for a second one; a developer's machine has
-provided nothing at all. `EXTERNAL` is the first case said out loud, so that
-"nothing is wrapping the shell" can mean "the runtime already did it" instead of
-being indistinguishable from nobody having thought about it.
+What that boundary is worth closing was measured rather than assumed. With nothing in
+place the agent's shell could read the deployment's own `.env` -- both API keys --
+along with `~/.aws` and `~/.config/gh`, where the GitHub CLI keeps its token.
+`http_fetch` is a registered tool, so reading and sending are one turn apart for
+anything that gets an injection into a document.
 """
 
 from __future__ import annotations
@@ -48,22 +36,7 @@ _LANDLOCK_ABI_QUERY = 1
 
 
 def landlock_abi() -> int | None:
-    """The Landlock ABI this kernel supports, or `None` where there is none.
-
-    Asked of the kernel rather than inferred from a version string. A release
-    number says what the kernel was built from and not what it will do: a
-    distribution can ship Landlock disabled, a container runtime can block the
-    syscall, and both look like a modern kernel from `platform.release()`.
-
-    Free of `sandlock`, deliberately. This runs on hosts where the fence is not
-    installed and its whole purpose is to say whether installing it would help,
-    so a probe that needed it could never answer the question that matters.
-
-    Every failure is `None`. There is no ABI worth distinguishing from another
-    when the call did not work -- an old kernel, a blocked syscall and a
-    platform with no `syscall` symbol are one answer here, which is that this
-    host cannot be fenced this way.
-    """
+    """The Landlock ABI this kernel supports, or `None` where there is none."""
     if platform.system() != "Linux":
         return None
     try:
@@ -143,18 +116,12 @@ class Confinement:
 def with_supplied_runner(confined: Confinement, *, local: bool) -> Confinement:
     """What is confining the shell, once a deployment supplies the runner.
 
-    Measured before this existed: a runner declaring `local = False` ran the
-    command with no wrap applied, and the `Confinement` still reported
-    `mechanism='sandbox-exec'` and `confined=True`. The claim was false inside
-    the process, not merely invisible to `doctor` -- anything reading it got a
-    wrong answer, and a check that reports a fence which is not running is worse
-    than one that reports nothing.
-
-    Two cases, because they are not the same fact. A local runner still receives
-    the confined command, so the mechanism holds and only gains company. A
-    non-local one receives the command as the model wrote it -- so nothing this
-    process applies reaches it, which is exactly what `elsewhere` means: a
-    boundary the deployment asserted and this code cannot see.
+    Measured before this existed: a runner declaring `local = False` ran the command
+    with no wrap applied, and the `Confinement` still reported
+    `mechanism='sandbox-exec'` and `confined=True`. The claim was false inside the
+    process, not merely invisible to `doctor` -- anything reading it got a wrong
+    answer, and a check that reports a fence which is not running is worse than one
+    that reports nothing.
     """
     if local:
         return replace(confined, supplied=True)
@@ -173,16 +140,7 @@ REQUIRED_LANDLOCK_ABI = 6
 
 
 def landlock_ready() -> bool:
-    """Whether this host can actually fence a command, asked rather than assumed.
-
-    Three things have to hold and any one of them fails quietly on its own: the
-    kernel supports Landlock at a high enough ABI, the package is installed, and
-    the platform is Linux. A deployment that got two of the three would otherwise
-    run unfenced while `doctor` said it was fine.
-
-    The ABI is read without `sandlock`, so this answers the same on a host that
-    has not installed it -- which is exactly the host asking whether to.
-    """
+    """Whether this host can actually fence a command, asked rather than assumed."""
     if landlock_abi() is None or (landlock_abi() or 0) < REQUIRED_LANDLOCK_ABI:
         return False
     try:
@@ -193,12 +151,7 @@ def landlock_ready() -> bool:
 
 
 def _bubblewrap() -> Confinement:
-    """The bubblewrap mode, probed rather than trusted.
-
-    The binary can be missing, or present and unable to make a namespace --
-    which is the normal state of a container nobody relaxed, and the state an
-    operator naming this mode has most likely not noticed.
-    """
+    """The bubblewrap mode, probed rather than trusted."""
     from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available  # noqa: PLC0415
 
     if bubblewrap_available():
@@ -219,26 +172,16 @@ def _bubblewrap() -> Confinement:
 def _linux() -> Confinement:
     """The Linux chain: Landlock, then bubblewrap, then a warning.
 
-    Landlock first because it costs nothing -- no capability, no container
-    change, no relaxed syscall filter -- and because it fails in the right
-    direction: measured, it denies the path resolution `mount(2)` needs, so a
-    fenced process cannot spend `SYS_ADMIN` even where the container has it.
-    A fence that requires the operator to do something is a fence that is off
-    in most deployments.
+    Landlock first because it costs nothing -- no capability, no container change, no
+    relaxed syscall filter -- and because it fails in the right direction: measured,
+    it denies the path resolution `mount(2)` needs, so a fenced process cannot spend
+    `SYS_ADMIN` even where the container has it. A fence that requires the operator
+    to do something is a fence that is off in most deployments.
 
     bubblewrap second, and only when Landlock cannot run at all. That is kernels
-    below the ABI a full ruleset needs -- 6.12, where EKS nodes are commonly on
-    6.1 -- and on exactly those nodes the alternative was *nothing*: the shell
-    read every session's files and `doctor` said so. Something beats that.
-
-    Not the other way round, and not bubblewrap first anywhere. It cannot run on
-    a container nobody changed, so preferring it would fall through here anyway;
-    and where both work it trades escape surface for network reach, which is a
-    trade rather than an upgrade -- it hands the sandboxed process `SYS_ADMIN`
-    inside its own user namespace, which is the capability Landlock takes away.
-
-    Nothing is spelled here either way: both fences live in the `CommandRunner`
-    that `build_backend` builds, and this says which there will be.
+    below the ABI a full ruleset needs -- 6.12, where EKS nodes are commonly on 6.1
+    -- and on exactly those nodes the alternative was *nothing*: the shell read every
+    session's files and `doctor` said so. Something beats that.
     """
     if landlock_ready():
         return Confinement(wrap=_unwrapped, mechanism="Landlock")
@@ -252,13 +195,7 @@ def _linux() -> Confinement:
 
 
 def _no_landlock_here() -> str:
-    """Why this Linux host is unfenced, in the terms that decide what to do.
-
-    "No confinement is wired for Linux" was true before there was one and is now
-    misleading: it is wired, and this host cannot use it. Which of the two
-    reasons applies changes the remedy -- one is an upgrade, the other is an
-    install.
-    """
+    """Why this Linux host is unfenced, in the terms that decide what to do."""
     abi = landlock_abi()
     if abi is None:
         reason = f"this kernel ({platform.release()}) offers no Landlock"
@@ -277,18 +214,7 @@ def _no_landlock_here() -> str:
 
 
 def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement:
-    """The confinement this deployment will actually use, from its `Config`.
-
-    `resolve` takes one argument per root the profile has to name, and two
-    callers were assembling those six from the same `Config` -- the backend that
-    runs commands, and a driver that warns when nothing is confining them. Two
-    assemblies of one fact is how they come to disagree, and disagreeing here
-    means warning about a confinement other than the one in force.
-
-    `skills` overrides `cfg.skills_dir` because the backend has a derived one: a
-    session's skills directory is not always the workspace's. Nothing else
-    varies, so nothing else is a parameter.
-    """
+    """The confinement this deployment will actually use, from its `Config`."""
     return resolve(
         cfg.shell_sandbox,
         workspace=cfg.workspace,
@@ -309,58 +235,15 @@ def profile(
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
-    Deny-the-home rather than allow-only-the-workspace, deliberately. An
-    allow-list is the stronger shape and the one to grow into, but it fails
-    closed on every path a workload happens to need -- fonts, certificates, a
-    homebrew prefix -- and this is on by default. Denying the one directory
-    where a person's credentials actually live closes the measured hole at a
-    fraction of the breakage risk.
+    Deny-the-home rather than allow-only-the-workspace, deliberately. An allow-list
+    is the stronger shape and the one to grow into, but it fails closed on every path
+    a workload happens to need -- fonts, certificates, a homebrew prefix -- and this
+    is on by default. Denying the one directory where a person's credentials actually
+    live closes the measured hole at a fraction of the breakage risk.
 
-    The re-allowed paths are not a convenience. A virtualenv's `python3` is
-    typically a symlink onto an interpreter installed under the home -- uv puts
-    it in `~/.local/share/uv/python/...` -- so denying the home without
-    re-allowing `sys.base_prefix` leaves the agent unable to run Python at all.
-    That was found by doing it.
-
-    Writes are the other direction and take the opposite shape: an allow-list,
-    denied from `/` down. `system.md` already tells the agent to stop rather
-    than reach outside the workspace, and to write scratch under `$TMPDIR`
-    rather than a literal `/tmp`. Both were ignored inside a single observed
-    run -- it wrote `/tmp/preview.pdf` and twice tried `pip install`, which
-    failed only because this venv happens to have no `pip`. Prose that the
-    model overrides is not a boundary; this is the same rules with the kernel
-    behind them.
-
-    An allow-list is affordable here where it was not for reads, because what a
-    shell legitimately writes to is short and known: the workspace, `$TMPDIR`,
-    and the character devices that make `2>/dev/null` work.
-
-    The known cost, and it is now measured rather than guessed at: a program
-    that writes to the operating system's own temp directory stops working, even
-    when everything it was *told* to write is inside the workspace.
-
-    Headless Chrome is the proven case. Unsandboxed it renders a PDF in 2.0s;
-    under this profile it fails in 0.4s with `Failed to create a ProcessSingleton
-    for your profile directory`. The cause is this rule and no other -- the same
-    profile with writes unrestricted works, and adding socket permissions does
-    not help. No flag avoids it: `--user-data-dir` inside the workspace still
-    fails, because Chrome reaches `/private/var/folders/<user>` regardless. An
-    earlier note here said the case was unproven because Chrome "hung"; it does
-    not hang, it writes the PDF and then never exits, so the measurement was
-    watching the wrong thing.
-
-    Left broken deliberately. Nothing here needs a browser: not this codebase,
-    not the definitions a pack ships, and not the `pdf` skill, which prescribes `pypdf`,
-    `pdfplumber`, `pdftotext`, `qpdf` and `reportlab`. Chrome appeared once,
-    when an agent improvised it to look at its own HTML output. An agent
-    spawning a network-capable browser is nearer to what a boundary is for than
-    to something worth widening one to keep.
-
-    The fix, if a tool anyone actually depends on ever needs it, is one line:
-    allow writes to this user's own temp folder -- the parent of
-    `tempfile.gettempdir()`, not all of `/private/var/folders`. Verified to make
-    Chrome work while `.env`, the home and the repository stay refused. It is
-    not here because it should be added for a dependency, not for a guess.
+    The known cost, and it is now measured rather than guessed at: a program that
+    writes to the operating system's own temp directory stops working, even when
+    everything it was *told* to write is inside the workspace.
     """
     lines = [
         "(version 1)",
@@ -397,32 +280,7 @@ def _sb(path: Path) -> str:
 
 
 def traversable(home: Path, readable: tuple[Path, ...]) -> tuple[Path, ...]:
-    """The directories between the denied home and each root re-allowed inside it.
-
-    `deny (subpath ~)` followed by `allow (subpath ~/x/ws)` describes a
-    destination with no route: `~` and `~/x` are still denied, and they are what
-    a path to the workspace goes through. Whether that matters depends entirely
-    on how a program asks. `chdir` and `open` hand the whole path to the kernel
-    and resolve in one operation, so they succeed -- which is most things, and
-    why this survived so long. A program that canonicalises component by
-    component gets refused on the first denied one.
-
-    Two do it, and both are in the hot path. `/bin/sh` is the shell every
-    command runs in, and its `cd` builtin walks the path: `cd runs/t001` came
-    back "Not a directory" for every directory in the workspace, which reads as
-    a broken run directory rather than as a permission rule. `uv` walks it too,
-    and reports "failed to canonicalize path" for the venv's own `python3` --
-    so the agent could run Python but nothing could inspect or extend it.
-
-    Only the directories, and only `file-read-metadata`. The alternative was to
-    stop denying the home as a subpath and deny its contents individually, which
-    is a list nobody can keep complete. This adds `stat` on a handful of exact
-    paths -- not their contents, not their entries -- so the home stays
-    unlistable and every file in it stays unreadable.
-
-    Roots outside the home contribute nothing: `/opt/homebrew/bin` was never
-    denied, so nothing has to be said about `/opt`.
-    """
+    """The directories between the denied home and each root re-allowed inside it."""
     home = Path(home)
     found: dict[Path, None] = {}
     for root in readable:
@@ -436,26 +294,7 @@ def traversable(home: Path, readable: tuple[Path, ...]) -> tuple[Path, ...]:
 
 
 def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
-    """Where the interpreter the shell was told to run actually lives.
-
-    `sys.prefix` is the virtualenv and `sys.base_prefix` the interpreter it was
-    built from; they differ exactly when a venv is in use, which is the case
-    that breaks. `extra` carries `shell_path_extra`, since a deployment that
-    added a directory to the agent's `PATH` meant for it to be runnable.
-
-    Roots rather than the `PATH` entries themselves, and the difference is the
-    whole reason this is a function. `PATH` names `bin`; the libraries live in a
-    *sibling* `lib/pythonX.Y/site-packages`, so granting what `PATH` says grants
-    an interpreter that starts and then cannot import anything this project
-    installed for it. `sys.prefix` covers both.
-
-    Lifted out of `readable_roots` for a second caller that must not have the
-    rest of it. The two fences answer opposite questions -- `sandbox-exec`
-    denies the operator's home and re-allows what is inside it, Landlock and
-    bubblewrap deny everything and allow one session -- so they agree about the
-    toolchain and cannot agree about the workspace. See *The two fences share a
-    toolchain and not a workspace* in `docs/decisions.md`.
-    """
+    """Where the interpreter the shell was told to run actually lives."""
     roots = [Path(sys.prefix), Path(sys.base_prefix)]
     roots += [Path(e) for e in extra]
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
@@ -463,25 +302,7 @@ def toolchain_roots(extra: tuple[str, ...] = ()) -> tuple[Path, ...]:
 
 def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
                    skills: Path | None = None) -> tuple[Path, ...]:
-    """What has to stay readable for the shell to remain useful.
-
-    The toolchain, plus the two directories only this mechanism needs: the
-    workspace, because `sandbox-exec` denies the home it usually sits in, and
-    the catalogue.
-
-    `skills` is the catalogue, and it is here because it is the one definition
-    directory the *shell* reads: skills ship scripts, and running one is the
-    point of `KINGFISHER_SKILLS`. It defaults inside the workspace and is
-    already covered there, so this only matters when `KINGFISHER_SKILLS_DIR`
-    moves it out -- which is the whole reason that setting exists, a catalogue
-    shared by several deployments.
-
-    Without it the agent got a split view rather than a refusal: file tools are
-    routed and reached the catalogue, the shell was denied, so reading a skill's
-    definition worked while running the script beside it did not. Subagent and
-    tool directories are deliberately absent -- those are read by this process,
-    never by the shell.
-    """
+    """What has to stay readable for the shell to remain useful."""
     roots = [Path(workspace), *toolchain_roots(extra)]
     if skills is not None:
         roots.append(Path(skills))
@@ -489,31 +310,13 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
 
 
 def writable_roots(workspace: Path, scratch: Path) -> tuple[Path, ...]:
-    """Everywhere the shell is allowed to write.
-
-    `scratch` is named separately rather than assumed to sit inside the
-    workspace, because `KINGFISHER_SCRATCH_DIR` and `KINGFISHER_STATE_DIR` can
-    move it out. It is the directory handed to the shell as `TMPDIR`, so leaving
-    it off would deny the one place the prompt tells the agent to put scratch.
-    """
+    """Everywhere the shell is allowed to write."""
     roots = (Path(workspace), Path(scratch))
     return tuple(dict.fromkeys(p.resolve() for p in roots))
 
 
 def protected_roots(skills: Path | None, definitions: tuple[Path, ...]) -> tuple[Path, ...]:
-    """Everywhere inside a writable root the shell must still not write.
-
-    Deduplicated the way `writable_roots` deduplicates, and for the same reason:
-    `skills` is normally *also* `catalogue_roots["skills"]`, so the ordinary
-    deployment passes one directory twice and the profile would name it twice.
-
-    A root that does not exist is kept rather than filtered. A rule naming an
-    absent directory is inert, and dropping it would mean a workspace seeded
-    after the profile was written had a protection nobody removed and nothing
-    applied -- the profile is written once when the confinement resolves, and
-    `kingfisher seed` runs after that at least once, on the first deployment
-    anybody sets up.
-    """
+    """Everywhere inside a writable root the shell must still not write."""
     roots = (*((Path(skills),) if skills is not None else ()), *definitions)
     return tuple(dict.fromkeys(p.resolve() for p in roots))
 
@@ -534,12 +337,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
     extra: tuple[str, ...] = (), skills: Path | None = None,
     definitions: tuple[Path, ...] = (),
 ) -> Confinement:
-    """Choose a confinement for this deployment, writing any profile it needs.
-
-    The profile is written under the harness's own state directory rather than
-    the workspace: it is host-side configuration, and a file the agent could
-    edit is not a boundary.
-    """
+    """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
         return _bubblewrap()
 

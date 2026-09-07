@@ -3,14 +3,6 @@
     from kingfisher import run
     result = run("Profile /data/sales.csv and report what stands out.")
     print(result.answer, result.run_dir)
-
-Names resolve lazily. Importing anything from `kingfisher.infrastructure` pulls in
-deepagents, which imports langchain-anthropic, langchain-openai *and*
-langchain-google-genai at module level -- about 1.1s, most of it provider SDKs
-this deployment will never call. Eager re-exports here made every consumer pay
-that: `--help`, a config check, or a test that only touches `Request`.
-
-The names and their spelling are unchanged; only the moment of import moved.
 """
 
 from importlib import import_module

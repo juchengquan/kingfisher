@@ -2,13 +2,9 @@
 
 Session is the root because that is where the hard invariants cluster -- turn ids
 unique within a conversation, a turn's inputs confined to its own directory, and a
-discarded session taking its thread with it. Workspace is the context those
-sessions live in, not a root of its own: an aggregate holding every file in the
-project would be a concurrency bottleneck and the large-aggregate anti-pattern in
-one.
-
-Retention is deliberately *not* here. Deciding which sessions to drop is a policy
-*across* sessions, so it lives in `domain.retention`.
+discarded session taking its thread with it. Workspace is the context those sessions
+live in, not a root of its own: an aggregate holding every file in the project would
+be a concurrency bottleneck and the large-aggregate anti-pattern in one.
 """
 
 from __future__ import annotations
@@ -21,14 +17,7 @@ from kingfisher.domain.ports import SessionDirs, ThreadStore
 
 
 class UnknownSessionError(ValueError):
-    """A request named a session that does not exist.
-
-    Raised rather than creating one. A session id is a bearer credential: holding
-    one is how a caller proves the session is theirs, and they hold one by having
-    started it. If a supplied id could create a session, a service forwarding an
-    id from its own caller would let that caller choose -- or guess -- the name,
-    and read somebody else's turn.
-    """
+    """A request named a session that does not exist."""
 
 
 class SessionBusyError(ValueError):
@@ -38,22 +27,11 @@ class SessionBusyError(ValueError):
     whole: both read the same history, both append, and the last write wins.
     Measured, a turn simply vanished -- both callers got an answer and a run
     directory, and the conversation kept no record that one of them happened.
-
-    Refused rather than queued: a queue hides a wait as long as whatever the other
-    turn is doing, and a caller who did not know they were racing learns nothing
-    from it.
     """
 
 
 class QuotaExceededError(ValueError):
-    """A session is already holding more than the deployment allows.
-
-    Raised before a turn starts rather than during one. `execute` writes without
-    any file tool seeing it, so there is nothing to intercept while a turn runs --
-    a turn already going can exceed the bound, and only a filesystem quota
-    underneath could stop it. What this prevents is the *next* turn making it
-    worse.
-    """
+    """A session is already holding more than the deployment allows."""
 
 
 @dataclass(frozen=True)
@@ -66,13 +44,7 @@ class Turn:
 
     @property
     def virtual_dir(self) -> str:
-        """The directory as the agent addresses it -- machine-independent.
-
-        No session segment. The session directory *is* the backend root, so the
-        agent has no name for it and cannot address outside it; naming it here
-        would also put the id into the prompt, changing the cached prefix on every
-        session.
-        """
+        """The directory as the agent addresses it -- machine-independent."""
         return f"/runs/{self.id}"
 
     @property
@@ -100,22 +72,13 @@ class Turn:
 
 
 def sessions_root(workspace: Path | str) -> Path:
-    """Where a workspace keeps its sessions.
-
-    A layout the domain owns should not be re-spelled by every caller that needs
-    to look inside it.
-    """
+    """Where a workspace keeps its sessions."""
     return Path(workspace) / "sessions"
 
 
 @dataclass(frozen=True)
 class SessionInfo:
-    """One session, as something outside kingfisher asks about it.
-
-    Two fields, and the absence of a third is the point: there is no directory
-    here. A service that could read one would start reading files out of it, and
-    the layout would become a contract nobody wrote down.
-    """
+    """One session, as something outside kingfisher asks about it."""
 
     id: str
     #: When a turn last ran here, as a unix timestamp.
@@ -128,12 +91,7 @@ class SessionInfo:
 
 
 def known(entries: Sequence[tuple[str, float]]) -> tuple[SessionInfo, ...]:
-    """Every session there is, most recently used first.
-
-    Takes what `SessionDirs.listing` returns, so the read path and the sweep read
-    the same thing -- a session that retention can see is one a caller can ask
-    about, and the two cannot come to disagree about which exist.
-    """
+    """Every session there is, most recently used first."""
     return tuple(
         SessionInfo(id=name, last_used=modified)
         for name, modified in sorted(entries, key=lambda entry: -entry[1])
@@ -144,13 +102,10 @@ def still_held(
 ) -> tuple[str, ...]:
     """Which of these claims somebody could still be holding.
 
-    The rule `claim` applies to one claim, said once so retention can apply it to
-    all of them. Treating every claim name as a turn in progress is what let a
-    claim left behind by a dead process exempt its session from retention
-    permanently -- measured at ten years idle, still there.
-
-    `stale_after` is the turn timeout, which already bounds how long a turn may
-    run. Past it the holder is gone or was going to be stopped anyway.
+    The rule `claim` applies to one claim, said once so retention can apply it to all
+    of them. Treating every claim name as a turn in progress is what let a claim left
+    behind by a dead process exempt its session from retention permanently --
+    measured at ten years idle, still there.
     """
     return tuple(name for name, taken in entries if now - taken < stale_after)
 
@@ -164,22 +119,12 @@ class Session:
 
     @classmethod
     def open(cls, workspace: Path, session_id: str, dirs: SessionDirs) -> Session:
-        """Open (creating if needed) one session's directory.
-
-        Sessions live under `sessions/`, not `runs/`, because this directory is
-        the backend root: it holds the whole vocabulary the agent addresses rather
-        than only that session's turns.
-        """
+        """Open (creating if needed) one session's directory."""
         return cls.at(session_id, sessions_root(workspace) / session_id, dirs)
 
     @classmethod
     def at(cls, session_id: str, directory: Path, dirs: SessionDirs) -> Session:
-        """The same, for a directory chosen by something other than a workspace.
-
-        A deployment may hold a session's files somewhere this process does not
-        pick -- a mount that exists for one turn, a volume attached per pod -- and
-        the id stays kingfisher's either way.
-        """
+        """The same, for a directory chosen by something other than a workspace."""
         dirs.ensure(directory)
         return cls(id=session_id, directory=directory)
 
@@ -191,20 +136,7 @@ class Session:
     def claim(
         self, dirs: SessionDirs, claims: Path, *, stale_after: float, now: float
     ) -> Path:
-        """Take this session's turn slot, or refuse because someone holds it.
-
-        Atomic for the same reason turn allocation is: `create_exclusive` fails on
-        a name that exists, and that failure *is* the check.
-
-        Held in the store, not in the object. Any process may serve any request,
-        so a lock in memory would guard one process against itself and nothing
-        else.
-
-        A holder that died leaves its claim behind, so a claim older than a turn
-        could possibly be is taken over. The takeover is itself racy -- two callers
-        can both find it stale -- and safe for the same reason as the first
-        attempt, because only one `create_exclusive` succeeds.
-        """
+        """Take this session's turn slot, or refuse because someone holds it."""
         path = claims / self.id
         if dirs.create_exclusive(path):
             return path
@@ -232,16 +164,7 @@ class Session:
         dirs.remove_tree(claims / self.id)
 
     def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
-        """Create the next turn's directory and return it.
-
-        A caller-supplied id wins and is idempotent: the same id returns the same
-        directory, so a retried request reuses its turn rather than forking a
-        second one. Only the caller knows where the request boundary is.
-
-        Otherwise the next sequential id is allocated by `mkdir`, which fails if
-        the name is taken. Scanning for the highest id and *then* creating it is
-        the race this avoids.
-        """
+        """Create the next turn's directory and return it."""
         runs = self.runs_dir
         dirs.ensure(runs)
 
@@ -265,20 +188,7 @@ class Session:
             # -- the port only has to refuse a name it cannot claim.
 
     def discard(self, dirs: SessionDirs, threads: ThreadStore | None = None) -> str | None:
-        """Delete this session's thread and directory. Returns a failure, or None.
-
-        There is no transaction across a filesystem and sqlite, so the order is
-        chosen to make the surviving failure benign:
-
-          thread first, then directory
-            a failure leaves a directory whose thread still exists -- the session
-            is intact and the next sweep retries it
-          directory first, then thread
-            a failure leaves a thread pointing at deleted files, which is exactly
-            the state that makes an agent cite paths that are not there
-
-        Nothing is half-deleted: if the thread will not go, the directory stays.
-        """
+        """Delete this session's thread and directory. Returns a failure, or None."""
         if threads is not None:
             try:
                 threads.delete_thread(self.id)

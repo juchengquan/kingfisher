@@ -1,15 +1,9 @@
 """What a run tells the caller it did not have.
 
-Three reports and the event list that carries them, kept together because they
-answer one question -- *what did this turn not get, and why* -- and apart from
-the service because none of them touches it. Every input is decided by the time
-they run, so each can be checked on its own.
-
-The rule they share is stated once here and applied three times below: a caller
-is told what their *grant* left out, never what their *groups* denied them. The
-second would hand somebody the exact list of what they cannot reach, which is
-what filtering assets out of listings and refusals exists to prevent. An asset
-out of reach was never offered.
+Three reports and the event list that carries them, kept together because they answer
+one question -- *what did this turn not get, and why* -- and apart from the service
+because none of them touches it. Every input is decided by the time they run, so each
+can be checked on its own.
 """
 
 from __future__ import annotations
@@ -37,12 +31,7 @@ if TYPE_CHECKING:
 
 
 def _named(selection: Selection) -> set[str]:
-    """A selection as a set of names, with the two ends read as empty.
-
-    `ALL` and `None` name nothing that can be *lost*: one is everything and the
-    other is nothing, and neither changes under group narrowing -- so the
-    difference this feeds is empty either way, which is the right answer.
-    """
+    """A selection as a set of names, with the two ends read as empty."""
     return set(selection) if isinstance(selection, tuple) else set()
 
 
@@ -63,33 +52,15 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
-    **`middleware` is deliberately not among them**, and the reason is about
-    this report rather than about that axis. What goes here is what a caller
-    could have asked for differently -- a tool, a skill, a delegate they may
-    grant next time. A caller cannot register a middleware: the names come from
-    whatever constructed `Kingfisher`, so telling them one was withheld names
-    something they have no way to act on.
+    **`middleware` is deliberately not among them**, and the reason is about this
+    report rather than about that axis. What goes here is what a caller could have
+    asked for differently -- a tool, a skill, a delegate they may grant next time. A
+    caller cannot register a middleware: the names come from whatever constructed
+    `Kingfisher`, so telling them one was withheld names something they have no way
+    to act on.
 
-    It is the one axis where a shortfall can pass unremarked --
-    `approved_middleware` raises for a name a request withheld, but a
-    definition that wrote `middleware: ["*"]` resolves quietly smaller, and
-    quietly to nothing. That is the trade this absence accepts, written here
-    because this is where the next reader will come looking for it.
-
-    Three axes, one rule. Each differs only in where "what the workspace offers"
-    comes from, and none of the three is knowable without asking the thing that
-    assembled the agent -- which is why a grant goes stale in the first place.
-
-    The catalogue is passed rather than re-derived, so what a caller is told it
-    did not grant is measured against the same directories the agent was built
-    from.
-
-    Each "what the workspace offers" is a thunk, not a value, and that is a cost
-    rather than a style: three of the four walk a directory, and an axis left at
-    its default is skipped a line later without ever needing the answer. Written
-    eagerly, the subagent walk happened on every turn of every run -- which
-    stayed invisible only while that axis defaulted to none and this function
-    was the sole reader.
+    The catalogue is passed rather than re-derived, so what a caller is told it did
+    not grant is measured against the same directories the agent was built from.
     """
     default = Capabilities()
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
@@ -112,20 +83,12 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
         """`names`, less what this caller's groups took away.
 
         Applied to what the workspace *offers*, before the comparison, and the
-        ordering is the whole of it. This function names every offered thing a
-        grant left out -- so measured against the unfiltered catalogue it would
-        hand a caller the exact list of what their groups denied them, which is
-        precisely what filtering them out of listings and refusals exists to
-        avoid. An asset out of reach is not withheld from this caller; as far
-        as they are concerned it was never offered.
-
-        Only what *group narrowing* removed, and that precision matters. A tool
-        the agent simply never declared is still reported, because that is a
-        fact about the agent rather than about who is calling -- and it is what
-        this report has always said.
-
-        `kind` is `None` for the axes no audience controls, which are
-        unfiltered and keep reporting exactly what they did.
+        ordering is the whole of it. This function names every offered thing a grant
+        left out -- so measured against the unfiltered catalogue it would hand a
+        caller the exact list of what their groups denied them, which is precisely
+        what filtering them out of listings and refusals exists to avoid. An asset
+        out of reach is not withheld from this caller; as far as they are concerned
+        it was never offered.
         """
         if kind is None or not (lost := denied.get(kind)):
             return names
@@ -166,12 +129,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
 
 
 def delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
-    """Names this run was granted that only a delegate can actually ask for.
-
-    Computed from the catalogue rather than threaded out of `build_agent`,
-    because the graph has already dropped them by the time it exists -- which is
-    exactly why it has to be said from somewhere that still knows.
-    """
+    """Names this run was granted that only a delegate can actually ask for."""
     from kingfisher.infrastructure.catalogue import Definitions  # noqa: PLC0415
     from kingfisher.tools.spec import Offering  # noqa: PLC0415
 

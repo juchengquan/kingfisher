@@ -1,31 +1,14 @@
 """Reading `models.yaml`: which endpoints exist, and which models run on them.
 
-`config` owns the records — `Endpoint` and `ModelProfile` belong to no layer, so
-they sit at the package root with `Config` itself. `models` owns the closed
-adapter table and construction. This owns the step in between: turning one
-authored document into those records, and refusing the ways it can be wrong.
-
-Not folded into anything that reads a *definition*, and there is no longer a
-single module to be folded into: each kind reads its own documents --
-`subagents.reading`, `skills.reading`, `catalogue.agents.read_agent` -- and
-`documents` is the yaml step underneath them plus two scans that never parse.
-
-This paragraph said "not `definitions.py`, whose charter is stated and narrow",
-quoting a module that has since been renamed *and* had that charter taken off
-it. Both halves were wrong and neither could fail. A model profile is still not
-a definition: it names no kind, no request activates it, and `domain/` may not
-read deployment configuration at all.
-
-`safe_load`, for a different reason than there. Definitions arrive from a
-catalogue service, which makes them input rather than something we wrote; this
-file is operator-authored. But it names credential variables and is read at
-startup, and `yaml.load` would let a crafted document construct arbitrary
-objects before anything else runs.
+`config` owns the records — `Endpoint` and `ModelProfile` belong to no layer, so they
+sit at the package root with `Config` itself. `models` owns the closed adapter table
+and construction. This owns the step in between: turning one authored document into
+those records, and refusing the ways it can be wrong.
 
 **A key this format does not define is refused, not ignored.** The same rule
-`subagents.reading` states, for the same reason: ignoring a key is
-indistinguishable from honouring it, and `max_token:` singular would otherwise
-parse, be dropped, and hand back the default with no error anywhere.
+`subagents.reading` states, for the same reason: ignoring a key is indistinguishable
+from honouring it, and `max_token:` singular would otherwise parse, be dropped, and
+hand back the default with no error anywhere.
 """
 
 from __future__ import annotations
@@ -86,17 +69,7 @@ REMOVED: Mapping[str, str] = MappingProxyType(
 
 
 def _refuse_unknown(document: Mapping[str, Any], known: frozenset[str], where: str) -> None:
-    """Refuse every key this format does not define, and guess at the typos.
-
-    The wording is `fields.unrecognised`, shared with the subagent format, which
-    had the careful version of this rule while here it was five lines that
-    listed the valid keys and nothing else. That was the wrong way round: this
-    is the file a deployment writes *first*, and the only one that decides where
-    prompts go, so `defualt:` is exactly the mistake worth naming as a typo.
-
-    What stays here is the raising. A malformed catalogue is a `ConfigError`,
-    not a `SubagentError`, and `where` is a path plus which entry it was in.
-    """
+    """Refuse every key this format does not define, and guess at the typos."""
     for gone, reason in REMOVED.items():
         if gone in document:
             msg = f"{where}: {gone!r} {reason}"
@@ -119,14 +92,7 @@ def _mapping(value: Any, where: str) -> Mapping[str, Any]:
 def _endpoints(
     document: Mapping[str, Any], environ: Mapping[str, str], source: Path
 ) -> tuple[dict[str, Endpoint], dict[str, str]]:
-    """Every endpoint whose key is actually present, and the names dropped.
-
-    Dropping rather than refusing is what makes one reviewed file shareable
-    across a fleet. The alternative -- every machine must hold every key -- is
-    the thing `key_env` was chosen to avoid, and it would make a shared
-    catalogue useless the moment it listed an endpoint some machine did not pay
-    for.
-    """
+    """Every endpoint whose key is actually present, and the names dropped."""
     resolved: dict[str, Endpoint] = {}
     dropped: dict[str, str] = {}
     for name, raw in _mapping(document.get("endpoints"), f"{source}: endpoints").items():
@@ -182,17 +148,7 @@ def _models(
     dropped: Mapping[str, str],
     source: Path,
 ) -> tuple[dict[str, ModelProfile], dict[str, str]]:
-    """Every model whose endpoint survived, and why each of the others did not.
-
-    A model whose endpoint was dropped is still dropped from the first mapping:
-    it cannot run, and `models` means what can. It is no longer dropped
-    *silently*, which was the whole trouble -- once it was gone, nothing could
-    tell a name this file never defined from one this machine cannot reach, and
-    both `resolve` and `doctor` told people to go and edit correct YAML.
-
-    The second mapping is what makes that answerable, and is deliberately not a
-    place to look models up from: it holds the reason, not the profile.
-    """
+    """Every model whose endpoint survived, and why each of the others did not."""
     profiles: dict[str, ModelProfile] = {}
     for name, raw in _mapping(document.get("models"), f"{source}: models").items():
         entry = _mapping(raw, f"{source}: model {name!r}")
@@ -245,15 +201,7 @@ def _models(
 
 
 def load(path: Path, environ: Mapping[str, str]) -> Models:
-    """Read `path` into what this deployment can run, where, and under which names.
-
-    Required, with no fallback and no shipped default table. `api_style` was
-    required and deliberately defaulted to nothing for the same reason: a
-    default would silently pick the wrong destination the first time kingfisher
-    is pointed somewhere new. A fallback would also make "file absent" look
-    exactly like "file found", including when `KINGFISHER_MODELS_FILE` points
-    at the wrong path.
-    """
+    """Read `path` into what this deployment can run, where, and under which names."""
     try:
         text = path.read_text(encoding="utf-8")
     except OSError as exc:

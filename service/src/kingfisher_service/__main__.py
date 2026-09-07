@@ -1,10 +1,4 @@
-"""`kingfisher-service`, and `python -m kingfisher_service`.
-
-Nothing here decides anything. It reads `ServiceConfig` from the environment,
-builds the app the factory builds, and hands both to uvicorn -- so running the
-server and importing it give the same object, and there is no second way to
-configure one.
-"""
+"""`kingfisher-service`, and `python -m kingfisher_service`."""
 
 from __future__ import annotations
 
@@ -26,12 +20,7 @@ MISSING = (
 
 
 def serve(settings: ServiceConfig) -> None:
-    """Run the app until stopped.
-
-    Imported inside the function so `kingfisher_service` stays importable without
-    uvicorn -- an app served by something else (gunicorn, a hosted ASGI runner)
-    needs the module, not this.
-    """
+    """Run the app until stopped."""
     import uvicorn  # noqa: PLC0415
 
     # `uvicorn.run`, not `Kingfisher.run` -- the architecture rule names this

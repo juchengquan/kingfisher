@@ -43,17 +43,7 @@ def expired(
     *,
     busy: Sequence[str] = (),
 ) -> SweepPlan:
-    """Name every session untouched for longer than `older_than_seconds`.
-
-    Age rather than count. Keeping the newest N counts every caller's sessions
-    together, so a busy caller evicts a quiet one -- a tenancy bug once many
-    callers share a workspace. Age asks only how long a session has been idle,
-    which is a property of that session alone.
-
-    `busy` names sessions with a turn running, and they are kept whatever their
-    age says: a turn may outlive the idle bound, and sweeping one mid-turn deletes
-    the directory out from under an agent still writing to it.
-    """
+    """Name every session untouched for longer than `older_than_seconds`."""
     running = set(busy)
     doomed = tuple(
         name
@@ -69,13 +59,6 @@ def orphaned(names: Sequence[str], sessions: Sequence[str]) -> tuple[str, ...]:
     Both accumulate silently, because nothing but this looks for them. Measured on
     one real workspace: after reaping all 55 sessions, 132 threads and 1,894
     checkpoints remained, owned by nothing.
-
-    Safe to delete because they are unreachable, not merely unused. A session id
-    whose directory is gone is refused with `UnknownSessionError`, so the
-    conversation behind an orphaned thread can never be resumed by anyone, and
-    with the session gone there is nothing left to run a turn against a claim.
-    Taking over a *stale* claim on a session that still exists is a different
-    question, and stays with `Session.claim`.
     """
     live = set(sessions)
     return tuple(sorted(n for n in set(names) if n not in live))
@@ -87,11 +70,7 @@ def apply(
     dirs: SessionDirs,
     threads: ThreadStore | None = None,
 ) -> SweepResult:
-    """Carry out a plan, one session at a time.
-
-    The per-session ordering lives in `Session.discard`, which is where the
-    reasoning about benign failure belongs.
-    """
+    """Carry out a plan, one session at a time."""
     removed: list[str] = []
     failures: list[str] = []
     for name in sweep_plan.doomed:

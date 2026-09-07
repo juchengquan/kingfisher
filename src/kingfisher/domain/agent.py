@@ -4,74 +4,27 @@ What a request runs. Every other format on the catalogue is something an agent
 selects from -- the tools it holds, the skills it may read, the delegates it may
 consult, the model it runs on.
 
-    name: surveyor
-    description: Reads and profiles data without changing anything.
-    builtin_tools: [read_file, ls, glob, grep]
-    tools: [csv_profile::csv_profile]
-    memory: false
-    system_prompt: |
-      You survey files before anyone trusts them.
+**Its own folder and its own format, sharing the readers and not the fields.** Two
+fields disagree with `subagents/`: `memory` is a switch a delegate has no use for,
+and `system_prompt` means the opposite thing. A shared folder would have made a
+field's meaning depend on the request that read it rather than on the file.
 
-`name`, `description` and `system_prompt` are required and nothing else is. The
-prompt is required for the reason `description` is: an agent is a file somebody
-else picks from, and those are the two fields that say what it is. `system.md`
-describes the harness and `PROMPT.md` describes the workspace, and neither has
-ever heard of this agent.
+**`system_prompt` is added, never substituted.** A delegate's *is* the whole prompt
+and it gets none of `system.md`. An agent's is the last of three parts --
 
-**Its own folder and its own format, sharing the readers and not the fields.**
-Two fields disagree with `subagents/`: `memory` is a switch a delegate has no use
-for, and `system_prompt` means the opposite thing. A shared folder would have made
-a field's meaning depend on the request that read it rather than on the file.
+**Omission means the same thing it means in a subagent file:** leave a *tool* field
+out and you get everything available to you, and leave `skills` or `subagents` out
+and you get none. Tools are what an agent needs to *act* and it can do nothing
+without them; skills and delegates are what it needs to *know* and to *ask*, and most
+agents need neither. The skills index alone costs ~600 tokens for three -- ~450 of
+that deepagents' own preamble, before a single skill is named -- while every delegate
+compiles a graph at ~6ms. Re-measured 2026-09-03; `docs/findings.md` carries what
+each figure is a measurement *of*.
 
-**`system_prompt` is added, never substituted.** A delegate's *is* the whole
-prompt and it gets none of `system.md`. An agent's is the last of three parts --
-
-    prompts/system.md    what the harness is: /data is read-only, /skills is
-                         loadable, where memory lives
-    PROMPT.md            what this workspace is about, and it reaches delegates
-    system_prompt        what this agent is
-
--- and there is no way to say "instead of". An agent without the first is not
-leaner; it is one holding tools nobody told it about, discovering its permissions
-by being denied.
-
-The field keeps the name deepagents and Anthropic both use. What that costs is
-that a subagent file copied into `agents/` parses cleanly and behaves
-differently, so the warning lives in the documentation rather than in an error.
-
-**Omission means the same thing it means in a subagent file:** leave a *tool*
-field out and you get everything available to you, and leave `skills` or
-`subagents` out and you get none. Tools are what an agent needs to *act* and it
-can do nothing without them; skills and delegates are what it needs to *know* and
-to *ask*, and most agents need neither. The skills index alone costs ~600 tokens
-for three -- ~450 of that deepagents' own preamble, before a single skill is named
--- while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03;
-`docs/findings.md` carries what each figure is a measurement *of*.
-
-`subagents: ["*"]` is the one place the two formats genuinely answer differently.
-In a subagent file "everything" includes the definition doing the asking, so it is
-always a loop and is refused. An agent is not one of the subagents, so here it
-means every delegate the workspace offers.
-
-`model` reads exactly as it does for a delegate: one name, and a model this
-deployment cannot run refuses rather than falling back. Omitted, the agent runs
-the `default:` in `models.yaml` -- a vendor's model id is portable nowhere, so the
-shipped agents name none.
-
-Model *parameters* are not here and will not be. `models.yaml` carries
-`max_tokens`, `temperature` and an `extra` bag, has no credentials in it so it can
-go through review, and is meant to be the one place saying where prompts go and
-what they cost. An agent wanting the same model to think harder names a second
-entry.
-
-**A field this format does not define is refused, not ignored:** a key we ignore
-is a key the author believes took effect. The ones another format defines and this
-one declines are named individually in `REFUSED` below, because the generic
-message reads as "not supported yet" and sends someone looking for a workaround.
-
-Parsing lives in the domain because this is kingfisher's format. Nothing here
-knows deepagents exists and nothing here reads a disk -- finding the files is
-`infrastructure.catalogue.agents`.
+**A field this format does not define is refused, not ignored:** a key we ignore is a
+key the author believes took effect. The ones another format defines and this one
+declines are named individually in `REFUSED` below, because the generic message reads
+as "not supported yet" and sends someone looking for a workaround.
 """
 
 from __future__ import annotations
@@ -145,13 +98,7 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 
 @dataclass(frozen=True)
 class AgentSpec:
-    """One agent, once its definition has been read.
-
-    The values a request runs against. Everything is a *selection by name* apart
-    from the prompt and the two switches, which is what keeps a definition
-    reviewable: an agent file activates what the workspace already offers and
-    cannot invent a tool or write a delegate's prompt.
-    """
+    """One agent, once its definition has been read."""
 
     name: str
     description: str
@@ -210,26 +157,7 @@ class AgentSpec:
     )
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
-        """What this agent holds, said as the narrowing a request is clamped by.
-
-        The agent file is the baseline and a request only ever subtracts from it,
-        so the two meet through the lattice that already exists rather than through
-        a second set of rules. `agent.declares.intersect(asked)` is the whole of
-        it.
-
-        `endpoints` and `models` are `ALL` because an agent has no opinion about
-        either. They are grants a *deployment* makes, and an agent that narrowed
-        them here would be a definition authorising itself.
-
-        `held` is the caller's expanded groups, or `None` where this deployment
-        declares no vocabulary or the call is `UNSCOPED` -- which is what keeps a
-        deployment that has not adopted audiences unchanged, and why this is one
-        method rather than a policied path beside an unpolicied one.
-
-        `builtin_tools` is never narrowed here. deepagents registers those itself,
-        so they can be filtered but never left out of a graph; what gates them is
-        which *agents* a group may open.
-        """
+        """What this agent holds, said as the narrowing a request is clamped by."""
         return Capabilities(
             builtin_tools=self.builtin_tools,
             tools=self.tools if held is None else reaching(
@@ -252,12 +180,7 @@ class AgentSpec:
 
 
 def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
-    """One definition, from its decoded fields.
-
-    Raises `AgentError` on anything the format forbids. Whether the document
-    decoded at all was settled before this -- reading YAML needs a library, and
-    a domain module imports the standard library and `kingfisher.domain`.
-    """
+    """One definition, from its decoded fields."""
     read = fields.Reader(source=source.name, error=AgentError)
 
     # Before the required-field check, so `nmae:` is reported as the typo it is

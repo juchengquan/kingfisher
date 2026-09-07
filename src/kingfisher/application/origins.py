@@ -1,21 +1,11 @@
 """Where this deployment reads from, as one record.
 
-The four definition catalogues, `models.yaml`, `groups.yaml`, the directory
-seeding copies from, and the three working roots -- each with what kind of place
-it turned out to be, under the workspace they resolve against. Nothing could
-say what they were. `kingfisher list` printed four, `doctor` printed one, the
-library printed none, and each assembled its own answer -- so the catalogue a
-listing named and the one a diagnosis counted were two reads that nobody held
-together.
-
-Beside `inventory.py` and deliberately not inside it. The two answer different
-questions of the same workspace -- what does it *offer*, and where did that come
-from -- and one of them is cheap while the other builds an agent to answer.
-
-Nothing here prints. `Origin` carries a kind rather than a formatted string, for
-the reason the kinds exist at all: `--json` and the service read this, and
-"nothing is configured" and "you handed me a store" must not arrive as two
-spellings a consumer has to match on.
+The four definition catalogues, `models.yaml`, `groups.yaml`, the directory seeding
+copies from, and the three working roots -- each with what kind of place it turned
+out to be, under the workspace they resolve against. Nothing could say what they
+were. `kingfisher list` printed four, `doctor` printed one, the library printed none,
+and each assembled its own answer -- so the catalogue a listing named and the one a
+diagnosis counted were two reads that nobody held together.
 """
 
 from __future__ import annotations
@@ -53,29 +43,13 @@ Kind = Literal["default", "relocated", "overridden", "supplied", "unset"]
 
 @dataclass(frozen=True)
 class Origin:
-    """One place, and what kind of place it turned out to be.
-
-    `path` is what was read, except for `unset`, where it is where kingfisher
-    *looked* -- which is the whole value of the field there. A `groups.yaml`
-    written one directory off is invisible in every other way: the deployment
-    comes up, controls nothing by group, and says nothing about it.
-
-    `None` for `supplied`, because there is no path, and for an `unset` thing
-    with no default location to have looked in -- the seed directory and the
-    session store are both configured or absent, never derived.
-    """
+    """One place, and what kind of place it turned out to be."""
 
     kind: Kind
     path: Path | None = None
 
     def spelled(self, workspace: Path) -> str:
-        """This entry as it appears on the startup line.
-
-        No value contains a space, deliberately. The line is `key=value` pairs
-        separated by spaces, so a space inside one stops `grep tools=` from
-        answering -- which is the property that made every key worth printing
-        rather than collapsing the ordinary ones to "default".
-        """
+        """This entry as it appears on the startup line."""
         if self.kind == "supplied":
             return "<supplied>"
         if self.path is None:
@@ -90,21 +64,7 @@ class Origin:
 
 @dataclass(frozen=True)
 class Origins:
-    """Every place this deployment reads from, settled once.
-
-    Two levels of certainty, and which one you get depends on what you hand in.
-    Given a `Config` alone this reports what was *configured*, which is all a
-    caller outside a running kingfisher can know. Given the resolved catalogue
-    as well -- which `Kingfisher` has, warmed, before its constructor returns --
-    it reports what is actually being *read*, and the two differ exactly when a
-    deployment staged its definitions somewhere itself.
-
-    That difference is the reason this record exists rather than a handful of
-    fields on `Config`. `Config.catalogue_roots` is the fallback, not the
-    answer: a `Kingfisher` may be handed a mapping or a `Definitions` of its
-    own, and a report derived from configuration alone would be right for the
-    simple deployment and quietly wrong for the one that moved something.
-    """
+    """Every place this deployment reads from, settled once."""
 
     #: Everything else is relative to this, which is why it is a bare `Path`
     #: rather than an `Origin`: a workspace is never derived, never supplied and
@@ -140,16 +100,7 @@ class Origins:
         catalogue: Definitions | None = None,
         sessions: object | None = None,
     ) -> Origins:
-        """Read the configuration, and the collaborators that can override it.
-
-        Deliberately does not call `resolve_definitions`: that creates derived
-        roots, and a function whose whole job is to report must not change what
-        it is reporting on. Handed nothing, it answers from `cfg` alone.
-
-        `sessions` is the resolved store, which `Kingfisher` builds from
-        `cfg.session_store` when nothing was injected. A store whose root is
-        what the configuration names is that one; anything else was handed in.
-        """
+        """Read the configuration, and the collaborators that can override it."""
         return cls(
             workspace=cfg.workspace,
             **{
@@ -168,29 +119,16 @@ class Origins:
 
         Spelled out in full this is about 450 characters, nine of eleven values
         sharing one prefix -- and the entries worth noticing, the ones that are
-        somewhere else, are buried in the repetition. Relative brings it to
-        about 240 *and* leaves the relocated ones as the only absolute paths, so
-        the eye finds them without reading.
-
-        Every key appears, including the ordinary ones. Collapsing those to
-        "catalogues: default" is shorter still and deletes the path somebody is
-        looking for.
+        somewhere else, are buried in the repetition. Relative brings it to about 240
+        *and* leaves the relocated ones as the only absolute paths, so the eye finds
+        them without reading.
         """
         pairs = " ".join(
             f"{name}={origin.spelled(self.workspace)}" for name, origin in self.entries()
         )
         return f"workspace={self.workspace} {pairs}"
     def block(self) -> tuple[str, ...]:
-        """The same answer as a header, one place per line.
-
-        Both commands print this and neither formats its own. `kingfisher list`
-        assembled its header from three hand-written lines and `doctor` printed
-        no path at all, which is how `tools` came to be in neither -- a fourth
-        line nobody added, for a field that did not exist.
-
-        Eleven lines where the old header was four. That is the change rather
-        than a cost of it: seven of them were things no surface said.
-        """
+        """The same answer as a header, one place per line."""
         names = ("workspace", *(name for name, _ in self.entries()))
         width = max(len(name) for name in names)
         return (
@@ -202,12 +140,7 @@ class Origins:
         )
 
     def entries(self) -> tuple[tuple[str, Origin], ...]:
-        """Each name and its origin, in declaration order.
-
-        Derived from the dataclass rather than listed beside it, so a field
-        added here cannot be one a printer silently omits -- which is how
-        `tools` came to be the one catalogue `kingfisher list` never named.
-        """
+        """Each name and its origin, in declaration order."""
         return tuple(
             (f.name, value)
             for f in fields(self)
@@ -216,11 +149,7 @@ class Origins:
 
 
 def _under(path: Path, workspace: Path) -> str:
-    """A path inside the workspace as `./name`, anything else in full.
-
-    Not decoration, and not shortening for its own sake: what it buys is that
-    the absolute paths on the line are exactly the things that moved.
-    """
+    """A path inside the workspace as `./name`, anything else in full."""
     if path == workspace:
         return "."
     if path.is_relative_to(workspace):
@@ -229,14 +158,7 @@ def _under(path: Path, workspace: Path) -> str:
 
 
 def _derived(actual: Path, default: Path) -> Kind:
-    """`default` when this is where kingfisher would have put it anyway.
-
-    Compared against the derived location rather than asking whether an
-    override was set, and the difference shows on a deployment that names a
-    path equal to the default: this calls it `default`, which is what it is.
-    The alternative would fire `doctor`'s relocated-and-empty warning on every
-    fresh workspace whose operator was explicit.
-    """
+    """`default` when this is where kingfisher would have put it anyway."""
     return "default" if actual == default else "relocated"
 
 
@@ -250,27 +172,12 @@ def _file(actual: Path | None, default: Path) -> Origin:
 
 
 def _configured(actual: Path | None) -> Origin:
-    """A path with no derived fallback: seeding's source, and the session store.
-
-    Never `default`, because there is nowhere kingfisher would look on its own.
-    Absent is a legitimate state for both -- a workspace seeded months ago needs
-    no source, and a session directory is a perfectly good only copy.
-    """
+    """A path with no derived fallback: seeding's source, and the session store."""
     return Origin("relocated", actual) if actual is not None else Origin("unset")
 
 
 def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
-    """One definition catalogue, comparing what is read against what is configured.
-
-    The comparison *is* the report. Nobody needs to know how an override
-    happened, and threading a flag out of `resolve_definitions` to say so would
-    add a parameter that exists for printing. What a reader needs is that the
-    configuration is not what is being read, so they stop editing a variable
-    that does nothing.
-
-    A supplied mapping that matches the configuration reads as configured. The
-    two are indistinguishable and equivalent, so there is nothing to report.
-    """
+    """One definition catalogue, comparing what is read against what is configured."""
     configured = cfg.catalogue_roots[kind]
     if catalogue is None:
         return Origin(_derived(configured, cfg.workspace / kind), configured)
@@ -284,13 +191,7 @@ def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
 
 
 def _groups(cfg: Config) -> Origin:
-    """The policy file, whose absence is the case worth reporting.
-
-    Three states rather than two. A file that was read; no file, and here is
-    where it was looked for; and a `Groups` assembled in code, which has no file
-    behind it at all. The middle one is why `Config` carries the path rather
-    than `Groups` carrying its own -- with no policy there is no record to ask.
-    """
+    """The policy file, whose absence is the case worth reporting."""
     if cfg.access_source is None:
         return Origin("supplied") if cfg.access is not None else Origin("unset")
     if cfg.access is None:
@@ -299,12 +200,7 @@ def _groups(cfg: Config) -> Origin:
 
 
 def _sessions(cfg: Config, store: object | None) -> Origin:
-    """Where a session's files are kept when the machine may not keep them.
-
-    A store is asked for its root the way a repository is, rather than being
-    required to have one: `SessionStore` is a port, and a deployment keeping
-    sessions somewhere that is not a directory satisfies it without a path.
-    """
+    """Where a session's files are kept when the machine may not keep them."""
     if store is None:
         return _configured(cfg.session_store)
     root = getattr(store, "root", None)

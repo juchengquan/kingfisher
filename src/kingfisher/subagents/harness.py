@@ -57,20 +57,7 @@ if TYPE_CHECKING:
 def subagent_skills(
     spec: SubagentSpec, available: tuple[str, ...], activated: Selection
 ) -> Selection:
-    """Which skills a delegate is told about, or `None` for none.
-
-    Two different refusals, and the difference is the same one `build_agent`
-    already draws for a request. A name nothing defines is a mistake in the
-    definition and raises. A name that exists but this request did not activate
-    is not a mistake -- it is a caller narrower than the definition -- so it is
-    dropped, by the same `narrowed` that drops it for the parent. A delegate
-    cannot reach past the request that summoned it.
-
-    That last sentence used to describe a resemblance: the dropping was two
-    lines here, equal to `narrowed` across every input pair, which is a third
-    copy of one rule. Only the refusal is this function's own -- `narrowed` has
-    no opinion about what exists, and should not.
-    """
+    """Which skills a delegate is told about, or `None` for none."""
     if spec.skills is None or spec.skills == ALL:
         # `None` is none, `ALL` is whatever the request itself has -- neither
         # names anything, so neither can name something the workspace lacks.
@@ -84,23 +71,7 @@ def subagent_skills(
 def subagent_helpers(
     spec: SubagentSpec, defined: Mapping[str, Any], activated: Selection
 ) -> tuple[str, ...]:
-    """Which delegates this one may consult, of the ones it names.
-
-    The same two refusals as `subagent_skills`, for the same reasons. A name
-    nothing defines is a mistake in the definition and raises. A name that
-    exists but this request did not activate is a caller being narrower than
-    the definition -- so it is dropped, and reported as withheld rather than
-    refused.
-
-    That second half matters more here than anywhere else. A helper may run on
-    another company's servers, so a caller declining it is often declining
-    *that*, and refusing the whole request would mean they cannot use the
-    delegate that names it without also accepting the vendor. The delegate runs
-    alone and the report says so.
-
-    Which is why a definition naming a helper should say what to do without
-    one: the prompt has to work both ways, because the caller decides.
-    """
+    """Which delegates this one may consult, of the ones it names."""
     if spec.subagents is None:
         return ()
     named = tuple(defined) if spec.subagents == ALL else spec.subagents
@@ -111,23 +82,12 @@ def subagent_helpers(
 
 
 def _host(url: str) -> str:
-    """The host a base URL points at, which is what "somewhere else" means.
-
-    Compared rather than the style name, because the names are kingfisher's and
-    the destination is not: a deployment is free to fill `OPENAI_BASE_URL` with
-    a gateway that also serves the `anthropic` style, and then `provider:
-    openai` reads as "somewhere else" while being the same machine.
-    """
+    """The host a base URL points at, which is what "somewhere else" means."""
     return urlsplit(url).netloc
 
 
 def _subject(spec: SubagentSpec | AgentSpec) -> str:
-    """How a refusal names the file it is about.
-
-    Two folders hold definitions that look alike, so "which kind" is the first
-    thing somebody reading the error needs -- it decides which directory they
-    open.
-    """
+    """How a refusal names the file it is about."""
     kind = "subagent" if isinstance(spec, SubagentSpec) else "agent"
     return f"{kind} {spec.name!r}"
 
@@ -135,24 +95,7 @@ def _subject(spec: SubagentSpec | AgentSpec) -> str:
 def model_for(
     spec: SubagentSpec | AgentSpec, *, override: RunOn | None = None
 ) -> str | None:
-    """The model this delegate will actually run, or `None` for the deployment's.
-
-    One function because two callers must not disagree: `as_subagent` builds
-    from it and `indistinct_delegates` reports from it, and a report about where
-    a delegate ended up is worthless if it is computed by a second copy of the
-    rule.
-
-    Barely a function now, and that is the shape of what `alias` was. This held
-    a loop over candidates, trying each and passing over the ones this
-    deployment had not bound; a definition could name several and say which
-    deployments it was still useful in. With one kind of name there is nothing
-    to try in turn -- a model this deployment cannot run refuses, and always did
-    -- so what is left is the override rule and a lookup. Kept as a function
-    rather than inlined at the two call sites, because "the build and the report
-    resolve identically" is the property, not the number of lines. It takes no
-    `Config` any more either: binding an alias was the only thing here that
-    needed one.
-    """
+    """The model this delegate will actually run, or `None` for the deployment's."""
     return resolved_model(spec.wanted, override=override)
 
 
@@ -170,22 +113,7 @@ def model_object(  # five things decide which model a delegate
     run_on: RunOn | None = None,
     inherited: Any = None,
 ) -> Any | None:
-    """The model instance this delegate runs, or `None` to leave it inheriting.
-
-    `model_for` answers which model *id*; this answers with the thing that can
-    be called, which is a second step and a second set of refusals -- a model
-    outside the catalogue, an endpoint this request may not reach.
-
-    A function because two callers need the same answer and must not compute it
-    twice. `as_subagent` puts it on the spec it hands deepagents; `agent.py`
-    needs it *before* that, because a delegate's helpers inherit it and the
-    helpers are built first.
-
-    `inherited` is what summoned this one runs, and it is what a definition
-    naming no model gets. `None` for both means the spec carries no model at
-    all, which is how a top-level delegate keeps deepagents' own inheritance
-    from the agent that holds it.
-    """
+    """The model instance this delegate runs, or `None` to leave it inheriting."""
     model_id = model_for(spec, override=run_on)
     if model_id is None:
         return inherited
@@ -213,24 +141,7 @@ def indistinct(
     *,
     model: str | None,
 ) -> str | None:
-    """Why this delegate is not running anywhere different, or `None`.
-
-    Reported, never refused. Kingfisher cannot know that a delegate *needs* to
-    differ -- `reviewer` deliberately runs on the deployment's own model, and
-    that is the right choice for it. Only a definition that asked to be
-    elsewhere can be disappointed, so only those are checked.
-
-    Which is also why silence is the failure worth catching here. A delegate
-    that ends up beside the agent it was meant to check still builds, still
-    answers, and the answer is worth nothing -- there is no error to notice and
-    nothing in the output that looks wrong.
-
-    Two ways to arrive there. Naming the model the deployment already runs is
-    the plain one. The other survives the catalogue: two endpoints may point at
-    one host, so a different model id is not proof of a different machine, and a
-    "second opinion" served by the same gateway is the disappointment this
-    exists to name.
-    """
+    """Why this delegate is not running anywhere different, or `None`."""
     if not spec.wanted:
         return None  # it never asked to be anywhere in particular
 
@@ -272,25 +183,7 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     run_on: RunOn | None = None,
     default_model: Any = None,
 ) -> dict[str, Any]:
-    """A delegate the workspace built itself, wrapped the way deepagents takes one.
-
-    `CompiledSubAgent` is three keys -- name, description, runnable -- and
-    deepagents uses the runnable as given: no state schema, no tools, no model,
-    no middleware of ours reaches it. Which is why almost none of `as_subagent`
-    applies here, and why this returns early rather than sharing that body.
-
-    What kingfisher still decides is the two things a file cannot know: which
-    model this deployment binds the delegate's name to, and which of the
-    workspace's tools this request granted it. Both are resolved here and handed
-    in. The graph is free to ignore them -- nothing can stop it, since deepagents
-    never applies an allowlist to a graph it did not build -- but the honest
-    thing is the easy thing, and `--list` says which delegates are compiled so
-    nobody reads a tool grant as a guarantee.
-
-    The required keys come from deepagents' own declaration rather than a copy
-    of it, so a rename upstream fails `test_the_compiled_shape_is_deepagents_own`
-    instead of arriving as something confusing much later.
-    """
+    """A delegate the workspace built itself, wrapped the way deepagents takes one."""
     model = model_object(
         spec, cfg, endpoints=endpoints, run_on=run_on, inherited=default_model
     )
@@ -387,17 +280,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     run_on: RunOn | None = None,
     extra_middleware: list[Any] | None = None,
 ) -> dict[str, Any]:
-    """Translate kingfisher's definition into deepagents' `SubAgent`.
-
-    Every field maps directly except `tools`, `skills` and `middleware`.
-    deepagents' `SubAgent.tools` is a sequence of tool *objects* it will
-    register, not a selection from the ones the parent already has — handing it
-    names raises inside `ToolNode`. The
-    objects are built from the backend deep inside `create_deep_agent` and are
-    not reachable here, so the restriction is applied the same way a request's
-    own tool restriction is: a `ToolAllowlist` on the subagent's middleware,
-    which selects by name and refuses anything else.
-    """
+    """Translate kingfisher's definition into deepagents' `SubAgent`."""
     if spec.build is not None:
         # A graph the workspace assembled. Nothing below applies to it --
         # deepagents runs it as given -- so this leaves before building a

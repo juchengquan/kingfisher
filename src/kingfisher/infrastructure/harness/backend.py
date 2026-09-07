@@ -1,15 +1,11 @@
 """Filesystem + shell backend.
 
 `LocalShellBackend` defaults to `inherit_env=False` with `env=None`, which means
-`subprocess.run(..., env={})` — no variables at all, not even `PATH`. That is a
-good security default and a fatal usability one: nothing resolves. We keep the
-default and supply an explicit allowlist instead of inheriting the parent
-environment, so the agent's shell can run the toolchain but cannot read
-credentials out of the environment.
-
-The environment allowlist is not by itself a boundary, which is what
-`confinement` adds: `execute` otherwise reaches the whole host filesystem
-regardless of `virtual_mode`, and the network is still open either way.
+`subprocess.run(..., env={})` — no variables at all, not even `PATH`. That is a good
+security default and a fatal usability one: nothing resolves. We keep the default and
+supply an explicit allowlist instead of inheriting the parent environment, so the
+agent's shell can run the toolchain but cannot read credentials out of the
+environment.
 """
 
 from __future__ import annotations
@@ -60,18 +56,11 @@ _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 def agent_home(session_dir: Path) -> Path:
     """`HOME` for the agent's shell: per session, and disposable.
 
-    Not a real home directory but the place tools *believe* is one, so it fills up
-    with whatever they cache -- `~/.cache/uv`, `~/Library/Caches/pip`.
-
     Inside the session so that no new janitor is needed: `reap` already removes
     session directories, and `session_bytes` already counts everything in one, so a
     session that caches a gigabyte says so. Above the session, caches accumulated
-    beside `skills/` with nothing sweeping them -- 59MB in one real workspace --
-    and counted toward no quota.
-
-    Dotted, and not in `SESSION_DIRS`, because those are "the names the agent
-    addresses" and this is plumbing. It is reachable at `/.home`, which is harmless
-    and not worth a route.
+    beside `skills/` with nothing sweeping them -- 59MB in one real workspace -- and
+    counted toward no quota.
     """
     return Path(session_dir) / AGENT_HOME
 
@@ -81,22 +70,10 @@ def shell_env(
 ) -> dict[str, str]:
     """The explicit allowlist handed to the shell — no credentials.
 
-    `HOME` is this session's `.home`, so tools that resolve `~` look there
-    instead of at `~/.aws`, `~/.ssh` or `~/.config`.
-
     That is all it does. Redirecting `HOME` moves where a path is *resolved*; the
     files stay where they are, and an absolute path still reaches them. Measured on
-    this machine, the shell could read `~/.aws` and `~/.config/gh` right through
-    it. Keeping those closed is `confinement`'s job, not this function's.
-
-    `KINGFISHER_SKILLS` is here because the catalogue is the one virtual path the
-    shell cannot reach by dropping its leading slash: it is shared between
-    sessions, so it lives above them.
-
-    It follows `catalogue` for the same reason the sandbox profile does. Left on
-    `cfg` while the route and the profile pointed elsewhere, a skill's own
-    scripts would be told to look in a directory the deployment had moved away
-    from -- and `$KINGFISHER_SKILLS` is exactly how a skill addresses them.
+    this machine, the shell could read `~/.aws` and `~/.config/gh` right through it.
+    Keeping those closed is `confinement`'s job, not this function's.
     """
     path_parts = [str(Path(sys.executable).parent), *cfg.shell_path_extra, *_BASE_PATH]
     env = {
@@ -140,35 +117,11 @@ _HOST_ROOTS: tuple[str, ...] = (
 
 
 class HostPathError(ValueError):
-    """A host path reached a file tool.
-
-    A named type rather than a bare `ValueError` so the recovery middleware can
-    catch exactly this and nothing else. Raised from inside the backend, which
-    is past the point where deepagents converts errors into tool results: its
-    file tools catch `ValueError` around *path validation*, then call
-    `backend.write()` outside that guard. So this escapes on its own, and
-    `HostPathGuard` is what turns it back into a tool error.
-    """
+    """A host path reached a file tool."""
 
 
 def reject_host_path(key: str, workspace: Path) -> None:
-    """Refuse a host path handed to a file tool.
-
-    `virtual_mode` reads a leading `/` as the workspace root, so a host path
-    does not fail — it is recreated *inside* the workspace. Writing
-    `/<workspace>/runs/s/t/report.md` produces
-    `<workspace>/Users/.../runs/s/t/report.md`: the call reports success, the
-    file is not where the caller believes, and nothing downstream that looks
-    for `report.md` will find it.
-
-    `system.md` already warns against this and it happened anyway, which is the
-    argument for a guard rather than another paragraph. Rejecting rather than
-    silently rewriting: the error is what corrects the model mid-turn, and a
-    rewrite would let a wrong mental model keep working.
-
-    This is not a sandbox — the shell is unaffected and *should* be, since host
-    paths are how the shell is meant to address the workspace.
-    """
+    """Refuse a host path handed to a file tool."""
     if not key.startswith("/"):
         return
 
@@ -195,49 +148,10 @@ def reject_host_path(key: str, workspace: Path) -> None:
 class ConfinedLocalShellBackend(LocalShellBackend):
     """`LocalShellBackend` with every command run through a confinement.
 
-    Named for what it is rather than for what it does, because what it *is* is
-    the part that constrains callers: a `LocalShellBackend`, which is also a
-    `FilesystemBackend`, sitting in the composite's default slot where its ten
-    inherited file operations serve every path no route matches. "Shell" alone
-    hid all of that behind a word that sounds like one method.
-
-    "Local" describes this object, not necessarily where the command ends up. A
-    `runner` with `local = False` runs it somewhere else entirely -- and that is
-    the point of the seam rather than a contradiction: the *backend* is local,
-    serving this host's files, while only the last step of running a command may
-    not be.
-
-    Wrapping the command is the whole mechanism, which is why it subclasses
-    rather than composes: `CompositeBackend` delegates execution to its default
-    backend by calling these two methods, so anything that is not a
-    `LocalShellBackend` stops being usable as one.
-
-    Only `execute` is overridden, and that is a decision about upstream rather
-    than an oversight. `LocalShellBackend.aexecute` is `asyncio.to_thread(self.
-    execute, ...)`, so the async path -- which is what the interpreter's
-    code-side dispatch runs on -- arrives here anyway. Overriding it as well
-    wrapped every async command *twice*, nesting one `sandbox-exec` inside
-    another; it still confined, so every test passed, and the only sign was the
-    command string.
-
-    Leaning on that delegation is a coupling, so
-    `test_the_async_path_still_routes_through_execute` pins it. If a deepagents
-    release gives `aexecute` its own implementation, that test fails rather than
-    the boundary quietly going missing on one path.
-
-    A `runner` moves the last step -- actually running the command -- out of
-    this process, without moving file access with it. The two are one object
-    upstream: `LocalShellBackend` *is* a `FilesystemBackend`, adding only
-    `execute`, its async twin and `id` to the file operations it inherits, and
-    this object sits in the composite's default slot where those operations
-    serve every path no route matches. So a deployment that supplied "the shell" would be supplying
-    `/derived` as well, and a session's files belong to whoever supplies the
-    directory.
-
-    `None` means run it here, which is what upstream already does -- a default
-    runner would be 110 lines of upstream's truncation, timeout and exit-code
-    shaping, copied to be kept in step. The confinement is applied either way,
-    before the runner sees the command, so a runner cannot forget to.
+    `None` means run it here, which is what upstream already does -- a default runner
+    would be 110 lines of upstream's truncation, timeout and exit-code shaping,
+    copied to be kept in step. The confinement is applied either way, before the
+    runner sees the command, so a runner cannot forget to.
     """
 
     def __init__(
@@ -272,15 +186,7 @@ class ConfinedLocalShellBackend(LocalShellBackend):
 
 
 def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
-    """A result with its repeated matches dropped, first occurrence kept.
-
-    `replace` rather than assigning `result.matches`: the dataclass is
-    deepagents', and rebuilding it keeps `error` and `truncated` exactly as they
-    came back rather than reasoning about what they should be.
-
-    `None` matches mean a hard failure and are passed through untouched -- there
-    is nothing to deduplicate and an empty list would say something different.
-    """
+    """A result with its repeated matches dropped, first occurrence kept."""
     if result.matches is None:
         return result
     seen: set[Any] = set()
@@ -297,33 +203,15 @@ def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
 class WorkspaceScopedBackend(CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
-    `_get_backend_and_key` is the one place every path-addressed file operation
-    resolves through — read, write, edit, delete, upload, download — so the
-    check sits there rather than being repeated across a dozen overrides.
-    `ls` resolves separately and is left alone: it creates nothing, and a
-    listing that comes back empty is self-correcting.
-
-    `glob` and `grep` are deduplicated. They merge every backend's answer, and
-    three of the routes here point *inside* the default backend's own root --
-    `/data`, `/memory`, `/skills/uploaded` are all real directories under the
-    session -- so each saw the same file twice: measured, one file supplied with
-    `--data` came back as two matches with one path between them, on every pattern.
-
-    A listing that comes back doubled is not self-correcting. It reads as two
-    files, and the reader is a model that was about to count them.
-
-    It is a private method of a third-party class, which is a real coupling.
-    `test_backend.py` pins it, so a deepagents upgrade that renames it fails the
-    build rather than quietly removing the guard.
+    `glob` and `grep` are deduplicated. They merge every backend's answer, and three
+    of the routes here point *inside* the default backend's own root -- `/data`,
+    `/memory`, `/skills/uploaded` are all real directories under the session -- so
+    each saw the same file twice: measured, one file supplied with `--data` came back
+    as two matches with one path between them, on every pattern.
     """
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
-        """Every match, minus the ones a second backend already gave.
-
-        By path, because a file is a file: two backends reaching one produce
-        entries that agree about everything, and any that did not agree would
-        still be the same file.
-        """
+        """Every match, minus the ones a second backend already gave."""
         return _once(super().glob(pattern, path), key=lambda one: one.get("path"))
 
     def grep(
@@ -334,11 +222,7 @@ class WorkspaceScopedBackend(CompositeBackend):
         *,
         max_count: int | None = None,
     ) -> Any:
-        """The same, keyed by the line rather than the file.
-
-        A file may match on twenty lines and each is its own result; what
-        repeats is the whole match, so that is what identifies one.
-        """
+        """The same, keyed by the line rather than the file."""
         return _once(
             super().grep(pattern, path, glob, max_count=max_count),
             key=lambda one: (one.get("path"), one.get("line"), one.get("text")),
@@ -364,24 +248,8 @@ def prepare_scratch(cfg: Config) -> Path:
 
     Scratch defaults inside the workspace, where ownership is not in question.
     Pointing it at `/tmp` — one fixed location per machine — puts it in a
-    world-writable directory (`/tmp` is mode 1777), which introduces two
-    problems that do not exist inside the workspace:
-
-    * anything the agent derives from `/data` becomes readable by every local
-      user unless the directory itself is private, and
-    * another user can pre-create the name, so finding the directory already
-      there is not proof that we own it.
-
-    So it is created `0o700` and then checked. `mkdir(mode=…)` alone is not
-    enough: the mode is subject to umask, and is ignored entirely when the
-    directory already exists — which it does for every workspace created before
-    this check, all of them `0o755`.
-
-    Loose permissions on a directory we own are tightened rather than rejected.
-    Refusing would break those existing workspaces to no purpose, and the same
-    argument for privacy applies inside the workspace as in `/tmp`. What cannot
-    be repaired is a directory that is not ours, or not a directory at all —
-    that is someone else's, and this raises instead of touching it.
+    world-writable directory (`/tmp` is mode 1777), which introduces two problems
+    that do not exist inside the workspace:
     """
     scratch = cfg.scratch_dir
     scratch.mkdir(mode=0o700, parents=True, exist_ok=True)
@@ -399,12 +267,7 @@ def prepare_scratch(cfg: Config) -> Path:
 
 
 def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
-    """Every bundle that has skills to mount, or none.
-
-    Asked of the repository rather than required of the port, the way
-    `catalogue_root` asks for a root: a catalogue served over the wire has no
-    folders and therefore no bundles, correctly rather than as a gap.
-    """
+    """Every bundle that has skills to mount, or none."""
     try:
         bundles = getattr(catalogue.subagents, "bundles", None) or {}
     except SubagentError:
@@ -420,35 +283,12 @@ def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
 
 
 def bundled_skills_route(where: str) -> str:
-    """The route one bundle's skills are mounted at.
-
-    Keyed on the bundle's path under the subagent catalogue rather than on the
-    delegate's name, because two folders may each define a `surveyor` and a
-    route has to tell them apart. `analysis/surveyor` and `surveyor` are
-    different paths and stay different routes.
-    """
+    """The route one bundle's skills are mounted at."""
     return f"{BUNDLED_SKILLS_ROUTE}{where}/"
 
 
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
-    """Every place the agent should look for skills, labelled.
-
-    The catalogue root, then each folder under it that holds skills, then the
-    session's own. A folder has to be its own source or its skills are
-    invisible: deepagents lists a source exactly one level deep, so a skill in
-    `skills/research/` is found by a source at `/skills/research/` and by
-    nothing else.
-
-    The labels are not decoration. They are the first half of a skill's
-    `source::name`, which is what a request grants when two parties both ship a
-    `lookup` -- so what is written here is what a caller types, and it has to
-    match what `skills.registry` computed from the same folders.
-
-    `uploaded` is last, and that is the one place deepagents' own precedence
-    still shows: it merges later sources over earlier ones. Nothing relies on
-    it, because `uploads` refuses a name a catalogue already offers -- a request
-    may not stand its own text in for a reviewed skill.
-    """
+    """Every place the agent should look for skills, labelled."""
     if RESERVED_SKILL_FOLDER in folders:
         # Refused rather than skipped, which is the other half of the `uploaded`
         # decision below and deliberately not the same answer. `uploaded` is
@@ -488,20 +328,7 @@ def _fence_for(
     skills_dir: Path | None,
     env: Mapping[str, str],
 ) -> CommandRunner | None:
-    """The Linux fence, when the confinement says there is one.
-
-    Derived from the `Confinement` rather than deciding again. Whether to fence
-    depends on the mode, the platform, the kernel's Landlock ABI and whether
-    `sandlock` is installed, and two places answering that would eventually
-    answer it differently -- with the failure being a shell that runs unfenced
-    while `doctor` reports it confined.
-
-    The policy is generated here from what this session already has: writable is
-    the session and the scratch directory `TMPDIR` points at, readable is the
-    shared catalogue and the toolchain. A deployment never writes one -- see
-    `fence.py` for the hand-written policy that failed open and why that is the
-    rule.
-    """
+    """The Linux fence, when the confinement says there is one."""
     if confined.mechanism not in ("bubblewrap", "Landlock"):
         return None
 
@@ -557,16 +384,7 @@ def _fence_for(
 
 
 def _require_layout(session_dir: Path) -> None:
-    """Refuse a session directory that has not been made yet.
-
-    `ensure_session_layout` is the only thing that makes a session, and the point
-    of that is a directory this builder does not have to have come from a local
-    disk -- so creating one here would put the assumption straight back.
-
-    Loudly, because the quiet version is worse than it looks: a missing
-    `/memory` is a backend whose route resolves to nothing, and the first sign
-    is a tool error the model tries to work around mid-turn.
-    """
+    """Refuse a session directory that has not been made yet."""
     missing = [
         name
         for name in (*SESSION_DIRS, *SESSION_PLUMBING)
@@ -587,35 +405,7 @@ def build_backend(
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
 ) -> BackendProtocol:
-    """Build the backend rooted at one session.
-
-    `virtual_mode` is left at its default (`True`), so file tools address
-    virtual paths anchored to this session and `..` / `~` are blocked. The
-    session being the root is what lets `/data` mean the same thing in every
-    session while pointing somewhere different in each — one prompt, many
-    tenants — and it makes cross-session access impossible rather than denied:
-    there is no path from one root to another to check for.
-
-    `/skills/` is the exception, routed to the catalogue because definitions are
-    shared by every session rather than owned by one. It therefore sits outside
-    the shell's root, which is a gain rather than a compromise: `_skill_denials`
-    can only bind file tools, so a skill the shell could still `cat` was never
-    really denied.
-
-    `catalogue` is where that route points, and where the shell is granted read
-    access. Omitted, it comes from `cfg` — the same fallback `model=` takes in
-    `build_agent`: derive from `cfg`, never invent. A deployment that stages its
-    definitions elsewhere passes them, and both the route and the sandbox
-    profile follow, because a catalogue the file tools could read and the shell
-    could not would be two different answers to one question.
-
-    A `CompositeBackend` is required rather than merely convenient.
-    `FilesystemMiddleware` refuses `permissions=` outright when the backend
-    supports execution — unless every rule path is scoped to a route. Routing
-    `/data/` to its own backend is what makes the write-deny rule legal while
-    `execute` still works, because CompositeBackend delegates execution to its
-    default backend.
-    """
+    """Build the backend rooted at one session."""
     skills = (catalogue or Definitions.from_config(cfg)).skills
     # A directory on this host stays a directory: cheaper than copying every
     # skill into a store, and the only shape whose skills can also be *run*,
@@ -708,33 +498,17 @@ PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
 class WorkspaceToolPaths(AgentMiddleware):
     """Translate the agent's own paths into real ones, per session.
 
-    A workspace tool is an ordinary Python function. It runs inside this
-    process, receives whatever the model produced, and opens files with the
-    operating system -- so `/data/config.ini` means `/data/config.ini` on this
-    machine, which is not there. The built-in file tools do not have that problem
-    because they are defined *inside* deepagents' filesystem middleware, closing
-    over the backend that roots them at a session; nothing hands that backend to
-    a tool the caller supplied, and `ToolRuntime` does not carry one.
-
-    So there were two routes to the filesystem and the session was only on one
-    of them. This is the bridge.
-
-    **It closes a leak and a usability bug with one change, and the second is how
-    the first was found.** `system.md` teaches virtual paths and says the two
-    views do not mix; the tools wanted host paths and the agent is never told
-    one. Measured in a real run: the model passed `/data/config.ini` and the tool
-    raised `FileNotFoundError`. The only way it could succeed was to go looking
-    -- `pwd` in the shell, learn the layout -- and from there it can name *any*
-    session: `line_count('/workspace/sessions/<other>/secret.txt')` returned an
-    answer.
-
-    After this, that argument resolves under *this* session and finds nothing,
-    for the same reason `/etc/passwd` does. Not by refusing it -- by there being
-    no way to say it.
+    **It closes a leak and a usability bug with one change, and the second is how the
+    first was found.** `system.md` teaches virtual paths and says the two views do
+    not mix; the tools wanted host paths and the agent is never told one. Measured in
+    a real run: the model passed `/data/config.ini` and the tool raised
+    `FileNotFoundError`. The only way it could succeed was to go looking -- `pwd` in
+    the shell, learn the layout -- and from there it can name *any* session:
+    `line_count('/workspace/sessions/<other>/secret.txt')` returned an answer.
 
     Rewriting the call rather than wrapping each tool, because the tools are not
-    alike: some are `BaseTool`s from `@tool` and some are plain functions. The
-    call is the one shape they share, and langgraph documents the rewrite --
+    alike: some are `BaseTool`s from `@tool` and some are plain functions. The call
+    is the one shape they share, and langgraph documents the rewrite --
     `{**request.tool_call, "args": {...}}`.
     """
 
@@ -762,13 +536,7 @@ class WorkspaceToolPaths(AgentMiddleware):
         )
 
     def _real(self, value: Any) -> Any:
-        """One argument, resolved against the session the way a file tool would.
-
-        A leading slash means the session root, exactly as it does for
-        `read_file`, so the agent has one vocabulary rather than two. Anything
-        that is not a string is handed back untouched: a tool may take a number
-        called `path` and this is not the place to have an opinion about that.
-        """
+        """One argument, resolved against the session the way a file tool would."""
         if not isinstance(value, str) or not value.strip():
             return value
         landed = within(self.session_dir, value.lstrip("/"))
@@ -810,12 +578,7 @@ class WorkspaceToolPaths(AgentMiddleware):
             return self._refused(request, escaped)
 
     def _refused(self, request: Any, escaped: UnsafeReferenceError) -> ToolMessage:
-        """A path that climbs out, reported the way `reject_host_path` reports one.
-
-        Raising would end the turn on a mistake the model can correct; a tool
-        error names the rule and lets it try again with a path inside the
-        session.
-        """
+        """A path that climbs out, reported the way `reject_host_path` reports one."""
         call = request.tool_call
         return ToolMessage(
             content=(
@@ -832,28 +595,13 @@ class WorkspaceToolPaths(AgentMiddleware):
 class WorkspaceToolErrors(AgentMiddleware):
     """Turn a workspace tool's exception into a failed tool result.
 
-    A built-in reports its failures through `_tool_error` and the model carries
-    on; `HostPathGuard` below gives a rejected host path the same treatment. A
-    workspace tool had neither, so upstream's default applied -- bad *arguments*
-    are converted, everything else is re-raised -- and one wrong path killed a
-    sixteen-call run. Measured, on one deployment: the same mistake through
-    `read_file` cost nothing, and through `csv_profile` cost the run. Which of
-    the two happened depended on the tool the model reached for, which the
-    deployment cannot predict.
-
-    Not swallowing. `status="error"` and the text carried whole, so the model
-    sees a failure rather than a value and the transcript records it. The
-    objection this answers -- that catching everything would "hide real faults
-    behind a retry" -- is about hiding, and a failed tool result is the opposite:
-    a tool that always raises now fails `recursion_limit` times in a log
-    somebody can read, rather than once with a traceback.
-
-    Only tools the workspace defined. Built-ins already report properly and
-    `HostPathGuard` covers the one thing they do not; widening this to them
-    would put a second opinion between deepagents and its own error handling.
-
-    `BaseException` is deliberately not caught -- an interrupt or a memory error
-    is not a tool telling the model something.
+    A built-in reports its failures through `_tool_error` and the model carries on;
+    `HostPathGuard` below gives a rejected host path the same treatment. A workspace
+    tool had neither, so upstream's default applied -- bad *arguments* are converted,
+    everything else is re-raised -- and one wrong path killed a sixteen-call run.
+    Measured, on one deployment: the same mistake through `read_file` cost nothing,
+    and through `csv_profile` cost the run. Which of the two happened depended on the
+    tool the model reached for, which the deployment cannot predict.
     """
 
     def __init__(self, names: frozenset[str]) -> None:
@@ -897,20 +645,7 @@ class WorkspaceToolErrors(AgentMiddleware):
 
 
 class HostPathGuard(AgentMiddleware):
-    """Turn a rejected host path back into something the agent can act on.
-
-    `reject_host_path` exists to correct the model mid-turn -- its message
-    names the virtual path to use instead. But it raises from inside the
-    backend, and deepagents' file tools only convert `ValueError` raised during
-    *path validation*; `backend.write()` is called outside that guard. So the
-    exception escaped the tool, escaped the graph, and killed the run. The
-    message meant to teach the model never reached it.
-
-    Returning it as a failed `ToolMessage` is what makes the correction work,
-    exactly as `ToolAllowlist` does for a tool the request did not activate.
-    Only `HostPathError` is caught: a middleware that swallowed every
-    `ValueError` would hide real faults behind a retry.
-    """
+    """Turn a rejected host path back into something the agent can act on."""
 
     def _as_tool_error(self, request: Any, exc: HostPathError) -> ToolMessage:
         call = request.tool_call

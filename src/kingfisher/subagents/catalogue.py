@@ -1,13 +1,8 @@
 """Subagent definitions held in a directory on this host.
 
 `subagents.reading` owns the format -- what a definition means and what makes one
-malformed -- and `documents` turns a document into one. Finding the files is a
-third job, and it is this one: nothing in either of those globs a directory.
-
-A class rather than two functions taking the same `Path`. Beyond holding the
-directory, it fixes something the pair could not: `load_all` and `sources` each
-walked the tree and parsed every file, so a caller wanting both -- which is what
-`--list` is -- parsed the whole catalogue twice. One read now answers both.
+malformed -- and `documents` turns a document into one. Finding the files is a third
+job, and it is this one: nothing in either of those globs a directory.
 """
 
 from __future__ import annotations
@@ -48,24 +43,7 @@ ASSET_DIRECTORIES: frozenset[str] = frozenset({"tools", "skills"})
 
 
 def _definitions_in(directory: Path) -> list[Path]:
-    """Every definition document below `directory`, at any depth, in a stable order.
-
-    Folders are organisation, and that stays true now that one may also be a
-    Python package: a package's documents are still read. A folder is a package
-    for the *module* walk, which stops at it, and a folder for this one, which
-    does not -- the two searches never look at each other's files, so one tree
-    carries both without either needing to know.
-
-    Hidden directories and `__pycache__` are skipped for the same reason the
-    module loader skips them: a one-level scan could never reach whatever a
-    person left lying under the catalogue, and a recursive one can.
-    `ASSET_DIRECTORIES` is skipped for a sharper version of that reason: what is
-    under there belongs to a *skill* or a tool, and a skill may keep a
-    `config.yaml` that this would otherwise read as a subagent and refuse.
-
-    A function and not a method: it recurses into subdirectories, so most of its
-    calls are about somewhere that is not the repository's root.
-    """
+    """Every definition document below `directory`, at any depth, in a stable order."""
     found: list[Path] = []
     for entry in sorted(directory.iterdir()):
         if skipped(entry.name):
@@ -86,22 +64,7 @@ def _definitions_in(directory: Path) -> list[Path]:
 
 
 def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
-    """Every subagent a module under `directory` declares, with where it came from.
-
-    The Python half. `modules_in` is the same collection the tool catalogue
-    walks, with the same two shapes -- a loose file is a module, a folder
-    holding `__init__.py` is one unit and is not descended into -- so a compiled
-    subagent that grew helpers writes a folder exactly as a tool does.
-
-    A module without `SUBAGENTS` is an error rather than a skipped file, for the
-    reason the tool loader gives: quietly offering fewer than the workspace
-    defines is the failure `CapabilityError` exists to prevent, one layer down.
-
-    Which is exactly why a bundle's own `tools/` must be kept out of this walk:
-    every module in it declares `TOOLS` and none declares `SUBAGENTS`, so a
-    subagent that grew one private tool would fail the whole catalogue with a
-    message about the wrong export.
-    """
+    """Every subagent a module under `directory` declares, with where it came from."""
     found: list[tuple[SubagentSpec, str]] = []
     for path in modules_in(directory):
         relative = path.relative_to(directory)
@@ -136,26 +99,7 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
 
 @dataclass(frozen=True)
 class Bundle:
-    """The tools and skills that belong to one subagent and to nothing else.
-
-    A folder under `subagents/` is a bundle when it holds a definition whose
-    `name` is the folder's own. That rule is the whole of it, and it is stated
-    rather than inferred for a reason the skill registry already ran into:
-    `misfiled` exists because a directory name and a declared name can disagree,
-    and there the disagreement can only be *reported*, since deepagents owns the
-    skill format and refusing would fail a working catalogue over a spelling.
-    Kingfisher owns this format, so here the same relationship can decide
-    something.
-
-    What the folder buys is the one thing the shared catalogue cannot offer. An
-    agent omitting `tools:` gets every tool there is -- `absent=ALL` -- so a tool
-    in `tools/` is a tool the top-level agent holds. A tool in a bundle is not:
-    it reaches the delegate that owns it and no one else, which is how a
-    delegate comes to be trusted with something its caller is not.
-
-    `where` rather than a second path: every message about a bundle names the
-    place a person opens, and `root` is absolute.
-    """
+    """The tools and skills that belong to one subagent and to nothing else."""
 
     name: str
     root: Path
@@ -177,17 +121,7 @@ class Bundle:
 
 
 def _bundle_of(spec: SubagentSpec, where: str, root: Path) -> Bundle | None:
-    """The bundle a definition owns, if its folder is named after it.
-
-    Takes the relative `where` the repository already computed rather than
-    walking again -- a bundle is a fact about where a definition was found, and
-    that is known the moment it is read.
-
-    A definition declared by a Python module has no bundle and cannot: `where`
-    is then a module path, and the folder it names is a package whose
-    `__init__.py` decides what it exports. A package that also held a `tools/`
-    would be saying two different things with one directory.
-    """
+    """The bundle a definition owns, if its folder is named after it."""
     parent = Path(where).parent
     # A loose definition directly under the catalogue has no folder to be named
     # after, which `parent.name` reports as the empty string.
@@ -198,27 +132,13 @@ def _bundle_of(spec: SubagentSpec, where: str, root: Path) -> Bundle | None:
 
 @dataclass(frozen=True)
 class LocalSubagentRepository:
-    """The subagents defined in one directory.
-
-    Given the directory itself rather than a workspace to derive one from: the
-    catalogue can be deployed outside any workspace and shared by all of them,
-    so there is no longer a single parent to infer it from. A session's uploaded
-    subagents are this same class pointed at the session.
-    """
+    """The subagents defined in one directory."""
 
     root: Path
 
     @cached_property
     def _defined(self) -> dict[str, tuple[SubagentSpec, str]]:
-        """Every definition below `root`, parsed once, with where it came from.
-
-        Both answers from one walk. The filename is not authoritative -- the
-        `name` field is, since that is what a request names and what the `task`
-        tool will use. Which is also why folders are free: a path cannot reach a
-        name, so nesting a definition changes where it is kept and nothing else.
-        The duplicate check is what stays load-bearing, and it spans folders
-        rather than one listing.
-        """
+        """Every definition below `root`, parsed once, with where it came from."""
         directory = Path(self.root)
         if not directory.is_dir():
             return {}
@@ -255,12 +175,7 @@ class LocalSubagentRepository:
 
     @cached_property
     def specs(self) -> dict[str, SubagentSpec]:
-        """Every subagent defined here, keyed as a grant would name it.
-
-        Flat where the name is its own, and `analysis/profiler.yaml::profiler`
-        where two files claim it -- the same spelling a tool reference uses, and
-        for the same reason: a bare name that means two things cannot pick one.
-        """
+        """Every subagent defined here, keyed as a grant would name it."""
         return {name: spec for name, (spec, _) in self._defined.items()}
 
     @property
@@ -269,25 +184,7 @@ class LocalSubagentRepository:
 
     @cached_property
     def bundles(self) -> dict[str, Bundle]:
-        """Each subagent's own tools and skills, by the name a grant would use.
-
-        Keyed exactly as `specs` is, qualified reference and all, so a caller
-        holding a name from one has a name for the other. Two catalogues may
-        each ship a `surveyor` bundle for the same reason two may each ship a
-        `surveyor`.
-
-        Derived from the walk `_defined` already did rather than a second one.
-        The class exists because `load_all` and `sources` each walked the tree
-        and parsed every file; a bundle is a fact about *where* a definition was
-        found, so it is already in hand by the time this is asked.
-
-        A folder holding a definition named after it and *also* holding another
-        definition is refused rather than resolved. `surveyor/surveyor.yaml`
-        beside `surveyor/helper.yaml` gives no honest answer to "is `helper`
-        inside the bundle or next to it", and the two answers differ in what
-        `helper` may call -- so this is a question about capability, not tidiness,
-        and guessing at it would decide something nobody wrote down.
-        """
+        """Each subagent's own tools and skills, by the name a grant would use."""
         found: dict[str, Bundle] = {}
         holders: dict[str, list[str]] = {}
         for key, (spec, where) in self._defined.items():
@@ -319,19 +216,7 @@ class LocalSubagentRepository:
 
     @cached_property
     def orphaned_assets(self) -> tuple[str, ...]:
-        """Folders holding `tools/` or `skills/` that no definition is named for.
-
-        Reported, never refused, which is the split `skills.registry.misfiled`
-        already draws: a grouping folder is allowed to have directories in it,
-        so this is legal and the catalogue loads. It is also, nine times in ten,
-        a bundle whose definition was renamed -- and the symptom otherwise is a
-        delegate quietly holding nothing, which is the silent emptiness this
-        package keeps refusing everywhere else.
-
-        Its own walk, and a cheap one: directories only, nothing parsed. The
-        single-read rule this class is built on is about not parsing every file
-        twice, and this reads no files at all.
-        """
+        """Folders holding `tools/` or `skills/` that no definition is named for."""
         directory = Path(self.root)
         if not directory.is_dir():
             return ()
@@ -350,12 +235,5 @@ class LocalSubagentRepository:
 
     @cached_property
     def sources(self) -> dict[str, str]:
-        """Where each subagent is defined, by name, relative to the catalogue.
-
-        For `--list`, and for the same reason the tool loader has one: a folder
-        exists so a person can find a file, and a bare name does not help them.
-
-        Not on `SubagentRepository`: a store that is not a directory has no
-        relative path to report, and the one caller is an inventory listing.
-        """
+        """Where each subagent is defined, by name, relative to the catalogue."""
         return {name: where for name, (_, where) in self._defined.items()}

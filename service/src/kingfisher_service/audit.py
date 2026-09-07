@@ -1,27 +1,10 @@
 """What happened, for whoever has to answer that later.
 
-A log, not a store, and the distinction is the whole design. A keyed store of
-results would be a fourth kind of residue -- after sessions, threads and claims,
-two of which leaked until they were fixed -- and nothing in the server sweeps
-anything. A log stream has no such problem: rotation, retention and destination
-are the operator's, configured on a handler like every other log they run.
-
 It records what `JsonlRunLogger` cannot. That logger is built inside a turn, so
-everything refused *before* a turn exists -- an unknown session, a busy one, a
-quota, a reference that does not resolve -- leaves no trace anywhere. Measured:
-a refused request writes nothing at all, in a surface where a caller probing
-session ids is exactly the thing an operator would want to see afterwards.
-
-Session ids are here on purpose, and that is the difference from `access`. The
-access log goes to stdout and omits them because a session id is a bearer
-credential. This is the record that exists to say *which* session did what, so
-it is a separate logger with no handler by default: an operator wiring one is
-choosing where those ids may be written, which is a decision worth making
-explicitly rather than by default.
-
-Content -- the task and the answer -- is off unless asked for. What may be kept,
-and for how long, is a question about the deployment's obligations rather than
-about kingfisher, so it is a switch rather than a judgement made here.
+everything refused *before* a turn exists -- an unknown session, a busy one, a quota,
+a reference that does not resolve -- leaves no trace anywhere. Measured: a refused
+request writes nothing at all, in a surface where a caller probing session ids is
+exactly the thing an operator would want to see afterwards.
 """
 
 from __future__ import annotations
@@ -51,12 +34,7 @@ REFUSED = "refused"
 
 @dataclass(frozen=True)
 class Attempt:
-    """What was asked for, and when the asking started.
-
-    One object rather than four parameters threaded through both paths, because
-    a refusal and a turn are the same attempt seen at different depths -- and
-    the fields they share are exactly the ones a reader correlates on.
-    """
+    """What was asked for, and when the asking started."""
 
     session_id: str | None
     task: str
@@ -88,13 +66,7 @@ def _write(**fields: Any) -> None:
 
 
 def refused(attempt: Attempt, error: BaseException, *, status: int, code: str) -> None:
-    """One line for a request that never became a turn.
-
-    The half nothing else sees. `reason` is the machine-readable code the caller
-    was given, so a line here and the response that caller got say the same
-    thing -- which is what makes the two correlatable at all without logging a
-    request id neither side keeps.
-    """
+    """One line for a request that never became a turn."""
     _write(
         event=REFUSED,
         session_id=attempt.session_id,
@@ -109,16 +81,7 @@ def refused(attempt: Attempt, error: BaseException, *, status: int, code: str) -
 async def watching(
     events: AsyncIterator[RunEvent], first: RunEvent | None, attempt: Attempt
 ) -> AsyncIterator[RunEvent]:
-    """Pass every event through, and write one line when the turn ends.
-
-    A wrapper rather than a hook inside `streaming`, so the streaming code stays
-    about SSE and knows nothing about auditing.
-
-    The `finally` is what makes a hangup auditable: closing this generator lands
-    there whether the turn answered, was cut short, or had its client walk away
-    -- and "walked away" is the outcome an operator is least able to reconstruct
-    from anywhere else.
-    """
+    """Pass every event through, and write one line when the turn ends."""
     totals = {"input_tokens": 0, "output_tokens": 0}
     outcome = "stopped"
     turn_id: str | None = None

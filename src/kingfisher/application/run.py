@@ -1,11 +1,6 @@
 """Module-level conveniences over a default `Kingfisher`.
 
     run("profile /data/orders.csv")
-
-The orchestration itself lives on `Kingfisher`, with the wiring it needs. This
-is the one-liner surface, unchanged from before the service object existed, so
-nothing calling it had to learn a new shape. It builds an instance per call --
-fine for a script, wasteful for a server, which is the case `Kingfisher` is for.
 """
 
 from __future__ import annotations
@@ -41,14 +36,7 @@ def stream(
     checkpointer: Any | None = None,
     dirs: Any | None = None,
 ) -> Iterator[RunEvent]:
-    """Run one task, yielding progress as it happens.
-
-        for event in stream("profile /data/orders.csv"):
-            print(event)
-
-        for event in stream(Request(task, session_id=sid, turn_id=req.id)):
-            print(event)
-    """
+    """Run one task, yielding progress as it happens."""
     return _service(cfg, graph, checkpointer, dirs).stream(request)
 
 

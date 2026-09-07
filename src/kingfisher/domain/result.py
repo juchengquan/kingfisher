@@ -133,14 +133,7 @@ KINDS: tuple[str, ...] = (
 
 @dataclass(frozen=True)
 class RunEvent:
-    """A normalised step in a run.
-
-    There is no `message` kind. A completed assistant turn is a `model_call`
-    whatever it produced, and its prose is not carried there: prose arrives as
-    `token` events while it is being generated, which is the only place it lives.
-    Carrying it twice would mean rendering the same text at two granularities and
-    asking every consumer to know that.
-    """
+    """A normalised step in a run."""
 
     kind: str
     text: str = ""
@@ -171,12 +164,7 @@ class RunEvent:
             raise ValueError(msg)
 
     def _tag(self, kind: str) -> str:
-        """The bracketed tag, naming the delegate when one produced this.
-
-        `[model]` for the agent the caller asked, `[model:reviewer]` for work a
-        delegate did. Nothing changes for a run without delegates, which is why the
-        name is appended rather than given a column of its own.
-        """
+        """The bracketed tag, naming the delegate when one produced this."""
         return f"{kind}:{self.agent}" if self.agent else kind
 
     def _line(self, limit: int = 800) -> str:

@@ -1,22 +1,11 @@
 """What a request turns on: the skills and the delegates it activates.
 
 One module because the two answer the same question about different kinds. A
-definition names what it *may* reach; a request narrows that; and what is left
-is what the agent is actually built with. Every function here is that
-subtraction for one kind, plus the two that say why a delegate did not survive
-it -- `unrunnable_delegates` for one this deployment cannot build at all, and
+definition names what it *may* reach; a request narrows that; and what is left is
+what the agent is actually built with. Every function here is that subtraction for
+one kind, plus the two that say why a delegate did not survive it --
+`unrunnable_delegates` for one this deployment cannot build at all, and
 `indistinct_delegates` for one that asked to run elsewhere and did not.
-
-Separate from assembly because assembly only ever consumes the answers. It calls
-five of these once each and passes the results into the graph; none of them
-calls back, and none of them calls the tool surface or the middleware beside
-them. That independence is why this is a module rather than a region of a
-larger one.
-
-The two skill denials are here rather than with the permissions in `agent`
-because they are computed *from* what was activated: a rule denying reads of a
-skill this request left out is the same subtraction, expressed as a route the
-agent's backend can carry.
 """
 
 from __future__ import annotations
@@ -48,41 +37,14 @@ if TYPE_CHECKING:
 def available_skills(
     cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
 ) -> tuple[str, ...]:
-    """Every skill this request may activate: the catalogue, plus its own.
-
-    `catalogue` says where the shared half is read from, falling back to `cfg`.
-    What a session adds, and how the two halves merge, is `layered.for_session`
-    -- the rule lives there because it differs per kind and a reader comparing
-    them should not have to visit two functions to see the difference.
-
-    The catalogue half is the *registry*, not the directory listing. A directory
-    that looks like a skill and will not parse would otherwise be advertised here,
-    accepted by the build, allowed through the filter, and then absent from an
-    agent that reported nothing wrong; asking what will be loaded makes naming one
-    an ordinary unknown-skill refusal.
-
-    A session's own skills stay a listing. They are written by `uploads`, which
-    reads each header to file it under the name inside it, so the two cannot
-    disagree the way a catalogue's could -- and a request's uploads are checked
-    when they are provisioned rather than here.
-    """
+    """Every skill this request may activate: the catalogue, plus its own."""
     return activatable_skills(cfg, session_dir, catalogue=catalogue).names
 
 
 def activatable_skills(
     cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
 ) -> SkillRegistry:
-    """One registry for both halves: the catalogue, plus this request's own.
-
-    The single answer to "what may this request activate", and single because two
-    answers disagree: a listing merged over the catalogue registry on one side and
-    the catalogue registry alone on the other advertised every uploaded skill and
-    then refused it as unknown.
-
-    The catalogue half is cached for the life of the deployment; the session
-    half is read per turn, because that is when it arrives. One listing of a
-    directory holding at most a handful of skills.
-    """
+    """One registry for both halves: the catalogue, plus this request's own."""
     resolved = catalogue or Definitions.from_config(cfg)
     uploaded = (
         None
@@ -95,38 +57,14 @@ def activatable_skills(
 def defined_subagents(
     cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
 ) -> dict[str, SubagentSpec]:
-    """Every subagent this request may activate: the catalogue, plus its own.
-
-    A function because two callers need the same answer: `build_agent`, which
-    wants the specs, and the service, which wants only the names so it can say
-    which of them a request did not grant. Written out at both, the rule about
-    what a session adds to the catalogue would exist twice.
-    """
+    """Every subagent this request may activate: the catalogue, plus its own."""
     return dict(for_session(catalogue or Definitions.from_config(cfg), session_dir).subagents.specs)
 
 
 def unrunnable_delegates(
     cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[tuple[str, str], ...]:
-    """`(name, why)` for each defined delegate this deployment cannot run.
-
-    Every definition the catalogue holds, not the ones a request activated --
-    which is the difference from `indistinct_delegates` beside it, and the whole
-    point. A delegate binding an alias to a model on an endpoint with no key is
-    invisible until somebody activates it: the workspace loads, the listing is
-    clean, and the failure waits for the first request that names it.
-
-    Through `model_for` and `resolve`, the two calls a build makes, so this
-    cannot come to disagree with what actually happens. Both are needed and
-    neither is enough: `model_for` catches an alias nothing binds and a delegate
-    whose every candidate was passed over, and returns a model *name*; whether
-    that name can be reached is `resolve`'s question, and it is the one the
-    dropped-endpoint case fails.
-
-    Reported, never refused, and never called -- no model is built and nothing
-    goes over a network. It costs two dictionary lookups per definition, which
-    is what lets `doctor` run it before a deployment rather than after.
-    """
+    """`(name, why)` for each defined delegate this deployment cannot run."""
     from kingfisher.subagents.harness import model_for  # noqa: PLC0415
 
     found: list[tuple[str, str]] = []
@@ -148,14 +86,8 @@ def indistinct_delegates(
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
 ) -> tuple[tuple[str, str], ...]:
-    """`(name, why)` for each activated delegate that asked to run elsewhere and
-    did not.
-
-    Asked after the build rather than during it, the way `reporting.withheld_by_kind`
-    is: `build_agent` returns a graph, and a fact about the run is not one of
-    the things a graph can carry. It re-resolves through `model_for`,
-    the same call the build makes, so the two cannot come to disagree about
-    where a delegate ended up.
+    """`(name, why)` for each activated delegate that asked to run elsewhere and did
+    not.
     """
     if capabilities.subagents is None:
         return ()
@@ -183,33 +115,19 @@ def indistinct_delegates(
 
 
 def _denied_path(read_at: str) -> str:
-    """One skill's own directory, as a rule the agent's routes can carry.
-
-    The registry reads a catalogue through a backend rooted at the catalogue
-    itself, so a skill's `path` is `/research/lookup/<file>` -- where the
-    agent addresses that same file under `/skills/`. Two
-    roots, two spellings, and a rule written in the wrong one is not merely
-    wrong: `FilesystemMiddleware` refuses *every* permission when the backend
-    can execute unless each rule is scoped to a route, so one unrouted path
-    takes the whole deny list down with it. Found by a test doing exactly that.
-    """
+    """One skill's own directory, as a rule the agent's routes can carry."""
     return f"{SKILLS_ROUTE}{read_at.lstrip('/').rsplit('/', 1)[0]}/**"
 
 
 def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[FilesystemPermission]:
     """Deny reads of skills this request did not activate.
 
-    The listing filter only stops the agent being *told*; this stops the file
-    tools reading it anyway. Neither stops `execute`, which bypasses tool-level
-    permissions entirely — so this is a real boundary only for a request that
-    did not activate the shell.
-
-    Built from each skill's own path rather than from its name, and that is the
-    fix rather than a tidy-up. This wrote `/skills/{name}/**`, which is where a
-    skill sits only while every skill sits at the top level. A skill in a folder
-    lives at `/skills/research/lookup/`, so the rule denied a path that does not
-    exist and the file tools could still read it -- a boundary failing open,
-    silently, the moment folders were possible.
+    Built from each skill's own path rather than from its name, and that is the fix
+    rather than a tidy-up. This wrote `/skills/{name}/**`, which is where a skill
+    sits only while every skill sits at the top level. A skill in a folder lives at
+    `/skills/research/lookup/`, so the rule denied a path that does not exist and the
+    file tools could still read it -- a boundary failing open, silently, the moment
+    folders were possible.
     """
     allowed = set(activated)
     return [
@@ -224,16 +142,7 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
 def _private_skills(
     catalogue: Definitions, name: str
 ) -> tuple[tuple[str, ...], tuple[str, str]] | None:
-    """The skills a delegate brings itself, and where they are mounted.
-
-    Answered from `bundled_skills`, which asked deepagents what it will actually
-    load rather than listing directories -- the distinction `skills.registry`
-    exists for, and the reason a delegate is never told about a skill that will
-    not load.
-
-    `None` when there are none, which is every delegate without a bundle, so the
-    branch that folds these in never runs for them.
-    """
+    """The skills a delegate brings itself, and where they are mounted."""
     registry = catalogue.bundled_skills.get(name)
     if registry is None or not registry.offered:
         return None
@@ -249,12 +158,7 @@ def _activated_subagents(
     *,
     catalogue: Definitions | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
-    """Which delegates this request wired, and every definition available.
-
-    Resolved before the tools rather than beside them, because whether any
-    activated definition *names* a tool decides whether the tool probe has to
-    run at all. Nothing here reads a tool, so the order costs nothing.
-    """
+    """Which delegates this request wired, and every definition available."""
     if capabilities.subagents is None:
         return {}, ()
     defined = defined_subagents(cfg, session_dir, catalogue=catalogue)

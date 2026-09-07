@@ -1,126 +1,56 @@
 """Subagent definitions: `/subagents/<name>.yaml`.
 
-A YAML document. `name`, `description` and `system_prompt` are required. The
-rest are optional, and `builtin_tools`, `tools`, `skills`, `subagents`,
-`middleware` and `model` all select by name from what the deployment already
-offers — how each selection is enforced is the adapter's problem, not this
-format's. `groups` and `metadata` are optional too and select nothing. `KNOWN`
-below is the whole set, and is the one place that stays right when it grows.
-
-    name: reviewer
-    description: Checks an analysis for arithmetic errors and unsupported claims.
-    tools: [read_file, glob, grep]
-    skills: [tabular-qa]
-    middleware: [audit]
-    model: gpt-5
-    system_prompt: |
-      You review analyses...
-
-It was markdown with a YAML header until the header had grown into everything
-but the prompt. A skill still has that shape, because deepagents owns that
-format and kingfisher owns this one — which is also why they disagree about
-what an unrecognised field means.
+A YAML document. `name`, `description` and `system_prompt` are required. The rest are
+optional, and `builtin_tools`, `tools`, `skills`, `subagents`, `middleware` and
+`model` all select by name from what the deployment already offers — how each
+selection is enforced is the adapter's problem, not this format's. `groups` and
+`metadata` are optional too and select nothing. `KNOWN` below is the whole set, and
+is the one place that stays right when it grows.
 
 **Omitting `tools` inherits the parent's; omitting `skills` grants none.** The
 asymmetry is deliberate. Tools are what a delegate needs to *act* and it can do
-nothing without them, so inheriting is the useful default. Skills are what it
-needs to *know*, and the body below is already its procedure — a delegate that
-needed the whole index would not have been worth defining. Handing it over also
-costs: the listing is injected into the delegate's prompt at ~600 tokens for
-three skills, of which ~450 is deepagents' preamble and is paid for the first
-skill as much as the third. Re-measured 2026-09-03.
+nothing without them, so inheriting is the useful default. Skills are what it needs
+to *know*, and the body below is already its procedure — a delegate that needed the
+whole index would not have been worth defining. Handing it over also costs: the
+listing is injected into the delegate's prompt at ~600 tokens for three skills, of
+which ~450 is deepagents' preamble and is paid for the first skill as much as the
+third. Re-measured 2026-09-03.
 
-`middleware` names entries from a registry the *deployment* supplies, so it is
-the one field that selects code rather than content. It is empty until someone
-wires one, and a name must be both registered and granted — including for a
-definition a caller uploaded, which gets none of the leeway an uploaded skill
-does. An uploaded skill is the caller's own text; a middleware name is not.
+`subagents` names delegates this one may consult mid-job, from the same catalogue.
+Absent means none, like `skills`. It was refused until it was measured: the refusal
+said "deepagents gives it no `task` tool, so nesting is not something this format can
+express", and the first half is true -- `create_sub_agent` calls `create_agent` with
+the spec's tools and no `task`. The second half was not. A spec carries `middleware`,
+and `SubAgentMiddleware` is exactly what supplies `task`, so the format could always
+express it through a field it already had.
 
-`subagents` names delegates this one may consult mid-job, from the same
-catalogue. Absent means none, like `skills`. It was refused until it was
-measured: the refusal said "deepagents gives it no `task` tool, so nesting is
-not something this format can express", and the first half is true --
-`create_sub_agent` calls `create_agent` with the spec's tools and no `task`.
-The second half was not. A spec carries `middleware`, and `SubAgentMiddleware`
-is exactly what supplies `task`, so the format could always express it through
-a field it already had.
+**One name, and no list.** There was an `alias:` beside `model:` -- a general name
+the deployment bound under `aliases:` in `models.yaml` -- so that a definition could
+know what *kind* of model it needed without knowing its name, which is what a file
+shipped inside a wheel is in. It is gone: two spellings for one idea, and the shipped
+definitions name nothing at all now and say in a comment what to pin them to.
 
-Any depth. A helper may name helpers of its own, so a cycle *can* form, and
-`refuse_cycles` is the only thing stopping one -- checked over the whole
-catalogue when it loads rather than per request, because a set of definitions is
-either coherent or it is not. This was bounded at one level until delegation
-learned to nest, and the bound was structural: the call that would build the
-second level was simply never made.
+There was a `provider:` beside `model:`, naming an endpoint by style, and a rule that
+the two moved together -- a model name sent to an endpoint that has never heard of it
+is a 404 if you are lucky and a wrong-model run if you are not. Both are gone. A
+model resolves to its own endpoint through the catalogue, so the half-pair is not a
+thing that can be written, and the rule refusing it has nothing left to refuse.
 
-`model` names what this delegate runs, out of the models `models.yaml`
-defines. Omitted, it runs whatever the deployment runs. It is granted like
-`middleware` and for a stronger reason: the model decides which endpoint
-receives this delegate's prompts and whose credentials pay for them.
+**A field this format does not define is refused, not ignored.** Ignoring one is
+indistinguishable from honouring it, and the difference matters most where it is
+least visible: `tolls:` produced a delegate holding *every* tool its parent had,
+because a missing `tools` means inherit. `permissions:` was worse -- it is written to
+*restrict* a delegate, did nothing at all, and so a definition read tighter than the
+agent it produced. Fields deepagents knows and this format deliberately declines are
+named individually with the reason, since a generic "unknown field" reads as an
+omission worth working around.
 
-**One name, and no list.** There was an `alias:` beside `model:` -- a general
-name the deployment bound under `aliases:` in `models.yaml` -- so that a
-definition could know what *kind* of model it needed without knowing its name,
-which is what a file shipped inside a wheel is in. It is gone: two spellings for
-one idea, and the shipped definitions name nothing at all now and say in a
-comment what to pin them to.
-
-The list went with it, and that is worth understanding rather than noticing. A
-list meant "try these in order", and the only thing that ever passed a candidate
-over was an alias this deployment had not bound. Nothing passes over a *model*:
-one this deployment cannot run refuses on the spot, and always did. So every
-entry after the first was already unreachable, and keeping the shape would have
-been keeping a promise nothing could honour.
-
-There was a `distinct: true` too, saying that running beside the main agent
-defeated the delegate, and turning `indistinct`'s report into a refusal. It went
-with `second-opinion`, its only user. `indistinct` still reports -- it fires for
-any definition that named a model and did not end up anywhere different -- so
-the disappointment is still named, just not refused.
-
-There was a `provider:` beside `model:`, naming an endpoint by style, and a rule
-that the two moved together -- a model name sent to an endpoint that has never
-heard of it is a 404 if you are lucky and a wrong-model run if you are not. Both
-are gone. A model resolves to its own endpoint through the catalogue, so the
-half-pair is not a thing that can be written, and the rule refusing it has
-nothing left to refuse.
-
-The definition is the only place either is said. There was an environment
-override too, and it is gone: `KINGFISHER_MODEL_SUBAGENT` could only say "every
-delegate", which is a sentence about cost that nobody wants to be true of a
-delegate chosen for being a *different* model. Per-delegate is what this file
-already is, so this is where cost routing lands -- reading-heavy delegation on
-a cheap model, the second opinion somewhere else entirely.
-
-**A field this format does not define is refused, not ignored.** Ignoring one
-is indistinguishable from honouring it, and the difference matters most where
-it is least visible: `tolls:` produced a delegate holding *every* tool its
-parent had, because a missing `tools` means inherit. `permissions:` was worse
--- it is written to *restrict* a delegate, did nothing at all, and so a
-definition read tighter than the agent it produced. Fields deepagents knows and
-this format deliberately declines are named individually with the reason, since
-a generic "unknown field" reads as an omission worth working around.
-
-`metadata` is the one field this format has no opinion about: a mapping of the
-caller's own keys, carried and never interpreted.
-
-**Nothing in a run reads it, and that is deliberate.** It is for whatever loads
-the catalogue -- a deployment script deciding which definitions to install, an
-ownership report, a linter -- all of which read a `SubagentRepository` and
-read `spec.metadata` without kingfisher's help. Wiring it into the run would
-mean choosing a consumer, and the obvious candidate (handing it to a middleware
-factory) changes a published constructor argument for a use nobody has yet.
-
-So the field exists and the seam does not. That way round is recoverable: a
-consumer can be added later without changing what a definition may say.
-
-Parsing lives in the domain because this is kingfisher's format, not a library's
-— nothing here knows deepagents exists, and nothing here reads a disk. Finding
-the files is `subagents.catalogue`; translating a spec into
-`SubAgent` is `infrastructure.harness.agent`.
-
-`declared` is the same format arriving another way -- a Python module stating
-`SUBAGENTS` rather than a document on disk -- and the two share every field
-reader below them, which is why they are one module and not two.
+**Nothing in a run reads it, and that is deliberate.** It is for whatever loads the
+catalogue -- a deployment script deciding which definitions to install, an ownership
+report, a linter -- all of which read a `SubagentRepository` and read `spec.metadata`
+without kingfisher's help. Wiring it into the run would mean choosing a consumer, and
+the obvious candidate (handing it to a middleware factory) changes a published
+constructor argument for a use nobody has yet.
 """
 
 from __future__ import annotations
@@ -279,24 +209,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
 
 
 def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
-    """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
-
-    The Python sibling of `parse`, and it reads the same fields by the same
-    rules: `tools` narrows the same way, `model` resolves the same way, `metadata`
-    refuses the same way. What differs is `build`, which a document writes as
-    `system_prompt`, and the fields a compiled graph cannot be handed at all.
-
-    `NOT_COMPILED` is that set with a reason on each, and `system_prompt` is in
-    it: the swap is not a rename, since a compiled delegate carries its prompt
-    inside the graph. All of them are refused rather than ignored, for the
-    reason the whole `REFUSED` table exists -- a definition writing a line that
-    does nothing reads tighter than the delegate it produces, and nothing in the
-    output says so.
-
-    `source` is a string rather than a `Path` because a declaration is one entry
-    of a list in a file, not a file -- `researcher.py` names it as precisely as
-    anything can, and the name inside it does the rest.
-    """
+    """One entry of a module's `SUBAGENTS` into the spec kingfisher works with."""
     if not isinstance(entry, Mapping):
         msg = (
             f"{source}: every entry of {EXPORT} must be a mapping with a "
@@ -358,18 +271,8 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
 
 
 def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
-    """Refuse every field this format does not define, saying why for the ones
-    we know about.
-
-    A key we ignore is a key the author believes took effect. That is merely
-    annoying for `tolls:`, and worse than annoying for `permissions:`, which
-    someone writes *to restrict a delegate* and which currently does nothing at
-    all -- the definition reads tighter than the agent it produces.
-
-    The wording is `fields.unrecognised` now, shared with `models.yaml`, which
-    had a plainer version of the same rule. What stays here is the raising: this
-    format's mistakes are `SubagentError`, and the source is named the way this
-    format names one.
+    """Refuse every field this format does not define, saying why for the ones we know
+    about.
     """
     complaint = fields.unrecognised(document, known=KNOWN, declined=REFUSED)
     if complaint is not None:
@@ -378,23 +281,7 @@ def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
 
 
 def read(text: str, source: Path) -> SubagentSpec:
-    """One definition, from its document. Raises `SubagentError` on anything malformed.
-
-    The whole document, not a header and a body: a subagent is YAML through and
-    through, so there is no envelope to open. A skill still has one -- that
-    format is deepagents', and it is markdown with a header.
-
-    Decoding and parsing were two functions in two packages, and the split had
-    one reason: reading YAML needs a library and this file was in `domain/`,
-    which may import neither. It is not in `domain/` any more. The wrapper that
-    did the first half was this function's only caller and is folded in here,
-    which also removes the round trip a subagent catalogue used to make through
-    `infrastructure` to reach its own parser.
-
-    `require_literal_prompt` stays where it is and is called rather than moved:
-    a scalar's style is a fact about the document, and the agent format needs
-    the same check.
-    """
+    """One definition, from its document. Raises `SubagentError` on anything malformed."""
     document = documents.decode(text)
     if isinstance(document, str):
         msg = f"{source.name}: cannot read definition ({document})"

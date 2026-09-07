@@ -1,23 +1,9 @@
 """Anticorruption layer between kingfisher's domain and the agent runtime.
 
-Everything that knows LangChain's and LangGraph's shapes lives here: the
-message payload, the stream-chunk structure, and where usage and tool calls
-hide on a message. The domain and the orchestration above it speak only
-`Request`, `RunEvent` and `RunResult`.
-
-This exists because the knowledge was previously duplicated — `run.py` and
-`runlog.py` each carried their own copy of
-
-    usage.get("input_token_details")
-
-kept in sync by nobody. One move of that field upstream would have broken two
-modules and been caught by one test.
-
-Note what is deliberately *not* wrapped: `BaseChatModel`, `BaseCheckpointSaver`
-and `BackendProtocol` are stable published protocols, and swapping sqlite for
-postgres is a one-line factory change precisely because they pass through
-unwrapped. An ACL earns its place where a foreign *shape* enters our
-vocabulary, not wherever a foreign name appears.
+Everything that knows LangChain's and LangGraph's shapes lives here: the message
+payload, the stream-chunk structure, and where usage and tool calls hide on a
+message. The domain and the orchestration above it speak only `Request`, `RunEvent`
+and `RunResult`.
 """
 
 from __future__ import annotations
@@ -63,30 +49,13 @@ STREAM_MODES: list[StreamMode] = ["updates", "values", "messages"]
 
 
 def user_payload(text: str, history: tuple[Message, ...] = ()) -> dict[str, Any]:
-    """The graph's input: what was said before, then what is being asked now.
-
-    The history used to arrive from a checkpointer keyed by `thread_id`, and
-    this sent only the new turn. It is passed in now, because a transcript this
-    package owns is what survives a machine that may keep nothing — see
-    `domain.transcript`. The graph gets a whole conversation and a fresh
-    checkpointer each turn, which is the same conversation by a route that does
-    not depend on a framework's storage.
-    """
+    """The graph's input: what was said before, then what is being asked now."""
     return {"messages": [*(_as_langchain(message) for message in history),
                          {"role": "user", "content": text}]}
 
 
 def _as_langchain(message: Message) -> Any:
-    """One of kingfisher's records, in the shape LangChain expects.
-
-    Dicts rather than message classes wherever a dict will do: langchain coerces
-    them, and a record that never becomes a `HumanMessage` is one less thing to
-    keep in step with a library.
-
-    A tool result has to be a `ToolMessage`, because `tool_call_id` has no dict
-    spelling that survives coercion -- and losing it would break the pairing
-    that makes a tool result mean anything.
-    """
+    """One of kingfisher's records, in the shape LangChain expects."""
     if message.role == "tool":
         return ToolMessage(
             content=message.content, tool_call_id=message.call_id, name=message.name or None
@@ -103,13 +72,7 @@ def _as_langchain(message: Message) -> Any:
 
 
 def as_transcript(messages: Iterable[Any]) -> tuple[Message, ...]:
-    """What the graph ended up holding, as records this package owns.
-
-    The other direction, and the only place that knows how LangChain spells a
-    conversation. A message whose type is not one of the four roles is dropped
-    rather than guessed at: a framework that grows a fifth kind should make this
-    lose information visibly rather than invent a role for it.
-    """
+    """What the graph ended up holding, as records this package owns."""
     read: list[Message] = []
     for raw in messages:
         # Both shapes, because both occur. `_as_langchain` emits plain dicts
@@ -165,11 +128,7 @@ _ROLES: dict[str, Role] = {
 
 
 def _text(content: Any) -> str:
-    """A message's text, whatever shape the provider used.
-
-    Anthropic returns a list of blocks where OpenAI returns a string, and a
-    transcript that stored one shape would be unreadable by the other.
-    """
+    """A message's text, whatever shape the provider used."""
     if isinstance(content, str):
         return content
     if isinstance(content, list):
@@ -180,10 +139,7 @@ def _text(content: Any) -> str:
 
 
 def usage_of(message: Any) -> dict[str, int]:
-    """Token usage from a message, in kingfisher's flat vocabulary.
-
-    The single place that knows where LangChain puts these numbers.
-    """
+    """Token usage from a message, in kingfisher's flat vocabulary."""
     usage = getattr(message, "usage_metadata", None) or {}
     details = usage.get("input_token_details") or {}
     return {
@@ -195,11 +151,7 @@ def usage_of(message: Any) -> dict[str, int]:
 
 
 def tool_calls(message: Any) -> tuple[tuple[str, ...], tuple[Mapping[str, Any], ...]]:
-    """Names and arguments of the tools a message asks for, index-aligned.
-
-    Both tuples are built from one list in one expression, so they cannot be
-    made to disagree about which arguments belong to which call.
-    """
+    """Names and arguments of the tools a message asks for, index-aligned."""
     calls = getattr(message, "tool_calls", None) or []
     return (
         tuple(call["name"] for call in calls),
@@ -251,16 +203,12 @@ def messages_in(update: Any) -> list[Any]:
 class Delegates:
     """Which delegate produced a chunk, learned from the stream as it arrives.
 
-    With `subgraphs=True` every chunk carries a namespace: `()` for the agent
-    the caller asked, and an opaque `("tools:<uuid>",)` for a delegate running
-    inside a `task` call. That distinguishes them but does not name them.
-
     Only `messages` chunks carry a name, in `lc_agent_name`. `updates` carry no
-    metadata at all -- which would leave `model_call` and `tool_result` unnamed
-    if the two were read independently. They are not: a delegate's first model
-    call is *streamed* before the node update that reports it, so the name is
-    always known by the time an event needs it. Measured, not assumed; a test
-    drives a real two-level run and asserts every delegate event is named.
+    metadata at all -- which would leave `model_call` and `tool_result` unnamed if
+    the two were read independently. They are not: a delegate's first model call is
+    *streamed* before the node update that reports it, so the name is always known by
+    the time an event needs it. Measured, not assumed; a test drives a real two-level
+    run and asserts every delegate event is named.
     """
 
     def __init__(self) -> None:
@@ -277,14 +225,7 @@ class Delegates:
 
 
 def _token_event(chunk: Any) -> RunEvent | None:
-    """One `messages` chunk into a token event, or nothing.
-
-    Tool results travel this stream too, and untruncated -- a `read_file` of a
-    large CSV arrives here in full. They are already carried, bounded to
-    `PREVIEW`, as `tool_result`, so letting them through would both duplicate
-    them and undo the bound. Chunks holding only usage, or only the fragments
-    of a tool call's arguments, carry no text and are likewise nothing to show.
-    """
+    """One `messages` chunk into a token event, or nothing."""
     if not isinstance(chunk, tuple) or len(chunk) != TOKEN_CHUNK_PARTS:
         return None
     message, _metadata = chunk
@@ -300,19 +241,7 @@ def _token_event(chunk: Any) -> RunEvent | None:
 def events_in(
     namespace: Any, mode: str, chunk: Any, delegates: Delegates | None = None
 ) -> Iterator[RunEvent]:
-    """Translate one stream chunk into domain events.
-
-    Which modes exist, and what each carries, is decided here rather than by
-    the orchestration above. `updates`, `values` and `messages` are LangGraph's
-    vocabulary, and `application/` should no more compare against them than it should
-    reach for `input_token_details` -- which is the duplication this module was
-    written to end.
-
-    `namespace` says which agent produced the chunk, and `delegates` turns it
-    into a name. Both flow through every event so that a delegate's work is
-    distinguishable at the far end: the caller's prose and a delegate's arrive
-    as the same type on the same channel, so nothing else could tell them apart.
-    """
+    """Translate one stream chunk into domain events."""
     named = delegates.name(namespace) if delegates is not None else None
     if mode == "messages":
         if delegates is not None and isinstance(chunk, tuple) and len(chunk) == TOKEN_CHUNK_PARTS:
@@ -333,17 +262,14 @@ def events_in(
 def answer_in(namespace: Any, mode: str, chunk: Any) -> str | None:
     """The assistant's last message from a `values` chunk, if it has one.
 
-    `None` for any other mode, so a caller can offer every chunk and keep the
-    last answer it is given: the final emission is the authoritative one.
-
-    And `None` for any chunk from a delegate, which is not a refinement -- it
-    is the whole reason this takes a namespace. Streaming into delegates makes
-    their `values` chunks arrive here too, and "the last one wins" then means
-    the last *anyone* emitted. A turn that ends normally is unharmed, because
-    the caller's agent always speaks last. A turn cut short by
-    `turn_timeout_s` is not: it stops between chunks, and if it stopped just
-    after a delegate finished, the run reported the delegate's answer as its
-    own. Measured on a real two-level run before this line existed.
+    And `None` for any chunk from a delegate, which is not a refinement -- it is the
+    whole reason this takes a namespace. Streaming into delegates makes their
+    `values` chunks arrive here too, and "the last one wins" then means the last
+    *anyone* emitted. A turn that ends normally is unharmed, because the caller's
+    agent always speaks last. A turn cut short by `turn_timeout_s` is not: it stops
+    between chunks, and if it stopped just after a delegate finished, the run
+    reported the delegate's answer as its own. Measured on a real two-level run
+    before this line existed.
     """
     if namespace:
         return None

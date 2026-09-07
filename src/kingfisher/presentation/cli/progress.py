@@ -3,16 +3,8 @@
 Lived in `tests/integration/driver.py`, which is not in the wheel, so shipping
 `kingfisher run` would have meant a second copy of it -- and the two would have
 drifted the first time one learned something about a new event kind. One
-implementation, two callers: the driver passes one stream twice and behaves
-exactly as it did, and the command passes two.
-
-Two streams is what lets the command compose:
-
-    kingfisher run "profile this" --agent analyst --data sales.csv > answer.md
-
-The answer has to land in the file while the tool calls still scroll past, and
-`2>/dev/null` has to give silence. A `--quiet` flag would ask the caller for
-correct behaviour and do nothing for whoever forgets it.
+implementation, two callers: the driver passes one stream twice and behaves exactly
+as it did, and the command passes two.
 """
 
 from __future__ import annotations
@@ -29,27 +21,12 @@ if TYPE_CHECKING:
 class Progress:
     """Print run events as they arrive, and keep the terminal readable.
 
-    Token events are fragments, not lines: written with no newline and no tag,
-    so the model owns the left margin and its own formatting survives. Progress
-    stays tagged and aligned. That mix is the whole reason for `_owed` -- a
-    newline is owed before the next tagged line, or it lands on the end of a
-    half-finished sentence.
-
-    A class rather than a loop because there are two loops: `stream` is
-    synchronous and `astream` is not, and the formatting is the same either
-    way. Writing it twice is how the two would come to disagree about when a
-    newline is owed.
-
-    **A delegate's prose is progress, not answer.** `token` events carry the
-    delegate that produced them, or `None` for the agent the caller asked. Sent
-    to one stream they read as one voice, which the speaker tag exists to
-    prevent; sent to two, the distinction does the same job better -- an
-    extractor's working notes are not part of what you asked for, and a caller
-    redirecting stdout wants the answer rather than the reasoning that reached
-    it.
-
-    When both streams are the same object that distinction collapses back to
-    the tag, which is what the driver has always shown.
+    **A delegate's prose is progress, not answer.** `token` events carry the delegate
+    that produced them, or `None` for the agent the caller asked. Sent to one stream
+    they read as one voice, which the speaker tag exists to prevent; sent to two, the
+    distinction does the same job better -- an extractor's working notes are not part
+    of what you asked for, and a caller redirecting stdout wants the answer rather
+    than the reasoning that reached it.
     """
 
     def __init__(self, answer: TextIO, progress: TextIO | None = None) -> None:
@@ -121,12 +98,7 @@ class Progress:
 def show(
     events: Iterable[RunEvent], out: TextIO, progress: TextIO | None = None
 ) -> RunResult | None:
-    """Drain a synchronous stream through `Progress`.
-
-    `show` rather than `render`, which is what the driver called it: this module
-    ships beside `listing.render`, and one CLI with two `render`s that take
-    different types and answer different questions is a name doing no work.
-    """
+    """Drain a synchronous stream through `Progress`."""
     shown = Progress(out, progress)
     result: RunResult | None = None
     for event in events:

@@ -1,23 +1,14 @@
 """Copying a set of definitions into a workspace.
 
-Kingfisher does not *read* the definitions a deployment runs. Its job is to
-find, validate and compose definitions held as static files, and it does all
-three against files it did not write -- content a workspace rewrites on first
-contact with a real task, which is a different kind of thing from the code that
-reads it.
+Kingfisher does not *read* the definitions a deployment runs. Its job is to find,
+validate and compose definitions held as static files, and it does all three against
+files it did not write -- content a workspace rewrites on first contact with a real
+task, which is a different kind of thing from the code that reads it.
 
 **Nothing ships.** Where a deployment gets its definitions is a setting,
-`KINGFISHER_ASSETS`, and a directory needs no wheel, no metadata and no publish
-step. This repository keeps a worked set in `assets_examples/` for the same reason
-it keeps documentation.
-
-What that costs is written down rather than glossed: `pip install kingfisher`
-followed by `kingfisher seed` does not produce a working workspace, and since a
-request must name an agent, it produces a library that cannot run. See *Packaging:
-where the definitions live* in docs/decisions.md.
-
-`models.yaml.example` is written by `ensure_layout` rather than here: it must
-arrive whether or not a deployment has definitions, and this module can refuse.
+`KINGFISHER_ASSETS`, and a directory needs no wheel, no metadata and no publish step.
+This repository keeps a worked set in `assets_examples/` for the same reason it keeps
+documentation.
 """
 
 from __future__ import annotations
@@ -99,23 +90,7 @@ Omitting `tools:` grants every tool there is; omitting `skills:` and
 
 @runtime_checkable
 class Destination(Protocol):
-    """Where seeding puts things: a workspace, its catalogues, and two files.
-
-    A Protocol rather than `Config` because seeding a *fresh* workspace has to
-    run before a model catalogue can be read -- the catalogue is a file inside
-    the workspace, so `config_from_env` raises before the directory exists. `Config`
-    satisfies this by shape, and so does `WorkspacePaths`, which is the part of
-    a configuration a first run can actually know.
-
-    Nothing here needs an endpoint, a credential or a timeout.
-
-    `authored_files` is here because seeding lays the workspace out, and laying
-    it out places the worked example for `models.yaml` and `groups.yaml`. Both
-    relocate, and an example is only useful in the directory the real file is
-    read from -- so a destination that could not say where those are is one that
-    writes the example somewhere nothing looks. Still nothing to read: these are
-    paths, and seeding opens neither.
-    """
+    """Where seeding puts things: a workspace, its catalogues, and two files."""
 
     @property
     def workspace(self) -> Path: ...
@@ -129,34 +104,14 @@ class Destination(Protocol):
 
 @runtime_checkable
 class Source(Protocol):
-    """Where definitions are copied *from*, as a deployment configured it.
-
-    A second protocol rather than a field on `Destination`, and the names are
-    the argument: a destination that also knew its source would have stopped
-    being one thing. `Destination` is narrow on purpose -- that narrowness is
-    what lets seeding run before a workspace has a model catalogue to read --
-    and widening it for the first thing that asked would have undone it.
-
-    `WorkspacePaths` and `Config` both satisfy this by shape, which is the same
-    arrangement `Destination` has and for the same reason: a first run can
-    answer "which directories?" long before it can answer "which models?".
-    """
+    """Where definitions are copied *from*, as a deployment configured it."""
 
     @property
     def assets(self) -> Path | None: ...
 
 
 def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
-    """Each kind of definition, and the catalogue it belongs in.
-
-    The catalogues, not the workspace. They are the same directory until a
-    deployment moves one, and seeding the workspace unconditionally fills a
-    directory nothing reads.
-
-    Derived from `DEFINITION_KINDS` rather than listed again, because getting this
-    list wrong is quiet: a kind missing here is one the definitions ship and
-    nothing ever copies.
-    """
+    """Each kind of definition, and the catalogue it belongs in."""
     roots = cfg.catalogue_roots
     return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS)
 
@@ -172,14 +127,7 @@ DOCUMENT_KINDS = ("agents", "subagents")
 
 @dataclass(frozen=True)
 class Skipped:
-    """A definition left behind, and the names that decided it.
-
-    The names travel with the label because the message needs them: "names
-    middleware" sends a reader looking, and "names call-cap-strict" tells them
-    what to register. Formatted by the caller rather than here -- what a CLI
-    prints is the CLI's business, and a service seeding a workspace has its own
-    way of reporting.
-    """
+    """A definition left behind, and the names that decided it."""
 
     label: str
     names: tuple[str, ...]
@@ -193,17 +141,7 @@ class Skipped:
 
 @dataclass(frozen=True)
 class Seeded:
-    """What `seed` did. `overwritten` names files, where `written` names entries.
-
-    The two are deliberately different granularities. An entry is what you asked
-    for -- `skills/code-review` -- and a file is what you might have lost, which
-    is the thing worth being exact about.
-
-    `skipped` is the third answer, and it is neither of those: a definition that
-    was found, understood, and deliberately not copied. Reported rather than
-    silent, because a workspace missing a definition somebody can see in the
-    source directory is a bug report waiting to be filed.
-    """
+    """What `seed` did. `overwritten` names files, where `written` names entries."""
 
     written: tuple[str, ...] = ()
     overwritten: tuple[str, ...] = ()
@@ -216,27 +154,7 @@ def _is_debris(name: str) -> bool:
 
 
 def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
-    """What this file needs that a workspace may not have, or `None` for nothing.
-
-    The question `seed` has to answer about one definition: does this belong in
-    a workspace that has registered and declared nothing?
-
-    Two ways to fail that, and they fail at different moments. A definition
-    naming middleware is refused when it is *built* -- `names unregistered
-    middleware` -- so seeding it hands somebody a file that cannot run. A
-    definition naming a group is refused when the catalogue is *read*, which is
-    worse: it does not break that definition, it stops the deployment. Both are
-    a file arriving somewhere it cannot be honoured, which is the one question
-    this answers.
-
-    Middleware first where a file names both, because it is the older rule and
-    the message can only carry one remedy. A reader who registers the names
-    seeds again and hears about the groups.
-
-    Only YAML, and only where such a field exists at all. A directory, a
-    Python-defined subagent and a skill body all answer `None`, which is the
-    same answer as "reads fine and names nothing".
-    """
+    """What this file needs that a workspace may not have, or `None` for nothing."""
     if path.suffix not in (".yaml", ".yml") or not path.is_file():
         return None
     try:
@@ -255,21 +173,7 @@ def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
 def _ignoring(
     root: Path, kind: str, *, everything: bool, found: list[Skipped]
 ) -> Callable[[str, list[str]], set[str]]:
-    """`copytree(ignore=...)` that drops debris and deployment-specific definitions.
-
-    Through the ignore callback rather than a check at the top level, for the
-    reason the debris rule went the same way: it has to hold at every depth. A
-    delegate in `subagents/analysis/` names middleware exactly as easily as one
-    beside it, and a rule that only saw the top level would be a rule with a
-    hole the catalogue's own layout walks straight through.
-
-    Both rules in one callback because `copytree` takes one, and they were two
-    functions only while debris was the only thing being dropped.
-
-    `found` is appended to rather than returned, because `copytree` decides what
-    to call this and how often. The labels come out relative to the source tree,
-    so they read like the `written` entries beside them.
-    """
+    """`copytree(ignore=...)` that drops debris and deployment-specific definitions."""
 
     def ignore(directory: str, names: list[str]) -> set[str]:
         dropped = {name for name in names if _is_debris(name)}
@@ -289,16 +193,7 @@ def _ignoring(
 
 
 def _overwritten(source: Path, target: Path, label: str) -> list[str]:
-    """Files under `target` this copy is about to change, by content.
-
-    By content rather than by presence, because seeding twice with nothing
-    edited in between must say nothing at all. A warning that fires on the
-    ordinary path is one people learn to scroll past, and then it is not there
-    on the path that matters.
-
-    `copytree(dirs_exist_ok=True)` merges, so a file the catalogue has and the
-    source does not survives and is not reported. Only a collision loses work.
-    """
+    """Files under `target` this copy is about to change, by content."""
     if source.is_file():
         changed = target.is_file() and target.read_bytes() != source.read_bytes()
         return [label] if changed else []
@@ -314,68 +209,17 @@ def _overwritten(source: Path, target: Path, label: str) -> list[str]:
 
 
 def kinds_at(source: Path) -> tuple[str, ...]:
-    """Which of the four kinds a directory actually provides.
-
-    For `kingfisher doctor`. It asked whether the definitions had arrived inside
-    the install, which its own comment admitted was "only ever wrong if an
-    install is damaged" -- a check that could realistically only pass. A
-    configured directory can be unset, mistyped, deleted, or named one level too
-    high, so there is something to answer now.
-
-    Empty for a directory that is missing as well as for one holding none of
-    them. `doctor` tells those two apart before asking, because the remedies
-    differ: a path that is wrong, against a path that points one level off.
-    """
+    """Which of the four kinds a directory actually provides."""
     return tuple(kind for kind in DEFINITION_KINDS if (source / kind).is_dir())
 
 
 def destination_hint() -> str:
-    """The clause naming `assets/`, and nothing at all where there is none.
-
-    Two messages ask this question -- the refusal below, and `doctor`'s "not
-    set" warn -- so it is one wording in one place, for the reason `SEED_HINT`
-    gives: four wordings drift, and the one seen daily is the one nobody
-    reviews.
-
-    A function rather than a constant because the answer depends on the working
-    directory, and a module-level string would settle it at import time --
-    before a test has chdir'd anywhere, and before a command has read its
-    `.env`. `SUGGESTION` is a constant and can be, because it is the *name*
-    that is fixed and the caller does the asking.
-
-    Phrased to append to a sentence that already ends in advice, so it reads
-    whether or not `SUGGESTION` has put a clause in front of it.
-    """
+    """The clause naming `assets/`, and nothing at all where there is none."""
     return f", and ./{DESTINATION} is where your own go" if DESTINATION.is_dir() else ""
 
 
 def definitions_source(paths: Source, override: str | Path | None = None) -> Path:
-    """The directory `seed` should copy from, or a refusal saying how to name one.
-
-    Two callers need this and must agree: `kingfisher seed`, and the driver's
-    auto-seed on a fresh workspace. Written once because the alternative is two
-    messages, of which the one seen daily is the one nobody reviews -- the driver
-    printed an instruction naming `--seed-assets` long after that had become the
-    wrong advice.
-
-    Public for the same reason `seed` is. The shipped command is held to being a
-    consumer of the library rather than an insider, so a private helper would be
-    unreachable from the one place that most needs it.
-
-    `override` wins over the environment, which is the ordinary shape of a flag
-    against a variable and the one `__main__` already documents for `.env`: an
-    explicit argument must not be quietly replaced by something a caller may not
-    have known was set.
-
-    Neither given is a refusal rather than a guess. Nothing ships definitions
-    any more, so there is no set to fall back to, and inventing one would mean
-    seeding a workspace from somewhere the caller never named.
-
-    The refusal names `./assets_examples` and `./assets` only when there is one to
-    name -- see `SUGGESTION` and `destination_hint`. It says both because a
-    reader stopped here has two things to learn and the messages only ever
-    taught the first: where to point, but never where to put.
-    """
+    """The directory `seed` should copy from, or a refusal saying how to name one."""
     if override is not None:
         return Path(override).expanduser()
     if paths.assets is not None:
@@ -392,35 +236,7 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
 
 
 def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded:
-    """Copy definitions into this deployment's catalogues, and say what changed.
-
-    `source` is a directory holding `agents/`, `tools/`, `skills/` and
-    `subagents/`. Required, with no default: seeding cannot invent where
-    definitions come from, and a signature that let it try is one a caller can
-    get wrong at runtime rather than at check time. `definitions_source` is what
-    turns a flag and a variable into one of these.
-
-    Copied rather than read in place: they are the deployment's content once
-    seeded, and the entire point is that you edit your copy. A definition that
-    changed under a catalogue because kingfisher was upgraded would be a
-    different thing altogether.
-
-    Which is exactly why the overwriting is reported. Seeding is the one
-    operation that writes over those edited copies, and it used to do so
-    silently -- an edited `reviewer.md` came back as the shipped one, reported
-    identically to a file that had not been there at all.
-
-    It still overwrites: refusing would make re-seeding after an upgrade
-    impossible, and that is the same trade `place_data` makes for caller files.
-    Replacing silently is the part that was wrong.
-
-    `everything` copies definitions that name middleware, which are left behind
-    by default. The default is the safe one because the common case is a fresh
-    workspace with an empty registry, where such a definition is refused when it
-    is built; the flag is for the deployment that has already registered the
-    names and wants its own examples. Neither is a judgement about the file --
-    it is a fact about the workspace it is going into.
-    """
+    """Copy definitions into this deployment's catalogues, and say what changed."""
     # Before anything is copied, and not left to the caller. Seeding into a
     # workspace that was never laid out succeeds, reports every definition
     # written, and leaves no `models.yaml.example` -- which is the dead end that
