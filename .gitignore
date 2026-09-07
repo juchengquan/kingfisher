@@ -235,6 +235,23 @@ assets/*
 
 # This checkout doubles as a workspace when the CLI is run from it, so the
 # workspace's own `models.yaml` lands at the root. It is one deployment's
-# endpoints, not the project's -- `src/kingfisher/models.yaml.example` is the
-# tracked template, and is what a reader should be reading.
+# endpoints, not the project's -- `src/kingfisher/templates/models.yaml.example`
+# is the tracked template, and is what a reader should be reading.
 /models.yaml
+
+# And so does everything a run is handed or leaves behind. Two annual reports,
+# their extracted text and a comparison page -- 51MB of somebody's documents --
+# sat untracked at the root for three days, one `git add -A` away from a commit
+# that could not be undone by deleting the file afterwards.
+#
+# Root-anchored, like `/models.yaml` above, and that is the whole care in it. A
+# bare `*.pdf` would also swallow a fixture under `tests/` or a document a
+# deployment meant to ship in `assets/`, which are files somebody chose to
+# commit. This rule is only about the directory a run happens to be started in.
+#
+# The caller's own output is not listed, because it has no shape to match: this
+# one was `comparison.html`, and the next will be called something else.
+# Untracked and visible is the right state for a file this rule cannot name --
+# a `git status` that mentions it is what prompts somebody to move it.
+/*.pdf
+/.pdf_text/
