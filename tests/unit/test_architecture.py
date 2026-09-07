@@ -1043,8 +1043,10 @@ WITNESSES: dict[str, str] = {
     "paths_from_env": "document",
     "seed": "document",
     "run": "document",
-    # `formats.md` writes them out: `groups=UNSCOPED` at line 1042, and
-    # `from kingfisher import Request, RunOn` at line 74.
+    # `formats.md` writes them out: `groups=UNSCOPED`, and
+    # `from kingfisher import Request, RunOn`. Grep for those rather than trusting a
+    # line number here -- two were written down and both went stale the first time
+    # that page was edited.
     "UNSCOPED": "document",
     "RunOn": "document",
     # `guides/ports.md` writes `from kingfisher import SESSION_STORE_CONTRACT`
