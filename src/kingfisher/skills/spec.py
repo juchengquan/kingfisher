@@ -11,15 +11,10 @@ import re
 
 FILENAME = "SKILL.md"
 
-#: Where skills live and what an upload's directory is called are *not* here.
-#: They are facts about the workspace layout, so `kingfisher.layout` declares them
-#: -- `SKILLS` and `UPLOADED_SKILL_DIR` -- and readers ask it directly rather
-#: than through this module.
-#:
-#: They were here while both files were in `domain/` and nothing had to choose.
-#: `skills` becoming a module of its own made the domain import it to learn
-#: where a directory was, which is the wrong way round, and that is what named
-#: the owner. This module is about the document format and nothing else.
+#: Where skills live and what an upload's directory is called are *not* here. They are
+#: facts about the workspace layout, so `kingfisher.layout` declares them -- `SKILLS`
+#: and `UPLOADED_SKILL_DIR` -- and readers ask it directly rather than through this
+#: module.
 
 
 class SkillError(ValueError):

@@ -129,15 +129,7 @@ def test_a_caller_can_only_narrow_within_what_the_deployment_granted(cfg):
 
 
 def test_absent_follows_the_lattice_even_if_the_model_declares_otherwise():
-    """What `model_fields_set` actually buys, and it is not obvious.
-
-    The declared defaults above match the lattice, so passing every axis every time
-    would produce the same answer -- a mutation that does exactly that changes
-    nothing. What `model_fields_set` buys is that the two are allowed to drift
-    *without the behaviour drifting*: a wrong declared default becomes a lie in the
-    generated schema rather than a capability quietly granted or withheld. This is
-    that claim, with a deliberately wrong model.
-    """
+    """What `model_fields_set` actually buys, and it is not obvious."""
     from kingfisher_service.capabilities import Axis
 
     class Drifted(CapabilitiesBody):

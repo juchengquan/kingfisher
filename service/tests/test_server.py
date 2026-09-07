@@ -617,13 +617,7 @@ def test_two_refusals_with_one_status_still_say_which_is_which(client):
 
 
 def test_a_bug_is_not_dressed_up_as_a_refusal(cfg, monkeypatch):
-    """An unmapped exception must not acquire an `error` code on the way out.
-
-    Asserted on the response rather than on the raise. Starlette re-raises after a
-    server-error handler runs, so `pytest.raises` passes whether or not the handler
-    dressed the bug up first -- which it did, when this was written that way and a
-    mutation broadening the registration went unnoticed.
-    """
+    """An unmapped exception must not acquire an `error` code on the way out."""
     boom = "something is wrong here"
 
     def explode(self, session_id):

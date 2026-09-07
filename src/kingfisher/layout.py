@@ -1,34 +1,18 @@
 """The workspace layout, as data. Belongs to no layer, which is why it sits here.
 
-Every name and tier here is policy: which directories exist, which hold what a
-person wrote, which are disposable. None of it creates anything -- making the
-layout real is `infrastructure.workspace.layout`.
+Every name and tier here is policy: which directories exist, which hold what a person
+wrote, which are disposable. None of it creates anything -- making the layout real is
+`infrastructure.workspace.layout`.
 
-Outside `domain/` for the reason `config.py` was: **no domain rule reads it.**
-Every reader is in `infrastructure/`, `skills/`, `tools/` or `subagents/`, and it
-sat in the innermost layer so those could share it without depending on each
-other -- which is reasoning about import direction, not modelling. The names are
-the vocabulary the prompt teaches the model, which is the honest counter and does
-not change the test.
+Outside `domain/` for the reason `config.py` was: **no domain rule reads it.** Every
+reader is in `infrastructure/`, `skills/`, `tools/` or `subagents/`, and it sat in
+the innermost layer so those could share it without depending on each other -- which
+is reasoning about import direction, not modelling. The names are the vocabulary the
+prompt teaches the model, which is the honest counter and does not change the test.
 
-  shared by all     /agents /skills           definitions, authored by a person
-                    /subagents /tools
-  per-session       sessions/<id>/            /data /derived /memory /runs
-  per-turn          sessions/<id>/runs/<turn>/
-  harness-owned     .kingfisher/
-
-  authored          /agents, /skills, /subagents, /tools, PROMPT.md
-  harness-owned     /.kingfisher
-  disposable        everything under sessions/
-
-A session directory is the backend root, which is why it holds every name the
-agent addresses: `/data` means the same thing in every session while pointing
-somewhere different in each. There is no directory for reports, because "a
-report" is one kind of output among many.
-
-The tiers are about durability, not about a tool. Versioning the authored tier is
-an operator's business, best done wherever `KINGFISHER_SKILLS_DIR` points rather
-than around 200MB of sessions.
+The tiers are about durability, not about a tool. Versioning the authored tier is an
+operator's business, best done wherever `KINGFISHER_SKILLS_DIR` points rather than
+around 200MB of sessions.
 """
 
 from __future__ import annotations
@@ -96,11 +80,7 @@ RESERVED_SKILL_FOLDER = "subagents"
 
 
 def _route(*parts: str) -> str:
-    """A path the agent addresses, with both slashes, from names above.
-
-    Both slashes matter: `CompositeBackend` matches a route by prefix, and a route
-    without its trailing slash would match `/database/` as well as `/data/`.
-    """
+    """A path the agent addresses, with both slashes, from names above."""
     return "/" + "/".join(parts) + "/"
 
 
@@ -120,17 +100,7 @@ RUNS_ROUTE = _route(RUNS)
 
 @dataclass(frozen=True)
 class Route:
-    """One path the agent addresses, and what is true of it.
-
-    Policy, like everything else here: nothing builds a backend or a permission.
-    `infrastructure.harness.backend` turns each entry into a mount and
-    `infrastructure.harness.agent` turns the scopes into deny rules.
-
-    One table because `FilesystemMiddleware` refuses `permissions=` outright
-    unless every rule is scoped to a route, so a path and its rule have to agree
-    -- and nothing made them agree except care, with the failure arriving at a
-    turn rather than at the definition.
-    """
+    """One path the agent addresses, and what is true of it."""
 
     #: The path, with both slashes, as `CompositeBackend` matches it.
     path: str
@@ -199,11 +169,7 @@ def denied_scopes() -> tuple[str, ...]:
 
 
 def routed_paths() -> tuple[str, ...]:
-    """The paths the composite mounts itself, families excluded.
-
-    A family's members are generated from a catalogue, so they cannot be listed
-    here; `family_prefixes` is how a caller recognises one.
-    """
+    """The paths the composite mounts itself, families excluded."""
     return tuple(r.path for r in ROUTES if r.routed and not r.family)
 
 MARKER = ".kingfisher/WORKSPACE"

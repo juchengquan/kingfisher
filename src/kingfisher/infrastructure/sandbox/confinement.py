@@ -77,33 +77,13 @@ class Confinement:
     #: Empty when the shell is confined, or when a deployment has said it is
     #: confined elsewhere. Non-empty text is printed once at startup.
     warning: str = ""
-    #: The deployment asserted a boundary this code cannot see -- a container
-    #: mounting only the workspace. Nothing is wrapped and nothing is wrong.
-    #:
-    #: A field rather than an inference, because the inference is exactly what
-    #: `EXTERNAL` was invented to remove: "nothing wraps the shell" has two
-    #: causes and one of them is fine. Without this, a reader downstream sees
-    #: `confined = False` for both and reports the reassuring case as the
-    #: alarming one -- which `doctor` did until this was added.
+    #: The deployment asserted a boundary this code cannot see -- a container mounting
+    #: only the workspace. Nothing is wrapped and nothing is wrong.
     elsewhere: bool = False
     #: What is doing the confining, named. Empty when nothing is.
-    #:
-    #: Needed once a confinement stopped being spelled as a command prefix.
-    #: `sandbox-exec` is one, so "does `wrap` do anything" answered the question
-    #: on macOS; Landlock is applied to the process rather than to the string,
-    #: so on Linux that test reports a fenced shell as unfenced. Naming it also
-    #: fixes the report: "confined" could not tell an operator whether to go
-    #: looking at a profile or at a container.
     mechanism: str = ""
-    #: A deployment provided the `CommandRunner`, so what actually runs a command
-    #: is code this process cannot inspect.
-    #:
-    #: Separate from `elsewhere` because the two answer different questions. A
-    #: supplied runner that is `local` still has kingfisher's confinement applied
-    #: to the command, so `mechanism` stays true -- it is just no longer the
-    #: whole story, and an operator asking "what runs my commands" deserves the
-    #: rest of it. A supplied runner that is *not* local has none of it applied,
-    #: and that case sets `elsewhere` as well.
+    #: A deployment provided the `CommandRunner`, so what actually runs a command is
+    #: code this process cannot inspect.
     supplied: bool = False
 
     @property
@@ -373,23 +353,12 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
             home=home,
             readable=readable_roots(workspace, extra, skills),
             writable=writable_roots(workspace, scratch_dir),
-            # The catalogue is instructions the agent follows, and by default it
-            # sits inside the workspace -- so "the workspace is writable" made a
-            # skill something the agent could rewrite for every later request,
-            # including in the other deployments sharing a relocated one. Read at
-            # the tool level too, by the deny rule `kingfisher.layout` declares for
-            # this route; both are needed,
-            # because the shell bypasses tool permissions entirely.
-            #
-            # Every definition root, for the same reason and one worse. `tools/`
-            # holds Python that `LocalToolRepository` *executes* to read, and a
-            # graph is built per request -- so a file the shell wrote was
-            # imported and run, in this process and outside this profile, on the
-            # next turn. The others decide rather than execute: an agent that
-            # edits its own `agents/*.yaml` strikes out the `groups:` line
-            # saying who may reach it, and groups are read when the catalogue
-            # loads. `skills/` is passed separately because the backend derives
-            # a session's own, which is not always the workspace's.
+            # The catalogue is instructions the agent follows, and by default it sits
+            # inside the workspace -- so "the workspace is writable" made a skill
+            # something the agent could rewrite for every later request, including in
+            # the other deployments sharing a relocated one. Read at the tool level too,
+            # by the deny rule `kingfisher.layout` declares for this route; both are
+            # needed, because the shell bypasses tool permissions entirely.
             protected=protected_roots(skills, definitions),
         ),
         encoding="utf-8",

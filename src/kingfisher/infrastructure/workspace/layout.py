@@ -1,12 +1,8 @@
 """The workspace tree, and the furniture that ships inside it.
 
-What `kingfisher.layout` describes as data, made on disk: the directories a
-workspace holds, the marker saying it has been used before, and the worked
-example of the one file a deployment must write for itself.
-
-All of it is about the tree a *deployment* runs out of. One session's directory
-is `sessions`, and the lifetimes are the reason they are apart -- a workspace is
-laid out once and outlives every session inside it.
+What `kingfisher.layout` describes as data, made on disk: the directories a workspace
+holds, the marker saying it has been used before, and the worked example of the one
+file a deployment must write for itself.
 """
 
 from __future__ import annotations
@@ -39,26 +35,12 @@ EXAMPLES = (EXAMPLE,)
 
 
 def is_new_workspace(workspace: Path) -> bool:
-    """True when this path has never been used as a workspace.
-
-    Surfaced by callers so a silently relocated workspace — an unstable `~`,
-    a changed env var — reads as "created new" rather than as a first run.
-    """
+    """True when this path has never been used as a workspace."""
     return not (Path(workspace) / MARKER).exists()
 
 
 def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None) -> Path:
     """Create the workspace layout. Idempotent.
-
-    `authored` says where the two files a deployment writes itself are read
-    from -- `Config.authored_files` and `WorkspacePaths.authored_files` are it,
-    keyed by filename. Omitted means the workspace, which is where both default
-    and where every caller holding only a directory should put them.
-
-    What the workspace still owns is what sessions share — the skill and
-    subagent definitions — plus the directory sessions live in. Everything the
-    agent addresses belongs to a session and is made by
-    `sessions.ensure_session_layout`.
 
     No `.gitignore` is written, and nothing here runs git. A shipped one listed two
     of the five things a workspace holds, so it read as complete while being wrong:
@@ -84,35 +66,7 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
 
 
 def _place_example(workspace: Path, authored: Mapping[str, Path] | None = None) -> None:
-    """Put each worked example where the file it is an example of is read from.
-
-    Here rather than in `seed`, because seeding can *refuse* -- a deployment that
-    names no definitions has nothing to copy -- and this file must arrive anyway:
-    `models.yaml` is required, has no fallback, and the error a deployment without
-    one hits names this file as the place to look. It is furniture rather than
-    content: nothing chooses it, and a workspace without it is missing a part of
-    itself.
-
-    Written when absent *or different*. Always writing would touch the disk on
-    every run for nothing; only when absent would mean an upgrade never refreshed
-    the example, so a deployment would keep reading last year's annotations for a
-    file that had grown fields.
-
-    As `.example`, never as `models.yaml` itself: the one file that must not be
-    overwritten is the one naming every endpoint this deployment reaches and whose
-    credentials pay.
-
-    "Where it is read from" is not always the workspace. Both files relocate --
-    `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue, the
-    arrangement `compose.yaml` ships -- and an example written into the workspace
-    regardless leaves a container deployment with an annotated catalogue in a
-    directory nothing reads.
-
-    Best-effort where the destination will not take it: a shared catalogue is often
-    mounted read-only, and failing the whole layout over furniture would take
-    `kingfisher seed` down for exactly the deployment that relocated. The fallback
-    is the workspace.
-    """
+    """Put each worked example where the file it is an example of is read from."""
     beside = dict(authored or {})
     for name in EXAMPLES:
         source = resources.files(TEMPLATES).joinpath(name)
@@ -135,10 +89,5 @@ def _place_example(workspace: Path, authored: Mapping[str, Path] | None = None) 
 
 
 def _candidates(wanted: Path, fallback: Path) -> tuple[Path, ...]:
-    """Where to try writing one example, in order, without trying twice.
-
-    One entry for the ordinary deployment, which relocated nothing: the two are
-    the same path there, and a fallback that repeats the attempt that just
-    failed would write the same `OSError` off twice and say nothing new.
-    """
+    """Where to try writing one example, in order, without trying twice."""
     return (wanted,) if wanted == fallback else (wanted, fallback)
