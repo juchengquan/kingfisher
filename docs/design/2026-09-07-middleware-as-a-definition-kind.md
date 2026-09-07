@@ -1,10 +1,9 @@
 # Middleware as a definition kind
 
-**Status:** proposed, and **blocked on [a definition is not the agent's to
-edit](2026-09-07-a-definition-is-not-the-agents-to-edit.md)**.
-Not sequenced for tidiness: without that one, this proposal puts a guard in a
-directory the guarded thing can rewrite, which is the objection it exists to
-answer. Nothing here is built.
+**Status:** proposed. **Unblocked on 2026-09-07**: the definition roots are now
+denied to the agent's shell, which was the premise this rested on -- see *A
+definition is not the agent's to edit* under *Confining the shell* in
+`decisions.md`. Nothing here is built.
 **Date:** 2026-09-07
 **Cited by symbol, not by line.**
 
@@ -31,10 +30,12 @@ The reason is one sentence: a middleware read out of the workspace would be code
 the agent can edit, wrapped around the agent that edited it. A cap the capped
 thing can rewrite is not a cap.
 
-That argument is exactly as strong as the premise, and the premise is the subject
-of the other document. Once the definition roots are denied to the agent's shell,
-a `middleware/` directory beside `tools/` is no longer editable by the thing it
-constrains, and the sentence no longer applies.
+That argument is exactly as strong as the premise, and the premise has since
+changed. Every directory in `catalogue_roots` is denied to the confined shell, so
+a `middleware/` directory beside `tools/` is not editable by the thing it
+constrains, and the sentence no longer applies. `test_every_definition_root_is
+_protected` walks the roots rather than a list, so the fifth kind arrives
+covered.
 
 What does *not* change is who may put something there. `seed` writes into those
 directories and a caller cannot: uploads layer `LayeredSkills` and
@@ -106,10 +107,10 @@ starts being satisfiable by seeding rather than only by writing Python.
 
 ## Considered and rejected
 
-**Doing this without protecting the roots first.** The whole argument above rests
-on the agent not being able to edit what it is capped by. Built in the other
-order, this ships the exact failure the current design refuses, and ships it as a
-feature.
+**Doing this before protecting the roots.** The whole argument above rests on the
+agent not being able to edit what it is capped by. In the other order this would
+have shipped the exact failure the design refuses, as a feature -- which is why
+the protection went first and this waited for it.
 
 **A `middleware/` directory outside the workspace, for this kind alone.** The
 first shape considered, and rejected once the tools situation was measured:
