@@ -213,7 +213,11 @@ CITATION = re.compile(r"docs/[A-Za-z0-9_./-]+\.md")
 #: `docs/README.md` names removed documents on purpose -- its recovery commands
 #: are `git show <commit>^:docs/design/...`, which are supposed to be paths that
 #: no longer resolve.
-CITED_FROM = ("src", "tests", "service", ".github")
+#: `assets_examples` joined the four when `call_cap.py` started naming
+#: `guides/middleware.md`. It was outside the rule for no reason anybody had
+#: stated -- it is tracked text and it is not under `docs/`, which is the whole
+#: of what the sentence above asks for.
+CITED_FROM = ("src", "tests", "service", ".github", "assets_examples")
 
 #: The root files, named rather than globbed: the repository root also holds a
 #: `.venv`, a `.git` and whatever a developer left there, and a rule that reads
@@ -300,6 +304,7 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 CHECKED_SNIPPETS: dict[str, bool] = {
     "README.md": True,
     "docs/guides/formats.md": True,
+    "docs/guides/middleware.md": True,
     "docs/guides/ports.md": True,
     "docs/guides/tools.md": True,
 }
@@ -404,6 +409,7 @@ def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
     assert collected == {
         "README.md",
         "docs/guides/formats.md",
+        "docs/guides/middleware.md",
         "docs/guides/ports.md",
         "docs/guides/tools.md",
     }

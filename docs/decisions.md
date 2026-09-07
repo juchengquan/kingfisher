@@ -1185,6 +1185,35 @@ and `infrastructure/catalogue/agents.py` stay where they are, and
 `harness/agent.py` with them -- assembling a graph out of the three kinds is
 kingfisher's own job, not any kind's.
 
+**Not a module: middleware.** It has a field in both definition formats and a
+name in `Capabilities`, which is what makes it look like a fourth kind. What it
+does not have is the thing the other three earned their packages with: a format
+of its own and a walk over the disk. `tools`, `skills` and `subagents` each own
+a file somebody authors, a reader for it, and a registry built from what was
+found; middleware has a name a definition writes and a dict the deployment
+passed in, and nothing in between for a package to hold.
+
+The pieces are where they are for reasons that survive being asked again.
+`approved_middleware` and `approved_settings` are in `domain/capabilities.py`
+because the rule is expressible in kingfisher's vocabulary -- both fields are
+name lists -- while turning a name into an object is not. `declared_middleware`
+is in `harness/` because it imports `langchain`, which is the same rule that
+keeps `skills.registry` and `subagents.harness` where they are. A
+`kingfisher/middleware/` package would be the fifth area in `THIRD_PARTY`
+reaching the agent runtime, and the last three entries there each carry a note
+apologising for widening a boundary that used to be one directory.
+
+What was actually missing was a page. Registering middleware is deployment code
+like a port adapter is, and `guides/` had `ports.md` and `tools.md` and nothing
+for this -- so the deployment's half lived in three docstrings inside
+`middleware.py` and two example files. `guides/middleware.md` is that page, and
+it links the examples rather than restating them: the copy in a docstring is the
+one a test exercises. Measured on the way past, and worth recording because it
+was the argument for a package that did not survive it -- a deployment writing
+middleware imports **nothing** from kingfisher. Both examples import
+`langchain` alone, and `MiddlewareFactory` is an annotation this package uses on
+itself. *(2026-09-07.)*
+
 **Reversed: "the rest of the layer stays flat."** The clause read *a second
 subpackage would advertise a distinction no test could hold*, and by the time
 anyone looked there were three of them -- `catalogue/` had arrived without the
