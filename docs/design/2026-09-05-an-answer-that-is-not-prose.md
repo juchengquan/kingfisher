@@ -205,6 +205,34 @@ can pass `name=`. Deterministic across requests, and it hands the transcript
 translation below the name it needs without recomputing what LangChain would
 have called it.
 
+Passing it also settles `title`, which is worth stating because the hazard above
+reads like a rule about schemas and is not one. `_SchemaSpec` consults
+`schema["title"]` *only* when no name was given; a registry that always passes
+one has taken the field out of the question, and a registered schema does not
+need a `title` at all.
+
+**The schema's `description` is left alone, and it is the third place the model
+is told what it is producing.** Not `title` -- that one is inert once `name=` is
+passed -- but `description`, which travels:
+
+    tool=StructuredTool(
+        args_schema=schema_spec.json_schema,
+        name=schema_spec.name,
+        description=schema_spec.description,   # schema.get("description", "")
+    )
+
+So a registered schema with no `description` hands the model a tool with an
+empty one, alongside a system prompt describing the component catalogue and the
+schema constraining the envelope. Three places, and this is the one that arrives
+without anybody choosing it.
+
+Left to the schema rather than defaulted here. The registry key is a good tool
+*name* and a poor description of what a document is for, and inventing prose
+about a deployment's own format is the thing this design has refused everywhere
+else -- kingfisher does not know what the components mean. What follows is a
+line in whatever guide the field gets, not a fallback in the code: a schema worth
+registering says in its `description` what it is for, because the model reads it.
+
 **`answer` keeps holding prose, and a new `structured` field holds the
 document.** Not a `str | Mapping` union: `answer` is typed `str` in
 `result_payload`, in the audit record, in `run_end(answer_chars=...)` and in
