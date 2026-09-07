@@ -71,7 +71,6 @@ class Origins:
     seed: Origin
 
     state: Origin
-    scratch: Origin
     sessions: Origin
 
     @classmethod
@@ -92,7 +91,6 @@ class Origins:
             groups=_groups(cfg),
             seed=_configured(cfg.assets),
             state=_file(cfg.state_dir, cfg.workspace / ".kingfisher"),
-            scratch=_file(cfg.scratch_dir, cfg.state_dir / "tmp"),
             sessions=_sessions(cfg, sessions),
         )
 

@@ -303,7 +303,7 @@ PROSE_GONE: dict[str, frozenset[str]] = {
     "tests/unit/test_architecture.py": frozenset({
         "infrastructure.agent",
         "infrastructure.backend",
-        "infrastructure.backend.prepare_scratch",
+        "infrastructure.backend.shell_env",
         "infrastructure.workspace_fs.resolve_definitions",
     }),
 }
@@ -377,7 +377,9 @@ def test_prose_naming_a_module_names_one_that_exists():
 #: a list, a comma or a conjunction mid-clause. Trimming a docstring drops the
 #: block underneath and leaves the introduction behind, which reads as complete
 #: prose and is not -- `agent.py` promised "the last of three parts --" and named
-#: none of them, `prepare_scratch` promised "two problems" and listed neither.
+#: none of them, and the scratch preparer promised "two problems" and listed
+#: neither. That second one is named without backticks on purpose: it went with
+#: the shared scratch directory, and the rule below would now call it unresolved.
 UNFINISHED = ("--", ":", ",", " and", " or", " the", " is", " are")
 
 #: Prose citing a position in a file rather than something in it. `formats.md`
@@ -474,10 +476,10 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     """
     assert _prose_unresolved("`infrastructure.harness.backend`") == []
     assert _prose_unresolved("`skills.spec.split` and `application.inventory`") == []
-    assert _prose_unresolved("`infrastructure.harness.backend.prepare_scratch`") == []
+    assert _prose_unresolved("`infrastructure.harness.backend.shell_env`") == []
 
-    assert _prose_unresolved("`infrastructure.backend.prepare_scratch`") == [
-        "infrastructure.backend.prepare_scratch"
+    assert _prose_unresolved("`infrastructure.backend.shell_env`") == [
+        "infrastructure.backend.shell_env"
     ]
     # A package and a name it does not hold. This is the one a parent-only check
     # let through, and six of the thirteen were this shape.

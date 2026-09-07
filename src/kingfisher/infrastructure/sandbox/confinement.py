@@ -200,7 +200,6 @@ def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement
         cfg.shell_sandbox,
         workspace=cfg.workspace,
         state_dir=cfg.state_dir,
-        scratch_dir=cfg.scratch_dir,
         extra=cfg.shell_path_extra,
         skills=cfg.skills_dir if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
@@ -306,10 +305,15 @@ def readable_roots(workspace: Path, extra: tuple[str, ...] = (),
     return tuple(dict.fromkeys(p.resolve() for p in roots if str(p)))
 
 
-def writable_roots(workspace: Path, scratch: Path) -> tuple[Path, ...]:
-    """Everywhere the shell is allowed to write."""
-    roots = (Path(workspace), Path(scratch))
-    return tuple(dict.fromkeys(p.resolve() for p in roots))
+def writable_roots(workspace: Path) -> tuple[Path, ...]:
+    """Everywhere the shell is allowed to write.
+
+    One root now. `TMPDIR` used to be named beside it, because
+    `KINGFISHER_SCRATCH_DIR` could move it out of the workspace; it lives inside
+    the session instead, which is inside the workspace, so naming it again would
+    be naming a subpath of what this already returns.
+    """
+    return (Path(workspace).resolve(),)
 
 
 def protected_roots(skills: Path | None, definitions: tuple[Path, ...]) -> tuple[Path, ...]:
@@ -330,7 +334,7 @@ def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
 
 def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
     # and each is separately relocatable by its own environment variable
-    mode: str, *, workspace: Path, state_dir: Path, scratch_dir: Path,
+    mode: str, *, workspace: Path, state_dir: Path,
     extra: tuple[str, ...] = (), skills: Path | None = None,
     definitions: tuple[Path, ...] = (),
 ) -> Confinement:
@@ -370,7 +374,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         profile(
             home=home,
             readable=readable_roots(workspace, extra, skills),
-            writable=writable_roots(workspace, scratch_dir),
+            writable=writable_roots(workspace),
             # The profile refuses writes to itself, so the rules cannot be
             # rewritten by the shell they bind. See `profile`.
             itself=path,

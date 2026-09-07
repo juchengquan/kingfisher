@@ -123,16 +123,13 @@ def test_the_seed_directory_is_never_derived(cfg, tmp_path):
 
 
 def test_the_working_roots_follow_the_workspace_until_they_are_moved(cfg, tmp_path):
-    """State and scratch are derived from the workspace, and relocate together -- moving
-    state moves scratch, because scratch hangs off it.
+    """State is derived from the workspace.
     """
     plain = Origins.of(cfg)
     assert plain.state == Origin("default", cfg.workspace / ".kingfisher")
-    assert plain.scratch.kind == "default"
 
     moved = Origins.of(replace(cfg, state_root=tmp_path / "state"))
     assert moved.state == Origin("relocated", tmp_path / "state")
-    assert moved.scratch.kind == "default", "scratch derives from state, so it did not move"
 
 
 def test_a_session_store_handed_in_is_told_from_a_configured_one(cfg, tmp_path):
@@ -162,7 +159,7 @@ def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
 
     assert names == [
         "agents", "middleware", "skills", "subagents", "tools",
-        "models", "groups", "seed", "state", "scratch", "sessions",
+        "models", "groups", "seed", "state", "sessions",
     ]
 
 

@@ -41,7 +41,7 @@ needs_a_real_toolchain = pytest.mark.skipif(
 def test_off_is_warned_about_on_every_start(cfg, tmp_path):
     """An exposure nobody is reminded of is one nobody fixes."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path
     )
 
     assert not chosen.confined
@@ -52,7 +52,7 @@ def test_off_is_warned_about_on_every_start(cfg, tmp_path):
 def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
     """A container that mounts only the workspace has provided the boundary."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path
     )
 
     assert chosen.warning == ""
@@ -63,14 +63,14 @@ def test_an_unknown_mode_is_refused_rather_than_treated_as_off(cfg, tmp_path):
     """A typo in a deployment's env must not silently unconfine it."""
     with pytest.raises(ValueError, match="unknown shell sandbox mode"):
         confinement.resolve(
-            "sandbox", workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+            "sandbox", workspace=cfg.workspace, state_dir=tmp_path
         )
 
 
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
     chosen = confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path
     )
 
     assert chosen.confined
@@ -90,7 +90,7 @@ def test_the_profile_follows_the_state_directory(cfg, tmp_path):
     only that the setting is honoured.
     """
     confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path
     )
 
     assert not list(Path(cfg.workspace).rglob("shell.sb"))
@@ -394,13 +394,15 @@ def test_installing_into_the_environment_is_refused(cfg, session_dir):
 
 
 @macos
-def test_tmpdir_stays_writable_wherever_it_is_pointed(cfg, session_dir, tmp_path):
-    """`$TMPDIR` is where the prompt sends scratch, and `KINGFISHER_SCRATCH_DIR` can
-    move it out of the workspace.
+def test_tmpdir_is_writable_inside_the_session(cfg, session_dir):
+    """`$TMPDIR` is where the prompt sends scratch, so a shell that cannot write it
+    fails on its first command.
+
+    It used to be relocatable out of the workspace and named separately in the
+    writable set for that reason. Inside the session, it is covered by the
+    workspace allow the profile already emits.
     """
-    outside = tmp_path / "scratch-elsewhere"
-    relocated = replace(cfg, scratch_root=outside)
-    backend = build_backend(relocated, session_dir)
+    backend = build_backend(cfg, session_dir)
 
     result = backend.execute('echo hi > "$TMPDIR/note.txt" && cat "$TMPDIR/note.txt"')
 
@@ -507,7 +509,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
 def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
     """The distinction `EXTERNAL` exists for, made readable downstream."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path
     )
 
     assert chosen.elsewhere
@@ -519,7 +521,7 @@ def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
 def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
     """The other side, or the flag would say yes to everything."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path
     )
 
     assert not chosen.elsewhere
@@ -726,7 +728,6 @@ def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
             confinement.AUTO,
             workspace=tmp_path / "ws",
             state_dir=state,
-            scratch_dir=tmp_path / "scratch",
         )
 
     assert sorted(p.name for p in state.iterdir()) == ["shell.sb"], (

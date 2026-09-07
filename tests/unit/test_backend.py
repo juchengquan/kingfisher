@@ -6,15 +6,14 @@ from pathlib import Path
 import pytest
 from deepagents.backends import CompositeBackend
 
-from kingfisher.config import ConfigError
 from kingfisher.infrastructure.harness.agent import read_only_permissions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     build_backend,
-    prepare_scratch,
     shell_env,
 )
 from kingfisher.infrastructure.harness.runlog import log_path
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, ROUTES, denied_scopes, routed_paths
 
 
@@ -57,7 +56,8 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    with pytest.raises(ValueError, match=r"missing derived, memory, runs, \.home, skills/uploaded"):
+    wanted = r"missing derived, memory, runs, \.home, \.tmp, skills/uploaded"
+    with pytest.raises(ValueError, match=wanted):
         build_backend(cfg, bare)
 
 
@@ -164,50 +164,29 @@ def test_every_read_and_write_path_resolves_through_the_guarded_hook():
     assert WorkspaceScopedBackend._get_backend_and_key is not CompositeBackend._get_backend_and_key
 
 
-def test_scratch_defaults_inside_the_workspace(cfg, session_dir):
-    """Unset means self-contained: scratch is disposed of with the workspace."""
-    assert cfg.scratch_dir == cfg.workspace / ".kingfisher" / "tmp"
-    assert shell_env(cfg, session_dir)["TMPDIR"] == str(cfg.scratch_dir)
+def test_tmpdir_is_the_session_s_own(cfg, session_dir):
+    """One shared scratch directory was swept by nothing, counted against nothing, and
+    readable by every other session's shell. Per session, `reap` and `session_bytes`
+    already cover it and neither fence has to grant anything extra.
+    """
+    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / ".tmp")
 
 
-def test_scratch_can_be_relocated(cfg, tmp_path, session_dir):
-    """One fixed location per machine, e.g. /tmp, is a config change."""
-    relocated = replace(cfg, scratch_root=tmp_path / "kingfisher-scratch")
+def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
+    """The cross-session channel this closed: what one caller derived sat where another
+    caller's agent could read it."""
+    other = ensure_session_layout(workspace / "sessions" / "second")
 
-    assert relocated.scratch_dir == tmp_path / "kingfisher-scratch"
-    assert shell_env(relocated, session_dir)["TMPDIR"] == str(relocated.scratch_dir)
-
-
-def test_prepare_scratch_creates_a_private_directory(cfg, tmp_path):
-    """0700: /tmp is world-writable, and scratch derives from /data."""
-    relocated = replace(cfg, scratch_root=tmp_path / "scratch")
-
-    created = prepare_scratch(relocated)
-
-    assert created.is_dir()
-    assert created.stat().st_mode & 0o077 == 0
+    assert shell_env(cfg, session_dir)["TMPDIR"] != shell_env(cfg, other)["TMPDIR"]
 
 
-def test_prepare_scratch_tightens_an_existing_loose_directory(cfg, tmp_path):
-    """Every workspace made before this check has a 0755 scratch directory."""
-    existing = tmp_path / "existing"
-    existing.mkdir()
-    existing.chmod(0o755)
+def test_tmpdir_is_created_private(cfg, session_dir):
+    """The mode the shared scratch directory had, kept rather than quietly widened.
 
-    prepare_scratch(replace(cfg, scratch_root=existing))
-
-    assert existing.stat().st_mode & 0o077 == 0
-
-
-def test_prepare_scratch_refuses_something_that_is_not_a_directory(cfg, tmp_path):
-    """A symlink in /tmp is the classic way to redirect someone else's writes."""
-    target = tmp_path / "elsewhere"
-    target.mkdir()
-    link = tmp_path / "link"
-    link.symlink_to(target)
-
-    with pytest.raises(ConfigError, match="symlink or not a directory"):
-        prepare_scratch(replace(cfg, scratch_root=link))
+    Not a boundary on its own -- `derived/` sits beside it at whatever the umask gave
+    it -- and `ensure_session_layout` says so where it does this.
+    """
+    assert (session_dir / ".tmp").stat().st_mode & 0o077 == 0
 
 
 def test_state_dir_defaults_and_relocates(cfg, tmp_path):
@@ -217,13 +196,6 @@ def test_state_dir_defaults_and_relocates(cfg, tmp_path):
     relocated = replace(cfg, state_root=tmp_path / "state")
     assert relocated.state_dir == tmp_path / "state"
     assert log_path(relocated.state_dir, "s1") == tmp_path / "state" / "runs" / "s1.jsonl"
-
-
-def test_scratch_follows_a_relocated_state_dir(cfg, tmp_path):
-    """Scratch defaults *under* state, so moving state moves scratch with it."""
-    relocated = replace(cfg, state_root=tmp_path / "state")
-
-    assert relocated.scratch_dir == tmp_path / "state" / "tmp"
 
 
 def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):

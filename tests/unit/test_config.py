@@ -146,28 +146,32 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
     assert os.environ["LANGCHAIN_TRACING_V2"] == "false"
 
 
-def test_state_and_scratch_default_to_the_workspace(env):
+def test_state_defaults_to_the_workspace(env):
     """Unset means self-contained: nothing is written outside the workspace."""
     cfg = config_from_env(env)
 
     assert cfg.state_root is None
-    assert cfg.scratch_root is None
     assert cfg.state_dir == cfg.workspace / ".kingfisher"
-    assert cfg.scratch_dir == cfg.workspace / ".kingfisher" / "tmp"
 
 
-def test_state_and_scratch_can_be_pointed_elsewhere(env, tmp_path):
+def test_state_can_be_pointed_elsewhere(env, tmp_path):
     """Host-side state is relocatable; the agent addresses none of it by path."""
-    cfg = config_from_env(
-        {
-            **env,
-            "KINGFISHER_STATE_DIR": str(tmp_path / "state"),
-            "KINGFISHER_SCRATCH_DIR": str(tmp_path / "scratch"),
-        }
-    )
+    cfg = config_from_env({**env, "KINGFISHER_STATE_DIR": str(tmp_path / "state")})
 
     assert cfg.state_dir == tmp_path / "state"
-    assert cfg.scratch_dir == tmp_path / "scratch"
+
+
+def test_there_is_no_knob_for_the_agent_s_tmpdir(env):
+    """`TMPDIR` is a session directory, so it cannot be pointed out of the session.
+
+    `KINGFISHER_SCRATCH_DIR` existed to move it, and a scratch directory that is
+    both per-session and elsewhere is not expressible: `session_bytes` counts one
+    directory, so anywhere else is a cost the quota cannot see.
+    """
+    cfg = config_from_env({**env, "KINGFISHER_SCRATCH_DIR": "/tmp/somewhere"})
+
+    assert not hasattr(cfg, "scratch_dir")
+    assert not hasattr(cfg, "scratch_root")
 
 
 def test_the_catalogue_defaults_inside_the_workspace(env):

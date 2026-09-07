@@ -289,7 +289,10 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     # And that the paths are the ones meant, so agreeing on nothing would fail.
     _, readable, writable = seen["Landlock"]
     assert skills in readable, "the shared catalogue is what a skill's scripts are read from"
-    assert writable == [cfg.scratch_dir], "$TMPDIR has to be writable or the first command fails"
+    assert writable == [], (
+        "$TMPDIR is inside the session both fences already grant, so naming it again "
+        "would grant a subpath of what is granted"
+    )
 
 
 def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):

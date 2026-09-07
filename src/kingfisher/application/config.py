@@ -157,7 +157,6 @@ class Environment:
             shell_path_extra=path_extra,
             shell_sandbox=self.values.get("KINGFISHER_SHELL_SANDBOX", "auto"),
             state_root=self.optional_path("KINGFISHER_STATE_DIR"),
-            scratch_root=self.optional_path("KINGFISHER_SCRATCH_DIR"),
             # From `paths`, not read again here: it is the one reader of these
             # three, so a fresh workspace is seeded into the same directories a
             # configured one is served from.

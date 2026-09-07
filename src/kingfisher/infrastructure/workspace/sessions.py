@@ -8,7 +8,7 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from kingfisher.domain.session import sessions_root
-from kingfisher.infrastructure.workspace.permissions import unlock_and_retry
+from kingfisher.infrastructure.workspace.permissions import keep_tmp_private, unlock_and_retry
 from kingfisher.layout import (
     AGENTS_SCAFFOLD,
     ARTIFACT_DIRS,
@@ -61,6 +61,10 @@ def ensure_session_layout(session_dir: Path) -> Path:
     session_dir = Path(session_dir).expanduser().resolve()
     for name in (*SESSION_DIRS, *SESSION_PLUMBING):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
+
+    # Asked for rather than done here: `permissions` is the one module in this
+    # package that changes a mode, and it says why this one is set at all.
+    keep_tmp_private(session_dir)
 
     # Scaffolded rather than empty: the memory prompt directs the agent to save
     # knowledge with `edit_file`, which replaces existing text — an empty file

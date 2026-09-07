@@ -19,10 +19,10 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "tools",
     # Sessions are the unit of isolation; each one is a backend root.
     "sessions",
-    # `.kingfisher` holds the marker. Its `runs/` and `tmp/` subdirectories are
-    # not created here: both are relocatable (`KINGFISHER_STATE_DIR`,
-    # `KINGFISHER_SCRATCH_DIR`) and each is created by whatever opens it, so
-    # creating them here would leave empty decoys behind when they are moved.
+    # `.kingfisher` holds the marker. Its `runs/` subdirectory is not created
+    # here: it is relocatable (`KINGFISHER_STATE_DIR`) and is created by
+    # whatever opens it, so creating it here would leave an empty decoy behind
+    # when it is moved.
     ".kingfisher",
 )
 
@@ -52,8 +52,17 @@ UPLOADED_SKILL_DIR = "uploaded"
 
 UPLOADED_SKILLS = f"{SKILLS}/{UPLOADED_SKILL_DIR}"
 
+#: The agent's `TMPDIR`, for the reason `.home` is here: one shared scratch
+#: directory for the whole workspace was swept by nothing, counted against no
+#: session's quota, and readable by every other session's shell -- so what one
+#: caller derived sat where another caller's agent could read it. Per session,
+#: it is deleted with the session and counted by `session_bytes`, and neither
+#: fence has to grant anything beyond the session directory it already grants.
+AGENT_TMP = ".tmp"
+
 SESSION_PLUMBING: tuple[str, ...] = (
     AGENT_HOME,
+    AGENT_TMP,
     UPLOADED_SKILLS,
 )
 
