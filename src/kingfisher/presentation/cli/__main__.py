@@ -81,13 +81,27 @@ if TYPE_CHECKING:
 #: are standing in.
 ENV_FILE = ".env"
 
-#: What a workspace cannot do with a name it has not been given, per kind. Two
-#: verbs rather than one, because "cannot build" is exact for middleware and
-#: wrong for a group -- a definition naming an undeclared group does not fail to
-#: build, it stops the catalogue being read at all.
-CANNOT = {
-    "middleware": "cannot build",
-    "groups": "does not declare",
+#: What `seed` did *not* look at before leaving a definition behind, per kind.
+#:
+#: These said "this workspace cannot build" and "this workspace does not
+#: declare", which read as findings and were not ones. `_deployment_specific`
+#: opens the definition and nothing else: it never sees a registry, and `seed`
+#: is not handed a group vocabulary at all. So a deployment that had declared
+#: every name in its `groups.yaml` was still told the workspace did not declare
+#: them -- a sentence its own file contradicted, with a remedy it had already
+#: carried out.
+#:
+#: Saying what was skipped and what was not consulted is true of every run, and
+#: it is also the sentence that explains the surprise: a reader who has done the
+#: work needs to know the check cannot see it, or the next step looks broken.
+#:
+#: Still two entries rather than one. The thing not consulted differs, and so
+#: does where it lives -- a registry is in the deployment's own code, a
+#: vocabulary is a file in the workspace -- which is the same split `REMEDY`
+#: below makes and for the same reason.
+UNCONSULTED = {
+    "middleware": "what this deployment registered",
+    "groups": "your groups.yaml",
 }
 
 #: And what to do about it. The half a reader acts on, and the half that would
@@ -355,7 +369,8 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
         # both would send half its readers to the wrong file.
         print(
             f"skipped {left.label} — names {left.wants} "
-            f"({', '.join(left.names)}) that this workspace {CANNOT[left.wants]}. "
+            f"({', '.join(left.names)}), and seed does not check "
+            f"{UNCONSULTED[left.wants]}. "
             f"{REMEDY[left.wants]}, then seed again with --all"
         )
     for line in _declare(written):
@@ -386,9 +401,9 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
             # where they thought.
             wants = written.skipped[0].wants
             print(
-                f"nothing seeded — every definition in {tree} names {wants} "
-                f"this workspace {CANNOT[wants]}. {REMEDY[wants]}, then seed "
-                f"again with --all"
+                f"nothing seeded — every definition in {tree} names {wants}, "
+                f"and seed does not check {UNCONSULTED[wants]}. "
+                f"{REMEDY[wants]}, then seed again with --all"
             )
             return 1
         print(f"nothing to seed — {tree} holds none of {', '.join(DEFINITION_KINDS)}")
