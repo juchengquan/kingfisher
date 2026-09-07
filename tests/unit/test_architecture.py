@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import ast
+import inspect
 import re
 import sys
 from pathlib import Path
@@ -367,6 +368,77 @@ def test_prose_naming_a_module_names_one_that_exists():
     assert not stale, (
         f"{stale} name kingfisher modules that do not exist — something moved "
         "and the comment about it did not"
+    )
+
+
+#: A docstring's last line, when it has promised something that is not there.
+#:
+#: These are the endings a sentence cannot stop on: a dash or a colon introducing
+#: a list, a comma or a conjunction mid-clause. Trimming a docstring drops the
+#: block underneath and leaves the introduction behind, which reads as complete
+#: prose and is not -- `agent.py` promised "the last of three parts --" and named
+#: none of them, `prepare_scratch` promised "two problems" and listed neither.
+UNFINISHED = ("--", ":", ",", " and", " or", " the", " is", " are")
+
+#: Prose citing a position in a file rather than something in it. `formats.md`
+#: was cited by line twice, both correct when written and both wrong the first
+#: time that page was edited -- a claim nothing checks, in a file the rule above
+#: would have covered had it named a module instead.
+PROSE_LINE_REF = re.compile(r"\bat line \d+|\bline \d+ of\b", re.IGNORECASE)
+
+
+def _docstrings(path: Path) -> list[tuple[str, str]]:
+    """Every docstring in a module, with the name it belongs to."""
+    try:
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+    except SyntaxError:  # pragma: no cover -- the suite would not import either
+        return []
+    holds = (ast.Module, ast.ClassDef, ast.FunctionDef, ast.AsyncFunctionDef)
+    return [
+        (getattr(node, "name", "<module>"), doc)
+        for node in ast.walk(tree)
+        if isinstance(node, holds) and (doc := ast.get_docstring(node, clean=False))
+    ]
+
+
+def test_no_docstring_stops_mid_sentence():
+    """A docstring that introduces a list nobody wrote is a wrong map, not a typo.
+
+    Cheap where the module rule was expensive: whether a sentence ends is syntax,
+    where whether a module exists needed tense and intent. Measured against the
+    tree before the prose was cut -- 2,705 docstrings, no false positives -- and
+    it catches all three the cutting produced.
+    """
+    unfinished = []
+    for path in _everything_that_imports_kingfisher():
+        for name, doc in _docstrings(path):
+            if inspect.cleandoc(doc).rstrip().endswith(UNFINISHED):
+                unfinished.append(f"{_module_id(path)}::{name}")
+
+    assert not unfinished, (
+        f"{unfinished} end on a dash, a colon or a conjunction — each promises "
+        "something underneath it that is not there, which reads as finished prose"
+    )
+
+
+def test_no_prose_cites_a_line_number():
+    """A line number is a claim about a file that editing the file falsifies.
+
+    The neighbouring rule checks that prose naming a module names a real one, and
+    cannot see this: a position is not a name. Both citations this found were
+    right when written and wrong two commits later, with nothing going red.
+    """
+    cited = []
+    for path in _prose_bearing_files():
+        text = path.read_text(encoding="utf-8")
+        cited += [
+            f"{path.relative_to(REPO).as_posix()} -> {hit}"
+            for hit in PROSE_LINE_REF.findall(text)
+        ]
+
+    assert not cited, (
+        f"{cited} cite a line number — name the thing instead, so a reader greps "
+        "for it rather than trusting an address the next edit moves"
     )
 
 
