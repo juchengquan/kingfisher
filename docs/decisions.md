@@ -1620,6 +1620,23 @@ A caution for whoever measures this again: a first pass counted 40 of 45
 unresolved, and three of the resolutions it did find came out of `.venv` --
 `deepagents/middleware/skills.py` made `skills.py` look real. *(2026-09-06.)*
 
+**Two prose rules that do hold, and why they are not that one.** Cutting the
+repository's prose introduced four defects and every check stayed green: three
+docstrings left promising a list the cut had dropped -- *"the last of three parts
+--"*, naming none -- and one comment citing `formats.md` by line number, which
+went stale the first time that page was edited and was found four merges later by
+accident.
+
+Both shapes are now guarded, and the numbers are the whole argument for why the
+rejection above does not extend to them. That rule ran 10 false positives to 2
+true ones, because "does this module exist" needs tense and intent -- illustrative
+paths, deliberate history. **"Does this sentence end" is syntax.** Measured
+against the tree before the cutting: 2,705 docstrings, *zero* false positives,
+and it catches all three. `at line N` matched twice in the entire repository, both
+stale. A rule is fragile when it has to read intent, not because it reads prose.
+
+*(2026-09-07.)*
+
 ## How much a comment says
 
 **Reversed: "match the surrounding density".** The convention asked every comment
