@@ -1,4 +1,8 @@
-"""Agent definitions held in a directory on this host."""
+"""Agent definitions held in a directory on this host.
+
+`spec` is the format and `reading` parses one; this finds the documents. Why the
+package exists, and why `harness/agent.py` is not in it, is `__init__`.
+"""
 
 from __future__ import annotations
 
@@ -6,25 +10,14 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.domain import agent
-from kingfisher.domain.agent import AgentError, AgentSpec
-from kingfisher.infrastructure import documents
+from kingfisher.agents import reading
+from kingfisher.agents.spec import AgentError, AgentSpec
 from kingfisher.infrastructure.importing import skipped
 
 # `SUFFIX` comes from the format that already names it rather than being
 # restated here: both are YAML documents kingfisher reads, and a second copy of
 # the extension is a second thing to keep in step.
 from kingfisher.subagents.reading import NEAR_MISS, SUFFIX
-
-
-def read_agent(text: str, source: Path) -> AgentSpec:
-    """One agent definition. Raises `AgentError` on anything malformed."""
-    document = documents.decode(text)
-    if isinstance(document, str):
-        msg = f"{source.name}: cannot read definition ({document})"
-        raise AgentError(msg)
-    documents.require_literal_prompt(text, source, AgentError)
-    return agent.parse(document, source)
 
 
 def _definitions_in(directory: Path) -> list[Path]:
@@ -64,7 +57,7 @@ class LocalAgentRepository:
         for path in _definitions_in(directory):
             where = str(path.relative_to(directory))
             text = path.read_text(encoding="utf-8")
-            read.append((read_agent(text, path), where, text))
+            read.append((reading.read(text, path), where, text))
 
         # Two of a name is refused here rather than reported, which is the one
         # place this differs from subagents. A request names exactly one agent,

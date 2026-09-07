@@ -1243,8 +1243,7 @@ say, how they are found on disk, and how they reach the runtime. Kingfisher
 fetches from them; they do not answer to a layer. *(2026-09-04.)*
 
 **A kind reads its own documents.** `subagents.reading.read`,
-`skills.reading.name_from`, and `catalogue.agents.read_agent` for the kind that
-has no module. Each was two functions in two packages: an envelope opener in
+`skills.reading.name_from`, and `agents.reading.read`. Each was two functions in two packages: an envelope opener in
 `infrastructure` and the format's own parser, with the opener calling straight
 back into the module it was called from. *(2026-09-05.)*
 
@@ -1315,7 +1314,7 @@ and the definition readers parse a tool reference because an agent definition
 referring to itself, not the domain reaching for a layer.
 
 The rule was refused as a wall first and then measured, which is the order that
-was wrong. Importing `domain.ports` and `domain.agent` with those edges takes
+was wrong. Importing `domain.ports` and `agents.spec` with those edges takes
 39ms and loads 101 modules with no part of the agent runtime among them -- the
 same 39ms recorded below as the good case against 888ms. The direction was
 protecting two operational properties and this costs neither, so what stopped
@@ -1338,7 +1337,7 @@ choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
 used by `kingfisher.layout`, which *is* the layout; `ceiling` sat in the tool module
 and touches no registry, so it went to `domain.capabilities` with the rest of
 that arithmetic; and `wanted_model` was in the subagent format while
-`domain.agent` imported it to read its own `model:` line, so it went to
+`agents.spec` imported it to read its own `model:` line, so it went to
 `domain.fields`, which is the field readers. A helper two formats need belongs
 to neither of them.
 
@@ -1350,11 +1349,39 @@ other*, which is why both dragged shared vocabulary into the question. Nothing
 here was insurmountable, but a fourth kind with an interlocking format should
 expect the same three-way negotiation rather than a rename.
 
-**Not a module: agents.** An agent is selected by name, one per request, and is
-the thing the graph *is* rather than something the graph holds. `domain/agent.py`
-and `infrastructure/catalogue/agents.py` stay where they are, and
-`harness/agent.py` with them -- assembling a graph out of the three kinds is
-kingfisher's own job, not any kind's.
+**Reversed in part: "not a module: agents."** The entry read *an agent is
+selected by name, one per request, and is the thing the graph* is *rather than
+something the graph holds*, and drew from that: *assembling a graph out of the
+three kinds is kingfisher's own job, not any kind's*. That conclusion is right
+and `harness/agent.py` stays exactly where it was. It reaches one of the three
+files the entry moved to keep, and a format's parser is not an assembly.
+
+`agents/` is the fourth kind module: `spec` the format, `reading` the parser,
+`catalogue` the walk and the repository -- `subagents`' shape minus `rules`,
+whose one cross-definition question is answered where it is found, and minus
+`harness`, for the reason above.
+
+**The test applied is the neighbouring entry's.** *Not a module: middleware* is
+what says what earns a package -- *a file somebody authors, a reader for it, and
+a registry built from what was found* -- and an agent has all three where
+middleware has none. Agents was the only kind that met that test and lacked the
+package, and this entry refused it on a different ground: what an agent *is* at
+runtime, which is a fact about the graph rather than about where a YAML parser
+lives.
+
+**It costs nothing at the boundary, which is the other half of the middleware
+argument.** That entry's closing objection was that a `middleware/` package
+would be *the fifth area in `THIRD_PARTY` reaching the agent runtime*. This one
+reaches none: `THIRD_PARTY["agents"]` is empty, the only kind whose set is, and
+it is empty precisely because the runtime half stayed in `harness/`.
+
+**One rule got smaller.** `test_the_catalogue_holds_one_module_per_kind` looked
+in two places while three kinds had left `catalogue/` and one had not. With the
+fourth gone that branch is unreachable, so it is one place again -- a rule with
+a branch nothing can reach is half a rule. `catalogue/` keeps `__init__` and
+`layered`, which is `Definitions` and the per-session merge, and holds no
+per-kind module at all.
+*(2026-09-04, reversed in part 2026-09-07.)*
 
 **Not a module: middleware.** It has a field in both definition formats and a
 name in `Capabilities`, which is what makes it look like a fourth kind. What it

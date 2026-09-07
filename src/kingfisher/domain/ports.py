@@ -8,7 +8,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Protocol, runtime_checkable
 
-from kingfisher.domain.agent import AgentSpec
+from kingfisher.agents.spec import AgentSpec
 from kingfisher.subagents.spec import SubagentSpec
 from kingfisher.tools.spec import Found
 

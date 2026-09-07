@@ -19,8 +19,8 @@ from kingfisher.tools.harness import (
 if TYPE_CHECKING:
     from pathlib import Path
 
+    from kingfisher.agents.spec import AgentSpec
     from kingfisher.config import Config
-    from kingfisher.domain.agent import AgentSpec
     from kingfisher.infrastructure.catalogue import Definitions
 
 

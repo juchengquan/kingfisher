@@ -6,9 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.agent import AgentError
+from kingfisher.agents.catalogue import LocalAgentRepository
+from kingfisher.agents.reading import read
+from kingfisher.agents.spec import AgentError
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository, read_agent
 from kingfisher.subagents import reading
 from kingfisher.subagents.spec import SubagentError
 
@@ -34,7 +35,7 @@ MINIMAL = "".join(REQUIRED.values())
 
 
 def _read(text: str, name: str = "surveyor.yaml"):
-    return read_agent(text, Path(name))
+    return read(text, Path(name))
 
 
 # -- what a definition says -------------------------------------------------
@@ -196,7 +197,7 @@ def test_a_folded_prompt_is_refused_because_it_reflows():
 
 def test_the_error_says_which_format_the_broken_file_is_in():
     """`AgentError` rather than `SubagentError`, and that is the whole reason
-    `read_agent` is its own function rather than a shared one taking a parser: it is
+    `read` is its own function rather than a shared one taking a parser: it is
     what tells somebody which of two folders to open.
     """
     with pytest.raises(AgentError):
@@ -426,7 +427,7 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
 
     import yaml
 
-    from kingfisher.domain.agent import parse
+    from kingfisher.agents.spec import parse
     from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT
 
     block = STARTER_AGENT.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]

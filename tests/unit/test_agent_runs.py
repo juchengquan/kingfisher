@@ -36,7 +36,7 @@ def _agents(cfg, *bodies: str) -> None:
 
 
 def _spec(cfg, name: str):
-    from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
+    from kingfisher.agents.catalogue import LocalAgentRepository
 
     return LocalAgentRepository(cfg.catalogue_roots["agents"]).specs[name]
 

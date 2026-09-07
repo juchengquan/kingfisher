@@ -17,7 +17,7 @@ gone stale two days after it was drafted, one of them moved by its own first
 slice. A `grep` for the name still lands; a line number is a claim with a
 shelf life.
 
-The `REFUSED` table in `domain/agent.py` declines `response_format` on an agent
+The `REFUSED` table in `agents/spec.py` declines `response_format` on an agent
 definition, and the refusal reads like a specification:
 
 > an agent answers a real caller who may well want a schema, and there is

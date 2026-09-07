@@ -7,15 +7,15 @@ from dataclasses import dataclass, fields
 from functools import cached_property
 from pathlib import Path
 
+from kingfisher.agents.catalogue import LocalAgentRepository
+from kingfisher.agents.spec import DIRECTORY as AGENT_DIRECTORY
 from kingfisher.config import Config, ConfigError
-from kingfisher.domain.agent import DIRECTORY as AGENT_DIRECTORY
 from kingfisher.domain.ports import (
     AgentRepository,
     SkillRepository,
     SubagentRepository,
     ToolRepository,
 )
-from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.skills import registry as skill_registry
 from kingfisher.skills.catalogue import LocalSkillRepository
 from kingfisher.skills.registry import SkillRegistry

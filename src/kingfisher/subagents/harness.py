@@ -16,8 +16,8 @@ from urllib.parse import urlsplit
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.runnables import Runnable
 
+from kingfisher.agents.spec import AgentSpec
 from kingfisher.config import ConfigError
-from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     ALL,
     Selection,

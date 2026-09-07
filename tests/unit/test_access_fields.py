@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.domain.agent import AgentError
+from kingfisher.agents.spec import AgentError
 from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.fields import Reader
 

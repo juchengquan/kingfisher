@@ -424,7 +424,7 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.infrastructure.catalogue.agents import read_agent
+    from kingfisher.agents.reading import read
     from kingfisher.subagents import reading
 
     readme = (formats_doc).read_text(encoding="utf-8")
@@ -441,7 +441,7 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
     assert blocks, "the README opens the section with a whole definition"
     assert any(is_agent for is_agent, _ in blocks), "the agents section shows one too"
     for is_agent, block in blocks:
-        read = read_agent if is_agent else reading.read
+        read = read if is_agent else reading.read
         read(block, _Path("readme.yaml"))
 
 
@@ -461,7 +461,7 @@ def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
     import re
     from pathlib import Path as _Path
 
-    from kingfisher.infrastructure.catalogue.agents import read_agent
+    from kingfisher.agents.reading import read
     from kingfisher.subagents import reading
 
     required = "name: probe\ndescription: A probe.\nsystem_prompt: |\n  Do the task.\n"
@@ -474,7 +474,7 @@ def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
 
     assert fragments, "no field fragments found -- this asserts nothing"
     for is_agent, fragment in fragments:
-        read = read_agent if is_agent else reading.read
+        read = read if is_agent else reading.read
         read(required + fragment, _Path("readme.yaml"))
 
 

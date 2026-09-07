@@ -33,6 +33,8 @@ from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
+from kingfisher.agents.reading import read
+from kingfisher.agents.spec import AgentSpec
 from kingfisher.application import access
 from kingfisher.application import config as config_module
 from kingfisher.application.disposal import Disposal
@@ -60,7 +62,6 @@ from kingfisher.domain.access import (
     _Unscoped,
     reaches,
 )
-from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     UNRESTRICTED,
     Capabilities,
@@ -73,7 +74,6 @@ from kingfisher.domain.session import (
     Session,
 )
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
-from kingfisher.infrastructure.catalogue.agents import read_agent
 from kingfisher.infrastructure.harness import runtime
 from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
@@ -407,7 +407,7 @@ class Kingfisher(Sessions, Disposal):
             self.remember_agent(session_id, request.agent)
             return spec
 
-        started = read_agent(kept, agent_snapshot(self.cfg.state_dir, session_id))
+        started = read(kept, agent_snapshot(self.cfg.state_dir, session_id))
         if request.agent is not None and request.agent != started.name:
             msg = (
                 f"this session is running {started.name!r}; it was fixed when the "

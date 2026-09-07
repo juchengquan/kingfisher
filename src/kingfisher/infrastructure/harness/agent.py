@@ -17,8 +17,8 @@ from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
+from kingfisher.agents.spec import AgentSpec
 from kingfisher.config import Config
-from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import (
     ALL,
     Capabilities,

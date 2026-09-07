@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from kingfisher.agents.reading import read
 from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
@@ -16,7 +17,6 @@ from kingfisher.domain.session import (
     known,
     sessions_root,
 )
-from kingfisher.infrastructure.catalogue.agents import read_agent
 from kingfisher.infrastructure.session_store import restore_into
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout, session_bytes
 from kingfisher.infrastructure.workspace.snapshots import agent_snapshot, agent_started_with
@@ -101,7 +101,7 @@ class Sessions:
         kept = agent_started_with(self.cfg.state_dir, session_id)
         if kept is None:
             return found
-        pinned = read_agent(kept, agent_snapshot(self.cfg.state_dir, session_id))
+        pinned = read(kept, agent_snapshot(self.cfg.state_dir, session_id))
         return found if reaches(pinned.groups, self.access.expand(groups)) else None
 
     def start_session(self, session_id: str | None = None) -> str:
