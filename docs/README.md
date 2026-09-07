@@ -52,8 +52,8 @@ slices land.
 - [An answer that is not
   prose](design/2026-09-05-an-answer-that-is-not-prose.md) — what a run returns
   when a caller wants a schema, and why the format that prompted it is not
-  named in the source. Its first slice stands alone; the rest waits for
-  something that renders.
+  named in the source. Its first slice has landed; the rest waits for something
+  that renders.
 
 Two have passed through and left the way the rule says. *A store a deployment
 can name* was built in four slices; its decisions are under *Wiring a store* in

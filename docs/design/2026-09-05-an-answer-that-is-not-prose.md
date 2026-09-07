@@ -1,11 +1,10 @@
 # An answer that is not prose
 
-**Status:** proposed, and slice 1 is written. That slice stands alone -- it
-corrects a refusal whose reason upstream contradicts -- and is open on its own
-branch, so this document may merge either side of it. Slices 2 and 3 are
-deliberately held: nothing renders structured output yet, and the argument for
-waiting is in *What this does not do* at the foot. It stays here until they land
-or the proposal is withdrawn.
+**Status:** proposed. **Slice 1 landed on 2026-09-06 (#372)**, correcting a
+refusal whose reason deepagents contradicted; it went first because it depended
+on nothing else here. Slices 2 and 3 are deliberately held: nothing renders
+structured output yet, and the argument for waiting is in *What this does not
+do* at the foot. It stays here until they land or the proposal is withdrawn.
 **Date:** 2026-09-05
 **Occasion:** an investigation into carrying A2UI, Google's declarative
 agent-driven UI format, as what a kingfisher run returns. The conclusion was
@@ -294,10 +293,9 @@ catalogue is the client's.
 **Extending `response_format` to delegates.** The `REFUSED` table in
 `subagents/reading.py` refused it with a reason that was checkably false:
 deepagents does hand a delegate's structured response somewhere, serialising it
-into the tool result with `json.dumps`. The refusal stays and the reason is
-corrected, which is slice 1. The true reason is better than the false one: a
-delegate's structured response reaches its parent as *text*, so a schema buys
-shape
+into the tool result with `json.dumps`. The refusal stays; the reason was
+corrected in slice 1. The true reason is better than the false one: a delegate's
+structured response reaches its parent as *text*, so a schema buys shape
 discipline inside the delegate and nothing structured survives the handoff.
 Extending it would double the surface -- a second registry lookup, a second
 refusal, a second set of format docs -- for a feature with no consumer.
@@ -324,12 +322,12 @@ smaller document, and there is no client to prove otherwise.
 
 Independent slices, a pull request each off `main`, no stacking.
 
-**1. Correct the delegate refusal.** `subagents/reading.py` states a reason
-upstream contradicts. Written, and valuable if nothing else here is ever built:
-it depends on none of it, which is why it is open separately rather than waiting
-for this document. A refusal message stating a false reason is worse
-than the generic "unknown field" this format went out of its way to avoid --
-someone will check it, find it wrong, and stop trusting the other two.
+**1. Correct the delegate refusal.** *Landed 2026-09-06 as #372, the day this
+document did.* `subagents/reading.py` stated a reason upstream contradicts, and
+it went first because it depended on none of the rest and was worth having
+whether or not any of it is ever built. A refusal message stating a false reason
+is worse than the generic "unknown field" this format went out of its way to
+avoid -- someone will check it, find it wrong, and stop trusting the other two.
 
 **2. The feature.** Registry, the `response_format` field, the load-time name
 refusal, `ToolStrategy` with an explicit name, `structured` on `RunResult` and
