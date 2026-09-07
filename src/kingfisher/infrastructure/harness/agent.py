@@ -43,7 +43,6 @@ from kingfisher.domain.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
-from kingfisher.domain.layout import denied_scopes
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.harness.activation import (
@@ -73,6 +72,7 @@ from kingfisher.infrastructure.harness.narrowing import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.prompting import system_prompt
+from kingfisher.layout import denied_scopes
 from kingfisher.subagents.harness import (
     as_subagent,
     model_object,

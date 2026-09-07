@@ -319,7 +319,7 @@ class FileStore(Protocol):
 
     A mapping rather than plain bytes, so one ref may name a small bundle and
     the two ports read alike. The keys are paths relative to wherever the files
-    land, and a caller-supplied key is exactly what `layout.within` refuses to
+    land, and a caller-supplied key is exactly what `references.within` refuses to
     let escape.
 
     Ids stop here, as they do for definitions: what the agent sees is a filename

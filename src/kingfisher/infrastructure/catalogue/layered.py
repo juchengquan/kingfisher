@@ -31,7 +31,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.domain import layout
+from kingfisher import layout
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.skills.catalogue import LocalSkillRepository
 from kingfisher.subagents.catalogue import LocalSubagentRepository

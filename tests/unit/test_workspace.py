@@ -6,14 +6,14 @@ import shutil
 import pytest
 
 from kingfisher.domain import retention
-from kingfisher.domain.layout import (
+from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
+from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs, ensure_session_layout
+from kingfisher.layout import (
     AGENT_HOME,
     LAYOUT_DIRS,
     SESSION_DIRS,
     SESSION_PLUMBING,
 )
-from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
-from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs, ensure_session_layout
 from tests.conftest import StubCheckpointer
 
 

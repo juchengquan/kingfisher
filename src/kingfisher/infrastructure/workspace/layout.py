@@ -1,6 +1,6 @@
 """The workspace tree, and the furniture that ships inside it.
 
-What `domain.layout` describes as data, made on disk: the directories a
+What `kingfisher.layout` describes as data, made on disk: the directories a
 workspace holds, the marker saying it has been used before, and the worked
 example of the one file a deployment must write for itself.
 
@@ -15,7 +15,7 @@ from collections.abc import Mapping
 from importlib import resources
 from pathlib import Path
 
-from kingfisher.domain.layout import LAYOUT_DIRS, MARKER
+from kingfisher.layout import LAYOUT_DIRS, MARKER
 
 #: Where the shipped templates sit, as an import path rather than a filesystem
 #: one -- an installed package is not in this repository's directory tree.

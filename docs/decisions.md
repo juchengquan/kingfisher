@@ -820,7 +820,7 @@ out of the shell's reach"* -- leaving the agent able to read its inputs and unab
 to run anything over them. Object storage reaches a session as a mount
 (`SessionRoot`) or by being copied in and out, and both work today.
 
-**What the agent addresses is a table in `domain.layout`.** One entry per path,
+**What the agent addresses is a table in `kingfisher.layout`.** One entry per path,
 saying whether the composite mounts it, which scope denies writes under it, and
 whether its members are generated per catalogue. `harness.backend` turns the
 entries into mounts and `harness.agent` turns the scopes into deny rules. Policy
@@ -1201,6 +1201,42 @@ or langgraph**, and only that package may. Registries and DTOs did *not* move to
 `application/`, and the package root did not change.
 *(2026-08-17, `layer-boundaries.md`.)*
 
+**The layout is not domain vocabulary, and moved to the package root.**
+`kingfisher.layout` was `domain/layout.py`, and it left for the reason `Config`
+left before it: **no domain rule reads it.** Every reader is in
+`infrastructure/`, `skills/`, `tools/` or `subagents/`, and it sat in the
+innermost layer so those could share it without depending on each other -- which
+is `config.py`'s own words, *"reasoning about import direction, not
+modelling"*.
+
+The counter is real and does not change the test. `/data` and `/derived` are the
+vocabulary the prompt teaches the model, so this reads far more like the domain
+than `base_url` ever did. But the test the `Config` move applied is not "does it
+sound like vocabulary", it is "does a domain rule read it" -- and vocabulary no
+domain rule uses is a record held for the outer layers.
+
+**Rejected: `infrastructure/harness/`**, which is where this started. Twelve
+readers across five packages and four of them are nowhere near deepagents, so
+the move would have pulled `skills/`, `tools/`, `subagents/` and `workspace/`
+into importing the one package the layering rule quarantines. A file that
+imports no framework does not belong in the package defined by importing one.
+
+**Rejected: splitting the route table out to the harness.** Every field of it is
+shaped by deepagents -- `routed` exists because `CompositeBackend` has a default
+slot, `deny_write_under` is a glob because `FilesystemMiddleware` takes globs,
+the trailing slash exists because matching is by prefix -- and only
+`harness.backend` and `harness.activation` read it in code. That is a real
+argument, and the entry above is one day older than it: pulling the table apart
+would undo the joining that entry exists to record. The root belongs to no
+layer, so framework-shaped data there costs much less than in the innermost one.
+
+**The move activated a comment that had been wrong for some time.**
+`domain/ports.py` attributed `within` to the layout module; it is in
+`domain.references`.
+Prose roots are read off the tree, so `layout` only became a resolvable root
+when the file arrived at one -- and the rule caught it on the first run after.
+*(2026-09-07.)*
+
 **An asset kind owns its own registration.** `tools/`, `skills/` and
 `subagents/` are modules at the package root, each holding what its definitions
 say, how they are found on disk, and how they reach the runtime. Kingfisher
@@ -1299,7 +1335,7 @@ spans `infrastructure/harness/`, `tools/`, `skills/` and `subagents/`.
 **Three things were in the wrong place and only the move said so.** Each had
 lived quietly because the two halves shared a directory and nothing had to
 choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
-used by `domain.layout`, which *is* the layout; `ceiling` sat in the tool module
+used by `kingfisher.layout`, which *is* the layout; `ceiling` sat in the tool module
 and touches no registry, so it went to `domain.capabilities` with the rest of
 that arithmetic; and `wanted_model` was in the subagent format while
 `domain.agent` imported it to read its own `model:` line, so it went to
@@ -1489,7 +1525,7 @@ not have.
 
 **And the move found a comment that had been lying.** Two `#:` lines above
 `class LocalSessionDirs` described "what a catalogue is made of ... the three",
-an orphan left by a constant that went to `domain.layout`. It had been read past
+an orphan left by a constant that went to `kingfisher.layout`. It had been read past
 for as long as it had been there, which is what a comment attached to the wrong
 definition does; deciding which of six files it belonged in is what finally
 asked the question.

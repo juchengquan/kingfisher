@@ -579,7 +579,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
             # sits inside the workspace -- so "the workspace is writable" made a
             # skill something the agent could rewrite for every later request,
             # including in the other deployments sharing a relocated one. Read at
-            # the tool level too, by the deny rule `domain.layout` declares for
+            # the tool level too, by the deny rule `kingfisher.layout` declares for
             # this route; both are needed,
             # because the shell bypasses tool permissions entirely.
             #

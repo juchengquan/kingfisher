@@ -15,7 +15,7 @@ It was writable. Measured before this existed, against a catalogue on disk:
 `/data` had a rule and this had none.
 
 Two enforcement points, because neither is sufficient. The deny rule derived
-for `/skills/**` -- see `domain.layout.ROUTES` for where it is declared and
+for `/skills/**` -- see `kingfisher.layout.ROUTES` for where it is declared and
 `harness.agent.read_only_permissions` for what builds it -- is a tool permission,
 and the shell bypasses tool permissions entirely; the sandbox profile covers the
 shell and is macOS-only and disableable. `/data`

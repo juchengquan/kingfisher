@@ -21,7 +21,7 @@ import re
 FILENAME = "SKILL.md"
 
 #: Where skills live and what an upload's directory is called are *not* here.
-#: They are facts about the workspace layout, so `domain.layout` declares them
+#: They are facts about the workspace layout, so `kingfisher.layout` declares them
 #: -- `SKILLS` and `UPLOADED_SKILL_DIR` -- and readers ask it directly rather
 #: than through this module.
 #:
