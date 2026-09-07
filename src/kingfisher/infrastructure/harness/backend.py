@@ -30,9 +30,18 @@ from langchain_core.messages import ToolMessage
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.layout import (
     AGENT_HOME,
+    BUNDLED_SKILLS_ROUTE,
+    DATA,
+    DATA_ROUTE,
+    MEMORY,
+    MEMORY_ROUTE,
+    RESERVED_SKILL_FOLDER,
     SESSION_DIRS,
     SESSION_PLUMBING,
+    SKILLS_ROUTE,
     UPLOADED_SKILLS,
+    UPLOADED_SKILLS_ROUTE,
+    routed_paths,
 )
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.references import UnsafeReferenceError, within
@@ -401,47 +410,6 @@ def prepare_scratch(cfg: Config) -> Path:
     return scratch
 
 
-DATA_ROUTE = "/data/"
-
-#: Routed for the same reason `/data/` is, not because skills need isolating:
-#: `FilesystemMiddleware` rejects `permissions=` outright unless every rule path
-#: is scoped to a route, and a request that activates a subset of the skills
-#: needs deny rules for the rest.
-SKILLS_ROUTE = "/skills/"
-
-#: Routed for the same reason again: a request that declines the memory a
-#: deployment wired needs a deny rule, and FilesystemMiddleware rejects
-#: `permissions=` outright unless every rule path is scoped to a route.
-MEMORY_ROUTE = "/memory/"
-
-#: A request's own skills, unpacked into its session. A *longer* prefix than
-#: SKILLS_ROUTE, and CompositeBackend matches longest-first, so this wins for
-#: paths beneath it while everything else under /skills/ still reaches the
-#: shared catalogue. That is why the catalogue kept its plain path: uploads
-#: nest underneath it rather than forcing it to be renamed.
-UPLOADED_SKILLS_ROUTE = "/skills/uploaded/"
-
-#: Where a subagent's own skills are mounted, one folder per bundle, keyed by
-#: the bundle's path under the catalogue so two folders may each hold a
-#: `surveyor`.
-#:
-#: **Under `/skills/` rather than beside it, and that is the whole of why this
-#: path and not a shorter one.** Two things make the catalogue read-only -- the
-#: `SKILLS_ARE_READ_ONLY` tool permission and the sandbox profile -- and both
-#: are scoped to this prefix. A route at `/subagent-skills/` would have been a
-#: writable skills mount: the exact hole measured in `test_skills_read_only`,
-#: where `backend.write("/skills/demo/PWNED.md")` created a file and
-#: `backend.edit` tampered with one, reopened for the newest kind of skill.
-#:
-#: Longer than `SKILLS_ROUTE`, so `CompositeBackend` matches it first, the same
-#: way uploads nest underneath rather than forcing a rename.
-BUNDLED_SKILLS_ROUTE = "/skills/subagents/"
-
-#: The folder name a catalogue may not use for its own skills, because
-#: `BUNDLED_SKILLS_ROUTE` already means something under this root.
-RESERVED_SKILL_FOLDER = "subagents"
-
-
 def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
     """Every bundle that has skills to mount, or none.
 
@@ -700,30 +668,37 @@ def build_backend(
         env=env,
         timeout=cfg.execution_timeout_s,
     )
-    return WorkspaceScopedBackend(
-        default=shell,
-        routes={
-            DATA_ROUTE: FilesystemBackend(root_dir=str(session_dir / "data")),
-            SKILLS_ROUTE: (
-                FilesystemBackend(root_dir=str(skills_dir))
-                if skills_dir is not None
-                else skills_backend(skills)
-            ),
-            MEMORY_ROUTE: FilesystemBackend(root_dir=str(session_dir / "memory")),
-            UPLOADED_SKILLS_ROUTE: FilesystemBackend(root_dir=str(uploaded)),
-            # One per bundle, so a delegate's own skills are readable by the
-            # file tools that read every other skill -- and read-only for the
-            # same two reasons, since both enforcement points are scoped to
-            # `/skills/` and this sits underneath it.
-            **{
-                bundled_skills_route(bundle.where): FilesystemBackend(
-                    root_dir=str(bundle.skills)
-                )
-                for bundle in _bundles_with_skills(catalogue or Definitions.from_config(cfg))
-            },
-        },
-        workspace=session_dir,
-    )
+    # What backs each path. Keyed by the table rather than written as one dict
+    # so that a route declared in `domain.layout` and forgotten here raises when
+    # the backend is built, instead of reaching a turn as a path that resolves
+    # to the default backend and quietly ignores its own deny rule.
+    backing = {
+        DATA_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / DATA)),
+        SKILLS_ROUTE: lambda: (
+            FilesystemBackend(root_dir=str(skills_dir))
+            if skills_dir is not None
+            else skills_backend(skills)
+        ),
+        MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
+        UPLOADED_SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(uploaded)),
+    }
+    missing = [path for path in routed_paths() if path not in backing]
+    if missing:  # pragma: no cover -- a table edit, caught by its own test
+        msg = f"routes declared in domain.layout with nothing to back them: {missing}"
+        raise ConfigError(msg)
+
+    routes: dict[str, Any] = {path: backing[path]() for path in routed_paths()}
+    # One per bundle, so a delegate's own skills are readable by the file tools
+    # that read every other skill -- and read-only for the same two reasons,
+    # since both enforcement points are scoped to `/skills/` and this sits
+    # underneath it. Generated rather than declared: the names are not known
+    # until a catalogue is read, which is what `family=True` marks.
+    routes.update({
+        bundled_skills_route(bundle.where): FilesystemBackend(root_dir=str(bundle.skills))
+        for bundle in _bundles_with_skills(catalogue or Definitions.from_config(cfg))
+    })
+
+    return WorkspaceScopedBackend(default=shell, routes=routes, workspace=session_dir)
 
 
 # `HostPathGuard` lives beside `reject_host_path` rather than with the other
