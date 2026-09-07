@@ -1,9 +1,4 @@
-"""What a delegate is told it knows.
-
-A subagent inherits none of its parent's middleware, so an index it is not
-given is an index it has no idea exists. That is why `skills:` had to be built
-rather than inherited, and why omitting it means none.
-"""
+"""What a delegate is told it knows."""
 
 from __future__ import annotations
 
@@ -63,8 +58,9 @@ def test_a_definition_can_name_the_skills_its_delegate_gets(cfg, session_dir, mo
 
 
 def test_omitting_skills_grants_none(cfg, session_dir, monkeypatch):
-    """Not what omitting `tools` means, and the asymmetry is the point: a
-    delegate's body is already its procedure."""
+    """Not what omitting `tools` means, and the asymmetry is the point: a delegate's
+    body is already its procedure.
+    """
     offer_skills(cfg, "tabular-qa")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
 
@@ -74,8 +70,9 @@ def test_omitting_skills_grants_none(cfg, session_dir, monkeypatch):
 
 
 def test_omitting_tools_still_inherits(cfg, session_dir, monkeypatch):
-    """The other half of the asymmetry, so a change to one is not read as
-    licence to change the other."""
+    """The other half of the asymmetry, so a change to one is not read as licence to
+    change the other.
+    """
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n")
 
     captured = build(cfg, session_dir, monkeypatch, subagents=("reviewer",))
@@ -109,8 +106,9 @@ def test_both_can_be_named_together(cfg, session_dir, monkeypatch):
 
 
 def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir, monkeypatch):
-    """A mistake in the definition, so it raises -- the same way `build_agent`
-    already refuses a request naming a skill nothing defines."""
+    """A mistake in the definition, so it raises -- the same way `build_agent` already
+    refuses a request naming a skill nothing defines.
+    """
     define(cfg, "name: reviewer\ndescription: d\nskills: [nonesuch]\n"
         "system_prompt: |\n  You review.\n")
 
@@ -119,8 +117,9 @@ def test_a_definition_naming_an_unknown_skill_fails_loudly(cfg, session_dir, mon
 
 
 def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch):
-    """Not a mistake -- a caller narrower than the definition -- so the skill
-    is dropped rather than raised, exactly as intersect drops it for the parent."""
+    """Not a mistake -- a caller narrower than the definition -- so the skill is dropped
+    rather than raised, exactly as intersect drops it for the parent.
+    """
     offer_skills(cfg, "tabular-qa", "code-review")
     define(
         cfg,
@@ -141,8 +140,9 @@ def test_a_delegate_cannot_reach_past_the_request(cfg, session_dir, monkeypatch)
 
 
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
-    """A block list is the skill spec's own form, and both reach the domain
-    already parsed now that a definition is read as YAML."""
+    """A block list is the skill spec's own form, and both reach the domain already
+    parsed now that a definition is read as YAML.
+    """
     inline = reading.read(
         "name: r\ndescription: d\nskills: [a, b]\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md"
     )

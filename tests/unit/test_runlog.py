@@ -1,9 +1,4 @@
-"""The run log, written and read by the same module.
-
-The driver used to parse these records itself. That duplicated the event name
-and every field name across a boundary with nothing keeping them in step --
-the same shape of bug the layering rules exist to prevent, one level out.
-"""
+"""The run log, written and read by the same module."""
 
 from __future__ import annotations
 
@@ -25,8 +20,9 @@ def _reply(**usage):
 
 
 def test_usage_survives_the_round_trip(tmp_path):
-    """Written and read by one module, so the format is pinned to itself rather
-    than to a second copy of the field names somewhere else."""
+    """Written and read by one module, so the format is pinned to itself rather than to
+    a second copy of the field names somewhere else.
+    """
     logger = _logger(tmp_path)
     for sent, got, cached in ((100, 10, 80), (200, 20, 100)):
         logger.on_llm_end(
@@ -61,8 +57,9 @@ def test_a_missing_log_is_not_an_error(tmp_path):
 
 
 def test_a_torn_final_line_does_not_lose_the_rest(tmp_path):
-    """The log is appended to as a run proceeds, so the last line can be
-    partial if the process died mid-write. The earlier records still count."""
+    """The log is appended to as a run proceeds, so the last line can be partial if the
+    process died mid-write.
+    """
     logger = _logger(tmp_path)
     logger.on_llm_end(
         _reply(

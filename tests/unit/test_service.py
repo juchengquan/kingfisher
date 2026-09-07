@@ -31,13 +31,12 @@ class CountingCheckpointer(StubCheckpointer):
 
 
 def test_an_injected_thread_store_is_opened_once_and_reused(cfg):
-    """The reason this object exists. `stream()` used to open the thread store
-    on every call; a server serving many turns opens it at startup.
+    """The reason this object exists.
 
     Still true for a store a deployment made itself, which is the case this was
-    written for. The *default* is now a database inside each session, opened for
-    the turn and closed after it -- measured at 0.22ms to reopen, against the
-    orphaned threads and cross-session contention one shared file cost.
+    written for. The *default* is now a database inside each session, opened for the
+    turn and closed after it -- measured at 0.22ms to reopen, against the orphaned
+    threads and cross-session contention one shared file cost.
     """
     CountingCheckpointer.built = 0
     store = CountingCheckpointer()
@@ -61,9 +60,9 @@ def test_three_turns_share_one_service_and_still_get_their_own_directories(cfg):
 
 
 def test_construction_prepares_only_what_sessions_share(cfg):
-    """Eagerly, so a broken workspace fails at startup rather than mid-turn --
-    but only the shared tier. `/data` and the rest belong to a session, whose
-    path is not known until a request names it."""
+    """Eagerly, so a broken workspace fails at startup rather than mid-turn -- but only
+    the shared tier.
+    """
     service = Kingfisher(cfg, threads=StubCheckpointer())
 
     assert service.workspace.is_dir()
@@ -73,8 +72,9 @@ def test_construction_prepares_only_what_sessions_share(cfg):
 
 
 def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
-    """Injection is by collaborator, not by monkeypatching -- and an agent
-    built elsewhere cannot honour restrictions it never saw."""
+    """Injection is by collaborator, not by monkeypatching -- and an agent built
+    elsewhere cannot honour restrictions it never saw.
+    """
     agent = StubAgent("ok")
     service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
 
@@ -88,8 +88,8 @@ def test_an_injected_graph_is_reused_and_refuses_narrowing(cfg, session_dir):
 
 def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
     """Deliberately not cached: it reads the workspace's skills and subagent
-    definitions, which a user can edit between turns. ~30ms against a model
-    call of seconds is not a trade worth taking."""
+    definitions, which a user can edit between turns.
+    """
     # A real checkpointer: this builds a real agent, and deepagents type-checks
     # the saver it is handed.
     an_agent(cfg)
@@ -102,12 +102,9 @@ def test_a_fresh_agent_is_built_per_request(cfg, session_dir):
 
 
 def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
-    """The bug this fixes: hardening `data/` ran before everything else, so one
-    file owned by another user -- a `sudo` run, a restored backup -- aborted
-    the turn, and every later turn of that session with it.
-
-    The tool-level deny rule is still in force; the caller is told which paths
-    are bare and the run proceeds.
+    """The bug this fixes: hardening `data/` ran before everything else, so one file
+    owned by another user -- a `sudo` run, a restored backup -- aborted the turn, and
+    every later turn of that session with it.
     """
     start(cfg, "s")
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
@@ -128,8 +125,9 @@ def test_a_session_holding_a_file_we_cannot_chmod_still_runs(cfg):
 
 
 def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
-    """Degrading quietly would be worse than crashing: the guard is weaker than
-    it looks and nobody would know."""
+    """Degrading quietly would be worse than crashing: the guard is weaker than it looks
+    and nobody would know.
+    """
     start(cfg, "s")
     monkeypatch.setattr(
         "kingfisher.application.service.protect_data",
@@ -145,8 +143,9 @@ def test_unhardened_paths_are_reported_to_the_caller(cfg, monkeypatch):
 
 
 def test_the_module_level_helpers_are_unchanged(cfg):
-    """`run("do a thing")` was the whole public surface before this object, and
-    is unaffected by it."""
+    """`run("do a thing")` was the whole public surface before this object, and is
+    unaffected by it.
+    """
     from kingfisher import run
 
     result = run("say hello", cfg=cfg, graph=StubAgent("hello"), checkpointer=StubCheckpointer())
@@ -180,8 +179,9 @@ def test_a_quiet_turn_opens_with_only_run_start():
 
 
 def test_replacing_durable_data_is_counted_not_just_listed():
-    """Durable data silently overwritten is the one dangerous case, so the
-    count is named. Nothing asserted this before."""
+    """Durable data silently overwritten is the one dangerous case, so the count is
+    named.
+    """
     events = opening_events("/runs/t001", (), FakePlacement(("a.csv", "b.csv"), ("a.csv",)))
 
     (placed,) = [e for e in events if e.kind == "data_placed"]
@@ -196,8 +196,9 @@ def test_placing_without_replacing_says_nothing_about_replacement():
 
 
 def test_unhardened_paths_are_reported_before_the_run_starts():
-    """Order matters: the caller should know the guard is weaker before it is
-    told the turn began."""
+    """Order matters: the caller should know the guard is weaker before it is told the
+    turn began.
+    """
     events = opening_events("/runs/t001", ("theirs.pdf: denied",), FakePlacement())
 
     assert [e.kind for e in events] == ["protect_failed", "run_start"]
@@ -220,9 +221,7 @@ def test_supplied_files_and_new_data_are_both_named():
 
 
 def test_the_turn_message_carries_no_output_convention():
-    """What the task should *produce* is the task's business. Filenames lived in
-    the system prompt once and made every greeting deliberate over two files
-    nobody wanted."""
+    """What the task should *produce* is the task's business."""
     message = turn_message("say hello", FakeTurn(), (), has_inputs=False)
 
     assert "report" not in message.lower()
@@ -274,16 +273,16 @@ def test_a_refused_request_leaves_no_turn_behind(cfg, tmp_path, how):
 
 
 def test_the_admitted_request_is_what_opens_the_turn(cfg):
-    """`_admit` returns; `_open_turn` takes only that. Nothing reaches the turn
-    without having passed every refusal first."""
+    """`_admit` returns; `_open_turn` takes only that."""
     import inspect
 
     assert list(inspect.signature(Kingfisher._open_turn).parameters) == ["self", "admitted"]
 
 
 def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
-    """The silence this closes: the caller found out when the model reached for
-    a tool mid-turn and was refused, not when the turn opened."""
+    """The silence this closes: the caller found out when the model reached for a tool
+    mid-turn and was refused, not when the turn opened.
+    """
     events = opening_events("/runs/t001", (), FakePlacement(), (("tool", ("execute", "ls")),))
 
     (said,) = [e for e in events if e.kind == "withheld"]
@@ -291,17 +290,14 @@ def test_a_narrowed_request_is_told_what_it_did_not_grant(cfg):
 
 
 def test_an_unrestricted_request_is_told_nothing(cfg):
-    """Nothing was withheld, so there is nothing to say. A line on every run
-    would be noise, and noise is what gets scrolled past."""
+    """Nothing was withheld, so there is nothing to say."""
     events = opening_events("/runs/t001", (), FakePlacement(), ())
 
     assert [e.kind for e in events] == ["run_start"]
 
 
 def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
-    """Not off a list kept somewhere. The tool surface includes whatever the
-    workspace defined, so the only honest answer is what was actually wired --
-    which is also what makes a grant go stale when a workspace gains a tool."""
+    """Not off a list kept somewhere."""
     from kingfisher.infrastructure.workspace import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
@@ -332,8 +328,7 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
 
 
 def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
-    """Every axis narrows the same way and every one of them went silent the
-    same way. One line per kind, and only for kinds that lost something."""
+    """Every axis narrows the same way and every one of them went silent the same way."""
     from kingfisher.infrastructure.workspace import seeding
 
     # Seeded before the service, not after: a catalogue is read when a
@@ -437,13 +432,7 @@ def _wired_to_a_store(cfg, tmp_path):
 
 
 class FreshEachTurn:
-    """A provider whose tree exists for one turn and then does not.
-
-    The deployment this seam is for, made testable: nothing survives between
-    turns except the store, so a session that remembers anything remembers it
-    because it was persisted and restored rather than because a directory
-    happened to still be there.
-    """
+    """A provider whose tree exists for one turn and then does not."""
 
     def __init__(self, root) -> None:
         self.root = Path(root)
@@ -478,8 +467,9 @@ def _wired_to_a_root(cfg, tmp_path):
 
 
 def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
-    """The seam itself: kingfisher asks where this session's files are rather
-    than deciding, and builds the layout inside whatever it is given."""
+    """The seam itself: kingfisher asks where this session's files are rather than
+    deciding, and builds the layout inside whatever it is given.
+    """
     service, _, roots = _wired_to_a_root(cfg, tmp_path)
 
     result = service.run(Request(task="anything"))
@@ -489,14 +479,7 @@ def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
 
 
 def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
-    """The whole design, end to end, with nothing left on the machine.
-
-    Turn one writes a file. Its directory is destroyed. Turn two gets a
-    brand-new empty one -- and the file is there, which it can only be because
-    the store was written before the tree went and read after the next one
-    arrived. If the bracket were narrower than the turn on either side, this is
-    the test that would say so.
-    """
+    """The whole design, end to end, with nothing left on the machine."""
     service, kept, roots = _wired_to_a_root(cfg, tmp_path)
     first = service.run(Request(task="anything"))
     kept.save(first.session_id, {"derived/report.md": b"forty rows"})
@@ -509,9 +492,9 @@ def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
 
 
 def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
-    """A mount left behind after every failed turn is an accumulating pile of
-    other tenants' session directories, in the box this design exists to
-    make safe."""
+    """A mount left behind after every failed turn is an accumulating pile of other
+    tenants' session directories, in the box this design exists to make safe.
+    """
 
     class Fails:
         def stream(self, state, config, stream_mode=None, subgraphs=False):
@@ -540,10 +523,7 @@ def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
 
 
 def test_the_tree_is_released_when_a_caller_walks_away(cfg, tmp_path):
-    """The same claim for the other way a turn ends without finishing. A tree
-    released only by the garbage collector is one held for as long as the
-    caller keeps the generator, which in a shared box is somebody else's
-    problem."""
+    """The same claim for the other way a turn ends without finishing."""
     service, _, roots = _wired_to_a_root(cfg, tmp_path)
 
     events = service.stream(Request(task="anything"))
@@ -561,14 +541,7 @@ def _with_a_derived_file(cfg, service, session_id, name, text):
 
 
 def test_a_caller_who_stops_reading_still_has_their_work_kept(cfg, tmp_path):
-    """The bug this split exists for, and it was live rather than theoretical.
-
-    `stream` is a generator whose last act is `yield self._finished(...)`, and
-    persistence used to live inside that call. A caller who takes the answer and
-    stops iterating never advances the body that far, so the turn's files were
-    never written to the store -- and the session came back from another machine
-    without them, with nothing anywhere saying so.
-    """
+    """The bug this split exists for, and it was live rather than theoretical."""
     service, kept = _wired_to_a_store(cfg, tmp_path)
     opened = service.run(Request(task="anything"))
     _with_a_derived_file(cfg, service, opened.session_id, "half.md", "half a turn")
@@ -588,13 +561,7 @@ def test_a_caller_who_stops_reading_still_has_their_work_kept(cfg, tmp_path):
 
 
 def test_a_turn_that_fails_keeps_what_it_made(cfg, tmp_path):
-    """A behaviour change, and the one this direction implies.
-
-    A turn used to leave its files in a directory and write nothing, which was
-    survivable while the directory was the truth. Once the store is the truth,
-    half a turn's work is worth more than none of it -- and the alternative is
-    that the way to lose work is for the turn to go wrong.
-    """
+    """A behaviour change, and the one this direction implies."""
 
     class Fails:
         def stream(self, state, config, stream_mode=None, subgraphs=False):
@@ -617,13 +584,8 @@ def test_a_turn_that_fails_keeps_what_it_made(cfg, tmp_path):
 
 
 def test_a_turn_hands_what_it_produced_to_the_store(cfg, tmp_path):
-    """`/derived` and `/memory` at the end of a turn, which is what
-    `collect_artifacts` already names and what has to outlive the machine.
-
-    `/memory/AGENTS.md` comes along, and that is correct rather than noise:
-    `ensure_session_layout` writes the scaffold there, `/memory` is an artifact
-    directory, and a restored session that had lost its project-memory file
-    would be missing something a turn can edit.
+    """`/derived` and `/memory` at the end of a turn, which is what `collect_artifacts`
+    already names and what has to outlive the machine.
     """
     service, kept = _wired_to_a_store(cfg, tmp_path)
     result = service.run(Request(task="anything"))
@@ -642,13 +604,7 @@ def test_a_turn_hands_what_it_produced_to_the_store(cfg, tmp_path):
 
 
 def test_a_session_whose_directory_is_gone_gets_its_files_back(cfg, tmp_path):
-    """The prototype's claim, at the level a deployment sees it.
-
-    A container holds a session's files in memory; the container goes; a later
-    turn lands on a directory with nothing in it. If the files do not come back
-    here, the session has forgotten its own work and every guarantee above it is
-    decoration.
-    """
+    """The prototype's claim, at the level a deployment sees it."""
     import shutil
 
     service, _ = _wired_to_a_store(cfg, tmp_path)
@@ -668,9 +624,7 @@ def test_a_session_whose_directory_is_gone_gets_its_files_back(cfg, tmp_path):
 
 
 def test_deleting_a_session_drops_it_from_the_store_too(cfg, tmp_path):
-    """Or a deleted session outlives its deletion everywhere that matters. The
-    directory going is the visible half; on a host that may not hold data, the
-    store is the only half that was ever durable."""
+    """Or a deleted session outlives its deletion everywhere that matters."""
     service, kept = _wired_to_a_store(cfg, tmp_path)
     result = service.run(Request(task="anything"))
     directory = cfg.workspace / "sessions" / result.session_id
@@ -685,8 +639,9 @@ def test_deleting_a_session_drops_it_from_the_store_too(cfg, tmp_path):
 
 
 def test_wiring_no_store_leaves_everything_as_it_was(cfg):
-    """The default, and it must stay the default: a deployment allowed to hold
-    data on its own disk should notice none of this."""
+    """The default, and it must stay the default: a deployment allowed to hold data on
+    its own disk should notice none of this.
+    """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
 
     result = service.run(Request(task="anything"))
@@ -696,13 +651,7 @@ def test_wiring_no_store_leaves_everything_as_it_was(cfg):
 
 
 def test_a_conversation_survives_losing_its_directory(cfg, tmp_path):
-    """The transcript's claim, and the reason it is not the checkpointer.
-
-    A checkpointer holds a conversation in whatever the framework chose. This
-    holds it in records kingfisher owns, in a file inside the session, so the
-    same store that carries results carries the history — and a machine that
-    keeps nothing loses neither.
-    """
+    """The transcript's claim, and the reason it is not the checkpointer."""
     import shutil
 
     service, _ = _wired_to_a_store(cfg, tmp_path)
@@ -724,9 +673,7 @@ def test_a_conversation_survives_losing_its_directory(cfg, tmp_path):
 
 
 def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg, tmp_path):
-    """Where history comes from now. The checkpointer holds one turn and nothing
-    after it, so a second turn that saw only its own question would be a session
-    with no memory at all."""
+    """Where history comes from now."""
     service, _ = _wired_to_a_store(cfg, tmp_path)
     first = service.run(Request(task="the number is forty"))
     service.run(Request(task="and now?", session_id=first.session_id))
@@ -741,18 +688,7 @@ def test_the_graph_is_sent_the_whole_conversation_not_only_the_question(cfg, tmp
 
 
 def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, monkeypatch):
-    """The reason this takes a callable rather than an object.
-
-    A shared runner has no way to know which session it is running for --
-    `run(command, timeout)` carries nothing -- so anything that fences *by*
-    session, which is the reason to supply one, could not work. Kingfisher's own
-    Landlock fence has the same shape for the same reason: its policy is
-    generated from the session.
-
-    Asserted where the runner is handed over rather than through a turn,
-    because a turn that reached a real `build_agent` would need a model, and an
-    injected graph skips the call this is about.
-    """
+    """The reason this takes a callable rather than an object."""
     import kingfisher.application.service as service_module
 
     asked: list[Path] = []
@@ -786,9 +722,7 @@ def test_a_runner_is_built_for_each_turn_and_told_the_session(cfg, tmp_path, mon
 
 
 def test_a_runner_that_is_not_a_callable_is_refused_at_wiring_time(cfg):
-    """With the sentence that says what to type instead. A shared instance is a
-    line at the call site; the alternative is a second shape in this
-    constructor forever, which is what `threads` carries."""
+    """With the sentence that says what to type instead."""
 
     class Runner:
         local = True

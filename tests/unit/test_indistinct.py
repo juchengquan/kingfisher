@@ -1,14 +1,4 @@
-"""A delegate that meant to run elsewhere, and did not.
-
-`second-opinion` exists in order *not* to be the model that produced the
-answer. When it ends up being that model anyway it still builds, still answers,
-and the answer is worth nothing -- there is no error to notice and nothing in
-the output that looks wrong. Silence is the failure.
-
-Reported, never refused. Kingfisher cannot know which delegates need to differ:
-`reviewer` deliberately runs on the deployment's own model, and that is right
-for it. Only a definition that *asked* to be elsewhere can be disappointed.
-"""
+"""A delegate that meant to run elsewhere, and did not."""
 
 from __future__ import annotations
 
@@ -95,10 +85,10 @@ def _found(cfg, session_dir, names, **kwargs):
 def test_a_second_endpoint_pointing_at_the_same_host_is_reported(cfg, session_dir):
     """The live case, and the one a style name cannot show.
 
-A model id says nothing about which machine serves it, so two catalogue
-    entries may name one host -- and then `model: gpt-5` reads as "somewhere
-    else" while being the same gateway. Measured on a real deployment: both
-    endpoints resolved to `api.minimaxi.com`.
+    A model id says nothing about which machine serves it, so two catalogue entries
+    may name one host -- and then `model: gpt-5` reads as "somewhere else" while
+    being the same gateway. Measured on a real deployment: both endpoints resolved to
+    `api.minimaxi.com`.
     """
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
@@ -110,8 +100,7 @@ A model id says nothing about which machine serves it, so two catalogue
 
 
 def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
-    """The negative control. Without it this reports on every run that has a
-    second endpoint at all, which is noise rather than a finding."""
+    """The negative control."""
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
     _define(elsewhere, ASKED)
 
@@ -122,8 +111,9 @@ def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
 
 
 def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
-    """Reads as a decision, behaves as a no-op -- and stops being a no-op the
-    day someone runs it on a deployment whose default differs."""
+    """Reads as a decision, behaves as a no-op -- and stops being a no-op the day
+    someone runs it on a deployment whose default differs.
+    """
     _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
 
     found = _found(cfg, session_dir, ("cheap",))
@@ -132,9 +122,8 @@ def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
 
 
 def test_pinning_a_different_model_is_not_reported(cfg, session_dir):
-    """The negative control, and it has to name a model on another *host* --
-    not merely another entry. Several models behind one gateway is the ordinary
-    case, so a different model id is not by itself evidence of anywhere else.
+    """The negative control, and it has to name a model on another *host* -- not merely
+    another entry.
     """
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
     _define(elsewhere, ASKED_FOR_A_MODEL.format(model="gpt-5"))
@@ -143,9 +132,7 @@ def test_pinning_a_different_model_is_not_reported(cfg, session_dir):
 
 
 def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
-    """`cheap-model` is a different model and the same machine. Worth a line for
-    the reason the whole check exists: a second opinion served by the gateway
-    that produced the first is the disappointment nothing else would show."""
+    """`cheap-model` is a different model and the same machine."""
     _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
     assert "same host" in _found(cfg, session_dir, ("cheap",))["cheap"]
@@ -158,18 +145,16 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
 
 
 def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
-    """`reviewer` runs on the deployment's own model on purpose. Reporting it
-    would put a line on every run, which is the noise this exists to avoid
-    being -- and would drown the one delegate the message is about.
-    """
+    """`reviewer` runs on the deployment's own model on purpose."""
     _define(cfg, ASKED_FOR_NOTHING)
 
     assert _found(cfg, session_dir, ("reviewer",)) == {}
 
 
 def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir):
-    """Written `subagents=None` rather than left at the default, which stopped
-    meaning "none" once an agent could declare a roster of its own."""
+    """Written `subagents=None` rather than left at the default, which stopped meaning
+    "none" once an agent could declare a roster of its own.
+    """
     _define(cfg, ASKED)
 
     assert indistinct_delegates(cfg, Capabilities(subagents=None), session_dir) == ()
@@ -179,8 +164,7 @@ def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir
 
 
 def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir):
-    """A caller may put a delegate on the main model deliberately. Saying so is
-    still worth a line: they chose the model, not the consequence."""
+    """A caller may put a delegate on the main model deliberately."""
     _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
     found = _found(
@@ -197,12 +181,8 @@ def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir
 
 
 def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
-    """Through the same channel as a withheld capability, and for the same
-    reason: it is a fact about the run rather than a refusal.
-
-    Asked of `_admit` rather than driven through `stream`, because an injected
-    agent cannot honour narrowed capabilities -- and narrowing is how a
-    delegate gets activated at all. The same route `withheld` is tested by.
+    """Through the same channel as a withheld capability, and for the same reason: it is
+    a fact about the run rather than a refusal.
     """
     from kingfisher import Kingfisher
 
@@ -258,8 +238,9 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
 
 
 def test_the_message_names_the_delegate(cfg, session_dir):
-    """`[indistinct] second-opinion runs 'gpt-5' on endpoint 'openai', which
-    points at the same host as the default (…)` -- readable without the field."""
+    """`[indistinct] second-opinion runs 'gpt-5' on endpoint 'openai', which points at
+    the same host as the default (…)` -- readable without the field.
+    """
     from kingfisher.domain.result import RunEvent
 
     rendered = str(RunEvent(kind="indistinct", text="second-opinion runs 'M3'", agent="x"))
@@ -304,11 +285,9 @@ def _spec_from(text):
 
 
 def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
-    """Kingfisher cannot know that a delegate needs to differ, so this is only
-    ever a report: `reviewer` names the deployment's own model on purpose.
-
-    There was a `distinct: true` that turned it into a refusal. It went with
-    `second-opinion`, its only user, and the report is what is left."""
+    """Kingfisher cannot know that a delegate needs to differ, so this is only ever a
+    report: `reviewer` names the deployment's own model on purpose.
+    """
     _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
     spec = _spec_from(
         ELSEWHERE_BY_MODEL.format(model=cfg.models.default)

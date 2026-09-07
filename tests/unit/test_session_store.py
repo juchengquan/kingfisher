@@ -1,18 +1,4 @@
-"""Where a session's files go when the machine may not keep them.
-
-The missing half of a symmetry the domain already commits to: `FileStore` is how
-bytes arrive, and until now nothing was how they leave. `artifacts()` hands back
-a list of paths, which serves a caller sharing the host and nobody else.
-
-This file used to hold the port's contract inline, above a fixture hardwired to
-`LocalSessionStore`, under a docstring saying *"everything here should read the
-same against a bucket"*. It could not: nothing outside this repository could run
-a line of it. The contract now lives in `kingfisher.testing` where a deployment
-can import it, and what stays here is the two things that are genuinely local --
-proving the kit against the implementation it was written from, and testing
-`restore_into` and `keep_from`, which are kingfisher's own functions over a store
-rather than anything a store has to provide.
-"""
+"""Where a session's files go when the machine may not keep them."""
 
 from __future__ import annotations
 
@@ -29,16 +15,7 @@ def store(tmp_path):
 
 @pytest.mark.parametrize("check", SESSION_STORE_CONTRACT, ids=lambda c: c.__name__)
 def test_the_local_store_keeps_the_port_contract(check, tmp_path):
-    """The kit, run against the store it was extracted from.
-
-    Which is the only thing that keeps the kit honest. A contract nothing
-    satisfies is a contract nobody has read, and a deployment's first sight of a
-    failing check should not be the first time anybody ran it.
-
-    A counter rather than a shared directory, because several checks build more
-    than one store and two of them landing on the same root would let one
-    check's leftovers answer another's `fetch`.
-    """
+    """The kit, run against the store it was extracted from."""
     made = 0
 
     def make():
@@ -50,9 +27,10 @@ def test_the_local_store_keeps_the_port_contract(check, tmp_path):
 
 
 def test_the_contract_is_not_quietly_empty():
-    """The kit is a tuple somebody maintains by hand, so it can be emptied by an
-    edit that looks like tidying -- and every parametrised test above would then
-    pass by not existing. This is the guard that notices."""
+    """The kit is a tuple somebody maintains by hand, so it can be emptied by an edit
+    that looks like tidying -- and every parametrised test above would then pass by
+    not existing.
+    """
     assert len(SESSION_STORE_CONTRACT) >= 12
     assert all(callable(check) for check in SESSION_STORE_CONTRACT)
 
@@ -66,12 +44,7 @@ def test_the_contract_is_not_quietly_empty():
 
 
 def test_a_session_survives_losing_its_directory(store, tmp_path):
-    """The prototype's whole claim, at the level the port can be tested.
-
-    A turn produced files, the machine went away, and a new directory has
-    nothing in it. `restore_into` is what stands between that and a session
-    which has forgotten its own work.
-    """
+    """The prototype's whole claim, at the level the port can be tested."""
     from kingfisher.infrastructure.session_store import keep_from, restore_into
 
     first = tmp_path / "before"
@@ -89,13 +62,8 @@ def test_a_session_survives_losing_its_directory(store, tmp_path):
 
 
 def test_restoring_leaves_a_file_that_is_already_there(store, tmp_path):
-    """The case that has to stay cheap: a host keeping its own disk, where every
-    turn after the first finds nothing to do.
-
-    Also the case that has to stay *correct*. A file present locally and
-    different in the store means a turn was interrupted between writing and
-    saving, and nothing here can tell that from a file this turn has not saved
-    yet -- so the local copy wins and the store catches up at the end.
+    """The case that has to stay cheap: a host keeping its own disk, where every turn
+    after the first finds nothing to do.
     """
     from kingfisher.infrastructure.session_store import restore_into
 
@@ -109,9 +77,7 @@ def test_restoring_leaves_a_file_that_is_already_there(store, tmp_path):
 
 
 def test_keeping_skips_a_file_that_has_gone(store, tmp_path):
-    """The list was taken a moment ago and `execute` can delete between then and
-    now. Failing a turn's persistence over one absent file is a worse answer
-    than keeping the rest."""
+    """The list was taken a moment ago and `execute` can delete between then and now."""
     from kingfisher.infrastructure.session_store import keep_from
 
     live = tmp_path / "live"

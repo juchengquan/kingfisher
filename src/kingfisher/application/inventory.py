@@ -1,21 +1,4 @@
-"""What a workspace offers, as one answer instead of two half-answers.
-
-`--list` and `--without-skills` ask the same question and used to compute it
-apart: `show_inventory` assembled the display, `_offered` assembled the names,
-and both built an agent to do it. Two implementations of "what may a request
-activate here" is one more than can be kept in step -- and the one that drifts
-is `--without-skills`, which subtracts from a set that has to be the set the run
-will actually offer, or it refuses a name the run did not have.
-
-So the question is answered once, here, and returned as a record. Whoever wants
-names reads the names; whoever wants to print reads the rest. Nothing here
-prints: a library that writes to stdout cannot be used by a server, and the two
-callers format differently anyway.
-
-The tool surface is *built*, not listed. It includes whatever the workspace
-defined, so the only honest answer is an assembled agent -- which is why this
-lives in infrastructure and cannot sit any higher.
-"""
+"""What a workspace offers, as one answer instead of two half-answers."""
 
 from __future__ import annotations
 
@@ -50,28 +33,13 @@ _NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
 
 @dataclass(frozen=True)
 class Inventory:
-    """What this workspace offers right now, per kind, with where each came from.
+    """What this workspace offers right now, per kind, with where each came from."""
 
-    The sources are not decoration. A catalogue can be deployed outside the
-    workspace and shared by several deployments, a folder cannot reach a tool's
-    name, and a definition can be present on disk and invisible to the agent.
-    Each field beyond the names exists because one of those has gone wrong.
-
-    `tools_error` and `subagents_error` are carried rather than raised. A
-    listing is where someone goes *because* something is broken, so one
-    unloadable catalogue must not take the other two down with it -- the
-    printer decides what to say and what exit code to use.
-    """
-
-    #: Where every part of this deployment was read from, including the four
-    #: catalogue directories. One record rather than the three loose strings
-    #: that were here -- `skills_source`, `subagents_source`, `agents_source` --
-    #: which named three of the four kinds and left `tools` out, because a
-    #: fourth field is a thing somebody has to remember to add and nobody did.
-    #:
-    #: It carries the workspace too, so `Inventory` no longer holds its own. Two
-    #: fields answering one question is the drift this record exists to end, and
-    #: `render` used to take a third answer as an argument.
+    #: Where every part of this deployment was read from, including the four catalogue
+    #: directories. One record rather than the three loose strings that were here --
+    #: `skills_source`, `subagents_source`, `agents_source` -- which named three of the
+    #: four kinds and left `tools` out, because a fourth field is a thing somebody has
+    #: to remember to add and nobody did.
     origins: Origins
 
     #: Agent name -> its description. First in the record because it is first in
@@ -136,14 +104,10 @@ class Inventory:
     #: `tools_error`, so a listing says which delegate to go and look at.
     bundles_error: str | None = None
 
-    #: Which of them are graphs the workspace built rather than definitions
-    #: kingfisher assembles. Carried because it changes what the rest of the
-    #: listing *means* for them: deepagents runs a compiled graph as given and
-    #: never applies a tool allowlist to it, so `--tools` is not a limit on one.
-    #:
-    #: A separate tuple rather than a flag folded into `subagents`, whose values
-    #: are descriptions and are printed as such. Two facts about one name, and
-    #: the second one is about a minority.
+    #: Which of them are graphs the workspace built rather than definitions kingfisher
+    #: assembles. Carried because it changes what the rest of the listing *means* for
+    #: them: deepagents runs a compiled graph as given and never applies a tool
+    #: allowlist to it, so `--tools` is not a limit on one.
     compiled_subagents: tuple[str, ...] = ()
 
     #: Kept so a caller does not have to reach for `cfg` to know whether an
@@ -174,11 +138,7 @@ class Inventory:
 
     @property
     def offered(self) -> dict[str, tuple[str, ...]]:
-        """The four grant axes as bare names, which is what a subtraction needs.
-
-        Derived rather than stored, so it cannot disagree with the listing above
-        -- that disagreement is the bug this record exists to make impossible.
-        """
+        """The four grant axes as bare names, which is what a subtraction needs."""
         return {
             "builtin_tools": self.builtin_tools,
             "tools": self.tools,
@@ -188,17 +148,7 @@ class Inventory:
 
 
 def reached(named: Selection, defined: Mapping[str, SubagentSpec]) -> tuple[str, ...]:
-    """Every delegate an agent ends up with: the ones it names, and theirs.
-
-    Resolved when the catalogue is read rather than kept in a file, which is the
-    whole reason an agent names only the delegates it calls. A list written by
-    hand goes stale the moment a file somebody else owns changes its own
-    helpers, and nothing anywhere says so.
-
-    Sorted, and deduplicated by the visit rather than at the end: a definition
-    reached twice is not a loop, and `refuse_cycles` has already refused the
-    ones that are -- so this cannot run away.
-    """
+    """Every delegate an agent ends up with: the ones it names, and theirs."""
     if named is None:
         return ()
     frontier = list(defined) if named == ALL else list(named)
@@ -223,17 +173,7 @@ def _bundled(
     Mapping[str, tuple[str, ...]],
     str | None,
 ]:
-    """What each subagent brings itself, for a listing: tools, skills, shadowed.
-
-    Its own function because `inventory` was at the statement limit, and because
-    what it does is one thing: the three answers come from one pair of reads and
-    are only ever wanted together.
-
-    The tool half is in a `try` and the skill half is not, which is the split
-    `list` already makes between the two kinds -- a tool that will not import is
-    a broken catalogue and exits 1, a skill that will not load is reported and
-    the run works without it.
-    """
+    """What each subagent brings itself, for a listing: tools, skills, shadowed."""
     tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
     error: str | None = None
@@ -268,13 +208,7 @@ def _bundled(
 
 
 def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
-    """What each definition of one kind says about who reaches what.
-
-    Read off the specs so the printer needs no knowledge of the spec types --
-    there are two of them and they say this identically. A definition that
-    restricts nobody is left out, so the section stays quiet for a workspace
-    that has not adopted audiences.
-    """
+    """What each definition of one kind says about who reaches what."""
     found: dict[str, Stated] = {}
     for name, spec in sorted(specs.items()):
         stated = Stated(
@@ -293,28 +227,14 @@ def _access(
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
 ) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, frozenset[str] | None, dict[str, str]]:
-    """What the definitions say, what restricts nobody, and whose view this is.
-
-    Audiences come off the specs that declare them, so there is nothing here
-    that could name a definition this workspace does not have -- which is the
-    whole reason the central table's reconciliation has no counterpart.
-
-    The fourth answer is what *cannot* be honoured: a definition naming a group
-    the vocabulary does not declare stops a deployment being built, so a listing
-    that showed it as ordinary would be describing a workspace that will not
-    start.
-    """
+    """What the definitions say, what restricts nobody, and whose view this is."""
     stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
     if cfg.access is None:
         return stated, AccessReport(), None, {}
-    # The same walk `Kingfisher` runs at construction, and the same functions --
-    # which is the point. A listing that disagreed with startup about who
-    # reaches what would be worse than neither saying anything, and until these
-    # were shared nothing but a docstring held them together.
-    #
-    # Raw specs rather than `stated` above: that mapping drops the definitions
-    # restricting nobody, which are exactly the ones `unrestricted` is looking
-    # for.
+    # The same walk `Kingfisher` runs at construction, and the same functions -- which
+    # is the point. A listing that disagreed with startup about who reaches what would
+    # be worse than neither saying anything, and until these were shared nothing but a
+    # docstring held them together.
     kinds = (("agent", agents), ("subagent", subagents))
     report = access.audit(*kinds, vocabulary=cfg.access)
     broken = {
@@ -329,13 +249,7 @@ def _access(
 def _reaching(
     held: frozenset[str] | None, audiences: Mapping[str, Mapping[str, Stated]]
 ) -> Callable[[str, Mapping[str, str]], Mapping[str, str]]:
-    """A filter keeping only the definitions this caller reaches, or the identity.
-
-    Applied where the record is built rather than where it is printed, so a
-    `--as` listing and the turn that caller would actually get are narrowed by
-    one rule and cannot come apart. The identity for the operator's view, which
-    is what `None` means.
-    """
+    """A filter keeping only the definitions this caller reaches, or the identity."""
     if held is None:
         return lambda _kind, names: names
 
@@ -353,19 +267,7 @@ def _reaching(
 def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[Found] | None
 ) -> tuple[str, ...] | None:
-    """The built-in set, which is only knowable from an assembled graph.
-
-    Its own function because `inventory` reached the statement cap, and the cap
-    was right: this is one self-contained question with two imports of its own,
-    and the caller wants only the answer.
-
-    Rooted at a throwaway directory. An agent needs a session to root its backend
-    at, but what a workspace *offers* is a question about the workspace, and
-    answering it must not leave a session behind for `reap` to collect. Given
-    its layout, because a backend is built against a session that exists rather
-    than one it makes for itself -- `ensure_session_layout` is the only thing
-    that makes a session now.
-    """
+    """The built-in set, which is only knowable from an assembled graph."""
     from kingfisher.infrastructure.harness import agent  # noqa: PLC0415
     from kingfisher.tools import harness as surface  # noqa: PLC0415
 
@@ -389,20 +291,7 @@ def _builtin_tools(
 def inventory(
     cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
 ) -> Inventory:
-    """Ask the workspace what it offers, through the catalogue a run would use.
-
-    `catalogue` is accepted so a caller that already resolved one does not
-    resolve it twice; the fallback is `cfg`, which is what the drivers pass.
-    Reading `cfg` here while the agent read somewhere else is how
-    `--without-skills X` came to refuse a name the run did not have.
-
-    `groups` narrows the answer to what one caller reaches, which is the same
-    rule a turn runs under rather than a second one -- the filtering happens
-    *here*, on the record, so the printed view and the runnable view cannot
-    come apart. `None` is the operator's view of everything, which is what a
-    listing is for and is why a listing is not refused the way a turn is: it
-    is read-only, and whoever runs it can read the policy file anyway.
-    """
+    """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
 
     builtin: tuple[str, ...] = ()
@@ -456,15 +345,11 @@ def inventory(
         # with a default does not help, because the property raises rather than
         # being absent.
         specs = resolved.subagents.specs
-        # Asked here as well as at `build_agent`, and that is the point rather
-        # than duplication. A cycle is a property of the catalogue, so an
-        # inventory that reports the catalogue has to report it: this said a
-        # workspace was fine while a run refused it, which is the same shape as
-        # `--list` advertising a skill the agent would not load.
-        #
-        # Reading `specs` cannot raise it -- a definition naming a helper is
-        # perfectly well-formed on its own, and the loop only exists across
-        # files.
+        # Asked here as well as at `build_agent`, and that is the point rather than
+        # duplication. A cycle is a property of the catalogue, so an inventory that
+        # reports the catalogue has to report it: this said a workspace was fine while a
+        # run refused it, which is the same shape as `--list` advertising a skill the
+        # agent would not load.
         refuse_cycles(specs)
         subagents = {name: spec.description for name, spec in specs.items()}
         compiled_subagents = tuple(

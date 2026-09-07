@@ -1,8 +1,8 @@
 """The async path: the same turn, on an event loop.
 
-`astream` exists for concurrency, not for speed. A turn is the model's time --
-our own code measures at 15-46ms of 1.5s -- so nothing here makes one turn
-faster. What it buys is turns overlapping, which is the shape a service needs.
+`astream` exists for concurrency, not for speed. A turn is the model's time -- our
+own code measures at 15-46ms of 1.5s -- so nothing here makes one turn faster. What
+it buys is turns overlapping, which is the shape a service needs.
 """
 
 from __future__ import annotations
@@ -54,13 +54,7 @@ def test_arun_returns_the_same_result_shape(cfg):
 
 
 def test_turns_on_one_service_genuinely_overlap(cfg):
-    """The whole claim, made deterministic.
-
-    Each turn waits at a barrier that only opens once all three have reached
-    it. If `astream` serialised -- because `_prepare` blocked the loop, or the
-    graph were driven synchronously -- the third would never arrive and this
-    would time out rather than fail on an assertion about scheduling order.
-    """
+    """The whole claim, made deterministic."""
     barrier = asyncio.Barrier(3)
 
     class Barred(AsyncStubAgent):
@@ -86,20 +80,14 @@ def test_turns_on_one_service_genuinely_overlap(cfg):
 
 
 def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
-    """`_prepare` is filesystem work -- 15-46ms measured -- and on an event loop
-    that is 15-46ms during which no other turn can progress. `astream` runs it
-    with `asyncio.to_thread`, so three turns overlap their setup.
+    """`_prepare` is filesystem work -- 15-46ms measured -- and on an event loop that is
+    15-46ms during which no other turn can progress.
 
-    Asserted as two facts rather than as a stopwatch. It used to time three
-    turns and require the total under 70% of the serial cost, which is the same
-    claim expressed as a ratio -- and a ratio is a race against the machine. On
-    a loaded runner it came in at 0.34s against a 0.315s bar and failed, having
-    proved nothing except that CI was busy. Both replacements hold whatever
-    speed the machine runs at:
-
-    - the work happened on a thread that is not the loop's, so the loop was free
-    - two of the three overlapped, so they were not merely off the loop one
-      after another -- which `to_thread` awaited in sequence would also be
+    Asserted as two facts -- that `_prepare` ran off the loop, and that the loop kept
+    turning while it did -- rather than as a stopwatch. Timing three turns and
+    requiring the total under 70% of the serial cost is the same claim as a ratio, and
+    a ratio is a race against the machine: on a loaded runner it came in at 0.34s
+    against a 0.315s bar and failed, having proved nothing except that CI was busy.
     """
     real_prepare = Kingfisher._prepare
     delay = 0.15
@@ -143,12 +131,7 @@ def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
 
 
 def _any_overlap(spans):
-    """Whether any two of these intervals share a moment.
-
-    The whole claim, and it does not care how long anything took. Serialised
-    work produces disjoint intervals at any speed; concurrent work overlaps at
-    any speed.
-    """
+    """Whether any two of these intervals share a moment."""
     return any(
         a_start < b_end and b_start < a_end
         for i, (a_start, a_end, _) in enumerate(spans)
@@ -163,10 +146,7 @@ def _as_intervals(spans):
 
 
 def test_the_turn_bound_holds_on_the_async_path_too(cfg):
-    """The timeout is checked between chunks, and there are two loops now.
-    Enforcing it in one and not the other is exactly the drift that splitting
-    `stream` and `astream` risks, so both are pinned.
-    """
+    """The timeout is checked between chunks, and there are two loops now."""
     from dataclasses import replace
 
     from tests.unit.test_quotas import SlowAgent
@@ -189,8 +169,9 @@ def test_the_turn_bound_holds_on_the_async_path_too(cfg):
 
 
 def test_an_unbounded_async_turn_is_untouched(cfg):
-    """The negative control: without it the test above would pass even if
-    every async turn were cut short."""
+    """The negative control: without it the test above would pass even if every async
+    turn were cut short.
+    """
     service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
 
     assert asyncio.run(service.arun(Request("go"))).stop_reason == "end_turn"
@@ -218,13 +199,7 @@ class RecordingRoot:
 
 
 def test_the_async_path_holds_and_releases_the_tree(cfg, tmp_path):
-    """The bracket is symmetric on an ordinary turn.
-
-    Weaker than it looks, and named here rather than left as a trap: with
-    nothing releasing the tree at all this still passes, because the suspended
-    generator is collected the moment the last reference goes and its `finally`
-    runs then. The test below is the one that pins the release.
-    """
+    """The bracket is symmetric on an ordinary turn."""
     roots = RecordingRoot(tmp_path / "for-one-turn")
     service = Kingfisher(
         cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer(), session_root=roots
@@ -236,14 +211,7 @@ def test_the_async_path_holds_and_releases_the_tree(cfg, tmp_path):
 
 
 def test_the_async_path_releases_the_tree_when_the_turn_fails(cfg, tmp_path):
-    """The release is the stack's, and this is where that becomes checkable.
-
-    A turn that raises keeps its frames alive in the traceback, so the holder is
-    *not* collected and nothing runs its `finally` for free. Only an explicit
-    release does -- which is why removing `stack.push` fails this test and not
-    the one above, and why a leaked mount would show up first on the turns that
-    went wrong.
-    """
+    """The release is the stack's, and this is where that becomes checkable."""
 
     class Fails(AsyncStubAgent):
         async def astream(self, state, config, stream_mode=None, subgraphs=False):

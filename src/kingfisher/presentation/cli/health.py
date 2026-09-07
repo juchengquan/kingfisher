@@ -1,21 +1,4 @@
-"""Every check that stands between an install and a run.
-
-`doctor` answers one question -- *why will this not start?* -- and the value is
-that the answers already existed and were scattered: a `ConfigError` here, a
-warning inside `model_catalogue.load` there, `warn_if_unconfined` in a driver
-that is not in the wheel at all. Somebody diagnosing a deployment had to
-provoke each one in turn.
-
-Nothing here calls a model. A credential that is present can still be wrong, and
-the only way to know is to spend money on a call nobody asked for -- so a check
-says what it can see and is honest that reachable is not the same as working.
-That line is what keeps this cheap enough to run before every deployment rather
-than after the first failure.
-
-Checks, not prose: each returns a verdict and the driver prints it. A library
-that writes to stdout cannot be used by a server, and `--json` needs the same
-answers in a different shape.
-"""
+"""Every check that stands between an install and a run."""
 
 from __future__ import annotations
 
@@ -26,20 +9,14 @@ from typing import Literal
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
 
-# Everything below is past the front door on purpose, and this is the file to
-# read if you want to know what that door is now for. These are `doctor`'s
-# probes: what fences this host offers, what the kernel supports, what the
-# cgroup files say, and the sentence that tells a reader where their own
-# definitions go. Every one of them was public because *this file* reached for
-# it -- the export table said so in as many words -- and a probe only `doctor`
-# has ever wanted is not a promise worth making to everybody who runs
-# `pip install kingfisher`. The command ships in this wheel, so it takes each
-# name where it lives.
-#
-# What stays above is the half that is not a relaxation: `Config`, `inventory`
-# and the rest are names the door does carry, so they still come through it.
-# `test_architecture` refuses the other spelling, which is what keeps the claim
-# in `cli/__init__.py` honest. See *The front door* in `docs/decisions.md`.
+# Everything below is past the front door on purpose, and this is the file to read if
+# you want to know what that door is now for. These are `doctor`'s probes: what fences
+# this host offers, what the kernel supports, what the cgroup files say, and the
+# sentence that tells a reader where their own definitions go. Every one of them was
+# public because *this file* reached for it -- the export table said so in as many words
+# -- and a probe only `doctor` has ever wanted is not a promise worth making to
+# everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
+# takes each name where it lives.
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.infrastructure.sandbox.confinement import (
@@ -57,13 +34,7 @@ Verdict = Literal["ok", "warn", "fail"]
 
 @dataclass(frozen=True)
 class Check:
-    """One question, its answer, and what to do about it.
-
-    `remedy` is empty when there is nothing to do. It is a separate field rather
-    than part of `detail` because a caller reading JSON wants the diagnosis and
-    the instruction apart, and because an instruction that is optional reads
-    badly when it is glued on.
-    """
+    """One question, its answer, and what to do about it."""
 
     name: str
     verdict: Verdict
@@ -72,13 +43,7 @@ class Check:
 
 
 def _catalogue(cfg: Config) -> Iterator[Check]:
-    """The model catalogue: that it loaded, and that its names can be reached.
-
-    `config_from_env` has already refused a missing or unreadable one before we get
-    here, so what is left is the half that loads and still cannot run: an
-    endpoint whose credential is absent is dropped with a warning, and an alias
-    a definition names but nothing binds refuses at build time, one request in.
-    """
+    """The model catalogue: that it loaded, and that its names can be reached."""
     models = cfg.models
     yield Check(
         "catalogue",
@@ -88,14 +53,10 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
     )
 
     # A dropped endpoint is a warning, not a failure. A shared catalogue naming
-    # endpoints this machine cannot reach is the normal case by the loader's own
-    # account -- "one reviewed file works across a fleet holding different
-    # subsets of keys" -- so failing here would fail on the arrangement the
-    # format encourages. It becomes a failure through the definitions check,
-    # when something actually names one.
-    #
-    # Reported at all because it was not: the drop is announced by a warning at
-    # load and then discarded, so this printed a tick over a lost endpoint.
+    # endpoints this machine cannot reach is the normal case by the loader's own account
+    # -- "one reviewed file works across a fleet holding different subsets of keys" --
+    # so failing here would fail on the arrangement the format encourages. It becomes a
+    # failure through the definitions check, when something actually names one.
     if models.unreachable:
         named = ", ".join(f"{name} ({why})" for name, why in sorted(models.unreachable.items()))
         yield Check(
@@ -109,32 +70,7 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
 
 
 def _packs(cfg: Config) -> Iterator[Check]:
-    """Whether there is anywhere to seed definitions from.
-
-    This asked whether they had arrived inside the install, which was only ever
-    wrong if an install was damaged -- a check that could realistically only
-    pass. Nothing ships them now, so the question is about a configured
-    directory, and a configured directory has four ordinary ways to be wrong:
-    unset, mistyped, deleted, or named one level too high. Before, there was one
-    exotic way.
-
-    `warn` and never `fail`, in all four. A deployment that seeded its workspace
-    six months ago runs perfectly well with nothing set here, and `doctor` exits
-    non-zero on any failure -- so failing would turn a working install red for a
-    setting it does not need. That is the trap `worst` already names, using the
-    unconfined shell as its example.
-
-    Four separate details rather than one, because the remedies differ and a
-    diagnosis that cannot be acted on is a line people scroll past. "Holds none
-    of them" is the one worth spelling out: pointing one level off is the
-    easiest mistake to make with a path, and naming what was looked for is what
-    turns it from a puzzle into a fix.
-
-    The unset remedy carries `destination_hint`, which is the only one of the
-    four where a reader has nothing at all yet: the other three are holding a
-    path that is wrong somehow, and this one has never been told there is a
-    directory in a checkout for definitions it did not write.
-    """
+    """Whether there is anywhere to seed definitions from."""
     if cfg.assets is None:
         yield Check(
             "definitions to seed",
@@ -167,13 +103,8 @@ def _packs(cfg: Config) -> Iterator[Check]:
 def _at_rest(cfg: Config) -> Iterator[Check]:
     """Whether a workspace kept in memory can actually keep nothing.
 
-    Silent on a workspace that is not in memory, because then there is nothing
-    to promise and nothing to check: a deployment allowed to hold data on its
-    own disk is not misconfigured for doing so.
-
-    Where it *is* in memory, this is the one check here that can fail on
-    something which appears to work. Measured, and it is not what the obvious
-    reading predicts:
+    Where it *is* in memory, this is the one check here that can fail on something
+    which appears to work. Measured, and it is not what the obvious reading predicts:
 
     - A memory filesystem **larger** than the container's memory limit does not
       refuse when it fills. The kernel swaps its pages out — data at rest, the
@@ -183,11 +114,6 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
       every session in the container rather than one.
     - Only a filesystem **smaller** than the limit gives a clean `ENOSPC` on a
       full one, which is a thing kingfisher can refuse on.
-
-    `fail` rather than `warn`, and it stretches the word. A deployment in this
-    state runs; what it cannot do is keep the promise it was configured for, and
-    a check that shrugged at silent data-at-rest would be a check nobody should
-    have trusted. Better a deploy that stops.
     """
     backing = memory_backing(cfg.workspace)
     if not backing.in_memory:
@@ -305,18 +231,7 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
 
 
 def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
-    """Two ways a catalogue is somewhere other than you think.
-
-    Both were unreportable until the record carried a *kind*. A path on its own
-    cannot tell you either of these, because in both cases the directory exists
-    and is readable -- what is wrong is the relationship between it and the
-    configuration, and only something holding both can see that.
-
-    Warnings in both cases, never failures. Staging a catalogue that has not
-    been filled yet is legitimate, and so is a deployment that overrides one on
-    purpose; `worst` already records why a check that fails on a deliberate
-    choice is a check nobody runs.
-    """
+    """Two ways a catalogue is somewhere other than you think."""
     for kind in DEFINITION_KINDS:
         origin = getattr(found.origins, kind)
 
@@ -348,34 +263,17 @@ def _where(cfg: Config, found: Inventory) -> Iterator[Check]:
 
 
 def _holds(found: Inventory, kind: str) -> bool:
-    """Whether a catalogue produced anything the agent can reach.
-
-    Asked of the listing rather than of the directory: a folder with three files
-    that will not parse is not empty, and the checks above it already say so.
-    What this decides is whether to add "and the path is unusual" to a count of
-    zero.
-    """
+    """Whether a catalogue produced anything the agent can reach."""
     return bool(getattr(found, kind))
 
 
 def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
     """Which definitions this deployment cannot actually run.
 
-    The check the dropped-endpoint bug produces, and the one nothing else does:
-    a delegate binding an alias to a model on an endpoint with no key leaves a
-    workspace that loads, lists cleanly, and fails on the first request naming
-    it. The build refuses it then, with a message worth reading -- but then is
-    after somebody waited, and `doctor` exists to be the before.
-
-    A failure rather than a warning, unlike a merely unreachable endpoint: a
-    catalogue naming endpoints this machine cannot use is ordinary, and a
-    definition that cannot run is a workspace promising something it will not
-    deliver.
-
-    Imported inside the function. `unrunnable_delegates` reaches deepagents as
-    it loads -- 868ms and 3,137 modules, measured -- and at module scope every
-    other verb would pay it, so `kingfisher help` would cost a second to print
-    text. The CLI starts in 40ms and should keep doing so.
+    Imported inside the function. `unrunnable_delegates` reaches deepagents as it
+    loads -- 868ms and 3,137 modules, measured -- and at module scope every other
+    verb would pay it, so `kingfisher help` would cost a second to print text. The
+    CLI starts in 40ms and should keep doing so.
     """
     # Asked only when the catalogue parsed. `unrunnable_delegates` reads the
     # same files, so a definition that will not load raises out of here instead
@@ -414,34 +312,11 @@ FULL_LANDLOCK_ABI = 6
 
 
 #: Appended to every answer this check gives, because it qualifies all of them.
-#:
-#: `doctor` builds a `Config` from the environment and never sees a
-#: `Kingfisher`, so a deployment that supplied its own `CommandRunner` or
-#: `SessionRoot` is invisible here. Reporting the built-in path as though it
-#: were the running one is the failure this file exists to prevent, and the
-#: cheapest honest fix is to say which one is being described rather than to
-#: plumb a service into a command that does not have one.
 FROM_CONFIG = " (from configuration; an injected runner is not visible here)"
 
 
 def _mechanism(confined: Confinement) -> str:
-    """What is doing the confining, named rather than implied.
-
-    "confined" was true and unhelpful: two deployments reading it had no way to
-    tell a `sandbox-exec` profile from a container someone remembered to set up,
-    and the answer decides what an operator has to check when it stops working.
-
-    Read off the `Confinement` rather than guessed from the platform, which is
-    what this did and what stopped being right the moment Linux had two fences
-    to choose between. Guessing would have reported "the platform's sandbox" for
-    either -- and one of them switches the shell's network off.
-
-    That last part is said out loud. `auto` reaching bubblewrap means Landlock
-    could not run here, and the fence that took its place changes what the agent
-    *can do*, not only what it can reach. An operator whose skill suddenly cannot
-    download anything should find the reason in `doctor` rather than in a
-    stack trace.
-    """
+    """What is doing the confining, named rather than implied."""
     named = (
         "bubblewrap (Landlock is unavailable here, and the shell has no network)"
         if confined.mechanism == "bubblewrap"
@@ -454,13 +329,9 @@ def _mechanism(confined: Confinement) -> str:
 
 
 def _or_bubblewrap() -> str:
-    """What is left when Landlock is not an option, which is the case that
-    matters: EKS nodes are commonly on 6.1, where a full ruleset is unavailable
-    and kingfisher would otherwise have nothing to suggest but a container.
-
-    Probed rather than described, because "install bubblewrap" is useless advice
-    to a host that has it and cannot use it -- which is every container nobody
-    relaxed the syscall filter for.
+    """What is left when Landlock is not an option, which is the case that matters: EKS
+    nodes are commonly on 6.1, where a full ruleset is unavailable and kingfisher
+    would otherwise have nothing to suggest but a container.
     """
     if bubblewrap_available():
         return (
@@ -477,13 +348,7 @@ def _or_bubblewrap() -> str:
 
 
 def _what_this_host_could_do() -> str:
-    """The remedy, from what the kernel actually answers rather than its name.
-
-    A release number says what the kernel was built from, not what it will do --
-    a distribution can ship Landlock off and a runtime can block the syscall,
-    and both look modern from `platform.release()`. So this asks, and a host
-    that could be fenced is told so by ABI rather than by version.
-    """
+    """The remedy, from what the kernel actually answers rather than its name."""
     if platform.system() != "Linux":
         return "set KINGFISHER_SHELL_SANDBOX, or confine the process itself"
     abi = landlock_abi()
@@ -535,22 +400,7 @@ def _shell(cfg: Config) -> Iterator[Check]:
 
 
 def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
-    """Every check, in the order somebody diagnosing would want them.
-
-    Configuration first, because nothing else matters if that is wrong; then
-    what supplies definitions; then the definitions; then the boundary around
-    the shell. A `ConfigError` from any of it is caught and becomes a failed
-    check rather than an exception, because a diagnosis that stops at the first
-    problem is the thing this command exists to replace.
-
-    `found` is optional and is what makes one of the checks below reachable at
-    all. Building the inventory here means resolving the catalogue from `cfg`,
-    which by construction agrees with `cfg` -- so a deployment that *supplied*
-    its catalogue could never be told that its configuration is being ignored,
-    because the thing being examined was a fresh guess rather than its wiring.
-    A deployment holding a real one passes it; the command passes the one it
-    already built to print the header.
-    """
+    """Every check, in the order somebody diagnosing would want them."""
     checks: list[Check] = []
     try:
         checks += _catalogue(cfg)
@@ -570,12 +420,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
 
 
 def worst(checks: tuple[Check, ...]) -> Verdict:
-    """The exit code, decided in one place.
-
-    A warning is not a failure. `doctor` exiting non-zero because a shell is
-    unconfined would make it useless in the deployments that chose that, and a
-    check nobody can run is a check nobody heeds.
-    """
+    """The exit code, decided in one place."""
     if any(check.verdict == "fail" for check in checks):
         return "fail"
     return "warn" if any(check.verdict == "warn" for check in checks) else "ok"

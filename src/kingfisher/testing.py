@@ -1,57 +1,4 @@
-"""The port contracts, as checks a deployment can run against its own adapter.
-
-Four of them, one per port a deployment realistically replaces:
-`SESSION_STORE_CONTRACT`, `FILE_STORE_CONTRACT`, `SESSION_ROOT_CONTRACT` and
-`COMMAND_RUNNER_CONTRACT`.
-
-Three take a factory and one takes a `Planted`, and the difference is the ports
-rather than a preference: a check can fill a session store, hold a session root
-and run a command, but it cannot put a file into a file store, because that port
-has no verb for writing.
-
-The last two do more than read. `SESSION_ROOT_CONTRACT` creates directories
-inside what the provider yields -- which is what kingfisher does with it -- and
-`COMMAND_RUNNER_CONTRACT` runs commands, one of which waits a second for a
-timeout. Run those where you would run an integration test.
-
-`SessionStore` is four methods over bytes and its docstring says a bucket is as
-good an implementation as a directory. That invitation was unbacked: a
-deployment writing one got excellent prose and no way to find out whether it had
-got it right, including on the parts where being wrong is a security fault
-rather than a bug. This is what makes the invitation checkable.
-
-    from kingfisher.testing import SESSION_STORE_CONTRACT
-
-    @pytest.mark.parametrize("check", SESSION_STORE_CONTRACT, ids=lambda c: c.__name__)
-    def test_my_store_keeps_the_contract(check):
-        check(lambda: S3SessionStore(bucket="kept", prefix="sessions/"))
-
-**A factory, not a store.** Every check builds its own and most of them write to
-it, so one shared instance would make them depend on each other's leftovers and
-on the order they ran in.
-
-**No test framework is imported here**, which is what lets this live in the
-library rather than in a second distribution: `pip install kingfisher` gains a
-module and no test dependency, and the checks run from unittest, pytest, or a
-loop in a script. The cost is that failures cannot lean on pytest's assertion
-rewriting -- it only applies to test modules and registered plugins, not to a
-library somebody imported -- so every check raises `AssertionError` with the
-whole story in the message rather than leaving a bare `assert` to say nothing.
-
-Raised rather than asserted for a second reason: `python -O` strips `assert`
-outright, and a conformance kit that silently passes while checking nothing is
-worse than no kit. `AssertionError` and not a class of our own, so a runner
-reports these as failures rather than errors -- and because a new `*Error` in
-this package has to be classified as caller-facing or deployment-facing by
-`test_every_error_is_classified_by_who_caused_it`, which a test-support type is
-neither of.
-
-The checks are the ones `tests/unit/test_session_store.py` had, minus three that
-turned out to be about `restore_into` and `keep_from` -- kingfisher's own
-functions over a store rather than anything a store must provide -- plus three
-for `knows`, which had no test at all and is the method the port calls a
-security question.
-"""
+"""The port contracts, as checks a deployment can run against its own adapter."""
 
 from __future__ import annotations
 
@@ -133,13 +80,7 @@ def _refused(call: Callable[[], object], *, doing: str) -> None:
 
 
 def _must_be(value: object, kind: type, *, doing: str, why: str) -> None:
-    """Require `value` to be a `kind`, saying what the shape is for.
-
-    One helper for three checks, so the exception choice is argued once.
-    `AssertionError` and not the `TypeError` ruff prefers behind an `isinstance`
-    guard: every failure here is a conformance result, and a runner has to
-    report it as a failure rather than as an error in the kit.
-    """
+    """Require `value` to be a `kind`, saying what the shape is for."""
     if isinstance(value, kind):
         return
     msg = f"{doing}: {why}. Got {type(value).__name__}"
@@ -150,12 +91,7 @@ def _must_be(value: object, kind: type, *, doing: str, why: str) -> None:
 
 
 def what_was_saved_comes_back(make: Factory) -> None:
-    """The whole point, and the shape: paths relative to the session root.
-
-    The same vocabulary `artifacts()` returns, deliberately. A caller diffing
-    one turn against the last needs names it can compare, and an absolute path
-    names a machine rather than a file.
-    """
+    """The whole point, and the shape: paths relative to the session root."""
     store = make()
     kept: Mapping[str, bytes] = {"derived/report.md": b"hello", "memory/notes.md": b"note"}
     store.save("s1", kept)
@@ -164,23 +100,14 @@ def what_was_saved_comes_back(make: Factory) -> None:
 
 
 def a_session_never_seen_is_empty_rather_than_an_error(make: Factory) -> None:
-    """A first turn has nothing to restore, and that is the common case.
-
-    Raising here would make every caller write the same `try` around the one
-    path that always happens.
-    """
+    """A first turn has nothing to restore, and that is the common case."""
     store = make()
 
     _equal(dict(store.fetch("never-opened")), {}, doing="fetching an unknown session")
 
 
 def saving_merges_rather_than_mirrors(make: Factory) -> None:
-    """What lets a caller send only the files that changed.
-
-    A mirror would mean every save costs the whole session. The price of merging
-    is that nothing here can delete -- which is what `forget` is for, and why
-    deletion is a separate verb rather than an omission.
-    """
+    """What lets a caller send only the files that changed."""
     store = make()
     store.save("s1", {"derived/a.md": b"one", "derived/b.md": b"two"})
     store.save("s1", {"derived/a.md": b"changed"})
@@ -193,13 +120,8 @@ def saving_merges_rather_than_mirrors(make: Factory) -> None:
 
 
 def nesting_survives_a_round_trip(make: Factory) -> None:
-    """A session's keys nest several levels -- uploaded definitions land under a
-    folder per delegate, and `/derived` is whatever the agent decided to make.
-
-    A store that flattened its keys would lose which folder a file belonged to,
-    and one built on an object bucket is exactly the shape that might: prefixes
-    are not directories, and a store splitting on the last separator quietly
-    collapses two files into one.
+    """A session's keys nest several levels -- uploaded definitions land under a folder
+    per delegate, and `/derived` is whatever the agent decided to make.
     """
     store = make()
     deep: Mapping[str, bytes] = {"derived/reports/2026/q1/summary.md": b"deep"}
@@ -248,12 +170,7 @@ ESCAPING_KEYS = ("../outside.md", "/etc/passwd")
 
 
 def a_session_id_that_names_somewhere_else_is_refused(make: Factory) -> None:
-    """Checked on all four methods, because all four take the id.
-
-    "The caller cannot reach this argument" is a claim about every call site
-    rather than about the one in front of you. `Sessions._exists` already passes
-    a *supplied* id to `knows`, so the claim is not even true today.
-    """
+    """Checked on all four methods, because all four take the id."""
     for bad in ESCAPING_IDS:
         store = make()
         _refused(lambda: store.fetch(bad), doing=f"fetch({bad!r})")  # noqa: B023
@@ -263,13 +180,7 @@ def a_session_id_that_names_somewhere_else_is_refused(make: Factory) -> None:
 
 
 def a_filename_that_climbs_out_is_refused(make: Factory) -> None:
-    """The second half. A key is a path, and a path from anywhere can climb.
-
-    Separate from the id, because they arrive from different places: an id comes
-    from the caller and a key from whatever kingfisher collected out of the
-    session, so a store that checked only one is a store that checked the wrong
-    one on some future call path.
-    """
+    """The second half. A key is a path, and a path from anywhere can climb."""
     for bad in ESCAPING_KEYS:
         store = make()
         _refused(lambda: store.save("s1", {bad: b"x"}), doing=f"save('s1', {{{bad!r}: ...}})")  # noqa: B023
@@ -279,11 +190,8 @@ def a_filename_that_climbs_out_is_refused(make: Factory) -> None:
 
 
 def a_store_knows_what_it_kept(make: Factory) -> None:
-    """`knows` had no test anywhere before this kit, and it is the method the
-    port calls *"a security question rather than a convenience one"*.
-
-    `Sessions._exists` asks it whether a supplied id may resume, so it is the
-    proof that a session belongs to whoever named it.
+    """`knows` had no test anywhere before this kit, and it is the method the port calls
+    *"a security question rather than a convenience one"*.
     """
     store = make()
     store.save("s1", {"derived/a.md": b"one"})
@@ -292,13 +200,7 @@ def a_store_knows_what_it_kept(make: Factory) -> None:
 
 
 def a_store_does_not_know_what_it_never_kept(make: Factory) -> None:
-    """The half that is a security fault when it is wrong.
-
-    *"A caller cannot make a store know an id it never saved."* A store
-    answering `True` too readily -- one built on a bucket that reports a prefix
-    as present, say -- lets a caller resume a session they invented, which is
-    the whole of what the id is supposed to prove.
-    """
+    """The half that is a security fault when it is wrong."""
     store = make()
     store.save("s1", {"derived/a.md": b"one"})
 
@@ -306,11 +208,7 @@ def a_store_does_not_know_what_it_never_kept(make: Factory) -> None:
 
 
 def forgetting_removes_everything_and_says_nothing_twice(make: Factory) -> None:
-    """`reap`'s side of the port, and the only granularity it ever needs.
-
-    Idempotent because a janitor runs on its own schedule against a list it read
-    earlier, so a session already gone is the ordinary case rather than a fault.
-    """
+    """`reap`'s side of the port, and the only granularity it ever needs."""
     store = make()
     store.save("s1", {"derived/a.md": b"one"})
     store.forget("s1")
@@ -321,11 +219,7 @@ def forgetting_removes_everything_and_says_nothing_twice(make: Factory) -> None:
 
 
 def forgetting_one_session_leaves_the_others(make: Factory) -> None:
-    """`reap` sweeps expired sessions one at a time while others are live.
-
-    A store implementing `forget` as a prefix delete gets this wrong the first
-    time two ids share a prefix, and every test above would still pass.
-    """
+    """`reap` sweeps expired sessions one at a time while others are live."""
     store = make()
     store.save("s1", {"derived/a.md": b"one"})
     store.save("s1-extra", {"derived/b.md": b"two"})
@@ -371,16 +265,7 @@ SESSION_STORE_CONTRACT: tuple[Check, ...] = (
 
 @dataclass(frozen=True)
 class Planted:
-    """One ref a store resolves, and what it resolves to.
-
-    Built by the deployment, because only the deployment knows how to put a file
-    into its own store -- a `put_object`, a fixture directory, a row. What the
-    checks need is the store and the truth about one thing in it.
-
-    `missing` is a ref the store does *not* hold. It has a default that no
-    sensible deployment collides with; override it if yours somehow does, which
-    is cheaper than making every caller invent one.
-    """
+    """One ref a store resolves, and what it resolves to."""
 
     store: FileStore
     #: A ref this store resolves.
@@ -400,14 +285,8 @@ def what_the_ref_names_comes_back(planted: Planted) -> None:
 
 
 def the_result_is_bytes_under_string_keys(planted: Planted) -> None:
-    """The shape, checked apart from the value, because the likely wrong guess
-    returns the right *content* in the wrong container.
-
-    `fetch` handing back bare bytes reads as obvious -- a ref names a file --
-    and `place_inputs` would then write one file per byte. Returning `str`
-    is the other half: a store that decoded on the way through corrupts the
-    first PDF it meets, and the failure lands in the agent's hands rather than
-    the wiring's.
+    """The shape, checked apart from the value, because the likely wrong guess returns
+    the right *content* in the wrong container.
     """
     doing = f"fetch({planted.ref!r})"
     got = planted.store.fetch(planted.ref)
@@ -446,15 +325,7 @@ def a_ref_the_store_does_not_hold_is_refused(planted: Planted) -> None:
 
 
 def a_ref_that_names_somewhere_else_is_refused(planted: Planted) -> None:
-    """`UnsafeReferenceError`, for a ref that climbs out or names an absolute path.
-
-    Required of a store with no directories to climb out of, which is worth
-    saying because it looks like a filesystem rule. A bucket has no `..` --
-    which is exactly why an implementation is likely to pass these through to a
-    key lookup, and a store that resolves `../` *relative to something* is one
-    prefix mistake away from serving another tenant. Refusing a ref that cannot
-    mean anything good is cheaper than proving each store's key handling safe.
-    """
+    """`UnsafeReferenceError`, for a ref that climbs out or names an absolute path."""
     for bad in ESCAPING_REFS:
         _raises(
             lambda: planted.store.fetch(bad),  # noqa: B023
@@ -494,13 +365,7 @@ CONTRACT_SESSIONS = ("kingfisher-contract-a", "kingfisher-contract-b")
 
 
 def hold_yields_a_path(make: Callable[[], SessionRoot]) -> None:
-    """A `Path`, not a string.
-
-    Worth checking because the annotation is not enforced anywhere and the
-    mistake is quiet: kingfisher does `session_dir / name` immediately, and a
-    `str` fails there with a `TypeError` about unsupported operands, which reads
-    like a bug in kingfisher rather than in the provider.
-    """
+    """A `Path`, not a string."""
     with make().hold(CONTRACT_SESSIONS[0]) as directory:
         _must_be(
             directory,
@@ -511,17 +376,7 @@ def hold_yields_a_path(make: Callable[[], SessionRoot]) -> None:
 
 
 def kingfisher_can_lay_a_session_out_inside_it(make: Callable[[], SessionRoot]) -> None:
-    """The directory need not exist, and must be creatable.
-
-    `LocalSessionRoot` yields a path it has not made -- its own docstring says
-    `hold` "creates nothing and releases nothing" -- because
-    `ensure_session_layout` runs `mkdir(parents=True, exist_ok=True)` inside it
-    a moment later. So a check for `is_dir()` on the way out would fail the
-    shipped implementation, and be wrong to.
-
-    What a provider does owe is a path that can be *made*: on a filesystem that
-    is writable, under a parent that exists or can be created.
-    """
+    """The directory need not exist, and must be creatable."""
     with make().hold(CONTRACT_SESSIONS[0]) as directory:
         probe = Path(directory) / "data" / "nested"
         try:
@@ -536,15 +391,7 @@ def kingfisher_can_lay_a_session_out_inside_it(make: Callable[[], SessionRoot]) 
 
 
 def a_child_of_the_session_stays_inside_it(make: Callable[[], SessionRoot]) -> None:
-    """A session cannot be composed out of links to shared content.
-
-    The root itself may be a symlink or a mount -- kingfisher resolves it once,
-    in `ensure_session_layout`, and that is the point of the port. What cannot
-    happen is a *child* resolving somewhere else, because containment is checked
-    per access against the resolved root: a provider that links `data/` at
-    shared content gets every access to it refused, and the symptom is the agent
-    being unable to read its own inputs.
-    """
+    """A session cannot be composed out of links to shared content."""
     with make().hold(CONTRACT_SESSIONS[0]) as directory:
         root = Path(directory).resolve()
         child = Path(directory) / "data"
@@ -559,15 +406,7 @@ def a_child_of_the_session_stays_inside_it(make: Callable[[], SessionRoot]) -> N
 
 
 def two_sessions_are_two_directories(make: Callable[[], SessionRoot]) -> None:
-    """The isolation the whole port rests on.
-
-    `ensure_session_layout` calls it structural -- *"two sessions share a parent
-    and nothing else"* -- and structural is exactly what a provider can undo. A
-    root that ignores the id, or derives a path from something coarser than it,
-    puts two callers in one directory and there is no later check that would
-    notice: every path is legal, and each session reads the other's files as its
-    own.
-    """
+    """The isolation the whole port rests on."""
     root = make()
     first, second = CONTRACT_SESSIONS
     with root.hold(first) as one, root.hold(second) as two:
@@ -581,12 +420,7 @@ def two_sessions_are_two_directories(make: Callable[[], SessionRoot]) -> None:
 
 
 def a_session_can_be_held_again(make: Callable[[], SessionRoot]) -> None:
-    """Once per turn, and a session has many turns.
-
-    A provider that mounts on the way in and unmounts on the way out is the case
-    this port exists for, and it has to survive being asked twice -- a second
-    turn of the same conversation is the ordinary path, not an edge.
-    """
+    """Once per turn, and a session has many turns."""
     root = make()
     with root.hold(CONTRACT_SESSIONS[0]) as first:
         first_path = Path(first).resolve()
@@ -599,14 +433,7 @@ def a_session_can_be_held_again(make: Callable[[], SessionRoot]) -> None:
 
 
 def a_failed_turn_still_leaves_the_hold(make: Callable[[], SessionRoot]) -> None:
-    """*"Released when the turn ends however it ended"*, and the half that bites.
-
-    A context manager whose `__exit__` returns true swallows the exception, and
-    a turn that failed is then reported as one that succeeded -- with whatever
-    the provider mounted still mounted. Written as `@contextmanager` around a
-    bare `yield` this cannot happen; written by hand it is one wrong return
-    value away.
-    """
+    """*"Released when the turn ends however it ended"*, and the half that bites."""
     held = make().hold(CONTRACT_SESSIONS[0])
     held.__enter__()
     # Asked of `__exit__` directly rather than by raising inside a `with`, which
@@ -656,14 +483,7 @@ SLEEPS = "sleep 30"
 
 
 def a_runner_says_where_it_runs(make: Callable[[], CommandRunner]) -> None:
-    """`local` decides whether the fence is applied, so it is read before a
-    command is.
-
-    Kingfisher reads it with a default of `True`, so an object that never
-    declares it still gets the safe answer. This checks the other thing: that a
-    runner which *does* declare it declares a boolean, since `local = "no"` is
-    truthy and would keep the local fence on a command going somewhere else.
-    """
+    """`local` decides whether the fence is applied, so it is read before a command is."""
     runner = make()
     declared = getattr(runner, "local", True)
     _must_be(
@@ -729,16 +549,14 @@ def a_result_is_shaped_the_way_a_caller_reads_it(make: Callable[[], CommandRunne
 def a_timeout_is_a_result_and_not_an_exception(make: Callable[[], CommandRunner]) -> None:
     """The one most likely to be got wrong, because every timeout API raises.
 
-    `subprocess.run(timeout=...)` raises `TimeoutExpired`, so a runner written
-    the obvious way propagates it -- and the port says otherwise: *"a timeout is
-    a result, not an exception: `exit_code` 124, the shell's own, with output
-    saying so. Raising would make every runner's failure the model's problem
-    rather than a tool result it can read and retry."*
+    `subprocess.run(timeout=...)` raises `TimeoutExpired`, so a runner written the
+    obvious way propagates it -- and the port says otherwise: *"a timeout is a
+    result, not an exception: `exit_code` 124, the shell's own, with output saying
+    so. Raising would make every runner's failure the model's problem rather than a
+    tool result it can read and retry."*
 
-    124 rather than any non-zero code, because it is what `timeout(1)` returns
-    and the number a reader of the output will recognise.
-
-    This check waits for the timeout it asks for.
+    124 rather than any non-zero code, because it is what `timeout(1)` returns and
+    the number a reader of the output will recognise.
     """
     try:
         result = make().run(SLEEPS, timeout=1)

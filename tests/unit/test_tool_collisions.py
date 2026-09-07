@@ -1,15 +1,4 @@
-"""Two tools called `fetch`, from folders nobody coordinated.
-
-The sibling of `test_skill_sources`, and it was ruled out there: a tool is
-*called* by name, a dictionary holds one entry per key, so two can never
-coexist. That reasoning was about one dictionary. There is one per **agent**,
-and that is what these pin.
-
-The catalogue keeps both. Each delegate is handed the one it named, as an
-object rather than a name, because a name would pick one of the two out of a
-dictionary and lose the other before any narrowing ran. The agent holding the
-grant can name nothing, so it holds neither -- and is told so.
-"""
+"""Two tools called `fetch`, from folders nobody coordinated."""
 
 from __future__ import annotations
 
@@ -77,8 +66,9 @@ def _fetch_from(graph):
 
 
 def test_two_folders_may_each_define_one_name(cfg):
-    """This stopped the deployment before, and was unfixable by anyone who owned
-    neither file."""
+    """This stopped the deployment before, and was unfixable by anyone who owned neither
+    file.
+    """
     _two_vendors(cfg)
 
     assert sorted(one.reference for one in LocalToolRepository(tools_dir(cfg)).found) == [
@@ -91,11 +81,7 @@ def test_two_folders_may_each_define_one_name(cfg):
 
 
 def test_each_delegate_holds_the_tool_it_named(cfg, session_dir):
-    """Two helpers, two vendors, one name. Driven to the object each would call
-    rather than asserted on the spec that asked for it -- what a spec *carries*
-    proves nothing about what its compiled agent dispatches to, which is how
-    the sandbox once nested itself while thirteen tests passed.
-    """
+    """Two helpers, two vendors, one name."""
     _two_vendors(cfg)
     for vendor in ("vendor_a", "vendor_b"):
         _delegate(cfg, vendor, grant=f"{vendor}/fetch.py::fetch")
@@ -117,9 +103,9 @@ def test_each_delegate_holds_the_tool_it_named(cfg, session_dir):
 
 
 def test_the_agent_holding_the_grant_holds_neither(cfg, session_dir):
-    """It dispatches by name and cannot say which, so keeping one would be
-    keeping the wrong one half the time. Dropped, and reported -- the report is
-    the part that matters."""
+    """It dispatches by name and cannot say which, so keeping one would be keeping the
+    wrong one half the time.
+    """
     _two_vendors(cfg)
 
     graph = build_agent(
@@ -136,9 +122,9 @@ def test_the_agent_holding_the_grant_holds_neither(cfg, session_dir):
 
 
 def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
-    """Quietly holding less than was asked for is the failure this codebase
-    refuses everywhere. Deliberately not folded into `withheld`, which means
-    "you did not ask for this" -- here the caller did ask."""
+    """Quietly holding less than was asked for is the failure this codebase refuses
+    everywhere.
+    """
     from kingfisher.application.reporting import delegate_only
 
     _two_vendors(cfg)
@@ -151,9 +137,9 @@ def test_what_the_agent_cannot_hold_is_said_out_loud(cfg):
 
 
 def test_a_grant_of_everything_still_works(cfg, session_dir):
-    """`tools` defaults to `*`, so a catalogue with a collision would otherwise
-    be unusable by default. The pair drops out of the parent's hands and stays
-    reachable through a delegate."""
+    """`tools` defaults to `*`, so a catalogue with a collision would otherwise be
+    unusable by default.
+    """
     _two_vendors(cfg)
     _delegate(cfg, "vendor_a", grant="vendor_a/fetch.py::fetch")
 
@@ -171,10 +157,10 @@ def test_a_grant_of_everything_still_works(cfg, session_dir):
 def test_a_delegate_can_actually_call_the_one_it_named(cfg, session_dir):
     """The registry says a delegate *holds* it; only a call says it can use it.
 
-    Written because a mutation proved the gap: leaving the allowlist keyed on
-    the reference rather than the bare name filters every workspace tool out of
-    the model request, and every other test here still passed. The delegate
-    would have held its `fetch` and never been offered it.
+    Written because a mutation proved the gap: leaving the allowlist keyed on the
+    reference rather than the bare name filters every workspace tool out of the model
+    request, and every other test here still passed. The delegate would have held its
+    `fetch` and never been offered it.
     """
     _two_vendors(cfg)
     _delegate(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
@@ -212,8 +198,7 @@ def test_a_delegate_can_actually_call_the_one_it_named(cfg, session_dir):
 
 
 def test_a_bare_name_two_files_offer_is_refused(cfg, session_dir):
-    """The safety property. Adding a colliding tool turns a working grant into a
-    loud error rather than silently changing which code runs."""
+    """The safety property."""
     _two_vendors(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source offers"):
@@ -241,9 +226,10 @@ def test_the_refusal_names_both_files(cfg, session_dir):
 
 
 def test_a_definition_naming_it_bare_is_refused_too(cfg, session_dir):
-    """A definition is checked the same way a request is, and at construction --
-    a delegate that would have dispatched to the wrong vendor should never
-    reach a turn."""
+    """A definition is checked the same way a request is, and at construction -- a
+    delegate that would have dispatched to the wrong vendor should never reach a
+    turn.
+    """
     _two_vendors(cfg)
     _delegate(cfg, "vendor_a", grant="fetch")
 
@@ -264,8 +250,7 @@ def test_a_definition_naming_it_bare_is_refused_too(cfg, session_dir):
 
 
 def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
-    """Every catalogue without a collision behaves exactly as it did. The
-    reference is required only where a bare name stopped being enough."""
+    """Every catalogue without a collision behaves exactly as it did."""
     directory = tools_dir(cfg) / "solo"
     directory.mkdir(parents=True)
     (directory / "only.py").write_text(
@@ -283,19 +268,7 @@ def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
 
 
 def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
-    """The ceiling this change had to leave alone.
-
-    Handing a delegate its own objects is what makes two vendors possible, and
-    the obvious way to get it wrong is to select from the catalogue rather than
-    from what the request was granted -- then a definition naming vendor_b gets
-    vendor_b whatever the caller said, and the same hole stands open for
-    `execute`.
-
-    Driven, not inspected. `test_delegation_ceiling` says why in as many words:
-    what a delegate's `ToolNode` *registers* is identical either way, "which is
-    how this went unnoticed". The delegate here inherits the parent's registry
-    and is stopped by its allowlist, so only calling it proves anything.
-    """
+    """The ceiling this change had to leave alone."""
     _two_vendors(cfg)
     _delegate(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
 
@@ -329,8 +302,9 @@ def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
 
 
 def test_one_file_defining_a_name_twice_is_still_refused(cfg):
-    """Where the refusal still belongs: no second file, so no reference could
-    pick between them and nothing downstream could offer a way to say which."""
+    """Where the refusal still belongs: no second file, so no reference could pick
+    between them and nothing downstream could offer a way to say which.
+    """
     from kingfisher.tools.catalogue import ToolError
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -344,9 +318,9 @@ def test_one_file_defining_a_name_twice_is_still_refused(cfg):
 
 
 def test_a_workspace_tool_shadowing_a_builtin_is_still_refused(cfg, session_dir):
-    """The other collapse, which is not fixed by references: a workspace
-    `read_file` would take a built-in's name, and the built-in has no file to be
-    told apart by."""
+    """The other collapse, which is not fixed by references: a workspace `read_file`
+    would take a built-in's name, and the built-in has no file to be told apart by.
+    """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "shadow.py").write_text(
         TOOL.format(name="read_file", vendor="x"), encoding="utf-8"
@@ -372,10 +346,8 @@ def _subtractable(cfg):
 
 
 def test_subtracting_an_ambiguous_bare_name_is_refused(cfg):
-    """The grant side refused this from the start; the subtraction side matched
-    the bare name against a workspace holding two and removed *both* without a
-    word. Silent over-removal is the hardest kind to notice -- the tool is
-    simply not there, and nothing said so.
+    """The grant side refused this from the start; the subtraction side matched the bare
+    name against a workspace holding two and removed *both* without a word.
     """
     _two_vendors(cfg)
 
@@ -384,8 +356,9 @@ def test_subtracting_an_ambiguous_bare_name_is_refused(cfg):
 
 
 def test_subtracting_a_reference_leaves_the_other_one(cfg):
-    """And the only spelling that says *which* came back as an unknown name, so
-    there was no way to subtract one of the pair at all."""
+    """And the only spelling that says *which* came back as an unknown name, so there
+    was no way to subtract one of the pair at all.
+    """
     _two_vendors(cfg)
 
     kept = all_but(("vendor_a/fetch.py::fetch",), offered=_subtractable(cfg))
@@ -403,8 +376,7 @@ def test_a_genuine_typo_still_reads_as_unknown(cfg):
 
 
 def test_the_subtraction_axis_offers_what_a_grant_could_name(cfg):
-    """The two were built from different lists, which is how they disagreed.
-    One `Offering` feeds both now."""
+    """The two were built from different lists, which is how they disagreed."""
     _two_vendors(cfg)
 
     assert "vendor_a/fetch.py::fetch" in _subtractable(cfg)

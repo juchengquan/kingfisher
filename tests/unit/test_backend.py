@@ -33,12 +33,7 @@ def test_shell_env_supplies_a_usable_toolchain(cfg, session_dir):
 
 
 def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
-    """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks.
-
-    Per session rather than the workspace, so what tools cache under `~` is
-    disposed of by `reap` and counted by `session_max_bytes` -- neither of which
-    reached it while it sat at the workspace root.
-    """
+    """So ~/.aws, ~/.ssh and ~/.config are not where the agent's tooling looks."""
     assert shell_env(cfg, session_dir)["HOME"] == str(session_dir / ".home")
     assert shell_env(cfg, session_dir)["HOME"] != str(cfg.workspace)
 
@@ -46,11 +41,6 @@ def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
 def test_a_session_that_was_never_made_is_refused(cfg, tmp_path):
     """This function used to create what it needed, and that is why `.home` and
     `skills/uploaded` were made in one file and listed in none.
-
-    It refuses now rather than creating, because the directory it is handed may
-    not have come from a local disk. Loudly, because the quiet version costs a
-    turn: a missing `/memory` is a route resolving to nothing, and the first
-    sign is a tool error the model tries to work around.
     """
     bare = tmp_path / "never-made"
     bare.mkdir()
@@ -60,8 +50,9 @@ def test_a_session_that_was_never_made_is_refused(cfg, tmp_path):
 
 
 def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
-    """A message saying only "missing layout" would send a reader to the source
-    to find out which names it meant."""
+    """A message saying only "missing layout" would send a reader to the source to find
+    out which names it meant.
+    """
     bare = tmp_path / "never-made"
     bare.mkdir()
     (bare / "data").mkdir()
@@ -71,38 +62,33 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
 
 
 def test_backend_is_rooted_at_the_session(cfg, session_dir):
-    """One session is one root: virtual paths anchor there, so /data means
-    this session's data and no path leads to another session's."""
+    """One session is one root: virtual paths anchor there, so /data means this
+    session's data and no path leads to another session's.
+    """
     backend = build_backend(cfg, session_dir)
     assert str(session_dir.resolve()) == str(backend.default.cwd)
 
 
 def test_data_is_routed_so_the_deny_rule_is_legal(cfg, session_dir):
-    """deepagents refuses permissions on an execution backend unless every rule
-    path is scoped to a route -- routing /data/ is what makes Q21 possible."""
+    """deepagents refuses permissions on an execution backend unless every rule path is
+    scoped to a route -- routing /data/ is what makes Q21 possible.
+    """
     backend = build_backend(cfg, session_dir)
     assert "/data/" in backend.routes
     assert str((session_dir / "data").resolve()) == str(backend.routes["/data/"].cwd)
 
 
 def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
-    """A request that activates a subset of the skills needs deny rules for the
-    rest, and those rules are rejected unless /skills/ is a route too. Caught by
-    a live run, not by a unit test -- the wiring tests spy on create_deep_agent
-    and so never reach deepagents' own validation."""
+    """A request that activates a subset of the skills needs deny rules for the rest,
+    and those rules are rejected unless /skills/ is a route too.
+    """
     backend = build_backend(cfg, session_dir)
     assert "/skills/" in backend.routes
     assert str((cfg.workspace / "skills").resolve()) == str(backend.routes["/skills/"].cwd)
 
 
 def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_dir):
-    """The table and what backs it are in two modules, so something has to tie them.
-
-    `build_backend` keys its dict off `routed_paths`, which catches a route
-    declared with nothing to back it. This is the other direction: a mount added
-    to the builder and never declared would have no deny rule and no entry
-    saying it exists, and nothing else would notice.
-    """
+    """The table and what backs it are in two modules, so something has to tie them."""
     backend = build_backend(cfg, session_dir)
     declared = set(routed_paths())
     generated = {r for r in backend.routes if r.startswith(BUNDLED_SKILLS_ROUTE)}
@@ -115,17 +101,7 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
 
 
 def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
-    """Pinned rather than derived twice.
-
-    This is the wiring as it stood before the table existed -- two rules, these
-    paths, this order -- and the table's whole claim is that it produces the
-    same. Deriving the expectation from `denied_scopes` as well would assert
-    that a function equals itself.
-
-    That the count stays at two *however many bundles a catalogue ships* is the
-    other half, and it needs a catalogue with some:
-    `test_bundles.test_a_bundles_skills_add_a_mount_and_no_rule`.
-    """
+    """Pinned rather than derived twice."""
     assert denied_scopes() == ("/data/**", "/skills/**")
     assert [p.paths for p in read_only_permissions()] == [["/data/**"], ["/skills/**"]]
     assert {p.mode for p in read_only_permissions()} == {"deny"}
@@ -133,13 +109,7 @@ def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
 
 
 def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
-    """The absence used to be the only record of it.
-
-    `/derived` and `/runs` reach the default backend, which is the shell's,
-    rooted at the session. That is deliberate -- what a run produces is the
-    agent's to write -- but before the table a reader learned it by not finding
-    them in a dict literal.
-    """
+    """The absence used to be the only record of it."""
     backend = build_backend(cfg, session_dir)
     unrouted = {r.path for r in ROUTES if not r.routed}
 
@@ -148,12 +118,7 @@ def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
 
 
 def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
-    """The observed bug: it succeeded, and the file was not where it looked.
-
-    Passing `<workspace>/runs/s/t/report.md` produced
-    `<workspace>/Users/.../runs/s/t/report.md`, so `load_result` never found
-    the deliverable.
-    """
+    """The observed bug: it succeeded, and the file was not where it looked."""
     backend = build_backend(cfg, session_dir)
     host_path = f"{cfg.workspace}/runs/s1/t001/report.md"
 
@@ -194,13 +159,7 @@ def test_virtual_paths_still_work(cfg, virtual_path, session_dir):
 
 
 def test_every_read_and_write_path_resolves_through_the_guarded_hook():
-    """Pins the coupling to a private deepagents method.
-
-    The guard lives in `_get_backend_and_key` because every path-addressed
-    operation resolves through it. If an upgrade renames it, the override stops
-    being called and the guard silently disappears — so this fails the build
-    instead.
-    """
+    """Pins the coupling to a private deepagents method."""
     assert hasattr(CompositeBackend, "_get_backend_and_key")
     assert WorkspaceScopedBackend._get_backend_and_key is not CompositeBackend._get_backend_and_key
 
@@ -230,12 +189,7 @@ def test_prepare_scratch_creates_a_private_directory(cfg, tmp_path):
 
 
 def test_prepare_scratch_tightens_an_existing_loose_directory(cfg, tmp_path):
-    """Every workspace made before this check has a 0755 scratch directory.
-
-    `mkdir(mode=...)` is ignored when the directory already exists, so without
-    the chmod those directories would stay world-readable forever — or, if this
-    raised instead, stop working entirely.
-    """
+    """Every workspace made before this check has a 0755 scratch directory."""
     existing = tmp_path / "existing"
     existing.mkdir()
     existing.chmod(0o755)
@@ -257,9 +211,7 @@ def test_prepare_scratch_refuses_something_that_is_not_a_directory(cfg, tmp_path
 
 
 def test_state_dir_defaults_and_relocates(cfg, tmp_path):
-    """The run logs move with `state_dir`, and the agent addresses neither it
-    nor them. It asserted the thread database moved too, until there stopped
-    being one: what a session keeps is its transcript, inside the session."""
+    """The run logs move with `state_dir`, and the agent addresses neither it nor them."""
     assert cfg.state_dir == cfg.workspace / ".kingfisher"
 
     relocated = replace(cfg, state_root=tmp_path / "state")
@@ -275,13 +227,8 @@ def test_scratch_follows_a_relocated_state_dir(cfg, tmp_path):
 
 
 def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):
-    """The guard exists to correct the model mid-turn, and its message names
-    the virtual path to use. That only works if the message arrives.
-
-    It raised straight out of the tool call instead, killing the run: three
-    live smoke runs died this way, on `analyze.py`, on a skill's SKILL.md, and
-    again with skills off. deepagents converts `ValueError` raised during path
-    *validation*, but `backend.write()` is called outside that guard.
+    """The guard exists to correct the model mid-turn, and its message names the virtual
+    path to use.
     """
     from langchain_core.messages import AIMessage
 
@@ -316,14 +263,10 @@ def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir)
 def test_a_delegate_gets_the_correction_too(cfg, session_dir):
     """The same guard, one level down, where the same backend raises.
 
-    A delegate is built with the parent's backend and inherits none of the
-    parent's middleware, so `reject_host_path` fired for it exactly as it fires
-    for the parent and the correction had nothing to turn it into. Measured
-    before the fix: `HostPathError` out of the delegate's graph, killing the run.
-
-    Worse than it looks from the parent's side. This needs no workspace tools at
-    all -- `write_file` is a built-in, and a delegate that leaves
-    `builtin_tools` out has every one of them.
+    A delegate is built with the parent's backend and inherits none of the parent's
+    middleware, so `reject_host_path` fired for it exactly as it fires for the parent
+    and the correction had nothing to turn it into. Measured before the fix:
+    `HostPathError` out of the delegate's graph, killing the run.
     """
     from langchain_core.messages import AIMessage
 
@@ -369,10 +312,7 @@ def test_a_delegate_gets_the_correction_too(cfg, session_dir):
 
 
 def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, session_dir):
-    """`reap` removes session directories and nothing else. With `HOME` at the
-    workspace root, `~/.cache/uv` and `~/Library/Caches/pip` accumulated beside
-    `skills/` and were never swept -- 59MB in one real workspace.
-    """
+    """`reap` removes session directories and nothing else."""
     from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 
     home = Path(shell_env(cfg, session_dir)["HOME"])
@@ -385,9 +325,7 @@ def test_what_tools_cache_under_home_is_disposed_of_with_the_session(cfg, sessio
 
 
 def test_what_tools_cache_counts_against_the_session_quota(cfg, session_dir):
-    """`session_max_bytes` measures a session. A cache above every session was
-    invisible to it, so a session could hold a gigabyte of wheels and report
-    nothing."""
+    """`session_max_bytes` measures a session."""
     from kingfisher.infrastructure.workspace.sessions import session_bytes
 
     before = session_bytes(session_dir)
@@ -409,12 +347,7 @@ def test_home_is_not_shared_between_two_sessions(cfg, workspace):
 
 
 def test_the_catalogue_is_named_because_the_shell_cannot_derive_it(cfg, session_dir):
-    """Every other virtual path becomes a shell path by dropping the slash.
-    `/skills` is the exception -- it is shared, so it lives above the session --
-    and it used to be reachable as `$HOME/skills` only because `HOME` was the
-    workspace. Moving `HOME` into the session broke that, so the catalogue is
-    named outright.
-    """
+    """Every other virtual path becomes a shell path by dropping the slash."""
     env = shell_env(cfg, session_dir)
 
     assert env["KINGFISHER_SKILLS"] == str(cfg.skills_dir)
@@ -422,8 +355,9 @@ def test_the_catalogue_is_named_because_the_shell_cannot_derive_it(cfg, session_
 
 
 def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
-    """A `HOME` that does not exist is worse than none: tools fall back to
-    somewhere unpredictable rather than failing."""
+    """A `HOME` that does not exist is worse than none: tools fall back to somewhere
+    unpredictable rather than failing.
+    """
     from kingfisher.infrastructure.harness.backend import agent_home, build_backend
 
     build_backend(cfg, session_dir)
@@ -441,12 +375,7 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
 # entirely.
 
 def _rows(result):
-    """The matches in a listing, insisting it actually succeeded.
-
-    `matches` is `None` on a hard failure and `[]` on a search that found
-    nothing. Every test below means the second, so this refuses the first
-    rather than letting an empty comparison pass for it.
-    """
+    """The matches in a listing, insisting it actually succeeded."""
     assert result.matches is not None, result.error
     return result.matches
 
@@ -462,8 +391,8 @@ INSIDE_THE_ROOT = {
 @pytest.mark.parametrize(("route", "parts"), INSIDE_THE_ROOT.items(), ids=INSIDE_THE_ROOT)
 def test_a_routed_file_is_globbed_once(cfg, session_dir, route, parts):
     """Measured before this: `--data orders.csv` reached the model as
-    `['/data/orders.csv', '/data/orders.csv']`, on every pattern tried. It reads
-    as two files, and the reader is a model that was about to count them."""
+    `['/data/orders.csv', '/data/orders.csv']`, on every pattern tried.
+    """
     backend = build_backend(cfg, session_dir)
     where = session_dir.joinpath(*parts)
     where.mkdir(parents=True, exist_ok=True)
@@ -476,11 +405,7 @@ def test_a_routed_file_is_globbed_once(cfg, session_dir, route, parts):
 
 @pytest.mark.parametrize(("route", "parts"), INSIDE_THE_ROOT.items(), ids=INSIDE_THE_ROOT)
 def test_a_routed_file_is_grepped_once(cfg, session_dir, route, parts):
-    """From the root, which is where the two answers meet. Asked *at* the route
-    it was always right -- one backend answers and there is nothing to merge --
-    and a first draft of this test asserted exactly that, passed with the fix
-    reverted, and pinned nothing at all.
-    """
+    """From the root, which is where the two answers meet."""
     backend = build_backend(cfg, session_dir)
     where = session_dir.joinpath(*parts)
     where.mkdir(parents=True, exist_ok=True)
@@ -492,9 +417,7 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir, route, parts):
 
 
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
-    """The half that says this is deduplication and not collapsing. A grep
-    match is a *line*, so one file may honestly produce several, and a key of
-    the path alone would have thrown the rest away."""
+    """The half that says this is deduplication and not collapsing."""
     backend = build_backend(cfg, session_dir)
     data = session_dir / "data"
     data.mkdir(parents=True, exist_ok=True)
@@ -507,8 +430,9 @@ def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
 
 
 def test_two_different_files_are_both_still_listed(cfg, session_dir):
-    """The other half: nothing is dropped for being similar, only for being
-    the same thing twice."""
+    """The other half: nothing is dropped for being similar, only for being the same
+    thing twice.
+    """
     backend = build_backend(cfg, session_dir)
     data = session_dir / "data"
     data.mkdir(parents=True, exist_ok=True)
@@ -521,9 +445,9 @@ def test_two_different_files_are_both_still_listed(cfg, session_dir):
 
 
 def test_a_hard_failure_is_passed_through_rather_than_emptied(cfg, session_dir):
-    """`matches` is `None` on a hard failure and `[]` on a search that found
-    nothing, and the two say different things. Deduplicating `None` into an
-    empty list would turn the first into the second."""
+    """`matches` is `None` on a hard failure and `[]` on a search that found nothing,
+    and the two say different things.
+    """
     from dataclasses import dataclass
 
     from kingfisher.infrastructure.harness.backend import _once

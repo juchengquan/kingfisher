@@ -1,15 +1,4 @@
-"""Folders in the catalogue: which kinds get them, and what a folder cannot do.
-
-Tools and subagents are read by kingfisher, so they may nest as deep as anyone
-likes. Skills are read by the agent itself through a filesystem route, and
-deepagents looks exactly one level down -- so nesting one does not tidy it away,
-it makes it unreachable. That asymmetry is the feature, not an oversight, and
-these pin both halves.
-
-The rule a folder must never break: it cannot reach a *name*. A tool is named by
-itself and a subagent by its `name:` field, so where the file sits changes what
-a person greps for and nothing that a request, a grant or the model ever sees.
-"""
+"""Folders in the catalogue: which kinds get them, and what a folder cannot do."""
 
 from __future__ import annotations
 
@@ -60,25 +49,14 @@ def test_a_tool_in_a_subfolder_is_found(tmp_path):
 
 
 def test_nesting_does_not_reach_the_name(tmp_path):
-    """The rule everything else depends on.
-
-    A folder is organisation. If it leaked into the name, every grant, every
-    `--without-tools`, and every `tools:` list inside a subagent definition
-    would break the moment a file moved between folders.
-    """
+    """The rule everything else depends on."""
     _tool(tmp_path / "research" / "deep" / "deeper", "find_company")
 
     assert LocalToolRepository(tmp_path).names == ("find_company",), "the folders reached the name"
 
 
 def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
-    """The case worth building for, and the one that failed before.
-
-    A tool grows helpers -- that is *why* it wants a folder -- and a helper is
-    an ordinary module that imports with a relative import. Scanned as a
-    standalone file it would both fail to import and be required to declare
-    `TOOLS` of its own.
-    """
+    """The case worth building for, and the one that failed before."""
     pkg = tmp_path / "research"
     pkg.mkdir(parents=True)
     (pkg / "client.py").write_text("def resolve(name): return f'found:{name}'\n", encoding="utf-8")
@@ -101,13 +79,7 @@ def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
 
 
 def test_two_catalogues_may_each_hold_a_package_of_the_same_name(tmp_path):
-    """The isolation the flat loader was built for, kept.
-
-    Two deployments sharing a process must not share a module. The loader keys
-    on the full path, so `wsA/research` and `wsB/research` are different
-    modules -- and each resolves its *own* helper, which is the part a name
-    collision would break silently.
-    """
+    """The isolation the flat loader was built for, kept."""
     for workspace in ("wsA", "wsB"):
         pkg = tmp_path / workspace / "research"
         pkg.mkdir(parents=True)
@@ -132,11 +104,7 @@ def test_two_catalogues_may_each_hold_a_package_of_the_same_name(tmp_path):
 
 
 def test_a_package_must_still_declare_its_exports(tmp_path):
-    """Declared, never inferred -- the same rule a flat module follows.
-
-    Scanning a package for anything callable would promote a helper to a tool
-    by accident, which is worse than a tool that never appeared.
-    """
+    """Declared, never inferred -- the same rule a flat module follows."""
     pkg = tmp_path / "research"
     pkg.mkdir(parents=True)
     (pkg / "__init__.py").write_text("VALUE = 1\n", encoding="utf-8")
@@ -155,13 +123,7 @@ def test_an_error_names_the_folder_it_came_from(tmp_path):
 
 
 def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
-    """The failure someone actually hits on the way to writing a package.
-
-    A loose file is loaded with no parent, so `from ._client import r` resolves
-    against this loader's invented namespace and fails naming it -- which tells
-    a reader only that kingfisher has internals. The fix is always the same, so
-    the error should be the fix.
-    """
+    """The failure someone actually hits on the way to writing a package."""
     sub = tmp_path / "sub"
     sub.mkdir(parents=True)
     (sub / "_client.py").write_text("def r(n): return n\n", encoding="utf-8")
@@ -180,12 +142,8 @@ def test_a_relative_import_in_a_loose_file_says_what_to_do(tmp_path):
 
 
 def test_two_folders_may_each_define_one_name(tmp_path):
-    """This used to stop the deployment, and was unfixable by anyone who owned
-    neither file. Vendors do not coordinate names.
-
-    Both load, and the pair is told apart by the file each came from. Nothing
-    silently wins: an *agent* dispatches by name, so the refusal moved to the
-    agent, where it can say which one you meant.
+    """This used to stop the deployment, and was unfixable by anyone who owned neither
+    file.
     """
     _tool(tmp_path / "research", "find_company")
     _tool(tmp_path / "sales", "find_company", filename="lookup.py")
@@ -200,12 +158,7 @@ def test_two_folders_may_each_define_one_name(tmp_path):
 
 @pytest.mark.parametrize("debris", ["__pycache__", ".venv", ".hidden"])
 def test_the_walk_refuses_to_descend_into_debris(tmp_path, debris):
-    """New guard, because the exposure is new.
-
-    A one-level scan could never reach a virtualenv left under `tools/`. A
-    recursive one can, and this layer *imports what it finds* -- so a walk that
-    descended would execute whatever is in there.
-    """
+    """New guard, because the exposure is new."""
     junk = tmp_path / debris
     junk.mkdir(parents=True)
     (junk / "boom.py").write_text("raise RuntimeError('this should never be imported')\n",
@@ -216,8 +169,9 @@ def test_the_walk_refuses_to_descend_into_debris(tmp_path, debris):
 
 
 def test_sources_say_where_a_nested_tool_lives(tmp_path):
-    """`--list` needs this: a folder exists so a person can find a file, and a
-    bare name sends them grepping instead."""
+    """`--list` needs this: a folder exists so a person can find a file, and a bare name
+    sends them grepping instead.
+    """
     _tool(tmp_path / "research", "find_company")
     _tool(tmp_path, "flat")
 
@@ -228,10 +182,9 @@ def test_sources_say_where_a_nested_tool_lives(tmp_path):
 
 
 def test_a_package_is_reported_as_a_directory(tmp_path):
-    """With its trailing slash, so `csv_profile` the folder does not read as a
-    file that would have been `csv_profile.py`. A package contributes tools
-    under names that are not its own, which is exactly when someone goes
-    looking for where a name came from."""
+    """With its trailing slash, so `csv_profile` the folder does not read as a file that
+    would have been `csv_profile.py`.
+    """
     pkg = tmp_path / "csv_profile"
     pkg.mkdir(parents=True)
     (pkg / "__init__.py").write_text(
@@ -254,8 +207,9 @@ def test_a_subagent_in_a_subfolder_is_found(tmp_path):
 
 
 def test_a_nested_subagent_keeps_its_own_name(tmp_path):
-    """The filename is not authoritative and neither is the folder: the `name:`
-    field is what a request activates and what `task` dispatches."""
+    """The filename is not authoritative and neither is the folder: the `name:` field is
+    what a request activates and what `task` dispatches.
+    """
     directory = tmp_path / "analysis"
     directory.mkdir(parents=True)
     (directory / "whatever.yaml").write_text(SUBAGENT.format(name="profiler"), encoding="utf-8")
@@ -264,12 +218,9 @@ def test_a_nested_subagent_keeps_its_own_name(tmp_path):
 
 
 def test_two_folders_may_each_define_one_subagent_name(tmp_path):
-    """Same as tools, and for the same reason: refusing the pair on sight
-    stopped the whole catalogue loading over a clash no single agent had yet
-    asked for, and nobody who owned neither file could fix it.
-
-    Both are kept, under the reference a grant writes. The refusal moved to the
-    agent, where the roster actually collapses.
+    """Same as tools, and for the same reason: refusing the pair on sight stopped the
+    whole catalogue loading over a clash no single agent had yet asked for, and
+    nobody who owned neither file could fix it.
     """
     _subagent(tmp_path / "analysis", "profiler")
     _subagent(tmp_path / "review", "profiler")
@@ -281,14 +232,8 @@ def test_two_folders_may_each_define_one_subagent_name(tmp_path):
 
 
 def test_sources_say_where_a_nested_subagent_lives(tmp_path):
-    """The mirror of `test_sources_say_where_a_nested_tool_lives`, and the half
-    of the pair that was missing. `--list` is the only caller: a folder exists so
-    a person can find a file, and a bare name sends them grepping instead.
-
-    Exercised by the `--list` tests already, in the sense that they run it and do
-    not crash. Nothing asserted on what it returned, so the one thing it is for
-    -- naming a file that is not `<name>.yaml` -- was unverified for subagents
-    while being verified for tools.
+    """The mirror of `test_sources_say_where_a_nested_tool_lives`, and the half of the
+    pair that was missing.
     """
     _subagent(tmp_path / "analysis", "profiler")
     _subagent(tmp_path, "flat")
@@ -300,14 +245,7 @@ def test_sources_say_where_a_nested_subagent_lives(tmp_path):
 
 
 def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
-    """The case that makes this worth having at all. A subagent's name comes from
-    inside the document, so `profiler` may be defined in `whatever.yaml` -- and
-    then the name alone tells you nothing about what to open.
-
-    `test_a_nested_subagent_keeps_its_own_name` already writes exactly this file
-    to prove the name wins over the filename. This asserts the other half: that
-    the filename is still recoverable afterwards.
-    """
+    """The case that makes this worth having at all."""
     directory = tmp_path / "analysis"
     directory.mkdir(parents=True)
     (directory / "whatever.yaml").write_text(SUBAGENT.format(name="profiler"), encoding="utf-8")
@@ -319,12 +257,9 @@ def test_sources_report_the_file_when_the_name_is_not_it(tmp_path):
 
 
 def test_the_repository_still_lists_only_the_root(tmp_path):
-    """`names` is what a *store-backed* catalogue mounts by, and a store has no
-    folders -- so this stays a root listing on purpose while the registry, which
-    reads through sources, is the one that sees `research::company-lookup`.
-
-    Two questions that look like one. Running them together is what the
-    registry was built to stop.
+    """`names` is what a *store-backed* catalogue mounts by, and a store has no folders
+    -- so this stays a root listing on purpose while the registry, which reads
+    through sources, is the one that sees `research::company-lookup`.
     """
     nested = tmp_path / "research" / "company-lookup"
     nested.mkdir(parents=True)
@@ -337,8 +272,9 @@ def test_the_repository_still_lists_only_the_root(tmp_path):
 
 
 def test_a_second_level_of_grouping_is_where_it_stops(tmp_path):
-    """Making our own scan recurse further would advertise a skill the agent
-    then could not open, which is worse than not offering it."""
+    """Making our own scan recurse further would advertise a skill the agent then could
+    not open, which is worse than not offering it.
+    """
     nested = tmp_path / "research" / "deep" / "company-lookup"
     nested.mkdir(parents=True)
     (nested / "SKILL.md").write_text(

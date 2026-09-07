@@ -1,13 +1,4 @@
-"""`kingfisher doctor`: everything between an install and a run.
-
-The checks existed and were scattered -- a `ConfigError` here, a warning inside
-`model_catalogue.load` there, `warn_if_unconfined` in a driver the wheel does not
-ship. Diagnosing a deployment meant provoking each in turn.
-
-The distinction these hold hardest is failure against warning. An unconfined
-shell is a deployment's choice and must not make the command non-zero, or it
-goes unrun in exactly the deployments most worth checking.
-"""
+"""`kingfisher doctor`: everything between an install and a run."""
 
 from __future__ import annotations
 
@@ -70,12 +61,7 @@ def test_a_broken_tool_catalogue_is_a_failure_too(cfg):
 
 
 def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
-    """The distinction the exit code turns on.
-
-    Plenty of deployments run unconfined on purpose -- in a container that is
-    already the boundary. A `doctor` that failed there would be a command those
-    deployments stop running, and then it is not checking anything at all.
-    """
+    """The distinction the exit code turns on."""
     from dataclasses import replace
 
     unconfined = replace(cfg, shell_sandbox="off")
@@ -89,24 +75,7 @@ def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
 def test_every_way_a_source_can_be_wrong_warns_and_says_something_different(
     cfg, tmp_path, shipped
 ):
-    """Four states, four remedies, and never a failure.
-
-    This asked whether the definitions had arrived inside the install, which was
-    only ever wrong if an install was damaged -- a check that could realistically
-    only pass. A configured directory can be unset, mistyped, deleted, or named
-    one level too high, so there is something to answer now.
-
-    Each detail is asserted apart because the remedies differ, and a diagnosis
-    a reader cannot act on is a line they scroll past. The "holds none of them"
-    case names the four kinds: pointing one level off is the easiest mistake to
-    make with a path, and without them a reader is left guessing which
-    direction.
-
-    `warn` in all four, never `fail`. A deployment that seeded six months ago
-    runs perfectly well with nothing set here, and `doctor` exits non-zero on
-    any failure -- so failing would turn a working install red over a setting it
-    does not need.
-    """
+    """Four states, four remedies, and never a failure."""
     from dataclasses import replace
 
     empty = tmp_path / "nothing-of-the-kind"
@@ -129,8 +98,9 @@ def test_every_way_a_source_can_be_wrong_warns_and_says_something_different(
 
 
 def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
-    """Separately asserted, because "holds none of them" without the list is
-    the puzzle this message exists to stop being."""
+    """Separately asserted, because "holds none of them" without the list is the puzzle
+    this message exists to stop being.
+    """
     from dataclasses import replace
 
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
@@ -145,17 +115,8 @@ def test_the_empty_source_detail_names_every_kind_it_looked_for(cfg, tmp_path):
 
 
 def test_the_unset_remedy_says_where_your_own_definitions_go(cfg, tmp_path, monkeypatch):
-    """`doctor` is where a deployment learns it has nothing to seed from, and
-    the remedy said only where to point -- never where to put.
-
-    Only the unset case carries it. The other three are holding a path that is
-    wrong somehow and already have a remedy about that path; this is the one
-    where the reader has nothing yet.
-
-    Conditional on the directory being there, for the reason `SUGGESTION` is:
-    the reader most likely to see this warn installed the package and has no
-    `assets/` anywhere. Both halves, because a clause that never appears is as
-    wrong as one that always does.
+    """`doctor` is where a deployment learns it has nothing to seed from, and the remedy
+    said only where to point -- never where to put.
     """
     from dataclasses import replace
 
@@ -174,12 +135,7 @@ def test_the_unset_remedy_says_where_your_own_definitions_go(cfg, tmp_path, monk
 
 
 def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatch, shipped):
-    """One place decides it, and this is what it decides.
-
-    `assets` is set on the "ok" record because an unset source is now one of the
-    things `doctor` warns about -- so a fixture leaving it out would make the
-    all-clear case unreachable and this test about nothing.
-    """
+    """One place decides it, and this is what it decides."""
     from dataclasses import replace
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
@@ -198,12 +154,7 @@ def test_the_exit_code_separates_will_not_run_from_worth_knowing(cfg, monkeypatc
 
 
 def test_nothing_here_calls_a_model(cfg, monkeypatch):
-    """The line that keeps this cheap enough to run before every deployment.
-
-    A credential that is present can still be wrong, and finding out means
-    spending money on a call nobody asked for. Asserted by making any outbound
-    build explode: `examine` must not reach one.
-    """
+    """The line that keeps this cheap enough to run before every deployment."""
     from kingfisher.infrastructure.harness import models
 
     reached = "doctor built a model"
@@ -246,13 +197,8 @@ def test_the_json_form_carries_the_same_checks(cfg, monkeypatch, capsys):
 
 
 def test_both_forms_of_doctor_say_where_it_read_from(cfg, monkeypatch, capsys):
-    """An object where this was a bare list of checks, because the two forms of
-    one command must not show different things.
-
-    The human form opens with the header; a JSON form without it would be the
-    disagreement between surfaces this record was built to end -- and a script
-    checking a deployment's health wants the paths in the same answer as the
-    verdicts, not from a second command.
+    """An object where this was a bare list of checks, because the two forms of one
+    command must not show different things.
     """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
@@ -273,13 +219,7 @@ def test_both_forms_of_doctor_say_where_it_read_from(cfg, monkeypatch, capsys):
 
 
 def test_an_empty_catalogue_somebody_pointed_at_is_not_an_empty_workspace(cfg, tmp_path):
-    """The two look identical and the remedies are opposite.
-
-    Resolving a catalogue *creates* the directory it was pointed at rather than
-    refusing an absent one, so a mistyped `KINGFISHER_SUBAGENTS_DIR` yields a
-    real, readable, empty directory. `doctor` then said `ok  subagents  0
-    defined`, which is also what a correct fresh workspace says.
-    """
+    """The two look identical and the remedies are opposite."""
     from dataclasses import replace
 
     elsewhere = tmp_path / "staged-subagents"
@@ -293,14 +233,14 @@ def test_an_empty_catalogue_somebody_pointed_at_is_not_an_empty_workspace(cfg, t
 
 
 def test_an_empty_catalogue_where_it_belongs_says_nothing(cfg):
-    """A fresh workspace is the ordinary state, and warning about it would make
-    the check above noise on every first run."""
+    """A fresh workspace is the ordinary state, and warning about it would make the
+    check above noise on every first run.
+    """
     assert "subagents directory" not in {c.name for c in examine(cfg)}
 
 
 def test_a_relocated_catalogue_that_holds_something_says_nothing(cfg, tmp_path):
-    """Sharing a catalogue across deployments is the arrangement the setting
-    exists for. The warning is about emptiness, not about relocation."""
+    """Sharing a catalogue across deployments is the arrangement the setting exists for."""
     from dataclasses import replace
 
     from tests.conftest import an_agent
@@ -313,13 +253,7 @@ def test_a_relocated_catalogue_that_holds_something_says_nothing(cfg, tmp_path):
 
 
 def test_a_configuration_that_is_being_ignored_is_said_out_loud(cfg, tmp_path):
-    """Otherwise somebody edits the setting and watches nothing change.
-
-    Only reachable because `examine` takes the inventory rather than building
-    one: a catalogue it resolved from `cfg` agrees with `cfg` by construction,
-    so the deployment being examined would have been a fresh guess instead of
-    the wiring that is actually running.
-    """
+    """Otherwise somebody edits the setting and watches nothing change."""
     from kingfisher import inventory
     from kingfisher.infrastructure.catalogue import Definitions
 
@@ -338,7 +272,8 @@ def test_a_configuration_that_is_being_ignored_is_said_out_loud(cfg, tmp_path):
 
 def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatch, capsys):
     """`doctor` is what somebody runs when nothing works, so the case where the
-    configuration itself is absent has to be a message, not a traceback."""
+    configuration itself is absent has to be a message, not a traceback.
+    """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
@@ -394,9 +329,7 @@ def _half_keyed(cfg, tmp_path):
 
 
 def test_an_endpoint_with_no_key_is_reported_rather_than_ticked(cfg, tmp_path):
-    """It used to be invisible. The drop is announced by a warning at load and
-    then discarded, so `doctor` counted the survivors and printed `ok` over a
-    catalogue that had lost an endpoint."""
+    """It used to be invisible."""
     checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
 
     assert checks["credentials"].verdict == "warn"
@@ -405,10 +338,10 @@ def test_an_endpoint_with_no_key_is_reported_rather_than_ticked(cfg, tmp_path):
 
 
 def test_a_missing_credential_is_a_warning_not_a_failure(cfg, tmp_path):
-    """A shared catalogue naming endpoints this machine cannot reach is the
-    normal case by the loader's own account -- one reviewed file across a fleet
-    holding different subsets of keys. Failing here fails the arrangement the
-    format encourages."""
+    """A shared catalogue naming endpoints this machine cannot reach is the normal case
+    by the loader's own account -- one reviewed file across a fleet holding different
+    subsets of keys.
+    """
     checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
 
     assert checks["credentials"].verdict == "warn"
@@ -417,12 +350,7 @@ def test_a_missing_credential_is_a_warning_not_a_failure(cfg, tmp_path):
 
 
 def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
-    """The check nothing else does.
-
-    A delegate naming a model this machine has no key for leaves a workspace
-    that loads, lists cleanly, and fails on the first request naming it. The
-    build refuses it then; `doctor` exists to be the before.
-    """
+    """The check nothing else does."""
     half = _half_keyed(cfg, tmp_path)
     subagents_dir(half).mkdir(parents=True, exist_ok=True)
     (subagents_dir(half) / "far.yaml").write_text(
@@ -439,8 +367,9 @@ def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):
 
 
 def test_definitions_that_all_run_say_so_once(cfg, tmp_path):
-    """The negative control, and it is one line rather than one per definition:
-    a clean deployment should not scroll."""
+    """The negative control, and it is one line rather than one per definition: a clean
+    deployment should not scroll.
+    """
     half = _half_keyed(cfg, tmp_path)
     subagents_dir(half).mkdir(parents=True, exist_ok=True)
     (subagents_dir(half) / "near.yaml").write_text(
@@ -456,9 +385,9 @@ def test_definitions_that_all_run_say_so_once(cfg, tmp_path):
 
 
 def test_a_broken_catalogue_does_not_take_the_definitions_check_with_it(cfg):
-    """`unrunnable_delegates` reads the same files, so a definition that will
-    not load raises out of it. A diagnosis that stops at the first problem is
-    what this command exists to replace, and the check above already said so."""
+    """`unrunnable_delegates` reads the same files, so a definition that will not load
+    raises out of it.
+    """
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     (subagents_dir(cfg) / "broken.yaml").write_text("name: broken\n", encoding="utf-8")
 
@@ -470,17 +399,19 @@ def test_a_broken_catalogue_does_not_take_the_definitions_check_with_it(cfg):
 
 
 def test_the_catalogue_line_says_what_it_did_not_check(cfg):
-    """A green tick that does not say so claims more than it knows: the check is
-    that a credential is *present*, never that it works."""
+    """A green tick that does not say so claims more than it knows: the check is that a
+    credential is *present*, never that it works.
+    """
     checks = {check.name: check for check in examine(cfg)}
 
     assert "not tested" in checks["catalogue"].detail
 
 
 def test_reaching_the_cli_stays_free_of_provider_sdks():
-    """`unrunnable_delegates` costs 868ms and 3,137 modules to import, so at the
-    top of `health` every verb would pay it -- `kingfisher help` would spend a
-    second to print text. Imported inside the check instead."""
+    """`unrunnable_delegates` costs 868ms and 3,137 modules to import, so at the top of
+    `health` every verb would pay it -- `kingfisher help` would spend a second to
+    print text.
+    """
     import subprocess
     import sys
 
@@ -498,14 +429,7 @@ def test_reaching_the_cli_stays_free_of_provider_sdks():
 
 
 def test_the_description_names_its_own_limit():
-    """A command that never calls a model has to say so where it is read.
-
-    `doctor` can report every credential present and every definition resolving
-    and still be wrong about whether a call succeeds. That hole is deliberate --
-    a probe would make this cost money, and a command that costs money comes out
-    of the pipeline -- so the honest thing is to name it and point at the test
-    that does prove it.
-    """
+    """A command that never calls a model has to say so where it is read."""
     from kingfisher.presentation.cli.__main__ import build_parser
 
     description = verbs(build_parser())["doctor"].description or ""
@@ -528,21 +452,18 @@ def _backing(monkeypatch, **fields):
 
 
 def test_an_ordinary_disk_says_nothing_at_all(cfg, monkeypatch):
-    """A deployment allowed to hold data on its own disk is not misconfigured
-    for doing so, and a check that fired anyway would be one people learn to
-    scroll past."""
+    """A deployment allowed to hold data on its own disk is not misconfigured for doing
+    so, and a check that fired anyway would be one people learn to scroll past.
+    """
     _backing(monkeypatch, filesystem="ext4", size_bytes=10**12)
 
     assert "nothing at rest" not in {check.name for check in examine(cfg)}
 
 
 def test_swapping_fails_because_it_is_the_silent_one(cfg, monkeypatch):
-    """The measured behaviour, and the reason this check exists at all: a
-    memory filesystem larger than the limit does not refuse when it fills, it
-    swaps -- the write succeeds, no error appears, and the bytes are on a disk.
-
-    `fail` rather than `warn`. The deployment runs; what it cannot do is keep
-    the promise it was configured for.
+    """The measured behaviour, and the reason this check exists at all: a memory
+    filesystem larger than the limit does not refuse when it fills, it swaps -- the
+    write succeeds, no error appears, and the bytes are on a disk.
     """
     _backing(
         monkeypatch, filesystem="tmpfs", size_bytes=512 * 1024**2,
@@ -557,9 +478,7 @@ def test_swapping_fails_because_it_is_the_silent_one(cfg, monkeypatch):
 
 
 def test_a_filesystem_larger_than_the_limit_fails(cfg, monkeypatch):
-    """The other half of the same trap. With swap off this is not silent -- it
-    is an OOM kill, which takes every session in the container rather than the
-    one that overran."""
+    """The other half of the same trap."""
     _backing(
         monkeypatch, filesystem="tmpfs", size_bytes=2048 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
@@ -572,9 +491,9 @@ def test_a_filesystem_larger_than_the_limit_fails(cfg, monkeypatch):
 
 
 def test_no_memory_limit_at_all_warns(cfg, monkeypatch):
-    """Not a failure: a memory filesystem on a host with no cgroup limit is what
-    a developer's machine looks like, and it runs. It is worth saying, because a
-    full one then exhausts the host rather than failing."""
+    """Not a failure: a memory filesystem on a host with no cgroup limit is what a
+    developer's machine looks like, and it runs.
+    """
     _backing(monkeypatch, filesystem="tmpfs", size_bytes=512 * 1024**2, swap_enabled=False)
 
     check = {c.name: c for c in examine(cfg)}["nothing at rest"]
@@ -583,8 +502,7 @@ def test_no_memory_limit_at_all_warns(cfg, monkeypatch):
 
 
 def test_the_arrangement_that_works_says_so(cfg, monkeypatch):
-    """Smaller than the limit, swap off. A full filesystem then gives a clean
-    ENOSPC, which is a thing kingfisher can refuse on rather than die of."""
+    """Smaller than the limit, swap off."""
     _backing(
         monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
@@ -597,12 +515,7 @@ def test_the_arrangement_that_works_says_so(cfg, monkeypatch):
 
 
 def test_a_memory_workspace_with_nowhere_to_keep_sessions_fails(cfg, monkeypatch):
-    """The combination that loses everything and says nothing.
-
-    A workspace in memory and no store is not a slow leak — it is every session
-    gone the moment the process restarts, discovered by a caller whose
-    conversation has forgotten itself.
-    """
+    """The combination that loses everything and says nothing."""
     _backing(
         monkeypatch, filesystem="tmpfs", size_bytes=300 * 1024**2,
         limit_bytes=400 * 1024**2, swap_enabled=False,
@@ -615,8 +528,9 @@ def test_a_memory_workspace_with_nowhere_to_keep_sessions_fails(cfg, monkeypatch
 
 
 def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
-    """Unset means unbounded, which is survivable on a disk and is not
-    survivable in memory every session in the container shares."""
+    """Unset means unbounded, which is survivable on a disk and is not survivable in
+    memory every session in the container shares.
+    """
     from dataclasses import replace
 
     _backing(
@@ -631,8 +545,7 @@ def test_no_quota_fails_only_once_memory_is_shared(cfg, monkeypatch, tmp_path):
 
 
 def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monkeypatch, tmp_path):
-    """A number that can never be reached is not a limit. The real limit is then
-    the filesystem, and it arrives as a write failure rather than a refusal."""
+    """A number that can never be reached is not a limit."""
     from dataclasses import replace
 
     _backing(
@@ -647,11 +560,7 @@ def test_a_quota_larger_than_the_filesystem_warns_that_it_cannot_bind(cfg, monke
 
 
 def test_none_of_this_fires_on_an_ordinary_disk(cfg, monkeypatch):
-    """Neither check has an opinion about a deployment allowed to hold data.
-
-    Asserted because both would otherwise fail every existing install the moment
-    they shipped -- `session_store` and the quota are both unset by default.
-    """
+    """Neither check has an opinion about a deployment allowed to hold data."""
     _backing(monkeypatch, filesystem="ext4", size_bytes=10**12)
 
     names = {check.name for check in examine(cfg)}
@@ -661,10 +570,9 @@ def test_none_of_this_fires_on_an_ordinary_disk(cfg, monkeypatch):
 
 
 def test_a_runtime_confined_shell_reads_as_ok_rather_than_a_warning(cfg, monkeypatch):
-    """`KINGFISHER_SHELL_SANDBOX=external` is a deployment saying a container
-    already mounts only the workspace. Reported as a warning it is
-    indistinguishable from nobody having thought about it, which is the confusion
-    `EXTERNAL` was invented to remove."""
+    """`KINGFISHER_SHELL_SANDBOX=external` is a deployment saying a container already
+    mounts only the workspace.
+    """
     from dataclasses import replace
 
     check = {c.name: c for c in examine(replace(cfg, shell_sandbox="external"))}["shell"]
@@ -677,21 +585,18 @@ def test_a_runtime_confined_shell_reads_as_ok_rather_than_a_warning(cfg, monkeyp
 
 
 def test_the_probe_answers_nothing_where_there_is_no_landlock():
-    """Landlock is a Linux thing, and asking anywhere else must not raise --
-    this runs inside `doctor`, whose whole job is to survive a host that is
-    wrong in some way and report it."""
+    """Landlock is a Linux thing, and asking anywhere else must not raise -- this runs
+    inside `doctor`, whose whole job is to survive a host that is wrong in some way
+    and report it.
+    """
     from kingfisher.infrastructure.sandbox.confinement import landlock_abi
 
     assert landlock_abi() is None or platform.system() == "Linux"
 
 
 def test_an_unconfined_shell_is_told_what_this_kernel_could_do(cfg, monkeypatch):
-    """The point of step 1: an operator learns where they stand rather than
-    only that they are somewhere bad.
-
-    Asked of the kernel rather than read off its version, because a
-    distribution can ship Landlock disabled and a runtime can block the
-    syscall, and both look modern from `platform.release()`.
+    """The point of step 1: an operator learns where they stand rather than only that
+    they are somewhere bad.
     """
     from dataclasses import replace
 
@@ -706,9 +611,9 @@ def test_an_unconfined_shell_is_told_what_this_kernel_could_do(cfg, monkeypatch)
 
 
 def test_a_kernel_below_the_full_ruleset_is_told_it_is_below(cfg, monkeypatch):
-    """S6: a fence that quietly becomes weaker on a different node is worse
-    than one that says so. EKS nodes are commonly on 6.1, which is not enough
-    for the full ruleset, and nothing about the release number says that."""
+    """S6: a fence that quietly becomes weaker on a different node is worse than one
+    that says so.
+    """
     from dataclasses import replace
 
     monkeypatch.setattr(health.platform, "system", lambda: "Linux")
@@ -722,8 +627,9 @@ def test_a_kernel_below_the_full_ruleset_is_told_it_is_below(cfg, monkeypatch):
 
 
 def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
-    """The answer that changes what an operator should do: no fence is coming
-    on this host, so the container is the only boundary available."""
+    """The answer that changes what an operator should do: no fence is coming on this
+    host, so the container is the only boundary available.
+    """
     from dataclasses import replace
 
     monkeypatch.setattr(health.platform, "system", lambda: "Linux")
@@ -737,14 +643,7 @@ def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
 
 
 def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
-    """"confined" was true and unhelpful. Two deployments reading it could not
-    tell a `sandbox-exec` profile from a container someone set up, and which one
-    it is decides what an operator checks when it stops working.
-
-    Asserted against `_mechanism` rather than a real `examine`, because the
-    confined branch is only reachable on a host with `sandbox-exec` -- and a
-    test that quietly asserts nothing on the CI runner is worse than no test.
-    """
+    """"confined" was true and unhelpful."""
     from kingfisher.infrastructure.sandbox.confinement import Confinement, _unwrapped
 
     assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (
@@ -760,13 +659,8 @@ def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
 
 
 def test_the_doctor_says_which_answer_it_is_giving(cfg):
-    """It builds a `Config` from the environment and never sees a `Kingfisher`,
-    so a deployment supplying its own runner or session root is invisible to it.
-
-    Describing the built-in path as though it were the running one is the
-    failure this file exists to prevent, and the cheapest honest fix is to say
-    which one is being described -- rather than plumb a service into a command
-    that does not have one.
+    """It builds a `Config` from the environment and never sees a `Kingfisher`, so a
+    deployment supplying its own runner or session root is invisible to it.
     """
     check = {c.name: c for c in examine(cfg)}["shell"]
 
@@ -775,9 +669,9 @@ def test_the_doctor_says_which_answer_it_is_giving(cfg):
 
 
 def test_a_supplied_local_runner_is_named_beside_the_mechanism():
-    """It still receives the confined command, so the mechanism holds and has
-    only gained company. An operator asking what runs their commands is asking
-    about the runner, not only about the fence."""
+    """It still receives the confined command, so the mechanism holds and has only
+    gained company.
+    """
     from kingfisher.infrastructure.sandbox.confinement import Confinement
 
     said = health._mechanism(

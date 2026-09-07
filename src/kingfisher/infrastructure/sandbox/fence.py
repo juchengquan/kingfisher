@@ -70,17 +70,7 @@ MAX_OUTPUT_BYTES = 100_000
 
 
 def _present(paths: Iterable[Path | str]) -> list[str]:
-    """The ones that exist, as strings.
-
-    Dropping rather than naming, because `sandlock` rejects the whole policy
-    when a path in it does not exist -- and a rejected policy is not a loose
-    fence, it is no fence and no command either. Safe to drop: a path that does
-    not exist grants nothing, so the fence is exactly as tight without it.
-
-    The risk this accepts is a typo becoming silence. It is bounded by the rule
-    above it -- a deployment never writes one of these, so the only paths that
-    reach here are ones this repository generated from a session that exists.
-    """
+    """The ones that exist, as strings."""
     return [str(path) for path in paths if Path(path).exists()]
 
 
@@ -92,26 +82,12 @@ def policy_for(
 ) -> Any:
     """The `Sandbox` one session's commands run under, generated from it.
 
-    Writable is the session plus whatever the caller adds, which today is the
-    scratch directory `TMPDIR` points at: a shell that cannot write its own
-    temporary directory fails on the first command that wants one. This said
-    "the session and nothing else" from the day it was written, while the body
-    below spread `writable` in and the only caller passed one -- a fence
-    claiming to grant less than it grants, which is the worse of the two
-    directions for the claim to be wrong in. `argv_for` describes the same
-    arrangement correctly and is the wording to keep the two in step with.
-
-    Readable is what a shell needs plus the shared catalogue, because skills are
-    workspace-level and their scripts are run by the shell against
-    `$KINGFISHER_SKILLS` -- a fence that hid them would break the feature it was
-    protecting.
-
     Filesystem fields and nothing else, because that is all `confine` accepts.
     Measured: `cwd`, `workdir`, `clean_env` and `env` each make it raise
-    `ConfinementError` -- rejected rather than silently ignored, which is the
-    right behaviour and is how this was found. The working directory and the
-    environment are the runner's business instead, which is where they can be
-    given to `subprocess` anyway.
+    `ConfinementError` -- rejected rather than silently ignored, which is the right
+    behaviour and is how this was found. The working directory and the environment
+    are the runner's business instead, which is where they can be given to
+    `subprocess` anyway.
     """
     # Imported here, not at the top. `sandlock` ships Linux-only wheels, and
     # this module is imported on macOS every time `build_backend` runs -- a
@@ -130,26 +106,21 @@ def policy_for(
 class LandlockRunner:
     """Runs one session's commands behind that policy.
 
-    A `CommandRunner`, so it replaces *running the command* and nothing else.
-    The shell backend it sits behind is also the filesystem for every path no
-    route matches, and those stay kingfisher's.
+    The fence goes on between `fork` and `exec`, which means this owns the process
+    launch. `Sandbox.run` would have owned it instead and was tried first: measured
+    in a container on Linux 6.12 with ABI 6 and `SYS_ADMIN` available, `sandlock`'s
+    own quick-start example returns `sandlock_create failed` -- it needs more than
+    Landlock, and Docker's default seccomp does not give it. `confine` in the same
+    container works, both directions: the session's own files readable and writable,
+    another tenant's `Permission denied`.
 
-    The fence goes on between `fork` and `exec`, which means this owns the
-    process launch. `Sandbox.run` would have owned it instead and was tried
-    first: measured in a container on Linux 6.12 with ABI 6 and `SYS_ADMIN`
-    available, `sandlock`'s own quick-start example returns
-    `sandlock_create failed` -- it needs more than Landlock, and Docker's
-    default seccomp does not give it. `confine` in the same container works,
-    both directions: the session's own files readable and writable, another
-    tenant's `Permission denied`.
-
-    **`preexec_fn` is documented as unsafe in a threaded program**, and this one
-    is threaded: `astream` runs turns on worker threads. The hazard is a child
-    that deadlocks because another thread held an allocator lock at `fork`. It
-    is accepted here rather than hidden, because the alternative -- a launcher
-    process that confines itself and then `exec`s -- costs an interpreter start
-    per command and a serialised policy, and should be built if a deadlock is
-    ever seen rather than in anticipation of one.
+    **`preexec_fn` is documented as unsafe in a threaded program**, and this one is
+    threaded: `astream` runs turns on worker threads. The hazard is a child that
+    deadlocks because another thread held an allocator lock at `fork`. It is accepted
+    here rather than hidden, because the alternative -- a launcher process that
+    confines itself and then `exec`s -- costs an interpreter start per command and a
+    serialised policy, and should be built if a deadlock is ever seen rather than in
+    anticipation of one.
     """
 
     #: This one runs here, so kingfisher's own confinement still applies to the
@@ -176,13 +147,7 @@ class LandlockRunner:
         self.max_output_bytes = max_output_bytes
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
-        """Run `command` through a shell, fenced.
-
-        `shell=True` because that is what `execute` means and what the unfenced
-        path does. The fence is applied to the shell itself, so everything it
-        starts inherits it -- Landlock rulesets only ever narrow, and a child
-        cannot widen its own.
-        """
+        """Run `command` through a shell, fenced."""
         from sandlock import confine  # noqa: PLC0415
 
         def fence() -> None:
@@ -209,19 +174,11 @@ class LandlockRunner:
                 exit_code=124,
             )
         except (OSError, subprocess.SubprocessError) as failed:
-            # The fence failing to *build* used to arrive as an exit code with
-            # two empty byte strings, which is what a command with no output
-            # looks like -- so a fence that never applied read as a broken
-            # image. Both types are caught because a `preexec_fn` that raises
-            # comes back as a `SubprocessError` wrapping the child's exception
-            # rather than as the exception itself.
-            #
-            # Failing closed either way: the child is already dead, so there is
-            # no unfenced run to leak. What this decides is only whether anyone
-            # is told why -- and mostly they cannot be. `subprocess` discards
-            # the child's exception and raises "Exception occurred in
-            # preexec_fn." with no detail, so the message says which side failed
-            # rather than pretending to a reason it was not given.
+            # The fence failing to *build* used to arrive as an exit code with two empty
+            # byte strings, which is what a command with no output looks like -- so a
+            # fence that never applied read as a broken image. Both types are caught
+            # because a `preexec_fn` that raises comes back as a `SubprocessError`
+            # wrapping the child's exception rather than as the exception itself.
             return CommandResult(
                 output=(
                     f"[fence] the command did not run: the Landlock fence could not be "
@@ -232,11 +189,7 @@ class LandlockRunner:
         return self._shaped(done.stdout + done.stderr, done.returncode)
 
     def _shaped(self, output: str, exit_code: int) -> CommandResult:
-        """Truncated where an unfenced command would truncate.
-
-        A fence that changed how much output a turn could see would be a fence
-        that changed the agent's behaviour, which is how a fence gets turned off.
-        """
+        """Truncated where an unfenced command would truncate."""
         truncated = len(output.encode("utf-8")) > self.max_output_bytes
         if truncated:
             output = output[: self.max_output_bytes]

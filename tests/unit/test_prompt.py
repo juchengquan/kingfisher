@@ -13,10 +13,7 @@ from kingfisher.subagents.harness import as_subagent
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():
-    """A general agent's base prompt must read the same whatever the project is.
-
-    The smoke fixture's filename leaked in here once; this is the guard.
-    """
+    """A general agent's base prompt must read the same whatever the project is."""
     text = render_system_prompt()
     for leaked in ("sales", ".csv", "revenue", "region"):
         assert leaked not in text.lower(), f"domain-specific token {leaked!r} in base prompt"
@@ -40,8 +37,9 @@ def test_capability_flags_are_independent():
 
 
 def test_structural_contract_survives_every_combination():
-    """The workspace layout is what every turn needs to know, whatever else is
-    switched on. It is the one thing that genuinely belongs in every prompt."""
+    """The workspace layout is what every turn needs to know, whatever else is switched
+    on.
+    """
     for skills in (False, True):
         for memory in (False, True):
             text = render_system_prompt(skills_enabled=skills, memory_enabled=memory)
@@ -84,10 +82,8 @@ def test_assembly_leaves_no_blank_line_runs_or_markers():
 
 
 def test_shell_section_does_not_contradict_the_injected_host_mappings():
-    """FilesystemMiddleware injects host path mappings whenever a CompositeBackend
-    is used, and instructs the agent to substitute them in shell commands. A
-    blanket ban on absolute paths here would contradict that, and the agent
-    would reasonably follow the more specific instruction.
+    """FilesystemMiddleware injects host path mappings whenever a CompositeBackend is
+    used, and instructs the agent to substitute them in shell commands.
     """
     # Collapse wrapping: the prompt is hard-wrapped, so phrases span newlines.
     text = " ".join(render_system_prompt().lower().split())
@@ -99,8 +95,7 @@ def test_shell_section_does_not_contradict_the_injected_host_mappings():
 
 def test_prompt_warns_about_host_paths_in_file_tools():
     """virtual_mode makes `write_file('/tmp/x')` succeed by creating
-    `<workspace>/tmp/x`. Observed in a real run: a subagent recreated an entire
-    host path inside the workspace and believed it had written to /tmp.
+    `<workspace>/tmp/x`.
     """
     text = " ".join(render_system_prompt().lower().split())
     assert "a host path is not a file-tool path" in text
@@ -108,13 +103,8 @@ def test_prompt_warns_about_host_paths_in_file_tools():
 
 
 def test_the_system_prompt_demands_no_artifacts():
-    """A general agent is sometimes just answering, and this prompt is the
-    cached prefix for both kinds of turn -- the one place that cannot tell them
-    apart. Asking for files belongs on the request, not here.
-
-    Leaving it here produced both failure modes in one afternoon: a greeting
-    that deliberated over files nobody wanted, and, once softened to a
-    suggestion, a real analysis that recorded nothing.
+    """A general agent is sometimes just answering, and this prompt is the cached prefix
+    for both kinds of turn -- the one place that cannot tell them apart.
     """
     for skills in (False, True):
         for memory in (False, True):
@@ -128,14 +118,8 @@ def test_the_system_prompt_demands_no_artifacts():
 def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements(
     cfg, session_dir
 ):
-    """The prompt tells the agent a virtual path becomes a shell path by dropping
-    the leading slash. That is a claim about `build_backend`'s mounts, not about
-    prose, so it is checked against the mounts.
-
-    Written after a live run burned four model calls and a `find` over the whole
-    home directory looking for `/runs/t001`, which existed the whole time. The
-    prompt said the run directory was "reachable by relative path" without ever
-    saying what that path was, and the model did not derive it.
+    """The prompt tells the agent a virtual path becomes a shell path by dropping the
+    leading slash.
     """
     from kingfisher.infrastructure.harness.backend import build_backend
 
@@ -152,9 +136,8 @@ def test_the_shell_mapping_the_prompt_promises_is_the_one_the_backend_implements
 
 
 def test_the_skills_exception_is_still_an_exception(cfg, session_dir):
-    """The skills section warns that `/skills` is the one path where dropping the
-    slash silently reads the wrong directory. If the catalogue ever moves under
-    the session that warning becomes a lie, which is worse than no warning.
+    """The skills section warns that `/skills` is the one path where dropping the slash
+    silently reads the wrong directory.
     """
     from kingfisher.infrastructure.harness.backend import build_backend
 
@@ -209,9 +192,7 @@ def test_a_workspace_that_wrote_none_changes_nothing(cfg):
 
 
 def test_a_delegate_is_not_given_the_harnesss_own_prompt(cfg):
-    """The part that must *not* be inherited. That document describes `/data`,
-    the shell and the skills index to an agent that has its own procedure and
-    its own narrower grant -- and it is 5,305 characters of it."""
+    """The part that must *not* be inherited."""
     (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
     prompt = _delegate(cfg)
 
@@ -220,8 +201,7 @@ def test_a_delegate_is_not_given_the_harnesss_own_prompt(cfg):
 
 
 def test_both_levels_separate_the_addition_the_same_way(cfg):
-    """One joining rule. Written out at each it would be one rule with two
-    spellings, which is how a separator comes to differ by a newline."""
+    """One joining rule."""
     (cfg.workspace / USER_PROMPT_FILE).write_text("Always cite the file.", encoding="utf-8")
 
     main = system_prompt(replace(cfg, skills_enabled=True))

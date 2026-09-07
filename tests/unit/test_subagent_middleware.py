@@ -1,8 +1,4 @@
-"""Middleware a definition names, from a registry a deployment supplies.
-
-The one field that selects *code* rather than content, which is why it is the
-one an uploaded definition gets no exemption for.
-"""
+"""Middleware a definition names, from a registry a deployment supplies."""
 
 from __future__ import annotations
 
@@ -72,15 +68,14 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir, monkeypatch
 
 
 def test_the_registry_is_empty_until_a_deployment_wires_one(cfg):
-    """Kingfisher cannot define these; only a deployment knows what its
-    middleware is. So a `middleware:` line fails until someone says what it
-    means, rather than being quietly ignored."""
+    """Kingfisher cannot define these; only a deployment knows what its middleware is."""
     assert Kingfisher(cfg, threads=StubCheckpointer()).middleware == {}
 
 
 def test_an_unregistered_name_fails_loudly(cfg, session_dir, monkeypatch):
     """A mistake in the definition, and the alternative -- running without the
-    middleware it asked for -- could mean running without an audit hook."""
+    middleware it asked for -- could mean running without an audit hook.
+    """
     define(cfg, NAMES_AUDIT)
 
     with pytest.raises(CapabilityError, match="names unregistered middleware"):
@@ -144,8 +139,9 @@ def test_grants_clamp_middleware_like_everything_else():
 
 
 def test_an_upload_widens_its_own_text_and_nothing_else():
-    """Skills and subagents an upload brings are the caller's own text, so
-    permitting them grants nothing new. Middleware is not widened at all."""
+    """Skills and subagents an upload brings are the caller's own text, so permitting
+    them grants nothing new.
+    """
     granted = Capabilities(skills=("vetted",), middleware=("audit",))
 
     widened = granted.including(skills=("theirs",), subagents=("mine",))
@@ -155,11 +151,8 @@ def test_an_upload_widens_its_own_text_and_nothing_else():
 
 
 def test_including_cannot_be_asked_to_widen_middleware():
-    """The actual guarantee, and it is structural rather than a check: there is
-    no parameter to pass. A middleware *name* selects code the deployment
-    wrote, so a widening path would let anyone who can upload a definition
-    activate anything registered -- the hole `including` exists to avoid, one
-    level down.
+    """The actual guarantee, and it is structural rather than a check: there is no
+    parameter to pass.
     """
     import inspect
 
@@ -223,21 +216,7 @@ TOOLS = [always_fails]
 
 
 def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, monkeypatch):
-    """The exact stack, in order, for a definition that triggers every branch.
-
-    Its neighbours deliberately do not assert this. A test about the allowlist a
-    `tools:` line produced should not fail when an unrelated guard is added, so
-    they read the entries they are about -- and that left the composition itself
-    pinned nowhere. This is the one place it is, so that adding to the stack is
-    a decision somebody makes here rather than a thing that happens.
-
-    Order is not cosmetic. The two guards wrap every call and go first, so
-    nothing below them can raise past them. `ToolAllowlist` and `NarrowedSkills`
-    are what the definition asked for. `SubAgentMiddleware` is what lets it
-    delegate at all. A deployment's own goes last, deliberately: "so a
-    deployment's middleware sees the tool and skill scoping kingfisher applied
-    rather than running ahead of it".
-    """
+    """The exact stack, in order, for a definition that triggers every branch."""
     from tests.conftest import tools_dir
     from tests.unit.test_subagent_skills import offer_skills
 
@@ -269,19 +248,7 @@ def test_what_a_delegate_carries_is_pinned_here_and_only_here(cfg, session_dir, 
 
 
 def test_a_bare_definition_carries_three_of_them(cfg, session_dir, monkeypatch):
-    """The other end of the same pin, and it is not two.
-
-    A definition that narrows nothing is still handed an allowlist, because the
-    ceiling it is built against is the *request's* grant rather than its own
-    silence -- and that is concrete the moment a workspace defines any tool. A
-    delegate may never be offered more than whoever reached it, which is a
-    sentence about the caller and stays true of a definition that asked for
-    nothing.
-
-    The two guards are there for the reason they are always there: the backend
-    rejects host paths for a delegate exactly as it does for its parent, and a
-    workspace tool it can reach fails the same way.
-    """
+    """The other end of the same pin, and it is not two."""
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)

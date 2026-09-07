@@ -1,33 +1,4 @@
-"""`kingfisher`, and `python -m kingfisher.presentation.cli`.
-
-Nothing here decides anything. It reads the configuration the library reads,
-calls the library, and prints what came back -- so running a command and calling
-the function give the same answer, and there is no second way to configure one.
-
-Subcommands rather than flags, and bare `kingfisher` prints help. A shipped
-command needs a safe do-nothing default: the driver's bare invocation spends
-money, which is right for a driver you type daily and wrong for a stranger's
-first contact. Flags would force a default to be invented, and there is no good
-one.
-
-**`./.env` if there is one, and nowhere else.** This read the environment
-alone at first, on the grounds that `load_dotenv()` with no argument searches
-*upward from the calling file* -- which for an installed package starts in
-`site-packages` and finds either nothing or something nobody meant.
-
-That objection is sound and it is about the search, not about the file. The two
-were run together and the conclusion was too broad: a checkout keeps its keys in
-`.env`, so `kingfisher list` failed on a deployment where `driver.py --list`
-worked, with the key sitting in a file three lines away. Naming the path takes
-the search away and leaves the file, which is what was wanted.
-
-Relative on purpose. `load_dotenv(".env")` resolves against the working
-directory and stops there, so it finds the one beside you or nothing -- never
-one belonging to a parent, and never one under `site-packages`. Values already
-in the environment win, which is what `override=False` is for: an explicit
-`KINGFISHER_WORKSPACE=... kingfisher list` must not be quietly replaced by a
-file the caller may not have known was there.
-"""
+"""`kingfisher`, and `python -m kingfisher.presentation.cli`."""
 
 from __future__ import annotations
 
@@ -82,23 +53,6 @@ if TYPE_CHECKING:
 ENV_FILE = ".env"
 
 #: What `seed` did *not* look at before leaving a definition behind, per kind.
-#:
-#: These said "this workspace cannot build" and "this workspace does not
-#: declare", which read as findings and were not ones. `_deployment_specific`
-#: opens the definition and nothing else: it never sees a registry, and `seed`
-#: is not handed a group vocabulary at all. So a deployment that had declared
-#: every name in its `groups.yaml` was still told the workspace did not declare
-#: them -- a sentence its own file contradicted, with a remedy it had already
-#: carried out.
-#:
-#: Saying what was skipped and what was not consulted is true of every run, and
-#: it is also the sentence that explains the surprise: a reader who has done the
-#: work needs to know the check cannot see it, or the next step looks broken.
-#:
-#: Still two entries rather than one. The thing not consulted differs, and so
-#: does where it lives -- a registry is in the deployment's own code, a
-#: vocabulary is a file in the workspace -- which is the same split `REMEDY`
-#: below makes and for the same reason.
 UNCONSULTED = {
     "middleware": "what this deployment registered",
     "groups": "your groups.yaml",
@@ -120,20 +74,7 @@ REMEDY = {
 
 
 def _declare(written: Seeded) -> tuple[str, ...]:
-    """The `groups.yaml` to write, or nothing when no group was missing.
-
-    After the list rather than beside each entry, which is the placement the
-    overwrite warning already uses and for a better reason here: the union
-    across every skipped definition is one line that unblocks all of them, where
-    a copy per definition would print two overlapping lists and leave whoever
-    pasted the first one skipped again on the second.
-
-    The flat form, which is the minimum vocabulary that makes the definitions
-    load. A name meant to stand for several is `{contains: [...]}` and one meant
-    to require several is `{all_of: [...]}` -- both are the deployment's choice
-    about its own organisation, and nothing here can infer which a name wants.
-    `docs/guides/formats.md` has them; this has the line you can paste.
-    """
+    """The `groups.yaml` to write, or nothing when no group was missing."""
     wanted = sorted(
         {name for left in written.skipped if left.wants == "groups" for name in left.names}
     )
@@ -338,23 +279,10 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
-    """Fill the workspace with definitions.
-
-    On the paths half of the configuration, not the whole of it: `models.yaml`
-    lives *inside* the workspace, so a first run has no catalogue to read and
-    requiring one would make this unusable exactly when it is needed.
-    """
+    """Fill the workspace with definitions."""
     paths = paths_from_env()
-    # The destination has to exist before anything is copied into it, and this
-    # is idempotent -- an already-laid-out workspace is untouched.
-    #
-    # Before the source is resolved, deliberately. Laying out a workspace writes
-    # `models.yaml.example`, and that has to happen even when there is nothing
-    # to seed: a deployment told to write `models.yaml` and given no example of
-    # one is the dead end this ordering exists to avoid.
-    #
-    # And beside wherever the catalogue is actually read from, which is not
-    # always the workspace: `compose.yaml` sets `KINGFISHER_MODELS_FILE`.
+    # The destination has to exist before anything is copied into it, and this is
+    # idempotent -- an already-laid-out workspace is untouched.
     ensure_layout(paths.workspace, authored=paths.authored_files)
 
     tree = definitions_source(paths, source)
@@ -380,18 +308,10 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
         # copy, so losing one is the line that has to survive being skimmed.
         print(f"warning: overwrote your edited {name}")
 
-    # Non-zero, and this changed with the definitions leaving the wheel. It was
-    # nearly unreachable before -- the shipped set always held all four kinds --
-    # and is now one of the likelier mistakes: `--from ./assets_examples/skills` names
-    # a directory that exists, is readable, and holds none of them.
-    #
-    # `doctor` only warns about the same state, and that is not an
-    # inconsistency. It reports on a deployment, which runs fine on a workspace
-    # seeded months ago. This is an action, and the action did not happen.
-    #
-    # The four kinds are named because the mistake is almost always one
-    # directory level in the wrong direction, and "holds no definitions" leaves
-    # a reader guessing which direction.
+    # Non-zero, and this changed with the definitions leaving the wheel. It was nearly
+    # unreachable before -- the shipped set always held all four kinds -- and is now one
+    # of the likelier mistakes: `--from ./assets_examples/skills` names a directory that
+    # exists, is readable, and holds none of them.
     if not written.written:
         if written.skipped:
             # A different failure from an empty directory, and the remedy is
@@ -412,19 +332,7 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
 
 
 def _run(args: argparse.Namespace) -> int:
-    """Run one task, and say how it ended in the only channel that is left.
-
-    stdout is the answer, a word at a time, so there is no room on it for a
-    machine-readable field -- no `--json` here and no wire format. The exit code
-    is what a script has, which is why it carries `stop_reason` rather than
-    merely distinguishing a crash from a run.
-
-    `0` finished, `1` ran and stopped at a bound, `2` never ran. The case `1`
-    exists for is `kingfisher run ... > report.md && publish report.md`, which
-    must not publish a report that stopped halfway. A code per reason was
-    considered and dropped: it encodes in the exit status what the line below
-    already says, in a vocabulary that grows every time `STOP_REASONS` does.
-    """
+    """Run one task, and say how it ended in the only channel that is left."""
     missing = [p for p in (*args.input, *args.data) if not Path(p).expanduser().is_file()]
     if missing:
         # Before the model, because this is the one mistake that would otherwise
@@ -465,28 +373,14 @@ def _run(args: argparse.Namespace) -> int:
 
 
 def _held(raw: str) -> Held:
-    """`--as A,B` as the groups it names, or the explicit absence of any.
-
-    `UNSCOPED` is spelled out rather than being what an empty value means: an
-    empty `--as` is far more likely to be a shell variable that did not expand
-    than a considered decision to run with no caller at all, and the two must
-    not look the same at the one place somebody says who they are.
-    """
+    """`--as A,B` as the groups it names, or the explicit absence of any."""
     if raw.strip() == "UNSCOPED":
         return UNSCOPED
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
 def _list(*, as_document: bool = False, held: Held | None = None) -> int:
-    """Print what the workspace offers.
-
-    The whole configuration here, unlike `seed`: answering means building an
-    agent, and an agent needs to know which model it would run on.
-
-    The exit code does not depend on the format. A broken catalogue is still one
-    when a script is reading, and the reason is in the document as well -- so a
-    caller can find out either way round rather than having to pick.
-    """
+    """Print what the workspace offers."""
     cfg = config_from_env()
     # `UNSCOPED` and an absent flag are the same answer here, and that is not
     # the inconsistency it looks like. A listing is read-only and whoever runs
@@ -504,19 +398,7 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
 
 
 def _serve() -> int:
-    """Hand off to the server's own entry point, which decides everything.
-
-    Imported here rather than at module scope, and that is not a style choice.
-    The service is a separate distribution now, so on a base install the module
-    is not there at all -- importing it at the top would make `kingfisher list`
-    fail over a verb nobody asked for.
-
-    This is also the only place that says how to get it. The service ships a
-    `kingfisher-service` command, and the base deliberately does not declare one
-    of the same name: two distributions owning one script is not an override but
-    a shared file, and reinstalling the base would silently swap a working server
-    for a note telling you to install what you already have.
-    """
+    """Hand off to the server's own entry point, which decides everything."""
     try:
         from kingfisher_service.__main__ import main as serve_forever  # noqa: PLC0415
     except ImportError:
@@ -529,12 +411,7 @@ def _serve() -> int:
 
 
 def _doctor(*, as_document: bool = False) -> int:
-    """Say what would stop a run, and what would merely surprise.
-
-    Non-zero on a failure and zero on a warning. An unconfined shell is a
-    deployment's choice, and a command that failed on one would go unrun in
-    exactly the deployments most worth checking.
-    """
+    """Say what would stop a run, and what would merely surprise."""
     cfg = config_from_env()
     # Built here and handed on, rather than each of the two asking for its own.
     # The header and the checks are then reading one object -- and `examine`
@@ -629,13 +506,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except REFUSALS as exc:
         # Nine errors that reached a stranger as a traceback until `run` existed,
-        # because nothing but `run` could raise them from a command. Every one is
-        # the same shape as `ConfigError` below: something the person at the
-        # terminal wrote and can fix -- an agent they cannot reach, a session id
-        # that is not there, a file reference that does not resolve.
-        #
-        # Named by type, because "what went wrong" is the useful half and the
-        # class is what says which kind of thing it was.
+        # because nothing but `run` could raise them from a command. Every one is the
+        # same shape as `ConfigError` below: something the person at the terminal wrote
+        # and can fix -- an agent they cannot reach, a session id that is not there, a
+        # file reference that does not resolve.
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     except AccessError as exc:

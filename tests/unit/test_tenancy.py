@@ -29,9 +29,7 @@ def service(cfg, **kwargs):
 
 
 def test_a_request_cannot_create_a_session_by_naming_one(cfg):
-    """The whole of T2. A service that forwarded an id from its own caller
-    would otherwise let that caller choose -- or guess -- the name, and read
-    somebody else's conversation and files."""
+    """The whole of T2."""
     kf = service(cfg)
 
     with pytest.raises(UnknownSessionError, match="no session 'someone-elses'"):
@@ -59,8 +57,9 @@ def test_the_id_it_hands_back_can_be_resumed(cfg):
 
 
 def test_minted_ids_are_not_guessable(cfg):
-    """48 bits was enough to avoid collisions, which is all it was for, and
-    far too few for something that opens a conversation and its files."""
+    """48 bits was enough to avoid collisions, which is all it was for, and far too few
+    for something that opens a conversation and its files.
+    """
     kf = service(cfg)
 
     minted = kf.run(Request("go")).session_id
@@ -94,20 +93,14 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
 
 
 def test_grants_are_unrestricted_by_default(cfg):
-    """A deployment serving one caller is unaffected by any of this.
-
-    `UNRESTRICTED`, not `Capabilities()`: a grant that said nothing about
-    subagents would clamp away every request that named one, because for a
-    *request* saying nothing means wiring none.
-    """
+    """A deployment serving one caller is unaffected by any of this."""
     assert Kingfisher(cfg, threads=StubCheckpointer()).grants == UNRESTRICTED
 
 
 def test_an_uploaded_definition_is_added_back_after_clamping(cfg):
-    """A grant list is written before an upload exists and its name is
-    unknowable then, so clamping against it would strip every upload rather
-    than authorise it. The caller supplied the content; the tool clamp, which
-    `including` does not touch, is what actually bounds it."""
+    """A grant list is written before an upload exists and its name is unknowable then,
+    so clamping against it would strip every upload rather than authorise it.
+    """
     granted = Capabilities(skills=("tabular-qa",), builtin_tools=("read_file",))
 
     allowed = granted.intersect(Capabilities()).including(skills=("theirs",))
@@ -118,8 +111,7 @@ def test_an_uploaded_definition_is_added_back_after_clamping(cfg):
 
 
 def test_including_cannot_widen_an_unrestricted_set(cfg):
-    """`ALL` already includes them; adding names would narrow it. And `None`
-    asked for none, so an upload is not a way back through that door."""
+    """`ALL` already includes them; adding names would narrow it."""
     assert Capabilities().including(skills=("theirs",)).skills == ALL
     assert Capabilities(skills=None).including(skills=("theirs",)).skills is None
 
@@ -128,8 +120,9 @@ def test_including_cannot_widen_an_unrestricted_set(cfg):
 
 
 def test_a_turn_disposes_of_nothing(cfg):
-    """Retention counted every caller's sessions together, so a busy caller
-    evicted a quiet one on a turn that had nothing to do with it."""
+    """Retention counted every caller's sessions together, so a busy caller evicted a
+    quiet one on a turn that had nothing to do with it.
+    """
     kf = service(cfg)
     quiet = kf.start_session()
     for _ in range(5):
@@ -154,8 +147,9 @@ def test_deleting_an_unknown_session_is_not_an_error(cfg):
 
 
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
-    """Age, not count: how long a session has been idle is a property of that
-    session alone, so one caller's traffic cannot evict another's."""
+    """Age, not count: how long a session has been idle is a property of that session
+    alone, so one caller's traffic cannot evict another's.
+    """
     import os
 
     kf = service(cfg)
@@ -173,12 +167,7 @@ def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
 
 
 class ListingCheckpointer(StubCheckpointer):
-    """A store that can also say which threads it holds, as a real one can.
-
-    `StubCheckpointer` deliberately cannot: `ThreadStore` is only "something
-    that forgets a thread", and a sweep must still work when handed one. That
-    case has its own test below.
-    """
+    """A store that can also say which threads it holds, as a real one can."""
 
     def __init__(self, held: tuple[str, ...]) -> None:
         super().__init__()
@@ -197,12 +186,8 @@ class ListingCheckpointer(StubCheckpointer):
 
 
 def test_a_thread_whose_session_is_gone_is_deleted(cfg):
-    """`discard` takes the thread and the directory together, so a swept session
-    leaves neither. A directory that goes any other way -- by hand, or one of
-    the sessions that could not be removed until `remove_tree` learned to unlock
-    `/data` -- left its thread forever, because nothing else looked. One real
-    workspace held 132 of them and 1,894 checkpoints after every session had
-    been reaped.
+    """`discard` takes the thread and the directory together, so a swept session leaves
+    neither.
     """
     import time
 
@@ -231,8 +216,8 @@ def test_a_thread_whose_session_still_exists_is_left_alone(cfg):
 
 
 def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
-    """They are not sessions this call decided to end; they are residue from
-    ones that ended some other way, and a janitor's log should tell them apart.
+    """They are not sessions this call decided to end; they are residue from ones that
+    ended some other way, and a janitor's log should tell them apart.
     """
     import time
 
@@ -249,10 +234,7 @@ def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
 
 
 def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
-    """`ThreadStore` is only `delete_thread`. Widening the port to make
-    reconciliation possible would break every double, so a store that cannot
-    answer is skipped rather than failing the sweep it was asked for.
-    """
+    """`ThreadStore` is only `delete_thread`."""
     import time
 
     kf = service(cfg)
@@ -281,8 +263,9 @@ def _claims(cfg) -> Path:
 
 
 def test_a_second_turn_on_a_busy_session_is_refused(cfg):
-    """Refused, not queued: a queue hides a wait as long as whatever the other
-    turn is doing, and tells a racing caller nothing."""
+    """Refused, not queued: a queue hides a wait as long as whatever the other turn is
+    doing, and tells a racing caller nothing.
+    """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
 
@@ -306,8 +289,9 @@ def test_the_slot_goes_back_when_the_turn_ends(cfg):
 
 
 def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
-    """Every check after the claim can raise, and each one holding the slot on
-    the way out would wedge the session over a typo."""
+    """Every check after the claim can raise, and each one holding the slot on the way
+    out would wedge the session over a typo.
+    """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 
@@ -319,9 +303,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
 
 
 def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
-    """A process that died leaves its claim behind. `turn_timeout_s` already
-    bounds how long a turn may run, so past it the holder is gone or was going
-    to be stopped anyway."""
+    """A process that died leaves its claim behind."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
@@ -334,8 +316,9 @@ def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
 
 
 def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
-    """The session directory is the backend root, so a claim kept there is
-    something `execute` could delete. `state_dir` is host-side only."""
+    """The session directory is the backend root, so a claim kept there is something
+    `execute` could delete.
+    """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
@@ -383,10 +366,11 @@ def test_a_turn_records_that_its_session_was_used(cfg):
 
 
 def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
-    """A turn may outlive the idle bound -- `turn_timeout_s` defaults to an
-    hour and nothing requires a session to be kept that long -- and sweeping
-    one mid-turn deletes the directory out from under an agent still writing
-    to it, leaving the claim pointing at nothing."""
+    """A turn may outlive the idle bound -- `turn_timeout_s` defaults to an hour and
+    nothing requires a session to be kept that long -- and sweeping one mid-turn
+    deletes the directory out from under an agent still writing to it, leaving the
+    claim pointing at nothing.
+    """
     import os
     import time
 
@@ -444,9 +428,9 @@ def test_the_rule_itself_keeps_what_is_busy():
 
 
 def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg):
-    """`None` rather than raising: "is this still there" is an ordinary
-    question with two ordinary answers. `UnknownSessionError` is for a request
-    that named a session and meant to use it."""
+    """`None` rather than raising: "is this still there" is an ordinary question with
+    two ordinary answers.
+    """
     kf = service(cfg)
     session = kf.start_session()
 
@@ -455,8 +439,7 @@ def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg):
 
 
 def test_asking_does_not_disturb_the_session(cfg):
-    """The whole reason this exists. Validating an id must not refresh the
-    clock retention reads, nor hold the claim a turn needs."""
+    """The whole reason this exists."""
     import os
     import time
 
@@ -474,9 +457,10 @@ def test_asking_does_not_disturb_the_session(cfg):
 
 
 def test_sessions_come_back_most_recently_used_first(cfg):
-    """Ordering by last-used only became truthful when a turn began recording
-    it -- a turn writes *inside* a session, so before that the timestamp this
-    sorts on was not moved by use at all."""
+    """Ordering by last-used only became truthful when a turn began recording it -- a
+    turn writes *inside* a session, so before that the timestamp this sorts on was
+    not moved by use at all.
+    """
     kf = service(cfg)
     first = kf.start_session()
     second = kf.start_session()
@@ -499,9 +483,9 @@ def test_a_deleted_session_stops_being_listed(cfg):
 
 
 def test_what_comes_back_names_no_path(cfg):
-    """A service handed a directory would start reading files out of it, and
-    the layout would become a contract nobody wrote down. Ids and last-used is
-    kingfisher's own vocabulary: a name to pass back to `run`, and a clock."""
+    """A service handed a directory would start reading files out of it, and the layout
+    would become a contract nobody wrote down.
+    """
     import dataclasses
 
     kf = service(cfg)
@@ -513,8 +497,9 @@ def test_what_comes_back_names_no_path(cfg):
 
 
 def test_the_ordering_rule_needs_no_filesystem():
-    """The domain half -- `known` takes what `listing` returns and nothing
-    more, so the rule is testable without a workspace."""
+    """The domain half -- `known` takes what `listing` returns and nothing more, so the
+    rule is testable without a workspace.
+    """
     ordered = known((("old", 1.0), ("newest", 9.0), ("middle", 5.0)))
 
     assert [s.id for s in ordered] == ["newest", "middle", "old"]
@@ -522,8 +507,9 @@ def test_the_ordering_rule_needs_no_filesystem():
 
 
 def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):
-    """Both read `listing`, so a session retention can end is one a caller can
-    ask about. Two answers to "which exist" would drift apart."""
+    """Both read `listing`, so a session retention can end is one a caller can ask
+    about.
+    """
     import time
 
     kf = service(cfg)
@@ -546,8 +532,7 @@ def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):
 
 
 def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
-    """Ten years idle and still there, before this. `stale_after` is the turn
-    timeout, so past it the holder is gone or was going to be stopped."""
+    """Ten years idle and still there, before this."""
     import time
 
     kf = service(cfg)
@@ -577,14 +562,7 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
 
 
 def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
-    """One rule, so they cannot drift. Just inside the window the session is
-    spared; just outside it, both let go.
-
-    Asked in terms of `claim_stale_after` rather than the turn timeout, which is
-    the same "one rule" point one level up: the window is deliberately longer
-    than a turn is allowed to run, and a test written against the timeout would
-    pin the two together again.
-    """
+    """One rule, so they cannot drift."""
     import time
 
     kf = service(cfg)
@@ -600,18 +578,7 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
 
 
 def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
-    """The window a turn stops *in*, which the claim used to be taken during.
-
-    A run's deadline and the claim's staleness were the same number, so the
-    claim became takeable at the instant the deadline passed -- and a run stops
-    between stream chunks, then still has to emit its result, collect what the
-    turn left behind, and let go. Reproduced before this: a second caller took
-    the session while the first turn was still running, and the first turn then
-    finished. Two turns in one session is the thing the claim exists to prevent.
-
-    So the claim has to outlive the deadline by however long a turn can take to
-    notice it -- one model call, which is what a stopping turn is inside.
-    """
+    """The window a turn stops *in*, which the claim used to be taken during."""
     import time
 
     from kingfisher.domain.session import Session, still_held
@@ -643,8 +610,9 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
 
 
 def test_a_sweep_leaves_no_claim_behind(cfg):
-    """After the session sweep rather than before, so one pass clears a crashed
-    holder: the session goes first, which is what makes the claim residue."""
+    """After the session sweep rather than before, so one pass clears a crashed holder:
+    the session goes first, which is what makes the claim residue.
+    """
     import time
 
     kf = service(cfg)
@@ -670,9 +638,7 @@ def test_deleting_a_session_takes_its_claim_with_it(cfg):
 
 
 def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
-    """Why the leftover mattered rather than merely accumulated. `start_session`
-    takes a caller's id, so a service reusing one inherited a claim nobody held
-    and its first turn was refused until the window ran out."""
+    """Why the leftover mattered rather than merely accumulated."""
     kf = service(cfg)
     kf.start_session("reused")
     (cfg.state_dir / "claims" / "reused").mkdir(parents=True, exist_ok=True)
@@ -684,10 +650,7 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
 
 
 def test_a_live_claim_is_never_residue_whatever_its_age(cfg):
-    """The domain half, and the line between the two questions. Age decides
-    whether a claim can be taken over -- that stays with `claim`, where
-    `create_exclusive` settles the race. Residue is decided by the session
-    being gone."""
+    """The domain half, and the line between the two questions."""
     assert retention.orphaned(("a", "b"), ("b",)) == ("a",)
     assert retention.orphaned(("a",), ("a",)) == ()
 

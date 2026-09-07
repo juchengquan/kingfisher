@@ -21,8 +21,9 @@ def test_dataset_is_deterministic():
 
 
 def test_ground_truth_matches_the_generated_file():
-    """Truth is computed from the same pass that writes the rows — verify by
-    re-parsing, so a generator bug cannot quietly redefine correctness."""
+    """Truth is computed from the same pass that writes the rows — verify by re-parsing,
+    so a generator bug cannot quietly redefine correctness.
+    """
     text, truth = build_dataset()
     rows = _rows(text)
 
@@ -130,8 +131,9 @@ def test_a_non_object_answer_fails_cleanly():
 
 
 def test_findings_at_top_level_still_get_analysed():
-    """A shape mistake must not mask every number — the first live run had
-    perfect analysis and reported 0/1 because the envelope was missing."""
+    """A shape mistake must not mask every number — the first live run had perfect
+    analysis and reported 0/1 because the envelope was missing.
+    """
     payload = {
         "row_count": GROUND_TRUTH.row_count,
         "distinct_regions": GROUND_TRUTH.distinct_regions,

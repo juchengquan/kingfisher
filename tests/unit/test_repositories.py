@@ -1,16 +1,4 @@
-"""One class per kind of definition, and one read behind it.
-
-These were nine functions across three modules, each taking the same directory
-and each doing its own walk. The directory is state, so it belongs to an object
--- but the reason to make the change is not tidiness. Two of the three modules
-read the same files more than once for callers that wanted more than one view
-of them, and for tools that meant *importing* them more than once, because a
-tool is Python and reading it runs it.
-
-What a deployment may replace is `AssetRepository` and its three kinds in
-`domain.ports`. What is here is the implementation backed by this host's
-filesystem.
-"""
+"""One class per kind of definition, and one read behind it."""
 
 from __future__ import annotations
 
@@ -63,11 +51,8 @@ def catalogue(tmp_path):
 
 
 def test_each_local_repository_satisfies_the_port_for_its_kind(catalogue):
-    """The point of the ports: a deployment holding its definitions somewhere
-    else supplies its own, and nothing downstream knows.
-
-    Checked by shape rather than by inheritance, because that is what a
-    `Protocol` promises -- the local ones do not subclass anything.
+    """The point of the ports: a deployment holding its definitions somewhere else
+    supplies its own, and nothing downstream knows.
     """
     skills = LocalSkillRepository(catalogue / "skills")
     subagents = LocalSubagentRepository(catalogue / "subagents")
@@ -80,8 +65,7 @@ def test_each_local_repository_satisfies_the_port_for_its_kind(catalogue):
 
 def test_all_three_answer_the_one_question_the_grant_layer_asks(catalogue):
     """`names` is the whole of the shared vocabulary, and it is shared because
-    capabilities filter every kind by name and by nothing else. A kind that
-    could not answer it would need its own path through `_withheld_by_kind`.
+    capabilities filter every kind by name and by nothing else.
     """
     every = (
         LocalSkillRepository(catalogue / "skills"),
@@ -97,13 +81,7 @@ def test_all_three_answer_the_one_question_the_grant_layer_asks(catalogue):
 
 
 def test_a_tool_repository_imports_each_module_once_for_every_view_of_it(catalogue, capfd):
-    """The reason this kind became a class.
-
-    `loaded`, `load_tools`, `names` and `sources` each funnelled back into a
-    fresh walk, so a caller wanting two of them ran every workspace tool module
-    twice -- twice the import cost, and any module-level side effect twice over.
-    `--list` is exactly that caller.
-    """
+    """The reason this kind became a class."""
     tools = LocalToolRepository(catalogue / "tools")
 
     assert tools.names == ("noisy",)
@@ -115,10 +93,7 @@ def test_a_tool_repository_imports_each_module_once_for_every_view_of_it(catalog
 
 
 def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalogue, monkeypatch):
-    """The same fix one kind over. `load_all` and `sources` each walked the tree
-    and parsed every file, so `--list` -- which prints the specs *and* where
-    each came from -- parsed the whole catalogue twice.
-    """
+    """The same fix one kind over."""
     parsed = []
     # Patched on the reading module rather than on a name the catalogue imported:
     # the catalogue calls `reading.read` through the module now, so a name bound
@@ -140,9 +115,10 @@ def test_a_subagent_repository_parses_each_definition_once_for_both_views(catalo
 
 
 def test_a_skill_repository_lists_once_for_both_of_its_questions(catalogue, monkeypatch):
-    """Cheapest of the three -- a listing, not a parse -- and cached for the
-    same reason: a catalogue's repository answers every turn of a deployment's
-    life from one read."""
+    """Cheapest of the three -- a listing, not a parse -- and cached for the same
+    reason: a catalogue's repository answers every turn of a deployment's life from
+    one read.
+    """
     listings = []
     real_iterdir = type(catalogue).iterdir
 
@@ -163,11 +139,7 @@ def test_a_skill_repository_lists_once_for_both_of_its_questions(catalogue, monk
 
 
 def test_a_repository_does_not_notice_a_definition_written_after_it_read(catalogue):
-    """Stated as behaviour rather than left to be discovered. A repository is
-    the *deployment's* view of its catalogue, settled when it was wired --
-    `Definitions.warm` already made that trade deliberately, and this is where it
-    now lives. A dev loop gets the old behaviour by building a new one.
-    """
+    """Stated as behaviour rather than left to be discovered."""
     subagents = LocalSubagentRepository(catalogue / "subagents")
     assert set(subagents.specs) == {"alpha"}
 
@@ -180,9 +152,10 @@ def test_a_repository_does_not_notice_a_definition_written_after_it_read(catalog
 
 
 def test_a_broken_definition_raises_on_the_read_and_not_on_construction(catalogue):
-    """Which is what lets `--list` build one and still report the failure over
-    the rest of the inventory, and what lets `Definitions.warm` choose when a
-    deployment pays for it."""
+    """Which is what lets `--list` build one and still report the failure over the rest
+    of the inventory, and what lets `Definitions.warm` choose when a deployment pays
+    for it.
+    """
     # A malformed definition, where this used to use two files claiming one
     # name -- that pair is legal now and told apart by file, so it no longer
     # says anything about *when* a repository reads.

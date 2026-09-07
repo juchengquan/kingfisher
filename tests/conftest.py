@@ -12,12 +12,7 @@ from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 
 
 class FakeToolCallingModel(FakeMessagesListChatModel):
-    """A fake model that can be handed to `create_agent`.
-
-    `FakeMessagesListChatModel` does not implement `bind_tools`, and the agent
-    binds tools during construction. Returning `self` is enough: the scripted
-    responses already contain the tool calls we want to drive.
-    """
+    """A fake model that can be handed to `create_agent`."""
 
     def bind_tools(self, tools, **kwargs):
         return self
@@ -35,8 +30,7 @@ class StubCheckpointer:
 
 @pytest.fixture
 def dirs():
-    """The real `SessionDirs`. A test that wants to watch or break an
-    individual call substitutes its own object -- that is what the port buys."""
+    """The real `SessionDirs`."""
     from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 
     return LocalSessionDirs()
@@ -49,12 +43,7 @@ def workspace(tmp_path):
 
 @pytest.fixture
 def session_dir(workspace):
-    """One session's directory — the backend root.
-
-    Most tests want *a* session rather than a particular one, and building the
-    backend now needs somewhere to root. `Session.open` is not used here: this
-    fixture should keep working if the aggregate's naming changes.
-    """
+    """One session's directory — the backend root."""
     return ensure_session_layout(workspace / "sessions" / "test-session")
 
 
@@ -111,12 +100,7 @@ def cfg(workspace):
 
 
 def start(cfg, session_id: str) -> str:
-    """Create a named session, as a service would before serving a turn.
-
-    A request cannot create one -- an id it carries may have come from whoever
-    called the service -- so a test that wants to name its session has to open
-    it the way the service does.
-    """
+    """Create a named session, as a service would before serving a turn."""
     from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 
     ensure_session_layout(cfg.workspace / "sessions" / session_id)
@@ -124,29 +108,16 @@ def start(cfg, session_id: str) -> str:
 
 
 def declared_subagents(captured: dict) -> list:
-    """The delegate specs a build activated, without the built-in one.
-
-    `general-purpose` is supplied on every build -- it is what carries the
-    caller's tool ceiling and the deployment's registered middleware onto the
-    one delegate nobody has to declare. So a test about what a *request*
-    activated says so, rather than counting the list and picking up a spec no
-    request asked for.
-    """
+    """The delegate specs a build activated, without the built-in one."""
     return [s for s in captured.get("subagents") or () if s.get("name") != "general-purpose"]
 
 
 def capture_build(monkeypatch) -> dict:
-    """Record the arguments `create_deep_agent` was called with -- and let the
-    call through.
+    """Record the arguments `create_deep_agent` was called with -- and let the call
+    through.
 
-    The recording used to *replace* the call, returning a stub. That made every
-    assertion here blind to anything deepagents validates while constructing,
-    and three separate bugs slipped past because of it: `permissions=` is
-    refused unless every rule path is scoped to a backend route, and `/data`,
-    `/skills` and `/memory` each had to be caught by a live run instead.
-
-    Calling through costs about 30ms per test and removes the whole category.
-    A test that genuinely wants no construction can still patch it directly.
+    Calling through costs about 30ms per test and removes the whole category. A test
+    that genuinely wants no construction can still patch it directly.
     """
     captured: dict = {}
     real = create_deep_agent
@@ -160,18 +131,7 @@ def capture_build(monkeypatch) -> dict:
 
 
 def repository_root(start: Path | None = None) -> Path:
-    """The checkout this file is in, found rather than counted.
-
-    Counting levels is correct until the tree moves, and this tree moves: it
-    broke twice in one month, and neither time did it *fail* -- the paths simply
-    pointed somewhere that no longer held what they were about.
-
-    A marker only helps if it cannot match elsewhere. An earlier one looked for
-    `pyproject.toml` beside `packages/`; when `packages/` went, nothing here
-    matched, the walk climbed out of the checkout entirely and found the parent
-    clone, and every rule then read a different repository and passed. So this
-    stops with a real message rather than climbing past.
-    """
+    """The checkout this file is in, found rather than counted."""
     here = (start or Path(__file__)).resolve()
     for candidate in here.parents:
         if (candidate / "pyproject.toml").is_file() and (candidate / "src" / "kingfisher").is_dir():
@@ -186,22 +146,7 @@ def repository_root(start: Path | None = None) -> Path:
 
 @pytest.fixture(scope="session")
 def shipped():
-    """This repository's worked definitions, found in this repository.
-
-    Nothing ships them any more, so "reached as an install would" -- which is
-    what this said, through `importlib.resources` -- describes a route that no
-    longer exists.
-
-    Found by marker rather than by counting levels, and deliberately **not** by
-    reading `KINGFISHER_ASSETS`. The whole point of that variable is that it can
-    name somewhere else; a fixture that read it would mean four hundred lines of
-    tests quietly stop checking this repository's examples the first time a
-    developer uses the feature, and go green or red for reasons unrelated to the
-    commit under test.
-
-    A test about the examples in *this* repository has to find this repository.
-    A deployment setting is the wrong thing to ask.
-    """
+    """This repository's worked definitions, found in this repository."""
     return repository_root() / "assets_examples"
 
 
@@ -224,15 +169,7 @@ def fake_model():
 
 
 def dispatched(graph) -> tuple[str, ...]:
-    """`registered_tools` for a graph the tests built themselves.
-
-    It answers `None` for a graph it cannot read, which is a real state and has
-    its own tests. It is never the right answer *here*: every graph these tests
-    pass in came from `build_agent`, so unreadable means the introspection broke
-    rather than that the agent dispatches nothing -- and silently reading it as
-    the empty tuple is how a rename upstream would empty the built-in set with
-    every assertion still passing.
-    """
+    """`registered_tools` for a graph the tests built themselves."""
     from kingfisher.tools.harness import registered_tools
 
     names = registered_tools(graph)
@@ -241,18 +178,7 @@ def dispatched(graph) -> tuple[str, ...]:
 
 
 def an_agent(cfg, name: str = "only", **fields: str) -> str:
-    """Write one agent into this workspace and return its name.
-
-    A helper because naming an agent is required now, so every test that runs a
-    *request* needs a workspace holding one -- and a test about withheld tools
-    or per-request builds should say that in one line rather than in a YAML
-    block it does not care about.
-
-    The prompt is written for the caller unless the caller writes one, because
-    the format requires it and almost no test here is about what it says. A
-    `system_prompt=` passed through `fields` lands as a plain scalar and is
-    refused -- deliberately: a test wanting a real prompt writes the document.
-    """
+    """Write one agent into this workspace and return its name."""
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
     written = "".join(f"{key}: {value}\n" for key, value in fields.items())
@@ -264,17 +190,7 @@ def an_agent(cfg, name: str = "only", **fields: str) -> str:
 
 
 def subagents_dir(cfg) -> Path:
-    """Where this config's subagent definitions live.
-
-    A test helper, and that is the whole finding. `Config` carried
-    `subagents_dir` and `tools_dir` as properties until a sweep showed neither
-    had a reader in the package -- `catalogue_roots` answers for all three, and
-    is what production asks. The convenience was only ever wanted here, so it
-    lives here, and the published record is one field smaller.
-
-    `skills_dir` stayed on `Config`, because `confinement.shell_confinement`
-    genuinely needs that one directory on its own.
-    """
+    """Where this config's subagent definitions live."""
     return cfg.catalogue_roots["subagents"]
 
 
@@ -284,18 +200,7 @@ def tools_dir(cfg) -> Path:
 
 
 def verbs(parser) -> dict:
-    """Every subcommand a parser offers, keyed by name.
-
-    Lived in `__main__` as `_verbs` while the `help` verb read it to print one
-    verb's own help. That verb is gone -- it repeated `<verb> --help` exactly --
-    and this was left with two callers, both tests. A helper whose only users
-    are tests belongs with the tests, which is what
-    `test_nothing_is_defined_for_tests_alone` says by failing otherwise.
-
-    Read off the parser rather than listed beside it, which is the property both
-    callers want: a second list of verb names goes stale the first time somebody
-    adds one.
-    """
+    """Every subcommand a parser offers, keyed by name."""
     return {
         name: subparser
         for action in parser._actions

@@ -27,12 +27,7 @@ def _all_text(messages) -> str:
 
 @needs_a_real_toolchain
 def test_agent_runs_shell_and_writes_files(cfg, session_dir):
-    """The wiring test that matters: a scripted tool sequence, no network.
-
-    Exercises the three things most likely to be misconfigured at once -- the
-    shell env allowlist (does `python3` resolve?), the backend root (does a
-    virtual path land inside the workspace?), and tool dispatch itself.
-    """
+    """The wiring test that matters: a scripted tool sequence, no network."""
     responses = [
         AIMessage(
             content="",
@@ -69,11 +64,7 @@ def test_agent_runs_shell_and_writes_files(cfg, session_dir):
 
 
 def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
-    """deepagents 0.7.6 ships no planning tool, and /data must be write-denied.
-
-    Asserted at the construction seam rather than by digging into compiled
-    graph internals, which are not a public contract.
-    """
+    """deepagents 0.7.6 ships no planning tool, and /data must be write-denied."""
     captured = capture_build(monkeypatch)
     build_agent(
         cfg,
@@ -121,8 +112,9 @@ def test_enabling_a_capability_wires_the_middleware_not_just_the_prompt(
 
 
 def test_system_prompt_carries_no_host_paths_or_session_ids():
-    """Q19/Q20: the prompt must stay byte-identical across workspaces and
-    sessions, or the cached prefix is invalidated on every run."""
+    """Q19/Q20: the prompt must stay byte-identical across workspaces and sessions, or
+    the cached prefix is invalidated on every run.
+    """
     text = system_prompt()
     assert "/Users/" not in text
     assert "/home/" not in text
@@ -133,12 +125,7 @@ def test_system_prompt_carries_no_host_paths_or_session_ids():
 
 
 def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
-    """A regression guard on the whole surface, not just one middleware.
-
-    deepagents 0.7.6 ships no planning tool, so `write_todos` here proves
-    TodoListMiddleware is wired; `task` proves the general-purpose subagent is
-    present even though this model has no harness profile registered.
-    """
+    """A regression guard on the whole surface, not just one middleware."""
     agent = build_agent(
         cfg,
         session_dir=session_dir,
@@ -160,12 +147,7 @@ def test_the_agent_exposes_the_expected_tool_surface(cfg, session_dir):
 
 
 class _Audit(AgentMiddleware):
-    """Stands in for what a deployment registers: an audit hook, a rate limit.
-
-    No hook, like `Audited` in `test_subagent_middleware.py` -- these assert on
-    the list handed to `create_deep_agent`, not on compiled graph nodes, so a
-    middleware that declares nothing is enough and stays out of ty's way.
-    """
+    """Stands in for what a deployment registers: an audit hook, a rate limit."""
 
     name = "_Audit"
 
@@ -183,20 +165,10 @@ def _named(spec_middleware, **kwargs) -> AgentSpec:
 def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, session_dir):
     """`middleware:` in an agent file did nothing to the agent.
 
-    It parsed, and `declares` folded it into `Capabilities.middleware`, where
-    the only reader was the `granted=` argument of the delegates' own
-    `approved_middleware` call. So the name bounded what an agent's *delegates*
-    could activate and never reached the agent -- silently, since nothing
-    refuses and `_withheld_by_kind` reports tools, skills and subagents but not
-    this.
-
-    Measured before it was fixed, one build, same registry, same name: the
-    delegate's graph had an `Audit.before_agent` node and the agent's did not.
-    An audit hook that covers the cheap half of a run and not the expensive
-    half is worse than none, because it looks like coverage.
-
-    The design doc for this format says `middleware` "read[s] exactly as they
-    do in a subagent file". This is that sentence made true.
+    Measured before it was fixed, one build, same registry, same name: the delegate's
+    graph had an `Audit.before_agent` node and the agent's did not. An audit hook
+    that covers the cheap half of a run and not the expensive half is worse than
+    none, because it looks like coverage.
     """
     captured = capture_build(monkeypatch)
 
@@ -214,9 +186,10 @@ def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, 
 def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
     cfg, monkeypatch, session_dir
 ):
-    """Last, for the reason `as_subagent` already gives for a delegate's: a
-    deployment's middleware should see the tool and skill narrowing rather than
-    running ahead of it."""
+    """Last, for the reason `as_subagent` already gives for a delegate's: a deployment's
+    middleware should see the tool and skill narrowing rather than running ahead of
+    it.
+    """
     captured = capture_build(monkeypatch)
 
     build_agent(
@@ -234,8 +207,9 @@ def test_the_agents_middleware_runs_after_the_narrowing_kingfisher_applied(
 
 
 def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_dir):
-    """The same refusal a subagent gets, and for the same reason: a name
-    nothing registered is a mistake in the definition, not a narrower caller."""
+    """The same refusal a subagent gets, and for the same reason: a name nothing
+    registered is a mistake in the definition, not a narrower caller.
+    """
     with pytest.raises(CapabilityError, match="unregistered middleware"):
         build_agent(
             cfg,
@@ -247,10 +221,10 @@ def test_an_agent_naming_middleware_nothing_registered_is_refused(cfg, session_d
 
 
 def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
-    """Withholding it refuses rather than running with less than the definition
-    asked for -- which could mean running without the rate limit or the audit
-    hook it was written to have. `Capabilities.middleware` defaults to `ALL`, so
-    only a request that narrowed it on purpose reaches this."""
+    """Withholding it refuses rather than running with less than the definition asked
+    for -- which could mean running without the rate limit or the audit hook it was
+    written to have.
+    """
     with pytest.raises(CapabilityError, match="may not use"):
         build_agent(
             cfg,
@@ -263,8 +237,9 @@ def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
 
 
 def test_an_agent_that_names_none_wires_none(cfg, monkeypatch, session_dir):
-    """Omission grants nothing here, like `skills` and `subagents` -- so a
-    deployment with a registry does not wrap every agent in it by default."""
+    """Omission grants nothing here, like `skills` and `subagents` -- so a deployment
+    with a registry does not wrap every agent in it by default.
+    """
     captured = capture_build(monkeypatch)
 
     build_agent(
@@ -282,21 +257,11 @@ def test_an_agent_that_names_none_wires_none(cfg, monkeypatch, session_dir):
 
 
 class FilesystemMiddleware(AgentMiddleware):
-    """A deployment's own middleware, named like deepagents' scaffolding.
-
-    Spelled as the collision rather than as `name = "FilesystemMiddleware"`,
-    because a class name is what collides: `AgentMiddleware.name` defaults to
-    `self.__class__.__name__`, so this is the shape somebody actually writes
-    when they write this by accident, and it needs no `name` line to be one.
-    """
+    """A deployment's own middleware, named like deepagents' scaffolding."""
 
 
 class _Summarization(AgentMiddleware):
-    """deepagents' own, but not one it refuses to run without.
-
-    The two halves of the notice are different sentences, and this is the one
-    that gets the shorter of them.
-    """
+    """deepagents' own, but not one it refuses to run without."""
 
     name = "SummarizationMiddleware"
 
@@ -307,29 +272,14 @@ def _replacement_warnings(recorded) -> list[str]:
 
 
 def test_the_required_names_match_deepagents():
-    """`REQUIRED_BY_DEEPAGENTS` is a copy, so something has to compare it.
-
-    Copied rather than imported because `_REQUIRED_MIDDLEWARE_NAMES` is private,
-    and an upstream rename would otherwise change which replacement gets the
-    louder sentence with nobody deciding.
-    """
+    """`REQUIRED_BY_DEEPAGENTS` is a copy, so something has to compare it."""
     from deepagents.graph import _REQUIRED_MIDDLEWARE_NAMES
 
     assert set(REQUIRED_BY_DEEPAGENTS) == set(_REQUIRED_MIDDLEWARE_NAMES)
 
 
 def test_the_guide_names_the_same_required_middleware():
-    """The third copy, and the one with nothing else watching it.
-
-    `docs/guides/middleware.md` writes both names out, because a page that said
-    "two of deepagents' own are required and the warning will tell you which"
-    makes the reader wait for the failure it exists to prevent.
-
-    Here rather than beside the other documentation rules, because the person
-    who breaks this is not the person editing docs. It is whoever updates the
-    tuple after the test above goes red, and this is the next test down from
-    the one that sent them.
-    """
+    """The third copy, and the one with nothing else watching it."""
     page = repository_root() / "docs" / "guides" / "middleware.md"
     text = page.read_text(encoding="utf-8")
 
@@ -342,12 +292,7 @@ def test_the_guide_names_the_same_required_middleware():
 
 
 def test_deepagents_own_middleware_is_discovered_across_the_package():
-    """The breadth, pinned, because the narrow version looked right and was not.
-
-    Walking `graph.py`'s namespace alone found eight names and missed the
-    summarizer, which is reached there through a factory. A notice that covers
-    most of the stack is the kind nobody notices has stopped covering the rest.
-    """
+    """The breadth, pinned, because the narrow version looked right and was not."""
     found = _deepagents_middleware_names()
 
     assert set(REQUIRED_BY_DEEPAGENTS) <= found
@@ -356,17 +301,7 @@ def test_deepagents_own_middleware_is_discovered_across_the_package():
 
 
 def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, monkeypatch, session_dir):
-    """The whole point: said, not forbidden.
-
-    A filesystem middleware of one's own is a reasonable thing to deploy, and
-    refusing it here would be kingfisher inventing a policy deepagents does not
-    have. What is unreasonable is doing it by accident -- the names collide
-    because somebody picked an obvious class name, and neither side would
-    otherwise mention that deepagents' own is now gone rather than wrapped.
-
-    So the build completes and the middleware is handed over, which is the half
-    a warning could quietly have cost.
-    """
+    """The whole point: said, not forbidden."""
     captured = capture_build(monkeypatch)
 
     with pytest.warns(UserWarning, match="deepagents merges by name"):
@@ -382,12 +317,7 @@ def test_replacing_deepagents_filesystem_warns_and_still_runs(cfg, monkeypatch, 
 
 
 def test_the_warning_names_both_of_the_deployments_two_names():
-    """A deployment has two names for one middleware and only one is the problem.
-
-    The registry key is fine and stays; the class name is the collision. A
-    message naming only the key would send somebody to rename the thing that was
-    never wrong. `kind` reaches the wording too, which is why it has no default.
-    """
+    """A deployment has two names for one middleware and only one is the problem."""
     with pytest.warns(UserWarning) as recorded:
         declared_middleware(
             _named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="subagent"
@@ -401,13 +331,7 @@ def test_the_warning_names_both_of_the_deployments_two_names():
 
 
 def test_replacing_one_deepagents_needs_says_so_more_loudly():
-    """Two sentences, because the two cases are not the same size.
-
-    Losing the summarizer costs summarization. Losing `FilesystemMiddleware`
-    costs the `permissions` rules every built-in file tool is checked against,
-    and a deployment that did that by accident has quietly turned off a
-    guarantee rather than a feature.
-    """
+    """Two sentences, because the two cases are not the same size."""
     with pytest.warns(UserWarning) as recorded:
         declared_middleware(_named(("audit",)), {"audit": FilesystemMiddleware}, ALL, kind="agent")
     required = _replacement_warnings(recorded)[0]
@@ -425,11 +349,7 @@ def test_replacing_one_deepagents_needs_says_so_more_loudly():
 
 
 def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, monkeypatch, session_dir):
-    """The quiet path, which is every deployment that named its classes normally.
-
-    Without this the notice could grow into one that fires on every registered
-    middleware, and a warning that always fires is one nobody reads.
-    """
+    """The quiet path, which is every deployment that named its classes normally."""
     captured = capture_build(monkeypatch)
 
     with warnings.catch_warnings(record=True) as recorded:
@@ -447,20 +367,7 @@ def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, monkeypatch, 
 
 
 def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
-    """`_instantiate` called every non-class entry, so an instance was *called*.
-
-    A deployment writing the natural thing -- `middleware={"audit": _Audit()}`,
-    building the object before handing it over -- got
-    `TypeError: '_Audit' object is not callable` out of the middle of assembly,
-    naming neither the entry nor the definition that asked for it. Every other
-    refusal on this path is a `CapabilityError` that names both.
-
-    Refused rather than supported, and the reason is in the message: a
-    registered object is built again for every graph, so one shared instance
-    accumulates across all of them. `CallCap` counts tool calls in `self._made`;
-    as an instance it would spend its budget once and refuse every call
-    afterwards for the life of the process.
-    """
+    """`_instantiate` called every non-class entry, so an instance was *called*."""
     with pytest.raises(CapabilityError, match="audit") as raised:
         build_agent(
             cfg,
@@ -486,31 +393,13 @@ def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
 
 
 def test_an_entry_no_definition_names_is_still_refused_when_it_is_registered(cfg):
-    """The half `_instantiate` cannot reach, and the reason the sweep exists.
-
-    `_instantiate` runs only for names a definition actually asked for. Register
-    `{"audit": _Audit()}` today, write the definition that names it next month,
-    and the mistake waits that long -- in somebody else's deployment, on the
-    first request unlucky enough to reach it.
-
-    The same argument `model_catalogue` makes for refusing an unbuildable `api`
-    as the file loads rather than when a turn starts: it is a fact about what
-    was written, not about the request that met it.
-    """
+    """The half `_instantiate` cannot reach, and the reason the sweep exists."""
     with pytest.raises(CapabilityError, match="audit"):
         Kingfisher(cfg, middleware={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
 
 
 def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
-    """The gate is `callable`, which is what `MiddlewareFactory` promises.
-
-    Narrowing it to `isinstance(entry, AgentMiddleware)` would name the common
-    mistake and let every other uncallable entry through to the `TypeError` this
-    replaces. A registry holding a settings dict -- the shape somebody reaches
-    for when they confuse registering with configuring -- is refused too, and
-    said differently, because "a built X rather than the class" would be wrong
-    about it.
-    """
+    """The gate is `callable`, which is what `MiddlewareFactory` promises."""
     with pytest.raises(CapabilityError, match="which cannot be called") as raised:
         Kingfisher(cfg, middleware={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
 
@@ -520,16 +409,12 @@ def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
 def test_a_registered_class_is_built_again_for_every_graph(cfg, monkeypatch, session_dir):
     """The lifecycle the refusal above gives as its reason, held to it.
 
-    The message says a middleware is built again for every graph, and that is
-    the whole justification for refusing an instance. Nothing else in the tree
-    checks it: graphs are built per request for reasons that have nothing to do
-    with middleware -- capabilities narrow them, the backend is session-anchored
-    -- and `service.py` already describes the cache that would end that as the
-    thing to reach for above roughly 150 concurrent turns.
-
-    If that day comes, a registered `CallCap` starts surviving across turns and
-    the refusal's stated reason quietly inverts. This is what makes that a
-    failure rather than a cap that stops capping.
+    The message says a middleware is built again for every graph, and that is the
+    whole justification for refusing an instance. Nothing else in the tree checks it:
+    graphs are built per request for reasons that have nothing to do with middleware
+    -- capabilities narrow them, the backend is session-anchored -- and `service.py`
+    already describes the cache that would end that as the thing to reach for above
+    roughly 150 concurrent turns.
     """
     built = []
     for _ in range(2):

@@ -30,8 +30,7 @@ def test_a_dict_satisfies_the_port():
 
 
 def test_an_uploaded_skill_is_unpacked_under_its_declared_name(cfg, session_dir):
-    """Not under its id. deepagents validates the frontmatter name against the
-    directory, so the definition names its own directory."""
+    """Not under its id."""
     store = FakeStore(skl_1={"SKILL.md": SKILL, "reference/notes.md": b"more"})
 
     provision(Request("t", skill_refs=("skl_1",)), store, session_dir, cfg)
@@ -51,8 +50,9 @@ def test_an_uploaded_subagent_is_unpacked_under_its_declared_name(cfg, session_d
 
 
 def test_an_upload_cannot_shadow_the_catalogue(cfg, session_dir):
-    """Otherwise a request could stand its own definition in for a reviewed one
-    under the same name, and deepagents' later-source-wins would let it."""
+    """Otherwise a request could stand its own definition in for a reviewed one under
+    the same name, and deepagents' later-source-wins would let it.
+    """
     (cfg.skills_dir / "extractor").mkdir(parents=True)
     (cfg.skills_dir / "extractor" / "SKILL.md").write_bytes(SKILL)
     store = FakeStore(skl_1={"SKILL.md": SKILL})
@@ -62,14 +62,7 @@ def test_an_upload_cannot_shadow_the_catalogue(cfg, session_dir):
 
 
 def test_an_upload_cannot_shadow_a_skill_that_lives_in_a_folder(cfg, session_dir):
-    """The same rule, against the catalogue shape folders made possible.
-
-    It read `SkillRepository.names`, which lists the root and stops -- so for a
-    catalogue whose skills all sit in folders it saw `()` and let every name
-    through. The test above kept passing throughout, because its skill is at the
-    root, which is why this one is separate rather than parametrised: they fail
-    for different reasons and only one of them ever failed.
-    """
+    """The same rule, against the catalogue shape folders made possible."""
     (cfg.skills_dir / "research" / "extractor").mkdir(parents=True)
     (cfg.skills_dir / "research" / "extractor" / "SKILL.md").write_bytes(SKILL)
     store = FakeStore(skl_1={"SKILL.md": SKILL})
@@ -87,8 +80,7 @@ def test_two_uploads_of_one_name_in_a_request_are_refused(cfg, session_dir):
 
 
 def test_a_path_that_escapes_its_directory_is_refused(cfg, session_dir):
-    """A catalogue is a remote service, so its paths are input, not data we
-    produced. `../` in one would write anywhere this process can."""
+    """A catalogue is a remote service, so its paths are input, not data we produced."""
     store = FakeStore(skl_1={"SKILL.md": SKILL, "../../escaped.md": b"nope"})
 
     with pytest.raises(UploadError, match="escapes the directory"):
@@ -131,11 +123,8 @@ Body.
 
 
 def test_a_skill_written_to_the_published_spec_can_be_uploaded(cfg, session_dir):
-    """The defect this closes: catalogue skills are never parsed by kingfisher
-    -- `LocalSkillRepository.names` only lists directories -- but uploaded ones are. So
-    a skill using the Agent Skills spec\'s documented block list for
-    `allowed-tools`, or a folded description, loaded fine from the catalogue
-    and was refused on upload by a stricter parser of our own.
+    """The defect this closes: catalogue skills are never parsed by kingfisher --
+    `LocalSkillRepository.names` only lists directories -- but uploaded ones are.
     """
     store = FakeStore(skl_1={"SKILL.md": SPEC_SHAPED_SKILL})
 

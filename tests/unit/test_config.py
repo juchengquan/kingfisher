@@ -50,17 +50,18 @@ def env(tmp_path):
 
 
 def test_the_catalogue_is_required_with_no_default(tmp_path):
-    """No fallback and no shipped table, for the reason `KINGFISHER_API_STYLE`
-    was required and had none: a default silently picks a destination nobody
-    chose the first time kingfisher is pointed somewhere new."""
+    """No fallback and no shipped table, for the reason `KINGFISHER_API_STYLE` was
+    required and had none: a default silently picks a destination nobody chose the
+    first time kingfisher is pointed somewhere new.
+    """
     with pytest.raises(ConfigError, match="no model catalogue at"):
         config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
 
 
 def test_the_absent_file_error_shows_a_working_example(tmp_path):
-    """It is the first thing a new deployment hits, replacing a message that
-    came with an unusually explanatory `.env.example`. A path alone would leave
-    someone guessing at a schema."""
+    """It is the first thing a new deployment hits, replacing a message that came with
+    an unusually explanatory `.env.example`.
+    """
     with pytest.raises(ConfigError) as raised:
         config_from_env({"KINGFISHER_WORKSPACE": str(tmp_path / "ws")})
 
@@ -91,8 +92,9 @@ def test_endpoints_and_models_come_from_the_file(env):
 
 
 def test_credentials_come_from_the_variable_each_endpoint_names(env):
-    """Keys are named, not written: the file is meant to be reviewed and shared,
-    which a file holding credentials could not be."""
+    """Keys are named, not written: the file is meant to be reviewed and shared, which a
+    file holding credentials could not be.
+    """
     cfg = config_from_env(env)
 
     assert cfg.models.endpoints["gateway"].api_key == "sk-gateway"
@@ -101,10 +103,8 @@ def test_credentials_come_from_the_variable_each_endpoint_names(env):
 
 
 def test_an_endpoint_without_its_key_is_dropped_and_warned_about(env):
-    """One reviewed file across a fleet is the point of `key_env`, so a machine
-    holding only some of the keys must still start. Warned even when nothing
-    names the endpoint: silence would make a typo'd `key_env` look identical to
-    a deployment that deliberately does not pay for that endpoint.
+    """One reviewed file across a fleet is the point of `key_env`, so a machine holding
+    only some of the keys must still start.
     """
     del env["OPENAI_API_KEY"]
 
@@ -116,10 +116,7 @@ def test_an_endpoint_without_its_key_is_dropped_and_warned_about(env):
 
 
 def test_a_default_whose_endpoint_has_no_key_is_refused(env):
-    """Dropping is for endpoints nothing needs. The default is needed by
-    definition, so a deployment that cannot run it has not finished being set
-    up -- and knowing that at startup is the whole point of closing the table.
-    """
+    """Dropping is for endpoints nothing needs."""
     del env["GATEWAY_API_KEY"]
 
     with pytest.raises(ConfigError, match="no credentials"), pytest.warns(UserWarning):
@@ -127,8 +124,9 @@ def test_a_default_whose_endpoint_has_no_key_is_refused(env):
 
 
 def test_a_default_naming_nothing_is_a_different_error(env, tmp_path):
-    """A broken file and an unfinished deployment read differently and are
-    worded differently."""
+    """A broken file and an unfinished deployment read differently and are worded
+    differently.
+    """
     (tmp_path / "models.yaml").write_text(
         CATALOGUE.replace("default: MiniMax-M3", "default: typo-5"), encoding="utf-8"
     )
@@ -183,8 +181,9 @@ def test_the_catalogue_defaults_inside_the_workspace(env):
 
 
 def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
-    """The point of the phase: one reviewed set of definitions, deployed once,
-    rather than a copy per workspace that nobody can audit centrally."""
+    """The point of the phase: one reviewed set of definitions, deployed once, rather
+    than a copy per workspace that nobody can audit centrally.
+    """
     cfg = config_from_env(
         {
             **env,
@@ -198,33 +197,9 @@ def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
 
 
 def test_the_file_shows_exactly_the_knobs_that_exist():
-    """`.env.example` is the only place a deployment learns a knob exists --
-    and, since nothing anywhere warns about an unknown `KINGFISHER_` variable,
-    the only place it learns one does not.
-
-    Both KINGFISHER_TOOLS_DIR and KINGFISHER_SHELL_PATH_EXTRA shipped without a
-    line here, and the second one is why an agent could not find `pdftotext`:
-    the shell PATH is an allowlist, so an unnamed directory looks like the tool
-    not existing rather than like configuration. That is one direction of this.
-
-    The other is a knob shown here that nothing reads, which is the fault
-    `test_no_message_names_a_variable_nothing_reads` catches for runtime
-    strings. It was one containment before, and the loose half asked the wrong
-    question: it searched `config.py` for any `KINGFISHER_` name, comments
-    included, so three variables that have not existed since endpoints and
-    models split were pinned into this file by a regex rather than by anyone
-    deciding they belonged.
-
-    Over assignment lines rather than the whole text, and that is what keeps the
-    block naming the retired variables possible -- prose carries no `NAME=`, so
-    telling somebody their setting is inert does not re-document it.
-
-    A renamed knob is the third case, and it is read *and* must not be shown.
-    `RENAMED` holds a name for the length of a deprecation so that a deployment
-    on the old spelling keeps working; `.env.example` names those with an arrow
-    rather than an assignment, for the same reason the retired block does. A
-    rule that demanded a `KINGFISHER_SKILLS=` line back would be asking the file
-    to advertise the spelling the suffix exists to replace.
+    """`.env.example` is the only place a deployment learns a knob exists -- and, since
+    nothing anywhere warns about an unknown `KINGFISHER_` variable, the only place it
+    learns one does not.
     """
     import re
     from pathlib import Path as _Path
@@ -261,26 +236,7 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
 
 
 def test_no_message_names_a_variable_nothing_reads():
-    """The other direction, and the one that had gone wrong.
-
-    The rule above catches a knob nobody documented. This catches a knob that
-    does not exist: the refusal for naming groups without a policy said "write
-    access.yaml in the workspace, or set KINGFISHER_ACCESS_FILE", and neither
-    had existed since the central policy file was reversed. A reader following
-    it wrote a file nothing loads, set a variable nothing reads, and got the
-    identical refusal back. Worse than no message, because it is confidently
-    wrong -- and nothing would ever have failed: the string is a message, so no
-    import breaks and no lookup returns `None`.
-
-    **Runtime strings only, and that distinction is the whole rule.** Comments
-    and docstrings here deliberately name variables that are *gone* --
-    `KINGFISHER_MODEL_SUBAGENT` and `KINGFISHER_PROVIDER_SUBAGENT` are both
-    explained as removed, which is this codebase's convention for recording what
-    was tried and abandoned. A rule that could not tell those from an
-    instruction would either fail on correct prose or be deleted for crying
-    wolf. What a reader is told to *set* is a string the program evaluates;
-    what a reader is told about the past is not.
-    """
+    """The other direction, and the one that had gone wrong."""
     import ast
     import re
     from pathlib import Path as _Path
@@ -325,11 +281,8 @@ def test_no_message_names_a_variable_nothing_reads():
     )
 
 def test_the_variables_that_chose_a_model_are_gone(env):
-    """`KINGFISHER_MODEL`, `KINGFISHER_API_STYLE` and `KINGFISHER_MAX_TOKENS`
-    are the catalogue's job now, and the per-role pair went before them.
-
-    Asserted as absence, because the failure mode is a variable that reads as
-    configuration and is not -- someone sets it, sees no error, and believes it.
+    """`KINGFISHER_MODEL`, `KINGFISHER_API_STYLE` and `KINGFISHER_MAX_TOKENS` are the
+    catalogue's job now, and the per-role pair went before them.
     """
     cfg = config_from_env(
         {
@@ -350,22 +303,16 @@ def test_the_variables_that_chose_a_model_are_gone(env):
 
 
 def test_the_execution_timeout_is_named_for_what_it_bounds(env):
-    """It was `KINGFISHER_TIMEOUT_S` and bounded a model call as well as the
-    shell and the interpreter -- three unrelated jobs for one number. The model
-    half is per-model in the catalogue now."""
+    """It was `KINGFISHER_TIMEOUT_S` and bounded a model call as well as the shell and
+    the interpreter -- three unrelated jobs for one number.
+    """
     cfg = config_from_env({**env, "KINGFISHER_EXECUTION_TIMEOUT_S": "45"})
 
     assert cfg.execution_timeout_s == 45
     assert not [f for f in fields(cfg) if f.name == "timeout_s"]
 
 def test_the_paths_half_honours_the_catalogue_overrides(monkeypatch, tmp_path):
-    """The reason seeding reads `paths_from_env` rather than one env var.
-
-    A first run has to decide where to put things before a catalogue exists,
-    and the obvious shortcut -- read `KINGFISHER_WORKSPACE` and be done -- seeds
-    a deployment that relocated `KINGFISHER_SKILLS_DIR` into the directory it
-    stopped reading. Silent, and the kind this codebase refuses everywhere else.
-    """
+    """The reason seeding reads `paths_from_env` rather than one env var."""
     from kingfisher import paths_from_env
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
@@ -378,10 +325,9 @@ def test_the_paths_half_honours_the_catalogue_overrides(monkeypatch, tmp_path):
 
 
 def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
-    """`Config` and `WorkspacePaths` answer the same question, and one of them
-    is used to seed while the other is used to serve. A second copy of
-    `skills_root or workspace / "skills"` is how those two drift apart -- so
-    there is one, and this is what says so."""
+    """`Config` and `WorkspacePaths` answer the same question, and one of them is used
+    to seed while the other is used to serve.
+    """
     from kingfisher.config import Config, WorkspacePaths
 
     overrides = {"skills_root": tmp_path / "s", "tools_root": tmp_path / "t"}
@@ -398,15 +344,7 @@ def test_the_two_records_cannot_disagree_about_where_things_go(tmp_path):
 
 
 def test_the_two_records_cannot_disagree_about_the_authored_files(tmp_path):
-    """The same rule as above for the two files a deployment writes itself.
-
-    `models.yaml` and `groups.yaml` both relocate, and both have a shipped
-    example that is only useful beside the file it is an example of. Laying a
-    workspace out is what places those, and it runs on `WorkspacePaths` while
-    every later read goes through `Config` -- so a second copy of `models_file
-    or workspace / "models.yaml"` is how a deployment gets its example written
-    one directory away from the file it describes.
-    """
+    """The same rule as above for the two files a deployment writes itself."""
     from kingfisher.config import Config, WorkspacePaths
 
     elsewhere = tmp_path / "shared"
@@ -428,9 +366,7 @@ def test_the_two_records_cannot_disagree_about_the_authored_files(tmp_path):
 
 
 def test_the_authored_files_default_into_the_workspace(tmp_path):
-    """The ordinary deployment, which relocates neither. Named because the
-    override path is the one with a test and the default is what nearly every
-    workspace runs."""
+    """The ordinary deployment, which relocates neither."""
     from kingfisher.config import WorkspacePaths
 
     files = WorkspacePaths(workspace=tmp_path / "ws").authored_files
@@ -442,12 +378,7 @@ def test_the_authored_files_default_into_the_workspace(tmp_path):
 
 
 def test_seeding_sees_a_relocated_catalogue(tmp_path, monkeypatch):
-    """`paths_from_env` is what a first run has, and it has to carry these.
-
-    The same reason it carries `KINGFISHER_SKILLS_DIR`: seeding decides where
-    things go before a catalogue can be read, so a variable it cannot see is a
-    relocation it writes past.
-    """
+    """`paths_from_env` is what a first run has, and it has to carry these."""
     from kingfisher import paths_from_env
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
@@ -461,9 +392,9 @@ def test_seeding_sees_a_relocated_catalogue(tmp_path, monkeypatch):
 
 
 def test_a_config_is_a_seeding_destination(tmp_path):
-    """Both records satisfy the protocol the seeder asks for, by shape and
-    without either being told about it. `Config` is what an ordinary run seeds
-    with; `WorkspacePaths` is what a first run has."""
+    """Both records satisfy the protocol the seeder asks for, by shape and without
+    either being told about it.
+    """
     from kingfisher.config import WorkspacePaths
     from kingfisher.infrastructure.workspace.seeding import Destination
 
@@ -474,8 +405,9 @@ def test_a_config_is_a_seeding_destination(tmp_path):
 
 
 def test_a_workspace_without_a_vocabulary_file_has_none(env):
-    """Absent is the whole of what "this deployment controls nothing by group"
-    means, and it is what every deployment that predates the field has."""
+    """Absent is the whole of what "this deployment controls nothing by group" means,
+    and it is what every deployment that predates the field has.
+    """
     assert config_from_env(env).access is None
 
 
@@ -489,8 +421,9 @@ def test_a_vocabulary_in_the_workspace_is_read(env):
 
 
 def test_the_vocabulary_file_can_be_relocated(env, tmp_path):
-    """It can be deployed once and shared by several workspaces, the way a
-    model catalogue can -- it holds content a person authored and reviewed."""
+    """It can be deployed once and shared by several workspaces, the way a model
+    catalogue can -- it holds content a person authored and reviewed.
+    """
     elsewhere = tmp_path / "vocab.yaml"
     elsewhere.write_text("groups: [B]\n", encoding="utf-8")
     access = config_from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
@@ -510,8 +443,7 @@ def test_a_relocated_vocabulary_wins_over_one_in_the_workspace(env, tmp_path):
 
 
 def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
-    """Fail closed. One that cannot be read leaves every definition's audience
-    uncheckable, and coming up anyway would serve every caller everything."""
+    """Fail closed."""
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
     (workspace / "groups.yaml").write_text("groups: [A\n", encoding="utf-8")
@@ -523,9 +455,9 @@ def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
 
 
 def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
-    """The property that makes it testable at all: it reads what it was handed,
-    never the process. A reader reaching for `os.environ` would pass every test
-    that supplied its own mapping and then behave differently in a run."""
+    """The property that makes it testable at all: it reads what it was handed, never
+    the process.
+    """
     from kingfisher.application.config import Environment
 
     monkeypatch.setenv("KINGFISHER_RECURSION_LIMIT", "9999")
@@ -535,13 +467,9 @@ def test_a_reader_answers_from_the_mapping_it_was_given(monkeypatch):
 
 
 def test_one_path_reading_now_rather_than_two(tmp_path):
-    """`_optional_path` was defined twice -- once inside `paths_from_env`, once
-    inside `config_from_env` -- because a closure over `environ` was the only
-    way to share it while `environ` was a parameter.
-
-    Asserted through both entry points rather than on the method, because what
-    the duplication risked was the two drifting: a `~` or a relative path
-    expanded on one route and not the other.
+    """`_optional_path` was defined twice -- once inside `paths_from_env`, once inside
+    `config_from_env` -- because a closure over `environ` was the only way to share
+    it while `environ` was a parameter.
     """
     from kingfisher.application.config import Environment
 
@@ -553,9 +481,10 @@ def test_one_path_reading_now_rather_than_two(tmp_path):
 
 
 def test_the_exported_functions_are_the_class(tmp_path, monkeypatch):
-    """`paths_from_env` stays a function because callers import it, and it has
-    to keep answering identically -- so it is asserted against the reader rather
-    than left to look obvious."""
+    """`paths_from_env` stays a function because callers import it, and it has to keep
+    answering identically -- so it is asserted against the reader rather than left to
+    look obvious.
+    """
     from kingfisher.application.config import Environment, paths_from_env
 
     environ = {"KINGFISHER_WORKSPACE": str(tmp_path / "ws")}
@@ -564,8 +493,9 @@ def test_the_exported_functions_are_the_class(tmp_path, monkeypatch):
 
 
 def test_a_reader_with_no_mapping_reads_the_process(monkeypatch, tmp_path):
-    """The default that `os.environ if environ is None` used to express, now in
-    one place instead of at the top of every function."""
+    """The default that `os.environ if environ is None` used to express, now in one
+    place instead of at the top of every function.
+    """
     from kingfisher.application.config import Environment
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))

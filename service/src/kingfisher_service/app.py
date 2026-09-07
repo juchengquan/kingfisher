@@ -1,16 +1,4 @@
-"""The ASGI application: HTTP mapped onto the methods `Kingfisher` already has.
-
-Transport, and nothing else. This server does not know who is calling and has
-no place to put the answer: authentication, mapping callers to sessions, and
-per-caller quotas belong to whatever sits in front of it. That line was drawn
-before this file existed -- kingfisher has no tenant concept in `Request` or
-`Config`, because a tenant field would make it decide who may see what -- and a
-server that authenticated would be the thing that line put outside.
-
-This module assembles; the routes live beside it in `sessions.py` and
-`turns.py`, and the dependency they share is in `dependencies.py` so that the
-assembling only goes one way.
-"""
+"""The ASGI application: HTTP mapped onto the methods `Kingfisher` already has."""
 
 from __future__ import annotations
 
@@ -38,20 +26,10 @@ if TYPE_CHECKING:
 def _refuse_mismatch(kf: Kingfisher, groups_from: GroupsFrom | None) -> None:
     """Refuse a deployment whose policy and identity do not agree.
 
-    Both directions, and each is worth refusing for its own reason.
-
-    A vocabulary with no source cannot serve one request: the library refuses a
-    call that does not say who is calling, so every route answers 500 and the
-    deployment is up while serving nothing. One message at startup, where
-    somebody is watching, beats that on every axis.
-
-    A source with no vocabulary is the more dangerous one. Nothing fails --
-    groups are resolved and then narrow nothing at all -- so a deployment
-    somebody wired identity into, and believes is locked down, quietly is not.
-
-    A `RuntimeError` rather than `AccessError`: this is the process being
-    assembled wrongly, not a request being refused, and the two should not reach
-    the same handler.
+    A vocabulary with no source cannot serve one request: the library refuses a call
+    that does not say who is calling, so every route answers 500 and the deployment
+    is up while serving nothing. One message at startup, where somebody is watching,
+    beats that on every axis.
     """
     if (kf.access is not None) == (groups_from is not None):
         return
@@ -73,16 +51,7 @@ def _refuse_mismatch(kf: Kingfisher, groups_from: GroupsFrom | None) -> None:
 
 
 def _file_store(settings: ServiceConfig) -> Any:
-    """Where `input_refs` and `data_refs` are fetched from, or nowhere.
-
-    Two ways to say it and `ServiceConfig.__post_init__` has already refused
-    both at once, so the order here settles nothing -- it reads as precedence
-    and never acts as any.
-
-    `None` is a real answer and the default: a request naming files by id then
-    fails saying no store is wired, which is the honest reply, because it is the
-    deployment that has not decided where files come from.
-    """
+    """Where `input_refs` and `data_refs` are fetched from, or nowhere."""
     if settings.file_store_factory is not None:
         return file_store_named(
             settings.file_store_factory, setting=f"{PREFIX}FILE_STORE_FACTORY"
@@ -97,33 +66,7 @@ def create_app(
     config: ServiceConfig | None = None,
     groups_from: GroupsFrom | None = None,
 ) -> FastAPI:
-    """Build the app, optionally around an instance somebody else made.
-
-    Taking one is what makes this testable without inventing anything: tests
-    build `Kingfisher(graph=StubAgent(...), threads=StubCheckpointer())` and
-    hand it over, which is the substitution point every existing test already
-    uses. An app that constructed its own at import time would push its tests
-    toward patching `create_deep_agent` instead -- which this repo forbids,
-    because three live bugs got through while construction was stubbed out.
-
-    Given nothing, it builds one in the lifespan from the environment and wires
-    no saver at all.
-
-    It used to hold one async SQLite database open for the life of the process,
-    because `astream` needs async methods and `SqliteSaver` raises on
-    `aget_tuple` -- so a sync saver did not merely block the loop, it refused.
-    That stopped being true when the default became `InMemorySaver`, which
-    implements both halves of the protocol. What was left was the shape the
-    library had deliberately moved away from: one database shared by every
-    session, which is the contention `_async_checkpointer_for` describes the
-    per-session default as avoiding.
-
-    Nothing durable was lost with it. A checkpoint holds one turn's working
-    state; what a later turn reads is `read_transcript`, kingfisher's own
-    records in the session directory -- see *Sessions: what persists and where*
-    in `docs/decisions.md`. A deployment that does want durable graph state
-    still passes `threads=` its own saver.
-    """
+    """Build the app, optionally around an instance somebody else made."""
     settings = config or ServiceConfig.from_env()
     if kingfisher is not None:
         _refuse_mismatch(kingfisher, groups_from)
@@ -159,13 +102,7 @@ def create_app(
 
     @app.middleware("http")
     async def refuse_oversize_bodies(request: Request, call_next):  # noqa: ANN001, ANN202
-        """Reject on the header rather than after reading the body.
-
-        `task` is unbounded text, and the point of a limit is not tidiness -- it
-        is that measuring a body by reading it is the cost being avoided. A
-        chunked request without `Content-Length` is not caught here and is left
-        to whatever terminates the connection.
-        """
+        """Reject on the header rather than after reading the body."""
         declared = request.headers.get("content-length")
         if declared is not None and int(declared) > settings.max_body_bytes:
             return errors.problem(

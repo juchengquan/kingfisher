@@ -1,13 +1,4 @@
-"""Files a caller names but cannot hand over.
-
-`Request.inputs` and `data` are host paths, which a remote caller does not have.
-So the same two arrive as ids resolved by a `FileStore` the deployment wired --
-the decision `skill_refs` made one phase earlier, for the same reason: kingfisher
-never receives a payload over its own wire.
-
-The refusals matter more than the happy path. A ref is whatever a caller wrote,
-so most of what a store does is decline.
-"""
+"""Files a caller names but cannot hand over."""
 
 from __future__ import annotations
 
@@ -62,20 +53,16 @@ def test_an_ordinary_name_lands_under_the_root(name):
     ids=["parent", "climbing", "absolute", "windows", "empty", "dot", "dotdot"],
 )
 def test_a_name_that_leaves_the_root_is_refused(name):
-    """One function rather than a check each adapter remembers, because both
-    stores take a caller's id and join it onto a directory."""
+    """One function rather than a check each adapter remembers, because both stores take
+    a caller's id and join it onto a directory.
+    """
     with pytest.raises(UnsafeReferenceError):
         within(Path("/root"), name)
 
 
 def test_the_rule_never_asks_the_filesystem(tmp_path):
-    """Lexical by necessity: the domain may not touch the filesystem, and
-    `resolve` is a syscall. Demonstrated on a root that does not exist -- if
-    this consulted the disk it could not answer at all.
-
-    The cost of that is real and is the adapter's to cover: a symlink inside the
-    root pointing outside passes this check, which is why
-    `test_the_local_store_refuses_a_symlink_pointing_out_of_it` exists.
+    """Lexical by necessity: the domain may not touch the filesystem, and `resolve` is a
+    syscall.
     """
     nowhere = tmp_path / "does" / "not" / "exist"
 
@@ -88,14 +75,8 @@ def test_the_rule_never_asks_the_filesystem(tmp_path):
 
 @pytest.mark.parametrize("check", FILE_STORE_CONTRACT, ids=lambda c: c.__name__)
 def test_the_local_store_keeps_the_port_contract(check, store):
-    """The kit, run against the store it was extracted from -- which is the only
-    thing that keeps the kit honest. A contract nothing satisfies is a contract
-    nobody has read.
-
-    `Planted` rather than a factory, because `FileStore` has no verb for
-    writing: kingfisher never puts anything into a file store, it resolves what
-    a caller already put there. So the fixture plants and the kit is told what
-    was planted.
+    """The kit, run against the store it was extracted from -- which is the only thing
+    that keeps the kit honest.
     """
     check(
         Planted(
@@ -107,17 +88,15 @@ def test_the_local_store_keeps_the_port_contract(check, store):
 
 
 def test_the_file_store_contract_is_not_quietly_empty():
-    """A hand-maintained tuple can be emptied by an edit that looks like
-    tidying, and every parametrised test above would then pass by not
-    existing."""
+    """A hand-maintained tuple can be emptied by an edit that looks like tidying, and
+    every parametrised test above would then pass by not existing.
+    """
     assert len(FILE_STORE_CONTRACT) >= 4
     assert all(callable(check) for check in FILE_STORE_CONTRACT)
 
 
 def test_the_local_store_refuses_a_symlink_pointing_out_of_it(store, tmp_path):
-    """The check `within` cannot make. The name is unremarkable and the file is
-    somewhere else entirely, which is only visible by asking the filesystem --
-    so it is asked here, in the layer allowed to."""
+    """The check `within` cannot make."""
     (tmp_path / "secret").write_bytes(b"not yours")
     (store / "innocent.csv").symlink_to(tmp_path / "secret")
 
@@ -126,9 +105,7 @@ def test_the_local_store_refuses_a_symlink_pointing_out_of_it(store, tmp_path):
 
 
 def test_a_missing_reference_is_not_an_oserror(store):
-    """A caller who named a file that is not there gets something they can act
-    on. A bare `FileNotFoundError` cannot be told from this deployment's disk
-    being wrong, and answers 500 to a typo."""
+    """A caller who named a file that is not there gets something they can act on."""
     with pytest.raises(UnknownReferenceError):
         LocalFileStore(store).fetch("nope.csv")
 
@@ -144,9 +121,7 @@ def test_a_directory_is_not_a_file(store):
 
 
 def test_a_bad_reference_leaves_no_turn_behind(service, cfg):
-    """The rule `check_placeable` exists for, spelled for ids. `--input` naming
-    a missing file once stranded `t001`; a ref that will not resolve is the same
-    bug in a different vocabulary."""
+    """The rule `check_placeable` exists for, spelled for ids."""
     session_id = service.start_session()
     runs = cfg.workspace / "sessions" / session_id / "runs"
 
@@ -157,8 +132,9 @@ def test_a_bad_reference_leaves_no_turn_behind(service, cfg):
 
 
 def test_a_bad_reference_places_none_of_the_good_ones(service, cfg):
-    """Everything is fetched before anything is written, so a request that is
-    going to fail does not half-succeed."""
+    """Everything is fetched before anything is written, so a request that is going to
+    fail does not half-succeed.
+    """
     session_id = service.start_session()
     data = cfg.workspace / "sessions" / session_id / "data"
 
@@ -171,8 +147,9 @@ def test_a_bad_reference_places_none_of_the_good_ones(service, cfg):
 
 
 def test_a_bad_reference_gives_the_claim_back(service, cfg):
-    """`_admit` releases on the way out, so a refused request does not wedge the
-    session until its claim ages out."""
+    """`_admit` releases on the way out, so a refused request does not wedge the session
+    until its claim ages out.
+    """
     session_id = service.start_session()
 
     with pytest.raises(UnknownReferenceError):
@@ -183,8 +160,9 @@ def test_a_bad_reference_gives_the_claim_back(service, cfg):
 
 
 def test_naming_files_by_id_without_a_store_is_a_deployment_error(cfg):
-    """Told apart from a ref that does not resolve, because one is a wiring
-    mistake nobody outside can fix and the other is a bad request."""
+    """Told apart from a ref that does not resolve, because one is a wiring mistake
+    nobody outside can fix and the other is a bad request.
+    """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session_id = service.start_session()
 
@@ -194,7 +172,8 @@ def test_naming_files_by_id_without_a_store_is_a_deployment_error(cfg):
 
 def test_a_request_with_no_references_never_asks_the_store(cfg, store):
     """A store that would raise is not consulted, so wiring one has no effect on
-    requests that do not use it."""
+    requests that do not use it.
+    """
 
     class Explodes:
         def fetch(self, file_id):
@@ -232,9 +211,7 @@ def test_an_input_reference_leaves_with_its_turn(service):
 
 
 def test_paths_and_references_land_side_by_side(service, cfg, tmp_path):
-    """Both forms of the same thing. `inputs` stays a host path for CLI and
-    library callers; a ref is the remote spelling, and neither knows about the
-    other by the time it lands."""
+    """Both forms of the same thing."""
     local = tmp_path / "local.csv"
     local.write_bytes(b"x")
     session_id = service.start_session()
@@ -248,9 +225,10 @@ def test_paths_and_references_land_side_by_side(service, cfg, tmp_path):
 
 
 def test_data_is_left_read_only_after_a_reference_is_written(service, cfg):
-    """`place_data` re-hardens `/data` on its way out, and taking the write bits
-    twice would leave a window where it is writable for no reason -- so both
-    forms go through one `writable_data` block."""
+    """`place_data` re-hardens `/data` on its way out, and taking the write bits twice
+    would leave a window where it is writable for no reason -- so both forms go
+    through one `writable_data` block.
+    """
     session_id = service.start_session()
 
     service.run(Request("go", session_id=session_id, data_refs=("sales.csv",)))
@@ -260,8 +238,9 @@ def test_data_is_left_read_only_after_a_reference_is_written(service, cfg):
 
 
 def test_a_store_key_that_climbs_out_is_refused(cfg):
-    """The store is deployment-wired, but its *keys* can come from wherever a
-    caller uploaded. They are the untrusted half even when the store is not."""
+    """The store is deployment-wired, but its *keys* can come from wherever a caller
+    uploaded.
+    """
 
     class Hostile:
         def fetch(self, file_id):
@@ -281,14 +260,8 @@ def test_nothing_is_fetched_when_nothing_is_named():
 
 
 def test_a_hostile_key_is_refused_before_a_turn_exists(cfg):
-    """Why the check in `fetch_refs` is not redundant with the one in the
-    writers, which is not obvious and a mutation showed it.
-
-    Both are `within`, so removing either alone changes nothing -- the other
-    catches it. But they guard different moments. `place_data` runs during
-    admission, while `place_inputs` runs in `_open_turn`, *after* the turn
-    directory exists. A hostile input key caught only there would leave one
-    behind, which is the whole ordering `_Admitted` protects.
+    """Why the check in `fetch_refs` is not redundant with the one in the writers, which
+    is not obvious and a mutation showed it.
     """
 
     class Hostile:
@@ -309,10 +282,7 @@ def test_a_hostile_key_is_refused_before_a_turn_exists(cfg):
 
 @pytest.mark.parametrize("name", ["../escaped.txt", "/etc/passwd"])
 def test_the_writers_refuse_a_hostile_key_on_their_own(tmp_path, name):
-    """The other half of the pair above, tested where nothing else can cover
-    for it. These are the calls that actually touch the disk, so the guard is
-    here as well as at the fetch -- one is about ordering, this one is about the
-    syscall."""
+    """The other half of the pair above, tested where nothing else can cover for it."""
     from kingfisher.infrastructure.workspace.placement import place_data, place_inputs
     from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 

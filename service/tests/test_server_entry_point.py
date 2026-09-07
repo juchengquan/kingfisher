@@ -1,9 +1,4 @@
-"""Running the server, and what it writes down while it runs.
-
-The access log is the part with a decision in it. A session id is a bearer
-credential and it is in the path of four of the five routes, so an ordinary
-access log writes credentials to disk and to whatever collects logs from it.
-"""
+"""Running the server, and what it writes down while it runs."""
 
 from __future__ import annotations
 
@@ -40,9 +35,7 @@ def test_a_request_is_logged_once_with_its_route_and_status(client, caplog):
 
 
 def test_the_session_id_is_not_written_to_the_log(client, caplog):
-    """The decision this module exists for. A session id is how a caller proves
-    a session is theirs, so logging one puts a credential somewhere it is read
-    by more people than the request was, and keeps it there."""
+    """The decision this module exists for."""
     session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     with caplog.at_level(logging.INFO, logger="kingfisher_service"):
@@ -65,8 +58,9 @@ def test_a_turn_logs_its_route_template_not_its_path(client, caplog):
 
 
 def test_a_request_that_matched_nothing_logs_no_path_at_all(client, caplog):
-    """The case where falling back to the real path would be worst: a caller
-    probing for routes controls exactly what gets written."""
+    """The case where falling back to the real path would be worst: a caller probing for
+    routes controls exactly what gets written.
+    """
     with caplog.at_level(logging.INFO, logger="kingfisher_service"):
         client.get("/sessions/secret-looking-thing/nope")
 
@@ -87,8 +81,7 @@ def test_a_refusal_is_logged_with_its_status(client, caplog):
 
 
 def test_serving_uses_the_configured_address(monkeypatch):
-    """One place decides the address. An entry point that read the environment
-    its own way would be a second way to configure the same thing."""
+    """One place decides the address."""
     import uvicorn
 
     seen = {}
@@ -117,8 +110,9 @@ def test_the_entry_point_reads_the_environment(monkeypatch):
 
 
 def test_a_missing_extra_is_a_message_rather_than_a_traceback(monkeypatch, capsys):
-    """The script is installed whether or not the extra is, because a command
-    that exists and says what to install beats one that is silently absent."""
+    """The script is installed whether or not the extra is, because a command that
+    exists and says what to install beats one that is silently absent.
+    """
     import builtins
 
     real_import = builtins.__import__
@@ -151,10 +145,9 @@ def test_there_is_an_application_for_a_server_to_point_at():
 
 
 def test_the_obvious_target_is_a_module_which_is_why_asgi_exists():
-    """`kingfisher_service:app` looks like the name to point at and is not: the
-    package has a submodule called `app`, so that attribute is the module. A
-    server pointed there serves something that is not an application, and no
-    `__getattr__` can rescue it -- importing the submodule binds the name."""
+    """`kingfisher_service:app` looks like the name to point at and is not: the package
+    has a submodule called `app`, so that attribute is the module.
+    """
     import types
 
     import kingfisher_service
@@ -163,10 +156,9 @@ def test_the_obvious_target_is_a_module_which_is_why_asgi_exists():
 
 
 def test_the_docs_routes_are_logged_as_unmatched_too(client, caplog):
-    """Only fastapi's own `APIRoute` records itself in the scope, so a starlette
-    route answering 200 has no template to log. Imprecise and left that way: the
-    alternative is falling back to the real path for *some* requests, and this
-    rule is worth more without exceptions."""
+    """Only fastapi's own `APIRoute` records itself in the scope, so a starlette route
+    answering 200 has no template to log.
+    """
     with caplog.at_level(logging.INFO, logger="kingfisher_service"):
         response = client.get("/openapi.json")
 
@@ -175,14 +167,7 @@ def test_the_docs_routes_are_logged_as_unmatched_too(client, caplog):
 
 
 def test_uvicorns_own_access_log_is_off(monkeypatch):
-    """Otherwise the redaction above is decorative.
-
-    uvicorn logs the *concrete* path by default, so a live server wrote
-    `GET /sessions/5df2db83…` directly above our own
-    `GET /sessions/{session_id}` -- the credential this module exists to keep
-    out of logs, put there by the thing serving the app. Found by running it;
-    no in-process test reaches uvicorn's logger.
-    """
+    """Otherwise the redaction above is decorative."""
     import uvicorn
 
     seen = {}
@@ -194,9 +179,7 @@ def test_uvicorns_own_access_log_is_off(monkeypatch):
 
 
 def test_the_entry_point_configures_its_own_logging_not_everyones(monkeypatch):
-    """`basicConfig(level=INFO)` turns on every library at once. httpx then logs
-    a line per outbound model call -- noise in a server, and the kind of default
-    that eventually writes down something nobody meant to keep."""
+    """`basicConfig(level=INFO)` turns on every library at once."""
     import uvicorn
 
     monkeypatch.setattr(uvicorn, "run", lambda app, **kw: None)
@@ -209,16 +192,9 @@ def test_the_entry_point_configures_its_own_logging_not_everyones(monkeypatch):
 
 
 def test_turning_on_the_startup_line_does_not_turn_on_the_audit_trail(monkeypatch):
-    """`kingfisher.audit` is unconfigured on purpose -- "nothing is written
-    until a deployment attaches a handler, which is how 'may session ids be
-    written here' stays a decision somebody makes rather than a default they
-    inherit".
-
-    The library's startup line is raised to INFO here, and a logger named
-    `kingfisher` would be the audit one's parent -- so this server would have
-    begun writing session ids in exchange for a line saying where the skills
-    directory is. The sibling name is what stops that, and nothing else would
-    have noticed.
+    """`kingfisher.audit` is unconfigured on purpose -- "nothing is written until a
+    deployment attaches a handler, which is how 'may session ids be written here'
+    stays a decision somebody makes rather than a default they inherit".
     """
     import uvicorn
 
@@ -230,20 +206,7 @@ def test_turning_on_the_startup_line_does_not_turn_on_the_audit_trail(monkeypatc
 
 
 def test_the_app_builds_its_own_service_without_a_shared_thread_store(cfg, monkeypatch):
-    """The lifespan branch, which nothing drove until this.
-
-    `create_app()` given no instance builds one from the environment, and that
-    is the only path a real deployment takes -- every other test here hands in a
-    `Kingfisher` with a stub agent, so the branch the server actually runs was
-    the one branch never exercised. It held one async SQLite database open for
-    the life of the process, and kept doing so after the reason expired.
-
-    `threads is None` is the whole assertion. It means each turn takes the
-    per-session in-memory saver rather than sharing one database across every
-    session in the process -- the contention `_async_checkpointer_for` describes
-    the default as avoiding. What a later turn reads is `read_transcript`, so
-    nothing durable rides on this.
-    """
+    """The lifespan branch, which nothing drove until this."""
     from fastapi.testclient import TestClient
     from kingfisher_service import create_app
 

@@ -1,20 +1,4 @@
-"""Saying where a tool lives, in the definition that names it.
-
-A `tools:` entry may be written `where::what`. The path beside the name is a
-claim about location, and `refuse_moved` checks it.
-
-It began as a label and became a selector, which is what this file is mostly
-about. Two files may each define a `fetch` -- vendors do not coordinate -- and
-both load now: the loader used to refuse the pair, and stopped a deployment
-over a clash no single agent would ever see. So where a name is its own, a
-definition may still write it plainly; where two files answer to one, the
-reference is the only thing that picks between them, and the bare name is
-refused rather than resolved by a guess. `test_two_tools_of_one_name_both_load_and_are_told_apart`
-is that whole story in one test.
-
-The bare name is what an allowlist and the agent's dispatch table key on
-either way: a tool is called `fetch` however a definition spelled it.
-"""
+"""Saying where a tool lives, in the definition that names it."""
 
 from __future__ import annotations
 
@@ -88,8 +72,7 @@ def test_a_written_reference_splits_into_a_claim_and_a_name(written, expected):
 
 
 def test_a_package_reference_carries_no_trailing_slash():
-    """`.py` is what says "file"; its absence says "folder". The slash only
-    made `csv_profile/::csv_columns` noisier."""
+    """`.py` is what says "file"; its absence says "folder"."""
     assert Found(object(), "csv_profile/").source == "csv_profile/"
     assert reference("csv_profile/", "csv_columns") == "csv_profile::csv_columns"
     assert reference("sql_query.py", "sql_tables") == "sql_query.py::sql_tables"
@@ -99,13 +82,8 @@ def test_a_package_reference_carries_no_trailing_slash():
 
 
 def test_a_definition_keeps_what_it_wrote():
-    """This used to strip each entry to its bare name, because a name was the
-    only thing a grant or an allowlist could key on. Two folders may now each
-    define a `fetch`, and the reference is the only thing that says which -- so
-    the flattening moved to the two places that genuinely need a bare name.
-
-    Written the short way, an entry stays short: that is still what a catalogue
-    without collisions looks like.
+    """This used to strip each entry to its bare name, because a name was the only thing
+    a grant or an allowlist could key on.
     """
     spec = _spec(tools="csv_profile::csv_columns, http_fetch.py::http_fetch, plain")
 
@@ -125,9 +103,7 @@ def test_the_claims_travel_beside_the_names():
 
 @pytest.mark.parametrize("written", ['"*"', ""])
 def test_a_selection_naming_nothing_carries_no_claims(written):
-    """`["*"]` is everything and `[]` is nothing. Neither names a tool, so
-    neither can say where one lives -- which is also why "every entry must
-    carry a path" could never have been a clean rule."""
+    """`["*"]` is everything and `[]` is nothing."""
     spec = _spec(tools=written)
 
     assert dict(spec.tool_sources) == {}
@@ -135,8 +111,7 @@ def test_a_selection_naming_nothing_carries_no_claims(written):
 
 
 def test_the_derived_field_cannot_be_written_by_hand():
-    """It is read out of `tools`. A definition writing it is refused like any
-    other name this format does not define."""
+    """It is read out of `tools`."""
     with pytest.raises(Exception, match="unknown field 'tool_sources'"):
         reading.read(
             "name: a\ndescription: d\ntool_sources: {}\nsystem_prompt: |\n  b\n",
@@ -154,8 +129,9 @@ def test_a_path_that_still_describes_where_the_tool_is_passes():
 
 
 def test_a_path_that_no_longer_describes_it_is_refused():
-    """Old and new, both in the form a definition writes, so the right-hand
-    side is what you paste in to fix it."""
+    """Old and new, both in the form a definition writes, so the right-hand side is what
+    you paste in to fix it.
+    """
     with pytest.raises(CapabilityError) as raised:
         _offering({"csv_columns": "analysis/"}).refuse_moved(
             _spec(tools="csv_profile::csv_columns").tool_sources, subject=SUBJECT
@@ -174,8 +150,7 @@ def test_the_short_form_is_never_refused():
 
 
 def test_a_name_nothing_offers_is_left_to_the_other_refusal():
-    """`refuse_unknown_tools` says that better, with the full listing. Saying it
-    twice in two voices helps nobody."""
+    """`refuse_unknown_tools` says that better, with the full listing."""
     _offering({"csv_columns": "csv_profile/"}).refuse_moved(
         _spec(tools="csv_profile::gone").tool_sources, subject=SUBJECT
     )
@@ -185,10 +160,7 @@ def test_a_name_nothing_offers_is_left_to_the_other_refusal():
 
 
 def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg, shipped):
-    """`warm()` reads all three so a broken definition fails at startup. A path
-    that no longer resolves is the same mistake one layer in -- and finding it
-    when someone finally activates that one delegate means a deployment that
-    started while broken."""
+    """`warm()` reads all three so a broken definition fails at startup."""
     seeding.seed(cfg, shipped)
     (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
 
@@ -197,8 +169,9 @@ def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg, shipped):
 
 
 def test_an_untouched_catalogue_warms_cleanly(cfg, shipped):
-    """The negative control: the shipped presets use the long form, so this
-    would fail if the check were wrong about the layout it ships with."""
+    """The negative control: the shipped presets use the long form, so this would fail
+    if the check were wrong about the layout it ships with.
+    """
     seeding.seed(cfg, shipped)
 
     Definitions.from_config(cfg).warm()
@@ -208,13 +181,7 @@ def test_an_untouched_catalogue_warms_cleanly(cfg, shipped):
 
 
 def test_two_tools_of_one_name_both_load_and_are_told_apart(cfg):
-    """The reason a path stopped being only a claim about location.
-
-    The agent dispatches by name through a dictionary, so two tools of one name
-    cannot both reach one agent. The loader used to refuse the pair outright;
-    now it keeps both and the *reference* is what picks between them, which is
-    what makes two folders from two vendors survive.
-    """
+    """The reason a path stopped being only a claim about location."""
     for folder in ("a", "b"):
         directory = tools_dir(cfg) / folder
         directory.mkdir(parents=True, exist_ok=True)
@@ -266,21 +233,14 @@ def test_a_grant_that_names_nothing_is_left_alone(written):
 
 
 def test_the_long_form_of_a_unique_tool_is_not_an_unknown_tool():
-    """The refusal that stopped `surveyor` and `profiler`, both of which ship
-    written this way. Measured: `capability error: this request names unknown
-    tool(s): csv_profile::csv_profile`, from a file identical to the one in
-    `src/kingfisher/assets/`."""
+    """The refusal that stopped `surveyor` and `profiler`, both of which ship written
+    this way.
+    """
     _offering(UNIQUE).refuse_unknown(ALL, ("csv_profile::csv_columns",), subject=SUBJECT)
 
 
 def test_the_long_form_of_a_unique_tool_reaches_the_allowlist():
-    """The half that the first fix missed, and that only running it found.
-
-    Resolving the *grant* was not enough: `permitted` builds the middleware's
-    allowlist from the written form on its own, so the tool was registered on
-    the graph and then refused at the moment the model called it. The transcript
-    said `csv_profile` was granted and `Available tools:` did not list it.
-    """
+    """The half that the first fix missed, and that only running it found."""
     offering = Offering(builtin=("read_file",), workspace=("csv_columns",), sources=UNIQUE)
 
     permitted = offering.permitted(ALL, ("csv_profile::csv_columns",))
@@ -289,10 +249,7 @@ def test_the_long_form_of_a_unique_tool_reaches_the_allowlist():
 
 
 def test_a_clashing_name_still_has_to_be_spelt_out():
-    """The behaviour this must not change. Where two files define `fetch`, the
-    bare name is what nobody can act on -- the agent dispatches by name and
-    would keep one of the two in silence -- so it stays refused, and `spelt`
-    has nothing to place it against."""
+    """The behaviour this must not change."""
     offering = Offering(workspace=CLASHING, sources={})
 
     assert offering.spelt(("fetch",)) == ("fetch",)
@@ -303,8 +260,9 @@ def test_a_clashing_name_still_has_to_be_spelt_out():
 
 
 def test_the_claim_is_still_checked_by_the_rule_that_checks_claims():
-    """`spelt` deliberately does not verify the path, so this has to keep
-    firing: it is the whole reason the long form is worth writing."""
+    """`spelt` deliberately does not verify the path, so this has to keep firing: it is
+    the whole reason the long form is worth writing.
+    """
     offering = _offering(UNIQUE)
 
     offering.refuse_unknown(ALL, ("moved/elsewhere.py::csv_columns",), subject=SUBJECT)
@@ -330,8 +288,9 @@ PROBE = (Found(tool=probe, source="probe.py"),)
 
 
 class _Request:
-    """The one thing `ToolAllowlist` reads off a model request, and the one it
-    calls to hand back a narrowed copy."""
+    """The one thing `ToolAllowlist` reads off a model request, and the one it calls to
+    hand back a narrowed copy.
+    """
 
     def __init__(self, tools):
         self.tools = tools
@@ -341,10 +300,11 @@ class _Request:
 
 
 def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
-    """`granted_workspace` narrows the request's grant against what is offered,
-    and `narrowed` is set membership with no opinion about what exists -- so
-    the long form did not raise here, it silently resolved to nothing and the
-    agent carried no workspace tools at all."""
+    """`granted_workspace` narrows the request's grant against what is offered, and
+    `narrowed` is set membership with no opinion about what exists -- so the long
+    form did not raise here, it silently resolved to nothing and the agent carried no
+    workspace tools at all.
+    """
     surface = _ToolSurface(
         offering=Offering.of(PROBE),
         asked=Capabilities(tools=("probe.py::probe",), builtin_tools=()),
@@ -355,8 +315,9 @@ def test_an_agents_long_form_grant_reaches_the_tools_it_carries():
 
 
 def test_a_delegates_long_form_grant_reaches_the_tools_it_holds(cfg):
-    """The same question one level down, where a definition rather than a
-    request does the naming. `analysis/profiler.yaml` ships written this way."""
+    """The same question one level down, where a definition rather than a request does
+    the naming.
+    """
     spec = _spec(tools="probe.py::probe")
 
     built = as_subagent(
@@ -367,10 +328,9 @@ def test_a_delegates_long_form_grant_reaches_the_tools_it_holds(cfg):
 
 
 def test_a_delegates_long_form_grant_survives_the_ceiling(cfg):
-    """The ceiling merges the two axes into the allowlist the delegate runs
-    under, and took the written form as a name. A delegate could hold the tool
-    and still be refused the moment it called it -- which is exactly what the
-    parent did until `permitted` learned to spell."""
+    """The ceiling merges the two axes into the allowlist the delegate runs under, and
+    took the written form as a name.
+    """
     spec = _spec(tools="probe.py::probe")
 
     built = as_subagent(

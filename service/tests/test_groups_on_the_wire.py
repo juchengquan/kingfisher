@@ -1,10 +1,4 @@
-"""The five routes under a vocabulary: who reaches what, and what they are told.
-
-The through-line every assertion here checks: **the caller gets a code, the log
-gets the reason.** A session out of reach answers exactly what a wrong id
-answers, and a deployment whose identity provider has drifted from its
-vocabulary says so without naming a single group.
-"""
+"""The five routes under a vocabulary: who reaches what, and what they are told."""
 
 from __future__ import annotations
 
@@ -87,8 +81,9 @@ def test_opening_a_session_on_an_unreachable_agent_is_refused(client):
 
 
 def test_that_refusal_does_not_name_the_agent_as_existing(client):
-    """It is the library's `no agent named ...` -- the same words a typo gets,
-    and the listing in it names only what this caller can open."""
+    """It is the library's `no agent named ...` -- the same words a typo gets, and the
+    listing in it names only what this caller can open.
+    """
     got = client.post("/sessions", json={"agent": "narrow"}, headers=AS_C)
 
     assert "narrow" not in got.json()["message"].split("offers")[1]
@@ -99,8 +94,7 @@ def test_opening_a_reachable_agent_works(client):
 
 
 def test_the_open_response_narrows_what_it_reports(client):
-    """The one moment a caller is told what they got must be true for *them*.
-    `shared` declares `reviewer`, which only A reaches."""
+    """The one moment a caller is told what they got must be true for *them*."""
     for_a = client.post("/sessions", json={"agent": "shared"}, headers=AS_A).json()
     for_c = client.post("/sessions", json={"agent": "shared"}, headers=AS_C).json()
 
@@ -109,8 +103,9 @@ def test_the_open_response_narrows_what_it_reports(client):
 
 
 def test_the_open_response_echoes_the_groups_it_resolved_as(client):
-    """A caller behind a gateway usually cannot see what identity was asserted
-    for them; this is the one place to find out."""
+    """A caller behind a gateway usually cannot see what identity was asserted for them;
+    this is the one place to find out.
+    """
     assert client.post("/sessions", json={"agent": "shared"}, headers=AS_C).json()[
         "groups"
     ] == ["C"]
@@ -120,8 +115,9 @@ def test_the_open_response_echoes_the_groups_it_resolved_as(client):
 
 
 def test_a_session_out_of_reach_reads_as_missing(client):
-    """The assertion that matters: the same status *and* the same code a wrong
-    id gets, so holding a real one teaches nothing."""
+    """The assertion that matters: the same status *and* the same code a wrong id gets,
+    so holding a real one teaches nothing.
+    """
     session_id = opened(client, "narrow", AS_A)
 
     mine = client.get(f"/sessions/{session_id}", headers=AS_A)
@@ -152,8 +148,9 @@ def test_deleting_a_session_in_reach_works(client):
 
 
 def test_an_undeclared_group_is_a_misconfiguration(client):
-    """The only way an AccessError reaches a live request once startup refuses
-    the two mismatches: the identity provider and the vocabulary have drifted."""
+    """The only way an AccessError reaches a live request once startup refuses the two
+    mismatches: the identity provider and the vocabulary have drifted.
+    """
     got = client.post("/sessions", json={"agent": "shared"}, headers={HEADER: "Q"})
 
     assert got.status_code == 500
@@ -161,8 +158,7 @@ def test_an_undeclared_group_is_a_misconfiguration(client):
 
 
 def test_the_body_does_not_name_the_vocabulary(client):
-    """The library's message names every group this deployment defines. It must
-    not reach a caller -- that is the enumeration filtering exists to prevent."""
+    """The library's message names every group this deployment defines."""
     got = client.post("/sessions", json={"agent": "shared"}, headers={HEADER: "Q"})
 
     for name in ("A", "B", "C"):
@@ -170,8 +166,9 @@ def test_the_body_does_not_name_the_vocabulary(client):
 
 
 def test_a_missing_header_is_the_same_misconfiguration(client):
-    """A caller must not be able to tell a stripped header from an unknown
-    group: both are the deployment's to fix and neither is theirs."""
+    """A caller must not be able to tell a stripped header from an unknown group: both
+    are the deployment's to fix and neither is theirs.
+    """
     got = client.post("/sessions", json={"agent": "shared"})
 
     assert got.status_code == 500
@@ -179,8 +176,9 @@ def test_a_missing_header_is_the_same_misconfiguration(client):
 
 
 def test_every_route_resolves_the_caller(client):
-    """No route may be reachable without saying who is calling -- one forgotten
-    is a hole the others cannot cover."""
+    """No route may be reachable without saying who is calling -- one forgotten is a
+    hole the others cannot cover.
+    """
     session_id = opened(client, "shared", AS_A)
     unscoped = (
         client.post("/sessions", json={"agent": "shared"}),

@@ -12,7 +12,8 @@ from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 
 def test_data_becomes_read_only_to_the_os(workspace):
     """The layer the deny rule cannot provide: the kernel enforces this against
-    `execute` too, which tool-level permissions never covered."""
+    `execute` too, which tool-level permissions never covered.
+    """
     with writable_data(workspace) as data:
         (data / "input.csv").write_text("a,b\n1,2\n")
 
@@ -46,9 +47,7 @@ def test_protect_data_is_idempotent(workspace):
 
 
 def _refuse(name: str, monkeypatch):
-    """Make `chmod` refuse one file, the way the kernel does for a file we do
-    not own. `chmod(2)` returns EPERM to anyone who is not the owner, so a
-    single input copied in by another user reproduces this exactly."""
+    """Make `chmod` refuse one file, the way the kernel does for a file we do not own."""
     real = Path.chmod
 
     def chmod(self, mode, **kwargs):
@@ -60,8 +59,9 @@ def _refuse(name: str, monkeypatch):
 
 
 def test_a_file_we_cannot_chmod_is_reported_not_raised(workspace, monkeypatch):
-    """One file owned by another user used to abort the run -- and since this
-    runs before anything else, every later run of that session too."""
+    """One file owned by another user used to abort the run -- and since this runs
+    before anything else, every later run of that session too.
+    """
     with writable_data(workspace) as data:
         (data / "theirs.pdf").write_text("x")
         (data / "ours.csv").write_text("y")
@@ -90,8 +90,9 @@ def test_the_rest_of_the_directory_is_still_hardened(workspace, monkeypatch):
 
 
 def test_an_input_can_still_be_added_beside_a_file_we_do_not_own(workspace, monkeypatch):
-    """Refusing a new input because an unrelated old one belongs to someone
-    else would be its own bug."""
+    """Refusing a new input because an unrelated old one belongs to someone else would
+    be its own bug.
+    """
     with writable_data(workspace) as data:
         (data / "theirs.pdf").write_text("x")
 
@@ -118,9 +119,7 @@ def test_a_supplied_file_lands_in_the_sessions_data(session_dir, tmp_path):
 
 
 def test_data_is_read_only_again_afterwards(session_dir, tmp_path):
-    """Nobody may hand-chmod /data. That is the behaviour that has to become
-    impossible, not merely discouraged -- reaching for sudo is what bricked a
-    session once already."""
+    """Nobody may hand-chmod /data."""
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
@@ -132,8 +131,7 @@ def test_data_is_read_only_again_afterwards(session_dir, tmp_path):
 
 
 def test_data_is_read_only_again_even_when_a_copy_fails(session_dir, tmp_path, monkeypatch):
-    """`writable_data`'s finally is what makes this safe. A test that only
-    covers the happy path would not notice the copy moving outside it."""
+    """`writable_data`'s finally is what makes this safe."""
     source = tmp_path / "sales.csv"
     source.write_text("x")
 
@@ -233,8 +231,9 @@ def test_no_inputs_makes_no_directory(tmp_path):
 
 
 def test_resupplying_replaces_and_says_so(session_dir, tmp_path):
-    """`--data` is the only supported way to write there, so refusing would
-    make updating a dataset impossible. Replacing silently would be worse."""
+    """`--data` is the only supported way to write there, so refusing would make
+    updating a dataset impossible.
+    """
     source = tmp_path / "sales.csv"
     source.write_text("first")
     place_data((source,), session_dir)
@@ -264,13 +263,8 @@ def test_supplying_nothing_touches_nothing(session_dir):
 
 
 def test_a_session_that_was_given_data_can_still_be_removed(session_dir, tmp_path):
-    """`protect_data` drops the write bit off `data/`, and deletion is governed
-    by the directory's write bit -- so hardening made the session undeletable.
-
-    Every reap of a session that had ever been given `--data` failed with
-    `Permission denied`, reported it, and left the directory to fail again on
-    the next sweep. Sessions that never received data swept fine, which is why
-    it stayed invisible.
+    """`protect_data` drops the write bit off `data/`, and deletion is governed by the
+    directory's write bit -- so hardening made the session undeletable.
     """
     source = tmp_path / "orders.csv"
     source.write_text("a,b\n1,2\n")
@@ -284,8 +278,9 @@ def test_a_session_that_was_given_data_can_still_be_removed(session_dir, tmp_pat
 
 
 def test_removal_reaches_through_nested_hardened_directories(session_dir):
-    """`protect_data` hardens every directory under `data/`, not just the top,
-    so unlocking one level would strand anything deeper."""
+    """`protect_data` hardens every directory under `data/`, not just the top, so
+    unlocking one level would strand anything deeper.
+    """
     with writable_data(session_dir) as data:
         (data / "a" / "b").mkdir(parents=True)
         (data / "a" / "b" / "deep.csv").write_text("x")
@@ -296,10 +291,7 @@ def test_removal_reaches_through_nested_hardened_directories(session_dir):
 
 
 def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkeypatch):
-    """The same degradation `protect_data` chose. A path owned by someone else
-    is one we could not have deleted anyway, and a sweep of many sessions must
-    not abort on one of them.
-    """
+    """The same degradation `protect_data` chose."""
     with writable_data(session_dir) as data:
         (data / "theirs.pdf").write_text("x")
     protect_data(session_dir)
@@ -313,11 +305,7 @@ def test_a_directory_we_cannot_unlock_is_reported_not_raised(session_dir, monkey
 
 
 def test_an_unrelated_failure_leaves_data_hardened(session_dir, monkeypatch):
-    """Unlocking is for the one error it can fix. A sweep that fails for some
-    other reason leaves the session on disk, and that session's `/data` must
-    still be read-only -- unlocking it on the way past would strip the guard
-    off a session that then survives.
-    """
+    """Unlocking is for the one error it can fix."""
     import errno
 
     with writable_data(session_dir) as data:

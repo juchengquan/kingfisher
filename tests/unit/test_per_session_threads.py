@@ -1,18 +1,11 @@
 """A conversation lives inside the session it belongs to.
 
-One session used to be one logical thing kept in two stores keyed by the same
-id with nothing linking them: a directory, and a row set in a database shared by
-every session. Everything that went wrong with retention came from that seam --
-`discard` had to delete both in the right order, sessions that could not be
-removed left their threads behind, and a directory deleted any other way
-orphaned its thread forever, 132 of them in one real workspace.
-
-The file is a *transcript* now rather than a checkpoint database, and every
-claim below survived that: it is still one file in the session directory, still
-deleted with it, still counted by the quota, still separate per session. What
-changed is what is in it — kingfisher's own message records rather than
-langgraph's resumable graph state, because a graph is never resumed here. See
-`domain.transcript`.
+One session used to be one logical thing kept in two stores keyed by the same id with
+nothing linking them: a directory, and a row set in a database shared by every
+session. Everything that went wrong with retention came from that seam -- `discard`
+had to delete both in the right order, sessions that could not be removed left their
+threads behind, and a directory deleted any other way orphaned its thread forever,
+132 of them in one real workspace.
 """
 
 from __future__ import annotations
@@ -48,8 +41,7 @@ def test_the_conversation_is_a_file_inside_the_session(cfg):
 
 
 def test_nothing_is_written_to_a_workspace_wide_database(cfg):
-    """The shared file is what orphans came from. If one is still being opened,
-    this whole change bought nothing."""
+    """The shared file is what orphans came from."""
     kf = Kingfisher(cfg, graph=StubAgent("ok"))
 
     kf.run(Request("go"))
@@ -58,9 +50,10 @@ def test_nothing_is_written_to_a_workspace_wide_database(cfg):
 
 
 def test_the_conversation_counts_against_the_session_quota(cfg):
-    """`session_max_bytes` measures a directory, so checkpoint state was
-    invisible to it while it sat above every session -- the same blind spot the
-    tool caches had before `HOME` moved into the session."""
+    """`session_max_bytes` measures a directory, so checkpoint state was invisible to it
+    while it sat above every session -- the same blind spot the tool caches had
+    before `HOME` moved into the session.
+    """
     kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
 
@@ -74,13 +67,7 @@ def test_the_conversation_counts_against_the_session_quota(cfg):
 
 
 def test_a_real_graph_checkpoints_into_the_session_database(cfg, session_dir):
-    """The whole reason a checkpointer exists. Moving where it lives must not
-    change what it does.
-
-    Driven through a real graph rather than `StubAgent`, which replaces the
-    graph outright and so never reaches a checkpointer at all -- the first
-    version of this test asserted against a database nothing had written to.
-    """
+    """The whole reason a checkpointer exists."""
     from langchain_core.messages import AIMessage
 
     from kingfisher.infrastructure.harness.agent import build_agent
@@ -120,9 +107,7 @@ def test_two_sessions_keep_separate_conversations(cfg):
 
 
 def test_deleting_a_session_takes_its_conversation_with_it(cfg):
-    """No `ThreadStore` involved, which is the point. An orphaned thread is not
-    something the janitor cleans up here -- it is something that cannot happen.
-    """
+    """No `ThreadStore` involved, which is the point."""
     kf = Kingfisher(cfg, graph=StubAgent("ok"))
     result = kf.run(Request("go"))
     directory = _session_dir(cfg, result.session_id)
@@ -137,11 +122,7 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg):
 
 
 def test_astream_works_with_nothing_injected(cfg):
-    """It did not before. `SqliteSaver.aget_tuple` raises `NotImplementedError`,
-    so an async deployment had to pass its own saver -- and passing an instance
-    means one database shared by every session, which is the contention this
-    exists to avoid.
-    """
+    """It did not before."""
     kf = Kingfisher(cfg, graph=AsyncStubAgent("ok"))
 
     async def go() -> str | None:
@@ -158,13 +139,9 @@ def test_astream_works_with_nothing_injected(cfg):
 
 
 def test_the_async_saver_actually_supports_async(cfg, session_dir):
-    """The test above drives `AsyncStubAgent`, which replaces the graph -- so it
-    never touches the saver, and it passed even with the async resolver swapped
-    for the sync one. Mutation testing found that; this is the assertion that
-    catches it.
-
-    `SqliteSaver.aget_tuple` raises `NotImplementedError`, so calling it is the
-    difference between a saver an event loop can use and one it cannot.
+    """The test above drives `AsyncStubAgent`, which replaces the graph -- so it never
+    touches the saver, and it passed even with the async resolver swapped for the
+    sync one.
     """
     from contextlib import AsyncExitStack
 
@@ -186,8 +163,7 @@ def test_the_async_saver_actually_supports_async(cfg, session_dir):
 
 
 def test_an_injected_store_is_used_as_it_is_and_not_closed(cfg):
-    """A deployment's own store outlives every turn. Closing it after one would
-    break the next."""
+    """A deployment's own store outlives every turn."""
     store = StubCheckpointer()
     kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=store)
 
@@ -216,8 +192,7 @@ def test_a_factory_is_asked_once_per_session(cfg):
 
 
 def test_the_connection_does_not_outlive_the_turn(cfg):
-    """A database per session is a file descriptor per session. A process
-    serving many would otherwise hold every one it had ever touched."""
+    """A database per session is a file descriptor per session."""
     closed: list[object] = []
 
     class Recorder(StubCheckpointer):
@@ -235,8 +210,7 @@ def test_the_connection_does_not_outlive_the_turn(cfg):
 
 
 def test_a_sweep_needs_no_thread_store_at_all(cfg):
-    """`reap` deleted threads because they lived elsewhere. They do not any
-    more, so the sweep is one `rmtree` and the reconciliation finds nothing."""
+    """`reap` deleted threads because they lived elsewhere."""
     import time
 
     kf = Kingfisher(cfg, graph=StubAgent("ok"))
@@ -251,8 +225,7 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
 
 @pytest.mark.parametrize("injected", [None, "factory"])
 def test_the_default_and_a_factory_both_survive_two_turns(cfg, injected):
-    """The two shapes this service opens for itself, driven rather than
-    inspected."""
+    """The two shapes this service opens for itself, driven rather than inspected."""
     threads = None if injected is None else (lambda _dir: StubCheckpointer())
     kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
 
@@ -266,11 +239,7 @@ def test_the_default_and_a_factory_both_survive_two_turns(cfg, injected):
 
 
 def test_conversation_can_be_turned_off_entirely(cfg):
-    """A graph takes `checkpointer=None` and runs; the turn simply starts cold.
-
-    For a request/response API that is the whole state story: no database, so
-    nothing to contend on, orphan, or vacuum.
-    """
+    """A graph takes `checkpointer=None` and runs; the turn simply starts cold."""
     from dataclasses import replace as replace_cfg
 
     stateless = replace_cfg(cfg, conversation_enabled=False)
@@ -286,10 +255,7 @@ def test_conversation_can_be_turned_off_entirely(cfg):
 
 
 def test_files_survive_a_stateless_turn(cfg):
-    """"Stateless" is about the conversation, not the session. `/derived` and
-    `/memory` are on disk, and a resumed session still finds them -- so
-    `--session` keeps naming the same files while the agent starts cold.
-    """
+    """"Stateless" is about the conversation, not the session."""
     from dataclasses import replace as replace_cfg
 
     stateless = replace_cfg(cfg, conversation_enabled=False)
@@ -305,8 +271,9 @@ def test_files_survive_a_stateless_turn(cfg):
 
 
 def test_the_flag_wins_over_an_injected_store(cfg):
-    """A deployment that says it wants no conversation means it whatever it
-    wired earlier -- otherwise the flag would be advisory."""
+    """A deployment that says it wants no conversation means it whatever it wired
+    earlier -- otherwise the flag would be advisory.
+    """
     from dataclasses import replace as replace_cfg
 
     store = StubCheckpointer()
@@ -320,9 +287,9 @@ def test_the_flag_wins_over_an_injected_store(cfg):
 
 
 def test_the_async_path_honours_it_too(cfg, session_dir):
-    """Otherwise a deployment would be stateless on one entry point and not the
-    other, which is the kind of gap that only shows up in the path nobody
-    tested."""
+    """Otherwise a deployment would be stateless on one entry point and not the other,
+    which is the kind of gap that only shows up in the path nobody tested.
+    """
     from contextlib import AsyncExitStack
     from dataclasses import replace as replace_cfg
 
@@ -336,29 +303,20 @@ def test_the_async_path_honours_it_too(cfg, session_dir):
 
 
 def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):
-    """A session that forgets is a surprising default for something that issues
-    session ids."""
+    """A session that forgets is a surprising default for something that issues session
+    ids.
+    """
     assert cfg.conversation_enabled is True
 
 
 def test_a_turns_working_state_does_not_reach_the_next_one(cfg, session_dir):
     """What the conversation carries, and what it deliberately does not.
 
-    Messages cross a turn boundary, through the transcript. A turn's *graph*
-    state does not, and `TodoListMiddleware`'s plan is the visible instance of
-    that: an agent resuming a session should not find a half-finished checklist
-    it has no memory of writing, from a task the caller may have abandoned.
-
-    It holds because the saver is built per turn -- `build_session_checkpointer`
-    at `service.py:1249`, released when the turn ends -- so the next turn's graph
-    starts with nothing in its channels. That is structural rather than enforced,
-    which is why it is worth a test: a deployment injecting a persistent
-    `threads` factory takes it back, and nothing else would say so.
-
-    The turn boundary is reconstructed here rather than driven through
-    `Kingfisher.run`, which builds its own agent and takes no model to script.
-    What makes the reconstruction faithful is the one line it copies: a fresh
-    saver per turn.
+    It holds because the saver is built per turn -- `build_session_checkpointer` at
+    `service.py:1249`, released when the turn ends -- so the next turn's graph starts
+    with nothing in its channels. That is structural rather than enforced, which is
+    why it is worth a test: a deployment injecting a persistent `threads` factory
+    takes it back, and nothing else would say so.
     """
     from langchain_core.messages import AIMessage
 

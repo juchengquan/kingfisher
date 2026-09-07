@@ -1,17 +1,4 @@
-"""The Linux fence, and the policy it generates.
-
-The policy is the whole of it. `confine` and `Sandbox.run` are `sandlock`'s to
-get right; what this repository decides is *which paths go in which list*, and
-that decision is the one that failed open the first time it was made by hand --
-`/tmp` writable while the workspace was mounted under `/tmp`, so the fence
-covered nothing and every read still succeeded.
-
-So these run against a stand-in for `sandlock` rather than the real thing. That
-is not a compromise: it is the only way to assert the policy's *shape* on a
-machine that cannot load a Linux-only wheel, and the shape is what a reviewer
-has to be able to check. The escape list itself is in
-`tests/linux/test_fence_escapes.py`, which needs a kernel.
-"""
+"""The Linux fence, and the policy it generates."""
 
 from __future__ import annotations
 
@@ -59,13 +46,7 @@ def sandlock(monkeypatch):
 
 
 def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
-    """A policy for a session that exists, because only those are generated.
-
-    The directory is made rather than merely named: a path that does not exist
-    is dropped from the policy, since `sandlock` rejects the whole thing when one
-    is missing. A test that skipped this would be asserting about a policy no
-    turn could ever produce.
-    """
+    """A policy for a session that exists, because only those are generated."""
     session = tmp_path / "sessions" / "s1"
     session.mkdir(parents=True, exist_ok=True)
     return policy_for(session, **kwargs)
@@ -75,9 +56,7 @@ def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
 
 
 def test_the_session_is_writable_and_nothing_above_it_is(sandlock, tmp_path):
-    """The claim the fence exists to make. A workspace-writable policy would
-    permit exactly the read that was measured leaking: one session's shell
-    reaching another's `/derived` by climbing one level."""
+    """The claim the fence exists to make."""
     policy = a_policy(tmp_path)
 
     assert str(tmp_path / "sessions" / "s1") in policy.fs_writable
@@ -86,9 +65,7 @@ def test_the_session_is_writable_and_nothing_above_it_is(sandlock, tmp_path):
 
 
 def test_another_session_appears_in_no_list_at_all(sandlock, tmp_path):
-    """Not denied -- absent. Landlock denies by default, so a sibling session is
-    unreachable because nothing granted it, which is the property that keeps
-    holding as sessions are created after the policy was built."""
+    """Not denied -- absent."""
     policy = a_policy(tmp_path)
     sibling = str(tmp_path / "sessions" / "s2")
 
@@ -99,8 +76,8 @@ def test_another_session_appears_in_no_list_at_all(sandlock, tmp_path):
 def test_the_catalogue_is_readable_and_not_writable(sandlock, tmp_path):
     """Skills are workspace-level and their scripts are run by the shell against
     `$KINGFISHER_SKILLS`, so a fence that hid them would break the feature it is
-    protecting. Writable and the agent could rewrite a skill for every later
-    request, in every session sharing the catalogue."""
+    protecting.
+    """
     catalogue = tmp_path / "skills"
     catalogue.mkdir()
     policy = a_policy(tmp_path, readable=[catalogue])
@@ -110,12 +87,9 @@ def test_the_catalogue_is_readable_and_not_writable(sandlock, tmp_path):
 
 
 def test_a_shell_can_still_be_a_shell(sandlock, tmp_path):
-    """The fence is applied before `exec`, and Landlock denies by default -- so
-    a policy without these cannot start `/bin/sh` at all, and the failure looks
-    like a broken image rather than a denied path.
-
-    Every one that *exists here*, which is the whole rule: the list is a claim
-    about the host, and the host is the one that gets to answer it.
+    """The fence is applied before `exec`, and Landlock denies by default -- so a policy
+    without these cannot start `/bin/sh` at all, and the failure looks like a broken
+    image rather than a denied path.
     """
     policy = a_policy(tmp_path)
 
@@ -126,27 +100,14 @@ def test_a_shell_can_still_be_a_shell(sandlock, tmp_path):
 
 
 def test_a_path_that_is_not_there_is_dropped_rather_than_named(sandlock, tmp_path):
-    """Measured in a container, and it did not fail loudly. `/lib64` does not
-    exist on arm64 Debian; naming it made `sandlock_create` fail outright, so
-    the fence never built and every command returned exit -1 with no output --
-    which reads as a broken image rather than as a shell running unfenced.
-
-    Safe to drop, because a path that does not exist grants nothing: the fence
-    is exactly as tight without it.
-    """
+    """Measured in a container, and it did not fail loudly."""
     policy = a_policy(tmp_path, readable=[tmp_path / "never-made"])
 
     assert str(tmp_path / "never-made") not in policy.fs_readable
 
 
 def test_a_fence_that_could_not_be_built_says_so(sandlock, tmp_path, monkeypatch):
-    """Measured in a container, and it did not fail loudly.
-
-    `sandlock_create failed` arrived as an exit code with two empty byte strings
-    -- which is what a command with no output looks like, so the fence never
-    building read as a broken image. Whatever else is wrong, the reason has to
-    travel.
-    """
+    """Measured in a container, and it did not fail loudly."""
     from kingfisher.infrastructure.sandbox.fence import LandlockRunner
 
     def refuse(_policy):
@@ -180,9 +141,9 @@ def a_runner(sandlock, tmp_path, **kwargs):
 
 
 def test_a_command_runs_and_its_output_comes_back(sandlock, tmp_path):
-    """The runner owns the process launch, so this is its own behaviour rather
-    than a wrapper's. `Sandbox.run` would have owned it instead and cannot: see
-    the class docstring for what it returns in a container."""
+    """The runner owns the process launch, so this is its own behaviour rather than a
+    wrapper's.
+    """
     result = a_runner(sandlock, tmp_path).run("echo hi")
 
     assert result.exit_code == 0
@@ -190,9 +151,9 @@ def test_a_command_runs_and_its_output_comes_back(sandlock, tmp_path):
 
 
 def test_a_failure_reaches_the_model_with_its_message(sandlock, tmp_path):
-    """`stderr` is where a denied path is reported, and a fence whose refusals
-    were invisible would look like a broken command. Seeing it is what lets a
-    model ask for a path inside the session instead of retrying the denied one."""
+    """`stderr` is where a denied path is reported, and a fence whose refusals were
+    invisible would look like a broken command.
+    """
     result = a_runner(sandlock, tmp_path).run("cat /nope/definitely-not-here")
 
     assert result.exit_code != 0
@@ -200,18 +161,18 @@ def test_a_failure_reaches_the_model_with_its_message(sandlock, tmp_path):
 
 
 def test_the_command_runs_in_the_session(sandlock, tmp_path):
-    """`confine` rejects a policy carrying `cwd`, so the working directory is
-    the runner's business. A shell starting elsewhere would make every relative
-    path in a prompt wrong."""
+    """`confine` rejects a policy carrying `cwd`, so the working directory is the
+    runner's business.
+    """
     result = a_runner(sandlock, tmp_path).run("pwd")
 
     assert result.output.strip().endswith("sessions/s1")
 
 
 def test_the_environment_is_given_rather_than_inherited(sandlock, tmp_path, monkeypatch):
-    """The other thing `confine` rejects, and the one a filesystem fence would
-    not have caught anyway. Inheriting this process's environment would hand the
-    agent's shell every credential the service holds."""
+    """The other thing `confine` rejects, and the one a filesystem fence would not have
+    caught anyway.
+    """
     monkeypatch.setenv("A_SERVICE_CREDENTIAL", "sk-do-not-leak")
 
     result = a_runner(sandlock, tmp_path).run("env")
@@ -221,8 +182,9 @@ def test_the_environment_is_given_rather_than_inherited(sandlock, tmp_path, monk
 
 
 def test_long_output_truncates_where_an_unfenced_command_would(sandlock, tmp_path):
-    """A fence that changed how much output a turn could see would be a fence
-    that changed the agent's behaviour, which is how a fence gets turned off."""
+    """A fence that changed how much output a turn could see would be a fence that
+    changed the agent's behaviour, which is how a fence gets turned off.
+    """
     result = a_runner(sandlock, tmp_path, max_output_bytes=50).run("printf 'x%.0s' $(seq 200)")
 
     assert result.truncated is True
@@ -230,9 +192,9 @@ def test_long_output_truncates_where_an_unfenced_command_would(sandlock, tmp_pat
 
 
 def test_a_timeout_is_a_result_rather_than_an_exception(sandlock, tmp_path):
-    """The shell's own exit code, so a caller cannot tell a fenced timeout from
-    an unfenced one. Raising would make every runner's failure the model's
-    problem rather than a tool result it can read and retry."""
+    """The shell's own exit code, so a caller cannot tell a fenced timeout from an
+    unfenced one.
+    """
     result = a_runner(sandlock, tmp_path).run("sleep 5", timeout=1)
 
     assert result.exit_code == 124
@@ -240,8 +202,9 @@ def test_a_timeout_is_a_result_rather_than_an_exception(sandlock, tmp_path):
 
 
 def test_a_result_is_kingfisher_s_own_type(sandlock, tmp_path):
-    """The seam's whole point: no framework type, and no `sandlock` type either,
-    in something a deployment could implement."""
+    """The seam's whole point: no framework type, and no `sandlock` type either, in
+    something a deployment could implement.
+    """
     assert isinstance(a_runner(sandlock, tmp_path).run("true"), CommandResult)
 
 
@@ -249,8 +212,9 @@ def test_a_result_is_kingfisher_s_own_type(sandlock, tmp_path):
 
 
 def test_a_named_mechanism_counts_as_confined_even_with_nothing_wrapped():
-    """Landlock is applied to the process, not wrapped round the command, so
-    "does `wrap` do anything" reports a fenced shell as unfenced."""
+    """Landlock is applied to the process, not wrapped round the command, so "does
+    `wrap` do anything" reports a fenced shell as unfenced.
+    """
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     assert Confinement(wrap=_unwrapped, mechanism="Landlock").confined
@@ -258,9 +222,9 @@ def test_a_named_mechanism_counts_as_confined_even_with_nothing_wrapped():
 
 
 def test_three_things_have_to_hold_and_any_one_fails_quietly(monkeypatch):
-    """A deployment with two of the three would run unfenced while believing
-    otherwise, so they are checked together in one place rather than assumed
-    from the platform."""
+    """A deployment with two of the three would run unfenced while believing otherwise,
+    so they are checked together in one place rather than assumed from the platform.
+    """
     import kingfisher.infrastructure.sandbox.confinement as c
 
     monkeypatch.setattr(c.platform, "system", lambda: "Linux")
@@ -272,13 +236,8 @@ def test_three_things_have_to_hold_and_any_one_fails_quietly(monkeypatch):
 
 
 def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, cfg, tmp_path):
-    """Two places answering "should this be fenced" would eventually disagree,
-    and the failure is a shell running unfenced while `doctor` reports it
-    confined. So there is one decision and this is downstream of it.
-
-    Both directions asserted, on every platform. A test that only checked the
-    unfenced branch would pass on this machine and prove nothing about the one
-    the fence is for.
+    """Two places answering "should this be fenced" would eventually disagree, and the
+    failure is a shell running unfenced while `doctor` reports it confined.
     """
     from kingfisher.infrastructure.harness.backend import _fence_for
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped
@@ -295,21 +254,7 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
 
 
 def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
-    """The two mechanisms must fence the same shell the same way.
-
-    `argv_for` and `policy_for` take the same arguments and mean the same thing
-    by them, and `_fence_for` used to build those arguments separately in each
-    branch. Three identical lines twice is a path added to one and forgotten in
-    the other, and nothing would have said so: a run exercises whichever
-    mechanism its own kernel offers, so the branch that drifted is the branch
-    this machine never takes.
-
-    Recorded rather than compared through the built objects, which are a bwrap
-    argv and a `Sandbox` and not the same shape. What has to agree is the input.
-
-    Stubbing `policy_for` is also what lets this run off Linux -- `sandlock`
-    ships Linux-only wheels, and the real one imports it.
-    """
+    """The two mechanisms must fence the same shell the same way."""
     from kingfisher.infrastructure.harness.backend import _fence_for
     from kingfisher.infrastructure.sandbox import bubblewrap, fence
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped
@@ -348,29 +293,7 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
 
 
 def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):
-    """The rule the fence exists to keep, stated the way it actually breaks.
-
-    `shell_env` hands the shell a `PATH`, and on Linux the fence is an
-    allow-list: a directory on that `PATH` which no rule grants is not refused
-    loudly, it is skipped. The shell walks on to the next entry and finds
-    `/usr/local/bin/python3`, which is granted -- so the agent runs a *different*
-    interpreter, without the `agent` dependency group this project installs for
-    it, and the venv's `site-packages` is unreadable besides. Nothing fails.
-
-    Invisible on macOS, which is why it survived: that profile is
-    `(allow default)`, so every `PATH` entry is readable whether anyone thought
-    about it or not. The two platforms have opposite defaults and only one of
-    them punishes forgetting.
-
-    Asserted over `PATH` rather than over `toolchain_roots`, deliberately. The
-    second would check that this change was made; the first checks the property
-    the change was for, so an entry added to `PATH` later by some other route is
-    caught by having been added.
-
-    `_BASE_PATH` satisfies it through `SYSTEM_PATHS` already, and entries that do
-    not exist on this host are skipped for the reason `_present` skips them: a
-    path that is not there grants nothing and denies nothing.
-    """
+    """The rule the fence exists to keep, stated the way it actually breaks."""
     from kingfisher.infrastructure.harness.backend import _fence_for, shell_env
     from kingfisher.infrastructure.sandbox import bubblewrap, fence
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped

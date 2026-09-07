@@ -1,13 +1,4 @@
-"""Which model a delegate runs, and therefore where its prompt goes.
-
-A definition names a model and nothing else. The endpoint follows from it
-through the catalogue, so naming a model names whose credentials pay -- which
-is why it is granted rather than free, and why nothing outside the definition
-may move it.
-
-There was a `provider:` field here too, and a rule that the two moved together.
-Both are gone; `test_subagent.py` covers the format side of that.
-"""
+"""Which model a delegate runs, and therefore where its prompt goes."""
 
 from __future__ import annotations
 
@@ -100,16 +91,18 @@ def test_the_catalogue_is_where_endpoints_and_models_come_from(tmp_path):
 
 
 def test_several_models_may_share_one_endpoint(tmp_path):
-    """The shape the old `api_style` could not express at all: it keyed
-    endpoints by wire format, so there was exactly one per format."""
+    """The shape the old `api_style` could not express at all: it keyed endpoints by
+    wire format, so there was exactly one per format.
+    """
     cfg = config_from_env(written(tmp_path))
 
     assert cfg.models.resolve("MiniMax-M3")[1] == cfg.models.resolve("MiniMax-M2.5")[1]
 
 
 def test_two_endpoints_may_share_one_wire_format(tmp_path):
-    """The other half, and the actual motivation: a gateway and a local server
-    both speaking Anthropic's format could not both be configured."""
+    """The other half, and the actual motivation: a gateway and a local server both
+    speaking Anthropic's format could not both be configured.
+    """
     body = CATALOGUE.replace(
         "default: MiniMax-M3",
         "  vllm:\n    api: anthropic\n    base_url: http://localhost:8000\n"
@@ -122,8 +115,9 @@ def test_two_endpoints_may_share_one_wire_format(tmp_path):
 
 
 def test_naming_a_model_the_catalogue_does_not_define_is_refused(tmp_path):
-    """Closed, which is what converts a 404 mid-run into a sentence naming the
-    catalogue that should have defined it."""
+    """Closed, which is what converts a 404 mid-run into a sentence naming the catalogue
+    that should have defined it.
+    """
     cfg = config_from_env(written(tmp_path))
 
     with pytest.raises(ConfigError, match="no model 'gpt-5'"):
@@ -143,10 +137,11 @@ def test_a_delegate_runs_the_model_it_names(cfg, session_dir, monkeypatch):
 
 
 def test_omitting_the_model_builds_none_of_its_own(cfg, session_dir, monkeypatch):
-    """"Runs what the deployment runs" is expressed by building nothing here,
-    not by building the default again: a top-level delegate inherits the model
-    its parent was constructed with, and a second instance would only be a
-    chance for the two to differ."""
+    """"Runs what the deployment runs" is expressed by building nothing here, not by
+    building the default again: a top-level delegate inherits the model its parent
+    was constructed with, and a second instance would only be a chance for the two to
+    differ.
+    """
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
     spec = build(cfg, session_dir, monkeypatch)
@@ -155,9 +150,7 @@ def test_omitting_the_model_builds_none_of_its_own(cfg, session_dir, monkeypatch
 
 
 def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir, monkeypatch):
-    """Naming a model is not the same as going elsewhere. Several models behind
-    one gateway is the ordinary case, and the endpoint follows the model rather
-    than the other way round."""
+    """Naming a model is not the same as going elsewhere."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")
 
     spec = build(cfg, session_dir, monkeypatch)
@@ -166,18 +159,7 @@ def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir, mo
 
 
 def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
-    """**The guard this change exists for.**
-
-    `test_models.py` proves the params land for the deployment's own model.
-    Nothing proved it for a *delegate*, and that is precisely where the old
-    code could drop one: `as_subagent` built a delegate by copying the `Config`
-    with four fields swapped, so a fifth that nobody added to that copy was
-    silently the deployment's value. A per-model `max_tokens` -- the whole
-    point of the table -- would have been exactly that fifth field.
-
-    `cheap-model` carries a ceiling and a timeout that differ from the
-    default's, so this cannot pass by accident on the deployment's numbers.
-    """
+    """**The guard this change exists for.**"""
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")
 
     spec = build(cfg, session_dir, monkeypatch)
@@ -188,12 +170,7 @@ def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
 
 
 def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir, monkeypatch):
-    """The same guard across a wire format, where the attribute names differ.
-
-    `timeout_s` lands on `default_request_timeout` for anthropic and
-    `request_timeout` for openai -- the disagreement `LANDING_SITES` exists to
-    record -- so a delegate routed elsewhere is the case most able to lose one.
-    """
+    """The same guard across a wire format, where the attribute names differ."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     spec = build(elsewhere(cfg), session_dir, monkeypatch)
@@ -203,14 +180,10 @@ def test_a_delegates_params_survive_going_elsewhere(cfg, session_dir, monkeypatc
 
 
 def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_dir, monkeypatch):
-    """Refused when the delegate is *activated*, not across the catalogue up
-    front -- `run_on` exists so a caller can rescue a shipped definition whose
-    model their credentials cannot reach, and a catalogue-wide refusal would
-    fire before the override could apply.
-
-    The message names the delegate. `resolve_model` knows the model and the
-    catalogue but not who asked, and this is the one refusal that fires on a
-    file the reader may not own.
+    """Refused when the delegate is *activated*, not across the catalogue up front --
+    `run_on` exists so a caller can rescue a shipped definition whose model their
+    credentials cannot reach, and a catalogue-wide refusal would fire before the
+    override could apply.
     """
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
@@ -219,8 +192,7 @@ def test_a_delegate_naming_an_unrunnable_model_is_refused_by_name(cfg, session_d
 
 
 def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir, monkeypatch):
-    """Seeding a preset you cannot run costs nothing until you ask for it. This
-    is what a catalogue-wide check would have taken away."""
+    """Seeding a preset you cannot run costs nothing until you ask for it."""
     define(cfg, "name: unreachable\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
@@ -238,8 +210,9 @@ def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir, mo
 def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(
     cfg, session_dir, monkeypatch
 ):
-    """Seeding presets you have not bound for is free, the same rule an
-    unrunnable `model:` follows."""
+    """Seeding presets you have not bound for is free, the same rule an unrunnable
+    `model:` follows.
+    """
     define(cfg, "name: unbound\ndescription: d\nalias: missing\nsystem_prompt: |\n  Go.\n")
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
@@ -267,9 +240,7 @@ def test_a_granted_endpoint_goes_through(cfg, session_dir, monkeypatch):
 
 
 def test_the_grant_is_checked_against_where_the_model_resolves(cfg, session_dir, monkeypatch):
-    """A definition names no endpoint, so the grant cannot be read off it. It is
-    checked against the endpoint the model landed on -- the same question, asked
-    one step later."""
+    """A definition names no endpoint, so the grant cannot be read off it."""
     define(cfg, "name: reviewer\ndescription: d\nmodel: gpt-5\nsystem_prompt: |\n  Go.\n")
 
     with pytest.raises(CapabilityError, match="openai"):
@@ -277,8 +248,9 @@ def test_the_grant_is_checked_against_where_the_model_resolves(cfg, session_dir,
 
 
 def test_an_upload_cannot_widen_where_the_run_goes():
-    """The same structural rule as middleware, for a stronger reason: this one
-    chooses which endpoint receives the prompts and whose credentials pay."""
+    """The same structural rule as middleware, for a stronger reason: this one chooses
+    which endpoint receives the prompts and whose credentials pay.
+    """
     import inspect
 
     accepted = set(inspect.signature(Capabilities.including).parameters)
@@ -301,13 +273,8 @@ def test_grants_clamp_endpoints_like_everything_else():
 def test_the_environment_cannot_move_a_delegate_to_another_endpoint(
     cfg, session_dir, monkeypatch
 ):
-    """`KINGFISHER_PROVIDER_SUBAGENT` used to reroute every delegate at once,
-    and nothing reads it now.
-
-    Where the prompt goes is the strongest thing a definition decides -- it
-    names whose credentials pay -- so a variable moving all of them together was
-    the least appropriate place to say it. A file says it, or it runs the
-    default.
+    """`KINGFISHER_PROVIDER_SUBAGENT` used to reroute every delegate at once, and
+    nothing reads it now.
     """
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")

@@ -1,69 +1,25 @@
 """The application service: wired once, then asked to run things.
 
-`stream()` used to build its own world on every call -- checkpointer, session
-directories, workspace layout, permissions -- and take a keyword argument for
-each thing a test might want to substitute. That list grows with every port,
-and it made construction a per-request event for a program whose next shape is
-a server that constructs once and serves many.
-
-So the wiring lives here and the orchestration reads as a sequence:
-
-    kingfisher = Kingfisher(config_from_env())
-    for event in kingfisher.stream(request):
-        ...
-
-Module-level `run()` and `stream()` remain, over a default instance, so
-`run("profile /data/x.csv")` still works and nothing calling it had to change.
-
-What is *not* hoisted: the agent. It reads the workspace's skills and subagent
-definitions at construction, so a cached one would serve a stale view of a
-directory the user can edit between turns, and uploads write definitions into
-it per request.
-
-Measured, so the trade is a fact rather than a guess: 9.2ms median and 10.0ms
-p95 for an unrestricted agent, of which 7.2ms is `create_deep_agent` compiling
-the graph -- everything kingfisher does around it is sub-millisecond. Against a
-turn of 1.5-1.9s that is 0.6%.
-
-What it scales with, per item added at construction:
+Construction is not per-request, and the trade is measured rather than guessed: 8.1ms
+median and 9.2ms p95 to build an unrestricted agent, of which 7.2ms is
+`create_deep_agent` compiling the graph. Against a turn of 1.5-1.9s that is under 1%.
 
   subagent      +5-6ms   each compiles its own graph; the range is the delegate
-  custom tool   +0.47ms  linear to at least 50
+  custom tool   +0.47ms  linear to at least 50, measured in August
   middleware    +0.03ms
   skill          0.0ms   sixteen measure the same as none
   deny rule      0.0ms   a hundred measure the same as none
 
-Re-measured 2026-09-03. The baseline above held -- 8.1ms median, 9.2ms p95, 124
-builds a second -- and the subagent row did not: 4.3ms became 5.1ms for a
-delegate declaring one built-in tool and nothing else, and 6.2ms for the shipped
-`assets_examples/`. It is the largest term, so the additive prediction below now runs
-low, and the drift is not decay: a delegate costs what a delegate declares, and
-one number cannot say that. Every figure here is *per item added to an otherwise
-identical build*, which is the only form of it that transfers.
+Every figure is *per item added to an otherwise identical build*, which is the only
+form that transfers. The costs are additive and the total stays small: 10 tools, 5
+middleware, 20 deny rules and 2 subagents predicted 20.8ms and measured 21.6ms.
 
-The custom-tool row was not re-measured. Doing it needs tool files in the
-workspace, and their presence moves the baseline they would be measured against
--- the delta and the ground shift together. Left as it was, and marked so.
-
-Skills and permissions are free because they reach the agent as prompt text and
-as a rules list, not as anything compiled. Tools are an order of magnitude
-cheaper than subagents and an order dearer than middleware, so "adding things
-dynamically is cheap" is true or false depending entirely on which.
-
-The costs are additive: 10 tools, 5 middleware, 20 deny rules and 2 subagents
-predicted 20.8ms and measured 21.6ms, about 1% of a turn -- on the numbers above
-as they stood in August. With the subagent row re-measured the same shape
-predicts a little more, and the point survives either way: the model is additive
-and the total is small against a turn.
-
-Construction is CPU-bound Python, so it does not parallelise: ~100 builds per
-second per process, and worker threads make it slightly worse (0.85x) rather
-than better. At 1.5s a turn that ceiling is around 150 concurrent turns, or
-about 34 if every one activates eight subagents. Below that it is noise; above
-it, a cache keyed on session *and* capabilities *and* a fingerprint of the
-definitions would be the thing to reach for -- the fingerprint because uploads
-change what a session offers between turns, which is the staleness this avoids
-by not caching at all.
+Re-measured 2026-09-03. Construction is CPU-bound Python and does not parallelise --
+about 100 builds a second per process, worker threads slightly worse -- so the
+ceiling is roughly 150 concurrent turns, or 34 if every one activates eight
+subagents. Above that, a cache keyed on session *and* capabilities *and* a
+fingerprint of the definitions is the thing to reach for; the fingerprint because
+uploads change what a session offers between turns.
 """
 
 from __future__ import annotations
@@ -174,20 +130,6 @@ if TYPE_CHECKING:
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
-#:
-#: The library has had no logger until now, and the name matters more than that
-#: sounds: `kingfisher.audit` already exists in the service, whose own comment
-#: says it is "unconfigured. Nothing is written until a deployment attaches a
-#: handler, which is how 'may session ids be written here' stays a decision
-#: somebody makes rather than a default they inherit". A logger named
-#: `kingfisher` is that one's *parent*, so raising it to INFO -- which the
-#: server does, to get this line -- would start writing session ids as a side
-#: effect of asking where the definitions live. A sibling cannot.
-#:
-#: One record, at construction, and that is the whole budget. `print` is not an
-#: option: a library that writes to stdout cannot be used by a server, which is
-#: said twice in this codebase. `warnings.warn` is the wrong instrument -- it
-#: means "this is probably not what you meant", and a summary is not that.
 logger = logging.getLogger("kingfisher.origins")
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
@@ -196,24 +138,7 @@ _UNSET: Any = object()
 
 
 def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore | None:
-    """Which store this deployment gets: the one passed, the one named, or none.
-
-    A function rather than three lines in `__init__`, because the middle rung
-    imports and calls code the deployment wrote and that is more than an
-    expression should be doing in a constructor. What it decides stays here in
-    the application layer; how a named store is actually built is
-    `store_named`'s, an adapter's job -- the same split
-    `test_the_application_layer_does_not_write_to_disk_itself` already holds the
-    neighbouring code to.
-
-    `None` is a real answer and the common one. It means the session directory
-    is the only copy, which is correct wherever the host is allowed to keep
-    data.
-
-    `SessionStore` is imported at runtime here, unlike its six neighbours under
-    `TYPE_CHECKING`, because this hands it to `store_named` as the protocol to
-    check the result against -- a use rather than an annotation.
-    """
+    """Which store this deployment gets: the one passed, the one named, or none."""
     if supplied is not None:
         return supplied
     if cfg.session_store_factory is not None:
@@ -228,25 +153,7 @@ def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore |
 
 
 class Kingfisher(Sessions, Disposal):
-    """A configured kingfisher. Construct once; call `run` or `stream` per request.
-
-    Construction is where the deployment-scoped work happens -- creating the
-    layout, dropping write bits on `/data`, opening the thread store. Doing it
-    here rather than per request also means a broken workspace or an
-    unreachable state directory fails at startup, not on the first turn.
-
-    Every collaborator is injectable, and by protocol rather than by patching:
-    a test hands in its own `SessionDirs` to watch turn allocation, or its own
-    graph to drive a scripted conversation.
-
-    `catalogue` follows that shape too, and takes either form. A deployment
-    pointing at the catalogue directories passes the mapping and names no
-    classes; one
-    holding its definitions somewhere kingfisher did not choose passes a
-    `Definitions` of its own repositories. Both settle to the same object here, so
-    nothing downstream knows which arrived -- and swapping a single kind is
-    `replace(catalogue, subagents=...)`, since it is frozen.
-    """
+    """A configured kingfisher. Construct once; call `run` or `stream` per request."""
 
     def __init__(  # noqa: PLR0913 -- the composition root; each argument is one
         # collaborator a deployment or a test substitutes, and folding them into
@@ -296,36 +203,15 @@ class Kingfisher(Sessions, Disposal):
         # to say so. `--list` deliberately does not do this -- see `warm`.
         self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
 
-        # Injected, or derived from configuration, or nothing -- the same
-        # order `catalogue` follows and for the same reason: derive from `cfg`,
-        # never invent.
-        #
-        # Configuration now has two ways to say it, and this is where they meet:
-        # a factory for a store that is not a directory on this host, a
-        # directory for one that is. `Config.__post_init__` has already refused
-        # a deployment that set both, so the order here settles nothing -- it
-        # reads as precedence and never acts as any.
-        #
-        # Written out rather than chained with `or`, which is how the middle
-        # rung was first spelled and is a bug waiting for the first store that
-        # defines `__len__`: an empty one would be falsy, and a deployment's
-        # store would be silently replaced by the fallback below it.
+        # Injected, or derived from configuration, or nothing -- the same order
+        # `catalogue` follows and for the same reason: derive from `cfg`, never invent.
         self.sessions_store: SessionStore | None = _session_store(sessions, self.cfg)
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
-        # Where a session's files are for the length of a turn. The default
-        # keeps them under the workspace and leaves them there, which is what
-        # this did before there was a port for it; a deployment whose tree
-        # exists only while a turn runs supplies its own and gets the release
-        # for free, because the turn is what closes it.
-        #
-        # This governs the *turn*, and only the turn. `sessions()`, `reap` and
-        # `session_bytes` still read `sessions_root(workspace)`, so a provider
-        # that puts its sessions elsewhere gets an inventory that reports nothing
-        # and a janitor with nothing to sweep. That is survivable for a tree
-        # whose whole point is not to outlive the turn -- there is nothing to
-        # inventory -- and wrong for one that does. Whichever it is, the store
-        # is what a caller should be asking, and that is not what those three
-        # ask today.
+        # Where a session's files are for the length of a turn. The default keeps them
+        # under the workspace and leaves them there, which is what this did before there
+        # was a port for it; a deployment whose tree exists only while a turn runs
+        # supplies its own and gets the release for free, because the turn is what
+        # closes it.
         self.session_root: SessionRoot = session_root or LocalSessionRoot(self.workspace)
         # A callable, and only a callable. A runner is built for one turn --
         # kingfisher's own Landlock fence is, because its policy is generated
@@ -348,15 +234,10 @@ class Kingfisher(Sessions, Disposal):
         # could delete. `state_dir` is the one place the agent never addresses.
         self._claims: Path = self.cfg.state_dir / "claims"
         self.dirs.ensure(self._claims)
-        # Three shapes, and the difference is who owns the connection. An
-        # instance is a shared store the deployment made and manages; a callable
-        # is a factory this service calls per session and closes after the turn;
-        # `None` means the default, which is a database inside each session.
-        #
-        # `_shared` is the instance case only. `Session.discard` and `reap` use
-        # it to forget a thread, and both correctly do nothing when it is absent:
-        # a per-session database is deleted by removing the directory it sits in,
-        # which is the whole reason orphaned threads stop being possible.
+        # Three shapes, and the difference is who owns the connection. An instance is a
+        # shared store the deployment made and manages; a callable is a factory this
+        # service calls per session and closes after the turn; `None` means the default,
+        # which is a database inside each session.
         self.threads: Any = threads
         self._shared: Any = threads if (threads is not None and not callable(threads)) else None
         # No default. A deployment that never serves uploaded definitions has
@@ -386,27 +267,17 @@ class Kingfisher(Sessions, Disposal):
         # its own guard for `build_agent`, which takes a registry directly.
         refuse_unbuildable_middleware(self.middleware)
         self._graph = graph
-        # There is nothing to reconcile, and that is the shape of the design
-        # rather than an omission. Audiences live in the definitions, so a
-        # definition *is* the asset it is about -- there is no such thing as a
-        # line naming something the workspace does not offer, and a definition
-        # naming a tool that does not exist was already refused by
-        # `Offering.refuse_unknown` long before any of this.
-        #
-        # What is left to say is what the vocabulary cannot: which definitions
-        # restrict nobody. Default-open must not also be silent.
+        # There is nothing to reconcile, and that is the shape of the design rather than
+        # an omission. Audiences live in the definitions, so a definition *is* the asset
+        # it is about -- there is no such thing as a line naming something the workspace
+        # does not offer, and a definition naming a tool that does not exist was already
+        # refused by `Offering.refuse_unknown` long before any of this.
         self.access: Groups | None = self.cfg.access
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
-            # One walk of the definitions, not three. `defined_subagents` reads
-            # a directory, and asking it once per question is how this came to
-            # do it three times at every startup.
-            #
-            # `session_dir=None` because this is the shared catalogue, before
-            # any session exists. What a session adds is a request's own upload,
-            # which is the caller's own text and carries no audience anyone else
-            # wrote -- so the listing, which may be describing one, passes its
-            # own set to the same functions.
+            # One walk of the definitions, not three. `defined_subagents` reads a
+            # directory, and asking it once per question is how this came to do it three
+            # times at every startup.
             kinds = (
                 ("agent", self.catalogue.agents.specs),
                 ("subagent", defined_subagents(self.cfg, None, catalogue=self.catalogue)),
@@ -416,58 +287,27 @@ class Kingfisher(Sessions, Disposal):
             access.refuse_undeclared(*kinds, vocabulary=self.access)
             self.access_report = access.audit(*kinds, vocabulary=self.access)
 
-        # Last, so the line reports what was resolved rather than what was
-        # asked for -- and so a wiring failure raises instead of announcing a
-        # deployment that never came up.
-        #
-        # Guarded rather than left to the `%s`, which is what `audit._write`
-        # does and for the same reason: the argument here is a *built string*,
-        # so deferring the interpolation would defer nothing. With no logging
-        # configured this costs one attribute lookup and the record is never
-        # assembled.
+        # Last, so the line reports what was resolved rather than what was asked for --
+        # and so a wiring failure raises instead of announcing a deployment that never
+        # came up.
         if logger.isEnabledFor(logging.INFO):
             logger.info("reading from: %s", self.origins.line())
 
     @property
     def origins(self) -> Origins:
-        """Where this deployment is actually reading from.
-
-        Built here rather than from `cfg` alone, and that is the whole point:
-        `self.catalogue` is what was resolved and warmed above, so a deployment
-        that staged its definitions somewhere is reported as it is rather than
-        as it was configured. The same for `sessions_store`, which is either the
-        one this built from `cfg.session_store` or the one a deployment handed in.
-
-        A property rather than an attribute settled in `__init__`. Nothing here
-        changes after construction, so the two would be equivalent -- and a
-        property costs nothing until something asks, which keeps constructing a
-        `Kingfisher` exactly as cheap as it was.
-        """
+        """Where this deployment is actually reading from."""
         return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
 
     def held_for(self, groups: Held | None) -> frozenset[str] | None:
         """The caller's expanded groups, or `None` for no vocabulary / UNSCOPED.
 
-        The one place that turns what a call *said* into what the definitions
-        are *asked*. `None` is what every spec reads as "no opinion", and is
-        what keeps a deployment with no vocabulary behaving exactly as it did.
-
-        Public because `build_agent` needs it and the CLI wants to simulate a
-        caller with it; a second copy of this rule is one convention away from
-        the listing and the run disagreeing about who reaches what.
-
-        **Any sequence of names, not only a tuple.** This tested
-        `isinstance(groups, tuple)` and answered `None` -- "no opinion", the
-        same as no vocabulary at all -- for anything else. That was safe only
-        because `for_groups` coerced first and was the single documented way in;
-        with `groups=` the only way, `groups=["analysts"]` would have validated
-        the name and then narrowed nothing. A list is the obvious thing to
-        write, so it must mean what it looks like.
-
-        A bare `str` is refused rather than coerced. `groups="analysts"` is
-        iterable, so it would become eight one-letter group names -- caught
-        today only because `expand` refuses each of them, which reports a typo
-        nobody made.
+        **Any sequence of names, not only a tuple.** This tested `isinstance(groups,
+        tuple)` and answered `None` -- "no opinion", the same as no vocabulary at all
+        -- for anything else. That was safe only because `for_groups` coerced first
+        and was the single documented way in; with `groups=` the only way,
+        `groups=["analysts"]` would have validated the name and then narrowed
+        nothing. A list is the obvious thing to write, so it must mean what it looks
+        like.
         """
         if self.access is None or groups is None or isinstance(groups, _Unscoped):
             return None
@@ -477,23 +317,7 @@ class Kingfisher(Sessions, Disposal):
         return self.access.expand(tuple(groups))
 
     def _effective_grants(self, groups: Held | None) -> Capabilities:
-        """The ceiling for one call: this deployment's, narrowed by the caller's.
-
-        Four states, and the third is the reason this exists at all.
-
-        No policy and no groups is every deployment that predates this feature,
-        and it must keep behaving exactly as it did. No policy but groups named
-        is a caller who believes access is controlled here and is wrong -- said
-        out loud, because a group list quietly doing nothing is how somebody
-        ships a deployment they think is locked down. A policy and no groups is
-        a call that never said who was making it: refused, because the
-        alternative is one handler forgetting the boundary and granting
-        everything with nothing anywhere to show for it. A policy and groups is
-        the ordinary case.
-
-        Composition is `intersect`, so both ceilings hold and neither can widen
-        the other: a policy cannot hand back what the deployment withheld.
-        """
+        """The ceiling for one call: this deployment's, narrowed by the caller's."""
         if self.access is None:
             if groups is not None:
                 msg = (
@@ -540,21 +364,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         groups: Held | None = None,
     ) -> Any:
-        """The graph that serves one request, rooted at its session.
-
-        Private, and it was public for no one: `_prepare` is the only caller in
-        the package, the service never touches it, and five parameters of
-        assembly detail is a large thing to ask a reader to take as API. A test
-        reaching for it is reaching for an internal deliberately, which is what
-        `_agent_for` and `_admit` beside it already are.
-
-        Built per request because capabilities narrow it, because it reads
-        workspace content that can change between turns, and now because its
-        backend is anchored to the session -- two sessions cannot share a
-        graph without sharing a filesystem root. An injected graph is returned
-        as-is -- and refused if the request narrows anything, since those
-        restrictions were never applied to it.
-        """
+        """The graph that serves one request, rooted at its session."""
         if self._graph is not None:
             if not request.capabilities.is_unrestricted:
                 msg = "cannot honour request.capabilities against a pre-built graph"
@@ -580,14 +390,7 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def remember_agent(self, session_id: str, name: str | None) -> None:
-        """Have this session keep the agent it opened with.
-
-        Nothing to keep for a session that named none, which is the migration
-        path, and nothing to keep when the repository cannot hand over the
-        document it parsed -- a deployment serving definitions from elsewhere
-        keeps the behaviour it had, which is to read the catalogue each turn.
-        Both are silent because both are ordinary.
-        """
+        """Have this session keep the agent it opened with."""
         if name is None:
             return
         documents = getattr(self.catalogue.agents, "documents", {})
@@ -597,18 +400,7 @@ class Kingfisher(Sessions, Disposal):
     def _agent_for(
         self, request: Request, session_id: str, *, groups: Held | None = None
     ) -> AgentSpec | None:
-        """The agent this turn runs, which is the one its session opened with.
-
-        A session is fixed to an agent for its whole life. Swapping mid-session
-        would change the system prompt under a history that already happened, so
-        the conversation would no longer match the instructions that produced it.
-
-        A later turn may name the same agent again -- a stateless caller sends
-        the same payload every time and should not have to track what it opened
-        with. Naming a *different* one is refused rather than ignored: honouring
-        it is wrong, and ignoring it silently answers a question the caller
-        thought they had asked.
-        """
+        """The agent this turn runs, which is the one its session opened with."""
         kept = agent_started_with(self.cfg.state_dir, session_id)
         if kept is None:
             spec = self.agent_named(request.agent, groups=groups)
@@ -628,32 +420,13 @@ class Kingfisher(Sessions, Disposal):
     def agent_named(
         self, name: str | None, *, groups: Held | None = None
     ) -> AgentSpec | None:
-        """The agent this request asked for, out of the catalogue.
-
-        Naming one is required, and `None` is refused rather than defaulted.
-        There is no honest default: the agent decides where every prompt in the
-        session goes and what it costs, and a default would put the most
-        consequential choice a caller makes somewhere the call site never
-        mentions. It also leaves one path through `build_agent` rather than two.
-
-        A name, never a definition: an agent decides which endpoint receives the
-        session's prompts and whose credentials pay, so a caller picks from what
-        the deployment reviewed and supplies nothing.
-
-        The return stays optional because `build_agent` still takes an optional
-        spec -- a test building a bare graph passes none, and that is a different
-        question from what a *request* may leave out.
-        """
+        """The agent this request asked for, out of the catalogue."""
         offered = self.catalogue.agents.specs
-        # Filtered before the listing is built, not after, so the message a
-        # caller reads never names an agent they cannot open. An agent out of
-        # reach is spelled exactly the way an agent that was never written is:
-        # anything else lets a caller enumerate the catalogue by guessing, and
-        # sends them off to try something they will only be refused for.
-        #
-        # An agent is not a `Capabilities` axis, which is why this is here and
-        # not in the grant: a request names one before there is anything to
-        # narrow, so the check has to be at the moment the name is resolved.
+        # Filtered before the listing is built, not after, so the message a caller reads
+        # never names an agent they cannot open. An agent out of reach is spelled
+        # exactly the way an agent that was never written is: anything else lets a
+        # caller enumerate the catalogue by guessing, and sends them off to try
+        # something they will only be refused for.
         if (reach := self.access) is not None:
             if groups is None:
                 msg = (
@@ -668,15 +441,11 @@ class Kingfisher(Sessions, Disposal):
                     n: spec for n, spec in offered.items() if reaches(spec.groups, held)
                 }
         listing = ", ".join(sorted(offered)) if offered else "none"
-        # Two refusals, one remedy, and the remedy is different when there is
-        # nothing at all. `SEED_HINT` says `--from DIR`, which needs a DIR --
-        # and `SUGGESTION` names none to a reader who installed the package,
-        # because neither directory it could name exists for them. Correct, and
-        # a dead end: the next thing that reader needs is the file itself.
-        #
-        # `model_catalogue` answers the same shape of question the same way,
-        # printing a working catalogue inline. This is that, for the other file
-        # a workspace cannot run without.
+        # Two refusals, one remedy, and the remedy is different when there is nothing at
+        # all. `SEED_HINT` says `--from DIR`, which needs a DIR -- and `SUGGESTION`
+        # names none to a reader who installed the package, because neither directory it
+        # could name exists for them. Correct, and a dead end: the next thing that
+        # reader needs is the file itself.
         empty = "" if offered else f" -- try {SEED_HINT}, or write one:\n\n{STARTER_AGENT}"
         if name is None:
             msg = f"this request names no agent; this workspace offers {listing}{empty}"
@@ -697,33 +466,14 @@ class Kingfisher(Sessions, Disposal):
     ) -> Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
-        Blocking, and deliberately so: filesystem work plus building
-        the agent, measured at 15-46ms end to end -- of which 9.2ms is the
-        agent. `astream` runs it on a worker thread rather than pretending
-        otherwise.
-
-        Two halves, and the seam is the rule: everything able to reject the
-        request runs first, and only then is a turn directory created. That was
-        a sentence in this docstring for a long time and was not true --
-        `--input` named a missing file, was refused, and left `t001` behind.
-        Written as two functions it is checkable, and `Admitted` is the only
-        way across.
+        Blocking, and deliberately so: filesystem work plus building the agent,
+        measured at 15-46ms end to end -- of which 9.2ms is the agent. `astream` runs
+        it on a worker thread rather than pretending otherwise.
         """
         return self._open_turn(self._admit(request, session, checkpointer, groups=groups))
 
     def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
-        """The saver this turn runs on, and how to release it when the turn ends.
-
-        Only what this service opened is closed. An injected instance belongs to
-        the deployment that made it and outlives every turn; a factory's result
-        and the per-session default are ours, and a process serving many sessions
-        would otherwise hold a file descriptor for each one it had ever touched.
-
-        `None` for both when the deployment turned conversation off: a graph
-        takes `checkpointer=None` and runs, and each turn simply starts cold.
-        The flag wins over an injected store, because a deployment that said it
-        wants no conversation means it whatever it wired earlier.
-        """
+        """The saver this turn runs on, and how to release it when the turn ends."""
         if not self.cfg.conversation_enabled:
             return None, None
         if self.threads is None:
@@ -735,22 +485,7 @@ class Kingfisher(Sessions, Disposal):
         return self.threads, None
 
     async def _async_checkpointer_for(self, stack: AsyncExitStack, session_dir: Path) -> Any:
-        """The saver an async turn runs on, entered into the turn's exit stack.
-
-        Separate from `_checkpointer_for` because an aiosqlite connection
-        belongs to the event loop that made it: it cannot be opened inside the
-        worker thread `_prepare` runs on, which is why `astream` resolves the
-        session first and hands the saver down.
-
-        This is what carries the per-session shape to the deployments that most
-        want it. `astream` refuses a sync saver outright -- `SqliteSaver`
-        raises `NotImplementedError` on `aget_tuple` -- so an async deployment
-        has always injected its own, and injecting an *instance* means one
-        database shared by every session, which is the contention this avoids.
-        A factory returning an async context manager gets one per session.
-
-        `None` when conversation is off, for the same reason as the sync twin.
-        """
+        """The saver an async turn runs on, entered into the turn's exit stack."""
         if not self.cfg.conversation_enabled:
             return None
         if self.threads is None:
@@ -773,12 +508,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         groups: Held | None = None,
     ) -> Admitted:
-        """Everything that can refuse, before anything a refusal would strand.
-
-        Nothing is destroyed here either, and nothing turn-shaped is created.
-        The session directory is, which the rule tolerates: an empty one left
-        by a rejected request is idempotent, and the retry reuses it.
-        """
+        """Everything that can refuse, before anything a refusal would strand."""
         request = Request.coerce(request)
         cfg, dirs = self.cfg, self.dirs
         session = session if session is not None else self.open_session_for(request)
@@ -805,12 +535,7 @@ class Kingfisher(Sessions, Disposal):
         *,
         groups: Held | None = None,
     ) -> Admitted:
-        """The rest of admission, once the session is claimed.
-
-        Split so the claim has exactly one release path for a refusal. Every
-        check below can raise, and each one leaving the slot held would wedge
-        the session until the claim aged out.
-        """
+        """The rest of admission, once the session is claimed."""
         # Kernel-level guard; the deny rule covers only the file tools. Paths
         # it could not harden are reported below rather than raised: they used
         # to abort the run, and since this runs before anything else, one file
@@ -913,12 +638,7 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def _open_turn(self, admitted: Admitted) -> Prepared:
-        """Create the turn and compose what the loop needs.
-
-        Past the point of no refusal. Anything here that raised would leave a
-        turn directory behind, which is what `_admit` exists to prevent -- so
-        this half only ever creates, copies and composes.
-        """
+        """Create the turn and compose what the loop needs."""
         cfg, dirs = self.cfg, self.dirs
         request, session = admitted.request, admitted.session
         session_id = session.id
@@ -970,38 +690,14 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def _keep(self, prepared: Prepared) -> tuple[str, ...]:
-        """Persist what this turn produced, and name it.
-
-        In the turn's `finally` rather than beside the terminal event, and that
-        is the whole point of it being a separate method. `stream` is a
-        generator whose last act is `yield self._finished(...)`, so a caller
-        that stops reading early never advances the body that far -- the turn's
-        files were never written to the store at all, and a session that moved
-        to another machine came back without them. Nothing said so, because from
-        the caller's side it had the answer it wanted.
-
-        Moving the save a few lines earlier would not have helped: a generator
-        only runs when someone pulls, so "after the graph loop, before the final
-        yield" is the same `next()` call. Ending the turn is the only place that
-        runs whether the caller listened or not.
-
-        At the end of the turn rather than after each tool call. The narrower
-        window is better and costs a directory walk per call, which is
-        unmeasured -- and what has to be proven first is that a session survives
-        the machine, for which a turn-end save is enough. Measure, then narrow.
-        """
+        """Persist what this turn produced, and name it."""
         self._record(prepared)
         kept = collect_artifacts(prepared.session.directory)
         if self.sessions_store is not None:
-            # The transcript is named separately rather than collected. It sits
-            # at the session root, and `collect_artifacts` walks `/derived` and
-            # `/memory` -- so a first draft wrote it and never kept it, and a
-            # session that outlived its machine came back with its files and no
-            # conversation.
-            #
-            # And it stays out of `kept`, which is what the caller is handed:
-            # `artifacts` is what a turn *produced*, and a transcript is
-            # plumbing for the same reason `.home` is.
+            # The transcript is named separately rather than collected. It sits at the
+            # session root, and `collect_artifacts` walks `/derived` and `/memory` -- so
+            # a first draft wrote it and never kept it, and a session that outlived its
+            # machine came back with its files and no conversation.
             keep_from(
                 self.sessions_store,
                 prepared.session.id,
@@ -1013,11 +709,7 @@ class Kingfisher(Sessions, Disposal):
     def _finished(
         self, prepared: Prepared, answer: str, kept: tuple[str, ...], *, stop_reason: str
     ) -> RunEvent:
-        """The terminal event, built the same way whichever loop produced it.
-
-        Takes what `_keep` saved rather than saving anything itself, so that a
-        caller who never reads this event has still had their work kept.
-        """
+        """The terminal event, built the same way whichever loop produced it."""
         return RunEvent(
             kind="finished",
             text=answer,
@@ -1037,26 +729,7 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def _record(self, prepared: Prepared) -> None:
-        """Write what was said this turn, as records this package owns.
-
-        Read back out of the graph rather than accumulated from the stream: the
-        stream carries chunks and tool events shaped for a reader, and the state
-        is the one place holding the conversation as messages. `get_state` works
-        because the turn's saver is still alive here -- it holds this turn and
-        nothing after it.
-
-        A turn that produced no state leaves the transcript alone rather than
-        truncating it. A refused turn, or one that died before the first
-        superstep, has nothing to add and must not take the previous
-        conversation with it.
-
-        Nothing is suppressed. A first draft wrapped this in `suppress`, which
-        hid the fact that it was writing nothing at all -- and a conversation
-        lost without an error is precisely the failure this design exists to
-        prevent. A graph with no `get_state` is the one case that is not an
-        error: a deployment with conversation turned off has no state to read,
-        and neither does a caller who injected something simpler than a graph.
-        """
+        """Write what was said this turn, as records this package owns."""
         if not self.cfg.conversation_enabled:
             return
         read = getattr(prepared.graph, "get_state", None)
@@ -1085,10 +758,7 @@ class Kingfisher(Sessions, Disposal):
     def stream(
         self, request: str | Request, *, groups: Held | None = None
     ) -> Iterator[RunEvent]:
-        """Run one task, yielding progress as it happens.
-
-        The terminal event has `kind == "finished"` and carries the `RunResult`.
-        """
+        """Run one task, yielding progress as it happens."""
         # Coerced here rather than only in `_prepare`, because holding the
         # session now happens first and a bare task string has no session id to
         # read.
@@ -1099,12 +769,7 @@ class Kingfisher(Sessions, Disposal):
     def _stream_turn(
         self, request: Request, session: Session, *, groups: Held | None = None
     ) -> Iterator[RunEvent]:
-        """One turn, with its directory already held.
-
-        Split from `stream` for the reason `_astream_turn` is split from
-        `astream`: so what holds the session wraps the whole turn without
-        indenting the loop that matters.
-        """
+        """One turn, with its directory already held."""
         prepared = self._prepare(request, session, groups=groups)
         answer = ""
         ok = False
@@ -1166,21 +831,11 @@ class Kingfisher(Sessions, Disposal):
     ) -> AsyncIterator[RunEvent]:
         """`stream`, on an event loop.
 
-        The same turn and the same ordering -- `_prepare` is shared, so there
-        is one copy of the sequence that matters. What this buys is not a
-        faster turn: a turn is the model's time, and measurement puts our own
-        code at 15-46ms of 1.5-1.9s. It is concurrency. Four turns measured against
-        the live gateway cost 0.4-1.2 turns of wall clock instead of four.
-
-        `_prepare` is filesystem work, so it runs on a worker thread
-        rather than blocking every other turn sharing this loop.
-
-        Needs a checkpointer with async methods: `SqliteSaver` raises on
-        `aget_tuple` rather than merely blocking the loop. Nothing injected now
-        means one per session, opened here because an aiosqlite connection
-        belongs to the loop that made it and cannot be built inside the worker
-        thread `_prepare` runs on. That is why the session is opened first and
-        handed down: naming a session is not idempotent, so it happens once.
+        The same turn and the same ordering -- `_prepare` is shared, so there is one
+        copy of the sequence that matters. What this buys is not a faster turn: a
+        turn is the model's time, and measurement puts our own code at 15-46ms of
+        1.5-1.9s. It is concurrency. Four turns measured against the live gateway
+        cost 0.4-1.2 turns of wall clock instead of four.
         """
         request = Request.coerce(request)
         async with AsyncExitStack() as stack:
@@ -1203,11 +858,7 @@ class Kingfisher(Sessions, Disposal):
     async def _astream_turn(
         self, request: Request, session: Session, saver: Any, *, groups: Held | None = None
     ) -> AsyncIterator[RunEvent]:
-        """One async turn, with its session and saver already resolved.
-
-        Split from `astream` only so the exit stack holding the saver wraps the
-        whole turn without indenting the loop that matters.
-        """
+        """One async turn, with its session and saver already resolved."""
         prepared = await asyncio.to_thread(
             partial(self._prepare, request, session, saver, groups=groups)
         )

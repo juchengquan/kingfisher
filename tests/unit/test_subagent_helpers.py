@@ -1,17 +1,4 @@
-"""A delegate that consults another delegate.
-
-The format refused this until now, on the stated grounds that "deepagents gives
-it no `task` tool, so nesting is not something this format can express". Half
-right: `create_sub_agent` does call `create_agent` with the spec's tools and no
-`task`. But a spec carries `middleware`, and `SubAgentMiddleware` is precisely
-what supplies `task` to the main agent -- so the format could express it all
-along, through the one field it already had.
-
-It nests to any depth now. What stops a catalogue building forever is
-`refuse_cycles`, checked over the whole catalogue at load -- there is no depth
-bound, because with each definition compiled once rather than once per path,
-depth costs nothing to allow.
-"""
+"""A delegate that consults another delegate."""
 
 from __future__ import annotations
 
@@ -90,13 +77,13 @@ def _delegate(graph, name: str):
 
 
 def _helper(graph, delegate: str, name: str):
-    """A delegate's *helper*, which is a different instance from the delegate
-    of the same name the agent holds directly.
+    """A delegate's *helper*, which is a different instance from the delegate of the
+    same name the agent holds directly.
 
-    Worth its own accessor because reaching for the top-level one instead is an
-    easy mistake that passes: a standalone `second-opinion` has no helpers and
-    no `task` either, so asserting against it proves nothing. A mutation that
-    handed every helper the parent's `task` went undetected until this existed.
+    Worth its own accessor because reaching for the top-level one instead is an easy
+    mistake that passes: a standalone `second-opinion` has no helpers and no `task`
+    either, so asserting against it proves nothing. A mutation that handed every
+    helper the parent's `task` went undetected until this existed.
     """
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 
@@ -104,12 +91,7 @@ def _helper(graph, delegate: str, name: str):
 
 
 def _delegates_of(graph) -> set[str]:
-    """The delegates this compiled agent can reach, by name.
-
-    Read off the compiled graphs rather than the spec that asked for them: a
-    spec carrying `middleware` proves what was requested, and the whole question
-    at depth is whether the level below was actually built.
-    """
+    """The delegates this compiled agent can reach, by name."""
     from tests.unit.test_delegation_ceiling import _subagent_graphs
 
     return set(_subagent_graphs(graph))
@@ -125,16 +107,18 @@ def _tools_of(graph) -> set[str]:
 
 
 def test_a_definition_may_name_delegates(tmp_path):
-    """It was refused, with a reason that turned out to be wrong about what the
-    format could express."""
+    """It was refused, with a reason that turned out to be wrong about what the format
+    could express.
+    """
     spec = reading.read(REVIEWER, tmp_path / "reviewer.yaml")
 
     assert spec.subagents == ("second-opinion",)
 
 
 def test_naming_none_is_the_default(tmp_path):
-    """Like `skills` and unlike `tools`: a delegate that needed the whole
-    catalogue would not have been worth defining."""
+    """Like `skills` and unlike `tools`: a delegate that needed the whole catalogue
+    would not have been worth defining.
+    """
     spec = reading.read(HELPER, tmp_path / "second-opinion.yaml")
 
     assert spec.subagents is None
@@ -144,8 +128,7 @@ def test_naming_none_is_the_default(tmp_path):
 
 
 def test_a_helper_may_have_helpers_of_its_own(cfg, session_dir):
-    """Three levels, which the format refused until now. `reviewer` consults
-    `second-opinion`, which consults `checker`."""
+    """Three levels, which the format refused until now."""
     _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
 
     graph = _build(cfg, session_dir, subagents=("reviewer", "second-opinion", "checker"))
@@ -155,9 +138,9 @@ def test_a_helper_may_have_helpers_of_its_own(cfg, session_dir):
 
 
 def test_a_cycle_is_refused_when_the_catalogue_loads(cfg, session_dir):
-    """The only thing left standing between a catalogue and an endless build,
-    now that depth is unbounded. Enforced on the definitions rather than on a
-    request, because a set of files is either coherent or it is not."""
+    """The only thing left standing between a catalogue and an endless build, now that
+    depth is unbounded.
+    """
     _define(cfg, REVIEWER, CYCLIC_HELPER)
 
     with pytest.raises(SubagentError, match="reach themselves"):
@@ -165,8 +148,9 @@ def test_a_cycle_is_refused_when_the_catalogue_loads(cfg, session_dir):
 
 
 def test_the_refusal_names_the_whole_loop(cfg, session_dir):
-    """One edge does not say which link to cut, and whoever reads this may own
-    none of the files in it."""
+    """One edge does not say which link to cut, and whoever reads this may own none of
+    the files in it.
+    """
     _define(cfg, REVIEWER, CYCLIC_HELPER)
 
     with pytest.raises(SubagentError) as raised:
@@ -176,10 +160,7 @@ def test_the_refusal_names_the_whole_loop(cfg, session_dir):
 
 
 def test_a_definition_reached_twice_is_not_a_cycle():
-    """The distinction the check exists to draw. A diamond reaches `checker` by
-    two routes and is perfectly coherent; a loop reaches a name already on the
-    path being walked. Testing `seen` before the path is what made an earlier
-    version of this pass every cycle."""
+    """The distinction the check exists to draw."""
     specs = {
         "reviewer": reading.read(REVIEWER, Path("reviewer.yaml")),
         "second-opinion": reading.read(NESTING_HELPER, Path("second-opinion.yaml")),
@@ -198,12 +179,8 @@ def test_a_definition_naming_itself_is_a_cycle():
 
 
 def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
-    """The depth bound is a call that is not made, so this is what proves it:
-    the helper holds no `task`, so it could not delegate even if it tried.
-
-    Asked of the helper *inside* `reviewer`, not the standalone delegate of the
-    same name -- that one has no helpers either, so it would pass whatever this
-    change did.
+    """The depth bound is a call that is not made, so this is what proves it: the helper
+    holds no `task`, so it could not delegate even if it tried.
     """
     _define(cfg, REVIEWER, HELPER)
 
@@ -213,12 +190,7 @@ def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
 
 
 def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
-    """The harvested `task` is bound to the *parent's* delegate list.
-
-    So handing it down would not merely give a helper delegation -- it would
-    give it every delegate the agent itself can reach, one level below where
-    anyone is looking. Excluding it is a rule, not tidiness.
-    """
+    """The harvested `task` is bound to the *parent's* delegate list."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
@@ -231,10 +203,7 @@ def test_a_helper_is_not_handed_the_parents_task_tool(cfg, session_dir):
 
 
 def test_a_delegate_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
-    """What the whole change is for. Measured on the compiled graph rather than
-    on the spec, because a spec that looks right and compiles to an agent with
-    no `task` is exactly the failure this replaces.
-    """
+    """What the whole change is for."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir)
@@ -243,8 +212,9 @@ def test_a_delegate_that_names_a_helper_gets_a_task_tool(cfg, session_dir):
 
 
 def test_a_delegate_that_names_none_gets_no_task_tool(cfg, session_dir):
-    """Unchanged for every delegate that does not ask, which is all of them
-    until someone writes the line."""
+    """Unchanged for every delegate that does not ask, which is all of them until
+    someone writes the line.
+    """
     _define(cfg, HELPER)
 
     graph = _build(cfg, session_dir, subagents=("second-opinion",))
@@ -256,9 +226,7 @@ def test_a_delegate_that_names_none_gets_no_task_tool(cfg, session_dir):
 
 
 def test_a_helper_the_caller_did_not_name_is_dropped(cfg, session_dir):
-    """Not refused. `second-opinion` runs on another company's servers, so a
-    caller declining it is often declining *that* -- and refusing would mean
-    nobody can use `reviewer` without also accepting OpenAI."""
+    """Not refused."""
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir, subagents=("reviewer",))
@@ -267,8 +235,9 @@ def test_a_helper_the_caller_did_not_name_is_dropped(cfg, session_dir):
 
 
 def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
-    """The other half of the rule every field here follows: a name nothing
-    defines is a mistake in the definition, not a narrower caller."""
+    """The other half of the rule every field here follows: a name nothing defines is a
+    mistake in the definition, not a narrower caller.
+    """
     _define(cfg, REVIEWER.replace("second-opinion", "nobody"))
 
     with pytest.raises(CapabilityError, match="unknown subagent"):
@@ -276,8 +245,9 @@ def test_a_helper_nothing_defines_is_refused(cfg, session_dir):
 
 
 def test_granting_everything_reaches_the_helper_too(cfg, session_dir):
-    """`ALL` is every delegate the workspace defines, so a caller who narrowed
-    nothing has named the helper as much as anything else."""
+    """`ALL` is every delegate the workspace defines, so a caller who narrowed nothing
+    has named the helper as much as anything else.
+    """
     _define(cfg, REVIEWER, HELPER)
 
     graph = _build(cfg, session_dir, subagents=ALL)
@@ -289,13 +259,7 @@ def test_granting_everything_reaches_the_helper_too(cfg, session_dir):
 
 
 def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
-    """Building is not running, and the two have come apart before.
-
-    One scripted model serves every level, so the responses are consumed in
-    call order and the order itself is the assertion: parent delegates,
-    reviewer delegates again, the helper answers, and each summary travels back
-    up. If the helper never ran, `reviewer` would still be on its first reply.
-    """
+    """Building is not running, and the two have come apart before."""
     _define(cfg, REVIEWER, HELPER)
 
     def calls(who: str) -> AIMessage:
@@ -340,15 +304,9 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
 def test_a_nested_agent_gets_no_unrestricted_delegate(cfg, session_dir):
     """`DeclaredDelegatesOnly` is applied to the main agent and nowhere else.
 
-    That was sufficient while nothing below the top held `task`. It nests now,
-    so the question is live: deepagents supplies a `general-purpose` delegate
-    "with the same capabilities as the main agent" wherever it builds one, and
-    a nested agent holding an unrestricted delegate would hand back everything
-    the request withheld, one level down where nothing is watching.
-
     Measured rather than reasoned: `create_deep_agent` adds it, and
-    `SubAgentMiddleware` does not. So the backstop stays where it is -- and this
-    is what fails if an upgrade changes that.
+    `SubAgentMiddleware` does not. So the backstop stays where it is -- and this is
+    what fails if an upgrade changes that.
     """
     _define(cfg, REVIEWER, NESTING_HELPER, CHECKER)
 
@@ -360,12 +318,8 @@ def test_a_nested_agent_gets_no_unrestricted_delegate(cfg, session_dir):
 
 
 def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monkeypatch):
-    """Once per definition, not once per path -- the difference between linear
-    and exponential, and the thing that makes reuse affordable.
-
-    Twice rather than once because a top-level delegate and a nested one are
-    not the same agent: the first inherits its model and tools, the second is
-    refused by deepagents without them.
+    """Once per definition, not once per path -- the difference between linear and
+    exponential, and the thing that makes reuse affordable.
     """
     shared = HELPER.replace("second-opinion", "shared")
     left = REVIEWER.replace("reviewer", "left").replace("second-opinion", "shared")
@@ -403,30 +357,21 @@ def _spec(name, subagents=None):
 
 
 def test_a_definition_may_not_ask_for_every_delegate():
-    """The refusal that makes the rest of this moot: `subagents` must be named.
-
-    It was accepted for a while, and not because anyone chose it -- all five
-    list-shaped fields on a definition share one type and one reader, and `["*"]`
-    reads naturally for four of them. The fifth is this one, where everything
-    includes the definition doing the asking. The field's own documentation had
-    said so all along: "a delegate that needed the whole catalogue would not have
-    been worth defining".
-    """
+    """The refusal that makes the rest of this moot: `subagents` must be named."""
     with pytest.raises(SubagentError, match=r"subagents may not be"):
         _spec("greedy", '["*"]')
 
 
 def test_the_refusal_says_why_rather_than_only_no():
-    """Whoever wrote `['*']` was copying the habit from a request, where it is
-    the ordinary way to say everything. The message has to say what is different
-    here, or it reads as an arbitrary gap in the format."""
+    """Whoever wrote `['*']` was copying the habit from a request, where it is the
+    ordinary way to say everything.
+    """
     with pytest.raises(SubagentError, match="includes this one"):
         _spec("greedy", '["*"]')
 
 
 def test_the_other_selections_still_take_a_star():
-    """The refusal is one field, not a change to the format. A delegate asking
-    for every skill or every workspace tool is ordinary and stays so."""
+    """The refusal is one field, not a change to the format."""
     spec = reading.read(
         "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
         'skills: ["*"]\ntools: ["*"]\n',
@@ -438,13 +383,7 @@ def test_the_other_selections_still_take_a_star():
 
 
 def test_the_cycle_walk_still_reads_a_star_as_every_edge():
-    """The backstop, and worth keeping now that the parser refuses this.
-
-    A `SubagentSpec` is a plain record and nothing stops one being built in code
-    -- a test, or a catalogue that arrives from somewhere other than a file. If
-    that ever happens, `refuse_cycles` is the thing standing between it and
-    `_with_helpers`, which recurses with no re-entry guard because this ran.
-    """
+    """The backstop, and worth keeping now that the parser refuses this."""
     greedy = SubagentSpec(
         name="greedy", description="Consults everything.", system_prompt="x", subagents=ALL
     )
@@ -454,8 +393,9 @@ def test_the_cycle_walk_still_reads_a_star_as_every_edge():
 
 
 def test_a_catalogue_without_a_star_is_untouched():
-    """The fix widens what counts as an edge, so the case it must not break is
-    an ordinary chain: `a` consults `b` consults `c`, which N1 exists to allow."""
+    """The fix widens what counts as an edge, so the case it must not break is an
+    ordinary chain: `a` consults `b` consults `c`, which N1 exists to allow.
+    """
     specs = {
         "a": _spec("a", "[b]"),
         "b": _spec("b", "[c]"),
@@ -467,7 +407,8 @@ def test_a_catalogue_without_a_star_is_untouched():
 
 def test_a_diamond_is_not_a_cycle():
     """A definition reached twice by different paths is a DAG, which N2 allows
-    deliberately. Reading `seen` before `on_path` would call this a loop."""
+    deliberately.
+    """
     specs = {
         "top": _spec("top", "[left, right]"),
         "left": _spec("left", "[shared]"),
@@ -479,13 +420,7 @@ def test_a_diamond_is_not_a_cycle():
 
 
 def _helper_specs(spec) -> dict:
-    """The helper specs kingfisher hung off one delegate, by name.
-
-    They reach deepagents inside a `SubAgentMiddleware` rather than on the spec,
-    so this is where a helper's own model is legible -- the compiled graph has
-    it too, several closures down, and reading it there would test the walk
-    rather than the decision.
-    """
+    """The helper specs kingfisher hung off one delegate, by name."""
     for middleware in spec.get("middleware", []):
         for attribute in ("subagents", "_subagents"):
             if found := getattr(middleware, attribute, None):
@@ -496,13 +431,8 @@ def _helper_specs(spec) -> dict:
 def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(
     cfg, session_dir, monkeypatch
 ):
-    """A definition naming no model runs whatever reached it, and one level down
-    that is the delegate above -- not the main agent.
-
-    The two were the same thing while nothing between the agent and a helper
-    could name a model. `reviewer` pinning the cheap one is where they part, and
-    the old answer handed its helper the expensive model with nothing saying so:
-    no error, no warning, and a bill that looks like somebody else's.
+    """A definition naming no model runs whatever reached it, and one level down that is
+    the delegate above -- not the main agent.
     """
     _define(cfg, CHEAP_REVIEWER, HELPER)
     captured = capture_build(monkeypatch)
@@ -523,16 +453,8 @@ def test_a_helper_runs_the_model_of_the_delegate_that_summoned_it(
 
 
 def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir, monkeypatch):
-    """A helper naming no model runs whatever reached it, so the same name under
-    two differently-pinned parents is two different agents.
-
-    The build caches compiled delegates, and what that cache is keyed on is the
-    whole of this. It held the summoner's model *id*, obtained by a `model_for`
-    call that existed for `distinct`; when that field went the call went with it
-    and the key briefly became `(name, nested)` -- at which point the second
-    parent would have been handed the first one's helper, running the wrong
-    model with nothing to notice. `ty` caught the type, and this catches the
-    behaviour: nothing in the suite covered two parents.
+    """A helper naming no model runs whatever reached it, so the same name under two
+    differently-pinned parents is two different agents.
     """
     _define(cfg, CHEAP_REVIEWER, ELSEWHERE_REVIEWER, HELPER)
     captured = capture_build(monkeypatch)
@@ -555,12 +477,7 @@ def test_one_helper_under_two_parents_is_two_delegates(cfg, session_dir, monkeyp
 def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
     cfg, session_dir, monkeypatch
 ):
-    """The other half, and the one that must not have changed.
-
-    Nothing between the agent and the helper names a model, so "whatever
-    summoned it" resolves all the way up to the agent -- which is what happened
-    before and what every existing catalogue relies on.
-    """
+    """The other half, and the one that must not have changed."""
     _define(cfg, REVIEWER, HELPER)
     captured = capture_build(monkeypatch)
     main = FakeToolCallingModel(responses=[AIMessage(content="ok")])

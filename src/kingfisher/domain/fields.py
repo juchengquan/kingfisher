@@ -1,21 +1,4 @@
-"""Reading one decoded field as the value the format meant.
-
-Both definition formats reach here, and neither is the reason this module
-exists any more. It was `frontmatter`, named for the `---`-delimited header the
-two shared — until subagents became a whole YAML document and stopped having a
-header at all. What survived the change is the part that was never about
-envelopes: turning whatever YAML produced into the string or the tuple of names
-the format asked for.
-
-Splitting a markdown header off a body lives with the format that still has one
-— `skills.spec.split` — because it is deepagents' rule about deepagents'
-document, not a thing both formats do.
-
-What does *not* live here is the YAML decode, which needs a third-party
-library. `infrastructure.documents` owns that, because a domain module imports
-the standard library and `kingfisher.domain`, nothing else. A kind that reads its
-own documents calls it; the decode itself is written once.
-"""
+"""Reading one decoded field as the value the format meant."""
 
 from __future__ import annotations
 
@@ -41,17 +24,7 @@ if TYPE_CHECKING:
 SIMILARITY = 0.7
 
 def entry_fields(extra: str) -> tuple[str, ...]:
-    """The keys one long-form entry may write, for a field carrying `extra`.
-
-    `name` always, and the one thing that field lets a name carry -- `settings`
-    for middleware, `groups` for the audienced three. Two extras and one shape,
-    which is the whole of this arrangement: a reader who has met one long form
-    has met the other.
-
-    Two keys and deliberately no third: an entry says which thing and what to
-    pass it, and anything else it wanted to say belongs to the field as a whole
-    rather than to one name in it.
-    """
+    """The keys one long-form entry may write, for a field carrying `extra`."""
     return ("name", extra)
 
 
@@ -62,32 +35,7 @@ def unrecognised(
     declined: Mapping[str, str] | None = None,
     noun: str = "field",
 ) -> str | None:
-    """The complaint about every key a format does not define, or `None`.
-
-    Two formats refuse unknown keys and both give the same reason for it: a key
-    we ignore is a key the author believes took effect. Subagent definitions had
-    the careful version of the message and `models.yaml` had a plainer one, so
-    the file a deployment writes *first* -- and the only one that decides where
-    prompts go -- was the one that would not tell you `defualt:` was a typo.
-
-    Returns the complaint rather than raising it. Its callers raise different
-    types on purpose -- `SubagentError`, `AgentError`, `ConfigError`,
-    `AccessError` -- and each prefixes the source in its own way; what they
-    share is which keys are wrong, what they might have meant, and what the
-    format does define.
-
-    This said "the two callers", naming two of those types, and there are eight
-    call sites now: both definition formats, the model catalogue, the access
-    vocabulary, and three inside this module. The types are what the sentence is
-    about and are named; the count is not, and is gone.
-
-    All of them at once, not the first. Two typos used to take two runs to find,
-    and the second only after fixing the first.
-
-    `declined` names keys refused for a *specific* reason -- a field another
-    library defines that this format deliberately does not -- where the generic
-    message would read as an omission worth working around.
-    """
+    """The complaint about every key a format does not define, or `None`."""
     problems = [
         _explain(key, known=known, declined=declined or {}, noun=noun)
         for key in document
@@ -112,20 +60,12 @@ def _explain(
 
 
 def text(value: object) -> str:
-    """One field as a string, however YAML typed it.
-
-    `model: 4` is a number to YAML and a model name to us; a folded description
-    is already joined. Both become the string the format meant.
-    """
+    """One field as a string, however YAML typed it."""
     return "" if value is None else str(value).strip()
 
 
 def names(value: object) -> tuple[str, ...] | None:
-    """A field naming several things, written either way YAML allows.
-
-    `[read_file, grep]` and a block list both mean the same thing, and a single
-    unbracketed name is accepted because someone will write it.
-    """
+    """A field naming several things, written either way YAML allows."""
     if value is None:
         return None
     if isinstance(value, str):
@@ -137,16 +77,7 @@ def names(value: object) -> tuple[str, ...] | None:
 
 @dataclass(frozen=True)
 class Reader:
-    """One format's field readers, bound to the file and the error it raises.
-
-    The two formats read the same *fields* and raise different exceptions about
-    the same *file*, and both of those travel with every single call. Written as
-    free functions they showed up as `source=source.name, error=SubagentError`
-    on every line, which is the pair asking to be bound once.
-
-    `unrecognised` above stays a free function deliberately: it returns the
-    complaint instead of raising, so it needs neither half of this.
-    """
+    """One format's field readers, bound to the file and the error it raises."""
 
     #: What a message calls the file -- `reviewer.yaml`, not its whole path.
     source: str
@@ -158,19 +89,10 @@ class Reader:
     def one_name(self, value: object, *, key: str) -> str | None:
         """One name, or `None` when the field is absent. A list is refused.
 
-        The counterpart of `selection` below, for a field that names a single
-        thing. `text` cannot do this itself: it takes a value and no error type,
-        because it is what turns `model: 4` into `"4"` for every format at once
-        -- and it is that same `str()` which turns `[gpt-5, claude-4]` into the
-        name `"['gpt-5', 'claude-4']"`, brackets and quotes included.
-
-        Measured before this: a definition writing `model: [gpt-5, claude-4]`
-        was read as a model of that spelling and refused a request later, by
-        `resolve`, with `no model "['gpt-5', 'claude-4']" defined in
-        models.yaml` -- which sends its reader off to define one. `model:` did
-        take a list once, while an `alias:` beside it could be passed over for
-        being unbound; nothing passes a candidate over now, so the shape means
-        nothing and saying so here beats saying something else later.
+        Measured before this: a definition writing `model: [gpt-5, claude-4]` was
+        read as a model of that spelling and refused a request later, by `resolve`,
+        with `no model "['gpt-5', 'claude-4']" defined in models.yaml` -- which sends
+        its reader off to define one.
         """
         if value is None:
             return None
@@ -193,29 +115,7 @@ class Reader:
         key: str,
         refuse_all: str | None = None,
     ) -> Selection:
-        """One name-list field, or what its absence means for that field.
-
-        `absent` differs per field and that is the point: omitting `tools`
-        inherits everything available, omitting `skills` grants none. Both
-        formats draw that distinction and neither should own the reading of it.
-
-        `["*"]` is everything. A list, because every one of these fields is a
-        list and a field whose type changes with its value is one more thing to
-        know. The bare `"*"` is refused by name rather than read as a name --
-        the same trade `system_prompt` makes by accepting one block style and
-        naming the others -- because a request spells this `"*"` and someone
-        will carry the habit across.
-
-        Mixing is refused too. `["*", read_file]` has no reading that is not a
-        guess, and it used to have the worst one: `*` matched no tool, so the
-        star silently contributed nothing.
-
-        `refuse_all` is for a field where everything is not a coherent answer,
-        and it carries the reason rather than a flag so the message can say it.
-        `subagents` in a *subagent* file is the case: everything there includes
-        the definition doing the asking. In an agent file it does not, which is
-        why this is an argument and not a rule.
-        """
+        """One name-list field, or what its absence means for that field."""
         if isinstance(value, str) and value.strip() == ALL:
             msg = (
                 f"{self.source}: {key} is written {value.strip()!r}; write [{ALL!r}] "
@@ -223,16 +123,9 @@ class Reader:
             )
             raise self.error(msg)
         if isinstance(value, Mapping):
-            # `names` would fall through to `(text(value),)` and read the whole
-            # mapping as one name -- `builtin_tools: {execute: {groups: [A]}}`
-            # became a built-in called "{'execute': ...}", offered to nobody and
-            # reported nowhere. Worth refusing by name now that three sibling
-            # fields *do* take a mapping, because writing one here is the
-            # reasonable mistake rather than a strange one.
-            #
-            # The three are spelled out rather than imported: `domain.access`
-            # imports this module, so naming `AUDIENCED` here would be a cycle.
-            # `test_only_the_audienced_fields_take_a_mapping` pins the pair.
+            # `names` would fall through to `(text(value),)` and read the whole mapping
+            # as one name -- `builtin_tools: {execute: {groups: [A]}}` became a built-in
+            # called "{'execute': ...}", offered to nobody and reported nowhere.
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. A "
                 f"mapping says who reaches each entry, and only tools, subagents "
@@ -266,42 +159,7 @@ class Reader:
         absent: Selection,
         key: str,
     ) -> tuple[Selection, Mapping[str, Mapping[str, object]]]:
-        """One name-list field whose entries may also carry settings.
-
-        `selection` above reads the same field. What this adds is a second way
-        to write one entry of it:
-
-            middleware:
-              - call-cap-strict          # a name, as it always was
-              - name: audit-hook         # the same name, with values beside it
-                settings: {level: INFO}
-
-        Both spellings in one list, because they say the same kind of thing: an
-        entry is a name, and the mapping is that name with values attached. A
-        format where the whole list changed shape as soon as one entry wanted a
-        setting would make the common case pay for the rare one, and every
-        definition that never writes a setting keeps the list it already has.
-
-        Returns the two halves apart, which is the point. The names are a
-        `Selection` like every other field -- granting, narrowing and refusing
-        are all operations on names and none of them has heard of a setting --
-        and the settings are a sibling mapping keyed by name. That is
-        `tool_sources` beside `tools` and for the same reason: they are asked
-        for one name at a time, by whoever is building that one thing.
-
-        What a setting *means* is not decided here and cannot be. The keys a
-        name will accept are declared by the class the deployment registered
-        under it, and this layer has never seen a registry -- so this reads the
-        shape and `approved_settings` refuses the contents, the same split
-        `approved_middleware` already makes between a name and the code behind
-        it.
-
-        `"*"` is refused in the mapping form. It resolves to whatever the
-        deployment registered, so settings written beside it would be settings
-        for classes this file has never heard of; there is no reading of that
-        which is not a guess. The plain `["*"]` is untouched and still means
-        everything.
-        """
+        """One name-list field whose entries may also carry settings."""
         if not isinstance(value, (list, tuple)):
             # A bare `"*"`, one unbracketed name, or nothing at all. None of
             # the three can carry a setting, and `selection` already has the
@@ -323,26 +181,7 @@ class Reader:
     def _entries(
         self, value: Sequence[object], *, key: str, extra: str
     ) -> tuple[list[str], dict[str, Mapping[str, object]]]:
-        """The names a list field wrote, and what each entry carried beside one.
-
-        One loop for both long forms, because they are one long form. `tools`
-        attaches an audience and `middleware` attaches settings, and everything
-        else about reading them is the same: an entry is a name or a mapping of
-        `name` and that one extra, a name may appear once, and what the extra
-        *means* is decided by the caller after this returns.
-
-        The two were separate readers with separate spellings -- a field-level
-        mapping for audiences, an entry-level one for settings -- and the second
-        one's own docstring argued against the first: a format where the whole
-        list changes shape because one entry wants something makes the common
-        case pay for the rare one. This is that argument applied to both.
-
-        The entry itself is what comes back, not the extra pulled out of it, so
-        each caller reads its own key the way it already did. Only entries that
-        wrote the long form appear, which lets a caller tell "said nothing" from
-        "said nothing in particular" -- `audienced` needs that, because saying
-        nothing there means inheriting the definition's own audience.
-        """
+        """The names a list field wrote, and what each entry carried beside one."""
         written: list[str] = []
         carried: dict[str, Mapping[str, object]] = {}
         for position, entry in enumerate(value, start=1):
@@ -360,12 +199,7 @@ class Reader:
         return written, carried
 
     def _entry_name(self, entry: object, *, position: int, key: str, extra: str) -> str:
-        """The name one entry carries, whichever way that entry was written.
-
-        Positional in the message rather than named, because a name is the
-        thing that might be missing -- "entry 2" is findable in a file where
-        "the entry called nothing" is not.
-        """
+        """The name one entry carries, whichever way that entry was written."""
         if isinstance(entry, str):
             return entry.strip()
         if not isinstance(entry, Mapping):
@@ -404,40 +238,13 @@ class Reader:
         return name
 
     def groups(self, value: object, *, key: str = "groups") -> Audience:
-        """A definition's own audience: who may reach it at all.
-
-        `audience_list` below does the reading and gives the reasons; this adds
-        the one thing true only here. Absent means everyone, which is what an
-        absent optional field means everywhere else in these formats -- and it
-        is why this returns `ALL` rather than asking about an empty line.
-
-        `lone_name=True`, because a definition's own line takes `groups: A`.
-        """
+        """A definition's own audience: who may reach it at all."""
         if value is None:
             return ALL
         return self.audience_list(value, where=f"{self.source}: {key}", lone_name=True)
 
     def audience_list(self, listed: object, *, where: str, lone_name: bool) -> Audience:
-        """A list of group names, any entry of which may be `{all_of: [...]}`.
-
-        One reader for both places an audience is written -- a definition's own
-        `groups:` line and an entry's -- because they take the same list and two
-        readers is two chances for them to disagree about what it means.
-
-        Its own reader rather than `selection`, and not only for the type. A
-        selection names things the *workspace* offers and may be `None` for
-        "none of them"; this names groups, and there is no "none" -- a
-        definition nobody may reach is written by giving it a group nobody
-        holds. `selection` also refuses a mapping outright, which is exactly the
-        shape a conjunction is written in.
-
-        `lone_name` is the one thing the two sites do not agree on, and it is
-        kept rather than reconciled. A definition's own line takes `groups: A`,
-        because every list field in these formats takes a single unbracketed
-        name and this one should not be the exception. An entry's does not: it
-        is already nested inside a mapping, so its author has opted into the
-        long form and a bare string there reads as an unfinished edit.
-        """
+        """A list of group names, any entry of which may be `{all_of: [...]}`."""
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
             return (listed.strip(),)
         if isinstance(listed, Mapping):
@@ -473,13 +280,7 @@ class Reader:
         return ALL if written == [ALL] else tuple(written)
 
     def _conjunction(self, raw: Mapping[str, object], *, where: str) -> frozenset[str]:
-        """One audience entry that is satisfied only by holding every name in it.
-
-        The same word the vocabulary uses for the named form, so that a group
-        declared `all_of` is literally *a name for* what this writes inline --
-        one concept with a short spelling and a reusable one, rather than two
-        mechanisms that happen to agree.
-        """
+        """One audience entry that is satisfied only by holding every name in it."""
         if complaint := unrecognised(raw, known={"all_of"}, noun="key"):
             msg = f"{where}: {complaint}"
             raise self.error(msg)
@@ -500,28 +301,7 @@ class Reader:
         return named
 
     def _audience(self, raw: object, *, key: str, entry: str) -> Audience | None:
-        """One entry's audience, written `{groups: [...]}`, or `None` for none.
-
-        `None` is what makes the mapping form usable at all. Only the entries
-        you actually restrict carry a `groups:` line; the rest say nothing and
-        inherit the definition's own, so restricting one tool does not mean
-        writing an audience for every other tool beside it:
-
-            groups: [A, B]
-            tools:
-              sql_query:
-                groups: [A]        # this one is narrower
-              http_fetch:          # this one is not, and says so by saying nothing
-
-        Absent and empty are the same answer -- the entry wrote the long form
-        and asked for nothing by it -- which is the reading
-        `selection_with_settings` already makes of its own `settings`.
-
-        A mapping rather than a bare list where an audience *is* stated, so that
-        an entry says which fact it is stating, has somewhere to put a second
-        one later, and can have a mistyped key refused: `{grops: [A]}` is caught
-        here, where `[A]` alone has no key to check.
-        """
+        """One entry's audience, written `{groups: [...]}`, or `None` for none."""
         where = f"{self.source}: {key} entry {entry!r}"
         if raw is None:
             return None
@@ -555,33 +335,12 @@ class Reader:
         key: str,
         refuse_all: str | None = None,
     ) -> tuple[Selection, Mapping[str, Audience]]:
-        """A selection, and who reaches each entry of it.
-
-        Two spellings of one field, and the second is a strict extension of the
-        first: a list selects, a mapping selects *and* says who for. Every file
-        written before audiences existed reads identically through this.
-
-        Returned as a pair rather than as a richer type, so that `spec.tools`
-        stays the `Selection` every consumer already reads -- `narrowed`,
-        `Offering`, `as_subagent`, the allowlist -- and the audiences travel
-        beside it, consulted only where a caller's groups are known. A new type
-        here would mean touching every one of those to unwrap it.
-
-        The same pair `selection_with_settings` returns, arrived at separately
-        and for the same reason: names are what granting and narrowing operate
-        on, and whatever rides beside a name is asked for one name at a time.
-
-        The star belongs to the list form, because it says something about the
-        whole field rather than about an entry. `{"*": ...}` is a name that is
-        not a name, and is refused rather than read as one.
-        """
+        """A selection, and who reaches each entry of it."""
         if isinstance(value, Mapping):
-            # The shape this field used to take, and the reason it stopped. A
-            # field-level mapping made the whole list change shape because one
-            # entry wanted an audience -- and worse, it could not see a name
-            # written twice: YAML collapses `{a: X, a: Y}` before any reader
-            # here runs, so one of the two audiences was gone with nothing able
-            # to refuse or report it. An access restriction that vanishes
+            # Refused rather than read: a field-level mapping cannot see a name
+            # written twice, because YAML collapses `{a: X, a: Y}` before any reader
+            # here runs -- so one of the two audiences would be gone with nothing
+            # able to refuse or report it. An access restriction that vanishes
             # quietly is the failure this format exists to prevent.
             first = next(iter(value), "<name>")
             msg = (
@@ -611,14 +370,7 @@ class Reader:
         return chosen, {n: a for n, a in stated.items() if a is not None}
 
     def flag(self, value: object, *, key: str) -> bool:
-        """A yes/no field, refusing the spellings YAML would quietly accept.
-
-        `memory: "false"` is a non-empty string and truthy in Python, which is
-        the reading that says the opposite of what the file says. YAML already
-        turns `true`, `yes` and `on` into `True` before this sees them, so what
-        is left here arrived as something other than a bool -- and there is no
-        reading of it that is not a guess.
-        """
+        """A yes/no field, refusing the spellings YAML would quietly accept."""
         if value is None:
             return False
         if isinstance(value, bool):
@@ -631,15 +383,7 @@ class Reader:
         raise self.error(msg)
 
     def mapping(self, value: object, *, key: str) -> Mapping[str, object]:
-        """A field of the caller's own keys, carried and never interpreted.
-
-        A mapping or nothing. `metadata: gold` is refused rather than wrapped,
-        because a bag with no shape cannot be looked up by key and looking up a
-        key is the only thing anyone will do with it.
-
-        Absent and empty both become `{}`, which saves every reader a `None`
-        check for a field whose whole meaning is "nothing extra".
-        """
+        """A field of the caller's own keys, carried and never interpreted."""
         if value is None:
             return {}
         if not isinstance(value, Mapping):
@@ -651,32 +395,9 @@ class Reader:
         return dict(value)
 
 
-#: The `model:` line, which is one field and two formats.
-#:
-#: Here rather than in `subagents.reading`, which is where it was written and is
-#: no longer the only reader: an agent definition names a model too, so
-#: `domain.agent` imported the subagent format to read its own document. That is
-#: a field reader, this module is the field readers, and the shared line is what
-#: said so -- a helper two formats need belongs to neither of them.
+#: The `model:` line, which is one field and two formats -- so it belongs to
+#: neither of them.
 
 def wanted_model(document: Mapping[str, object], read: Reader) -> str | None:
-    """The model a definition names, or `None` for whatever summoned it.
-
-    One name. `model:` took a list while `alias:` existed, because an alias this
-    deployment had not bound was passed over and the next candidate tried -- so
-    a list was a definition naming the deployments it could still be useful in.
-    Nothing passes over a *model*: one this deployment cannot run refuses on the
-    spot, and always did. With `alias` gone every entry after the first was
-    unreachable, so a list here would be a shape that cannot mean anything.
-
-    Read through `Reader.one_name`, which refuses that list where the file can
-    still be named. It said `text` for a while, and `text` is the
-    `str()` that produced the shape rather than the check that stops it: a
-    definition writing `model: [gpt-5, claude-4]` was read as a model called
-    `"['gpt-5', 'claude-4']"`.
-
-    Takes the `Reader` both formats already build, rather than a bare error
-    type, because that is the pair -- the file's name and the format's
-    exception -- and it is bound once at each call site.
-    """
+    """The model a definition names, or `None` for whatever summoned it."""
     return read.one_name(document.get("model"), key="model")

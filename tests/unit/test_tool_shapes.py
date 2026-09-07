@@ -1,18 +1,4 @@
-"""The three shapes a workspace tool may be written in, and the one it may not.
-
-A `BaseTool` -- from `@tool` or from a class of your own -- or a plain function.
-
-`tool_name` has always said both are accepted -- "because `create_deep_agent`
-accepts both, and a definition should not have to know which one deepagents
-prefers this month" -- and nothing held it to that. Every fixture in this suite
-used `@tool`, so the claim lived in a docstring, and a langchain upgrade that
-stopped resolving a bare callable would have surfaced at some workspace's first
-tool call rather than here.
-
-The shipped `line_count` is the example of the third; this is the guarantee
-behind all of them, and the refusal for the near miss: a *class* where an
-instance was meant.
-"""
+"""The three shapes a workspace tool may be written in, and the one it may not."""
 
 from __future__ import annotations
 
@@ -75,8 +61,9 @@ def _calls(name: str, args: dict):
 
 
 def test_a_plain_function_is_named_by_the_function(cfg):
-    """No `.name` to read, so `__name__` is the name a request grants and an
-    allowlist matches -- and everything downstream keys on that one string."""
+    """No `.name` to read, so `__name__` is the name a request grants and an allowlist
+    matches -- and everything downstream keys on that one string.
+    """
     _install(cfg, "shout", BARE)
 
     (found,) = LocalToolRepository(tools_dir(cfg)).found
@@ -86,8 +73,9 @@ def test_a_plain_function_is_named_by_the_function(cfg):
 
 
 def test_a_plain_function_is_offered_to_the_model_and_dispatches(cfg, session_dir):
-    """Through a graph that really dispatches, because the interesting part is
-    not that it loads -- it is that deepagents wraps it and the call arrives."""
+    """Through a graph that really dispatches, because the interesting part is not that
+    it loads -- it is that deepagents wraps it and the call arrives.
+    """
     _install(cfg, "shout", BARE)
 
     graph = build_agent(
@@ -107,9 +95,10 @@ def test_a_plain_function_is_offered_to_the_model_and_dispatches(cfg, session_di
 
 
 def test_the_docstring_and_the_annotations_are_what_the_model_gets(cfg, session_dir):
-    """What you give up by leaving the decorator off, stated as behaviour: not
-    the description or the schema, which come from the function as written --
-    only the ability to make them differ from it."""
+    """What you give up by leaving the decorator off, stated as behaviour: not the
+    description or the schema, which come from the function as written -- only the
+    ability to make them differ from it.
+    """
     _install(cfg, "shout", BARE)
 
     graph = build_agent(
@@ -125,9 +114,10 @@ def test_the_docstring_and_the_annotations_are_what_the_model_gets(cfg, session_
 
 
 def test_a_plain_function_fails_the_way_a_decorated_one_does(cfg, session_dir):
-    """`WorkspaceToolErrors` is built from the names the workspace defined, and
-    a plain function's name comes from the same `tool_name` everything else
-    uses -- so the guard covers it without knowing which kind it is."""
+    """`WorkspaceToolErrors` is built from the names the workspace defined, and a plain
+    function's name comes from the same `tool_name` everything else uses -- so the
+    guard covers it without knowing which kind it is.
+    """
     _install(cfg, "bare_boom", BARE_FAILS)
 
     graph = build_agent(
@@ -174,9 +164,9 @@ TOOLS = [{export}]
 
 
 def test_a_basetool_subclass_is_named_by_its_own_field(cfg, session_dir):
-    """The instance form, which is what a class is for: `name` and
-    `description` are declared rather than taken from the function, and
-    `args_schema` is yours to write.
+    """The instance form, which is what a class is for: `name` and `description` are
+    declared rather than taken from the function, and `args_schema` is yours to
+    write.
     """
     _install(cfg, "shout", SUBCLASS.format(export="Shout()"))
 
@@ -197,16 +187,13 @@ def test_a_basetool_subclass_is_named_by_its_own_field(cfg, session_dir):
 
 
 def test_the_class_itself_is_refused_rather_than_offered(cfg):
-    """`TOOLS = [Shout]` for `TOOLS = [Shout()]` -- one character, and the only
-    mistake in this area that produced a *successful* wrong answer.
+    """`TOOLS = [Shout]` for `TOOLS = [Shout()]` -- one character, and the only mistake
+    in this area that produced a *successful* wrong answer.
 
     Measured before the refusal: it loaded, was advertised under the class name
-    `Shout` rather than its own `shout`, and calling it instantiated the class
-    and handed the model `status="success"` with the repr of a
-    `CallbackManager` in it. The run carried on.
-
-    The same family as `TOOLS = add`, which the container check refuses one
-    level up: both pass a duck test, and neither says anything.
+    `Shout` rather than its own `shout`, and calling it instantiated the class and
+    handed the model `status="success"` with the repr of a `CallbackManager` in it.
+    The run carried on.
     """
     _install(cfg, "shout", SUBCLASS.format(export="Shout"))
 
@@ -215,9 +202,10 @@ def test_the_class_itself_is_refused_rather_than_offered(cfg):
 
 
 def test_a_function_is_not_caught_by_that_refusal(cfg):
-    """The refusal is `isinstance(tool, type)`, and the point of it is that
-    nothing legitimate is one: a function is not a class, and neither is a
-    `StructuredTool` or an instance of your own."""
+    """The refusal is `isinstance(tool, type)`, and the point of it is that nothing
+    legitimate is one: a function is not a class, and neither is a `StructuredTool`
+    or an instance of your own.
+    """
     _install(cfg, "shout", BARE)
 
     assert [tool_name(f.tool) for f in LocalToolRepository(tools_dir(cfg)).found] == ["shout"]
@@ -248,14 +236,7 @@ SHAPES = {
 
 @pytest.mark.parametrize(("body", "kind", "shown"), NOT_TOOLS.values(), ids=NOT_TOOLS)
 def test_an_entry_that_is_not_a_tool_is_refused(cfg, body, kind, shown):
-    """Measured before this: every one of them loaded. The string was offered to
-    the model as a tool named `'line_count'`, quotes and all; the dict as
-    `{'name': 'line_count'}`. `tool_name` fell through to its `repr` fallback,
-    which exists so that naming never raises, and so gave junk a name.
-
-    The build then died at `AttributeError: 'function' object has no attribute
-    'name'`, from inside deepagents, naming neither the file nor the entry.
-    """
+    """Measured before this: every one of them loaded."""
     _install(cfg, "probe", body)
 
     with pytest.raises(ToolError) as caught:
@@ -269,10 +250,10 @@ def test_an_entry_that_is_not_a_tool_is_refused(cfg, body, kind, shown):
 
 @pytest.mark.parametrize("body", SHAPES.values(), ids=SHAPES)
 def test_the_three_documented_shapes_are_not_caught_by_that_refusal(cfg, body):
-    """The refusal asks `named`, not `callable`, and this is the half that pins
-    the difference: a `BaseTool` is not callable at all -- measured, `@tool`
-    returns a `StructuredTool` whose `callable()` is False -- so a callable-only
-    check would refuse two of the three shapes this file exists to guarantee.
+    """The refusal asks `named`, not `callable`, and this is the half that pins the
+    difference: a `BaseTool` is not callable at all -- measured, `@tool` returns a
+    `StructuredTool` whose `callable()` is False -- so a callable-only check would
+    refuse two of the three shapes this file exists to guarantee.
     """
     _install(cfg, "probe", body)
 
@@ -282,15 +263,12 @@ def test_the_three_documented_shapes_are_not_caught_by_that_refusal(cfg, body):
 def test_the_rule_is_the_one_langchain_itself_applies():
     """Why `named` is the right rule and not merely the one this layer can reach.
 
-    A catalogue may import `yaml` and nothing else, so `isinstance(tool,
-    BaseTool)` is not available there -- but it would not have been better.
-    Measured against `convert_to_openai_tool`: langchain names a bare callable
-    by `__name__` and raises on anything carrying neither that nor `.name`.
-    Everything refused above is something langchain would have died on anyway;
-    the check only moves the failure to where the file can still be named.
-
-    A `functools.partial` is the case that separates the two rules -- callable,
-    unusable, and accepted by any check that asks only whether it can be called.
+    A catalogue may import `yaml` and nothing else, so `isinstance(tool, BaseTool)`
+    is not available there -- but it would not have been better. Measured against
+    `convert_to_openai_tool`: langchain names a bare callable by `__name__` and
+    raises on anything carrying neither that nor `.name`. Everything refused above is
+    something langchain would have died on anyway; the check only moves the failure
+    to where the file can still be named.
     """
     from langchain_core.utils.function_calling import convert_to_openai_tool
 

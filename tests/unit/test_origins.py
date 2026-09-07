@@ -1,11 +1,4 @@
-"""Where a deployment reads from, and the states nothing could express before.
-
-Three of these guard something that was previously unreportable: a `groups.yaml`
-that is not there still names where it was looked for, a catalogue handed in at
-construction is reported as itself rather than as the configuration it ignores,
-and `tools` is in the record at all -- it was the one catalogue `kingfisher
-list` never named, because there was no field for it.
-"""
+"""Where a deployment reads from, and the states nothing could express before."""
 
 from __future__ import annotations
 
@@ -20,11 +13,7 @@ from kingfisher.infrastructure.catalogue import Definitions
 
 
 def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
-    """Four catalogues, and `tools` among them.
-
-    Named individually rather than looped, because the bug this record exists
-    to stop was one kind being silently absent from the answer.
-    """
+    """Four catalogues, and `tools` among them."""
     found = Origins.of(cfg)
 
     for kind in ("agents", "skills", "subagents", "tools"):
@@ -34,8 +23,9 @@ def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
 
 
 def test_a_relocated_catalogue_is_told_apart_from_a_derived_one(cfg, tmp_path):
-    """`doctor` warns on one and not the other, so a string comparison on the
-    path is not enough -- the kinds have to differ."""
+    """`doctor` warns on one and not the other, so a string comparison on the path is
+    not enough -- the kinds have to differ.
+    """
     elsewhere = tmp_path / "shared-skills"
     elsewhere.mkdir()
 
@@ -46,24 +36,15 @@ def test_a_relocated_catalogue_is_told_apart_from_a_derived_one(cfg, tmp_path):
 
 
 def test_naming_the_derived_path_explicitly_is_still_derived(cfg):
-    """A deployment that spells out the default is not relocated.
-
-    Otherwise `doctor`'s relocated-and-empty warning fires on every fresh
-    workspace whose operator happened to be explicit, which is the reading that
-    would make it noise.
-    """
+    """A deployment that spells out the default is not relocated."""
     found = Origins.of(replace(cfg, skills_root=cfg.workspace / "skills"))
 
     assert found.skills.kind == "default"
 
 
 def test_a_catalogue_supplied_at_construction_is_reported_as_itself(cfg, tmp_path):
-    """The case the record exists for: configuration says one thing, and
-    something else is being read.
-
-    Reported as `overridden` rather than as the configured path, because a
-    reader shown the configured path goes and edits a variable that does
-    nothing.
+    """The case the record exists for: configuration says one thing, and something else
+    is being read.
     """
     staged = {kind: tmp_path / kind for kind in ("agents", "skills", "subagents", "tools")}
     for path in staged.values():
@@ -83,8 +64,9 @@ def test_a_supplied_catalogue_matching_the_configuration_is_not_an_override(cfg)
 
 
 def test_a_repository_with_no_directory_has_no_path(cfg):
-    """A store the deployment wired satisfies the port without a root, and the
-    record says so rather than inventing a folder."""
+    """A store the deployment wired satisfies the port without a root, and the record
+    says so rather than inventing a folder.
+    """
 
     class Rootless:
         pass
@@ -97,12 +79,7 @@ def test_a_repository_with_no_directory_has_no_path(cfg):
 
 
 def test_an_absent_groups_file_still_says_where_it_looked(cfg, tmp_path):
-    """The line this whole record was worth building for.
-
-    A `groups.yaml` written one directory off leaves a deployment reachable by
-    everyone, and every other surface is silent about it: the process comes up,
-    nothing fails, and no message anywhere names a path.
-    """
+    """The line this whole record was worth building for."""
     looked = tmp_path / "ws" / "groups.yaml"
 
     found = Origins.of(replace(cfg, access=None, access_source=looked))
@@ -111,15 +88,17 @@ def test_an_absent_groups_file_still_says_where_it_looked(cfg, tmp_path):
 
 
 def test_a_config_assembled_in_code_reports_no_groups_file(cfg):
-    """Distinct from the above, and the distinction is actionable: one means
-    "go and look at that path", the other means "there was never a file"."""
+    """Distinct from the above, and the distinction is actionable: one means "go and
+    look at that path", the other means "there was never a file".
+    """
     assert Origins.of(cfg).groups == Origin("unset", None)
 
 
 def test_the_models_file_is_named(cfg, tmp_path):
-    """`doctor` counts models and endpoints and has never said which file they
-    came from, which is the question somebody sharing a catalogue across a
-    fleet actually has."""
+    """`doctor` counts models and endpoints and has never said which file they came
+    from, which is the question somebody sharing a catalogue across a fleet actually
+    has.
+    """
     written = tmp_path / "catalogue" / "models.yaml"
     catalogue = replace(cfg.models, source=written)
 
@@ -129,21 +108,24 @@ def test_the_models_file_is_named(cfg, tmp_path):
 
 
 def test_a_catalogue_built_in_code_has_no_file_behind_it(cfg):
-    """Which is how every test in this suite is wired, so it must not be
-    reported as a path that does not exist."""
+    """Which is how every test in this suite is wired, so it must not be reported as a
+    path that does not exist.
+    """
     assert Origins.of(cfg).models == Origin("supplied", None)
 
 
 def test_the_seed_directory_is_never_derived(cfg, tmp_path):
-    """There is nowhere kingfisher would look on its own, so an unset one is
-    unset rather than defaulted -- and `doctor` already warns about it."""
+    """There is nowhere kingfisher would look on its own, so an unset one is unset
+    rather than defaulted -- and `doctor` already warns about it.
+    """
     assert Origins.of(cfg).seed == Origin("unset", None)
     assert Origins.of(replace(cfg, assets=tmp_path)).seed == Origin("relocated", tmp_path)
 
 
 def test_the_working_roots_follow_the_workspace_until_they_are_moved(cfg, tmp_path):
-    """State and scratch are derived from the workspace, and relocate together
-    -- moving state moves scratch, because scratch hangs off it."""
+    """State and scratch are derived from the workspace, and relocate together -- moving
+    state moves scratch, because scratch hangs off it.
+    """
     plain = Origins.of(cfg)
     assert plain.state == Origin("default", cfg.workspace / ".kingfisher")
     assert plain.scratch.kind == "default"
@@ -154,8 +136,9 @@ def test_the_working_roots_follow_the_workspace_until_they_are_moved(cfg, tmp_pa
 
 
 def test_a_session_store_handed_in_is_told_from_a_configured_one(cfg, tmp_path):
-    """The same override the catalogues have, on the one other seam that
-    corresponds to a path a deployment configured."""
+    """The same override the catalogues have, on the one other seam that corresponds to
+    a path a deployment configured.
+    """
 
     class Elsewhere:
         root = tmp_path / "blob"
@@ -173,11 +156,7 @@ def test_a_session_store_handed_in_is_told_from_a_configured_one(cfg, tmp_path):
 
 
 def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
-    """A field added here must not be one a printer can silently omit.
-
-    That is exactly how `tools` came to be missing from `kingfisher list`: the
-    header named three catalogues from three hand-written lines.
-    """
+    """A field added here must not be one a printer can silently omit."""
     found = Origins.of(cfg)
     names = [name for name, _ in found.entries()]
 
@@ -196,8 +175,7 @@ def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
 
 
 def test_a_running_kingfisher_reports_what_it_resolved(cfg):
-    """Not what it was configured with. The property reads `self.catalogue`,
-    which is what the constructor resolved and warmed."""
+    """Not what it was configured with."""
     kf = Kingfisher(cfg)
 
     assert kf.origins.workspace == cfg.workspace
@@ -205,12 +183,7 @@ def test_a_running_kingfisher_reports_what_it_resolved(cfg):
 
 
 def test_asking_for_origins_does_not_create_the_directories_it_reports(cfg, tmp_path):
-    """A report must not change what it reports on.
-
-    `resolve_definitions` creates derived roots, which is right at construction
-    and wrong here -- a caller checking where skills *would* come from would
-    otherwise bring the directory into being by asking.
-    """
+    """A report must not change what it reports on."""
     fresh = tmp_path / "never-laid-out"
 
     found = Origins.of(replace(cfg, workspace=fresh))
@@ -223,8 +196,8 @@ def test_the_line_factors_out_the_workspace_and_keeps_every_key(cfg):
     """Short enough to read, and still greppable for any one place.
 
     Spelled in full this is about 450 characters of which most is one repeated
-    prefix. Collapsing the ordinary entries instead would be shorter still and
-    would delete the path somebody is looking for.
+    prefix. Collapsing the ordinary entries instead would be shorter still and would
+    delete the path somebody is looking for.
     """
     line = Origins.of(cfg).line()
 
@@ -234,8 +207,7 @@ def test_the_line_factors_out_the_workspace_and_keeps_every_key(cfg):
 
 
 def test_a_relocated_path_is_the_only_absolute_one_on_the_line(cfg, tmp_path):
-    """What the relative spelling is for. The entries worth noticing are the
-    ones that moved, and this is what makes the eye find them."""
+    """What the relative spelling is for."""
     elsewhere = tmp_path / "shared"
     elsewhere.mkdir()
 
@@ -246,9 +218,10 @@ def test_a_relocated_path_is_the_only_absolute_one_on_the_line(cfg, tmp_path):
 
 
 def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
-    """The line is `key=value` pairs separated by spaces, so a space inside a
-    value stops `grep tools=` answering -- which is the whole reason every key
-    is printed rather than the ordinary ones being collapsed."""
+    """The line is `key=value` pairs separated by spaces, so a space inside a value
+    stops `grep tools=` answering -- which is the whole reason every key is printed
+    rather than the ordinary ones being collapsed.
+    """
 
     class Rootless:
         pass
@@ -280,12 +253,8 @@ def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):
 
 
 def test_the_logger_is_not_the_parent_of_the_audit_one(cfg, caplog):
-    """`kingfisher.audit` is unconfigured on purpose, so that writing session
-    ids stays a decision a deployment makes rather than one it inherits.
-
-    A logger named `kingfisher` would be its parent, and the server raises this
-    one to INFO -- so asking where the definitions live would have turned on the
-    audit trail as a side effect.
+    """`kingfisher.audit` is unconfigured on purpose, so that writing session ids stays
+    a decision a deployment makes rather than one it inherits.
     """
     caplog.set_level(logging.INFO, logger="kingfisher.origins")
 
@@ -295,13 +264,7 @@ def test_the_logger_is_not_the_parent_of_the_audit_one(cfg, caplog):
 
 
 def test_nothing_is_emitted_or_even_built_when_logging_is_off(cfg, monkeypatch, capsys):
-    """The promise this makes to every caller that existed before it.
-
-    Python logging is silent until an application configures it, so no output
-    appears where none appeared before -- and the guard means the record is not
-    assembled either. `line` raising is how that second half is checked: if it
-    is reached, the logger was consulted too late.
-    """
+    """The promise this makes to every caller that existed before it."""
     logging.getLogger("kingfisher.origins").setLevel(logging.WARNING)
     monkeypatch.setattr(
         Origins, "line", lambda self: pytest.fail("the line was built with logging off")

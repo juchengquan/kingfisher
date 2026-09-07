@@ -1,13 +1,4 @@
-"""Turning an `Inventory` into the block someone reads.
-
-The only place either driver formats a listing. `tests/integration/driver.py`
-prints through this too, so `kingfisher list` and `driver.py --list` cannot come
-apart -- which is what makes keeping both doors safe: two entry points, one
-implementation.
-
-Lines rather than prints, so a caller decides where they go. A library that
-writes to stdout cannot be used by a server, and this one is reached by both.
-"""
+"""Turning an `Inventory` into the block someone reads."""
 
 from __future__ import annotations
 
@@ -15,18 +6,13 @@ from collections.abc import Iterator
 
 from kingfisher import Inventory, Origins
 
-# The renderer's own vocabulary, taken where it lives. A listing prints
-# audiences, tells a bare name from a `where::what` reference, and quotes the
-# sentence a refusal quotes -- none of which anybody outside this wheel has ever
-# asked for, and all of which were on the front door because *this file* was
-# forbidden to reach for them. `offered` is the one worth naming: a renderer in
-# the domain looks odd until you see that the block a refusal prints is the
-# block a listing prints, so a name two files define reads the same in both.
-# Shared for that reason, not promised for it.
-#
-# `Inventory` and `Origins` stay above because they are answers the library
-# gives anybody who asks, and `test_architecture` refuses the other spelling for
-# them. See *The front door* in `docs/decisions.md`.
+# The renderer's own vocabulary, taken where it lives. A listing prints audiences, tells
+# a bare name from a `where::what` reference, and quotes the sentence a refusal quotes
+# -- none of which anybody outside this wheel has ever asked for, and all of which were
+# on the front door because *this file* was forbidden to reach for them. `offered` is
+# the one worth naming: a renderer in the domain looks odd until you see that the block
+# a refusal prints is the block a listing prints, so a name two files define reads the
+# same in both. Shared for that reason, not promised for it.
 from kingfisher.domain.access import AUDIENCED, Audience, spell
 from kingfisher.domain.capabilities import ALL
 from kingfisher.infrastructure.workspace.seeding import SEED_HINT
@@ -35,25 +21,12 @@ from kingfisher.tools.spec import offered, split_reference
 
 
 def _from(source: str | None, expected: str) -> str:
-    """Name the file a definition came from, when it is not the obvious one.
-
-    Silent for anything where the name already tells you the file -- `reviewer`
-    in `reviewer.yaml` is not worth a line of output. Everything else gets said,
-    which is more than "is it in a folder": a package contributes tools under
-    names that are not its own, so `csv_columns` comes from `csv_profile/` with
-    no slash in sight and is exactly the case someone would go looking for.
-    """
+    """Name the file a definition came from, when it is not the obvious one."""
     return "" if source in (None, expected) else f"  ({source})"
 
 
 def _agents(found: Inventory) -> Iterator[str]:
-    """The agents section, which comes first because it is what a request names.
-
-    Its own function rather than eighteen more lines inside `render`, which was
-    already at the branch ceiling -- and a section that prints a nested thing is
-    the one worth lifting out, since the nesting is the only part of this
-    listing a reader has to follow rather than scan.
-    """
+    """The agents section, which comes first because it is what a request names."""
     yield "agents"
     if found.agents_error is not None:
         yield f"  cannot load: {found.agents_error}"
@@ -74,20 +47,7 @@ def _agents(found: Inventory) -> Iterator[str]:
 
 
 def render(found: Inventory) -> Iterator[str]:
-    """The listing, line by line.
-
-    The header is the record's, not this file's. It used to be four lines
-    written here, naming three of the four catalogues -- `tools` was in neither
-    the header nor the record behind it, because a fourth line is a thing
-    somebody has to remember. Now a place added to `Origins` appears here
-    without this function being touched.
-
-    `workspace` used to be a parameter, overriding the record "for a driver that
-    resolved one itself and wants to print what it actually used rather than
-    what the configuration says". That is exactly the disagreement `Origins`
-    removes: it reports what was resolved, so a second answer passed in
-    alongside it could only ever be the wrong one.
-    """
+    """The listing, line by line."""
     yield from found.origins.block()
     yield ""
 
@@ -124,18 +84,7 @@ def render(found: Inventory) -> Iterator[str]:
 
 
 def origins_document(origins: Origins) -> dict[str, object]:
-    """Where everything was read from, for a script rather than a person.
-
-    Absolute paths, unlike the header, which spells anything under the
-    workspace as `./name`. That shortening is a reading aid -- it makes the
-    entries that moved the only absolute ones on the page -- and a script wants
-    the path it can open.
-
-    The kind travels with it, which is the whole reason an entry is a record and
-    not a string. "Nothing is configured", "you handed me a store" and "this is
-    somewhere else entirely" are three different situations, and a consumer must
-    not have to match on prose to tell them apart.
-    """
+    """Where everything was read from, for a script rather than a person."""
     return {
         "workspace": str(origins.workspace),
         **{
@@ -146,12 +95,7 @@ def origins_document(origins: Origins) -> dict[str, object]:
 
 
 def _who(audience: Audience) -> str:
-    """One audience, as a reader sees it.
-
-    `spell` rather than a join of its own: a conjunction has to be written some
-    way, and the refusals quote audiences too. A reader comparing an error
-    against this listing should not have to translate between two spellings.
-    """
+    """One audience, as a reader sees it."""
     return f"[{spell(audience)}]"
 
 
@@ -161,18 +105,7 @@ def _singular(field_name: str) -> str:
 
 
 def _access(found: Inventory) -> Iterator[str]:
-    """Who reaches what, twice: as the files say it, and rolled up by asset.
-
-    Two views because audiences are per use-site. The first mirrors the files.
-    The second answers the question the files no longer answer on their own --
-    "who reaches `sql_query`?" is spread across every definition that uses it,
-    and a call site quietly wider than its neighbours would otherwise be
-    visible only to whoever went looking for it.
-
-    Printed only in the operator's view. Under `--as`, the sections above have
-    already been narrowed to what that caller reaches, and who *else* reaches a
-    thing is not their question.
-    """
+    """Who reaches what, twice: as the files say it, and rolled up by asset."""
     if found.access is None or found.held is not None:
         return
     if compounds := found.access.compounds:
@@ -199,11 +132,7 @@ def _access(found: Inventory) -> Iterator[str]:
 
 
 def _rollup(found: Inventory) -> Iterator[str]:
-    """Every asset carrying an audience anywhere, and where it carries it.
-
-    Inverted from the per-definition record rather than gathered separately, so
-    the two views cannot disagree about what the files say.
-    """
+    """Every asset carrying an audience anywhere, and where it carries it."""
     where: dict[str, dict[str, list[tuple[str, Audience]]]] = {}
     for definitions in found.audiences.values():
         for name, stated in definitions.items():
@@ -221,13 +150,8 @@ def _rollup(found: Inventory) -> Iterator[str]:
 
 
 def _catalogue(found: Inventory) -> Iterator[str]:
-    """The skills and subagents sections, which are the same whether or not
-    the tools catalogue loaded.
-
-    Its own generator so the tools failure can fall through to it. That path
-    used to `return`, so one unparseable `.py` hid these two entirely -- and
-    the person seeing it is by definition looking at a broken workspace, which
-    is the worst moment to be shown less of it.
+    """The skills and subagents sections, which are the same whether or not the tools
+    catalogue loaded.
     """
     yield (
         "\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS_ENABLED is off)"
@@ -307,34 +231,14 @@ def _catalogue(found: Inventory) -> Iterator[str]:
 
 
 def _audience_json(audience: Audience) -> list[object]:
-    """One audience as JSON: names, and a conjunction as a nested list.
-
-    Nested rather than `"A+B"`, because a script reading this should not have to
-    parse a separator out of a name -- and a group name may legally contain a
-    `+`. The human form spells it `A+B`; this is the same fact for a reader that
-    does not need it to fit in a column.
-
-    Sorted, like every other rendering of a conjunction: the set has no order to
-    preserve, and two runs of the same file must produce the same document.
-    """
+    """One audience as JSON: names, and a conjunction as a nested list."""
     if audience == ALL:
         return [ALL]
     return [sorted(one) if isinstance(one, frozenset) else one for one in audience]
 
 
 def as_json(found: Inventory) -> dict[str, object]:
-    """The same answer, in the shape a script can read.
-
-    Field for field what `Inventory` carries, so there is nothing to keep in
-    step: a name here the record does not have would be inventing an answer, and
-    one it has that is missing here would be hiding one. A test holds the two
-    together, because "field for field" is a claim and not a mechanism.
-
-    Mapped here rather than by the record, for the same reason `render` is here
-    -- a serialisation is a format, and formats are the driver's business.
-    `Path` becomes a string because JSON has no other option; the mapping
-    proxies become plain dicts because `json` will not encode them.
-    """
+    """The same answer, in the shape a script can read."""
     return {
         "origins": origins_document(found.origins),
         "agents": dict(found.agents),
@@ -358,15 +262,8 @@ def as_json(found: Inventory) -> dict[str, object]:
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
-        # The vocabulary, or `null` where this deployment declares none. Who
-        # reaches what is `audiences` below, keyed the way the definitions
-        # themselves are.
-        #
-        # Two keys because a vocabulary says two things: what a name grants,
-        # already closed over `contains`, and what a caller must hold for one to
-        # apply. This was the `names` mapping alone until `all_of` existed, and
-        # a compound has no honest place in it -- so the shape grew rather than
-        # the second fact being dropped.
+        # The vocabulary, or `null` where this deployment declares none. Who reaches
+        # what is `audiences` below, keyed the way the definitions themselves are.
         "access": (
             None
             if found.access is None
@@ -401,21 +298,7 @@ def as_json(found: Inventory) -> dict[str, object]:
 
 
 def failed(found: Inventory) -> bool:
-    """Whether the listing described a workspace that will not load.
-
-    The exit code, decided in one place. Printed and returned apart, a caller
-    could report a broken catalogue and exit 0 -- which is how a listing gets
-    read by a script that then carries on.
-
-    That is exactly what happened to `agents` for a while: the field was added,
-    the section printed "cannot load", and this predicate still named the two
-    kinds that existed when it was written. Read as "any of them" now, so the
-    next kind is a line in the tuple rather than a silent exit 0.
-
-    A skill that will not load is deliberately not here. One bad directory is
-    reported inline and the run still works without it, which is "worth
-    knowing" rather than "will not run" -- the split the exit codes are for.
-    """
+    """Whether the listing described a workspace that will not load."""
     return any(
         error is not None
         for error in (

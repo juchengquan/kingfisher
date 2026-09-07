@@ -1,25 +1,10 @@
 """The application layer: what a turn does, in order.
 
-Read the environment, prepare a session, build the graph for this request, run
-it, record what happened. It orchestrates and decides nothing about the harness
-— it speaks `Request`, `RunEvent` and `RunResult`, never `AIMessage`, and
-reaches deepagents only through `infrastructure/`.
-
-`run.py` and `runlog.py` each once carried their own copy of LangChain's
-usage-metadata shape, kept in sync by nobody. That is the failure the rule
-exists to prevent, and `tests/unit/test_architecture.py` enforces it.
-
-Names are re-exported here as well as from the package root, so a caller that
-wants to say where something lives can. `from kingfisher.application import
-Kingfisher` and `from kingfisher import Kingfisher` are the same object; the
-root is the documented surface and this is the layer-local one.
-
 Lazily, for the reason the root's own table is lazy and which matters more here:
-`service` imports deepagents, which imports three provider SDKs at module level
-and costs about 950ms. A plain `from .service import Kingfisher` on this line
-would run before *any* submodule of this package, so reading a config through
-`application.config` -- 39ms on its own -- would pay all of it. Measured both
-ways before choosing.
+`service` imports deepagents, which imports three provider SDKs at module level and
+costs about 950ms. A plain `from .service import Kingfisher` on this line would run
+before *any* submodule of this package, so reading a config through `application.config`
+-- 39ms on its own -- would pay all of it. Measured both ways before choosing.
 """
 
 from __future__ import annotations

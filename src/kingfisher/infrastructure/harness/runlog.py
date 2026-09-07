@@ -1,16 +1,4 @@
-"""Local-only structured run log.
-
-One append-only JSONL file per session under `<state_dir>/runs/`, which is
-`<workspace>/.kingfisher/runs/` unless configured elsewhere. Nothing leaves
-the machine (Q13), and per-step token usage is recorded (Q18) because it is the
-only way the cost-control driver becomes measurable rather than aspirational.
-
-`cache_read` is the signal worth watching: in an agent that re-sends its whole
-prefix on every step, a run of zeros means prompt caching is not working. The
-model and API style are logged alongside it, because on a gateway that does not
-cache server-side, zero is correct rather than broken — without those fields the
-alarm cannot tell the two cases apart.
-"""
+"""Local-only structured run log."""
 
 from __future__ import annotations
 
@@ -29,13 +17,7 @@ MODEL_CALL = "model_call"
 
 @dataclass(frozen=True)
 class Usage:
-    """What a session's model calls cost, read back from its log.
-
-    Reading lives here because writing does. The driver used to parse these
-    records itself, which duplicated the event name and all three field names
-    across a boundary with nothing keeping them in step -- the same shape of
-    bug the layering rules already exist to prevent, one level out.
-    """
+    """What a session's model calls cost, read back from its log."""
 
     calls: int
     input_tokens: int

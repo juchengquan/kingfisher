@@ -1,13 +1,4 @@
-"""Reading what a workspace is sitting on, as far as the platform will say.
-
-One record and the four reads that fill it: the filesystem type under the
-workspace, its size, the cgroup's memory limit, and whether swap is permitted.
-`MemoryBacking` carries what those four are for, and why the arrangement is not
-what the obvious reading of them predicts.
-
-`presentation/cli/health.py` is what turns them into a verdict. Nothing here
-decides anything, which is why it is four reads and a dataclass.
-"""
+"""Reading what a workspace is sitting on, as far as the platform will say."""
 
 from __future__ import annotations
 
@@ -21,20 +12,13 @@ from pathlib import Path
 class MemoryBacking:
     """What is underneath a workspace, for a deployment that must keep nothing.
 
-    Facts rather than a verdict. `kingfisher doctor` decides what they mean; this
-    reads them, because a deployment that has asserted "nothing at rest on this
-    machine" is relying on a configuration nothing in the process can see.
-
-    Measured, and the arrangement is not what the obvious reading predicts. A
-    memory filesystem *larger* than the container's memory limit does not fail
-    when it fills: the kernel swaps its pages out. That is data at rest, arrived
-    at silently, with the write succeeding and no error anywhere. With swap off
-    the same overrun becomes an OOM kill, which takes every session in the
-    container. Only when the filesystem is smaller than the limit does a full
-    one give a clean `ENOSPC` -- which is a thing kingfisher can refuse on.
-
-    `None` where the question cannot be asked: not Linux, no cgroup, or a
-    workspace on an ordinary disk where none of this applies.
+    Measured, and the arrangement is not what the obvious reading predicts. A memory
+    filesystem *larger* than the container's memory limit does not fail when it
+    fills: the kernel swaps its pages out. That is data at rest, arrived at silently,
+    with the write succeeding and no error anywhere. With swap off the same overrun
+    becomes an OOM kill, which takes every session in the container. Only when the
+    filesystem is smaller than the limit does a full one give a clean `ENOSPC` --
+    which is a thing kingfisher can refuse on.
     """
 
     #: The filesystem type under the workspace, e.g. `tmpfs`, `ext4`, `apfs`.
@@ -53,22 +37,14 @@ class MemoryBacking:
 
     @property
     def fits(self) -> bool | None:
-        """Whether the filesystem is small enough to fill without killing this.
-
-        `None` when either number is unknown, which is not the same as `False`
-        and must not be reported as one.
-        """
+        """Whether the filesystem is small enough to fill without killing this."""
         if self.size_bytes is None or self.limit_bytes is None:
             return None
         return self.size_bytes < self.limit_bytes
 
 
 def _mounted_filesystem(path: Path) -> str | None:
-    """The filesystem type under `path`, from `/proc/mounts`.
-
-    The longest matching mount point wins, because `/` matches everything and a
-    workspace is almost always under something more specific.
-    """
+    """The filesystem type under `path`, from `/proc/mounts`."""
     mounts = Path("/proc/mounts")
     if not mounts.is_file():
         return None
@@ -97,12 +73,7 @@ def _cgroup_number(name: str) -> int | None:
 
 
 def memory_backing(workspace: Path) -> MemoryBacking:
-    """Read what is underneath this workspace, as far as the platform will say.
-
-    Everything here is absent outside Linux and outside a container, and an
-    all-`None` answer is the honest one rather than a failure: a laptop is not
-    misconfigured for not being a cgroup.
-    """
+    """Read what is underneath this workspace, as far as the platform will say."""
     workspace = Path(workspace)
     swap = _cgroup_number("memory.swap.max")
     return MemoryBacking(

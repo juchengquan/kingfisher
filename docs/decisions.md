@@ -26,7 +26,7 @@ lines apart.
 | **What a request may do** | [Capabilities](#capabilities) · [Group access](#group-access) · [Models and endpoints](#models-and-endpoints) |
 | **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
 | **The surfaces** | [The command line](#the-command-line) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
-| **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) |
+| **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
 *Sessions* and *Wiring a store* sit together and are not one section: the first is
@@ -1592,6 +1592,42 @@ use of the words this codebase is *about*.
 A caution for whoever measures this again: a first pass counted 40 of 45
 unresolved, and three of the resolutions it did find came out of `.venv` --
 `deepagents/middleware/skills.py` made `skills.py` look real. *(2026-09-06.)*
+
+## How much a comment says
+
+**Reversed: "match the surrounding density".** The convention asked every comment
+to explain why, and asked a new one to match the length of the ones around it.
+The second half compounded the first. A file whose comments were long stayed
+long, because writing a short one there read as an oversight, and nothing in the
+rule ever pointed the other way. Measured before changing it: 53.6% of every
+non-blank line in the repository was comment or docstring -- 27,889 lines of
+prose against 24,124 of code, and `domain/ports.py` at 351 prose lines out of 359.
+
+**The rule is a test now, not a quantity.** A comment earns its place only if
+removing it would let a competent editor make a change that is wrong. That keeps
+the paragraph in `wiring.py` explaining why a factory's own exception is
+deliberately not wrapped -- delete it and someone helpfully wraps it -- and drops
+the paragraph after it that says the same thing again at greater length.
+
+**Four kinds were named as always-cut**, because a test alone drifts: repo
+history, a paragraph restating the one above it, framing that announces an
+argument instead of making it, and a contract the signature already states. The
+history ban is the one that matters, and it is the one this file already implied
+-- reversals are recorded *here* so the argument is not re-run, which makes the
+copy in a docstring the redundant half.
+
+**What it did not rest on: deduplication.** The first pass assumed source prose
+was largely restating `docs/`, on the strength of `wiring.py`, whose docstring
+shares near-verbatim paragraphs with *Wiring a store* above. Shingled against the
+whole of `docs/`, that is 1.4% of source prose -- 288 lines of 21,051.
+`wiring.py` is the outlier, not the pattern, and the cut had to be justified as
+losing information rather than moving it. *(2026-09-07.)*
+
+**No test guards this, deliberately**, which is the same finding as *Rejected: a
+rule against prose naming a module that is not there* one section up. CI cannot
+see this change at all: deleting every line of prose in the repository passes
+`ruff`, `ty` and `pytest`. The floor is the keep-test applied while editing, not
+a check afterwards.
 
 ## Proposals, and what became of them
 

@@ -1,19 +1,4 @@
-"""Importing a workspace's own Python, without putting it on the import path.
-
-Moved out of `tools`, unchanged, because tools stopped being the only kind
-that is code. A workspace may now define a subagent as a compiled graph, and
-that arrives the same way a tool does: a file or a folder under a catalogue,
-imported into this process and asked what it declares.
-
-Nothing here knows what it is loading. Which name a module must export, and what
-to do with what it exports, is the caller's -- this answers only "which files
-contribute a module" and "import that one, safely, and say something useful when
-it will not".
-
-Kept in flat `infrastructure/` rather than beside either caller, and it imports
-nothing foreign: what it adapts is the filesystem and Python's own loader, which
-is the same reason `workspace_fs` lives here.
-"""
+"""Importing a workspace's own Python, without putting it on the import path."""
 
 from __future__ import annotations
 
@@ -38,29 +23,16 @@ _NAMESPACE = "kingfisher_workspace"
 
 
 class LoadError(ValueError):
-    """A workspace module could not be loaded, or should not be.
-
-    Subclassed per kind, so a caller can keep catching the error its own
-    catalogue raises -- `ToolError` is the first, and reads exactly as it did
-    when this code lived next to it.
-    """
+    """A workspace module could not be loaded, or should not be."""
 
 
 def skipped(name: str) -> bool:
-    """Directories a walk must not descend into, nor a file be read from.
-
-    Needed because the exposure is: a one-level scan could never reach a
-    virtualenv or a build directory left under a catalogue; a recursive one can,
-    and this module *imports what it finds*. `__pycache__` is the one that turns
-    up by accident -- importing a workspace module once leaves it behind.
-    """
+    """Directories a walk must not descend into, nor a file be read from."""
     return name.startswith(".") or name == "__pycache__"
 
 
 def modules_in(directory: Path) -> list[Path]:
     """Every module a directory contributes, deepest layout first resolved.
-
-    Two shapes, and `PACKAGE_MARKER` is the switch between them:
 
     * a folder holding one is a **package** -- one unit, imported whole, its
       exports declared once in `__init__.py`. The walk stops there, because
@@ -69,12 +41,6 @@ def modules_in(directory: Path) -> list[Path]:
     * anything else is **organisation** -- files are independent, nested as deep
       as you like, and each declares its own exports exactly as a flat one
       always did.
-
-    Files whose names begin with `_` are helpers and are never modules of the
-    catalogue: that is how a loose file keeps something private without needing
-    a folder for it.
-
-    Sorted so two workspaces holding the same files build the same agent.
     """
     found: list[Path] = []
     for entry in sorted(directory.iterdir()):
@@ -91,35 +57,12 @@ def modules_in(directory: Path) -> list[Path]:
 
 
 def _module_name(path: Path) -> str:
-    """A name no other workspace file can collide with.
-
-    Keyed on the full path rather than the stem: two workspaces with a
-    `maths.py` each must not share an entry in `sys.modules`, and neither should
-    a workspace file and a real installed package. It is also what keeps a
-    `tools/analysis/` and a `subagents/analysis/` apart.
-    """
+    """A name no other workspace file can collide with."""
     return f"{_NAMESPACE}.{path.stem}_{abs(hash(str(path)))}"
 
 
 def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> Any:
-    """Import one file, or one package, without putting it on the import path.
-
-    A directory is imported as a package: the spec is built from its
-    `PACKAGE_MARKER` and told the directory is where its submodules live, which
-    is the whole of what makes `from .client import resolve` resolve. A module
-    that grew helpers is the reason to write a folder at all, so the folder has
-    to import the way Python says a folder imports.
-
-    `declares` is the export name the caller will look for, used only to say
-    what to write when a loose file tries a relative import. `error` is the
-    caller's own class, so the message a reader sees names their catalogue
-    rather than this shared loader.
-
-    `type[ValueError]` rather than `type[LoadError]`, which was the first
-    spelling and cannot hold: `SubagentError` belongs to the domain, and a
-    domain type subclassing one from `infrastructure/` would point the
-    dependency the wrong way for the sake of a signature.
-    """
+    """Import one file, or one package, without putting it on the import path."""
     is_package = path.is_dir()
     source = path / PACKAGE_MARKER if is_package else path
 
@@ -136,18 +79,10 @@ def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> A
     module = importlib.util.module_from_spec(spec)
     sys.modules[module_name] = module
     try:
-        # Importing writes `__pycache__` beside the source, which here means
-        # inside the catalogue -- a directory holding what a person authored, and
-        # the one an operator is most likely to keep under version control.
-        # Bytecode there is noise in `git status` at best and something committed
-        # at worst.
-        #
-        # Suppressed rather than deleted afterwards, so nothing is created to
-        # clean up. Global for the length of one `exec_module` and restored
-        # either way: a concurrent import elsewhere might skip its own cache
-        # once, which costs a recompile and nothing else. The alternative,
-        # `sys.pycache_prefix`, redirects every module in the process rather
-        # than these few.
+        # Importing writes `__pycache__` beside the source, which here means inside the
+        # catalogue -- a directory holding what a person authored, and the one an
+        # operator is most likely to keep under version control. Bytecode there is noise
+        # in `git status` at best and something committed at worst.
         written = sys.dont_write_bytecode
         sys.dont_write_bytecode = True
         try:
@@ -165,14 +100,7 @@ def load(path: Path, *, declares: str, error: type[ValueError] = LoadError) -> A
 
 
 def _relative_import_advice(path: Path, exc: Exception, *, declares: str) -> str | None:
-    """Turn a leaked internal module name into the thing to actually do.
-
-    A loose file cannot use a relative import: it is loaded as a module with no
-    parent package, so `from .client import x` resolves against the namespace
-    this loader invents and fails naming it -- which tells a reader nothing
-    except that kingfisher has internals. The fix is always the same, and it is
-    the feature next door: make the folder a package.
-    """
+    """Turn a leaked internal module name into the thing to actually do."""
     if not isinstance(exc, ModuleNotFoundError) or _NAMESPACE not in str(exc.name or ""):
         return None
     return (

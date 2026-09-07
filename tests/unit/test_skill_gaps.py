@@ -1,14 +1,4 @@
-"""Two rules that stopped applying when skills learned to live in folders.
-
-Neither was found by reading the code. One came from a five-line probe, the
-other from a CLI invocation nearly skipped because the reasoning said it was
-fine -- the same way the `--list` contradiction and the `unloadable` blind spot
-turned up while the folders work was still warm.
-
-Both are about a check that was written when every skill sat at the root, and
-that answered a question about the root long after that stopped being the whole
-catalogue.
-"""
+"""Two rules that stopped applying when skills learned to live in folders."""
 
 from __future__ import annotations
 
@@ -35,9 +25,10 @@ def _read(root):
 
 
 def test_a_foldered_skill_still_counts_as_taken(cfg):
-    """`SkillRepository.names` lists the root and stops, so it answered `()` for
-    a catalogue whose skills all lived in folders -- and the upload rule quietly
-    stopped applying to every one of them."""
+    """`SkillRepository.names` lists the root and stops, so it answered `()` for a
+    catalogue whose skills all lived in folders -- and the upload rule quietly
+    stopped applying to every one of them.
+    """
     _skill(cfg.skills_dir, "research/lookup", "lookup")
 
     assert LocalSkillRepository(cfg.skills_dir).names == (), "the old source, for contrast"
@@ -45,9 +36,7 @@ def test_a_foldered_skill_still_counts_as_taken(cfg):
 
 
 def test_taken_answers_bare_names_where_names_spells_them_out(cfg):
-    """Two different questions. `names` says what a request may *write*, so a
-    colliding name is spelt out; `taken` says what is *spoken for*, and no
-    upload will ever be called `research::lookup`."""
+    """Two different questions."""
     for party in ("research", "legal"):
         _skill(cfg.skills_dir, f"{party}/lookup", "lookup")
     registry = _read(cfg.skills_dir)
@@ -73,9 +62,10 @@ def test_an_empty_catalogue_takes_nothing(cfg):
 
 
 def test_subtracting_an_ambiguous_name_says_which_ones(cfg):
-    """It refused before this, so nothing unsafe happened -- but with the same
-    sentence a genuinely absent name gets, which sends a reader hunting for a
-    skill they can see in the listing printed underneath."""
+    """It refused before this, so nothing unsafe happened -- but with the same sentence
+    a genuinely absent name gets, which sends a reader hunting for a skill they can
+    see in the listing printed underneath.
+    """
     offered = ("code-review", "legal::lookup", "research::lookup")
 
     with pytest.raises(CapabilityError, match="more than one source offers it"):
@@ -93,8 +83,9 @@ def test_the_ambiguous_refusal_names_both_spellings():
 
 
 def test_a_genuinely_unknown_name_is_still_unknown():
-    """The distinction only exists if the other branch survives -- one is a
-    typo, the other is a name that stopped being enough."""
+    """The distinction only exists if the other branch survives -- one is a typo, the
+    other is a name that stopped being enough.
+    """
     with pytest.raises(CapabilityError, match="unknown name"):
         all_but(("nosuchthing",), offered=("legal::lookup", "research::lookup"))
 

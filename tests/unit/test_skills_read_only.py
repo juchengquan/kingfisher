@@ -1,25 +1,7 @@
 """The catalogue is instructions, so the agent may read it and never write it.
 
-`/memory` and `/derived` belong to a session and go when it does. A skill
-belongs to the *deployment*, and `KINGFISHER_SKILLS_DIR` exists so several
-deployments can share one reviewed set — so a skill edited during one request is
-read by every later request, in every deployment pointing at that directory. It
-is the one route where a write outlasts the turn that made it, and what it
-outlasts with is the text the model is told to follow.
-
-It was writable. Measured before this existed, against a catalogue on disk:
-
-    backend.write("/skills/demo/PWNED.md", ...)   -> created
-    backend.edit("/skills/demo/SKILL.md", ...)    -> tampered
-
-`/data` had a rule and this had none.
-
-Two enforcement points, because neither is sufficient. The deny rule derived
-for `/skills/**` -- see `kingfisher.layout.ROUTES` for where it is declared and
-`harness.agent.read_only_permissions` for what builds it -- is a tool permission,
-and the shell bypasses tool permissions entirely; the sandbox profile covers the
-shell and is macOS-only and disableable. `/data`
-already has exactly this pair, for exactly this reason.
+It was writable. Measured against a catalogue on disk, `backend.write` created
+`/skills/demo/PWNED.md` and `backend.edit` tampered with `/skills/demo/SKILL.md`.
 """
 
 from __future__ import annotations
@@ -73,9 +55,7 @@ def _drive(cfg, session_dir, tool, args):
 
 
 def test_a_file_tool_cannot_create_a_file_in_the_catalogue(cfg, session_dir):
-    """Driven through a compiled graph rather than asserted on the rules list.
-    A permission nothing enforces is a permission that does not exist, and the
-    `/data` rule beside this one has only ever been checked structurally."""
+    """Driven through a compiled graph rather than asserted on the rules list."""
     _catalogue(cfg)
 
     said = _drive(
@@ -88,8 +68,9 @@ def test_a_file_tool_cannot_create_a_file_in_the_catalogue(cfg, session_dir):
 
 
 def test_a_file_tool_cannot_rewrite_an_existing_skill(cfg, session_dir):
-    """The one that matters most: not a new file beside the instructions, but
-    the instructions themselves."""
+    """The one that matters most: not a new file beside the instructions, but the
+    instructions themselves.
+    """
     _catalogue(cfg)
 
     said = _drive(
@@ -102,9 +83,10 @@ def test_a_file_tool_cannot_rewrite_an_existing_skill(cfg, session_dir):
 
 
 def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
-    """`delete` and `edit` both map to the `write` operation, so one rule covers
-    all three -- stated here because that is a fact about deepagents rather than
-    about this rule, and it is what makes a single rule enough."""
+    """`delete` and `edit` both map to the `write` operation, so one rule covers all
+    three -- stated here because that is a fact about deepagents rather than about
+    this rule, and it is what makes a single rule enough.
+    """
     _catalogue(cfg)
 
     said = _drive(
@@ -118,10 +100,10 @@ def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
 
 
 def test_a_sessions_own_uploaded_skills_are_read_only_too(cfg, session_dir):
-    """`/skills/uploaded/` is the session's half rather than the deployment's,
-    and it is covered by the same rule on purpose: kingfisher writes it
-    host-side from `skill_refs`, and an agent able to rewrite an uploaded skill
-    could rewrite the instructions it was about to follow.
+    """`/skills/uploaded/` is the session's half rather than the deployment's, and it is
+    covered by the same rule on purpose: kingfisher writes it host-side from
+    `skill_refs`, and an agent able to rewrite an uploaded skill could rewrite the
+    instructions it was about to follow.
     """
     _catalogue(cfg)
     uploaded = session_dir / "skills" / "uploaded" / "mine"
@@ -138,8 +120,7 @@ def test_a_sessions_own_uploaded_skills_are_read_only_too(cfg, session_dir):
 
 
 def test_reading_a_skill_still_works(cfg, session_dir):
-    """The point is read-only, not unreachable. A skill the agent cannot open is
-    a skill that does not work, and this rule is one typo away from that."""
+    """The point is read-only, not unreachable."""
     _catalogue(cfg)
 
     said = _drive(cfg, session_dir, "read_file", {"file_path": "/skills/demo/SKILL.md"})
@@ -153,15 +134,7 @@ def test_reading_a_skill_still_works(cfg, session_dir):
 
 @macos
 def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
-    """The half the tool rule cannot reach. `FilesystemMiddleware` applies
-    permissions at the tool level and `execute` bypasses them entirely, which is
-    why `/data` has `protect_data()` under its rule.
-
-    Load-bearing specifically for the *default* layout: the catalogue lives in
-    the workspace unless a deployment relocates it, and the workspace is a
-    writable root -- so "writes are an allow-list" did not cover this. A
-    relocated catalogue was already safe by falling outside the list.
-    """
+    """The half the tool rule cannot reach."""
     directory = _catalogue(cfg)
     shell = build_backend(cfg, session_dir)
 
@@ -173,9 +146,7 @@ def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
 
 @macos
 def test_the_shell_can_still_read_a_skill_and_write_elsewhere(cfg, session_dir):
-    """The carve-out is a carve-out. Skills ship scripts and running one is the
-    reason the catalogue is a readable root at all, and the rest of the
-    workspace has to stay writable or every turn breaks."""
+    """The carve-out is a carve-out."""
     directory = _catalogue(cfg)
     shell = build_backend(cfg, session_dir)
 
@@ -185,10 +156,9 @@ def test_the_shell_can_still_read_a_skill_and_write_elsewhere(cfg, session_dir):
 
 
 def test_the_profile_denies_after_it_allows(tmp_path):
-    """sandbox-exec takes the *last* matching rule, so a carve-out inside a
-    writable root only works if it is written after the allow that covers it.
-    Ordering is the whole mechanism here and nothing else would catch it being
-    reversed."""
+    """sandbox-exec takes the *last* matching rule, so a carve-out inside a writable
+    root only works if it is written after the allow that covers it.
+    """
     text = confinement.profile(
         home=tmp_path / "home",
         readable=(tmp_path / "ws",),
@@ -204,8 +174,9 @@ def test_the_profile_denies_after_it_allows(tmp_path):
 
 
 def test_a_profile_with_nothing_protected_is_unchanged(tmp_path):
-    """The parameter defaults to empty, so a caller that names nothing gets the
-    profile it always got."""
+    """The parameter defaults to empty, so a caller that names nothing gets the profile
+    it always got.
+    """
     args = {"home": tmp_path / "home", "readable": (tmp_path / "ws",),
             "writable": (tmp_path / "ws",)}
 

@@ -1,31 +1,4 @@
-"""One line per request, with the session id left out of it.
-
-That omission is the whole design here. A session id is a bearer credential --
-`UnknownSessionError` says so outright: holding one is how a caller proves the
-session is theirs. It is also in the path of four of the five routes, so an
-ordinary access log writes credentials to disk, ships them to whatever collects
-logs, and leaves them in whatever that retains. A log is the one place a
-credential leaks quietly and stays leaked.
-
-So what is logged is the *route template* -- `/sessions/{session_id}/turns` --
-which fastapi has already matched by the time a response exists. It says which
-endpoint was called, which is what an access log is for, and says nothing about
-whose session it was.
-
-Anything that does need to tell requests apart should correlate on something the
-caller can be given and can rotate. There is no such field yet; when there is,
-it belongs here rather than the id being un-redacted.
-
-A caller's *groups* are not that field, and are deliberately not here. They are
-not a credential -- nothing is replayable about a group name -- so the reason
-the session id is kept out does not apply to them. What does apply is that they
-are weak correlation and strong disclosure: several callers share a group, so it
-tells requests apart badly, while a name like `hr-restricted` describes an
-organisation to whoever collects this stream. They go to the audit log instead,
-which has no handler until a deployment attaches one -- so writing them down
-stays a decision somebody makes rather than one they inherit, which is the same
-rule this file follows about ids.
-"""
+"""One line per request, with the session id left out of it."""
 
 from __future__ import annotations
 
@@ -47,15 +20,9 @@ def route_of(request: Request) -> str:
     """The matched route's template, or a placeholder if nothing matched.
 
     `scope["route"]` is set during routing, so this is only meaningful after the
-    response exists. A request that matched nothing has no template and must not
-    fall back to the real path -- that is precisely the 404-probing case where a
-    caller controls what gets written.
-
-    `<unmatched>` also covers a request that matched a route fastapi did not
-    add: only its own `APIRoute` records itself in the scope, so `/openapi.json`
-    and `/docs` are logged this way despite answering 200. Imprecise and
-    deliberately not fixed -- the alternative is falling back to the path for
-    *some* requests, and the rule is worth more when it has no exceptions.
+    response exists. A request that matched nothing has no template and must not fall
+    back to the real path -- that is precisely the 404-probing case where a caller
+    controls what gets written.
     """
     route = request.scope.get("route")
     template = getattr(route, "path", None)

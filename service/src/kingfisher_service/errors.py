@@ -1,21 +1,11 @@
 """Which refusal is which, and what every refusal looks like.
 
-Two rules, and they are separate.
-
-**Which status.** By exact type, never by base class. Ten of the package's
-eleven error types are `ValueError`, and so is `Request`'s empty-task check, and
-so is whatever a dependency raises -- so `except ValueError` would turn a bug
-into a refusal and a refusal into whichever status happened to be listed first.
-Errors not named below are not caller-facing: they say the deployment is wrong
-rather than the caller, and reaching one is a 500 on purpose.
-
-**What shape.** One, everywhere. There were four: this module's, fastapi's
-`{"detail": ...}` from `HTTPException`, fastapi's list-of-objects from request
-validation, and a hand-written string in the body-size middleware. A client that
-must recognise four shapes to find out what went wrong will parse one of them
-and break on the rest, so every refusal now leaves through `problem` -- and the
-routes raise rather than build responses, which is what leaves only one place
-that knows the shape.
+**Which status.** By exact type, never by base class. Ten of the package's eleven
+error types are `ValueError`, and so is `Request`'s empty-task check, and so is
+whatever a dependency raises -- so `except ValueError` would turn a bug into a
+refusal and a refusal into whichever status happened to be listed first. Errors not
+named below are not caller-facing: they say the deployment is wrong rather than the
+caller, and reaching one is a 500 on purpose.
 """
 
 from __future__ import annotations
@@ -70,21 +60,15 @@ STATUS: dict[type[Exception], tuple[int, str]] = {
     SubagentError: (HTTPStatus.BAD_REQUEST, "bad_subagent"),
 }
 
-#: Deployment errors that still earn a name. A second table rather than entries
-#: in the one above, because that one is *exactly* the caller-facing set and a
-#: rule checks it in both directions -- an error in it that a caller cannot
-#: cause would be a status nobody decided on, which is the drift that rule
-#: exists to catch.
+#: Deployment errors that still earn a name. A second table rather than entries in the
+#: one above, because that one is *exactly* the caller-facing set and a rule checks it
+#: in both directions -- an error in it that a caller cannot cause would be a status
+#: nobody decided on, which is the drift that rule exists to catch.
 #:
-#: What these have in common is that nothing the caller sends can fix them, so
-#: they stay 5xx and the code is not really a contract: it is a name, worth
-#: having because "500 error" and "500 the deployment's identity has drifted
-#: from its policy" are the same line in a log otherwise.
-#:
-#: `AccessError` covers `MissingGroups` through the MRO walk in `outcome`. The
-#: two are one problem seen from two places -- a header nothing set, a group the
-#: vocabulary never declared -- and a caller told them apart would learn
-#: something about the deployment and could act on neither.
+#: What these have in common is that nothing the caller sends can fix them, so they stay
+#: 5xx and the code is not really a contract: it is a name, worth having because "500
+#: error" and "500 the deployment's identity has drifted from its policy" are the same
+#: line in a log otherwise.
 DEPLOYMENT_STATUS: dict[type[Exception], tuple[int, str]] = {
     AccessError: (HTTPStatus.INTERNAL_SERVER_ERROR, "misconfigured"),
 }
@@ -103,13 +87,12 @@ CODE_FOR_STATUS: dict[int, str] = {
 def outcome(error: BaseException) -> tuple[int, str]:
     """What this exception will become on the wire: status, and code.
 
-    One function because there are two askers -- the handlers below, which turn
-    it into a response, and the audit log, which records what the caller was
-    told. They had drifted the moment there were two: the audit resolved through
-    `STATUS` alone, so an `HTTPException` carrying its own 422 was recorded as a
-    500 called "error" while the caller correctly received 422
-    "invalid_request". A log that disagrees with the response is worse than no
-    log, because it is believed.
+    One function because there are two askers -- the handlers below, which turn it
+    into a response, and the audit log, which records what the caller was told. They
+    had drifted the moment there were two: the audit resolved through `STATUS` alone,
+    so an `HTTPException` carrying its own 422 was recorded as a 500 called "error"
+    while the caller correctly received 422 "invalid_request". A log that disagrees
+    with the response is worse than no log, because it is believed.
     """
     # Walked rather than looked up, because starlette dispatches handlers by
     # walking the MRO and this has to agree with it. Asked as `STATUS.get(type)`
@@ -128,13 +111,7 @@ def outcome(error: BaseException) -> tuple[int, str]:
 
 
 def problem(status: int, code: str, message: str, **extra: object) -> JSONResponse:
-    """The one shape a refusal takes.
-
-    `error` is the contract; `message` is prose that may be reworded without
-    warning. `extra` carries whatever only one refusal has -- the limit that was
-    exceeded, the fields that failed validation -- rather than making every
-    refusal carry a field that is usually null.
-    """
+    """The one shape a refusal takes."""
     return JSONResponse({"error": code, "message": message, **extra}, status_code=status)
 
 
@@ -155,25 +132,16 @@ RESOLUTION_FAILED = (
 
 
 def install(app: FastAPI) -> None:
-    """Register the handlers that give every refusal that shape.
-
-    Routes then *raise* -- `UnknownSessionError` where there is no such session,
-    the library's own errors from a turn -- and nothing but this module builds a
-    body. A route that returned its own response would be a second shape by
-    definition, which is the thing being removed.
-    """
+    """Register the handlers that give every refusal that shape."""
 
     async def from_kingfisher(_: Request, error: Exception) -> JSONResponse:
         status, code = outcome(error)
         if isinstance(error, AccessError):
-            # The one refusal whose message may not be repeated. It names every
-            # group this deployment declares -- "unknown group(s): Q; this
-            # deployment defines A, B, C" -- which is exactly the enumeration
-            # that filtering listings and refusals exists to prevent, handed
-            # over by the one path that was not filtering anything.
-            #
-            # Logged rather than dropped, at ERROR on the service's own logger,
-            # because the operator who can act on it is the one reading that.
+            # The one refusal whose message may not be repeated. It names every group
+            # this deployment declares -- "unknown group(s): Q; this deployment defines
+            # A, B, C" -- which is exactly the enumeration that filtering listings and
+            # refusals exists to prevent, handed over by the one path that was not
+            # filtering anything.
             logger.error("cannot resolve the caller's groups: %s", error)
             return problem(status, code, RESOLUTION_FAILED)
         return problem(status, code, str(error))

@@ -1,10 +1,4 @@
-"""The group vocabulary, and the rule the definitions apply to it.
-
-Pure: no file, no workspace, no agent. Audiences themselves live in the
-definitions and are tested with the formats that carry them -- what is asserted
-here is the vocabulary a definition's audience is checked against, and the
-overlap rule every one of them applies.
-"""
+"""The group vocabulary, and the rule the definitions apply to it."""
 
 from __future__ import annotations
 
@@ -60,8 +54,9 @@ def test_a_caller_holding_nothing_reaches_nothing():
 
 
 def test_an_entry_with_no_audience_falls_back_to_the_definitions():
-    """What makes a plain list under a policied definition mean 'these, at my
-    audience' -- so every file written before audiences keeps its meaning."""
+    """What makes a plain list under a policied definition mean 'these, at my audience'
+    -- so every file written before audiences keeps its meaning.
+    """
     assert reaching(
         ("sql_query",), audiences={}, default=("A",), held=frozenset({"A"})
     ) == ("sql_query",)
@@ -79,8 +74,9 @@ def test_an_entry_with_its_own_audience_uses_it():
 
 
 def test_all_passes_through_untouched():
-    """`ALL` means everything available, bounded by the definition's own
-    audience rather than by any entry."""
+    """`ALL` means everything available, bounded by the definition's own audience rather
+    than by any entry.
+    """
     assert reaching(ALL, audiences={}, default=("A",), held=frozenset({"A"})) == ALL
 
 
@@ -99,9 +95,7 @@ def narrowing(entry, *, groups, vocab=None):
 
 
 def test_an_entry_outside_the_definitions_own_audience_is_reported():
-    """Reported, not refused. It reaches whoever holds C *and* A-or-B, which is
-    a second requirement somebody may well have meant -- and is also what a
-    mistake looks like, which is why it is said out loud and not vetoed."""
+    """Reported, not refused."""
     assert narrowing(("C",), groups=("A", "B")) == (("x.yaml: tool sql_query", "C"),)
 
 
@@ -118,15 +112,14 @@ def test_a_star_entry_never_narrows():
 
 
 def test_a_contained_entry_does_not_narrow():
-    """Judged on meaning, not spelling. A caller holding `wide` holds `A` too,
-    so an entry for `A` under a definition for `wide` asks nothing extra --
-    and comparing raw names called it narrower."""
+    """Judged on meaning, not spelling."""
     assert narrowing(("A",), groups=("wide",), vocab=vocabulary(wide=("A",))) == ()
 
 
 def test_a_compound_does_not_narrow_beside_either_part():
-    """Either part, in either direction: the definition names the compound and
-    the entry names a part, or the other way about."""
+    """Either part, in either direction: the definition names the compound and the entry
+    names a part, or the other way about.
+    """
     vocab = vocabulary(**{"A+B": ()})
     both = Groups(names=vocab.names, compounds={"A+B": ("A", "B")})
     assert narrowing(("A",), groups=("A+B",), vocab=both) == ()
@@ -139,10 +132,7 @@ def test_a_compound_sharing_no_part_narrows():
 
 
 def test_the_second_requirement_a_narrowing_states_actually_works():
-    """The whole reason the refusal went. An entry naming a group outside the
-    definition's own line reaches exactly the callers holding one of each --
-    which is "everyone who opens this, and is senior", and has always evaluated
-    correctly. Only the veto stood in the way."""
+    """The whole reason the refusal went."""
     audiences = {"export": ("C",)}
     tools = ("export", "line_count")
 
@@ -170,16 +160,18 @@ def test_no_groups_at_all_expands_to_nothing():
 
 
 def test_an_unknown_group_is_refused_rather_than_ignored():
-    """A typo would otherwise reach nothing, which looks exactly like a caller
-    who was denied."""
+    """A typo would otherwise reach nothing, which looks exactly like a caller who was
+    denied.
+    """
     with pytest.raises(AccessError, match="unknown group"):
         vocabulary().expand(["Q"])
 
 
 def test_a_definition_naming_an_undeclared_group_is_refused():
-    """The other end of the closed vocabulary: a mistyped audience would
-    otherwise invent a group nobody is in, and the only symptom would be
-    something quietly reachable by no one."""
+    """The other end of the closed vocabulary: a mistyped audience would otherwise
+    invent a group nobody is in, and the only symptom would be something quietly
+    reachable by no one.
+    """
     with pytest.raises(ValueError, match="undeclared group"):
         vocabulary().refuse_undeclared(("Q",), where="x.yaml: tools", error=ValueError)
 
@@ -223,9 +215,7 @@ def test_holding_one_part_earns_nothing():
 
 
 def test_contains_satisfies_a_requirement():
-    """Expansion first, then requirements against what is held afterwards. An
-    `admin` who reaches both parts is not weaker than the sum of what they
-    reach -- which is the alternative, and it has no defence."""
+    """Expansion first, then requirements against what is held afterwards."""
     vocab = Groups(
         names={"A": ("A",), "B": ("B",), "both": ("both",), "admin": ("admin", "A", "B")},
         compounds={"both": ("A", "B")},
@@ -236,7 +226,8 @@ def test_contains_satisfies_a_requirement():
 
 def test_a_compound_a_group_contains_comes_with_it():
     """Earning a compound earns whatever contains it, or a name written into a
-    `contains` chain would reach less than the same name written by hand."""
+    `contains` chain would reach less than the same name written by hand.
+    """
     vocab = Groups(
         names={"A": ("A",), "B": ("B",), "both": ("both", "C"), "C": ("C",)},
         compounds={"both": ("A", "B")},
@@ -246,8 +237,9 @@ def test_a_compound_a_group_contains_comes_with_it():
 
 
 def test_a_caller_may_not_present_a_compound():
-    """It is what holding the parts adds up to, not something to claim --
-    otherwise one assertion stands in for the two `all_of` exists to require."""
+    """It is what holding the parts adds up to, not something to claim -- otherwise one
+    assertion stands in for the two `all_of` exists to require.
+    """
     with pytest.raises(AccessError, match="derived"):
         requiring(both=("A", "B")).expand(["both"])
 
@@ -258,8 +250,9 @@ def test_the_refusal_names_the_parts_to_present_instead():
 
 
 def test_an_undeclared_name_inside_a_conjunction_is_refused():
-    """A name typed from memory is no likelier to be right for having been
-    written next to another one."""
+    """A name typed from memory is no likelier to be right for having been written next
+    to another one.
+    """
     with pytest.raises(ValueError, match="'Q'"):
         vocabulary().refuse_undeclared(
             (frozenset({"A", "Q"}),), where="x.yaml: tools", error=ValueError

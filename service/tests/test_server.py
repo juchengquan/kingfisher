@@ -1,10 +1,4 @@
-"""The HTTP surface over sessions.
-
-Every test here drives a real app over real HTTP through `TestClient`, around a
-`Kingfisher` built with a stub agent. That is the whole reason `create_app`
-takes an instance: the substitution point is the one the rest of this suite
-already uses, so nothing here needs to patch construction.
-"""
+"""The HTTP surface over sessions."""
 
 from __future__ import annotations
 
@@ -32,8 +26,9 @@ def client(cfg):
 
 
 def test_opening_a_session_returns_an_id_the_library_can_see(client):
-    """The two halves agreeing is the point: an id minted over HTTP is a
-    session, not a token the server invented and holds somewhere."""
+    """The two halves agreeing is the point: an id minted over HTTP is a session, not a
+    token the server invented and holds somewhere.
+    """
     response = client.post("/sessions", json={"agent": "only"})
 
     assert response.status_code == 201
@@ -42,14 +37,12 @@ def test_opening_a_session_returns_an_id_the_library_can_see(client):
 
 
 def test_a_request_cannot_choose_a_session_id(client):
-    """T2, at the edge. A supplied id may resume but never create, so there is
-    no field for one here -- a service forwarding an id from its own caller
-    would otherwise let that caller choose, or guess, somebody else's.
+    """T2, at the edge.
 
     Refused rather than ignored, which is stronger than it used to be: this body
-    forbids what it does not define, so a caller who believed the field worked
-    is told it does not, instead of getting a 201 and a different id than the one
-    they think they hold.
+    forbids what it does not define, so a caller who believed the field worked is
+    told it does not, instead of getting a 201 and a different id than the one they
+    think they hold.
     """
     response = client.post("/sessions", json={"agent": "only", "session_id": "chosen"})
 
@@ -67,8 +60,9 @@ def test_reading_a_session_reports_its_id_and_when_it_was_used(client):
 
 
 def test_what_comes_back_names_no_path(client):
-    """A caller handed a directory would start reading files out of it, and the
-    layout would become a contract nobody wrote down."""
+    """A caller handed a directory would start reading files out of it, and the layout
+    would become a contract nobody wrote down.
+    """
     session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
 
     body = client.get(f"/sessions/{session_id}").json()
@@ -81,9 +75,9 @@ def test_reading_a_session_that_does_not_exist_is_a_404(client):
 
 
 def test_reading_a_session_does_not_disturb_it(client, cfg):
-    """No claim taken, and the idle clock retention reads is not refreshed --
-    otherwise a service checking an id would keep sessions alive by asking
-    about them."""
+    """No claim taken, and the idle clock retention reads is not refreshed -- otherwise
+    a service checking an id would keep sessions alive by asking about them.
+    """
     import os
     import time
 
@@ -108,16 +102,17 @@ def test_deleting_a_session_removes_it(client):
 
 
 def test_deleting_a_session_that_does_not_exist_is_a_404(client):
-    """`delete_session` answers `None` both for "no such session" and for
-    "removed it", so existence is checked first -- the library's return cannot
-    tell a 404 from a 204."""
+    """`delete_session` answers `None` both for "no such session" and for "removed it",
+    so existence is checked first -- the library's return cannot tell a 404 from a
+    204.
+    """
     assert client.delete("/sessions/" + "0" * 32).status_code == 404
 
 
 def test_there_is_no_way_to_list_sessions(client):
-    """A session id is a bearer credential, so a collection endpoint hands out
-    every credential on the box. Whatever knows whose sessions are whose calls
-    `sessions()` in-process."""
+    """A session id is a bearer credential, so a collection endpoint hands out every
+    credential on the box.
+    """
     client.post("/sessions", json={"agent": "only"})
 
     assert client.get("/sessions").status_code in (404, 405)
@@ -127,15 +122,14 @@ def test_there_is_no_way_to_list_sessions(client):
 
 
 def test_the_server_binds_loopback_unless_told_otherwise():
-    """Not a placeholder. This server does not know who is calling, so a
-    default of `0.0.0.0` publishes an unauthenticated API the moment anyone
-    runs it."""
+    """Not a placeholder."""
     assert ServiceConfig().host == "127.0.0.1"
 
 
 def test_server_settings_come_from_their_own_prefix():
-    """A prefix of its own, so reading a deployment's environment says which
-    half of the split each setting belongs to."""
+    """A prefix of its own, so reading a deployment's environment says which half of the
+    split each setting belongs to.
+    """
     settings = ServiceConfig.from_env(
         {"KINGFISHER_SERVICE_HOST": "0.0.0.0", "KINGFISHER_SERVICE_PORT": "9001"}  # noqa: S104
     )
@@ -144,8 +138,7 @@ def test_server_settings_come_from_their_own_prefix():
 
 
 def test_a_body_over_the_limit_is_refused_without_being_read(client, cfg):
-    """`task` is unbounded text. The limit is not tidiness -- it is the
-    difference between a bad request and a process holding a gigabyte of it."""
+    """`task` is unbounded text."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     app = create_app(service, ServiceConfig(max_body_bytes=64))
 
@@ -157,8 +150,7 @@ def test_a_body_over_the_limit_is_refused_without_being_read(client, cfg):
 
 
 def test_the_app_serves_the_instance_it_was_given(cfg):
-    """The substitution point. An app that built its own would push these tests
-    toward patching `create_deep_agent`, which this repo forbids."""
+    """The substitution point."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     app = create_app(service)
 
@@ -173,10 +165,10 @@ def test_a_filesystem_endpoint_does_not_stall_every_other_request(cfg, monkeypat
     """Why the session handlers are `def` and not `async def`.
 
     `session` is a directory listing -- 0.24ms for fifty sessions, 22ms for five
-    thousand -- and on the loop that is time during which nothing else
-    progresses. fastapi runs a sync endpoint on a worker thread, so three
-    overlap in about the time of one. The margin is deliberately wide: the
-    claim is "not serialised", not a number.
+    thousand -- and on the loop that is time during which nothing else progresses.
+    fastapi runs a sync endpoint on a worker thread, so three overlap in about the
+    time of one. The margin is deliberately wide: the claim is "not serialised", not
+    a number.
     """
     import asyncio
     import time
@@ -261,8 +253,9 @@ def serving(cfg, agent, **settings):
 
 
 def test_a_turn_streams_its_events_as_named_sse(cfg):
-    """The kind is the event name, so a consumer subscribes to what it wants
-    rather than parsing every body to find out what it got."""
+    """The kind is the event name, so a consumer subscribes to what it wants rather than
+    parsing every body to find out what it got.
+    """
     service, app = serving(cfg, AsyncStub("done", tokens=tokens(3)))
     session_id = service.start_session()
 
@@ -289,9 +282,7 @@ def test_every_event_name_is_one_the_package_declares(cfg):
 
 
 def test_the_finished_event_carries_the_answer_and_no_host_path(cfg):
-    """`run_dir` and `log_path` are the host's filesystem layout. A remote
-    caller cannot read them and should not be told them; `virtual_dir` is the
-    machine-independent name for the same directory."""
+    """`run_dir` and `log_path` are the host's filesystem layout."""
     service, app = serving(cfg, AsyncStub("the answer"))
     session_id = service.start_session()
 
@@ -307,18 +298,7 @@ def test_the_finished_event_carries_the_answer_and_no_host_path(cfg):
 
 
 def test_the_result_payload_is_exactly_these_fields(cfg):
-    """The turn payload is a wire contract, and nothing pinned its shape.
-
-    The test above names the two fields that must be absent and three that must
-    be present, which leaves every other field free to appear or vanish
-    unnoticed. `stop_reason` -- and `cut_short` before it -- went on the wire
-    with no test at all: dropping the line from `result_payload` broke nothing,
-    so a client branching on it would have started seeing turns that never say
-    how they ended.
-
-    An exact set rather than a subset, so this fails in both directions: a field
-    added without a decision, and one removed without noticing who reads it.
-    """
+    """The turn payload is a wire contract, and nothing pinned its shape."""
     service, app = serving(cfg, AsyncStub("the answer"))
     session_id = service.start_session()
 
@@ -340,9 +320,7 @@ def test_the_result_payload_is_exactly_these_fields(cfg):
 
 
 def test_a_token_frame_carries_text_and_nothing_else(cfg):
-    """Defaults are omitted rather than sent as nulls. Tokens are the bulk of a
-    turn's bytes, and seven null fields each is a cost paid thousands of times
-    for a uniformity nobody consumes."""
+    """Defaults are omitted rather than sent as nulls."""
     service, app = serving(cfg, AsyncStub("done", tokens=tokens(1)))
     session_id = service.start_session()
 
@@ -357,10 +335,7 @@ def test_a_token_frame_carries_text_and_nothing_else(cfg):
 
 
 def test_an_unknown_session_is_a_404_and_not_a_stream(cfg):
-    """The rule the whole endpoint is arranged around. `astream` runs `_prepare`
-    before yielding, so a refusal is still a status code at that moment -- and
-    handing the generator to `StreamingResponse` unopened would put 200 on the
-    wire and bury it in the body."""
+    """The rule the whole endpoint is arranged around."""
     _, app = serving(cfg, AsyncStub("done"))
 
     with TestClient(app) as http:
@@ -372,9 +347,10 @@ def test_an_unknown_session_is_a_404_and_not_a_stream(cfg):
 
 
 def test_a_second_turn_on_a_busy_session_is_a_409(cfg):
-    """Refused rather than queued: a queue hides a wait as long as whatever the
-    other turn is doing, and a caller who did not know they were racing learns
-    nothing from it."""
+    """Refused rather than queued: a queue hides a wait as long as whatever the other
+    turn is doing, and a caller who did not know they were racing learns nothing from
+    it.
+    """
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
     (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
@@ -387,8 +363,9 @@ def test_a_second_turn_on_a_busy_session_is_a_409(cfg):
 
 
 def test_an_empty_task_is_refused_by_validation(cfg):
-    """422 from the model rather than 500 from `Request.__post_init__`, which
-    raises a bare `ValueError` that no error map should be catching."""
+    """422 from the model rather than 500 from `Request.__post_init__`, which raises a
+    bare `ValueError` that no error map should be catching.
+    """
     _, app = serving(cfg, AsyncStub("done"))
 
     with TestClient(app) as http:
@@ -396,9 +373,7 @@ def test_an_empty_task_is_refused_by_validation(cfg):
 
 
 def test_a_refused_turn_leaves_no_claim_behind(cfg):
-    """The stream is closed on the refusal path too. A claim taken and not
-    given back would make the session look busy to retention as well as to the
-    next caller."""
+    """The stream is closed on the refusal path too."""
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
 
@@ -412,9 +387,9 @@ def test_a_refused_turn_leaves_no_claim_behind(cfg):
 
 
 def test_a_one_shot_turn_mints_a_session_and_names_it(cfg):
-    """Omitting the session is something the library can do and the path form
-    cannot express. The id comes back on `finished`, so a caller who decides to
-    continue can."""
+    """Omitting the session is something the library can do and the path form cannot
+    express.
+    """
     service, app = serving(cfg, AsyncStub("done"))
 
     with TestClient(app) as http:
@@ -425,9 +400,7 @@ def test_a_one_shot_turn_mints_a_session_and_names_it(cfg):
 
 
 def test_a_one_shot_turn_does_not_take_a_session_id(cfg):
-    """A supplied id may resume but never create. If the body could name one,
-    a service forwarding its caller's input would let that caller pick -- or
-    guess -- somebody else's session."""
+    """A supplied id may resume but never create."""
     service, app = serving(cfg, AsyncStub("done"))
 
     with TestClient(app) as http:
@@ -439,9 +412,7 @@ def test_a_one_shot_turn_does_not_take_a_session_id(cfg):
 
 
 def test_the_api_does_not_accept_a_turn_id(cfg):
-    """It would read as an idempotency key. The library's `turn_id` reuses the
-    directory and then runs the turn again in full, so a client retrying a
-    dropped request would double both the conversation and the bill."""
+    """It would read as an idempotency key."""
     _, app = serving(cfg, AsyncStub("done"))
 
     with TestClient(app) as http:
@@ -454,14 +425,7 @@ def test_the_api_does_not_accept_a_turn_id(cfg):
 
 
 def test_a_quiet_stream_sends_a_heartbeat(cfg):
-    """Two jobs, and the second is the one that matters. Proxies drop idle
-    connections -- that is the obvious one. But a hangup is only noticed when
-    the server next tries to send, so this is what bounds how long a departed
-    client keeps paying for model calls during a quiet tool call.
-
-    An SSE comment, so every client ignores it by spec and it never becomes a
-    kind consumers have to know about.
-    """
+    """Two jobs, and the second is the one that matters."""
     service, app = serving(
         cfg, AsyncStub("done", tokens=tokens(2), pause=0.05), heartbeat_s=0.01
     )
@@ -475,10 +439,7 @@ def test_a_quiet_stream_sends_a_heartbeat(cfg):
 
 
 def test_a_heartbeat_does_not_restart_the_work_it_is_waiting_on(cfg):
-    """The pending `__anext__` is kept across pings rather than re-issued.
-    Restarting it would abandon a model call in flight every interval, which is
-    the opposite of what a keepalive is for -- and would show up as tokens
-    going missing."""
+    """The pending `__anext__` is kept across pings rather than re-issued."""
     service, app = serving(
         cfg, AsyncStub("done", tokens=tokens(5), pause=0.03), heartbeat_s=0.01
     )
@@ -493,11 +454,10 @@ def test_a_heartbeat_does_not_restart_the_work_it_is_waiting_on(cfg):
 async def hang_up_after(app, path, payload, chunks, when):
     """Drive the ASGI app directly and disconnect mid-stream.
 
-    Not through a client, because httpx's `ASGITransport` buffers the whole
-    response before yielding a line -- measured at 2.3s to the first line of a
-    2s stream -- so no HTTP-level test can observe a turn while it is running.
-    Speaking ASGI is also the honest level: this is exactly the `http.disconnect`
-    a real server delivers.
+    Not through a client, because httpx's `ASGITransport` buffers the whole response
+    before yielding a line -- measured at 2.3s to the first line of a 2s stream -- so
+    no HTTP-level test can observe a turn while it is running. Speaking ASGI is also
+    the honest level: this is exactly the `http.disconnect` a real server delivers.
     """
     import json
 
@@ -542,18 +502,7 @@ async def hang_up_after(app, path, payload, chunks, when):
 
 
 def test_hanging_up_stops_the_turn_and_gives_the_claim_back(cfg):
-    """The decision the whole design rests on, and it needs no library change.
-
-    A client that walks away stops the work rather than leaving the session
-    locked until the staleness window expires. It is also why there is no cancel
-    endpoint: disconnect already is one.
-
-    Getting here found a real defect. The generator's `finally` called `aclose()`
-    while a `__anext__` was still in flight, which raises "asynchronous generator
-    is already running" -- so the claim was never given back. Cancelling the
-    pending task is the way in, and awaiting that cancellation is what makes the
-    stop have happened rather than be scheduled.
-    """
+    """The decision the whole design rests on, and it needs no library change."""
     service, app = serving(cfg, AsyncStub("done", tokens=tokens(200), pause=0.01))
     session_id = service.start_session()
     claim = cfg.state_dir / "claims" / session_id
@@ -571,14 +520,7 @@ def test_hanging_up_stops_the_turn_and_gives_the_claim_back(cfg):
 
 
 def test_an_event_with_nothing_to_say_sends_an_empty_body(cfg):
-    """Defaults are omitted rather than sent as nulls. Tokens are the bulk of a
-    turn's bytes, and seven null fields each is a cost paid thousands of times
-    per turn for a uniformity nobody consumes.
-
-    Tested on the function rather than through a stream, because every kind a
-    real run emits happens to carry `text` -- so a stream cannot tell "omitted"
-    from "present and non-empty".
-    """
+    """Defaults are omitted rather than sent as nulls."""
     from kingfisher_service.payloads import event_payload
 
     from kingfisher import RunEvent
@@ -589,8 +531,9 @@ def test_an_event_with_nothing_to_say_sends_an_empty_body(cfg):
 
 
 def test_a_delegate_is_named_so_its_prose_can_be_told_apart(cfg):
-    """Without it a delegate's tokens and the caller's arrive on one channel and
-    the type cannot separate them -- both are chunks."""
+    """Without it a delegate's tokens and the caller's arrive on one channel and the
+    type cannot separate them -- both are chunks.
+    """
     from kingfisher_service.payloads import event_payload
 
     from kingfisher import RunEvent
@@ -623,12 +566,7 @@ REFUSALS = [
 
 @pytest.mark.parametrize("case", REFUSALS, ids=[row[0] for row in REFUSALS])
 def test_every_refusal_has_the_same_shape(client, case):
-    """One shape, whoever refused: kingfisher, fastapi's router, or validation.
-
-    `error` is the contract and `message` is prose. A client branches on the
-    first and shows the second; parsing the message is how a client breaks when
-    the wording improves.
-    """
+    """One shape, whoever refused: kingfisher, fastapi's router, or validation."""
     _, method, path, payload, expected_status, expected_code = case
 
     response = client.request(method, path, json=payload)
@@ -642,8 +580,9 @@ def test_every_refusal_has_the_same_shape(client, case):
 
 
 def test_a_busy_session_refuses_in_the_same_shape(client, cfg):
-    """The turn path raises rather than building a response, so it arrives at
-    the same handler as everything else."""
+    """The turn path raises rather than building a response, so it arrives at the same
+    handler as everything else.
+    """
     session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
     (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
 
@@ -655,9 +594,7 @@ def test_a_busy_session_refuses_in_the_same_shape(client, cfg):
 
 
 def test_an_oversize_body_refuses_in_the_same_shape(cfg):
-    """The middleware used to hand-write its JSON, which made it the fourth
-    shape. It carries `limit` as an extra rather than every refusal carrying a
-    field that is usually null."""
+    """The middleware used to hand-write its JSON, which made it the fourth shape."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     app = create_app(service, ServiceConfig(max_body_bytes=64))
 
@@ -670,8 +607,7 @@ def test_an_oversize_body_refuses_in_the_same_shape(cfg):
 
 
 def test_two_refusals_with_one_status_still_say_which_is_which(client):
-    """`unknown_session` and a mistyped URL are both 404 and need different
-    fixes. A status alone is not something a client can branch on."""
+    """`unknown_session` and a mistyped URL are both 404 and need different fixes."""
     unknown = client.get("/sessions/" + "0" * 32).json()["error"]
     mistyped = client.get("/nope").json()["error"]
 
@@ -681,14 +617,7 @@ def test_two_refusals_with_one_status_still_say_which_is_which(client):
 
 
 def test_a_bug_is_not_dressed_up_as_a_refusal(cfg, monkeypatch):
-    """An unmapped exception must not acquire an `error` code on the way out.
-    A 500 that looks like a refusal is one a client retries forever.
-
-    Asserted on the response rather than on the raise. Starlette re-raises after
-    a server-error handler runs, so `pytest.raises` passes whether or not the
-    handler dressed the bug up first -- which it did, when this was written that
-    way and a mutation broadening the registration went unnoticed.
-    """
+    """An unmapped exception must not acquire an `error` code on the way out."""
     boom = "something is wrong here"
 
     def explode(self, session_id):
@@ -708,9 +637,7 @@ def test_a_bug_is_not_dressed_up_as_a_refusal(cfg, monkeypatch):
 
 
 def test_a_capabilities_object_travels_with_the_turn(cfg):
-    """That the nested object parses and reaches the library. Which axes end up
-    where is exercised in `test_capabilities_on_the_wire`, against `turn_for`,
-    because a *narrowing* request cannot complete here -- see below."""
+    """That the nested object parses and reaches the library."""
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
 
@@ -727,11 +654,11 @@ def test_a_capabilities_object_travels_with_the_turn(cfg):
 def test_narrowing_against_an_injected_agent_is_a_deployment_error(cfg):
     """Not a caller-facing refusal, and deliberately not in the error map.
 
-    `Kingfisher(graph=...)` returns that graph as-is, so restrictions the
-    request asks for were never applied to it -- the library refuses rather than
-    pretending. A deployment that wants per-request capabilities must let
-    kingfisher build the agent. It is a 500 because it is the deployment that is
-    wrong, not the caller, and the caller can do nothing about it.
+    `Kingfisher(graph=...)` returns that graph as-is, so restrictions the request
+    asks for were never applied to it -- the library refuses rather than pretending.
+    A deployment that wants per-request capabilities must let kingfisher build the
+    agent. It is a 500 because it is the deployment that is wrong, not the caller,
+    and the caller can do nothing about it.
     """
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
@@ -747,8 +674,7 @@ def test_narrowing_against_an_injected_agent_is_a_deployment_error(cfg):
 
 
 def test_an_unknown_capability_axis_is_a_422_in_the_usual_shape(cfg):
-    """Misspelling an axis must not be a 200. Answering success to a request to
-    restrict something is the worst way to learn the field was ignored."""
+    """Misspelling an axis must not be a 200."""
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
 
@@ -767,8 +693,7 @@ def test_an_unknown_capability_axis_is_a_422_in_the_usual_shape(cfg):
 
 
 def test_a_turn_can_bring_files_by_reference(cfg, tmp_path):
-    """The remote form of `--data`. A caller with no host paths names an id and
-    the deployment's store turns it into content."""
+    """The remote form of `--data`."""
     from kingfisher import LocalFileStore
 
     store = tmp_path / "store"
@@ -795,9 +720,9 @@ def test_a_turn_can_bring_files_by_reference(cfg, tmp_path):
 
 
 def test_a_reference_that_climbs_out_is_refused_in_the_usual_shape(cfg, tmp_path):
-    """A ref is whatever a caller wrote, so this is the request most worth
-    getting right. Distinct from `unknown_reference`: one is a typo, this one
-    reads as an attempt."""
+    """A ref is whatever a caller wrote, so this is the request most worth getting
+    right.
+    """
     from kingfisher import LocalFileStore
 
     store = tmp_path / "store"
@@ -845,8 +770,9 @@ def test_a_reference_nobody_has_is_a_400_not_a_500(cfg, tmp_path):
 
 
 def test_references_without_a_wired_store_are_the_deployments_problem(cfg):
-    """A 500, and deliberately not in the error map: the deployment has not said
-    where files come from, and nothing the caller sends can fix that."""
+    """A 500, and deliberately not in the error map: the deployment has not said where
+    files come from, and nothing the caller sends can fix that.
+    """
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
 
@@ -860,19 +786,12 @@ def test_references_without_a_wired_store_are_the_deployments_problem(cfg):
 
 
 def test_opening_a_session_requires_an_agent(client):
-    """No default and no implicit one. The agent decides where every prompt in
-    the session goes and what it costs, so a body without one is a 422 rather
-    than a guess."""
+    """No default and no implicit one."""
     assert client.post("/sessions", json={}).status_code == 422
 
 
 def test_opening_a_session_says_what_it_resolved(client):
-    """The one moment a caller can be told what they got without running a turn.
-
-    The agent is resolved and pinned right here, so reporting it costs nothing
-    and answers the question a caller would otherwise have to infer from a
-    turn's behaviour.
-    """
+    """The one moment a caller can be told what they got without running a turn."""
     body = client.post("/sessions", json={"agent": "only"}).json()
 
     assert body["agent"]["name"] == "only"
@@ -880,9 +799,7 @@ def test_opening_a_session_says_what_it_resolved(client):
 
 
 def test_an_unknown_agent_is_refused_before_a_session_exists(client):
-    """Nothing is created for a request that cannot be served. A session left
-    behind by a refused open is one more thing for retention to reap, and one
-    more id a caller holds and cannot use."""
+    """Nothing is created for a request that cannot be served."""
     response = client.post("/sessions", json={"agent": "nobody"})
 
     assert response.status_code >= 400

@@ -1,11 +1,4 @@
-"""The driver's rendering, which had no tests at all.
-
-Nothing imported tests/integration/driver.py, so the one file whose entire job is what the user
-sees was the one file nobody checked. Every way this fails is silent and
-textual -- a line jammed onto the end of a sentence, an unbounded argument, a
-tool result leaking through as prose -- which is exactly what "run it and
-look" misses, because it only shows on the input you did not happen to try.
-"""
+"""The driver's rendering, which had no tests at all."""
 
 from __future__ import annotations
 
@@ -28,13 +21,7 @@ from tests.integration import driver as main
 
 
 def _render(events: list[RunEvent]) -> tuple[str, RunResult | None]:
-    """One stream, which is what the driver passes and what these tests are about.
-
-    The renderer moved into the wheel when `kingfisher run` needed one --
-    shipping a second copy is how the two would have come to disagree about a
-    new event kind. These stay here because they are the driver's rendering
-    contract; the two-stream split `run` uses is tested beside the verb.
-    """
+    """One stream, which is what the driver passes and what these tests are about."""
     out = io.StringIO()
     result = show(iter(events), out)
     return out.getvalue(), result
@@ -105,12 +92,7 @@ def test_prose_is_closed_off_when_the_run_ends_on_it():
 
 
 def test_a_delegates_prose_is_marked_where_it_starts_and_ends():
-    """Two answers on one stream, with nothing between them, read as one.
-
-    The marker cannot go on the fragment: chunks split mid-word, so there is no
-    line to tag. It goes at the seam, which is the only place a boundary
-    actually exists.
-    """
+    """Two answers on one stream, with nothing between them, read as one."""
     text, _ = _render(
         [
             RunEvent(kind="token", text="Checking that. "),
@@ -123,9 +105,9 @@ def test_a_delegates_prose_is_marked_where_it_starts_and_ends():
 
 
 def test_a_run_with_no_delegates_is_rendered_exactly_as_before():
-    """The regression that would be easy to miss: every run gaining a `[main]`
-    line it never had. The marker is printed on a *change* of speaker, and a
-    run with one speaker never changes."""
+    """The regression that would be easy to miss: every run gaining a `[main]` line it
+    never had.
+    """
     text, _ = _render(
         [RunEvent(kind="token", text="7 to"), RunEvent(kind="token", text=" seven.txt")]
     )
@@ -149,12 +131,7 @@ def test_no_result_when_the_stream_never_finishes():
 
 
 def test_the_inventory_lists_without_a_session(cfg, capsys):
-    """`--list` describes the workspace, and a workspace has no session.
-
-    Rooting each session at its own directory made `session_dir` mandatory for
-    `build_agent`, and this caller had none to give -- so `--list` raised
-    instead of listing.
-    """
+    """`--list` describes the workspace, and a workspace has no session."""
     assert main.show_inventory(cfg, cfg.workspace) == 0
 
     printed = capsys.readouterr().out
@@ -163,17 +140,7 @@ def test_the_inventory_lists_without_a_session(cfg, capsys):
 
 
 def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
-    """`--list` is where someone goes *because* something is wrong.
-
-    A malformed subagent has always been caught and printed; a tool that would
-    not load went out as a traceback over the rest of the inventory. Folders
-    make that more likely rather than less, so the two loaders report the same
-    way.
-
-    The example used to be two folders each defining a `find_company`, which is
-    no longer broken -- see the test below. One file exporting a name twice
-    still is, because there is no second file to tell those apart.
-    """
+    """`--list` is where someone goes *because* something is wrong."""
     directory = tools_dir(cfg) / "research"
     directory.mkdir(parents=True)
     (directory / "t.py").write_text(
@@ -194,12 +161,8 @@ def test_a_broken_tool_is_reported_rather_than_raised(cfg, capsys):
 
 
 def test_two_folders_may_each_define_one_subagent_name(cfg, capsys):
-    """The subagent half, and it failed harder than the tool one did: a
-    duplicate name took the whole inventory down rather than one section.
-
-    Listed under the reference a grant would write, with no trailing `(file)` --
-    the reference already says where it lives, and printing it twice in a
-    listing whose job is to be scannable is noise.
+    """The subagent half, and it failed harder than the tool one did: a duplicate name
+    took the whole inventory down rather than one section.
     """
     spec = (
         "name: surveyor\ndescription: Surveys, the {who} way.\n"
@@ -218,11 +181,7 @@ def test_two_folders_may_each_define_one_subagent_name(cfg, capsys):
 
 
 def test_two_folders_may_each_define_one_name(cfg, capsys):
-    """The case that used to stop `--list` dead, and stop a deployment with it.
-
-    Vendors do not coordinate names. Both are listed, under the reference a
-    grant would write, because a bare `find_company` no longer says which.
-    """
+    """The case that used to stop `--list` dead, and stop a deployment with it."""
     for folder in ("research", "sales"):
         directory = tools_dir(cfg) / folder
         directory.mkdir(parents=True)
@@ -251,12 +210,7 @@ def test_listing_the_inventory_leaves_no_session_behind(cfg):
 
 
 def test_the_smoke_seeds_its_dataset_where_the_agent_looks(cfg):
-    """`/data` is a *session's* directory, not the workspace's.
-
-    Seeding at workspace level wrote the fixture where no route reaches: the
-    smoke printed "seeded sample dataset into /data" and the agent found /data
-    empty, so every check failed for a reason nothing reported.
-    """
+    """`/data` is a *session's* directory, not the workspace's."""
     seeded = main.prepare_smoke(cfg, cfg.workspace, "smoke1")
 
     assert (cfg.workspace / "sessions" / "smoke1" / "data" / "orders.csv").is_file()
@@ -271,15 +225,7 @@ def test_the_smoke_never_creates_a_workspace_level_data_directory(cfg):
 
 
 def test_skills_stay_shared_across_sessions(cfg):
-    """Only `data` moved under the session. Skills are workspace-level, which
-    is where the backend's `/skills` route still points.
-
-    A session does hold `skills/uploaded`, and always did -- it used to appear
-    on the first backend build and now arrives with the rest of the layout. So
-    the claim is that the *catalogue* is not copied in, not that the directory
-    is absent: an empty slot for a caller's own skills is not a second copy of
-    the shared ones.
-    """
+    """Only `data` moved under the session."""
     from dataclasses import replace
 
     main.prepare_smoke(replace(cfg, skills_enabled=True), cfg.workspace, "smoke3")
@@ -291,29 +237,14 @@ def test_skills_stay_shared_across_sessions(cfg):
 
 
 def _unused(cfg, tmp_path):
-    """A `Config` whose workspace does not exist yet.
-
-    The `cfg` fixture runs `ensure_layout`, which writes the marker -- so its
-    workspace is not new and nothing below would fire. What A7 is about is the
-    directory that has never been used.
-    """
+    """A `Config` whose workspace does not exist yet."""
     from dataclasses import replace
 
     return replace(cfg, workspace=tmp_path / "brand-new")
 
 
 def _driver_on(monkeypatch, target, source=None):
-    """Point the driver at one record for all three seams.
-
-    `config_from_env` serves the run, `paths_from_env` decides where seeding goes, and
-    the same record now says where seeding copies *from*. A `Config` satisfies
-    `Destination` and `Source` by shape, so one record answers all three --
-    which is the point of the protocols and not a shortcut for the test.
-
-    `assets` is filled in because it has to be: nothing ships definitions, so a
-    record carrying `None` makes the driver refuse rather than seed. Set here
-    rather than in each caller so that a test about seeding is about seeding.
-    """
+    """Point the driver at one record for all three seams."""
     from dataclasses import replace
 
     from tests.conftest import repository_root
@@ -326,9 +257,7 @@ def _driver_on(monkeypatch, target, source=None):
 
 
 def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
-    """A7, and the reason the flag is not the only way in. Nothing is copied
-    unless a pack was installed, which is somebody's explicit choice; a new
-    workspace is empty by definition, so nothing can be lost."""
+    """A7, and the reason the flag is not the only way in."""
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
 
@@ -338,10 +267,10 @@ def test_a_new_workspace_seeds_itself(cfg, tmp_path, monkeypatch):
 
 
 def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
-    """`is_new_workspace` also fires on a *misconfigured* workspace -- an
-    unstable `~`, a changed variable -- and a wrong path holding ten files
-    reads more like success than an empty one does. The list is how someone
-    notices they seeded somewhere they did not mean."""
+    """`is_new_workspace` also fires on a *misconfigured* workspace -- an unstable `~`,
+    a changed variable -- and a wrong path holding ten files reads more like success
+    than an empty one does.
+    """
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
 
@@ -361,13 +290,7 @@ def test_a_new_workspace_says_what_it_wrote(cfg, tmp_path, capsys, monkeypatch):
 
 
 def test_a_workspace_that_already_exists_does_not_reseed(cfg, tmp_path, capsys, monkeypatch):
-    """The half that makes the other half safe.
-
-    Seeding overwrites by design -- that is what makes re-seeding after an
-    upgrade possible -- so firing it on every run would quietly replace the
-    edits the whole arrangement exists to invite. `--seed-assets` stays the way
-    to ask for that, and asking is the point.
-    """
+    """The half that makes the other half safe."""
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
     driver.main(["driver.py", "--list"])  # the first run, which seeds
@@ -386,14 +309,10 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
 
     `models.yaml` lives *inside* the workspace, so a first run cannot load one:
     `config_from_env` used to raise before the directory it needed had been created,
-    and the error it printed said to run `--seed-assets`, which failed the same
-    way. A first run could not reach seeding at all -- precisely the run seeding
-    is for. Measured on a workspace with no catalogue: it still seeds, and still
-    exits 2 for the missing file.
-
-    Through the environment rather than the `_driver_on` seam, because the
-    ordering under test is what `paths_from_env` makes possible -- patching it
-    away would leave nothing to assert.
+    and the error it printed said to run `--seed-assets`, which failed the same way.
+    A first run could not reach seeding at all -- precisely the run seeding is for.
+    Measured on a workspace with no catalogue: it still seeds, and still exits 2 for
+    the missing file.
     """
     from tests.conftest import repository_root
     from tests.integration import driver
@@ -410,14 +329,7 @@ def test_a_new_workspace_seeds_before_the_catalogue_is_read(tmp_path, capsys, mo
 
 
 def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
-    """The dead end, closed.
-
-    The message said "`--seed-assets` writes an annotated models.yaml.example
-    next to it" whether or not one was there -- and running `--seed-assets` hit
-    this same error. Now a first run seeds first, so the file is usually already
-    beside the reader, and being told to run a command that has just run is how
-    a message stops being read.
-    """
+    """The dead end, closed."""
     from kingfisher.infrastructure import model_catalogue
 
     absent = tmp_path / "models.yaml"
@@ -437,17 +349,7 @@ def test_the_catalogue_error_stops_naming_a_command_that_already_ran(tmp_path):
 
 
 def test_a_first_run_with_nothing_to_seed_is_quiet(cfg, tmp_path, capsys, monkeypatch):
-    """A damaged install, where the shipped definitions are missing. Not an
-    error: the catalogue example is the one thing a first run always needs, and
-    it arrives with the layout rather than with the copy.
-
-    That is the change this asserts. The example used to be reported as seeded,
-    so a run with no definitions still printed one line and looked productive.
-    It is placed by `ensure_layout` now, before seeding is reached at all --
-    which is what lets seeding refuse without taking the example with it.
-
-    Reached by pointing the seeder at an empty directory, which is the only way
-    to produce this state now that the definitions ride inside the wheel."""
+    """A damaged install, where the shipped definitions are missing."""
     fresh = _unused(cfg, tmp_path)
     driver = _driver_on(monkeypatch, fresh)
     empty = tmp_path / "no-definitions"
@@ -484,15 +386,9 @@ def _args(**kwargs):
 def test_no_flags_leaves_every_kind_unrestricted(cfg):
     """Absent, not enumerated and not `None`.
 
-    An enumeration would go stale the moment the workspace gained a tool. But
-    `None` is worse than stale: `Capabilities` starts `builtin_tools`, `tools`
-    and `skills` at `ALL` and reads `None` on those fields as *none*, so
-    handing it a `None` per kind is a request for an agent with no tools and
-    no skills at all.
-
-    Which is what `tests/integration/driver.py "task"` was quietly sending. Measured against a real
-    run: every workspace tool and every skill came back as withheld on a
-    command line carrying no capability flags, while this file's own docstring
+    Which is what `tests/integration/driver.py "task"` was quietly sending. Measured
+    against a real run: every workspace tool and every skill came back as withheld on
+    a command line carrying no capability flags, while this file's own docstring
     promised that omitting a flag means everything the workspace offers.
     """
     # Empty, so `Capabilities(**grants)` is `Capabilities()` and every field
@@ -502,14 +398,7 @@ def test_no_flags_leaves_every_kind_unrestricted(cfg):
 
 
 def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
-    """And each subtraction is taken from its *own* axis.
-
-    `execute` and `delete` are built-ins, so they are subtracted from the
-    built-in set. Taken from the union -- which is what `_offered` used to
-    return -- the rest included every built-in and was then assigned to the
-    workspace grant, so `--without-tools execute,delete`, the example this
-    driver's own docstring gives, came back as "those are builtin tools".
-    """
+    """And each subtraction is taken from its *own* axis."""
     from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
@@ -542,14 +431,7 @@ def test_the_two_tool_axes_subtract_independently(cfg, shipped):
 
 
 def test_subtracting_skills_and_subagents_too(cfg, shipped):
-    """The rest is asked of the catalogue, not named here.
-
-    Naming it made this a test about how many presets ship: it asserted
-    `("reviewer",)` and went red on main when a third subagent preset was
-    added, for a reason having nothing to do with subtraction. What is being
-    tested is that the named one is gone and the others are enumerated, which
-    is true at any catalogue size.
-    """
+    """The rest is asked of the catalogue, not named here."""
     from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
@@ -574,13 +456,7 @@ def test_subtracting_skills_and_subagents_too(cfg, shipped):
 
 
 def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg, shipped):
-    """The mistake someone arrives with, because it used to be the advice.
-
-    `--without-tools execute` is what this driver's docstring advertised before
-    the axes were split. Left to `all_but` it comes back as "cannot exclude
-    unknown name(s): execute" beside a list not containing it -- true, and no
-    help at all if you do not know a second flag exists.
-    """
+    """The mistake someone arrives with, because it used to be the advice."""
     from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
@@ -593,8 +469,9 @@ def test_subtracting_on_the_wrong_tool_axis_names_the_right_flag(cfg, shipped):
 
 
 def test_naming_both_forms_of_one_kind_is_refused(cfg):
-    """Two ways to say the same thing; whichever precedence we picked, the
-    other reading is the one somebody meant."""
+    """Two ways to say the same thing; whichever precedence we picked, the other reading
+    is the one somebody meant.
+    """
     with pytest.raises(ValueError, match="not both: --tools and --without-tools"):
         main._grants(cfg, _args(tools="ls", without_tools="execute"))
 
@@ -605,8 +482,7 @@ def test_a_typo_in_a_subtraction_is_refused(cfg):
 
 
 def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
-    """Resolving needs to know what is offered, which needs an assembled agent.
-    A run that does not subtract should not pay for one."""
+    """Resolving needs to know what is offered, which needs an assembled agent."""
     builds = []
     real = main_agent_module.build_agent
 
@@ -627,15 +503,7 @@ def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
 
 
 def _intercepted(monkeypatch) -> list:
-    """Catch the `Request` the driver builds, without running a turn.
-
-    Patched on `kingfisher` itself, not on `kingfisher.application.run`. The
-    lazy export table caches: `__getattr__` resolves a name once and writes it
-    into the package globals, so patching the defining module works for the
-    first test in a session and silently hands every later one whatever the
-    first cached -- which here meant a second test appending to the first
-    test's list and finding its own empty.
-    """
+    """Catch the `Request` the driver builds, without running a turn."""
     from tests.integration import driver
 
     seen: list = []
@@ -652,9 +520,7 @@ def _intercepted(monkeypatch) -> list:
 
 
 def test_the_agent_named_on_the_command_line_reaches_the_request(cfg, monkeypatch):
-    """The whole flag. `Request.agent` is refused downstream when it is absent,
-    and the driver had no way to supply it -- so every task exited 2, including
-    the smoke."""
+    """The whole flag."""
     driver = _driver_on(monkeypatch, cfg)
     seen = _intercepted(monkeypatch)
 
@@ -664,12 +530,9 @@ def test_the_agent_named_on_the_command_line_reaches_the_request(cfg, monkeypatc
 
 
 def test_a_run_without_an_agent_is_refused_rather_than_defaulted(cfg, monkeypatch, capsys):
-    """No default, deliberately: an agent decides which endpoint a session's
-    prompts reach and whose credentials pay, so a driver picking one would put
-    that choice somewhere the command line never mentions.
-
-    The refusal comes from the service and names what the workspace offers; the
-    driver's job is only to let a caller answer it.
+    """No default, deliberately: an agent decides which endpoint a session's prompts
+    reach and whose credentials pay, so a driver picking one would put that choice
+    somewhere the command line never mentions.
     """
     driver = _driver_on(monkeypatch, cfg)
     seen = _intercepted(monkeypatch)
@@ -680,8 +543,9 @@ def test_a_run_without_an_agent_is_refused_rather_than_defaulted(cfg, monkeypatc
 
 
 def test_the_flag_is_offered_in_help(capsys):
-    """It is the one argument a task cannot omit, so it has to be findable
-    without reading the source."""
+    """It is the one argument a task cannot omit, so it has to be findable without
+    reading the source.
+    """
     from tests.integration import driver
 
     parser = driver.build_parser()

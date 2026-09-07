@@ -1,9 +1,4 @@
-"""Reading a selection that may say who each of its entries is for.
-
-The second spelling is a strict extension of the first: every file written
-before audiences existed reads identically through this, which is what lets a
-`groups:` line be added above one without touching the rest.
-"""
+"""Reading a selection that may say who each of its entries is for."""
 
 from __future__ import annotations
 
@@ -25,8 +20,7 @@ def test_omitted_is_the_absent_value_with_no_audiences():
 
 
 def test_omitted_respects_the_fields_own_absent_value():
-    """`tools` inherits everything when omitted; `skills` grants none. The pair
-    form must not flatten that difference."""
+    """`tools` inherits everything when omitted; `skills` grants none."""
     assert read.audienced(None, absent=None, key="skills") == (None, {})
 
 
@@ -52,34 +46,21 @@ def test_entries_select_their_names_and_carry_their_audiences():
 
 
 def test_the_field_level_mapping_is_refused_and_says_what_to_write():
-    """The shape this field used to take, and the reason it stopped.
-
-    It made the whole list change shape because one entry wanted an audience,
-    and it could not see a name written twice -- YAML collapses `{a: X, a: Y}`
-    before any reader here runs, so one audience was gone with nothing able to
-    refuse or report it.
-
-    The refusal names the entry to write rather than only the shape that is
-    wrong, because a reader with a mapping in front of them is one edit away
-    and the edit is not obvious.
-    """
+    """The shape this field used to take, and the reason it stopped."""
     with pytest.raises(AgentError, match=r"name: sql_query, groups"):
         read.audienced({"sql_query": {"groups": ["A"]}}, absent=ALL, key="tools")
 
 
 def test_an_entry_that_is_neither_a_name_nor_a_mapping_is_refused():
-    """`- [A]` has no reading. The refusal used to live in the audience reader,
-    which saw an entry's *value*; an entry is the whole thing now, so the check
-    is `_entry_name`'s and says so in the same words for every field."""
+    """`- [A]` has no reading."""
     with pytest.raises(AgentError, match="neither a name nor a mapping"):
         read.audienced([["A"]], absent=ALL, key="tools")
 
 
 def test_an_entry_that_states_no_audience_inherits_the_definitions():
-    """What makes the mapping form usable: only the entries you actually
-    restrict carry a `groups:` line, and the rest are selected and left to
-    inherit. Restricting one tool must not mean writing an audience for every
-    other tool beside it."""
+    """What makes the mapping form usable: only the entries you actually restrict carry
+    a `groups:` line, and the rest are selected and left to inherit.
+    """
     selected, audiences = read.audienced(
         [{"name": "sql_query", "groups": ["A"]}, "http_fetch", {"name": "line_count"}],
         absent=ALL,
@@ -97,22 +78,25 @@ def test_long_entries_that_restrict_nothing_are_just_names():
 
 
 def test_a_mistyped_entry_key_is_refused_with_a_suggestion():
-    """What the nested form buys that a bare list cannot: an entry has keys, so
-    a typo in one is catchable."""
+    """What the nested form buys that a bare list cannot: an entry has keys, so a typo
+    in one is catchable.
+    """
     with pytest.raises(AgentError, match="did you mean 'groups'"):
         read.audienced([{"name": "sql_query", "grops": ["A"]}], absent=ALL, key="tools")
 
 
 def test_a_bare_string_audience_is_refused_rather_than_iterated():
-    """`groups: A` would otherwise become the groups 'A' spelled one letter at
-    a time, which is the mistake `selection` refuses one level up."""
+    """`groups: A` would otherwise become the groups 'A' spelled one letter at a time,
+    which is the mistake `selection` refuses one level up.
+    """
     with pytest.raises(AgentError, match="a list of names"):
         read.audienced([{"name": "sql_query", "groups": "A"}], absent=ALL, key="tools")
 
 
 def test_an_empty_entry_audience_is_refused():
-    """`groups: []` would mean nobody, and the way to say "no restriction" is
-    to leave the line out -- so an empty one is an unfinished edit."""
+    """`groups: []` would mean nobody, and the way to say "no restriction" is to leave
+    the line out -- so an empty one is an unfinished edit.
+    """
     with pytest.raises(AgentError, match="Leave the line out"):
         read.audienced([{"name": "sql_query", "groups": []}], absent=ALL, key="tools")
 
@@ -129,17 +113,7 @@ def test_an_entry_may_not_be_named_the_star():
 
 
 def test_a_name_written_twice_is_refused_rather_than_collapsed():
-    """The reason this field stopped taking a mapping, asserted here.
-
-    Two entries for one name is two audiences that cannot both apply. The list
-    can see that and refuse it; the mapping it replaced could not -- YAML turns
-    `{a: X, a: Y}` into one key before any reader here runs, so the first
-    audience was gone with nothing able to name it.
-
-    Which direction it lost in did not matter. A restriction silently widened
-    and a restriction silently narrowed are both a file that does not say what
-    it does, and this is the field where that is worst.
-    """
+    """The reason this field stopped taking a mapping, asserted here."""
     with pytest.raises(AgentError, match="names 'sql_query' twice"):
         read.audienced(
             [
@@ -176,8 +150,9 @@ def test_a_conjunction_is_one_entry_of_an_entry_audience():
 
 
 def test_a_conjunction_of_one_is_that_one_name():
-    """Not special-cased: a set of one is satisfied by holding one, which is
-    what the bare name means. Asserted so nobody adds a case for it."""
+    """Not special-cased: a set of one is satisfied by holding one, which is what the
+    bare name means.
+    """
     _, audiences = read.audienced(
         [{"name": "sql_query", "groups": [{"all_of": ["finance"]}]}], absent=ALL, key="tools"
     )
@@ -186,8 +161,9 @@ def test_a_conjunction_of_one_is_that_one_name():
 
 
 def test_an_empty_conjunction_is_refused():
-    """It would require nothing and so admit everyone, which is not what
-    somebody writing `all_of` was reaching for."""
+    """It would require nothing and so admit everyone, which is not what somebody
+    writing `all_of` was reaching for.
+    """
     with pytest.raises(AgentError, match="empty"):
         read.audienced([{"name": "sql_query", "groups": [{"all_of": []}]}], absent=ALL, key="tools")
 
@@ -200,8 +176,9 @@ def test_a_mistyped_key_inside_a_conjunction_is_refused_with_a_suggestion():
 
 
 def test_a_conjunction_written_as_the_whole_audience_is_refused():
-    """`groups: {all_of: [...]}` has no list to be one entry of, so it reads as
-    the whole audience being a mapping -- and the refusal shows the brackets."""
+    """`groups: {all_of: [...]}` has no list to be one entry of, so it reads as the
+    whole audience being a mapping -- and the refusal shows the brackets.
+    """
     with pytest.raises(AgentError, match=r"\[\{all_of: \[A, B\]\}\]"):
         read.audienced(
             [{"name": "sql_query", "groups": {"all_of": ["A", "B"]}}], absent=ALL, key="tools"
@@ -209,8 +186,9 @@ def test_a_conjunction_written_as_the_whole_audience_is_refused():
 
 
 def test_everyone_cannot_be_part_of_a_requirement():
-    """`*` is everyone, so requiring it alongside a group is either everyone or
-    that group, and there is no way to tell which was meant."""
+    """`*` is everyone, so requiring it alongside a group is either everyone or that
+    group, and there is no way to tell which was meant.
+    """
     with pytest.raises(AgentError, match="everyone"):
         read.audienced(
             [{"name": "sql_query", "groups": [{"all_of": ["*", "A"]}]}], absent=ALL, key="tools"
@@ -218,8 +196,9 @@ def test_everyone_cannot_be_part_of_a_requirement():
 
 
 def test_a_definitions_own_line_reads_a_conjunction_the_same_way():
-    """One reader for both sites, so the two cannot drift about what the same
-    list means."""
+    """One reader for both sites, so the two cannot drift about what the same list
+    means.
+    """
     assert read.groups(["admin", {"all_of": ["finance", "senior"]}]) == (
         "admin",
         frozenset({"finance", "senior"}),
@@ -227,8 +206,8 @@ def test_a_definitions_own_line_reads_a_conjunction_the_same_way():
 
 
 def test_a_definitions_own_line_still_takes_a_single_unbracketed_name():
-    """The one thing the two sites do not agree on, kept rather than
-    reconciled: every list field in these formats takes a lone name, and an
-    entry's audience is already nested in a mapping where a bare string reads
-    as an unfinished edit."""
+    """The one thing the two sites do not agree on, kept rather than reconciled: every
+    list field in these formats takes a lone name, and an entry's audience is already
+    nested in a mapping where a bare string reads as an unfinished edit.
+    """
     assert read.groups("analysts") == ("analysts",)
