@@ -138,13 +138,26 @@ to run unaudited was to ask for nothing in particular.
 A delegate inherits none of its parent's middleware — each definition's is built
 from its own `middleware:` field.
 
+**So register the class, not an instance of it.** `middleware={"audit": Audit}`,
+never `{"audit": Audit()}`. Building it yourself hands every graph the same
+object, and the state it accumulates is exactly what a counter or a rate limit
+is for — `CallCap` would spend its budget on the first graph and refuse every
+tool call afterwards, for the life of the process. A registry entry that cannot
+be called is refused when `Kingfisher` is given it. A zero-argument factory is
+the other accepted shape, for the entry whose values were decided when the
+deployment wrote the lambda.
+
 ## What refuses, and when
 
-Everything below raises `CapabilityError` while the agent is built, before the
-model is reached. Nothing here is discovered mid-run.
+Everything below raises `CapabilityError`, and nothing here is discovered
+mid-run. The first fires earlier than the rest: it is a fact about the registry
+rather than about any definition, so `Kingfisher` refuses it as the registry
+arrives, before a definition has named anything. The others are raised while the
+agent is built, before the model is reached.
 
 | What happened | What it says |
 |---|---|
+| A registry entry that cannot be called — an already-built middleware, most often | `register the class itself, or a zero-argument factory returning one`, and why one shared object would be wrong |
 | A definition names middleware nothing registered | `names unregistered middleware`, with what this deployment did register |
 | A definition names middleware the request withheld | `names middleware this request may not use` |
 | A definition writes a setting outside `yaml_settable` | what that entry does accept, or that it accepts nothing at all |

@@ -6,6 +6,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
+from kingfisher import Kingfisher
 from kingfisher.domain.agent import AgentSpec
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -443,3 +444,107 @@ def test_a_middleware_named_its_own_thing_warns_about_nothing(cfg, monkeypatch, 
 
     assert _replacement_warnings(recorded) == []
     assert "_Audit" in {m.name for m in captured["middleware"]}
+
+
+def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
+    """`_instantiate` called every non-class entry, so an instance was *called*.
+
+    A deployment writing the natural thing -- `middleware={"audit": _Audit()}`,
+    building the object before handing it over -- got
+    `TypeError: '_Audit' object is not callable` out of the middle of assembly,
+    naming neither the entry nor the definition that asked for it. Every other
+    refusal on this path is a `CapabilityError` that names both.
+
+    Refused rather than supported, and the reason is in the message: a
+    registered object is built again for every graph, so one shared instance
+    accumulates across all of them. `CallCap` counts tool calls in `self._made`;
+    as an instance it would spend its budget once and refuse every call
+    afterwards for the life of the process.
+    """
+    with pytest.raises(CapabilityError, match="audit") as raised:
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            # `ty: ignore` is half the test. A type checker rejects this
+            # statically -- `MiddlewareFactory` is `Callable[..., Any]` and an
+            # instance is not one -- so a deployment running `ty` never gets
+            # here. The runtime guard is for the registry assembled from
+            # configuration, and for everyone who does not.
+            middleware_registry={"audit": _Audit()},  # ty: ignore[invalid-argument-type]
+        )
+
+    message = str(raised.value)
+    assert "probed" in message, "the definition that named it, as every other refusal here does"
+    assert "a built _Audit rather than the class" in message, (
+        "the mistake named, not just 'not callable' -- nobody registers a dict by accident"
+    )
+    assert "built again for every graph" in message, (
+        "and why, or this reads as a rule kingfisher invented"
+    )
+
+
+def test_an_entry_no_definition_names_is_still_refused_when_it_is_registered(cfg):
+    """The half `_instantiate` cannot reach, and the reason the sweep exists.
+
+    `_instantiate` runs only for names a definition actually asked for. Register
+    `{"audit": _Audit()}` today, write the definition that names it next month,
+    and the mistake waits that long -- in somebody else's deployment, on the
+    first request unlucky enough to reach it.
+
+    The same argument `model_catalogue` makes for refusing an unbuildable `api`
+    as the file loads rather than when a turn starts: it is a fact about what
+    was written, not about the request that met it.
+    """
+    with pytest.raises(CapabilityError, match="audit"):
+        Kingfisher(cfg, middleware={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
+
+
+def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
+    """The gate is `callable`, which is what `MiddlewareFactory` promises.
+
+    Narrowing it to `isinstance(entry, AgentMiddleware)` would name the common
+    mistake and let every other uncallable entry through to the `TypeError` this
+    replaces. A registry holding a settings dict -- the shape somebody reaches
+    for when they confuse registering with configuring -- is refused too, and
+    said differently, because "a built X rather than the class" would be wrong
+    about it.
+    """
+    with pytest.raises(CapabilityError, match="which cannot be called") as raised:
+        Kingfisher(cfg, middleware={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
+
+    assert "a dict" in str(raised.value)
+
+
+def test_a_registered_class_is_built_again_for_every_graph(cfg, monkeypatch, session_dir):
+    """The lifecycle the refusal above gives as its reason, held to it.
+
+    The message says a middleware is built again for every graph, and that is
+    the whole justification for refusing an instance. Nothing else in the tree
+    checks it: graphs are built per request for reasons that have nothing to do
+    with middleware -- capabilities narrow them, the backend is session-anchored
+    -- and `service.py` already describes the cache that would end that as the
+    thing to reach for above roughly 150 concurrent turns.
+
+    If that day comes, a registered `CallCap` starts surviving across turns and
+    the refusal's stated reason quietly inverts. This is what makes that a
+    failure rather than a cap that stops capping.
+    """
+    built = []
+    for _ in range(2):
+        captured = capture_build(monkeypatch)
+        build_agent(
+            cfg,
+            agent=_named(("audit",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"audit": _Audit},
+        )
+        built.append(next(m for m in captured["middleware"] if type(m) is _Audit))
+
+    first, second = built
+    assert first is not second, (
+        "two graphs shared one middleware object, so a counter in it would carry "
+        "across them -- which is the thing the instance refusal promises cannot happen"
+    )
