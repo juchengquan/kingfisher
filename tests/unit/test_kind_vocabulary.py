@@ -270,8 +270,8 @@ def test_every_reason_a_definition_is_skipped_has_a_remedy():
     """A skipped definition is reported in two halves, and both are lookups.
 
     `seed` names what a file wanted -- middleware, groups -- and the message is
-    built from two tables keyed by that word: `CANNOT` for what the workspace
-    cannot do about it, `REMEDY` for what the reader should. A third kind added
+    built from two tables keyed by that word: `UNCONSULTED` for what the check
+    did not look at, `REMEDY` for what the reader should do. A third kind added
     to `_deployment_specific` and to neither table raises `KeyError` while
     printing, which is loud but lands on whoever ran `kingfisher seed` rather
     than on whoever added the kind.
@@ -285,17 +285,19 @@ def test_every_reason_a_definition_is_skipped_has_a_remedy():
     in code and a group is declared in a file -- and that is exactly the shape
     where somebody updates one and stops.
     """
-    from kingfisher.presentation.cli.__main__ import CANNOT, REMEDY
+    from kingfisher.presentation.cli.__main__ import REMEDY, UNCONSULTED
 
     reported = _kinds_the_seeder_can_report()
 
     assert reported, "nothing was parsed, so this asserts nothing"
-    assert reported <= set(CANNOT), (
-        f"{sorted(reported - set(CANNOT))} can be reported and CANNOT does not name it"
+    assert reported <= set(UNCONSULTED), (
+        f"{sorted(reported - set(UNCONSULTED))} can be reported and UNCONSULTED "
+        "does not name it"
     )
     assert reported <= set(REMEDY), (
         f"{sorted(reported - set(REMEDY))} can be reported and REMEDY does not name it"
     )
-    assert set(CANNOT) == set(REMEDY), (
-        f"the two tables disagree: {sorted(set(CANNOT) ^ set(REMEDY))} is in one and not the other"
+    assert set(UNCONSULTED) == set(REMEDY), (
+        f"the two tables disagree: {sorted(set(UNCONSULTED) ^ set(REMEDY))} is in one "
+        "and not the other"
     )

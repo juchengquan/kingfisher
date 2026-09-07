@@ -113,7 +113,7 @@ def test_the_line_is_printed_once_for_every_definition_skipped(
 
     printed = capsys.readouterr().out
     assert printed.count("the groups.yaml that unblocks") == 1
-    assert len([ln for ln in printed.splitlines() if "does not declare" in ln]) > 1
+    assert len([ln for ln in printed.splitlines() if "does not check your groups.yaml" in ln]) > 1
 
 
 def test_no_line_is_printed_when_nothing_wanted_a_group(cfg, monkeypatch, capsys, tmp_path):
