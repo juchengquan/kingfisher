@@ -165,7 +165,7 @@ class BubblewrapRunner:
     """Runs one session's commands inside that sandbox.
 
     A `CommandRunner`, so it replaces running the command and nothing else --
-    the ten file operations of the backend it sits behind stay kingfisher's.
+    the file operations of the backend it sits behind stay kingfisher's.
 
     `local` is True: the command runs on this machine, so kingfisher's own
     confinement still applies to it beforehand. On Linux that wrap is the

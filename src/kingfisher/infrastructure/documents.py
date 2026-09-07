@@ -31,8 +31,9 @@ Named `documents` rather than `definitions`, and the name is what survived two
 moves. `definitions` was the first one and it was chosen against `domain.fields`
 -- one name across two layers makes every import a small act of guessing, which
 is why `narrowing` is not called `capabilities` either. Moving into `catalogue/`
-then put it a directory listing away from `Definitions`, the deployment's three
-repositories, so it was renamed to what its first line already said it does.
+then put it a directory listing away from `Definitions`, the deployment's
+repository per kind, so it was renamed to what its first line already said it
+does.
 
 Flat in `infrastructure/` again, which is where it started, and the reason is an
 import cycle rather than tidiness: `catalogue/__init__` imports three kind

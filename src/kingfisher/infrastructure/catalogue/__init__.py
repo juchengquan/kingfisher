@@ -44,14 +44,16 @@ per-request concern under a per-deployment one.
 
 Split out of `workspace_fs`, which is "the filesystem, doing what
 `domain.layout` describes" -- and a catalogue is the one thing here that need
-not be in a workspace at all. `KINGFISHER_SKILLS_DIR` and its two siblings exist
-so several deployments can share one reviewed set, so these three directories
-are as likely to sit somewhere else entirely as inside a workspace. Keeping them
+not be in a workspace at all. `KINGFISHER_SKILLS_DIR` and its siblings -- one per
+kind -- exist so several deployments can share one reviewed set, so these
+directories are as likely to sit somewhere else entirely as inside a workspace.
+Keeping them
 beside `ensure_layout` read as misfiled rather than as a deliberate exception.
 
-What it holds is one repository per kind rather than three paths. A path is what
+What it holds is one repository per kind rather than a path each. A path is what
 a *local* catalogue happens to be; what every caller actually wants is the
-definitions, and two of the three kinds need no filesystem to supply them.
+definitions, and only tools need a filesystem to supply them -- `ports.py` says
+why, and `SkillRepository.files` is what took skills off that list.
 
 The module keeps the word and the type does not, and that is the split rather
 than an oversight. A *catalogue* is where definitions are kept -- `catalogue_root`
@@ -89,7 +91,7 @@ from kingfisher.tools.spec import Offering
 class Definitions:
     """This deployment's definitions: one repository per kind.
 
-    A type rather than a mapping so the three names are checkable. `.skils` is
+    A type rather than a mapping so the names are checkable. `.skils` is
     an `unresolved-attribute` before the code runs; `["skils"]` is a `KeyError`
     while it does, and in this codebase a missing key surfaces as an
     empty catalogue -- the silent emptiness this module's neighbours keep

@@ -11,12 +11,18 @@ Construction stays free of side effects that a test would have to clean up, and
 every dependency is injectable, so wiring can be exercised with a fake model and
 no network, no database, and no sweeping.
 
-Two jobs it used to do live beside it now, because at 657 lines it was doing
+Two jobs it used to do live elsewhere now, because at 657 lines it was doing
 four. `prompting` assembles the system prompt -- moved out because it needs
 nothing foreign, and sharing a file with `create_deep_agent` cost every consumer
-of `system_prompt` 764ms and three provider SDKs. `delegation` resolves what a
-delegate runs with. Neither calls anything here; `build_agent` is the only
-caller of either.
+of `system_prompt` 764ms and three provider SDKs. Resolving what a delegate runs
+with was `delegation` beside this file and is `subagents.harness` now, a package
+of its own. Neither calls anything here.
+
+`build_agent` was the only caller of either when they moved, and is not now:
+`activation` takes `model_for` and `indistinct` to report with, `tools.harness`
+and `interpreter` take `TASK_TOOL`, and `subagents.harness` reaches `prompting`
+directly. The property that holds is the direction -- nothing they own calls
+back into this file.
 """
 
 from __future__ import annotations
