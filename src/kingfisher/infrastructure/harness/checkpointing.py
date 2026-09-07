@@ -12,16 +12,13 @@ turn — the sync and async halves stay separate only because a deployment may
 have wired a factory through either.
 
 **Nothing here persists, and that is the design.** A checkpoint holds one turn's
-working state; what a later turn reads is the transcript in the session
-directory. See *Sessions: what persists and where* in `docs/decisions.md`, which
-records why a checkpointer stopped being where a conversation lives: kingfisher
-never resumes a graph — no `checkpoint_id`, no `interrupt()` — so what a saver
-was preserving was machinery nothing asked for.
+working state; what a later turn reads is the transcript in the session directory.
+Kingfisher never resumes a graph -- no `checkpoint_id`, no `interrupt()` -- so
+what a saver would preserve is machinery nothing asks for. See *Sessions: what
+persists and where* in `docs/decisions.md`.
 
-This module used to build sqlite savers too, one per workspace, exported for a
-deployment that wanted one shared file. They went with the dependencies that
-carried them once the server stopped opening one; a deployment that still wants
-that arrangement installs `langgraph-checkpoint-sqlite` and passes its own.
+A deployment wanting one shared sqlite file installs `langgraph-checkpoint-sqlite`
+and passes its own saver.
 """
 
 from __future__ import annotations
@@ -41,35 +38,17 @@ if TYPE_CHECKING:
 def build_session_checkpointer(session_dir: Path) -> BaseCheckpointSaver:
     """The saver this turn runs on, which holds nothing after it.
 
-    In memory, and that is a change in what a checkpointer is *for* here rather
-    than a cheaper way to do the same job. A checkpoint preserves resumable
-    graph state — pending writes, channel versions, a position in the graph —
-    and kingfisher never resumes a graph: `service.py` passes `{"thread_id":
-    session_id}` with no `checkpoint_id`, and there is no `interrupt()`
-    anywhere. A turn runs to completion or fails, and the next one continues a
-    *conversation*, which is now carried by `domain.transcript` and restored as
-    the graph's input.
+    In memory, because what is left for a saver here is one turn's supersteps and
+    nothing needs to outlive the turn that made them. A checkpoint preserves
+    resumable graph state, and kingfisher never resumes a graph; the conversation
+    is carried by `domain.transcript` and restored as the graph's input.
 
-    So what is left for a saver is one turn's supersteps, and nothing needs to
-    outlive the turn that made them.
-
-    **What this gives up, and it was measured rather than assumed.** The default
-    was one sqlite database per session, inside the session directory, and that
-    bought three things: a conversation deleted with its directory (one real
-    workspace held 132 orphaned threads after every session had been reaped); a
-    conversation visible to `session_bytes` and so to the quota; and no
-    cross-session contention, where at 32 concurrent writers the slowest single
-    writer went from 363ms on a shared file to 80ms on its own.
-
-    All three survive, by a different route. The transcript is a file in the
-    session, so it is deleted with the directory and counted by the quota. And
-    nothing is shared, so there is nothing to contend for. What is genuinely
-    gone is the ~20KB of empty database per session, which was the cost rather
-    than the benefit.
+    The transcript being a file in the session is what keeps the three properties a
+    per-session sqlite database bought: deleted with the directory, counted by the
+    quota, and contending with nothing.
 
     `session_dir` is unused and stays in the signature: it is what a deployment
-    injecting a *factory* is handed, and a parameter dropped here would change
-    that contract for a saver that no longer needs it.
+    injecting a *factory* is handed, and dropping it would change that contract.
     """
     del session_dir
     return InMemorySaver()
@@ -78,22 +57,19 @@ def build_session_checkpointer(session_dir: Path) -> BaseCheckpointSaver:
 def thread_ids(store: Any) -> tuple[str, ...] | None:
     """Every thread the store holds, or `None` when it cannot say.
 
-    `ThreadStore` is "something that forgets a thread" and deliberately stays
-    that narrow; enumerating is a janitor's need, not the domain's, so it is
-    asked for here rather than widened into the port. A store that cannot
+    `ThreadStore` is "something that forgets a thread" and stays that narrow;
+    enumerating is a janitor's need, not the domain's. A store that cannot
     enumerate yields `None`, which the caller reads as "cannot reconcile" and
-    skips -- the same shape as `registered_tools` returning `()` for "cannot
-    check". An injected double is the usual case, and a sweep must not fail
-    because the thing it was handed does not answer this question.
+    skips: a sweep must not fail because the thing it was handed does not answer
+    this question.
 
-    Through the saver's public `list`, not a `SELECT DISTINCT thread_id`.
-    Direct SQL measured 411x faster on a real database -- under a millisecond
-    against 175ms -- and was still the wrong trade: this runs on a janitor's
-    schedule, never on a request, and the public call cannot be broken by an
-    upstream schema change. The cost is that `list` deserialises every
-    checkpoint, so the 175ms was for 1,894 of them and grows with the
-    database. If that ever matters, it is a reason to page, not a reason to
-    reach into the schema.
+    Through the saver's public `list`, not a `SELECT DISTINCT thread_id`. Direct
+    SQL measured 411x faster on a real database -- under a millisecond against
+    175ms -- and was still the wrong trade: this runs on a janitor's schedule,
+    never on a request, and the public call cannot be broken by an upstream schema
+    change. The cost is that `list` deserialises every checkpoint, so that 175ms
+    was for 1,894 of them and grows with the database. If it ever matters, that is
+    a reason to page rather than to reach into the schema.
     """
     lister = getattr(store, "list", None)
     if lister is None:

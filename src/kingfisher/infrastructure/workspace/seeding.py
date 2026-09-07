@@ -6,23 +6,18 @@ three against files it did not write -- content a workspace rewrites on first
 contact with a real task, which is a different kind of thing from the code that
 reads it.
 
-Nothing ships. The definitions used to live inside this wheel, and before that
-they were their own distribution found through a `kingfisher.assets` entry
-point so anyone could publish a pack. Both are gone: where a deployment gets
-its definitions is a setting now, `KINGFISHER_ASSETS`, and a directory needs no
-wheel, no metadata and no publish step. This repository keeps a worked set in
-`assets_examples/` for the same reason it keeps documentation.
+**Nothing ships.** Where a deployment gets its definitions is a setting,
+`KINGFISHER_ASSETS`, and a directory needs no wheel, no metadata and no publish
+step. This repository keeps a worked set in `assets_examples/` for the same reason
+it keeps documentation.
 
 What that costs is written down rather than glossed: `pip install kingfisher`
-followed by `kingfisher seed` no longer produces a working workspace, and since
-a request must name an agent, it produces a library that cannot run. See
-*Packaging: where the definitions live* in docs/decisions.md, which also records
-the two arrangements this one reversed.
+followed by `kingfisher seed` does not produce a working workspace, and since a
+request must name an agent, it produces a library that cannot run. See *Packaging:
+where the definitions live* in docs/decisions.md.
 
-`models.yaml.example` used to be seeded here too, apart from the definitions,
-because it is the one thing that was never content. `ensure_layout` writes it
-now -- it must arrive whether or not a deployment has definitions, and this
-module can refuse.
+`models.yaml.example` is written by `ensure_layout` rather than here: it must
+arrive whether or not a deployment has definitions, and this module can refuse.
 """
 
 from __future__ import annotations
@@ -58,13 +53,11 @@ DESTINATION = Path("assets")
 #: How the four "this workspace is empty" messages tell a reader to fill it.
 #:
 #: One string, because four wordings drift and the one seen daily is the one
-#: nobody reviews. It said `kingfisher seed`, which was true while a set shipped
-#: and became a dead end when it stopped: a reader with an empty workspace would
-#: follow it and hit a refusal for a source that was never configured.
+#: nobody reviews.
 #:
-#: `--from DIR` rather than the bare verb, because that form works whether or
-#: not `KINGFISHER_ASSETS` is set -- which is the whole property these messages
-#: need and the bare verb no longer has.
+#: `--from DIR` rather than the bare verb, because that form works whether or not
+#: `KINGFISHER_ASSETS` is set -- which is the whole property these messages need.
+#: The bare verb hits a refusal for a source that was never configured.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
 #: The other half of that answer, for the reader `SEED_HINT` cannot help.
@@ -114,9 +107,7 @@ class Destination(Protocol):
     satisfies this by shape, and so does `WorkspacePaths`, which is the part of
     a configuration a first run can actually know.
 
-    Nothing here needs an endpoint, a credential or a timeout. Asking for a
-    whole `Config` to copy files was always more than the job required; it only
-    became a problem when the job had to happen earlier.
+    Nothing here needs an endpoint, a credential or a timeout.
 
     `authored_files` is here because seeding lays the workspace out, and laying
     it out places the worked example for `models.yaml` and `groups.yaml`. Both
@@ -159,12 +150,11 @@ def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
     """Each kind of definition, and the catalogue it belongs in.
 
     The catalogues, not the workspace. They are the same directory until a
-    deployment moves one, and seeding the workspace unconditionally is how
-    `--seed-assets` used to fill a directory nothing reads.
+    deployment moves one, and seeding the workspace unconditionally fills a
+    directory nothing reads.
 
-    Derived from `DEFINITION_KINDS` rather than listed again. This was the
-    fourth place the three kinds were written out, and the one where getting it
-    wrong is quietest: a kind missing here is one the definitions ship and
+    Derived from `DEFINITION_KINDS` rather than listed again, because getting this
+    list wrong is quiet: a kind missing here is one the definitions ship and
     nothing ever copies.
     """
     roots = cfg.catalogue_roots
@@ -497,10 +487,9 @@ def _copy(
             overwritten += _overwritten(item, target, label)
             target.parent.mkdir(parents=True, exist_ok=True)
             if item.is_dir():
-                # `ignore` rather than the check above, because that one
-                # only ever saw the top level. A packaged tool used to be a
-                # single file, so a directory could not hold bytecode of
-                # its own; a package can, and `copytree` would take the lot.
+                # `ignore` rather than the check above, which only ever sees the
+                # top level: a packaged tool is a directory and can hold bytecode
+                # of its own, which `copytree` would take along with the rest.
                 shutil.copytree(item, target, dirs_exist_ok=True, ignore=ignore)
             else:
                 shutil.copy(item, target)

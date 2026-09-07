@@ -55,11 +55,11 @@ def available_skills(
     -- the rule lives there because it differs per kind and a reader comparing
     them should not have to visit two functions to see the difference.
 
-    The catalogue half is the *registry*, not the directory listing, and that is
-    the point of it: a directory that looks like a skill and will not parse
-    used to be advertised here, accepted by the build, allowed through the
-    filter, and then absent from an agent that reported nothing wrong. Asking
-    what will be loaded makes naming one an ordinary unknown-skill refusal.
+    The catalogue half is the *registry*, not the directory listing. A directory
+    that looks like a skill and will not parse would otherwise be advertised here,
+    accepted by the build, allowed through the filter, and then absent from an
+    agent that reported nothing wrong; asking what will be loaded makes naming one
+    an ordinary unknown-skill refusal.
 
     A session's own skills stay a listing. They are written by `uploads`, which
     reads each header to file it under the name inside it, so the two cannot
@@ -74,12 +74,10 @@ def activatable_skills(
 ) -> SkillRegistry:
     """One registry for both halves: the catalogue, plus this request's own.
 
-    The single answer to "what may this request activate", and it is a single
-    answer because the last time there were two they disagreed. `available_skills`
-    merged the session's directory listing over the catalogue registry while
-    `build_agent` resolved against the catalogue registry alone, so every
-    uploaded skill was advertised and then refused as unknown -- the whole
-    feature, not an edge of it.
+    The single answer to "what may this request activate", and single because two
+    answers disagree: a listing merged over the catalogue registry on one side and
+    the catalogue registry alone on the other advertised every uploaded skill and
+    then refused it as unknown.
 
     The catalogue half is cached for the life of the deployment; the session
     half is read per turn, because that is when it arrives. One listing of a
@@ -266,17 +264,12 @@ def _activated_subagents(
     # be checked at seed time and left at that.
     refuse_cycles(defined)
     # There is deliberately *no* matching check that every definition names a
-    # runnable model. It was written and taken out again: the two rules look
-    # alike and are not. Helper depth is structural -- a catalogue asking for
-    # two levels is incoherent however it is used, and no request can rescue it.
-    # An unrunnable model is not: `run_on` exists precisely so a caller can put
-    # a shipped delegate on a model their credentials reach, without editing a
-    # file they may not own, and a catalogue-wide refusal would fire before the
-    # override could apply and defeat it.
-    #
-    # So it stays per-delegate, at `as_subagent`, where the override has already
-    # been resolved -- and seeding a definition you cannot run costs nothing until
-    # you activate it.
+    # runnable model. Helper depth is structural -- a catalogue asking for two
+    # levels is incoherent however it is used, and no request can rescue it. An
+    # unrunnable model is not: `run_on` exists precisely so a caller can put a
+    # shipped delegate on a model their credentials reach, and a catalogue-wide
+    # refusal would fire before the override could apply. So it stays per-delegate,
+    # at `as_subagent`, where the override has already been resolved.
     # `ALL` is every subagent the workspace defines, resolved here because here
     # is where "what it defines" is known.
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents

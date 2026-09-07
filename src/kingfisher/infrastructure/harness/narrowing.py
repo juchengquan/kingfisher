@@ -1,17 +1,9 @@
 """Applying a request's capabilities to the agent that runs it.
 
 Named `narrowing`, not `capabilities`: `domain/capabilities.py` is the value
-object a caller passes, and this is the machinery that enforces it. Two files
-with one name across two layers made every import a small act of guessing.
-
-It was `scoping`, which satisfied that rule and broke another. "Narrow" is the
-word the domain uses for this and uses everywhere -- `narrowed()` is the
-function, `intersect` says "narrow these capabilities by another set", and
-`Capabilities` calls itself the narrowing axis. "Scope" appeared here and
-nowhere else in this sense: every other use in the package means a lifetime
-(`session-scoped`, `turn-scoped`) or a Python scope, and `backend` already says
-a permission is "scoped to a route" about a different mechanism entirely. One
-operation, one word, and the domain had already chosen it.
+object a caller passes, and this is the machinery that enforces it. "Narrow" is
+the domain's own word for the operation -- `narrowed()`, `intersect`, the
+narrowing axis -- while "scope" everywhere else in this package means a lifetime.
 
 Three middleware, because the three restrictions bite in different places:
 
@@ -37,11 +29,9 @@ it closes is a capability hole: deepagents supplies a `general-purpose` delegate
 carrying the main agent's tools and none of kingfisher's middleware, so a
 request that withheld `execute` could ask that one for it.
 
-`HostPathGuard` used to be here too, and is not, because it applies no
-capability. It turns a rejected host path into a `ToolMessage` the model can act
-on, and it now sits in `backend`, beside the `reject_host_path` that raises what
-it catches -- one mechanism in one file rather than two halves that never
-mention each other.
+`HostPathGuard` is deliberately not here, because it applies no capability: it
+turns a rejected host path into a `ToolMessage` the model can act on, and sits in
+`backend` beside the `reject_host_path` that raises what it catches.
 """
 
 from __future__ import annotations

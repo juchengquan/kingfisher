@@ -35,12 +35,11 @@ if TYPE_CHECKING:
 
 #: `defaults` plus whatever the definition was allowed to write.
 #:
-#: It was `Callable[[], Any]`, which stopped being true the moment a class
-#: could be registered -- and stopped being *checkable* in the same moment: a
-#: deployment pasting the wiring block `call_cap.py` documents got a type error
-#: on its own registry while the code it described ran correctly. A signature
-#: narrower than the contract is worse than a loose one, because the reader who
-#: believes it is the one following the docs.
+#: Deliberately loose. Narrowed to `Callable[[], Any]` it stopped covering a
+#: registered class, so a deployment pasting the wiring block `call_cap.py`
+#: documents got a type error on its own registry while the code ran correctly --
+#: and a signature narrower than the contract is worse than a loose one, because
+#: the reader who believes it is the one following the docs.
 MiddlewareFactory = Callable[..., Any]
 
 
@@ -70,11 +69,8 @@ def declared_middleware(
     a delegate's refusal that said "agent" would send the reader to the wrong
     file.
 
-    It was `subagent_middleware` in `delegation.py`, which was the right home
-    while delegates were the only definitions whose middleware was ever built.
-    An agent file has carried the field since `agents-as-definitions` and it
-    reached nothing -- so the function moved to the module that assembles both,
-    rather than an agent's wiring reaching into the delegates'.
+    Here, in the module that assembles both, rather than an agent's wiring reaching
+    into the delegates'.
     """
     subject = f"{kind} {spec.name!r}"
     approved = approved_middleware(
@@ -165,21 +161,14 @@ def _instantiate(
 ) -> Any:
     """One registry entry, built into the middleware it stands for.
 
-    Two shapes, because a registry has held one of them since before settings
-    existed and breaking every deployment that wrote one would be a poor trade
-    for a field most definitions will never use.
-
     A **class** is the shape that can be configured. `defaults` is what the
-    deployment supplies, the settings a definition wrote are laid over the top,
-    and `yaml_settable` on the class decides which of those it was allowed to
-    write. Deployment first and definition second is the whole precedence rule:
-    the registry holds the value that applies when nobody says otherwise, and a
-    definition overrides it only where the class said it may.
+    deployment supplies, the settings a definition wrote are laid over the top, and
+    `yaml_settable` on the class decides which of those it was allowed to write.
+    Deployment first and definition second is the whole precedence rule.
 
-    Anything else is a **zero-argument factory**, which is what a registry
-    entry used to be and still may be. It takes no settings and cannot be
-    given any -- there is no seam to pass them through, since whatever values
-    it uses were closed over when the deployment wrote the lambda.
+    Anything else is a **zero-argument factory**. It takes no settings and cannot be
+    given any -- there is no seam to pass them through, since whatever values it
+    uses were closed over when the deployment wrote the lambda.
 
     Which is why a definition writing settings for one is refused rather than
     built without them. A factory that quietly ignored a `settings:` block

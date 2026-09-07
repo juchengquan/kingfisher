@@ -17,29 +17,24 @@ that come from a profile use identical names on all of them. `ChatOpenAI`,
 base class to hold, and a hierarchy would express a one-field difference as a
 type.
 
-**This table is closed, and an endpoint table is not.** `ADAPTERS` was
-`PROVIDERS`, and it carried the credential variable names too -- which welded
-"which wire format" to "which endpoint", 1:1, so a deployment had exactly one
-endpoint per wire format and two Anthropic-compatible gateways could not both
-exist. Endpoints are now open data in `models.yaml`; what stays here is the part
-that needs a Python class behind it.
+**This table is closed, and an endpoint table is not.** Endpoints are open data in
+`models.yaml`; what stays here is the part that needs a Python class behind it.
 
-It stays closed deliberately. `Adapter.resolve` imports the module a row names,
-so a row a *deployment* could write would make a config file an arbitrary-import
-vector — in a package that sandboxes `execute` precisely because the shell could
+It stays closed deliberately. `Adapter.resolve` imports the module a row names, so
+a row a *deployment* could write would make a config file an arbitrary-import
+vector -- in a package that sandboxes `execute` precisely because the shell could
 otherwise read this deployment's own keys. And the openness would be fake:
 `test_models.py` carries a `LANDING_SITES` row per adapter because the classes
 disagree about attribute names, so a new wire format needs a kingfisher release
 whatever the table is written in.
 
-The classes are imported at module scope rather than inside a builder. The
-deferred import was meant to spare a deployment using one style from importing
-the other's SDK, or needing it installed at all — and it achieved neither.
-deepagents depends on `langchain-anthropic` and `langchain-google-genai`
-directly, so both are always installed, and `import kingfisher` has already
-loaded the whole provider stack long before anything calls `build_model`.
-Measured, not assumed. `pyproject.toml` declares `langchain-anthropic` outright
-now, because this module names it and a transitive dependency is not a promise.
+The classes are imported at module scope rather than inside a builder. A deferred
+import would spare nobody: deepagents depends on `langchain-anthropic` and
+`langchain-google-genai` directly, so both are always installed, and `import
+kingfisher` has already loaded the whole provider stack long before anything calls
+`build_model`. Measured, not assumed. `pyproject.toml` declares
+`langchain-anthropic` outright, because this module names it and a transitive
+dependency is not a promise.
 """
 
 from __future__ import annotations
@@ -119,12 +114,11 @@ ADAPTERS: Mapping[str, Adapter] = {
 def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
     """Build a chat model from `profile`, pointed at `endpoint`.
 
-    Two arguments rather than a `Config`, and that is the whole of the fix this
-    signature exists for. It used to read five fields off a `Config`, which
-    meant a delegate running elsewhere was built by *copying* a `Config` with
-    four of them swapped — so a param nobody remembered to add to that copy was
-    silently the deployment's own. `max_tokens` was one edit away from being
-    exactly that. A profile carries every param, so there is nothing to forget.
+    Two arguments rather than a `Config`, and that is the whole point of the
+    signature. Reading fields off a `Config` means a delegate running elsewhere is
+    built by *copying* one with some of them swapped, so a param nobody remembers
+    to add to that copy is silently the deployment's own. A profile carries every
+    param, so there is nothing to forget.
 
     No role parameter. A delegate that runs somewhere else says so in its own
     definition, and `delegation.as_subagent` resolves it through

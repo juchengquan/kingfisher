@@ -1,66 +1,47 @@
 """What reading a deployment's definitions needs that no one kind owns.
 
-The charter changed under this file and the sentence describing it did not.
-It said "the kinds are the point of it: `agents`, `skills`, `subagents` and
-`tools` are one module each" -- true when written, and false since three of the
-four became modules at the package root. `documents` and `importing` were named
-here as neighbours and are now at the top of the layer. A reader who trusted any
-of that went looking for five files, of which one is here.
+The complement of the kinds rather than a remnant of them. `Definitions` and
+`resolve_definitions` settle where *all four* are read from; `DEFINITION_KINDS` is
+derived from that record's fields, which is what stops it drifting from them;
+`bundled_tools` and `bundled_skills` read what one subagent keeps for itself,
+which is two kinds at once and neither kind's to own. `layered` puts a session's
+uploads over the deployment's, one merge rule per kind.
 
-What is left has a subject of its own, and it is the complement of the kinds
-rather than a remnant of them. `Definitions` and `resolve_definitions` settle
-where *all four* are read from; `DEFINITION_KINDS` is derived from that record's
-fields, which is what stops it drifting from them; `bundled_tools` and
-`bundled_skills` read what one subagent keeps for itself, which is two kinds at
-once and neither kind's to own. `layered` puts a session's uploads over the
-deployment's, one merge rule per kind, written where the difference between them
-is legible.
+`agents` is here because it is the kind with no module, which is a decision rather
+than an omission -- `docs/decisions.md`, *Not a module: agents*: an agent is
+selected one per request and is the thing the graph *is*, not something it holds.
 
-`agents` is here because it is the kind with no module, and that is a decision
-rather than an omission -- `docs/decisions.md`, *Not a module: agents*: an agent
-is selected one per request and is the thing the graph *is*, not something it
-holds.
+`test_the_catalogue_holds_one_module_per_kind` binds the modules to
+`DEFINITION_KINDS`, accepting a kind read from its own package or from here. It is
+also why this stayed a folder: "one module per kind" is not a shape anything can
+ask about a flat layer.
 
-`test_the_catalogue_holds_one_module_per_kind` is what binds the modules to
-`DEFINITION_KINDS`, and it accepts a kind read from its own package or from
-here. It is also the reason this stayed a folder: "one module per kind" is not a
-shape anything can ask about a flat layer.
+A subagent may keep tools and skills of its own in a folder named after it, read
+here by `bundled_tools` and `bundled_skills` and kept apart from `tools` and
+`registry` on purpose. An agent that omits `tools:` holds every tool the shared
+offering has, so a bundle is the only place a capability can sit that the
+top-level agent cannot reach.
 
-A subagent may keep tools and skills of its own in a folder named after it, and
-those are read here too -- `bundled_tools` and `bundled_skills`, kept apart from
-`tools` and `registry` on purpose. An agent that omits `tools:` holds every tool
-the shared offering has, so a bundle is the only place a capability can sit that
-the top-level agent cannot reach.
+Two neighbours are deliberately elsewhere. `skills.registry` answers which skills
+deepagents actually loaded -- a different question from what exists to mount, and
+its answer carries deepagents' own skill objects, so it lives where foreign types
+may be named. `uploads` is request-scoped and writes what `layered` then reads.
 
-Two things that belong to this subject are deliberately elsewhere.
-`skills.registry` answers which skills deepagents actually
-loaded, which is a different question from what exists to mount -- running the
-two together is the bug it was written to end -- and its answer carries
-deepagents' own skill objects, so it lives where foreign types may be named.
-Moving it here would also spread the swap boundary `harness/` exists to hold,
-and cost more watched edges than it saved. `uploads` is request-scoped and
-writes what `layered` then reads; splitting the pair costs less than filing a
-per-request concern under a per-deployment one.
+Apart from the workspace filesystem, because a catalogue is the one thing here
+that need not be in a workspace at all: `KINGFISHER_SKILLS_DIR` and its siblings
+exist so several deployments can share one reviewed set.
 
-Split out of `workspace_fs`, which is "the filesystem, doing what
-`kingfisher.layout` describes" -- and a catalogue is the one thing here that need
-not be in a workspace at all. `KINGFISHER_SKILLS_DIR` and its siblings -- one per
-kind -- exist so several deployments can share one reviewed set, so these
-directories are as likely to sit somewhere else entirely as inside a workspace.
-Keeping them
-beside `ensure_layout` read as misfiled rather than as a deliberate exception.
+Apart from the workspace filesystem, because a catalogue is the one thing here
+that need not be in a workspace at all: `KINGFISHER_SKILLS_DIR` and its siblings
+exist so several deployments can share one reviewed set.
 
-What it holds is one repository per kind rather than a path each. A path is what
-a *local* catalogue happens to be; what every caller actually wants is the
-definitions, and only tools need a filesystem to supply them -- `ports.py` says
-why, and `SkillRepository.files` is what took skills off that list.
+What it holds is one repository per kind rather than a path each. A path is what a
+*local* catalogue happens to be; what every caller wants is the definitions, and
+only tools need a filesystem to supply them -- `ports.py` says why.
 
-The module keeps the word and the type does not, and that is the split rather
-than an oversight. A *catalogue* is where definitions are kept -- `catalogue_root`
-and `Config.catalogue_roots` answer with places, and a deployment may point at
-one it shares. `Definitions` is what you get when you read it. The type was
-called `Catalogue` too, which made "the catalogue" mean the place, the contents,
-and -- one line away in `config.py` -- `models.yaml` as well.
+The module keeps the word and the type does not. A *catalogue* is where
+definitions are kept, and a deployment may point at one it shares; `Definitions`
+is what you get when you read it.
 """
 
 from __future__ import annotations
@@ -283,11 +264,9 @@ class Definitions:
 
 #: The kinds, taken from the type that already has one field per kind.
 #:
-#: It was written out again here, six lines above a `Definitions` whose fields
-#: have exactly these names, with nothing holding the two together. The folder
-#: made it worse: `agents.py`, `skills.py`, `subagents.py` and `tools.py` are the
-#: same vocabulary again, and the one with no type behind it --
-#: `test_the_catalogue_holds_one_module_per_kind` is what binds those.
+#: Derived rather than written out, because this vocabulary appears three times
+#: over -- here, `Definitions`' fields, and the module names -- with nothing but
+#: `test_the_catalogue_holds_one_module_per_kind` holding them together.
 #:
 #: Field order is load-bearing now rather than by coincidence: `seeding` walks
 #: this to decide what to copy and in what order, so reordering `Definitions` is
@@ -335,11 +314,9 @@ def source_of(repository: object) -> str:
 def catalogue_root(repository: object) -> Path | None:
     """The directory behind a repository, or `None` when there is not one.
 
-    This used to refuse rather than answer `None`, because the `/skills` route
-    was a `FilesystemBackend` over a real path and a repository with no path was
-    unmountable. `SkillRepository.files` ended that: `skills.backend` mounts
-    whatever a repository can hand over, so a missing directory is now a fact
-    about *which backend to build*, not a wiring error.
+    `None` rather than a refusal: `skills.backend` mounts whatever a repository can
+    hand over, so a missing directory is a fact about *which backend to build*
+    rather than a wiring error.
 
     Two things still follow the directory rather than the repository, and both
     are the shell rather than the agent's file tools: `$KINGFISHER_SKILLS`, which
@@ -363,12 +340,10 @@ def resolve_definitions(
     The two cases differ in who owns the directories, and therefore in what a
     missing one means:
 
-    * **Derived from `cfg`** -- kingfisher's own, so they are created. This is
-      what `ensure_layout` already does for a workspace that has not relocated
-      them, and doing it here extends that to one that has. `KINGFISHER_SKILLS_DIR`
-      pointing somewhere that does not exist yet used to yield an empty
-      catalogue and a clean start; only `skills_dir` was ever created, by
-      `build_backend`, and its two siblings were not.
+    * **Derived from `cfg`** -- kingfisher's own, so they are created. That extends
+      to a relocated catalogue what `ensure_layout` does for a workspace: without
+      it, `KINGFISHER_SKILLS_DIR` pointing somewhere that does not exist yet yields
+      an empty catalogue and a clean start.
     * **Supplied by the caller** -- theirs, so they must already be there.
       Creating one would hide a staging failure behind a catalogue that is
       merely empty, and an agent told about no skills at all is exactly the

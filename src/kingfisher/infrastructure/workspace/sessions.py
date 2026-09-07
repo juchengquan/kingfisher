@@ -80,10 +80,8 @@ def ensure_session_layout(session_dir: Path) -> Path:
     makes isolation structural rather than a matter of path checking.
 
     Both lists, because a session needs its plumbing as much as its addressed
-    names and only one of the two was written down. `build_backend` used to make
-    `.home` and `skills/uploaded` itself, and `data` and `memory` a second time
-    -- so nothing created a whole session in one pass, and the names lived in
-    two places that could disagree.
+    names. This is the only thing that creates a session, so the names live in one
+    place rather than in two that could disagree.
     """
     session_dir = Path(session_dir).expanduser().resolve()
     for name in (*SESSION_DIRS, *SESSION_PLUMBING):

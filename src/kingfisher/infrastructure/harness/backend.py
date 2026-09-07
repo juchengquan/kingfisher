@@ -60,26 +60,18 @@ _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 def agent_home(session_dir: Path) -> Path:
     """`HOME` for the agent's shell: per session, and disposable.
 
-    Not a real home directory but the place tools *believe* is one, so it fills
-    up with whatever they cache -- `~/.cache/uv`, `~/Library/Caches/pip`. It
-    used to be the workspace root, where three things went wrong at once. The
-    caches accumulated beside `skills/` and `subagents/` and nothing ever swept
-    them (59MB in one real workspace); `Library/` was untracked but *not*
-    ignored, so a `git add -A` in a workspace would commit a pip cache; and none
-    of it counted toward `session_max_bytes`, because the quota measures a
-    session and this sat above every session.
+    Not a real home directory but the place tools *believe* is one, so it fills up
+    with whatever they cache -- `~/.cache/uv`, `~/Library/Caches/pip`.
 
-    Inside the session fixes all three without a new janitor: `reap` already
-    removes session directories, and `session_bytes` already counts everything
-    in one. A session that caches a gigabyte now says so.
+    Inside the session so that no new janitor is needed: `reap` already removes
+    session directories, and `session_bytes` already counts everything in one, so a
+    session that caches a gigabyte says so. Above the session, caches accumulated
+    beside `skills/` with nothing sweeping them -- 59MB in one real workspace --
+    and counted toward no quota.
 
     Dotted, and not in `SESSION_DIRS`, because those are "the names the agent
-    addresses" and this is plumbing. It is reachable at `/.home` -- the shell
-    backend roots at the session -- which is harmless and not worth a route.
-
-    The name is `layout.AGENT_HOME`, beside the rest of a session's names.
-    Spelling it here as well is how this directory came to be created in one
-    file and listed in none.
+    addresses" and this is plumbing. It is reachable at `/.home`, which is harmless
+    and not worth a route.
     """
     return Path(session_dir) / AGENT_HOME
 
@@ -92,16 +84,14 @@ def shell_env(
     `HOME` is this session's `.home`, so tools that resolve `~` look there
     instead of at `~/.aws`, `~/.ssh` or `~/.config`.
 
-    That is all it does, and it used to be described as more. Redirecting `HOME`
-    moves where a path is *resolved*; the files stay where they are, and an
-    absolute path still reached them. Measured on this machine, the shell could
-    read `~/.aws` and `~/.config/gh` right through it. Keeping those closed is
-    `confinement`'s job, not this function's.
+    That is all it does. Redirecting `HOME` moves where a path is *resolved*; the
+    files stay where they are, and an absolute path still reaches them. Measured on
+    this machine, the shell could read `~/.aws` and `~/.config/gh` right through
+    it. Keeping those closed is `confinement`'s job, not this function's.
 
-    `KINGFISHER_SKILLS` is here because the catalogue is the one virtual path
-    the shell cannot reach by dropping its leading slash: it is shared between
-    sessions, so it lives above them. That used to be spelled `$HOME/skills`,
-    which was only true while `HOME` was the workspace.
+    `KINGFISHER_SKILLS` is here because the catalogue is the one virtual path the
+    shell cannot reach by dropping its leading slash: it is shared between
+    sessions, so it lives above them.
 
     It follows `catalogue` for the same reason the sandbox profile does. Left on
     `cfg` while the route and the profile pointed elsewhere, a skill's own
@@ -313,13 +303,11 @@ class WorkspaceScopedBackend(CompositeBackend):
     `ls` resolves separately and is left alone: it creates nothing, and a
     listing that comes back empty is self-correcting.
 
-    `glob` and `grep` are not, and used to be. They merge every backend's
-    answer, and three of the routes here point *inside* the default backend's
-    own root -- `/data`, `/memory`, `/skills/uploaded` are all real directories
-    under the session. So each of them saw the same file twice, and said so:
-    measured, one file supplied with `--data` came back as two matches with one
-    path between them, on every pattern. `/skills` escapes it only by pointing
-    at the catalogue, which is somewhere else entirely.
+    `glob` and `grep` are deduplicated. They merge every backend's answer, and
+    three of the routes here point *inside* the default backend's own root --
+    `/data`, `/memory`, `/skills/uploaded` are all real directories under the
+    session -- so each saw the same file twice: measured, one file supplied with
+    `--data` came back as two matches with one path between them, on every pattern.
 
     A listing that comes back doubled is not self-correcting. It reads as two
     files, and the reader is a model that was about to count them.
@@ -571,11 +559,9 @@ def _fence_for(
 def _require_layout(session_dir: Path) -> None:
     """Refuse a session directory that has not been made yet.
 
-    This function used to create what it needed, which is why the names lived
-    in two places. Now `ensure_session_layout` is the only thing that makes a
-    session, and the point of that is a directory this builder does not have to
-    have come from a local disk -- so creating one here would put the assumption
-    straight back.
+    `ensure_session_layout` is the only thing that makes a session, and the point
+    of that is a directory this builder does not have to have come from a local
+    disk -- so creating one here would put the assumption straight back.
 
     Loudly, because the quiet version is worse than it looks: a missing
     `/memory` is a backend whose route resolves to nothing, and the first sign
@@ -703,10 +689,7 @@ def build_backend(
 
 # `HostPathGuard` lives beside `reject_host_path` rather than with the other
 # middleware, and the two are one mechanism: this catches what that raises. It
-# spent a while in `narrowing` on the grounds that it was an `AgentMiddleware`
-# like its neighbours there -- but that file is about applying a request's
-# capabilities, and this applies none. It turns an error into something the
-# model can act on, and the error is raised twenty lines up.
+# applies no capability, which is what keeps it out of `narrowing`.
 
 
 #: Which arguments name a file. The convention this repository already keeps --

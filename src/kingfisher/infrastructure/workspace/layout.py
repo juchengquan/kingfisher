@@ -83,22 +83,16 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
     agent addresses belongs to a session and is made by
     `sessions.ensure_session_layout`.
 
-    No `.gitignore` is written. Kingfisher ran git once -- a `pre_run_commit`
-    that snapshotted the tracked tier before each turn -- and that went with
-    `adapters/workspace_git.py`. What was left behind was an ignore file for a
-    repository nothing created, nothing wrote to and nothing read, describing a
-    review workflow the code no longer had.
+    No `.gitignore` is written, and nothing here runs git. A shipped one listed two
+    of the five things a workspace holds, so it read as complete while being wrong:
+    `Library/` fell outside it, and a `git add -A` in a real workspace offered to
+    commit a 21MB pip cache. An operator who wants version control is better served
+    writing the rules they actually want.
 
-    Worse than merely unused: it listed two of the five things a workspace
-    holds, so it read as complete while being wrong. `Library/` was outside it,
-    and a `git add -A` in a real workspace offered to commit a 21MB pip cache.
-    An operator who wants their workspace under version control is better served
-    writing the ignore rules they actually want than inheriting stale ones.
-
-    A workspace is runtime state. The 132KB of authored content in it --
-    `skills`, `subagents`, `tools` against 256MB of sessions and harness state --
-    is what `KINGFISHER_SKILLS_DIR` and its two siblings exist to relocate, and
-    versioning belongs there rather than around the sessions.
+    A workspace is runtime state. The 132KB of authored content in it -- `skills`,
+    `subagents`, `tools` against 256MB of sessions and harness state -- is what
+    `KINGFISHER_SKILLS_DIR` and its two siblings exist to relocate, and versioning
+    belongs there rather than around the sessions.
     """
     workspace = Path(workspace).expanduser().resolve()
     for name in LAYOUT_DIRS:
@@ -115,41 +109,32 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
 def _place_example(workspace: Path, authored: Mapping[str, Path] | None = None) -> None:
     """Put each worked example where the file it is an example of is read from.
 
-    Here rather than in `seed`, which is where it lived. Seeding is about to
-    become able to *refuse* -- a deployment that names no definitions has
-    nothing to copy -- and this file must arrive anyway: `models.yaml` is
-    required and has no fallback, and the error a deployment without one hits
-    names this file as the place to look. Seeding's own comment said as much,
-    that it is written "not conditional on a deployment having any", and that
-    stops being true the moment seeding can decline.
+    Here rather than in `seed`, because seeding can *refuse* -- a deployment that
+    names no definitions has nothing to copy -- and this file must arrive anyway:
+    `models.yaml` is required, has no fallback, and the error a deployment without
+    one hits names this file as the place to look. It is furniture rather than
+    content: nothing chooses it, and a workspace without it is missing a part of
+    itself.
 
-    Laying out a workspace is the right owner because this is furniture rather
-    than content. Nothing chooses it, nothing seeds it from somewhere else, and
-    a workspace without it is missing a part of itself.
-
-    Written when absent *or different*, which is neither of the two obvious
-    rules. Always writing would touch the disk on every run for nothing. Only
-    when absent would mean an upgrade never refreshed the example, so a
-    deployment would keep reading last year's annotations for a file that had
-    grown fields -- and re-seeding used to be what refreshed it.
+    Written when absent *or different*. Always writing would touch the disk on
+    every run for nothing; only when absent would mean an upgrade never refreshed
+    the example, so a deployment would keep reading last year's annotations for a
+    file that had grown fields.
 
     As `.example`, never as `models.yaml` itself: the one file that must not be
-    overwritten is the one naming every endpoint this deployment reaches and
-    whose credentials pay.
+    overwritten is the one naming every endpoint this deployment reaches and whose
+    credentials pay.
 
-    "Where it is read from" is not always the workspace, which is what this took
-    a while to say. Both files relocate -- `KINGFISHER_MODELS_FILE` points a
-    fleet at one reviewed catalogue, the arrangement `compose.yaml` ships -- and
-    the example went into the workspace regardless. So a container deployment
-    was seeded with an annotated catalogue in a directory nothing reads, while
-    the error for the missing one told it `kingfisher seed` writes the example
-    next to the file. It had, next to the other one.
+    "Where it is read from" is not always the workspace. Both files relocate --
+    `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue, the
+    arrangement `compose.yaml` ships -- and an example written into the workspace
+    regardless leaves a container deployment with an annotated catalogue in a
+    directory nothing reads.
 
-    Best-effort where the destination will not take it: a shared catalogue is
-    often mounted read-only, and failing the whole layout over furniture would
-    take `kingfisher seed` down for exactly the deployment that relocated. The
-    fallback is the workspace, which is where it went before it could follow the
-    file at all.
+    Best-effort where the destination will not take it: a shared catalogue is often
+    mounted read-only, and failing the whole layout over furniture would take
+    `kingfisher seed` down for exactly the deployment that relocated. The fallback
+    is the workspace.
     """
     beside = dict(authored or {})
     for name in EXAMPLES:

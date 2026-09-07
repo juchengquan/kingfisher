@@ -4,11 +4,9 @@
 are the same idea twice: `module:name` for something callable with no arguments
 that returns an adapter kingfisher has never imported. This is that idea, once.
 
-It was written session-store-shaped and lived beside `LocalSessionStore`. The
-second caller is what moved it: the two would have been thirty-five lines each
-differing in four strings, and the strings are the *error messages* -- the part
-a deployment reads when its wiring is wrong, and the part that drifts first
-when there are two of them.
+One copy rather than one per port: two would be thirty-five lines each differing
+in four strings, and those strings are the *error messages* -- the part a
+deployment reads when its wiring is wrong, and the part that drifts first.
 
 **What is checked here is the name, not the building.** A spec that will not
 parse, a module that will not import, an attribute that is not there, a result

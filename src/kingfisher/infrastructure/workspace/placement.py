@@ -1,10 +1,9 @@
 """Copying a caller's files in: to a session's `/data`, or to one turn's input.
 
-Two destinations and one set of rules about what may be placed. `_checked`
-refuses before anything is copied, so a request naming a file that is not there
-leaves nothing half-placed behind -- applying that to `/data` and not to a
-turn's input was an accident of which was written first, and it cost the second
-one both guarantees.
+Two destinations and one set of rules about what may be placed. `_checked` refuses
+before anything is copied, so a request naming a file that is not there leaves
+nothing half-placed behind -- and it applies to both destinations, because a rule
+that covers one is a rule the other quietly does without.
 
 The durable half goes through `permissions.writable_data`, which is the only
 sanctioned way to lift the write bits it puts back afterwards.
@@ -83,10 +82,9 @@ def place_inputs(
     there is no `writable_data` dance here -- a turn directory is ours and was
     made moments ago.
 
-    This lived inline in the service as a `mkdir` and a bare `shutil.copy`, one
-    layer up from where the filesystem is supposed to be touched. It was the
-    only place in the application layer doing its own I/O, and it had silently
-    missed both of `_checked`'s guarantees for as long as it existed.
+    Here rather than inline in the service, which is a layer above where the
+    filesystem is supposed to be touched -- and where it missed both of
+    `_checked`'s guarantees.
     """
     checked = _checked(sources)
     if not checked and not contents:

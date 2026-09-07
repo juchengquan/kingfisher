@@ -27,12 +27,10 @@ under `strace`, the denial is a single call::
 
 Docker's default profile does not block `clone`; it blocks it *when the flags
 include `CLONE_NEWUSER`*. So what bubblewrap needs is a profile permitting that
-one argument-filtered rule -- Docker's default with it removed, keeping the
-other syscalls it denies. `--security-opt seccomp=unconfined` also works and is
-the blunt way: it turns off the whole filter for the *entire container*,
-including this process and every registered tool. Prefer the narrow profile;
-this document said "unconfined" first and that was advice to give up far more
-than the job needs.
+one argument-filtered rule -- Docker's default with it removed, keeping the other
+syscalls it denies. `--security-opt seccomp=unconfined` also works and is the
+blunt way: it turns off the whole filter for the *entire container*, including
+this process and every registered tool. Prefer the narrow profile.
 
 What is being enabled either way is the thing Docker blocks on purpose:
 unprivileged user namespaces are a known amplifier for kernel bugs, letting a

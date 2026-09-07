@@ -5,42 +5,24 @@ library. `yaml.safe_load` sat in the domain until the boundary was made
 deny-by-default — a domain module imports the standard library and
 `kingfisher.domain`, nothing else — and this is where it landed.
 
-It reads no kind. `read_subagent`, `skill_name` and `read_agent` each opened an
-envelope here and then called back into the format's own module to do the rest,
-so a subagent catalogue reached into infrastructure for a wrapper that reached
-straight back at it. Each of those is now one function where its format lives:
+It reads no kind. Each format's own reader lives with the format --
 `subagents.reading.read`, `skills.reading.name_from`, and `catalogue.agents` for
-the kind that has no module of its own. What could not follow them is here:
-`decode` and `require_literal_prompt` are shared by all three, and a scalar's
-style is a fact about a document rather than about what any kind means.
+the kind that has no module of its own. What is here is what all three share:
+`decode` and `require_literal_prompt`, because a scalar's style is a fact about a
+document rather than about what any kind means.
 
-It is YAML, parsed as YAML. This used to hand-roll a `key: value` reader, on
-the reasoning that a YAML dependency would accept anchors, multi-line blocks and
-type coercion into a format whose point is that a person can read it at a
-glance. deepagents accepts exactly those when it reads a skill, which made
-kingfisher *stricter than the format it mirrors*: a folded description or a
-block list — the Agent Skills spec's own form for `allowed-tools` — parsed there
-and raised here. Definitions skills are never read by kingfisher, but uploaded
-ones are, so a skill that loaded fine could not be uploaded.
+It is YAML, parsed as YAML. Hand-rolling a `key: value` reader made kingfisher
+*stricter than the format it mirrors*: deepagents accepts anchors, folded scalars
+and block lists when it reads a skill -- the Agent Skills spec's own form for
+`allowed-tools` among them -- so a skill that loaded fine could not be uploaded.
 
-`safe_load`, so a document cannot construct arbitrary objects. Definitions
-arrive from a catalogue service under `DefinitionStore`, which makes them input
-rather than something we wrote.
+`safe_load`, so a document cannot construct arbitrary objects. Definitions arrive
+from a catalogue service under `DefinitionStore`, which makes them input rather
+than something we wrote.
 
-Named `documents` rather than `definitions`, and the name is what survived two
-moves. `definitions` was the first one and it was chosen against `domain.fields`
--- one name across two layers makes every import a small act of guessing, which
-is why `narrowing` is not called `capabilities` either. Moving into `catalogue/`
-then put it a directory listing away from `Definitions`, the deployment's
-repository per kind, so it was renamed to what its first line already said it
-does.
-
-Flat in `infrastructure/` again, which is where it started, and the reason is an
+Flat in `infrastructure/` rather than inside `catalogue/`, and the reason is an
 import cycle rather than tidiness: `catalogue/__init__` imports three kind
-modules, and two of them needed this. A kind reaching a submodule of a package
-that imports the kind back resolved by luck of ordering, and stopped resolving
-when the readers moved. `importing` came up for the same reason and imports
-nothing from kingfisher at all.
+modules, and two of them need this.
 """
 
 from __future__ import annotations
@@ -86,11 +68,10 @@ def groups_named(text: str) -> tuple[str, ...]:
     _collect(parsed.get("groups"), into=found)
     for field_name in AUDIENCED:
         entries = parsed.get(field_name)
-        # A list whose entries are names, or mappings of `name` and `groups`.
-        # This walked a field-level mapping until 2026-09-03 and stopped finding
-        # anything the day the format changed -- which `seed` would not have
-        # reported, because a definition naming no group is exactly what a
-        # definition it cannot read looks like from here.
+        # A list whose entries are names, or mappings of `name` and `groups`. A
+        # reader that walks the wrong shape finds nothing and reports nothing:
+        # a definition naming no group is exactly what a definition this cannot
+        # read looks like from here.
         if isinstance(entries, (list, tuple)):
             for entry in entries:
                 if isinstance(entry, dict):
