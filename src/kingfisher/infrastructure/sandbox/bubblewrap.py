@@ -43,6 +43,7 @@ from typing import TYPE_CHECKING
 
 from kingfisher.domain.ports import CommandResult
 from kingfisher.infrastructure.sandbox.fence import MAX_OUTPUT_BYTES
+from kingfisher.layout import HARNESS
 
 if TYPE_CHECKING:
     from collections.abc import Iterable, Mapping, Sequence
@@ -96,6 +97,13 @@ def argv_for(
         argv += ["--ro-bind", str(path), str(path)]
     for path in _present([session_dir, *writable]):
         argv += ["--bind", str(path), str(path)]
+    # After the session's own bind, and that order is the whole mechanism: bwrap
+    # applies binds in sequence, so a read-only bind of a subpath lands on top of
+    # the writable one underneath it. Before it, the session bind would cover
+    # this again. `_present` drops it if it is absent, which is why
+    # `ensure_session_layout` makes it before a fence is built.
+    for path in _present([Path(session_dir) / HARNESS]):
+        argv += ["--ro-bind", str(path), str(path)]
     argv += [
         # A fresh minimal /dev rather than the container's.
         "--dev", "/dev",

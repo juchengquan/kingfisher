@@ -481,7 +481,7 @@ def test_a_bundles_skills_add_a_mount_and_no_rule(cfg, session_dir):
     mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
 
     assert mounted, "no bundle mounted, so this asserts nothing about bundles"
-    assert denied_scopes() == ("/data/**", "/skills/**")
+    assert denied_scopes() == ("/.harness/**", "/data/**", "/skills/**")
     assert all(route.startswith("/skills/") for route in mounted), (
         "a mount outside the scope the one rule covers would be writable"
     )

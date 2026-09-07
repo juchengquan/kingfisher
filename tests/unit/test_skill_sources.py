@@ -208,11 +208,13 @@ def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir, 
         capabilities=Capabilities(skills=("research::lookup",)),
     )
 
+    # Minus `.harness`, which every request is denied whatever it activates.
     denied = [
         p
         for r in captured["permissions"]
         if r.mode == "deny" and "read" in r.operations
         for p in r.paths
+        if p != "/.harness/**"
     ]
 
     assert "/skills/legal/lookup/**" in denied

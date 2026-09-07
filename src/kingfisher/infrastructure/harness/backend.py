@@ -24,6 +24,8 @@ from kingfisher.layout import (
     BUNDLED_SKILLS_ROUTE,
     DATA,
     DATA_ROUTE,
+    HARNESS,
+    HARNESS_ROUTE,
     MEMORY,
     MEMORY_ROUTE,
     RESERVED_SKILL_FOLDER,
@@ -416,6 +418,11 @@ def build_backend(
             else skills_backend(skills)
         ),
         MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
+        # Mounted so it can be refused. Every operation through it is denied by
+        # `read_only_permissions`, and a rule is only expressible against a path
+        # the composite routes -- so the mount is what makes the refusal legal,
+        # not a way in.
+        HARNESS_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / HARNESS)),
         UPLOADED_SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(uploaded)),
     }
     missing = [path for path in routed_paths() if path not in backing]

@@ -18,6 +18,7 @@ from __future__ import annotations
 import ctypes
 import os
 import platform
+import re
 import shlex
 import shutil
 import sys
@@ -26,6 +27,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from kingfisher.config import Config
+from kingfisher.layout import HARNESS
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --
 #: the three Landlock calls were added to the syscall table in one go rather
@@ -206,9 +208,12 @@ def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement
     )
 
 
-def profile(
+def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and each is
+    # a different question: what to deny, what to re-allow, what to carve back out,
+    # and the two paths the profile has to know about itself
     *,
     home: Path,
+    workspace: Path,
     readable: tuple[Path, ...],
     writable: tuple[Path, ...],
     itself: Path,
@@ -267,7 +272,25 @@ def profile(
     # the one a `subpath` deny on the parent directory would have been reached
     # for to catch.
     lines.append(f"(deny file-write* (path {_sb(itself)}))")
+    lines.append(_harness_denial(workspace))
     return "\n".join(lines) + "\n"
+
+
+def _harness_denial(workspace: Path) -> str:
+    """Refuse `<workspace>/sessions/*/.harness`, for every session at once.
+
+    A regex rather than one `subpath` per session, and that is what keeps the
+    profile static. `shell.sb` has a single fixed path, so a profile naming the
+    sessions that exist when it is written would have to be rewritten as sessions
+    arrive -- and two concurrent turns would then race to write different bytes
+    to one file, each ending up bound by the other's.
+
+    The character class is `[^/]+`, so it matches one session and not a path
+    walking through several: `sessions/a/.harness` is denied and
+    `sessions/a/derived/.harness` is not this rule's business.
+    """
+    root = re.escape(f"{Path(workspace).resolve()}/sessions/")
+    return f'(deny file-write* (regex #"^{root}[^/]+/{re.escape(HARNESS)}(/|$)"))'
 
 
 def _sb(path: Path) -> str:
@@ -373,6 +396,10 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         path,
         profile(
             home=home,
+            # Named separately from the writable roots it is usually the first
+            # of: `_harness_denial` builds a pattern under it, which needs the
+            # workspace itself rather than whatever happens to be writable.
+            workspace=workspace,
             readable=readable_roots(workspace, extra, skills),
             writable=writable_roots(workspace),
             # The profile refuses writes to itself, so the rules cannot be

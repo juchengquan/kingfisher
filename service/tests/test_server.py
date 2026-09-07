@@ -25,6 +25,13 @@ def client(cfg):
 # -- sessions --------------------------------------------------------------
 
 
+def _claim(cfg, session_id):
+    """One session's turn slot, inside the session it guards."""
+    from kingfisher.infrastructure.workspace.sessions import claim_path
+
+    return claim_path(cfg.workspace / "sessions" / session_id)
+
+
 def test_opening_a_session_returns_an_id_the_library_can_see(client):
     """The two halves agreeing is the point: an id minted over HTTP is a session, not a
     token the server invented and holds somewhere.
@@ -89,7 +96,7 @@ def test_reading_a_session_does_not_disturb_it(client, cfg):
     assert client.get(f"/sessions/{session_id}").status_code == 200
 
     assert directory.stat().st_mtime == pytest.approx(stale, abs=1)
-    assert not (cfg.state_dir / "claims" / session_id).exists()
+    assert not _claim(cfg, session_id).exists()
 
 
 def test_deleting_a_session_removes_it(client):
@@ -353,7 +360,7 @@ def test_a_second_turn_on_a_busy_session_is_a_409(cfg):
     """
     service, app = serving(cfg, AsyncStub("done"))
     session_id = service.start_session()
-    (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
+    _claim(cfg, session_id).mkdir(parents=True, exist_ok=True)
 
     with TestClient(app) as http:
         response = http.post(f"/sessions/{session_id}/turns", json={"task": "go"})
@@ -380,7 +387,7 @@ def test_a_refused_turn_leaves_no_claim_behind(cfg):
     with TestClient(app) as http:
         http.post(f"/sessions/{session_id}/turns", json={"task": "go"})
 
-    assert not (cfg.state_dir / "claims" / session_id).exists()
+    assert not _claim(cfg, session_id).exists()
 
 
 # -- the one-shot ----------------------------------------------------------
@@ -505,7 +512,7 @@ def test_hanging_up_stops_the_turn_and_gives_the_claim_back(cfg):
     """The decision the whole design rests on, and it needs no library change."""
     service, app = serving(cfg, AsyncStub("done", tokens=tokens(200), pause=0.01))
     session_id = service.start_session()
-    claim = cfg.state_dir / "claims" / session_id
+    claim = _claim(cfg, session_id)
 
     state = asyncio.run(
         hang_up_after(
@@ -584,7 +591,7 @@ def test_a_busy_session_refuses_in_the_same_shape(client, cfg):
     handler as everything else.
     """
     session_id = client.post("/sessions", json={"agent": "only"}).json()["session_id"]
-    (cfg.state_dir / "claims" / session_id).mkdir(parents=True, exist_ok=True)
+    _claim(cfg, session_id).mkdir(parents=True, exist_ok=True)
 
     response = client.post(f"/sessions/{session_id}/turns", json={"task": "go"})
 

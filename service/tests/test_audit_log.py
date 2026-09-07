@@ -14,6 +14,13 @@ from kingfisher import Kingfisher
 from tests.conftest import StubCheckpointer
 
 
+def _claim(cfg, session_id):
+    """One session's turn slot, inside the session it guards."""
+    from kingfisher.infrastructure.workspace.sessions import claim_path
+
+    return claim_path(cfg.workspace / "sessions" / session_id)
+
+
 def lines(caplog):
     return [
         json.loads(r.getMessage())
@@ -59,7 +66,7 @@ def test_the_reason_matches_what_the_caller_was_told(audited, caplog):
     """One code, both sides."""
     http = audited()
     session = http.post("/sessions", json={"agent": "only"}).json()["session_id"]
-    (http.kingfisher.cfg.state_dir / "claims" / session).mkdir(parents=True, exist_ok=True)
+    _claim(http.kingfisher.cfg, session).mkdir(parents=True, exist_ok=True)
 
     response = http.post(f"/sessions/{session}/turns", json={"task": "go"})
 

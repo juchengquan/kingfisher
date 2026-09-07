@@ -116,7 +116,7 @@ def test_a_turn_on_a_pinned_agent_out_of_reach_is_refused(two_agents):
     with pytest.raises(CapabilityError):
         kf._agent_for(
             Request(task="again", agent="assistant", session_id=opened.id),
-            opened.id,
+            opened.directory,
             groups=("B",),
         )
 
@@ -128,7 +128,7 @@ def test_a_turn_on_a_pinned_agent_still_in_reach_resolves(two_agents):
 
     assert kf._agent_for(
         Request(task="again", agent="assistant", session_id=opened.id),
-        opened.id,
+        opened.directory,
         groups=("A",),
     )
 

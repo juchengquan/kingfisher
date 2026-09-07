@@ -98,10 +98,11 @@ class Sessions:
         found = next((s for s in self.sessions() if s.id == session_id), None)
         if found is None or self.access is None or not isinstance(groups, tuple):
             return found
-        kept = agent_started_with(self.cfg.state_dir, session_id)
+        directory = sessions_root(self.workspace) / session_id
+        kept = agent_started_with(directory)
         if kept is None:
             return found
-        pinned = read(kept, agent_snapshot(self.cfg.state_dir, session_id))
+        pinned = read(kept, agent_snapshot(directory))
         return found if reaches(pinned.groups, self.access.expand(groups)) else None
 
     def start_session(self, session_id: str | None = None) -> str:

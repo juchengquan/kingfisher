@@ -161,6 +161,7 @@ def test_the_profile_denies_after_it_allows(tmp_path):
     """
     text = confinement.profile(
         home=tmp_path / "home",
+        workspace=tmp_path / "ws",
         readable=(tmp_path / "ws",),
         writable=(tmp_path / "ws",),
         itself=tmp_path / "ws" / ".kingfisher" / "shell.sb",
@@ -178,8 +179,8 @@ def test_a_profile_with_nothing_protected_is_unchanged(tmp_path):
     """The parameter defaults to empty, so a caller that names nothing gets the profile
     it always got.
     """
-    args = {"home": tmp_path / "home", "readable": (tmp_path / "ws",),
-            "writable": (tmp_path / "ws",),
+    args = {"home": tmp_path / "home", "workspace": tmp_path / "ws",
+            "readable": (tmp_path / "ws",), "writable": (tmp_path / "ws",),
             "itself": tmp_path / "ws" / ".kingfisher" / "shell.sb"}
 
     assert confinement.profile(**args) == confinement.profile(**args, protected=())

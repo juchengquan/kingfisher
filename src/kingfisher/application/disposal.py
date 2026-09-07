@@ -18,6 +18,8 @@ from kingfisher.domain import retention
 from kingfisher.domain.retention import SweepResult
 from kingfisher.domain.session import Session, sessions_root, still_held
 from kingfisher.infrastructure.harness.checkpointing import thread_ids
+from kingfisher.infrastructure.workspace.sessions import claim_path
+from kingfisher.layout import CLAIM
 
 if TYPE_CHECKING:
     from pathlib import Path
@@ -37,7 +39,6 @@ class Disposal:
     workspace: Path
     sessions_store: SessionStore | None
     session_root: SessionRoot
-    _claims: Path
     _shared: Any
 
     def delete_session(self, session_id: str) -> str | None:
@@ -47,7 +48,6 @@ class Disposal:
             return None
         session = Session(id=session_id, directory=root / session_id)
         failure = session.discard(self.dirs, self._shared)
-        session.release(self.dirs, self._claims)
         # And what the store kept, or a deleted session outlives its deletion
         # everywhere that matters. The directory going is the visible half; on a
         # host that may not hold data, the store is the only half that was ever
@@ -69,15 +69,10 @@ class Disposal:
             self.dirs.listing(root),
             age,
             now,
-            busy=still_held(
-                self.dirs.listing(self._claims),
-                stale_after=self.cfg.claim_stale_after,
-                now=now,
-            ),
+            busy=self._busy(root, now=now),
         )
         result = retention.apply(plan, root, self.dirs, self._shared)
         result = self._reconcile_threads(root, result)
-        self._discard_dead_claims(root)
         # Named by the sweep rather than re-derived. `removed` is what actually
         # went, which is not the same as what the plan asked for -- a session
         # whose directory refused to delete is still there and its store copy
@@ -92,11 +87,26 @@ class Disposal:
         if self.sessions_store is not None:
             self.sessions_store.forget(session_id)
 
-    def _discard_dead_claims(self, root: Path) -> None:
-        """Drop claims whose session no longer exists."""
-        gone = retention.orphaned(self.dirs.children(self._claims), self.dirs.children(root))
-        for name in gone:
-            self.dirs.remove_tree(self._claims / name)
+    def _busy(self, root: Path, *, now: float) -> tuple[str, ...]:
+        """The sessions a turn is still running in, so a sweep spares them.
+
+        One stat per session rather than one listing of a shared claims
+        directory, which is what a claim living inside the session it guards
+        costs. What it buys is that an orphaned claim cannot exist: it went with
+        the session, so there is nothing left to sweep and nothing to sweep it.
+
+        A claim only spares a session while somebody could still be holding it.
+        This used to read claim names and spare every one, so a process that died
+        mid-turn exempted its session from retention for good -- ten years idle
+        and still there, measured.
+        """
+        held = tuple(
+            (session_id, mtime)
+            for session_id in self.dirs.children(root)
+            for name, mtime in self.dirs.listing(claim_path(root / session_id).parent)
+            if name == CLAIM
+        )
+        return still_held(held, stale_after=self.cfg.claim_stale_after, now=now)
 
     def _reconcile_threads(self, root: Path, result: SweepResult) -> SweepResult:
         """Delete threads no session owns, and fold them into the result.

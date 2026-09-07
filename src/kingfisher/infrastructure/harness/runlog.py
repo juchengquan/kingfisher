@@ -11,6 +11,7 @@ from typing import Any
 from langchain_core.callbacks import BaseCallbackHandler
 
 from kingfisher.infrastructure.harness import runtime
+from kingfisher.layout import HARNESS, RUNLOG
 
 MODEL_CALL = "model_call"
 
@@ -52,9 +53,17 @@ def read_usage(path: Path) -> Usage:
     )
 
 
-def log_path(state_dir: Path, session_id: str) -> Path:
-    """One log per session, under the configured state directory."""
-    return Path(state_dir) / "runs" / f"{session_id}.jsonl"
+def log_path(session_dir: Path) -> Path:
+    """One log per session, inside the session.
+
+    It was `<state_dir>/runs/<id>.jsonl`, where nothing deleted it when the
+    session went: a workspace kept one per session that had ever existed. Inside,
+    `reap` takes it with the rest and `session_bytes` counts what it costs.
+
+    Under `.harness` rather than beside `/runs`, which is per-turn scratch the
+    agent addresses -- and what a turn spent is not a turn's to edit.
+    """
+    return Path(session_dir) / HARNESS / RUNLOG
 
 
 class JsonlRunLogger(BaseCallbackHandler):

@@ -706,13 +706,17 @@ def test_the_profile_refuses_itself_last(tmp_path):
 
     lines = confinement.profile(
         home=tmp_path / "home",
+        workspace=tmp_path / "ws",
         readable=(tmp_path / "ws",),
         writable=(tmp_path / "ws",),
         itself=written,
         protected=(tmp_path / "ws" / "skills",),
     ).splitlines()
 
-    assert lines[-1] == f'(deny file-write* (path "{written}"))'
+    # Last but one: the harness denial that follows it is the same kind of rule
+    # and covers a different path, so both have to sit after the allows.
+    assert f'(deny file-write* (path "{written}"))' in lines[-2:]
+    assert all(not line.startswith("(allow file-write*") for line in lines[-2:])
 
 
 @macos

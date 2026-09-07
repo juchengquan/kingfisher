@@ -134,3 +134,55 @@ def test_the_agent_reaches_its_own_interpreter(fenced):
     assert sys.prefix in result.output, (
         f"the fenced shell reached a different interpreter: {result.output.strip()}"
     )
+
+
+# -- the harness directory, which only a real kernel can answer for -------
+
+
+def _runner_for(session):
+    from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
+
+    return LandlockRunner(
+        policy_for(session, readable=toolchain_roots()),
+        cwd=session,
+        env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
+    )
+
+
+@needs_landlock
+def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
+    """The Linux half of the pair `.harness` is denied by, and the half that could not
+    be measured on the machine this was written on.
+
+    Landlock is additive: `policy_for` grants the session writable and names
+    `<session>/.harness` readable, on the understanding that the kernel resolves a
+    path by its most nested matching rule. If that reading is wrong the deeper grant
+    is subsumed and this goes red -- which is why it is asserted here rather than
+    reasoned about in a comment.
+    """
+    from kingfisher.layout import HARNESS
+
+    _, theirs = two_sessions
+    harness = theirs / HARNESS
+    harness.mkdir(parents=True, exist_ok=True)
+    pinned = harness / "agent.yaml"
+    pinned.write_text("name: pinned\n", encoding="utf-8")
+
+    _runner_for(theirs).run(f'printf "name: mine" > {pinned}')
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n", (
+        "the shell rewrote the agent definition its own session is pinned to"
+    )
+
+
+@needs_landlock
+def test_the_rest_of_the_session_stays_writable(two_sessions):
+    """The bound on the rule above: one directory is carved out, not the session."""
+    from kingfisher.layout import HARNESS
+
+    _, theirs = two_sessions
+    (theirs / HARNESS).mkdir(parents=True, exist_ok=True)
+
+    outcome = _runner_for(theirs).run(f'echo fine > {theirs / "derived" / "ok.txt"}')
+
+    assert outcome.exit_code == 0, outcome.output

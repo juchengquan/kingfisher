@@ -42,6 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.ports import CommandResult
+from kingfisher.layout import HARNESS
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -98,7 +99,15 @@ def policy_for(
     from sandlock import Sandbox  # noqa: PLC0415
 
     return Sandbox(
-        fs_readable=_present([*SYSTEM_PATHS, *readable]),
+        # `.harness` is named readable while the session around it is writable,
+        # and Landlock resolves a path by its most nested matching rule -- so the
+        # deeper grant is the one that applies and the harness stays read-only.
+        # If that reading is wrong the rule is simply subsumed and `.harness`
+        # stays writable to the shell, which is where it was before this: the
+        # failure direction is the status quo rather than a broken fence.
+        # `tests/linux/test_fence_escapes.py` is what settles it, on the only
+        # kind of host that can run it.
+        fs_readable=_present([*SYSTEM_PATHS, *readable, Path(session_dir) / HARNESS]),
         fs_writable=_present([session_dir, *writable]),
     )
 
