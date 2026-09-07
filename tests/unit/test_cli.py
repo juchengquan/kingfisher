@@ -891,8 +891,8 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, ca
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, monkeypatch):
     """The report is not the point -- this is."""
     from kingfisher import config_from_env
+    from kingfisher.agents.catalogue import LocalAgentRepository
     from kingfisher.domain.access import reaches
-    from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 
     _workspace(cfg, monkeypatch, NARROWED, vocabulary="groups: [A, B, C]\n")
     reach = config_from_env().access

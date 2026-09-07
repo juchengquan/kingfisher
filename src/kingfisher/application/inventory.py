@@ -8,11 +8,11 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from types import MappingProxyType
 
+from kingfisher.agents.spec import AgentError
 from kingfisher.application import access
 from kingfisher.application.origins import Origins
 from kingfisher.config import Config
 from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
-from kingfisher.domain.agent import AgentError
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout

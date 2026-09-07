@@ -522,7 +522,7 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
 
     **One exception, measured rather than granted.** A domain module may name an
     asset kind's `spec`: it is the *format's* vocabulary, and importing
-    `domain.ports` and `domain.agent` takes 39ms and loads 101 modules, none of them
+    `domain.ports` and `agents.spec` takes 39ms and loads 101 modules, none of them
     the agent runtime, against the 888ms `decisions.md` quotes for the bad case. A
     `catalogue` or a `harness` would not be free, and those stay refused.
     """
@@ -611,6 +611,9 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # reach the runtime, and the reason the swap boundary is now stated as a
     # list of areas rather than one directory.
     "subagents": frozenset({"deepagents", "langchain_core"}),
+    # The fourth kind, and the only one whose set is empty: an agent's runtime
+    # half is `harness/agent.py`, which is not this package's.
+    "agents": frozenset(),
     # The one consumer still in this distribution. `presentation` was the other and is
     # now `kingfisher-service`, a package of its own with its own rules -- so fastapi
     # and uvicorn are no longer anything this table has an opinion about, and an area
@@ -669,7 +672,7 @@ def test_an_area_is_refused_another_areas_dependencies():
 def test_a_subpackage_is_judged_by_its_own_area():
     """`infrastructure/harness/agent.py` is not judged as `infrastructure/`."""
     catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
-    buried = SRC / "infrastructure" / "catalogue" / "agents.py"
+    buried = SRC / "infrastructure" / "catalogue" / "layered.py"
     for path in (catalogue, buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
@@ -1571,51 +1574,45 @@ def test_this_repository_still_has_a_worked_set(shipped):
     )
 
 
-def _kinds_without_a_reader(
-    kinds: tuple[str, ...], *, package: Path, root: Path
-) -> list[str]:
-    """Kinds with no module reading them, in either place one may live."""
-    return sorted(
-        kind
-        for kind in kinds
-        if not (package / f"{kind}.py").is_file()
-        and not (root / kind / "catalogue.py").is_file()
-    )
+def _kinds_without_a_reader(kinds: tuple[str, ...], *, root: Path) -> list[str]:
+    """Kinds with no module of their own reading them.
+
+    One place, as of `agents` becoming a module. It took two while three kinds
+    had left `catalogue/` and one had not, and a rule with a branch nothing can
+    reach is half a rule.
+    """
+    return sorted(kind for kind in kinds if not (root / kind / "catalogue.py").is_file())
 
 
 def test_the_kind_rule_can_tell_a_missing_reader_from_a_present_one(tmp_path):
     """Exercised where there is something to find, because the rule above runs on a tree
     where there is not.
     """
-    package = tmp_path / "catalogue"
-    package.mkdir()
-    (package / "tools.py").write_text("", encoding="utf-8")
     (tmp_path / "skills").mkdir()
     (tmp_path / "skills" / "catalogue.py").write_text("", encoding="utf-8")
+    # A directory without the module is the near miss worth telling apart from
+    # an absent kind.
+    (tmp_path / "tools").mkdir()
 
-    found = _kinds_without_a_reader(
-        ("tools", "skills", "ghosts"), package=package, root=tmp_path
-    )
+    found = _kinds_without_a_reader(("tools", "skills", "ghosts"), root=tmp_path)
 
-    assert found == ["ghosts"], "a kind read from neither place is the one to report"
+    assert found == ["ghosts", "tools"], "a kind with no module of its own is reported"
 
 
 def test_the_catalogue_holds_one_module_per_kind():
     """Every kind has a reader, bound to the constant that says which kinds exist."""
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
-    package = SRC / "infrastructure" / "catalogue"
-    assert list(package.glob("*.py")), f"{package} holds no modules — this is about nothing"
+    assert DEFINITION_KINDS, "no kinds — this rule is about nothing"
 
     # A *file that exists*, not a name in a set. Stated as a set of stems, this
     # rule could be satisfied by widening the set -- a mutation adding every
-    # kind to it left the assertion trivially true and nothing went red. Two
-    # candidate paths per kind, and at least one has to be there.
-    missing = _kinds_without_a_reader(DEFINITION_KINDS, package=package, root=SRC)
+    # kind to it left the assertion trivially true and nothing went red.
+    missing = _kinds_without_a_reader(DEFINITION_KINDS, root=SRC)
 
     assert not missing, (
-        f"{missing} is a kind the catalogue reads "
-        "with no module in catalogue/ named for it"
+        f"{missing} is a kind the catalogue reads with no module of its own -- "
+        "each kind owns a package at the root holding its `catalogue`"
     )
 
 
@@ -2106,7 +2103,7 @@ def test_an_aliased_import_reads_the_name_it_renames():
     """The scanner recorded the alias and dropped the original, which made a constant
     reached only through `import X as Y` look like one nothing reads.
     """
-    read = _names_read("from kingfisher.domain.agent import DIRECTORY as AGENT_DIRECTORY")
+    read = _names_read("from kingfisher.agents.spec import DIRECTORY as AGENT_DIRECTORY")
 
     assert "DIRECTORY" in read, "the original name is what the constant is called"
     assert "AGENT_DIRECTORY" in read, "and the alias is what this module now reads"

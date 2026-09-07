@@ -9,8 +9,8 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
+from kingfisher.agents.catalogue import LocalAgentRepository
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from kingfisher.infrastructure.importing import load
 from kingfisher.skills import spec as skill
