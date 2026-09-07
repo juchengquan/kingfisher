@@ -13,6 +13,7 @@ here should not turn a test red over there.
 
 from __future__ import annotations
 
+import re
 from dataclasses import fields, replace
 
 import pytest
@@ -522,6 +523,147 @@ def _documented_registry(shipped):
         "call-cap-generous": cap.CallCapGenerous,
         "tool-note": note.ToolNote,
     }
+
+
+#: One `"name": Class,` line out of a wiring block. Deliberately loose about
+#: whitespace, because the two blocks align their values differently and a
+#: pattern that cared would be checking the layout rather than the pairs.
+WIRING = re.compile(r'"([a-z0-9-]+)":\s+(\w+),')
+
+
+def _wiring_per_example(shipped) -> dict[str, dict[str, str]]:
+    """`filename -> {name: class name}`, read out of each wiring block separately.
+
+    The third copy of a fact the other two already share, and until this it was
+    the only one nothing read. `researcher.yaml` names `call-cap-strict` and
+    `_documented_registry` binds it, and those two are pinned to each other --
+    but the block a deployment is actually told to paste lives in a *docstring*,
+    and a docstring is not executed. Renaming an entry there left every test
+    passing and the instructions wrong.
+
+    Kept per file rather than merged, and that is not tidiness. The first draft
+    merged with `dict.update`, and `tool_note.py` prints the cap's two entries as
+    well as its own -- so renaming a class in `call_cap.py`'s block was silently
+    overwritten by the correct copy in the other, and the mutation that should
+    have caught it passed. Two blocks that repeat entries have to be checked
+    against each other, not folded together.
+
+    Parsed from `__doc__` rather than from the file's text, so the block being
+    inside the docstring is part of what is asserted. Move it into a comment and
+    this finds nothing, which is the first failure below.
+    """
+    return {
+        filename: dict(
+            WIRING.findall(load(shipped / "middleware" / filename, declares=declares).__doc__ or "")
+        )
+        for filename, declares in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
+    }
+
+
+def _documented_wiring(shipped) -> dict[str, str]:
+    """Every `name -> class` the two blocks register between them."""
+    merged: dict[str, str] = {}
+    for pairs in _wiring_per_example(shipped).values():
+        merged.update(pairs)
+    return merged
+
+
+def test_the_two_wiring_blocks_do_not_contradict_each_other(shipped):
+    """`tool_note.py` prints the cap's entries too, so they can disagree.
+
+    One block is what a deployment pastes; both being right matters more than
+    either. This is also what makes the class-name check below bite: merged
+    naively, a rename in one block is papered over by the correct copy in the
+    other, which is exactly how the first version of these tests passed a
+    mutation it was written to catch.
+    """
+    blocks = _wiring_per_example(shipped)
+
+    conflicts = {
+        name: {file: pairs[name] for file, pairs in blocks.items() if name in pairs}
+        for name in set().union(*(set(pairs) for pairs in blocks.values()))
+        if len({pairs[name] for pairs in blocks.values() if name in pairs}) > 1
+    }
+
+    assert not conflicts, f"the wiring blocks register different classes for {conflicts}"
+
+
+def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
+    """The block a deployment pastes has to name code that is there.
+
+    Middleware is the one thing kingfisher cannot ship: it is not a
+    `DEFINITION_KIND`, `seed` never copies it, and no name in it is bound
+    anywhere in the shipped tree. What a deployment gets is these two docstrings
+    and an instruction to copy them, which makes the prose the deliverable and
+    a rename in it a broken deliverable.
+
+    So every class the block names is looked up on the module that defines it.
+    `CallCap` becoming `ToolCallCap` leaves the docstring naming something that
+    is not there, and nothing else in this file would have noticed.
+    """
+    modules = {
+        name: load(shipped / "middleware" / filename, declares=name)
+        for filename, name in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
+    }
+    defined = {
+        attribute
+        for module in modules.values()
+        for attribute in dir(module)
+        if isinstance(getattr(module, attribute), type)
+    }
+
+    blocks = _wiring_per_example(shipped)
+
+    assert all(blocks.values()), (
+        "a wiring block yielded no `\"name\": Class,` pairs -- it moved out of the "
+        "docstring or changed shape"
+    )
+    missing = {
+        f"{file}:{name}": cls
+        for file, pairs in blocks.items()
+        for name, cls in pairs.items()
+        if cls not in defined
+    }
+    assert not missing, (
+        f"a wiring block registers {missing}, and those classes are not defined "
+        f"by the examples that print it"
+    )
+
+
+def test_the_wiring_block_and_the_registry_the_tests_paste_are_one_fact(shipped):
+    """`_documented_registry` says it is "the wiring block ... pasted". Held to it.
+
+    It was pasted by hand, so the two agreed only for as long as somebody kept
+    them agreeing. This is what makes an edit to either show up as a failure
+    rather than as a test that still passes while the documentation drifts.
+    """
+    assert set(_documented_wiring(shipped)) == set(_documented_registry(shipped)), (
+        "the block the examples print and the registry these tests build from it "
+        "no longer register the same names"
+    )
+
+
+def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(shipped):
+    """The other end of it: a definition may not name what the block never wires.
+
+    `researcher.yaml` and `sweeper.yaml` are the only definitions here that name
+    middleware, and `seed` leaves both behind precisely because a workspace has
+    not registered these. The instruction that makes them runnable is the block,
+    so a name in a definition with no line in the block is a curriculum that
+    cannot be completed by following it.
+    """
+    wired = set(_documented_wiring(shipped))
+    named: set[str] = set()
+    for definition in ("agents/researcher.yaml", "subagents/sweeper.yaml"):
+        document = yaml.safe_load((shipped / definition).read_text(encoding="utf-8"))
+        for entry in document.get("middleware") or ():
+            named.add(entry if isinstance(entry, str) else entry["name"])
+
+    assert named, "neither definition named middleware, so this asserts nothing"
+    assert named <= wired, (
+        f"{sorted(named - wired)} is named by a shipped definition and wired by no "
+        f"example, so pasting the block still leaves it unregistered"
+    )
 
 
 def test_the_middleware_example_is_not_a_definition_kind(shipped):
