@@ -1,11 +1,4 @@
-"""Agent definitions held in a directory on this host.
-
-`domain.agent` owns the format -- what a definition means and what makes one
-malformed. Turning a document into one and finding the documents are both here, which
-is the arrangement the other kinds have inside their own packages: a kind's reader
-sits with its catalogue. An agent has no package of its own, because it is selected
-by name rather than registered, so this file is where that rule lands for it.
-"""
+"""Agent definitions held in a directory on this host."""
 
 from __future__ import annotations
 

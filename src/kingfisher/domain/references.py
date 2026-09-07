@@ -1,10 +1,4 @@
-"""Names that came from outside, and what may be done with them.
-
-A ref is whatever a caller wrote. `FileStore` and `DefinitionStore` both take one,
-both join it onto a directory, and both would let `../../etc/passwd` through if each
-remembered the check separately -- so the rule is one function here rather than a
-habit in two adapters.
-"""
+"""Names that came from outside, and what may be done with them."""
 
 from __future__ import annotations
 

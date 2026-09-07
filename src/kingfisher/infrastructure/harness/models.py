@@ -1,30 +1,4 @@
-"""Model construction.
-
-Every model in kingfisher is a pre-built instance, never a `"provider:model"` string
-— for delegates as much as for the main agent. A string would be resolved by
-deepagents through `init_chat_model`, which never sees this workspace's
-configuration: the endpoint, the key, the token ceiling and the timeout would all be
-silently dropped. A `ModelProfile` is a *record*; `build_model` is what turns it into
-an instance, and `delegation.py` routes subagent models through it too.
-
-A wire format is **data**, not a subclass. The classes differ in exactly two ways —
-which one to construct, and any kwargs peculiar to it — while the values that come
-from a profile use identical names on all of them. `ChatOpenAI`, `ChatAnthropic` and
-`ChatGoogleGenerativeAI` all accept `model`, `base_url`, `api_key`, `max_tokens` and
-`timeout` unchanged, because LangChain aliases them (Gemini's `max_output_tokens`
-among them). So there is no shared behaviour for a base class to hold, and a
-hierarchy would express a one-field difference as a type.
-
-**This table is closed, and an endpoint table is not.** Endpoints are open data in
-`models.yaml`; what stays here is the part that needs a Python class behind it.
-
-The classes are imported at module scope rather than inside a builder. A deferred
-import would spare nobody: deepagents depends on `langchain-anthropic` and
-`langchain-google-genai` directly, so both are always installed, and `import
-kingfisher` has already loaded the whole provider stack long before anything calls
-`build_model`. Measured, not assumed. `pyproject.toml` declares `langchain-anthropic`
-outright, because this module names it and a transitive dependency is not a promise.
-"""
+"""Model construction."""
 
 from __future__ import annotations
 

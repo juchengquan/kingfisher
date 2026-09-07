@@ -1,18 +1,4 @@
-"""The object a deployment named in a setting, imported and built.
-
-`KINGFISHER_SESSION_STORE_FACTORY` and `KINGFISHER_SERVICE_FILE_STORE_FACTORY` are
-the same idea twice: `module:name` for something callable with no arguments that
-returns an adapter kingfisher has never imported. This is that idea, once.
-
-**What is checked here is the name, not the building.** A spec that will not parse, a
-module that will not import, an attribute that is not there, a result of the wrong
-shape -- those are wiring mistakes, and a `ConfigError` naming the setting is what an
-operator can act on. A factory that raises *its own* exception is left alone: that is
-the deployment's code failing at the deployment's job, its type may be one their own
-error handling knows, and this function is already on the traceback saying which
-setting reached it. Wrapping it would replace a `NoCredentialsError` with a sentence
-about configuration that is not what went wrong.
-"""
+"""The object a deployment named in a setting, imported and built."""
 
 from __future__ import annotations
 

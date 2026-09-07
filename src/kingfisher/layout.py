@@ -1,15 +1,5 @@
 """The workspace layout, as data. Belongs to no layer, which is why it sits here.
 
-Every name and tier here is policy: which directories exist, which hold what a person
-wrote, which are disposable. None of it creates anything -- making the layout real is
-`infrastructure.workspace.layout`.
-
-Outside `domain/` for the reason `config.py` was: **no domain rule reads it.** Every
-reader is in `infrastructure/`, `skills/`, `tools/` or `subagents/`, and it sat in
-the innermost layer so those could share it without depending on each other -- which
-is reasoning about import direction, not modelling. The names are the vocabulary the
-prompt teaches the model, which is the honest counter and does not change the test.
-
 The tiers are about durability, not about a tool. Versioning the authored tier is an
 operator's business, best done wherever `KINGFISHER_SKILLS_DIR` points rather than
 around 200MB of sessions.

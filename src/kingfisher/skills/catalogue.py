@@ -1,10 +1,4 @@
-"""Skills held in a directory on this host.
-
-The mirror of `subagents`, and here for the same reason: `skills.spec` knows what a
-definition means, and this knows where they are. deepagents owns the format itself —
-what is needed here is only which names a directory offers, which is a directory
-listing and nothing more.
-"""
+"""Skills held in a directory on this host."""
 
 from __future__ import annotations
 

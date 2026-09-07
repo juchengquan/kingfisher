@@ -1,17 +1,4 @@
-"""Thread persistence: the conversation behind a session.
-
-`BaseCheckpointSaver` is already the swappable interface, so this is a factory rather
-than a wrapper — wrapping an existing protocol in a bespoke one can only lose
-fidelity. A deployment that wants durable graph state passes its own saver to
-`Kingfisher(threads=...)`; nothing else changes, including the thread deletion that
-`delete_session` and `reap` depend on.
-
-**Nothing here persists, and that is the design.** A checkpoint holds one turn's
-working state; what a later turn reads is the transcript in the session directory.
-Kingfisher never resumes a graph -- no `checkpoint_id`, no `interrupt()` -- so what a
-saver would preserve is machinery nothing asks for. See *Sessions: what persists and
-where* in `docs/decisions.md`.
-"""
+"""Thread persistence: the conversation behind a session."""
 
 from __future__ import annotations
 

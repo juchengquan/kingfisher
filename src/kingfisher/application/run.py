@@ -1,7 +1,4 @@
-"""Module-level conveniences over a default `Kingfisher`.
-
-    run("profile /data/orders.csv")
-"""
+"""Module-level conveniences over a default `Kingfisher`."""
 
 from __future__ import annotations
 

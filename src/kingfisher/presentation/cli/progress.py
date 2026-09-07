@@ -1,11 +1,4 @@
-"""Showing a run as it happens, on one stream or two.
-
-Lived in `tests/integration/driver.py`, which is not in the wheel, so shipping
-`kingfisher run` would have meant a second copy of it -- and the two would have
-drifted the first time one learned something about a new event kind. One
-implementation, two callers: the driver passes one stream twice and behaves exactly
-as it did, and the command passes two.
-"""
+"""Showing a run as it happens, on one stream or two."""
 
 from __future__ import annotations
 

@@ -1,10 +1,4 @@
-"""Reading a skill document for the one thing kingfisher needs from it.
-
-deepagents owns this format and decides what a skill means. What kingfisher has to
-know is the name, because that is what a request activates and what the directory
-must be called. `spec` holds the format's vocabulary -- where the header ends, what
-the file is called, which exception a mistake raises -- and opens nothing.
-"""
+"""Reading a skill document for the one thing kingfisher needs from it."""
 
 from __future__ import annotations
 

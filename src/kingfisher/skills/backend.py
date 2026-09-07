@@ -1,18 +1,12 @@
 """Mounting a skills repository the agent can read, wherever it is backed.
 
-Skills are the one kind kingfisher never parses. deepagents opens them itself,
-through `backend.ls` and `backend.download_files` on whatever is mounted at `/skills`
-— so a catalogue held somewhere that is not a filesystem was unmountable, not because
-the route demanded a *path* but because `SkillRepository` could only answer with
-names. `files` fixed the port; this mounts what it returns.
-
 Built on deepagents' own `StoreBackend` rather than hand-written against
-`BackendProtocol`. That protocol is 18 members and is beta, and every one we
-implemented would be ours to keep in step with an upstream that is still moving --
-this codebase has already paid that bill once, when overriding both `execute` and
-`aexecute` on `LocalShellBackend` nested the sandbox twice and thirteen tests still
-passed. `StoreBackend` already implements all 18 against a `BaseStore`, so what is
-left here is filling a store and refusing the four operations that would write to it.
+`BackendProtocol`. That protocol is 18 members and is beta, and every one we implemented
+would be ours to keep in step with an upstream that is still moving -- this codebase has
+already paid that bill once, when overriding both `execute` and `aexecute` on
+`LocalShellBackend` nested the sandbox twice and thirteen tests still passed.
+`StoreBackend` already implements all 18 against a `BaseStore`, so what is left here is
+filling a store and refusing the four operations that would write to it.
 """
 
 from __future__ import annotations

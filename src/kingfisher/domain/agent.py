@@ -1,30 +1,9 @@
 """Agent definitions: `/agents/<name>.yaml`.
 
-What a request runs. Every other format on the catalogue is something an agent
-selects from -- the tools it holds, the skills it may read, the delegates it may
-consult, the model it runs on.
-
-**Its own folder and its own format, sharing the readers and not the fields.** Two
-fields disagree with `subagents/`: `memory` is a switch a delegate has no use for,
-and `system_prompt` means the opposite thing. A shared folder would have made a
-field's meaning depend on the request that read it rather than on the file.
-
-**`system_prompt` is added, never substituted.** A delegate's *is* the whole prompt
-and it gets none of `system.md`. An agent's is the last of three parts --
-
-**Omission means the same thing it means in a subagent file:** leave a *tool* field
-out and you get everything available to you, and leave `skills` or `subagents` out
-and you get none. Tools are what an agent needs to *act* and it can do nothing
-without them; skills and delegates are what it needs to *know* and to *ask*, and most
-agents need neither. The skills index alone costs ~600 tokens for three -- ~450 of
-that deepagents' own preamble, before a single skill is named -- while every delegate
-compiles a graph at ~6ms. Re-measured 2026-09-03; `docs/findings.md` carries what
-each figure is a measurement *of*.
-
-**A field this format does not define is refused, not ignored:** a key we ignore is a
-key the author believes took effect. The ones another format defines and this one
-declines are named individually in `REFUSED` below, because the generic message reads
-as "not supported yet" and sends someone looking for a workaround.
+**Omission means the same thing it means in a subagent file:** leave a *tool* field out
+and you get everything available, leave `skills` or `subagents` out and you get none.
+The skills index alone costs ~600 tokens for three, ~450 of it deepagents' preamble,
+while every delegate compiles a graph at ~6ms. Re-measured 2026-09-03.
 """
 
 from __future__ import annotations

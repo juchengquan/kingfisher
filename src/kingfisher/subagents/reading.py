@@ -1,56 +1,10 @@
 """Subagent definitions: `/subagents/<name>.yaml`.
 
-A YAML document. `name`, `description` and `system_prompt` are required. The rest are
-optional, and `builtin_tools`, `tools`, `skills`, `subagents`, `middleware` and
-`model` all select by name from what the deployment already offers — how each
-selection is enforced is the adapter's problem, not this format's. `groups` and
-`metadata` are optional too and select nothing. `KNOWN` below is the whole set, and
-is the one place that stays right when it grows.
-
-**Omitting `tools` inherits the parent's; omitting `skills` grants none.** The
-asymmetry is deliberate. Tools are what a delegate needs to *act* and it can do
-nothing without them, so inheriting is the useful default. Skills are what it needs
-to *know*, and the body below is already its procedure — a delegate that needed the
-whole index would not have been worth defining. Handing it over also costs: the
-listing is injected into the delegate's prompt at ~600 tokens for three skills, of
-which ~450 is deepagents' preamble and is paid for the first skill as much as the
-third. Re-measured 2026-09-03.
-
-`subagents` names delegates this one may consult mid-job, from the same catalogue.
-Absent means none, like `skills`. It was refused until it was measured: the refusal
-said "deepagents gives it no `task` tool, so nesting is not something this format can
-express", and the first half is true -- `create_sub_agent` calls `create_agent` with
-the spec's tools and no `task`. The second half was not. A spec carries `middleware`,
-and `SubAgentMiddleware` is exactly what supplies `task`, so the format could always
-express it through a field it already had.
-
-**One name, and no list.** There was an `alias:` beside `model:` -- a general name
-the deployment bound under `aliases:` in `models.yaml` -- so that a definition could
-know what *kind* of model it needed without knowing its name, which is what a file
-shipped inside a wheel is in. It is gone: two spellings for one idea, and the shipped
-definitions name nothing at all now and say in a comment what to pin them to.
-
-There was a `provider:` beside `model:`, naming an endpoint by style, and a rule that
-the two moved together -- a model name sent to an endpoint that has never heard of it
-is a 404 if you are lucky and a wrong-model run if you are not. Both are gone. A
-model resolves to its own endpoint through the catalogue, so the half-pair is not a
-thing that can be written, and the rule refusing it has nothing left to refuse.
-
-**A field this format does not define is refused, not ignored.** Ignoring one is
-indistinguishable from honouring it, and the difference matters most where it is
-least visible: `tolls:` produced a delegate holding *every* tool its parent had,
-because a missing `tools` means inherit. `permissions:` was worse -- it is written to
-*restrict* a delegate, did nothing at all, and so a definition read tighter than the
-agent it produced. Fields deepagents knows and this format deliberately declines are
-named individually with the reason, since a generic "unknown field" reads as an
-omission worth working around.
-
-**Nothing in a run reads it, and that is deliberate.** It is for whatever loads the
-catalogue -- a deployment script deciding which definitions to install, an ownership
-report, a linter -- all of which read a `SubagentRepository` and read `spec.metadata`
-without kingfisher's help. Wiring it into the run would mean choosing a consumer, and
-the obvious candidate (handing it to a middleware factory) changes a published
-constructor argument for a use nobody has yet.
+**Omitting `tools` inherits the parent's; omitting `skills` grants none.** Tools are
+what a delegate needs to *act*, so inheriting is the useful default; skills are what it
+needs to *know*, and the body below is already its procedure. Handing the index over
+also costs ~600 tokens for three skills, of which ~450 is deepagents' preamble and is
+paid for the first as much as the third. Re-measured 2026-09-03.
 """
 
 from __future__ import annotations

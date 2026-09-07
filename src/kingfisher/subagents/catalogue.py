@@ -1,9 +1,4 @@
-"""Subagent definitions held in a directory on this host.
-
-`subagents.reading` owns the format -- what a definition means and what makes one
-malformed -- and `documents` turns a document into one. Finding the files is a third
-job, and it is this one: nothing in either of those globs a directory.
-"""
+"""Subagent definitions held in a directory on this host."""
 
 from __future__ import annotations
 

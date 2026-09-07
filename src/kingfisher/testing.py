@@ -1,21 +1,4 @@
-"""The port contracts, as checks a deployment can run against its own adapter.
-
-Four of them, one per port a deployment realistically replaces:
-`SESSION_STORE_CONTRACT`, `FILE_STORE_CONTRACT`, `SESSION_ROOT_CONTRACT` and
-`COMMAND_RUNNER_CONTRACT`.
-
-**A factory, not a store.** Every check builds its own and most of them write to it,
-so one shared instance would make them depend on each other's leftovers and on the
-order they ran in.
-
-**No test framework is imported here**, which is what lets this live in the library
-rather than in a second distribution: `pip install kingfisher` gains a module and no
-test dependency, and the checks run from unittest, pytest, or a loop in a script. The
-cost is that failures cannot lean on pytest's assertion rewriting -- it only applies
-to test modules and registered plugins, not to a library somebody imported -- so
-every check raises `AssertionError` with the whole story in the message rather than
-leaving a bare `assert` to say nothing.
-"""
+"""The port contracts, as checks a deployment can run against its own adapter."""
 
 from __future__ import annotations
 

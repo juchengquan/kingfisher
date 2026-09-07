@@ -1,15 +1,4 @@
-"""Reading `models.yaml`: which endpoints exist, and which models run on them.
-
-`config` owns the records — `Endpoint` and `ModelProfile` belong to no layer, so they
-sit at the package root with `Config` itself. `models` owns the closed adapter table
-and construction. This owns the step in between: turning one authored document into
-those records, and refusing the ways it can be wrong.
-
-**A key this format does not define is refused, not ignored.** The same rule
-`subagents.reading` states, for the same reason: ignoring a key is indistinguishable
-from honouring it, and `max_token:` singular would otherwise parse, be dropped, and
-hand back the default with no error anywhere.
-"""
+"""Reading `models.yaml`: which endpoints exist, and which models run on them."""
 
 from __future__ import annotations
 

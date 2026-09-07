@@ -1,20 +1,15 @@
 """Assembling the system prompt from the markdown that ships with the package.
 
-Split out of `agent.py`, and not for tidiness. `system_prompt` is a public
-export, it needs nothing but `Config` and the standard library, and it used to
-cost **764 ms and 3,107 modules** to reach -- because touching any name in
-`agent.py` runs that module's `from deepagents import ...`, and Python cannot
-import one name from a module without executing all of it. Measured after the
-split: about 7 ms and 90 modules.
+Split out of `agent.py`, and not for tidiness. `system_prompt` is a public export, it
+needs nothing but `Config` and the standard library, and it used to cost **764 ms and
+3,107 modules** to reach -- because touching any name in `agent.py` runs that module's
+`from deepagents import ...`, and Python cannot import one name from a module without
+executing all of it. Measured after the split: about 7 ms and 90 modules.
 
-Almost none of that was deepagents, which is 21 ms of its own code. It was
-openai (281 ms), anthropic (239 ms) and google (134 ms) -- the last one for a
-provider kingfisher has no path to at all. Their type modules are pydantic
-classes, and defining a model compiles a validator at import time.
-
-So the rule for this module is the point of it: **it imports nothing foreign,
-and nothing that imports anything foreign.** `test_a_light_export_stays_light`
-holds it to that.
+Almost none of that was deepagents, which is 21 ms of its own code. It was openai (281
+ms), anthropic (239 ms) and google (134 ms) -- the last one for a provider kingfisher
+has no path to at all. Their type modules are pydantic classes, and defining a model
+compiles a validator at import time.
 """
 
 from __future__ import annotations

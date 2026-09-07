@@ -1,10 +1,4 @@
-"""The tool picture one build works from, resolved once.
-
-What the workspace defines, what a request may call, what a delegate keeps to itself,
-and what the compiled graph can actually dispatch. Four questions with one answer
-between them, which is why `_ToolSurface` exists rather than four functions each
-walking the catalogue again.
-"""
+"""The tool picture one build works from, resolved once."""
 
 from __future__ import annotations
 

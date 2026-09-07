@@ -1,9 +1,4 @@
-"""kingfisher — a personal, local, general-purpose agent built on deepagents.
-
-    from kingfisher import run
-    result = run("Profile /data/sales.csv and report what stands out.")
-    print(result.answer, result.run_dir)
-"""
+"""kingfisher — a personal, local, general-purpose agent built on deepagents."""
 
 from importlib import import_module
 from typing import TYPE_CHECKING, Any

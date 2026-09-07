@@ -1,20 +1,9 @@
 """What was said in a session, as records this package owns.
 
-Not langgraph's checkpointer, which preserves resumable *graph* state: pending
-writes, channel versions, a position in the graph. Kingfisher never resumes a
-graph -- `service.py` passes `{"thread_id": session_id}` and no `checkpoint_id`,
-and there is no `interrupt()` anywhere -- so a turn runs to completion or fails
-and the next one continues a *conversation*.
-
-**A harness is a choice, and this outlives one.** Storing LangChain's classes
-would make every stored conversation a bet that the next harness reads them.
-Roles and tool calls are what every provider's wire format already carries, so a
-record of those travels; `infrastructure/harness/` translates.
-
 **Tool calls are kept, not only the human and assistant text.** Keeping just the
-question and the final answer makes the agent forget its own work: the next turn
-would see *"summarise /data/x.csv"* -> *"Done, 40 rows"* with no record that
-`csv_profile` ran, so it re-does things and cannot refer to what it did.
+question and the final answer makes the agent forget its own work: the next turn would
+see *"summarise /data/x.csv"* -> *"Done, 40 rows"* with no record that `csv_profile`
+ran, so it re-does things and cannot refer to what it did.
 """
 
 from __future__ import annotations

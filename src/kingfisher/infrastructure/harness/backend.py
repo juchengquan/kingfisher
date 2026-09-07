@@ -1,12 +1,4 @@
-"""Filesystem + shell backend.
-
-`LocalShellBackend` defaults to `inherit_env=False` with `env=None`, which means
-`subprocess.run(..., env={})` — no variables at all, not even `PATH`. That is a good
-security default and a fatal usability one: nothing resolves. We keep the default and
-supply an explicit allowlist instead of inheriting the parent environment, so the
-agent's shell can run the toolchain but cannot read credentials out of the
-environment.
-"""
+"""Filesystem + shell backend."""
 
 from __future__ import annotations
 
@@ -247,9 +239,15 @@ def prepare_scratch(cfg: Config) -> Path:
     """Create the scratch directory and refuse to use an unsafe one.
 
     Scratch defaults inside the workspace, where ownership is not in question.
-    Pointing it at `/tmp` — one fixed location per machine — puts it in a
-    world-writable directory (`/tmp` is mode 1777), which introduces two problems
-    that do not exist inside the workspace:
+    Pointing it at `/tmp` -- mode 1777, one fixed location per machine -- means
+    anything the agent derives from `/data` is readable by every local user unless
+    the directory is private, and another user can pre-create the name, so finding
+    it already there is not proof that we own it.
+
+    So it is created `0o700` and then checked: `mkdir(mode=...)` alone is subject to
+    umask and is ignored entirely when the directory already exists. Loose
+    permissions on a directory we own are tightened rather than rejected; one that
+    is not ours, or not a directory at all, raises instead of being touched.
     """
     scratch = cfg.scratch_dir
     scratch.mkdir(mode=0o700, parents=True, exist_ok=True)

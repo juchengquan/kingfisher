@@ -1,11 +1,4 @@
-"""The JavaScript sandbox a turn may run, and getting rid of it afterwards.
-
-Its own module because it is a *lifecycle*, not part of wiring a graph. Nothing in
-agent assembly calls into it except to build one and to close one, and the reason it
-needs closing at all belongs beside the closing rather than in a file about tools and
-delegates: of the three things a turn opens, this is the one that hangs the process
-rather than leaking a handle.
-"""
+"""The JavaScript sandbox a turn may run, and getting rid of it afterwards."""
 
 from __future__ import annotations
 

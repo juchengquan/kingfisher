@@ -1,9 +1,4 @@
-"""Fetching a request's files, and one place to fetch them from.
-
-The counterpart to `uploads.provision`, which does the same job for skills and
-subagents. Both exist because a caller with no host paths can still name things, and
-a port the deployment wired turns names into content.
-"""
+"""Fetching a request's files, and one place to fetch them from."""
 
 from __future__ import annotations
 

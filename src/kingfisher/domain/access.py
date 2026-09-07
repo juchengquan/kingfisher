@@ -1,9 +1,4 @@
-"""Who reaches what: the group vocabulary, and the rule the definitions apply.
-
-**Audiences live in the definitions** -- an agent or a subagent says who may reach
-it, and may say who reaches each tool, delegate or skill it holds. What is central is
-only the *vocabulary*: which group names exist, and which contain which.
-"""
+"""Who reaches what: the group vocabulary, and the rule the definitions apply."""
 
 from __future__ import annotations
 

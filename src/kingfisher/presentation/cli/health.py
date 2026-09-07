@@ -1,10 +1,4 @@
-"""Every check that stands between an install and a run.
-
-`doctor` answers one question -- *why will this not start?* -- and the value is that
-the answers already existed and were scattered: a `ConfigError` here, a warning
-inside `model_catalogue.load` there, `warn_if_unconfined` in a driver that is not in
-the wheel at all. Somebody diagnosing a deployment had to provoke each one in turn.
-"""
+"""Every check that stands between an install and a run."""
 
 from __future__ import annotations
 

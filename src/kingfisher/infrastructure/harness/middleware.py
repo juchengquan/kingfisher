@@ -1,9 +1,4 @@
-"""Building the middleware a definition asked for, and saying when it displaces.
-
-Its own module because it answers to a registry rather than to a graph. Assembly
-calls it once and passes the result on; nothing else here calls into it, and it calls
-nothing here.
-"""
+"""Building the middleware a definition asked for, and saying when it displaces."""
 
 from __future__ import annotations
 

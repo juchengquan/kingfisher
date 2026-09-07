@@ -1,15 +1,4 @@
-"""Copying a set of definitions into a workspace.
-
-Kingfisher does not *read* the definitions a deployment runs. Its job is to find,
-validate and compose definitions held as static files, and it does all three against
-files it did not write -- content a workspace rewrites on first contact with a real
-task, which is a different kind of thing from the code that reads it.
-
-**Nothing ships.** Where a deployment gets its definitions is a setting,
-`KINGFISHER_ASSETS`, and a directory needs no wheel, no metadata and no publish step.
-This repository keeps a worked set in `assets_examples/` for the same reason it keeps
-documentation.
-"""
+"""Copying a set of definitions into a workspace."""
 
 from __future__ import annotations
 

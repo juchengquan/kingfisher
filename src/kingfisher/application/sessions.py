@@ -1,17 +1,4 @@
-"""A session existing: naming one, making its directory, holding it, listing them.
-
-Everything about a session that is not a turn running inside it and not its disposal.
-Minting or accepting an id, laying the directory out, restoring what a store kept,
-holding the tree for exactly the length of a turn, and answering what exists.
-
-**A mixin, not a collaborator, and the distinction is worth stating.** It shares
-`self` with everything else on `Kingfisher` -- it can reach any attribute and call
-any sibling method, and nothing stops it. What this buys is that a reader looking for
-what happens before a turn has somewhere to run opens one file rather than scrolling
-past a turn; what it does not buy is a boundary. Written as a separate object it
-would have needed five constructor arguments and a delegating method for every public
-name, and the public surface is the thing that must not move.
-"""
+"""A session existing: naming one, making its directory, holding it, listing them."""
 
 from __future__ import annotations
 

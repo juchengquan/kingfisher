@@ -1,9 +1,4 @@
-"""Turning an `Inventory` into the block someone reads.
-
-The only place either driver formats a listing. `tests/integration/driver.py` prints
-through this too, so `kingfisher list` and `driver.py --list` cannot come apart --
-which is what makes keeping both doors safe: two entry points, one implementation.
-"""
+"""Turning an `Inventory` into the block someone reads."""
 
 from __future__ import annotations
 

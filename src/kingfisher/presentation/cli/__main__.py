@@ -1,14 +1,4 @@
-"""`kingfisher`, and `python -m kingfisher.presentation.cli`.
-
-Nothing here decides anything. It reads the configuration the library reads, calls
-the library, and prints what came back -- so running a command and calling the
-function give the same answer, and there is no second way to configure one.
-
-**`./.env` if there is one, and nowhere else.** This read the environment alone at
-first, on the grounds that `load_dotenv()` with no argument searches *upward from the
-calling file* -- which for an installed package starts in `site-packages` and finds
-either nothing or something nobody meant.
-"""
+"""`kingfisher`, and `python -m kingfisher.presentation.cli`."""
 
 from __future__ import annotations
 

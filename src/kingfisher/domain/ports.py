@@ -1,11 +1,4 @@
-"""What the domain needs the world to do for it.
-
-Narrow by intention. A port earns its place only where a rule genuinely depends on a
-primitive: `allocate_turn` is atomic *because* `mkdir` fails on an existing name, and
-expressing that as "scan, then create" in a caller would reintroduce the race the
-loop exists to avoid. Where no primitive is load-bearing, the domain returns a
-decision instead and the caller acts on it.
-"""
+"""What the domain needs the world to do for it."""
 
 from __future__ import annotations
 

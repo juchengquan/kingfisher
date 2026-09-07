@@ -1,11 +1,4 @@
-"""The shape of one turn: what it carries, and the two ways it can end early.
-
-Two records and four small functions, together because they describe a turn rather
-than run one. `Admitted` and `Prepared` are the seam `service` is built around --
-everything able to *refuse* a request happens before the first, and everything that
-creates happens after it, which was a claim in a docstring until the halves became
-separate functions with a type between them.
-"""
+"""The shape of one turn: what it carries, and the two ways it can end early."""
 
 from __future__ import annotations
 

@@ -1,9 +1,4 @@
-"""Skill definitions: `<name>/SKILL.md`.
-
-kingfisher does not own this format — deepagents reads it and decides what a skill
-means. What kingfisher needs from it is one thing: the name, because that is what a
-request activates and what the directory must be called.
-"""
+"""Skill definitions: `<name>/SKILL.md`."""
 
 from __future__ import annotations
 

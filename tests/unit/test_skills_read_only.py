@@ -1,12 +1,10 @@
 """The catalogue is instructions, so the agent may read it and never write it.
 
-It was writable. Measured before this existed, against a catalogue on disk:
+It was writable. Measured against a catalogue on disk, `backend.write` created
+`/skills/demo/PWNED.md` and `backend.edit` tampered with `/skills/demo/SKILL.md`.
 
-    backend.write("/skills/demo/PWNED.md", ...)   -> created
-    backend.edit("/skills/demo/SKILL.md", ...)    -> tampered
-
-Two enforcement points, because neither is sufficient. The deny rule derived for
-`/skills/**` is a tool permission and the shell bypasses those entirely; the
+Two enforcement points, because neither is sufficient: the deny rule derived for
+`/skills/**` is a tool permission and the shell bypasses those entirely, while the
 sandbox profile covers the shell and is macOS-only and disableable.
 """
 

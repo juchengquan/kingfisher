@@ -1,12 +1,4 @@
-"""What reading a deployment's definitions needs that no one kind owns.
-
-The complement of the kinds rather than a remnant of them. `Definitions` and
-`resolve_definitions` settle where *all four* are read from; `DEFINITION_KINDS` is
-derived from that record's fields, which is what stops it drifting from them;
-`bundled_tools` and `bundled_skills` read what one subagent keeps for itself, which
-is two kinds at once and neither kind's to own. `layered` puts a session's uploads
-over the deployment's, one merge rule per kind.
-"""
+"""What reading a deployment's definitions needs that no one kind owns."""
 
 from __future__ import annotations
 

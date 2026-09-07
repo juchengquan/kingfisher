@@ -1,9 +1,4 @@
-"""The workspace tree, and the furniture that ships inside it.
-
-What `kingfisher.layout` describes as data, made on disk: the directories a workspace
-holds, the marker saying it has been used before, and the worked example of the one
-file a deployment must write for itself.
-"""
+"""The workspace tree, and the furniture that ships inside it."""
 
 from __future__ import annotations
 

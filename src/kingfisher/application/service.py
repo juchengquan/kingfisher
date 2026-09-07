@@ -1,47 +1,25 @@
 """The application service: wired once, then asked to run things.
 
-`stream()` used to build its own world on every call -- checkpointer, session
-directories, workspace layout, permissions -- and take a keyword argument for each
-thing a test might want to substitute. That list grows with every port, and it made
-construction a per-request event for a program whose next shape is a server that
-constructs once and serves many.
-
-Measured, so the trade is a fact rather than a guess: 9.2ms median and 10.0ms p95 for
-an unrestricted agent, of which 7.2ms is `create_deep_agent` compiling the graph --
-everything kingfisher does around it is sub-millisecond. Against a turn of 1.5-1.9s
-that is 0.6%.
+Construction is not per-request, and the trade is measured rather than guessed: 8.1ms
+median and 9.2ms p95 to build an unrestricted agent, of which 7.2ms is
+`create_deep_agent` compiling the graph. Against a turn of 1.5-1.9s that is under 1%.
 
   subagent      +5-6ms   each compiles its own graph; the range is the delegate
-  custom tool   +0.47ms  linear to at least 50
+  custom tool   +0.47ms  linear to at least 50, measured in August
   middleware    +0.03ms
   skill          0.0ms   sixteen measure the same as none
   deny rule      0.0ms   a hundred measure the same as none
 
-Re-measured 2026-09-03. The baseline above held -- 8.1ms median, 9.2ms p95, 124
-builds a second -- and the subagent row did not: 4.3ms became 5.1ms for a delegate
-declaring one built-in tool and nothing else, and 6.2ms for the shipped
-`assets_examples/`. It is the largest term, so the additive prediction below now runs
-low, and the drift is not decay: a delegate costs what a delegate declares, and one
-number cannot say that. Every figure here is *per item added to an otherwise
-identical build*, which is the only form of it that transfers.
+Every figure is *per item added to an otherwise identical build*, which is the only
+form that transfers. The costs are additive and the total stays small: 10 tools, 5
+middleware, 20 deny rules and 2 subagents predicted 20.8ms and measured 21.6ms.
 
-The custom-tool row was not re-measured. Doing it needs tool files in the workspace,
-and their presence moves the baseline they would be measured against -- the delta and
-the ground shift together. Left as it was, and marked so.
-
-The costs are additive: 10 tools, 5 middleware, 20 deny rules and 2 subagents
-predicted 20.8ms and measured 21.6ms, about 1% of a turn -- on the numbers above as
-they stood in August. With the subagent row re-measured the same shape predicts a
-little more, and the point survives either way: the model is additive and the total
-is small against a turn.
-
-Construction is CPU-bound Python, so it does not parallelise: ~100 builds per second
-per process, and worker threads make it slightly worse (0.85x) rather than better. At
-1.5s a turn that ceiling is around 150 concurrent turns, or about 34 if every one
-activates eight subagents. Below that it is noise; above it, a cache keyed on session
-*and* capabilities *and* a fingerprint of the definitions would be the thing to reach
-for -- the fingerprint because uploads change what a session offers between turns,
-which is the staleness this avoids by not caching at all.
+Re-measured 2026-09-03. Construction is CPU-bound Python and does not parallelise --
+about 100 builds a second per process, worker threads slightly worse -- so the
+ceiling is roughly 150 concurrent turns, or 34 if every one activates eight
+subagents. Above that, a cache keyed on session *and* capabilities *and* a
+fingerprint of the definitions is the thing to reach for; the fingerprint because
+uploads change what a session offers between turns.
 """
 
 from __future__ import annotations

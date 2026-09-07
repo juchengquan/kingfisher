@@ -1,9 +1,4 @@
-"""Which sessions to drop, and the order in which a session comes apart.
-
-`plan` is a pure decision: given what exists and how many to keep, it names the
-victims and touches nothing. `apply` carries out the ordering rule, which stays
-in the domain because it is a rule and not a mechanism.
-"""
+"""Which sessions to drop, and the order in which a session comes apart."""
 
 from __future__ import annotations
 

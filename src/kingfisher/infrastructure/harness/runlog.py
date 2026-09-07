@@ -1,10 +1,4 @@
-"""Local-only structured run log.
-
-One append-only JSONL file per session under `<state_dir>/runs/`, which is
-`<workspace>/.kingfisher/runs/` unless configured elsewhere. Nothing leaves the
-machine (Q13), and per-step token usage is recorded (Q18) because it is the only way
-the cost-control driver becomes measurable rather than aspirational.
-"""
+"""Local-only structured run log."""
 
 from __future__ import annotations
 

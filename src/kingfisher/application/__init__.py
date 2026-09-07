@@ -1,16 +1,10 @@
 """The application layer: what a turn does, in order.
 
-Read the environment, prepare a session, build the graph for this request, run it,
-record what happened. It orchestrates and decides nothing about the harness — it
-speaks `Request`, `RunEvent` and `RunResult`, never `AIMessage`, and reaches
-deepagents only through `infrastructure/`.
-
 Lazily, for the reason the root's own table is lazy and which matters more here:
 `service` imports deepagents, which imports three provider SDKs at module level and
 costs about 950ms. A plain `from .service import Kingfisher` on this line would run
-before *any* submodule of this package, so reading a config through
-`application.config` -- 39ms on its own -- would pay all of it. Measured both ways
-before choosing.
+before *any* submodule of this package, so reading a config through `application.config`
+-- 39ms on its own -- would pay all of it. Measured both ways before choosing.
 """
 
 from __future__ import annotations

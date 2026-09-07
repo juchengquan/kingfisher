@@ -1,11 +1,4 @@
-"""The Session aggregate: a conversation and the turns inside it.
-
-Session is the root because that is where the hard invariants cluster -- turn ids
-unique within a conversation, a turn's inputs confined to its own directory, and a
-discarded session taking its thread with it. Workspace is the context those sessions
-live in, not a root of its own: an aggregate holding every file in the project would
-be a concurrency bottleneck and the large-aggregate anti-pattern in one.
-"""
+"""The Session aggregate: a conversation and the turns inside it."""
 
 from __future__ import annotations
 

@@ -1,17 +1,4 @@
-"""Ask the definitions who reaches what, in the one walk both askers share.
-
-Two places ask, and they must agree. `Kingfisher` asks at construction to decide
-whether a deployment may start; `inventory` asks to describe one. They differ only in
-what they do with the answer -- raise, or report -- which is the difference between
-building a deployment and describing it, and is not a reason to walk the catalogue
-twice.
-
-**Specs in, never fetched.** The two callers legitimately look at different sets:
-`Kingfisher` passes the shared catalogue with `session_dir=None`, because it is
-deciding about the deployment before any session exists, while `inventory` may be
-describing a session that has uploaded definitions of its own. Fetching here would
-have to choose one, and choosing would make the other wrong.
-"""
+"""Ask the definitions who reaches what, in the one walk both askers share."""
 
 from __future__ import annotations
 

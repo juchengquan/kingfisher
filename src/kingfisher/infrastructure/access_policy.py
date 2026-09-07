@@ -1,17 +1,4 @@
-"""Reading `groups.yaml`: the group names this deployment declares.
-
-The `infrastructure` half of a split `kingfisher.domain.access` states: that module
-owns the rule and may not read a file, this one owns the file and owns no rule. The
-same seam `Models` and `kingfisher.infrastructure.model_catalogue` sit on, for the
-same reason -- a domain module imports the standard library and `kingfisher.domain`,
-nothing else, and a test enforces it.
-
-**An absent file is no policy; an unreadable one is a refusal.** The two are not the
-same and must never collapse into each other: a deployment that never wrote a policy
-has none, and a deployment whose policy will not parse has one it cannot honour.
-Reading the second as the first is the failure this whole area exists to avoid -- a
-server that comes up wide open because a file had a tab in it.
-"""
+"""Reading `groups.yaml`: the group names this deployment declares."""
 
 from __future__ import annotations
 

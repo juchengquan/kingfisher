@@ -1,10 +1,4 @@
-"""Anticorruption layer between kingfisher's domain and the agent runtime.
-
-Everything that knows LangChain's and LangGraph's shapes lives here: the message
-payload, the stream-chunk structure, and where usage and tool calls hide on a
-message. The domain and the orchestration above it speak only `Request`, `RunEvent`
-and `RunResult`.
-"""
+"""Anticorruption layer between kingfisher's domain and the agent runtime."""
 
 from __future__ import annotations
 

@@ -1,10 +1,4 @@
-"""The YAML step, and the two scans that read a document without parsing it.
-
-`domain.fields` owns what a field means; this owns the one step that needs a library.
-`yaml.safe_load` sat in the domain until the boundary was made deny-by-default — a
-domain module imports the standard library and `kingfisher.domain`, nothing else —
-and this is where it landed.
-"""
+"""The YAML step, and the two scans that read a document without parsing it."""
 
 from __future__ import annotations
 

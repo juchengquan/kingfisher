@@ -1,10 +1,4 @@
-"""Unpacking a request's own definitions into its session.
-
-Fetching is the caller's business — kingfisher states the requirement as
-`DefinitionStore` and is handed something that satisfies it. What happens here is the
-part kingfisher owns: deciding where a fetched definition lands, and refusing the
-ones that would land badly.
-"""
+"""Unpacking a request's own definitions into its session."""
 
 from __future__ import annotations
 

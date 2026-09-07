@@ -1,8 +1,4 @@
-"""Reading one decoded field as the value the format meant.
-
-Both definition formats reach here: turning whatever YAML produced into the string or
-the tuple of names the format asked for.
-"""
+"""Reading one decoded field as the value the format meant."""
 
 from __future__ import annotations
 

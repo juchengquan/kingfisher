@@ -1,13 +1,9 @@
 """A `SessionStore` over a directory.
 
-The one a deployment gets for naming a directory. Naming a *factory* instead is
-`wiring.store_named`, which lived here until a second port wanted the same thing --
-see that module for why one copy beats two.
-
 Deliberately dull. It walks, it writes, it deletes. Everything interesting about this
 design is in *when* a caller reaches for it, not in what happens when they do, and a
-first implementation that was clever about batching or streaming would be optimising
-a cost nobody has measured yet.
+first implementation that was clever about batching or streaming would be optimising a
+cost nobody has measured yet.
 """
 
 from __future__ import annotations

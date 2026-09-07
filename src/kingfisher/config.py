@@ -1,11 +1,4 @@
-"""Deployment configuration. Belongs to no layer, which is why it sits here.
-
-`Config` lived in `domain/` so `application/` and `infrastructure/` could read it
-without depending on each other -- reasoning about import direction, not modelling.
-No domain rule reads a `Config`, and `base_url`, `api_key` and `timeout_s` are not
-kingfisher's vocabulary: it was the innermost layer holding a record for the outer
-ones.
-"""
+"""Deployment configuration. Belongs to no layer, which is why it sits here."""
 
 from __future__ import annotations
 

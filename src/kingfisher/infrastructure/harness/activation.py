@@ -1,12 +1,4 @@
-"""What a request turns on: the skills and the delegates it activates.
-
-One module because the two answer the same question about different kinds. A
-definition names what it *may* reach; a request narrows that; and what is left is
-what the agent is actually built with. Every function here is that subtraction for
-one kind, plus the two that say why a delegate did not survive it --
-`unrunnable_delegates` for one this deployment cannot build at all, and
-`indistinct_delegates` for one that asked to run elsewhere and did not.
-"""
+"""What a request turns on: the skills and the delegates it activates."""
 
 from __future__ import annotations
 

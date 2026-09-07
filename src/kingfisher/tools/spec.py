@@ -1,11 +1,4 @@
-"""What a tool is, seen from the domain: an object, and where it came from.
-
-Here rather than in `tools.catalogue` because `ToolRepository` is a port, and a port
-in `domain/ports.py` cannot name a type that lives one layer out. Nothing foreign
-travels with it: `tool` is `Any` on purpose and `tool_name` is three `getattr` calls,
-so the pure layer stays pure under the same rule
-`test_domain_imports_only_the_standard_library_and_itself` enforces.
-"""
+"""What a tool is, seen from the domain: an object, and where it came from."""
 
 from __future__ import annotations
 

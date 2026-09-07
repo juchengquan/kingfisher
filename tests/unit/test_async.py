@@ -83,11 +83,11 @@ def test_the_blocking_setup_does_not_stall_every_other_turn(cfg, monkeypatch):
     """`_prepare` is filesystem work -- 15-46ms measured -- and on an event loop that is
     15-46ms during which no other turn can progress.
 
-    Asserted as two facts rather than as a stopwatch. It used to time three turns and
-    require the total under 70% of the serial cost, which is the same claim expressed
-    as a ratio -- and a ratio is a race against the machine. On a loaded runner it
-    came in at 0.34s against a 0.315s bar and failed, having proved nothing except
-    that CI was busy. Both replacements hold whatever speed the machine runs at:
+    Asserted as two facts -- that `_prepare` ran off the loop, and that the loop kept
+    turning while it did -- rather than as a stopwatch. Timing three turns and
+    requiring the total under 70% of the serial cost is the same claim as a ratio, and
+    a ratio is a race against the machine: on a loaded runner it came in at 0.34s
+    against a 0.315s bar and failed, having proved nothing except that CI was busy.
     """
     real_prepare = Kingfisher._prepare
     delay = 0.15

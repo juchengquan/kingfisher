@@ -1,9 +1,4 @@
-"""The agent a session opened with, kept for the turns that come after.
-
-Three functions and the one directory they agree on. `remember_agent` writes the
-document, `agent_started_with` reads it back, and `agent_snapshot` is where both look
--- under `state_dir`, for the reason the constant's own comment gives.
-"""
+"""The agent a session opened with, kept for the turns that come after."""
 
 from __future__ import annotations
 

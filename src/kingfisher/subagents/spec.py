@@ -1,12 +1,4 @@
-"""What a subagent is, once a definition has been read.
-
-A package rather than a module, because one file had become three subjects and said
-so only by being the longest in the layer. `reading` turns a document into a spec and
-owns the format -- every field, and what makes one malformed. `rules` holds what has
-to be true across a *set* of specs, which is a different question from whether any
-one of them is well-formed: two of a name, a cycle, a model that resolves to the
-thing a delegate exists not to be.
-"""
+"""What a subagent is, once a definition has been read."""
 
 from __future__ import annotations
 

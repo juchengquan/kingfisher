@@ -1,10 +1,4 @@
-"""Copying a caller's files in: to a session's `/data`, or to one turn's input.
-
-Two destinations and one set of rules about what may be placed. `_checked` refuses
-before anything is copied, so a request naming a file that is not there leaves
-nothing half-placed behind -- and it applies to both destinations, because a rule
-that covers one is a rule the other quietly does without.
-"""
+"""Copying a caller's files in: to a session's `/data`, or to one turn's input."""
 
 from __future__ import annotations
 

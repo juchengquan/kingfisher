@@ -1,9 +1,4 @@
-"""One session's directory, on this machine.
-
-`SessionDirs` and `SessionRoot` with an implementation rather than only a promise,
-and the two questions asked of what a session holds: which of it is worth keeping,
-and what it costs the host to keep.
-"""
+"""One session's directory, on this machine."""
 
 from __future__ import annotations
 

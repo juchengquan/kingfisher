@@ -1,19 +1,11 @@
 """Getting rid of a session, and everything it left in other places.
 
-A session is four things in four places: a directory on disk, a thread in a database,
-a claim marking a turn in progress, and a copy in whatever durable store a deployment
+A session is four things in four places: a directory on disk, a thread in a database, a
+claim marking a turn in progress, and a copy in whatever durable store a deployment
 wired. Removing one means removing all four, and missing one does not fail -- it
-accumulates. One real workspace held 132 orphaned threads after every session had
-been deleted; a leftover claim made a reopened session refuse its first turn as busy;
-a process that died mid-turn left a session ten years idle and still there.
-
-**A mixin, not a collaborator, and the distinction is worth stating.** It shares
-`self` with everything else on `Kingfisher` -- it can reach any attribute and call
-any sibling method, and nothing stops it. What this buys is that a reader looking for
-how a session is disposed of opens one file instead of scrolling past a turn; what it
-does not buy is a boundary. Written as a separate object it would have needed five
-constructor arguments and a delegating method for every public name, and the public
-surface is the thing that must not move.
+accumulates. One real workspace held 132 orphaned threads after every session had been
+deleted; a leftover claim made a reopened session refuse its first turn as busy; a
+process that died mid-turn left a session ten years idle and still there.
 """
 
 from __future__ import annotations

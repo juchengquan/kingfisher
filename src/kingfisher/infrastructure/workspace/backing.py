@@ -1,10 +1,4 @@
-"""Reading what a workspace is sitting on, as far as the platform will say.
-
-One record and the four reads that fill it: the filesystem type under the workspace,
-its size, the cgroup's memory limit, and whether swap is permitted. `MemoryBacking`
-carries what those four are for, and why the arrangement is not what the obvious
-reading of them predicts.
-"""
+"""Reading what a workspace is sitting on, as far as the platform will say."""
 
 from __future__ import annotations
 

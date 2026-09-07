@@ -1,10 +1,4 @@
-"""What a run produces, in kingfisher's own vocabulary.
-
-`RunEvent` is deliberately not a LangGraph stream chunk. Those shapes are not a
-published protocol the way `BaseCheckpointSaver` is, so passing them through would
-make a LangGraph change a kingfisher breaking change -- and would put foreign
-vocabulary in the domain. Translation happens in the adapter.
-"""
+"""What a run produces, in kingfisher's own vocabulary."""
 
 from __future__ import annotations
 

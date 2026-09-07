@@ -1,9 +1,4 @@
-"""Reading configuration out of the environment.
-
-The `Config` record itself lives at the package root, belonging to no layer, for the
-reasons its own docstring gives. What stays here is the part with a foreign system on
-the other side of it — the process environment — and the policy that goes with it.
-"""
+"""Reading configuration out of the environment."""
 
 from __future__ import annotations
 

@@ -1,24 +1,4 @@
-"""Finding a workspace's own tools on disk.
-
-The third of the three kinds this package is named for, and the odd one out. A skill
-is markdown and a subagent is a YAML document; both are *data* the agent reads. A
-tool is Python, imported into this process and called in it. There is no format to
-parse here — only a module to import and a decision about what to refuse.
-
-- **`TOOLS` is declared, never inferred.** Scanning a module for anything
-  callable would guess at intent, and a helper promoted to a tool by accident
-  is worse than one that never appears. The other formats make a definition
-  state its own name; this makes a module state its own exports.
-- **A module that will not import is an error, not a skipped file.** Quietly
-  offering fewer tools than the workspace defines is the failure
-  `CapabilityError` already exists to prevent, one layer down.
-- **Nothing here is routed to the agent.** `/skills` and `/data` are backend
-  routes; the tools directory deliberately is not one, so no file tool can
-  reach it. An agent that could still write here is one holding `execute`,
-  which already runs arbitrary code on the host — so this adds a way in that
-  is no wider than the one already open, and none at all for a request without
-  the shell.
-"""
+"""Finding a workspace's own tools on disk."""
 
 from __future__ import annotations
 

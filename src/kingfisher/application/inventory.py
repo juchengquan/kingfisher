@@ -1,12 +1,4 @@
-"""What a workspace offers, as one answer instead of two half-answers.
-
-`--list` and `--without-skills` ask the same question and used to compute it apart:
-`show_inventory` assembled the display, `_offered` assembled the names, and both
-built an agent to do it. Two implementations of "what may a request activate here" is
-one more than can be kept in step -- and the one that drifts is `--without-skills`,
-which subtracts from a set that has to be the set the run will actually offer, or it
-refuses a name the run did not have.
-"""
+"""What a workspace offers, as one answer instead of two half-answers."""
 
 from __future__ import annotations
 

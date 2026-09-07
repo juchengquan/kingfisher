@@ -1,10 +1,4 @@
-"""Applying a request's capabilities to the agent that runs it.
-
-Named `narrowing`, not `capabilities`: `domain/capabilities.py` is the value object a
-caller passes, and this is the machinery that enforces it. "Narrow" is the domain's
-own word for the operation -- `narrowed()`, `intersect`, the narrowing axis -- while
-"scope" everywhere else in this package means a lifetime.
-"""
+"""Applying a request's capabilities to the agent that runs it."""
 
 from __future__ import annotations
 

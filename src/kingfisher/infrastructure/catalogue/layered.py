@@ -1,12 +1,4 @@
-"""What a turn sees: the deployment's catalogue, plus the session's own.
-
-A session may upload definitions of its own, and they have to reach the agent
-alongside the reviewed ones. That merge existed twice in `agent.py` as two inline
-expressions, and the two quietly did different things -- a sorted set union for
-skills, a right-wins `dict |` for subagents -- with nothing anywhere saying why. Here
-each rule is a class, so the difference is legible and the reason is written next to
-it.
-"""
+"""What a turn sees: the deployment's catalogue, plus the session's own."""
 
 from __future__ import annotations
 

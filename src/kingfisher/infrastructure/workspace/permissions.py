@@ -1,9 +1,4 @@
-"""The write bits on `/data`, and the only place allowed to change them.
-
-The layer a tool-level deny rule cannot provide: the kernel enforces this against
-`execute` too, where deepagents' own file permissions reach only its built-in file
-tools.
-"""
+"""The write bits on `/data`, and the only place allowed to change them."""
 
 from __future__ import annotations
 

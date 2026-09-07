@@ -1,11 +1,4 @@
-"""What has to be true of subagents together, rather than of one.
-
-`reading` decides whether a definition is well-formed. Nothing it can see says
-whether a *catalogue* is coherent: two folders may each define a `surveyor`, a helper
-may name a helper that names it back, and a delegate defined to be a different model
-may resolve to the one it exists not to be. Each of those is three well-formed
-definitions and one broken deployment.
-"""
+"""What has to be true of subagents together, rather than of one."""
 
 from __future__ import annotations
 

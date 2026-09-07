@@ -1,10 +1,4 @@
-"""What a run tells the caller it did not have.
-
-Three reports and the event list that carries them, kept together because they answer
-one question -- *what did this turn not get, and why* -- and apart from the service
-because none of them touches it. Every input is decided by the time they run, so each
-can be checked on its own.
-"""
+"""What a run tells the caller it did not have."""
 
 from __future__ import annotations
 
