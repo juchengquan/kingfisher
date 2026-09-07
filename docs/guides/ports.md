@@ -71,9 +71,8 @@ because that is what kingfisher does with it, and `COMMAND_RUNNER_CONTRACT` runs
 commands — one of them waits a second for a timeout. Run those where you would
 run an integration test.
 
-They are worth running even if your adapter looks obviously correct. `knows()`
-had no test anywhere in this repository until the kit was written, and a store
-that answers `True` for every id — which is what a bucket reporting a prefix as
+They are worth running even if your adapter looks obviously correct. A store that
+answers `True` for every id — which is what a bucket reporting a prefix as
 present does — passes every other test in this suite while letting a caller
 resume a session they invented.
 

@@ -12,33 +12,18 @@ definition may say *about* a tool — which it grants, and which file's when two
 files offer one name.
 
 Kingfisher ships none of these files. Its job is to find, validate and compose
-definitions, and it does all three against files it did not write — every
-definition is content a workspace rewrites on first contact with a real task,
-where the framework has no business having an opinion. It ships no skills of its
-own for the same reason its base prompt carries no domain instructions: a
-general agent should read the same whatever the project is.
+definitions, and it does all three against files it did not write. It ships no
+skills of its own for the same reason its base prompt carries no domain
+instructions: a general agent should read the same whatever the project is.
 
-Definitions ship with kingfisher — a working example of each format, copied
-into your workspace and yours to edit from then on:
+Seed from a directory holding `agents/`, `tools/`, `skills/` and `subagents/` —
+any of them, none required:
 
-    kingfisher seed                   # copies them into $KINGFISHER_WORKSPACE
-    kingfisher list                   # and what the workspace offers now
+    kingfisher seed --from ./my-definitions   # or $KINGFISHER_ASSETS
+    kingfisher list                           # what the workspace offers now
 
 Nothing is loaded automatically. A definition does nothing until it is in a
-workspace catalogue, and what it says there is yours; kingfisher never reads
-back from the copy it shipped.
-
-To seed from your own set instead, point at a directory holding `agents/`,
-`tools/`, `skills/` and `subagents/` — any of them, none required:
-
-    kingfisher seed --from ./my-definitions
-
-They were their own distribution for a while, found through a
-`kingfisher.assets` entry point so that anyone could publish a pack, and then a
-set inside the wheel. A directory covers the same ground without a wheel, a
-publish step or metadata, so both went; if a second publisher ever wants a group
-it comes back. `KINGFISHER_ASSETS` names the directory, and `--from` overrides
-it for one run.
+workspace catalogue, and what it says there is yours.
 
 
 A request then names what it wants:
@@ -82,21 +67,14 @@ run(Request(
 ```
 
 **It is off until a deployment grants it, and granted per model name.** Every
-other field here only ever takes something away — a request picks from what the
-workspace offers and cannot invent anything, which is what makes an untrusted
-caller safe to accept. Naming a model is the one thing that *chooses*, and
-models differ in price by more than an order of magnitude. `models` is `None`
-by default, so a caller who was granted nothing can choose nothing.
+other field here only ever takes something away, which is what makes an
+untrusted caller safe to accept. Naming a model is the one thing that *chooses*,
+and models differ in price by more than an order of magnitude, so `models` is
+`None` by default.
 
-**It replaces what the delegate runs, and where follows from that.** There
-were two fields here once, and a rule that an override had to replace both or
-neither — the file's endpoint joined to your model is a 404 if you are lucky
-and a wrong-model run if you are not. One field cannot be half of anything, so
-the rule is gone: name a model, and its entry in `models.yaml` says where it
-runs.
-
-The endpoint that model resolves to keeps its own permission. Choosing a model
-is not an exemption from where a request's prompts may go.
+Name a model, and its entry in `models.yaml` says where it runs. The endpoint it
+resolves to keeps its own permission: choosing a model is not an exemption from
+where a request's prompts may go.
 
 ---
 
@@ -128,17 +106,14 @@ kingfisher reads these files, so nothing outside it has an opinion about the
 layout. `agents/support/triage.yaml` is still `triage`, because `name:` is the
 identity and the path is not.
 
-**A request must name one.** There is no default agent and no implicit one; a
-request without `agent` is refused, and the message lists what your workspace
-has. The agent decides where every prompt in the session goes and what it costs,
-and a default would put that choice somewhere the call site never mentions.
+**A request must name one.** There is no default agent; a request without
+`agent` is refused, and the message lists what your workspace has. The agent
+decides where every prompt in the session goes and what it costs.
 
 **A session keeps the agent it started with.** It is resolved when the session
 opens and stored beside it, so editing the file mid-conversation does not change
-the instructions under a history that already happened — a deploy mid-session is
-ordinary, and that is exactly when a live conversation would otherwise pick up a
-different prompt from the one its own transcript was produced under. A later turn
-may name the same agent again; naming a different one is refused.
+the instructions under a history that already happened. A later turn may name the
+same agent again; naming a different one is refused.
 
 Over HTTP that lands where the choice is made:
 
@@ -160,17 +135,14 @@ subagent's *is* the whole prompt. An agent's is the last of three parts:
                          reaches your delegates too
     system_prompt        what this agent is. Yours, and required
 
-There is no way to replace the first, and that is not a gap. An agent without it
-is not leaner — it is one holding tools nobody told it about, discovering its
-permissions by being denied. Opening a session returns what was assembled, which
-is where to check rather than guess.
+There is no way to replace the first. An agent without it is not leaner — it is
+one holding tools nobody told it about, discovering its permissions by being
+denied. Opening a session returns what was assembled, which is where to check.
 
-The third part is required, for the reason `description` is. The two documents
-above it are written once for the whole deployment and neither has heard of this
-agent, so a file that leaves the prompt out is a list of tools with nothing
-anywhere saying what they are for. One line is enough — say what this agent is
-and what it is careful about, and leave out anything already true of every agent
-in the workspace.
+The third part is required: the two documents above it are written once for the
+whole deployment and neither has heard of this agent. One line is enough — say
+what this agent is and what it is careful about, and leave out anything already
+true of every agent in the workspace.
 
 ### The fields
 
@@ -189,12 +161,11 @@ in the workspace.
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `groups` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--groups-in-the-definitions-groupsyaml-for-the-vocabulary) |
 
-The two tool fields inherit and the two name fields do not, which is the same
-rule a subagent file follows and worth saying as one sentence: **leave a tool
-field out and you get everything available to you; leave `skills` or
-`subagents` out and you get none.** Tools are what an agent needs to *act* and
-it can do nothing without them. Skills and delegates are what it needs to
-*know* and *ask*, and most agents need neither.
+One rule covers all four, and a subagent file follows it too: **leave a tool
+field out and you get everything available to you; leave `skills` or `subagents`
+out and you get none.** Tools are what an agent needs to *act* and it can do
+nothing without them; skills and delegates are what it needs to *know* and
+*ask*, and most agents need neither.
 
 ### Helpers arrive with the delegate that wants them
 
@@ -215,15 +186,11 @@ Each with its own message rather than a generic "unknown field", because the
 generic one reads as *not supported yet* and sends you looking for a workaround:
 
 - **`permissions`** — deepagents' permissions *replace* the parent's rather than
-  narrowing them, so writing this here would drop `/data` being read-only along
-  with everything else it inherits.
-- **`interrupt_on`** — an agent has a checkpointer and a human, unlike a
-  delegate; what is missing is anything in the service that surfaces an
-  interrupt to a caller.
-- **`response_format`** — refused rather than absent. An agent returns to a real
-  caller who may well want JSON, and there is nowhere to ask for that yet
-  because it changes what a run *returns*: the result, the service's response
-  body and streaming all have a stake in it.
+  narrowing them, so writing this here would drop `/data` being read-only.
+- **`interrupt_on`** — what is missing is anything in the service that surfaces
+  an interrupt to a caller.
+- **`response_format`** — it changes what a run *returns*, so the result, the
+  service's response body and streaming all have a stake in it.
 
 ---
 
@@ -315,13 +282,11 @@ alone would silently pick one: write vendor_a/fetch.py::fetch,
 vendor_b/fetch.py::fetch
 ```
 
-The reference is the same `file::name` a subagent's `tools:` already used, and
-it now *selects* rather than merely being checked.
+The reference is the same `file::name` a subagent's `tools:` uses.
 
 **A request's grant says what the run may draw on, not what the agent carries.**
-Those were the same list until a name could mean two tools. The agent takes
-everything granted except names more than one file defines, and each such pair
-goes to whichever delegate names one:
+The agent takes everything granted except names more than one file defines, and
+each such pair goes to whichever delegate names one:
 
 ```yaml
 # subagents/agent_a.yaml
@@ -354,14 +319,10 @@ controls both — this is for when nobody does.
 
 A YAML document. Everything the delegate is, in one file.
 
-Folders work here too, and for the same reason they work for tools: kingfisher
-reads these, so nothing outside it has an opinion about the layout.
-A definition at `subagents/analysis/profiler.yaml` is still activated as
-`profiler` — the `name:` field is the identity and the path is not, which was
-already true of the filename.
-
-There are no packages here. A definition is a document, not code, so there is
-nothing to import and a folder is only ever organisation.
+Folders work here too: `subagents/analysis/profiler.yaml` is activated as
+`profiler`, because `name:` is the identity and the path is not. There are no
+packages — a definition is a document, not code, so a folder is only ever
+organisation.
 
 #### Saying where a tool lives
 
@@ -392,11 +353,8 @@ for a path to pick out.
 `builtin_tools:` axis.
 
 **Requests do not take one either.** `--tools` and `capabilities.tools` name
-tools plainly. A definition is written once and read many times, often by
-someone who did not write it, and that is where a location pays; a flag is typed
-once and thrown away. A request also arrives from a caller who has no idea what
-your folders look like — asking them for a path would make your layout part of
-your API, and moving a file a breaking change for people who never saw it.
+tools plainly: a request arrives from a caller who has no idea what your folders
+look like, so asking them for a path would make your layout part of your API.
 
 ```yaml
 name: reviewer
@@ -418,8 +376,8 @@ needed.
 `builtin_tools` is the set that comes with deepagents — the table further down
 lists them. `tools` is whatever *your* workspace defines in `tools/`.
 
-They are separate because they are granted separately, and one list meant a
-delegate could not ask for a workspace tool without giving up every built-in:
+They are separate because they are granted separately: on one list, a delegate
+could not ask for a workspace tool without giving up every built-in.
 
 ```yaml
 builtin_tools: [read_file, glob]   # named, so only these two
@@ -461,18 +419,11 @@ model as the deployment's default and a different id on the same host. Reported,
 never refused: kingfisher cannot know that a delegate *needs* to differ, and
 `reviewer` deliberately runs on the same model and is right to.
 
-There was a `distinct: true` for saying it did need to differ, which turned that
-report into a refusal. It went with `second-opinion`, its only user.
-
-There was a `provider:` beside it, naming an endpoint by style, and a rule that
-the two moved together. Both are gone. An endpoint is a property of the model —
-`models.yaml` says which one serves `gpt-5` — so there is no second line to keep
-in step, and the half-pair mistake cannot be written.
+An endpoint is a property of the model — `models.yaml` says which one serves
+`gpt-5` — so there is no second line to keep in step.
 
 This is the only place it is said. There is no environment variable for it: one
-could only say "every delegate", which is the wrong size for the decision — it
-would silently defeat `second-opinion`, whose whole job is to be a different
-model from the one beside it.
+could only say "every delegate", which is the wrong size for the decision.
 
 **The name has to be one your catalogue defines.** The table in `models.yaml` is
 closed, and a definition naming a model outside it is refused when the agent is
@@ -488,22 +439,13 @@ it. And `run_on` can rescue it without editing the file, which is why this is
 not checked across the whole catalogue up front: the refusal would fire before
 the override could apply.
 
-Which is why **a definition somebody else wrote should not carry a `model:`
-line at all.** A file you install cannot portably name a vendor's model id:
-`extractor` said `MiniMax-M2.5` and would refuse to start for anyone without a
-MiniMax entry. Every shipped definition names nothing and says in a comment what
-to pin it to, which is the only form that both works on a fresh seed and admits
-that a preference was intended.
+Which is why **a definition somebody else wrote should not carry a `model:` line
+at all.** A file you install cannot portably name a vendor's model id, and one
+that does refuses to start for anyone without that entry. Every shipped
+definition names nothing and says in a comment what to pin it to.
 
-There was an `alias:` for saying it portably — a general name each deployment
-bound under `aliases:` in `models.yaml` — and it is gone. Two spellings of one
-question is one more than the format needs, and a reader could not tell which
-kind of claim `cheap` was without opening another file.
-
-The candidate *list* went with it. A list meant "try these in order", and the
-only thing that ever passed one over was an alias a deployment had not bound; a
-model this deployment cannot run refuses on the spot, and always did. So every
-entry after the first was unreachable, and `model:` takes one name.
+`model:` takes one name, never a list: a model this deployment cannot run refuses
+on the spot, so every entry after the first would be unreachable.
 
 | Field | | |
 | --- | --- | --- |
@@ -579,17 +521,11 @@ The message names the whole loop rather than one edge of it, because one edge
 does not say which link to cut and whoever reads it may own none of the files.
 
 A definition may appear in several places — two delegates may both consult the
-same `checker` — and reaching one twice is not a loop. Each is built once for
-each position it occupies rather than once per route to it, so a wide catalogue
-costs what it has, not what it can describe.
-
-Depth costs you nothing to *declare*. It costs on every axis that matters at
-run time, which is the next paragraph.
+same `checker` — and reaching one twice is not a loop.
 
 **What it costs.** Every level is a real conversation with a real model. A
 helper's tokens are on your bill and in the run log, attributed to it by name,
-and its work streams into the terminal under `[second-opinion]` — so this is
-visible rather than merely charged.
+and its work streams into the terminal under `[second-opinion]`.
 
 Three reasons to reach for one, one example each:
 
@@ -601,7 +537,7 @@ Three reasons to reach for one, one example each:
   narrow `builtin_tools` and a cheap `model:`.
 - **A different model.** Two models from one family share failure modes, so a
   second opinion is worth nothing until you give it a `model:` that is genuinely
-  different — and a `provider:` if that model lives somewhere else.
+  different. Where that model runs follows from the entry in `models.yaml`.
 
 ### Writing the prompt
 
@@ -681,10 +617,8 @@ for spec in LocalSubagentRepository(cfg.catalogue_roots["subagents"]).specs.valu
     print(spec.name, spec.metadata.get("owner", "unowned"))
 ```
 
-Handing it to the agent would mean picking a consumer, and the obvious one —
-passing the definition to a middleware factory — changes a published argument
-for a use nobody has yet. The field is easy to add a consumer to later; a
-changed constructor is not easy to take back.
+Handing it to the agent would mean picking a consumer, and the field is easy to
+add one to later; a changed constructor is not easy to take back.
 
 ### Lists, and fields that are not here
 
@@ -698,12 +632,11 @@ tools:
 ```
 
 **A field not in the table above is an error, not a field that gets ignored.**
-Ignoring one is indistinguishable from honouring it: `tolls:` used to hand a
-delegate *every* tool its parent had, because unset `tools` means inherit. A
-near miss is named — *did you mean 'tools'?* — and the fields deepagents knows
-but this format declines (`permissions`, `subagents`, `interrupt_on`,
-`response_format`) each say why, since "unknown field" reads as an omission
-worth working around when the answer is that honouring it would be wrong.
+Ignoring one is indistinguishable from honouring it: `tolls:` hands a delegate
+*every* tool its parent had, because unset `tools` means inherit. A near miss is
+named — *did you mean 'tools'?* — and the fields deepagents knows but this format
+declines each say why, since "unknown field" reads as an omission worth working
+around.
 
 Skills take the opposite rule, deliberately: kingfisher does not own that
 format, so an unrecognised key there is left alone.
@@ -726,11 +659,9 @@ subagents/team/surveyor.yaml       name: surveyor
 its own — which is every catalogue with no clash — the bare name is the key and
 nothing changes.
 
-The refusal moved to where the constraint actually lives: an agent's roster is
-keyed by name, so an *agent* granted two of a name is refused. Two definitions
-sitting in one catalogue that no single agent ever holds together are not a
-conflict, and refusing them stopped deployments over a clash nobody had asked
-for — unfixable by anyone who owned neither file.
+The refusal sits where the constraint lives: an agent's roster is keyed by name,
+so an *agent* granted two of a name is refused. Two definitions in one catalogue
+that no single agent holds together are not a conflict.
 
 The filename is not authoritative for any of this. A subagent is named by its
 `name:` field, so `analysis/profiler.yaml` is activated as `profiler`; the path
@@ -776,12 +707,11 @@ add to the answer — it *replaces* it, and the reply is lost. Emit one message
 carrying both.
 
 **Reach for this when a definition cannot say what you mean.** The example above
-guarantees an ordering: there is no edge from the start to the model that does
-not pass through the survey node. A prompt can *ask* for that step and a model
-may skip it — occasionally, and most often on the input where skipping costs the
-most. That is a real reason. "The same delegate, in Python" is not: a document
-is reviewable by people who do not read Python, and it gets four fields this
-format has to refuse.
+guarantees an ordering: no edge from the start to the model bypasses the survey
+node. A prompt can *ask* for that and a model may skip it, most often on the
+input where skipping costs most. "The same delegate, in Python" is not a reason —
+a document is reviewable by people who do not read Python, and it gets the fields
+this format has to refuse below.
 
 **Five fields are refused, each because it would do nothing.**
 
@@ -829,9 +759,7 @@ subagents/
 
 That is the whole rule: **a folder is a bundle when it holds a definition whose
 `name` matches the folder.** A folder that names no definition is ordinary
-grouping and stays exactly what it was — `subagents/analysis/profiler.yaml` is
-unchanged by any of this. Both shapes ship, side by side, in the definitions
-`kingfisher seed` writes.
+grouping — `subagents/analysis/profiler.yaml` is unchanged by any of this.
 
 **Why you would.** An agent that omits `tools:` gets *every* tool the catalogue
 holds, so anything in `tools/` is something the top-level agent can call. A
@@ -899,11 +827,10 @@ deepagents' format, unchanged. A directory per skill, `SKILL.md` with `name` and
 `description` in frontmatter and the procedure in the body.
 
 **One folder of grouping, and no more** — where tools and subagents nest as deep
-as you like. The difference is who reads them: those are walked by kingfisher, a
-skill is read by the *agent* through a filesystem route, and deepagents lists a
-source one level deep and looks for `SKILL.md` directly inside each entry. It
-does not go further. So each folder is registered as its own source, which buys
-exactly one level:
+as you like. The difference is who reads them: those are walked by kingfisher,
+while a skill is read by the *agent*, and deepagents looks for `SKILL.md`
+directly inside each entry of a source and no further. Each folder is registered
+as its own source, which buys exactly one level:
 
 ```
 skills/code-review/SKILL.md            -> code-review
@@ -917,14 +844,11 @@ catalogue that simply looks empty.
 ### Two skills with the same name
 
 A folder is a *source*, and a skill's full identity is `source::name` — the same
-spelling a subagent's `tools:` uses for a tool in a package. This is what lets a
-vendor pack and a team's own folder both ship a `lookup` without one replacing
-the other, which is what a catalogue assembled from several parties looks like
-after long enough.
+spelling a subagent's `tools:` uses. That lets a vendor pack and a team's own
+folder both ship a `lookup` without one replacing the other.
 
-**A bare name stays legal wherever it is unique**, which today is everywhere.
-The qualifier is only required once two sources offer the same name, and then it
-is *required* rather than guessed:
+**A bare name stays legal wherever it is unique.** The qualifier is required once
+two sources offer the same name, and then it is *required* rather than guessed:
 
 ```
 capability error: 'lookup' is offered by more than one source, so naming it
@@ -966,24 +890,19 @@ Two shapes:
 
 A skill the agent declines to read is not a failure. If the task did not warrant
 it, not loading it is the mechanism working.
+
 ---
 
 ## Access — `groups:` in the definitions, `groups.yaml` for the vocabulary
 
-There is a worked set to read alongside this section:
-`assets_examples/groups.yaml`, `assets_examples/agents/analyst.yaml` and
-`assets_examples/subagents/auditor.yaml`. Between them they show a vocabulary
-with a containing group, a definition where only the restricted entry carries
-an audience, and a delegate that runs with fewer tools for a narrower caller.
-
-`seed` leaves those three behind by default, the way it leaves a definition
-naming middleware behind: a workspace that has not declared `analysts` cannot
-read a definition that names it. Copy `groups.yaml` first, then
-`kingfisher seed --all`.
-
 Which user groups may reach which agents, delegates, tools and skills. Optional:
-with no `groups.yaml`, kingfisher controls nothing by group and behaves exactly
-as it did before this existed.
+with no `groups.yaml`, kingfisher controls nothing by group.
+
+A worked set to read alongside this section: `assets_examples/groups.yaml`,
+`agents/analyst.yaml` and `subagents/auditor.yaml`. `seed` leaves them behind by
+default, because a workspace that has not declared `analysts` cannot read a
+definition that names it — copy `groups.yaml` first, then
+`kingfisher seed --all`.
 
 **Audiences live in the definitions.** An agent or a subagent says who may reach
 *it*, and may say who reaches each thing it holds. What is central is only the
@@ -1018,11 +937,10 @@ system_prompt: |
 ```
 
 `<workspace>/groups.yaml` by default; `KINGFISHER_GROUPS_FILE` points elsewhere,
-so several deployments can share one vocabulary. Read once at startup — a
-revocation lands on restart, the way every other deployment setting here does. A
-file that is present and will not parse stops the deployment: a vocabulary that
-cannot be honoured must never come up as no vocabulary, because then no
-definition's audience can be checked at all.
+so several deployments can share one vocabulary. Read once at startup, so a
+revocation lands on restart. A file that is present and will not parse stops the
+deployment: a vocabulary that cannot be honoured must never come up as *no*
+vocabulary, because then no audience can be checked at all.
 
 ### Who is calling
 
@@ -1071,18 +989,13 @@ tools:                     # the long form — per entry
 ```
 
 **An entry is a name, or a mapping of `name` and `groups`** — the same shape
-`middleware:` takes for its `settings`, and deliberately so: one long form to
-learn rather than one per field. `groups` is the same word the definition's own
-line uses, meaning the same thing one level down, so an entry says which fact it
-is stating, has somewhere to put a second one later, and can have a mistyped key
-refused.
+`middleware:` takes for its `settings`, so there is one long form to learn rather
+than one per field.
 
-The field itself stays a list. Writing the whole field as a mapping keyed by
-name is refused, and the message shows the entry to write instead. That spelling
-existed until 2026-09-03 and had a fault a format cannot carry: YAML collapses
-`{a: X, a: Y}` before any reader sees it, so a name written twice lost one of
-its audiences silently — a restriction that disappears without anything able to
-refuse or report it.
+The field itself stays a list. Writing the whole field as a mapping keyed by name
+is refused, and the message shows the entry to write instead: YAML collapses
+`{a: X, a: Y}` before any reader sees it, so a name written twice would lose one
+of its audiences silently, with nothing able to refuse or report it.
 
 **Only the entries you restrict need one.** An entry that says nothing inherits
 the definition's own audience, so an agent holding five tools and restricting one
@@ -1171,11 +1084,8 @@ tools a skill's procedure would need, which have audiences of their own.
 **`builtin_tools` deliberately takes none.** deepagents registers its own tools
 itself, so kingfisher can filter them but never leave them out of a graph —
 `infrastructure.harness.narrowing` records a live run where a model called
-`execute` from memory. Writing a mapping there is refused rather than parsed:
-reading it as a single tool named `{'execute': ['A']}` is exactly the silent
-wrong answer this format refuses everywhere else. No field takes a mapping now —
-an entry that carries something is a mapping *inside* the list — so what is
-refused here is refused the same way for every field.
+`execute` from memory. Writing a mapping there is refused rather than parsed as a
+single tool named `{'execute': ['A']}`.
 
 What gates the built-ins is which *agents* a group may open: an agent declaring
 `builtin_tools: [read_file, ls, glob, grep]` cannot yield the shell to anyone,
@@ -1257,21 +1167,18 @@ SUBAGENTS = [
 `groups` is a real boundary: whether a compiled delegate is built at all is
 kingfisher's decision, so there is nothing there for a graph to ignore.
 
-The per-tool audience narrows what is **handed to** `build`, and carries exactly
-the caveat the plain `tools` list already carries there: deepagents applies no
-allowlist to a graph it did not build, so a `build` that ignored what it was
-given could call anything it holds. `kingfisher list` marks compiled delegates
-for that reason. `skills` and `subagents` are refused for a compiled delegate
-regardless — see `NOT_COMPILED`.
+The per-tool audience narrows what is **handed to** `build`, with the caveat the
+plain `tools` list already carries: deepagents applies no allowlist to a graph it
+did not build, so a `build` that ignored what it was given could call anything it
+holds. `skills` and `subagents` are refused for a compiled delegate regardless —
+see `NOT_COMPILED`.
 
 ### What a caller can see
 
 **Out of reach reads as not offered.** An asset a caller's groups do not reach is
-absent from what they are told: absent from listings, from the "this workspace
-offers …" in a refusal, and from the report of what a run withheld. Naming one
-gives the same answer naming a typo does. Nothing lets a caller enumerate the
-catalogue by guessing, and nothing sends them to try something they will only be
-refused for.
+absent from listings, from the "this workspace offers …" in a refusal, and from
+the report of what a run withheld. Naming one gives the same answer naming a typo
+does, so nothing lets a caller enumerate the catalogue by guessing.
 
 The operator's view is the whole of it:
 
@@ -1290,11 +1197,9 @@ Running a *turn* still has to say who is calling.
 `agents` is checked where the *name* is resolved: when a session is opened, and
 again on **every turn afterwards**.
 
-That second half is the part worth knowing. A session pins its agent for life,
-and a session id is a bearer credential — holding one is how a caller proves the
-session is theirs. Checked only at the open, holding one would be a durable grant
-to an agent you may not open, and a caller who lost a group would keep running
-what they had before. So:
+A session pins its agent for life, and a session id is a bearer credential.
+Checked only at the open, holding one would be a durable grant to an agent you
+may not open, and a caller who lost a group would keep running what they had. So:
 
 - A leaked session id grants nothing its holder could not open themselves.
 - A demotion takes effect on the caller's next turn, and an in-flight
@@ -1321,10 +1226,8 @@ groups:
 ```
 
 A caller in `admin` reaches anything listing `A`, `B` or `C`, without `admin`
-appearing on a single definition. Without it, a broad group has to be written on
-every line and re-written on every line anyone adds. A loop is refused naming the
-whole cycle rather than one edge — one edge does not tell a reader which link to
-cut, and they may own none of the groups involved.
+appearing on a single definition. A loop is refused naming the whole cycle rather
+than one edge, since one edge does not tell a reader which link to cut.
 
 ### Requiring several groups at once
 
@@ -1359,27 +1262,19 @@ Use the inline form for a one-off and the named form for anything reused; a name
 that appears on two definitions and means the same thing on both belongs in the
 vocabulary, where changing it changes both.
 
-Three consequences worth knowing:
+Consequences worth knowing:
 
-- **`contains` satisfies `all_of`.** Expansion runs first, and requirements are
-  checked against whatever is held afterwards — so an `admin` who contains both
-  parts satisfies a compound of them. The alternative is an admin who is
-  mysteriously weaker than the sum of what they reach.
-- **A caller may not present a compound name.** It is what holding its parts
-  adds up to, not something to claim: accepting it would let one assertion stand
-  in for the two that `all_of` exists to require. The refusal names the parts to
-  send instead. A gateway emitting one is misconfigured, and is told so.
-- **`contains` and `all_of` cannot both appear on one group.** `contains` says
-  what a name grants and `all_of` says what a caller must bring; a name that is
-  both is a question with no answer. Requirement loops are refused like
-  `contains` loops, and for the same reason — a loop can never be entered, so
-  every name in it derives for nobody.
+- **`contains` satisfies `all_of`.** Expansion runs first and requirements are
+  checked against whatever is held afterwards, so an `admin` who contains both
+  parts satisfies a compound of them.
+- **A caller may not present a compound name.** It is what holding its parts adds
+  up to, not something to claim. The refusal names the parts to send instead.
+- **`contains` and `all_of` cannot both appear on one group.** One says what a
+  name grants and the other what a caller must bring; a name that is both is a
+  question with no answer. Requirement loops are refused like `contains` loops.
 - **`contains` may not hand out a compound.**
-  `admin: {contains: [finance-senior]}` is refused: it would give an admin the
-  compound while they hold neither part, which is the requirement defeated by
-  the file that declares it. Name the parts instead —
-  `admin: {contains: [finance, senior]}` — which reaches exactly the same people
-  and is legible, since the listing prints what a compound requires.
+  `admin: {contains: [finance-senior]}` is refused — it would give an admin the
+  compound while they hold neither part. Name the parts instead.
 
 `kingfisher list` writes a conjunction `finance+senior`, and prints what each
 named compound requires above the audiences, since a name alone tells a reader

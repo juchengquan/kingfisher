@@ -49,9 +49,9 @@ have to resemble it — two keys over one class is a normal thing to register, a
 **A value is a class, or a callable taking no arguments.** A class is the shape
 that can be configured: it is constructed per graph with its own `defaults` plus
 whatever the definition was allowed to write. Anything else is called with
-nothing, which is what a registry entry used to be and still may be — a lambda
-closing over the values it needs is a registry entry, and a definition writing
-`settings` beside it is refused rather than built without them.
+nothing — a lambda closing over the values it needs is a registry entry, and a
+definition writing `settings` beside one is refused rather than built without
+them.
 
 Registering is not permitting. A name a request withheld is refused even though
 the deployment registered it, and `grants` is where a deployment says what its
@@ -131,9 +131,8 @@ somewhere to live that a graph does not have.
 
 **Every graph, delegates included.** The general-purpose delegate deepagents
 supplies is replaced by one carrying this deployment's middleware, so delegating
-is not a way around an audit hook. That one is a promise rather than a
-description of today: it was wired deliberately, because left as it was, the way
-to run unaudited was to ask for nothing in particular.
+is not a way around an audit hook — otherwise the way to run unaudited would be
+to ask for nothing in particular.
 
 A delegate inherits none of its parent's middleware — each definition's is built
 from its own `middleware:` field.
