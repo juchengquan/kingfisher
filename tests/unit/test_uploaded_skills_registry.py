@@ -1,17 +1,4 @@
-"""A skill sent with the request, which could not be used at all.
-
-The registry was built so one thing answers "what will this agent actually
-have". It covered the catalogue and not the half a request brings with it, and
-the two halves then disagreed: `available_skills` merged the session's
-directory listing over the catalogue registry, `build_agent` resolved against
-the catalogue registry alone, and every uploaded skill was advertised and then
-refused as unknown. The whole feature, not an edge of it.
-
-The quieter half is here too. An upload deepagents will not load -- one with no
-`description` -- was written, listed, accepted, and then absent from an agent
-that said nothing was wrong. That is the original bug this module exists to
-remove, surviving in the one place it never reached.
-"""
+"""A skill sent with the request, which could not be used at all."""
 
 from __future__ import annotations
 
@@ -45,8 +32,7 @@ def _upload(cfg, session_dir, body, ref="skl_1"):
 
 
 def test_an_uploaded_skill_can_be_activated(cfg, session_dir):
-    """It could not. Advertised by validation, refused by the build -- so no
-    request could use a skill it supplied itself."""
+    """It could not."""
     _upload(cfg, session_dir, GOOD)
 
     build_agent(
@@ -58,9 +44,7 @@ def test_an_uploaded_skill_can_be_activated(cfg, session_dir):
 
 
 def test_validation_and_the_build_read_the_same_registry(cfg, session_dir):
-    """The property, rather than the symptom. Two readers is what produced the
-    bug, and asserting only that activation works would let them drift apart
-    again the moment one of them grew a second source."""
+    """The property, rather than the symptom."""
     _upload(cfg, session_dir, GOOD)
     scoped = _skills(cfg)
 
@@ -70,8 +54,9 @@ def test_validation_and_the_build_read_the_same_registry(cfg, session_dir):
 
 
 def test_an_upload_is_offered_beside_the_catalogue(cfg, session_dir):
-    """Both halves in one answer, and a bare name is enough because `uploads`
-    refuses one the catalogue already holds."""
+    """Both halves in one answer, and a bare name is enough because `uploads` refuses
+    one the catalogue already holds.
+    """
     _skill = cfg.skills_dir / "shipped"
     _skill.mkdir(parents=True, exist_ok=True)
     (_skill / "SKILL.md").write_text(
@@ -83,8 +68,7 @@ def test_an_upload_is_offered_beside_the_catalogue(cfg, session_dir):
 
 
 def test_a_request_with_no_uploads_is_unaffected(cfg, session_dir):
-    """The negative control. Every deployment that never uploads anything
-    behaves exactly as it did."""
+    """The negative control."""
     _skill = cfg.skills_dir / "shipped"
     _skill.mkdir(parents=True, exist_ok=True)
     (_skill / "SKILL.md").write_text(
@@ -98,8 +82,9 @@ def test_a_request_with_no_uploads_is_unaffected(cfg, session_dir):
 
 
 def test_an_upload_the_agent_cannot_load_is_refused_when_it_arrives(cfg, session_dir):
-    """Told at the moment it is sent, against the ref that was sent, rather
-    than later against a name the caller may not have chosen."""
+    """Told at the moment it is sent, against the ref that was sent, rather than later
+    against a name the caller may not have chosen.
+    """
     with pytest.raises(UploadError, match="cannot load this skill"):
         _upload(cfg, session_dir, NODESC, ref="skl_broken")
 
@@ -114,10 +99,7 @@ def test_the_refusal_names_the_ref_and_the_skill(cfg, session_dir):
 
 
 def test_the_registry_would_have_caught_it_anyway(cfg, session_dir):
-    """The upload check is about *when*, not whether. Written straight to disk,
-    bypassing that check, an unloadable skill is still never offered -- which is
-    what stops the two answers drifting apart if one of them is ever relaxed.
-    """
+    """The upload check is about *when*, not whether."""
     directory = session_dir / "skills" / "uploaded" / "nodesc"
     directory.mkdir(parents=True)
     (directory / "SKILL.md").write_bytes(NODESC)

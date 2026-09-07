@@ -1,12 +1,4 @@
-"""The definitions' audiences reaching a run: who is calling, and what is built.
-
-The assertion that matters most here is the graph one. An ungranted tool is not
-merely refused when called -- it is never attached, so the model is never told
-it exists and never spends context on its schema. That comes free from an
-audience resolving into an ordinary `Capabilities`: had it been a filter applied
-after the build, it would have inherited the weaker two-layer story the built-in
-tools are stuck with.
-"""
+"""The definitions' audiences reaching a run: who is calling, and what is built."""
 
 from __future__ import annotations
 
@@ -87,8 +79,9 @@ def built(kf, monkeypatch, groups, name: str):
 
 
 def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
-    """The dangerous failure is a handler that forgot the boundary, so it is
-    made loud rather than left to grant everything in silence."""
+    """The dangerous failure is a handler that forgot the boundary, so it is made loud
+    rather than left to grant everything in silence.
+    """
     kf = Kingfisher(policied)
     with pytest.raises(AccessError, match="groups="):
         kf.run("anything")
@@ -101,34 +94,25 @@ def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
 
 
 def test_an_unknown_group_is_refused(policied):
-    """The closed vocabulary, from the caller's end: a typo would otherwise
-    reach nothing, which looks exactly like a caller who was denied."""
+    """The closed vocabulary, from the caller's end: a typo would otherwise reach
+    nothing, which looks exactly like a caller who was denied.
+    """
     kf = Kingfisher(policied)
     with pytest.raises(AccessError, match="unknown group"):
         kf.held_for(("Q",))
 
 
 def test_naming_groups_where_there_is_no_vocabulary_is_refused(cfg):
-    """A caller naming groups against a deployment that declares none is
-    confused, and silently ignoring them is how they stay confused."""
+    """A caller naming groups against a deployment that declares none is confused, and
+    silently ignoring them is how they stay confused.
+    """
     kf = Kingfisher(cfg)
     with pytest.raises(AccessError, match="no access policy"):
         kf._effective_grants(("A",))
 
 
 def test_a_list_of_groups_narrows_exactly_as_a_tuple_does(policied):
-    """The trap that folding `for_groups` in had to disarm.
-
-    This tested `isinstance(groups, tuple)` and answered `None` for anything
-    else -- and `None` is "no opinion", which is what a deployment with no
-    vocabulary at all returns. That was survivable only while `for_groups` was
-    the single documented way in, because it coerced first. With `groups=` the
-    only way, `groups=["A"]` would have validated the name against the
-    vocabulary and then narrowed nothing: a caller who believes they are scoped
-    and is not, which is the exact failure the closed vocabulary exists to stop.
-
-    A list is the obvious thing to write. It has to mean what it looks like.
-    """
+    """The trap that folding `for_groups` in had to disarm."""
     kf = Kingfisher(policied)
 
     assert kf.held_for(["A"]) == kf.held_for(("A",))
@@ -136,10 +120,9 @@ def test_a_list_of_groups_narrows_exactly_as_a_tuple_does(policied):
 
 
 def test_a_bare_string_of_groups_is_refused_rather_than_spelled_out(policied):
-    """`groups="analysts"` is iterable, so coercing it yields nine one-letter
-    group names. `expand` does refuse those, but it reports a typo nobody made
-    -- and now that a sequence is what callers pass directly, the mistake is
-    one keystroke from the correct form."""
+    """`groups="analysts"` is iterable, so coercing it yields nine one-letter group
+    names.
+    """
     kf = Kingfisher(policied)
 
     with pytest.raises(AccessError, match="not a string"):
@@ -147,16 +130,18 @@ def test_a_bare_string_of_groups_is_refused_rather_than_spelled_out(policied):
 
 
 def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
-    """Everything that worked before this must still work untouched --
-    including calling `run` without saying anything about groups."""
+    """Everything that worked before this must still work untouched -- including calling
+    `run` without saying anything about groups.
+    """
     kf = Kingfisher(cfg)
     assert kf.access is None
     assert kf.held_for(None) is None
 
 
 def test_resolving_the_same_groups_twice_gives_the_same_grant(policied):
-    """It was a handle that could be bound once and reused; now the resolution
-    happens per call, so the thing worth asserting is that it is stable."""
+    """It was a handle that could be bound once and reused; now the resolution happens
+    per call, so the thing worth asserting is that it is stable.
+    """
     kf = Kingfisher(policied)
     assert kf._effective_grants(("A",)) == kf._effective_grants(("A",))
 
@@ -180,8 +165,9 @@ def test_a_caller_the_audience_excludes_does_not(policied, monkeypatch):
 
 
 def test_unscoped_still_gets_everything(policied, monkeypatch):
-    """No caller means no narrowing, which is what keeps `declares(None)` the
-    exact answer it was before audiences existed."""
+    """No caller means no narrowing, which is what keeps `declares(None)` the exact
+    answer it was before audiences existed.
+    """
     assert "line_count" in built(policied_kf(policied), monkeypatch, UNSCOPED, "s3")
 
 
@@ -202,11 +188,11 @@ def test_a_definition_with_no_groups_line_is_named(cfg):
 def test_a_subagent_with_no_groups_line_is_named_too(cfg):
     """Both kinds, asserted rather than assumed.
 
-    Mutation testing found this: the walk could stop looking at subagents
-    entirely and the whole suite stayed green, so a delegate reachable by
-    everyone would have gone unreported while the agent beside it was named.
-    The report's whole job is that default-open is not silent, and it was
-    silent for half the definitions it covers.
+    Mutation testing found this: the walk could stop looking at subagents entirely
+    and the whole suite stayed green, so a delegate reachable by everyone would have
+    gone unreported while the agent beside it was named. The report's whole job is
+    that default-open is not silent, and it was silent for half the definitions it
+    covers.
     """
     an_agent(cfg, "assistant")
     delegates = cfg.catalogue_roots["subagents"]
@@ -264,17 +250,19 @@ def reported(kf, groups, name: str):
 
 
 def test_a_caller_is_not_told_about_what_their_groups_took_away(policied):
-    """This report names every offered thing a grant left out -- so measured
-    against the unfiltered catalogue it would hand a caller the exact list of
-    what their groups denied them."""
+    """This report names every offered thing a grant left out -- so measured against the
+    unfiltered catalogue it would hand a caller the exact list of what their groups
+    denied them.
+    """
     kf = Kingfisher(policied)
     names = " ".join(n for _kind, group in reported(kf, ["B"], "w1") for n in group)
     assert "line_count" not in names
 
 
 def test_the_report_still_names_a_builtin_the_request_declined(policied):
-    """An axis no audience controls is unaffected, so the report keeps doing
-    its original job."""
+    """An axis no audience controls is unaffected, so the report keeps doing its
+    original job.
+    """
     kf = Kingfisher(policied)
     session = session_at(kf, "w2")
     held = ("A",)
@@ -350,10 +338,7 @@ def test_a_skill_audience_narrows_the_selection(with_skills):
 
 
 def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkeypatch):
-    """The half a selection alone does not prove. A skill reaches the model
-    through a middleware rather than the tool list, so narrowing the grant is
-    only half the claim -- this asserts what the agent is actually told about.
-    """
+    """The half a selection alone does not prove."""
     captured = capture_build(monkeypatch)
     kf = Kingfisher(with_skills)
     held = ("B",)

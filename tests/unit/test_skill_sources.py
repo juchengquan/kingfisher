@@ -1,15 +1,4 @@
-"""Two skills called `lookup`, from two parties who never met.
-
-Skills arrive from a vendor pack, a shared catalogue, a team's own folder, and
-nobody coordinates names. deepagents merges every source into a dictionary keyed
-by name and lets the last win, so the model was told about one skill where two
-existed. These pin both halves: that both survive, and that naming one
-ambiguously is refused rather than resolved.
-
-A skill can survive that where a tool cannot, and the difference is how each is
-reached -- a tool is called by name through a dictionary, a skill is read by the
-path the listing hands the model.
-"""
+"""Two skills called `lookup`, from two parties who never met."""
 
 from __future__ import annotations
 
@@ -45,8 +34,9 @@ def _two_parties(cfg):
 
 
 def test_a_folder_becomes_its_own_source(cfg):
-    """Nested skills are invisible to a single root source -- deepagents lists
-    one level deep and no further -- so a folder is a source or it is nothing."""
+    """Nested skills are invisible to a single root source -- deepagents lists one level
+    deep and no further -- so a folder is a source or it is nothing.
+    """
     _skill(cfg.skills_dir, "research/lookup", "lookup", "The research way.")
 
     assert skill_registry.sources(cfg.skills_dir) == (
@@ -56,16 +46,14 @@ def test_a_folder_becomes_its_own_source(cfg):
 
 
 def test_a_folder_that_is_itself_a_skill_is_not_a_source(cfg):
-    """Both look like a directory under the root. The difference is one level
-    down: a skill holds the file, a source holds directories that do."""
+    """Both look like a directory under the root."""
     _skill(cfg.skills_dir, "flat", "flat", "At the root.")
 
     assert skill_registry.sources(cfg.skills_dir) == (("catalogue", "/"),)
 
 
 def test_two_parties_can_both_ship_one_name(cfg):
-    """The whole point. Previously the second replaced the first and the model
-    was told about one skill where two existed."""
+    """The whole point."""
     registry = _two_parties(cfg)
 
     assert set(registry.offered) == {"research::lookup", "legal::lookup"}
@@ -74,8 +62,9 @@ def test_two_parties_can_both_ship_one_name(cfg):
 
 
 def test_a_unique_name_stays_bare(cfg):
-    """Every catalogue that exists today has no collisions, and none of them
-    should have to learn a new spelling for that."""
+    """Every catalogue that exists today has no collisions, and none of them should have
+    to learn a new spelling for that.
+    """
     _skill(cfg.skills_dir, "alone", "alone", "Only one of me.")
 
     assert _read(cfg).names == ("alone",)
@@ -89,8 +78,7 @@ def _read(cfg):
 
 
 def test_a_bare_name_that_two_sources_offer_is_refused(cfg):
-    """The safety property. Adding a colliding skill turns a working grant into
-    a loud error rather than silently changing which skill a caller gets."""
+    """The safety property."""
     registry = _two_parties(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source"):
@@ -98,8 +86,9 @@ def test_a_bare_name_that_two_sources_offer_is_refused(cfg):
 
 
 def test_the_refusal_names_both_spellings(cfg):
-    """A refusal that does not say what to write instead is a refusal someone
-    has to go and research."""
+    """A refusal that does not say what to write instead is a refusal someone has to go
+    and research.
+    """
     registry = _two_parties(cfg)
 
     with pytest.raises(CapabilityError) as raised:
@@ -114,8 +103,9 @@ def test_a_qualified_name_resolves(cfg):
 
 
 def test_a_qualified_name_from_the_wrong_source_is_refused(cfg):
-    """Told apart from an unknown skill, because they send a reader to
-    different places: one is a typo, the other is the wrong party."""
+    """Told apart from an unknown skill, because they send a reader to different places:
+    one is a typo, the other is the wrong party.
+    """
     registry = _two_parties(cfg)
 
     with pytest.raises(CapabilityError, match="no skill 'lookup' in 'sales'"):
@@ -146,10 +136,7 @@ def test_a_request_naming_it_bare_is_refused_at_build(cfg, session_dir):
 
 
 def test_a_broken_skill_inside_a_folder_is_still_reported(cfg):
-    """`unloadable` read `repository.names`, which lists the root and stops. A
-    skill one folder down with no `description` was therefore dropped by
-    deepagents, absent from `names`, and reported by nobody -- the silence this
-    registry exists to end, reopened one directory lower."""
+    """`unloadable` read `repository.names`, which lists the root and stops."""
     _skill(cfg.skills_dir, "research/fine", "fine", "Loads.")
     (cfg.skills_dir / "research" / "broken").mkdir(parents=True)
     (cfg.skills_dir / "research" / "broken" / "SKILL.md").write_text(
@@ -166,13 +153,8 @@ def test_a_broken_skill_inside_a_folder_is_still_reported(cfg):
 
 
 def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
-    """`before_agent` and `abefore_agent` each build their own dictionary --
-    neither calls the other -- so overriding one leaves the other collapsing.
-
-    It fails *open*: a synchronous run would offer both skills and an `astream`
-    run would silently offer one. Driven rather than asserted by inspection,
-    because "it delegates" is exactly the assumption that made the shell
-    sandbox nest itself twice while thirteen tests passed.
+    """`before_agent` and `abefore_agent` each build their own dictionary -- neither
+    calls the other -- so overriding one leaves the other collapsing.
     """
     _two_parties(cfg)
     backend = build_backend(replace(cfg, skills_enabled=True), session_dir)
@@ -193,9 +175,7 @@ def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
 
 
 def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
-    """Both load; one is shown. The filter is what a grant buys, and what the
-    model is shown went unasserted until a version that filtered *everything*
-    away passed the whole suite."""
+    """Both load; one is shown."""
     _two_parties(cfg)
     backend = build_backend(replace(cfg, skills_enabled=True), session_dir)
     middleware = NarrowedSkills(
@@ -215,14 +195,8 @@ def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
 
 
 def test_a_nested_skill_is_denied_at_the_path_it_actually_has(cfg, session_dir, monkeypatch):
-    """`_skill_denials` wrote `/skills/{name}/**`, which is where a skill sits
-    only while every skill sits at the top level. A skill in a folder lives at
-    `/skills/research/lookup/`, so the rule denied a path that does not exist
-    and the file tools could still read it.
-
-    Two rules also have to stay scoped to a route: `FilesystemMiddleware`
-    refuses *every* permission when the backend can execute unless each one is,
-    so a single unrouted path takes the whole deny list down with it.
+    """`_skill_denials` wrote `/skills/{name}/**`, which is where a skill sits only
+    while every skill sits at the top level.
     """
     _two_parties(cfg)
     captured = capture_build(monkeypatch)

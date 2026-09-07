@@ -1,22 +1,4 @@
-"""Where the seeder gets its files from.
-
-A directory, given or defaulted. `seed(cfg)` uses the definitions that ship with
-kingfisher; `seed(cfg, path)` uses whatever is at that path. Both write the
-catalogue example, because that is kingfisher's own and a caller's directory has
-no reason to carry it.
-
-This replaces `test_asset_packs`. The source was an entry-point group for a
-while: any distribution could register as a pack and seeding would copy from
-every one it found, so a team could publish definitions and have them seed
-alongside the shipped ones. A path covers the same ground without a wheel, a
-publish step, or metadata — a deployment points at its own directory — and the
-group went with the separate distribution.
-
-What went with it is worth naming, since nothing here can miss it: two packs
-seeding together, and the refusal when two claimed the same file. Neither can
-happen against a single directory. If a second publisher ever wants in, the
-group comes back and so do those tests.
-"""
+"""Where the seeder gets its files from."""
 
 from __future__ import annotations
 
@@ -40,17 +22,7 @@ def _definitions(root: Path, *entries: str) -> Path:
 
 
 def test_nothing_ships_to_seed_from(shipped):
-    """This asserted the opposite until the definitions left the wheel.
-
-    `kinds_at` answers about a directory now, because that is the only kind of
-    answer there is: no set arrives with the install, so the question "did they
-    come with it" has no subject. It is `assets_examples/` this reads, which is where
-    a reader is pointed.
-
-    Agents come first, and the order is `Definitions`' field order rather than
-    anything chosen here. It happens to be the useful one: the agent is what a
-    request names, and the other three are what it selects from.
-    """
+    """This asserted the opposite until the definitions left the wheel."""
     assert seeding.kinds_at(shipped) == ("agents", "skills", "subagents", "tools")
     # What the claim actually is, rather than "no such directory". A stale
     # `__pycache__` left by a checkout from before the move would fail that
@@ -68,13 +40,8 @@ def test_seeding_from_the_worked_set_writes_all_of_it(cfg, shipped):
 
 
 def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tmp_path):
-    """It is kingfisher's own, not a definition, so it does not come from the
-    source -- and a caller's own directory has no reason to hold one.
-
-    It arrives with the *layout* now rather than with the copy. The distinction
-    matters because seeding can decline: a deployment naming no definitions
-    still has to be told where to write `models.yaml`, and that instruction is
-    this file.
+    """It is kingfisher's own, not a definition, so it does not come from the source --
+    and a caller's own directory has no reason to hold one.
     """
     from kingfisher.infrastructure.workspace.layout import EXAMPLE, ensure_layout
 
@@ -86,17 +53,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
 
 
 def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
-    """Neither a policy nor an example, and the second half is the newer half.
-
-    `groups` was never a definition kind, so seeding one would make adopting
-    access control something a deployment inherits rather than does -- that part
-    has always been true. What changed is that no *example* arrives either: the
-    one that shipped declared a vocabulary of its own, which could never be the
-    vocabulary a given workspace's definitions ask for.
-
-    So `seed` says what to write instead of pointing at a file, and this asserts
-    the file it stopped pointing at does not come back by another route.
-    """
+    """Neither a policy nor an example, and the second half is the newer half."""
     from kingfisher.infrastructure.workspace.layout import ensure_layout
 
     mine = _definitions(tmp_path / "mine", "skills/only/SKILL.md")
@@ -113,13 +70,7 @@ def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
 
 
 def test_seed_will_not_invent_a_source(cfg):
-    """The parameter is required, with no default and no `None` branch.
-
-    Stated in the signature rather than checked at runtime, so a caller who
-    forgets is caught by the type checker instead of by an empty workspace an
-    hour later. Asserted here because the type checker does not run in this
-    suite, and a default reappearing would otherwise be silent.
-    """
+    """The parameter is required, with no default and no `None` branch."""
     import inspect
 
     parameter = inspect.signature(seeding.seed).parameters["source"]
@@ -128,9 +79,10 @@ def test_seed_will_not_invent_a_source(cfg):
 
 
 def test_an_explicit_directory_beats_the_variable(cfg, tmp_path):
-    """The ordinary shape of a flag against a variable, and the one
-    `__main__` already documents for `.env`: an explicit argument must not be
-    quietly replaced by something the caller may not have known was set."""
+    """The ordinary shape of a flag against a variable, and the one `__main__` already
+    documents for `.env`: an explicit argument must not be quietly replaced by
+    something the caller may not have known was set.
+    """
     from dataclasses import replace
 
     configured = _definitions(tmp_path / "configured", "skills/theirs/SKILL.md")
@@ -151,12 +103,7 @@ def test_the_variable_is_used_when_nothing_was_asked_for(cfg, tmp_path):
 
 
 def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
-    """On `WorkspacePaths`, not only on `Config`.
-
-    Seeding a fresh workspace runs before a model catalogue can be read -- the
-    catalogue is a file inside the workspace -- so a source reachable only from
-    a whole `Config` would be unreachable exactly when seeding happens.
-    """
+    """On `WorkspacePaths`, not only on `Config`."""
     from kingfisher.application.config import paths_from_env
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
@@ -166,10 +113,7 @@ def test_the_variable_reaches_a_first_run(monkeypatch, tmp_path):
 
 
 def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
-    """A workspace seeded once runs for years without this being set. Only the
-    act of seeding needs it, so `paths_from_env` must not refuse -- that is the
-    difference between this and `KINGFISHER_WORKSPACE`, which is required
-    because no default can supply it."""
+    """A workspace seeded once runs for years without this being set."""
     from kingfisher.application.config import paths_from_env
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
@@ -179,17 +123,7 @@ def test_no_variable_is_not_an_error_by_itself(monkeypatch, tmp_path):
 
 
 def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, monkeypatch):
-    """The advice has to be true from where the reader is standing.
-
-    `./assets_examples` exists in a checkout and nowhere else, and the reader most
-    likely to hit this refusal is the one who installed the package -- who has
-    none. Naming it unconditionally would repeat the fault the four "try
-    `kingfisher seed`" messages were rewritten to stop making: advice that fails
-    the same way the thing it is advising about failed.
-
-    Both halves, because they fail separately -- a suffix that never appears is
-    as wrong as one that always does.
-    """
+    """The advice has to be true from where the reader is standing."""
     from dataclasses import replace
 
     from kingfisher.infrastructure.workspace.seeding import SUGGESTION
@@ -210,17 +144,7 @@ def test_the_refusal_names_a_worked_set_only_when_there_is_one(cfg, tmp_path, mo
 
 
 def test_the_refusal_says_where_your_own_definitions_go(cfg, tmp_path, monkeypatch):
-    """The half of the advice these messages never gave.
-
-    A reader stopped here has two things to learn -- where to point the
-    variable, and where to put definitions they fetched from somewhere else.
-    Every wording of this refusal has answered the first and left the second to
-    `assets/README.md`, which is inside the directory the reader has not found.
-
-    Conditional for the reason `SUGGESTION` is conditional, and asserted from
-    both sides for the reason that one is: a clause that never appears is as
-    wrong as one that always does.
-    """
+    """The half of the advice these messages never gave."""
     from dataclasses import replace
 
     from kingfisher.infrastructure.workspace.seeding import DESTINATION
@@ -240,8 +164,7 @@ def test_the_refusal_says_where_your_own_definitions_go(cfg, tmp_path, monkeypat
 
 
 def test_the_refusal_says_both_ways_of_answering_it(cfg, tmp_path, monkeypatch):
-    """A variable and a flag. Naming only one leaves a reader who cannot set
-    environment variables -- a CI step, a container -- with no way through."""
+    """A variable and a flag."""
     from dataclasses import replace
 
     monkeypatch.chdir(tmp_path)
@@ -256,8 +179,9 @@ def test_the_refusal_says_both_ways_of_answering_it(cfg, tmp_path, monkeypatch):
 
 
 def test_a_given_directory_is_seeded_instead(cfg, tmp_path):
-    """The reason the parameter exists: a deployment with its own definitions
-    needs no package, no metadata and no publish step."""
+    """The reason the parameter exists: a deployment with its own definitions needs no
+    package, no metadata and no publish step.
+    """
     mine = _definitions(tmp_path / "mine", "skills/mine/SKILL.md")
 
     written = seeding.seed(cfg, mine).written
@@ -269,15 +193,15 @@ def test_a_given_directory_is_seeded_instead(cfg, tmp_path):
 
 
 def test_a_source_that_is_not_a_directory_is_refused(cfg, tmp_path):
-    """Loudly, and before anything is written. A caller who mistyped a path
-    should not discover it as an empty workspace an hour later."""
+    """Loudly, and before anything is written."""
     with pytest.raises(ConfigError, match="nothing to seed from"):
         seeding.seed(cfg, tmp_path / "no-such-directory")
 
 
 def test_nothing_is_written_before_that_refusal(cfg, tmp_path):
-    """The ordering `_admit` keeps for a turn: everything able to reject runs
-    first, so a refusal leaves nothing behind to clean up."""
+    """The ordering `_admit` keeps for a turn: everything able to reject runs first, so
+    a refusal leaves nothing behind to clean up.
+    """
     with pytest.raises(ConfigError):
         seeding.seed(cfg, tmp_path / "no-such-directory")
 

@@ -17,14 +17,7 @@ from kingfisher.domain.capabilities import (
 
 
 def test_the_two_ends_are_all_and_none():
-    """`ALL` and `None` are opposite ends, and every field now starts at the
-    same one.
-
-    `subagents` started at `None` while a request was the only thing that could
-    say which delegates to wire, and each one costs a compiled graph. An agent
-    declares its own roster, so `"*"` means that roster -- small and deliberate
-    -- rather than whatever the workspace happens to hold.
-    """
+    """`ALL` and `None` are opposite ends, and every field now starts at the same one."""
     assert Capabilities().tools == ALL
     assert Capabilities().subagents == ALL
     assert Capabilities().is_unrestricted
@@ -81,19 +74,13 @@ def test_intersect_handles_each_dimension_independently():
 
 
 def test_capabilities_are_hashable_and_comparable():
-    """Value object semantics: two identical grants are the same grant.
-
-    The list is deliberately off-contract -- the declared field type is a
-    tuple, and this pins the normalisation that lets a service hand us a
-    freshly deserialised JSON array anyway.
-    """
+    """Value object semantics: two identical grants are the same grant."""
     assert Capabilities(tools=("a",)) == Capabilities(tools=["a"])  # ty: ignore[invalid-argument-type]
     assert len({Capabilities(tools=("a",)), Capabilities(tools=("a",))}) == 1
 
 
 def test_memory_is_a_switch_not_a_selection():
-    """It is one file, mounted or not -- there are no names to choose between.
-    `None` still means "no opinion", so the default stays free."""
+    """It is one file, mounted or not -- there are no names to choose between."""
     assert Capabilities().memory is None
     assert Capabilities().is_unrestricted
     assert not Capabilities(memory=False).is_unrestricted
@@ -101,8 +88,9 @@ def test_memory_is_a_switch_not_a_selection():
 
 
 def test_a_refusal_of_memory_wins_from_either_side():
-    """`False` is the only value that subtracts, which is what makes this
-    narrowing rather than negotiation."""
+    """`False` is the only value that subtracts, which is what makes this narrowing
+    rather than negotiation.
+    """
     granted = Capabilities(memory=False)
     assert granted.intersect(Capabilities(memory=True)).memory is False
     assert Capabilities(memory=True).intersect(granted).memory is False
@@ -136,16 +124,18 @@ def test_registered_and_granted_names_go_through():
 
 
 def test_a_name_nothing_registered_is_a_mistake_in_the_definition():
-    """It names something that does not exist, so it cannot be honoured and
-    must not be ignored."""
+    """It names something that does not exist, so it cannot be honoured and must not be
+    ignored.
+    """
     with pytest.raises(CapabilityError, match="unregistered middleware: ghost"):
         approved_middleware(("ghost",), registered=("audit",), granted=None, subject="subagent 'r'")
 
 
 def test_a_registered_name_that_was_not_granted_is_refused():
-    """Not the "caller was narrower" case that quietly drops a skill: running
-    with silently less middleware than the definition asked for could mean
-    running without the audit hook it was written to have."""
+    """Not the "caller was narrower" case that quietly drops a skill: running with
+    silently less middleware than the definition asked for could mean running without
+    the audit hook it was written to have.
+    """
     with pytest.raises(CapabilityError, match="may not use: ratelimit"):
         approved_middleware(
             ("ratelimit",),
@@ -215,14 +205,14 @@ def test_an_empty_grant_withholds_all_of_it():
 
 
 def test_a_grant_naming_something_gone_reports_only_what_is_there():
-    """The mirror of `unknown`, and deliberately silent about that case: a name
-    that does not exist is refused at build, which is a louder answer."""
+    """The mirror of `unknown`, and deliberately silent about that case: a name that
+    does not exist is refused at build, which is a louder answer.
+    """
     assert withheld(("a", "vanished"), offered=("a", "b")) == ("b",)
 
 
 def test_a_grant_written_today_goes_stale_when_a_tool_arrives():
-    """The case that motivated this. The grant does not change; what it means
-    does."""
+    """The case that motivated this."""
     offered_today = ("execute", "ls", "read_file")
     grant = tuple(n for n in offered_today if n != "execute")  # "everything but the shell"
 
@@ -254,8 +244,9 @@ def test_excluding_everything_grants_none_of_it():
 
 
 def test_a_name_that_excludes_nothing_is_refused():
-    """`--without-tools exec` is a typo that would otherwise grant everything
-    quietly, which is the mirror of what `Capabilities.unknown` refuses."""
+    """`--without-tools exec` is a typo that would otherwise grant everything quietly,
+    which is the mirror of what `Capabilities.unknown` refuses.
+    """
     with pytest.raises(CapabilityError, match="cannot exclude unknown name"):
         all_but(("exec",), offered=("execute", "ls"))
 
@@ -267,15 +258,17 @@ def test_the_refusal_names_what_is_actually_on_offer():
 
 def test_it_is_the_same_difference_withheld_computes():
     """One rule, two directions: `withheld` turns a grant into what it left out,
-    `all_but` turns what to leave out into a grant."""
+    `all_but` turns what to leave out into a grant.
+    """
     offered = ("a", "b", "c")
 
     assert all_but(("b",), offered=offered) == withheld(("b",), offered=offered)
 
 
 def test_the_result_is_an_ordinary_grant_that_narrowing_still_clamps():
-    """What it produces is a whitelist like any other, so a deployment's grant
-    still caps it -- subtraction is a way to write one, not a way past one."""
+    """What it produces is a whitelist like any other, so a deployment's grant still
+    caps it -- subtraction is a way to write one, not a way past one.
+    """
     asked = Capabilities(tools=all_but(("execute",), offered=("execute", "ls", "read_file")))
     granted = Capabilities(builtin_tools=("ls",))
 
@@ -307,8 +300,7 @@ def test_a_name_nothing_offers_is_refused_whoever_named_it(kind, subject):
 
 
 def test_the_refusal_says_all_four_things_a_reader_needs():
-    """Who named it, what kind it was, which name was wrong, and what the real
-    ones are. A message missing any of the four sends someone to the wrong file."""
+    """Who named it, what kind it was, which name was wrong, and what the real ones are."""
     with pytest.raises(CapabilityError) as raised:
         refuse_unoffered(
             ("tabluar-qa",),
@@ -324,10 +316,7 @@ def test_the_refusal_says_all_four_things_a_reader_needs():
 
 
 def test_the_offered_set_is_not_claimed_to_belong_to_anyone():
-    """`offered:` rather than "this workspace offers" or "this request offers".
-    Who owns the set differs by kind -- a workspace offers tools and skills, a
-    request offers the subagents it activated -- so one message serving five
-    callers cannot name an owner without being wrong for some of them."""
+    """`offered:` rather than "this workspace offers" or "this request offers"."""
     with pytest.raises(CapabilityError) as raised:
         refuse_unoffered(("nope",), offered=("real",), kind="tool", subject="this request")
 
@@ -338,8 +327,7 @@ def test_the_offered_set_is_not_claimed_to_belong_to_anyone():
 
 
 def test_a_caller_that_can_say_more_than_names_says_it():
-    """Tools know which file each one came from. Skills and subagents have
-    nowhere to point yet, so they pass nothing and get the names."""
+    """Tools know which file each one came from."""
     with pytest.raises(CapabilityError) as raised:
         refuse_unoffered(
             ("nope",),
@@ -358,8 +346,7 @@ def test_names_that_are_all_offered_say_nothing():
 
 
 def test_every_unknown_name_is_listed_not_just_the_first():
-    """Someone fixing a definition wants the whole list, not one round trip per
-    typo."""
+    """Someone fixing a definition wants the whole list, not one round trip per typo."""
     with pytest.raises(CapabilityError, match="a, b"):
         refuse_unoffered(("a", "b"), offered=("c",), kind="subagent", subject="x")
 
@@ -368,8 +355,9 @@ def test_every_unknown_name_is_listed_not_just_the_first():
 
 
 def test_a_wildcard_takes_everything_registered_when_nothing_narrowed_it():
-    """`["*"]` is a definition asking for whatever this deployment has, which
-    is a different sentence from naming one."""
+    """`["*"]` is a definition asking for whatever this deployment has, which is a
+    different sentence from naming one.
+    """
     approved = approved_middleware(
         ALL, registered=("audit", "ratelimit"), granted=ALL, subject="agent 'a'"
     )
@@ -378,17 +366,8 @@ def test_a_wildcard_takes_everything_registered_when_nothing_narrowed_it():
 
 
 def test_a_wildcard_narrowed_by_the_request_drops_quietly():
-    """The case the two refusals above do not cover, and the one a reader is
-    most likely to assume they do.
-
-    A *named* middleware the request did not grant raises. A wildcard just
-    resolves smaller, silently. Both are defensible and they are not the same
-    rule: `["*"]` asks for a set rather than for names, so there is no
-    particular name to refuse on behalf of.
-
-    Written down because the alternative reading is worse. If a wildcard
-    refused whenever anything was withheld, no deployment could keep a hook
-    from one caller without breaking every definition that wrote a star.
+    """The case the two refusals above do not cover, and the one a reader is most likely
+    to assume they do.
     """
     approved = approved_middleware(
         ALL, registered=("audit", "ratelimit"), granted=("audit",), subject="agent 'a'"
@@ -398,19 +377,7 @@ def test_a_wildcard_narrowed_by_the_request_drops_quietly():
 
 
 def test_a_wildcard_can_resolve_to_nothing_and_says_nothing():
-    """The end of that road, and the reason this branch is worth three tests.
-
-    A definition that asked for every hook this deployment has runs with none
-    of them, and no refusal is raised -- reachable from a definition, since
-    `middleware: ["*"]` parses to `ALL` in both formats, and reachable from
-    outside, since the HTTP surface lets a client narrow this axis.
-
-    Deliberate, on the same argument as the test above: a star asked for
-    whatever there was, and nothing is what there was. Not reported back
-    either -- the withheld report is for what a caller could have asked for
-    differently, and a caller cannot register a middleware. See
-    `_withheld_by_kind`.
-    """
+    """The end of that road, and the reason this branch is worth three tests."""
     assert approved_middleware(
         ALL, registered=("audit",), granted=(), subject="agent 'a'"
     ) == ()

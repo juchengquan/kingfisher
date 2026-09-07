@@ -10,8 +10,9 @@ from kingfisher.domain.session import Session
 
 
 def test_caller_supplied_turn_id_wins_and_is_idempotent(workspace, dirs):
-    """A service passes its own request id, so a retry reuses the same turn
-    rather than forking a second one."""
+    """A service passes its own request id, so a retry reuses the same turn rather than
+    forking a second one.
+    """
     session = Session.open(workspace, "sess", dirs)
 
     first = session.allocate_turn(dirs, "req-abc")
@@ -23,9 +24,7 @@ def test_caller_supplied_turn_id_wins_and_is_idempotent(workspace, dirs):
 
 
 def test_concurrent_allocation_never_collides(workspace, dirs):
-    """Scanning for the highest id and then creating it is a race. Allocation
-    goes through mkdir, which fails if the name is taken, so two callers
-    cannot both decide they are t001."""
+    """Scanning for the highest id and then creating it is a race."""
     session = Session.open(workspace, "busy", dirs)
 
     with futures.ThreadPoolExecutor(max_workers=16) as pool:
@@ -40,8 +39,9 @@ def test_allocated_ids_are_sequential_and_readable(workspace, dirs):
 
 
 def test_a_turn_knows_its_virtual_paths(workspace, dirs):
-    """Virtual paths are machine-independent, so they can go in a task message
-    without pinning the prompt to this host."""
+    """Virtual paths are machine-independent, so they can go in a task message without
+    pinning the prompt to this host.
+    """
     turn = Session.open(workspace, "s", dirs).allocate_turn(dirs, "t001")
 
     assert turn.virtual_dir == "/runs/t001"
@@ -51,9 +51,10 @@ def test_a_turn_knows_its_virtual_paths(workspace, dirs):
 
 
 def test_a_turn_is_addressed_without_its_session(workspace, dirs):
-    """The session directory is the backend root, so naming the session in a
-    virtual path would address outside the root — and would put the id into
-    the prompt, changing the cached prefix on every session."""
+    """The session directory is the backend root, so naming the session in a virtual
+    path would address outside the root — and would put the id into the prompt,
+    changing the cached prefix on every session.
+    """
     turn = Session.open(workspace, "s1", dirs).allocate_turn(dirs)
 
     assert turn.directory == workspace / "sessions" / "s1" / "runs" / "t001"
@@ -98,14 +99,7 @@ def test_discard_keeps_the_session_whole_when_the_thread_survives(workspace, dir
 
 
 def test_turn_allocation_stays_atomic_through_the_port(workspace):
-    """The retry loop is the rule; `create_exclusive` is the primitive it needs.
-
-    Turn ids used to be allocated by `mkdir` failing on a taken name. Moving
-    the I/O out could have become "scan, then create" in a caller -- which is
-    exactly the race the loop exists to avoid. This proves the guarantee
-    survived the move: a port that keeps losing the name still yields a
-    distinct turn, and never returns one it did not claim.
-    """
+    """The retry loop is the rule; `create_exclusive` is the primitive it needs."""
 
     class Contended:
         """Loses the first two races, then behaves."""
@@ -145,8 +139,7 @@ def test_turn_allocation_stays_atomic_through_the_port(workspace):
 
 
 def test_discard_will_not_report_success_without_a_way_to_delete(workspace, dirs):
-    """`dirs` is required, not optional. An earlier draft defaulted it to None
-    and returned None -- a session that deleted nothing and said it had."""
+    """`dirs` is required, not optional."""
     session = Session.open(workspace, "kept", dirs)
 
     with pytest.raises(TypeError):
@@ -156,10 +149,8 @@ def test_discard_will_not_report_success_without_a_way_to_delete(workspace, dirs
 
 
 def test_the_shell_form_of_a_run_directory_is_the_virtual_one_without_its_slash(workspace, dirs):
-    """The shell starts in the session root, which is what virtual `/` names,
-    so the two forms differ by exactly one character. Asserted against the real
-    `Turn` because `test_service` drives a hand-written double, and a double
-    that drifts is how the message and the filesystem come to disagree.
+    """The shell starts in the session root, which is what virtual `/` names, so the two
+    forms differ by exactly one character.
     """
     session = Session.open(workspace, "s1", dirs)
     turn = session.allocate_turn(dirs)
@@ -170,11 +161,8 @@ def test_the_shell_form_of_a_run_directory_is_the_virtual_one_without_its_slash(
 
 
 def test_the_turn_message_names_both_forms(workspace, dirs):
-    """Measured over ten runs of one task: told only the virtual path, the agent
-    passed it to `execute` 4 times in 10. Each failed with `No such file or
-    directory` and cost roughly three times the whole task to recover -- +5.2
-    model calls, +19s, +56k input tokens. The 6 that used the shell form first
-    never failed once.
+    """Measured over ten runs of one task: told only the virtual path, the agent passed
+    it to `execute` 4 times in 10.
     """
     from kingfisher.application.turn import turn_message
 

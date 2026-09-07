@@ -1,13 +1,4 @@
-"""One answer to "what does this workspace offer", not two.
-
-`--list` and `--without-skills` used to work it out apart: each built its own
-agent, walked its own catalogue, and nothing made the two agree. The one that
-mattered was the subtraction, which has to be taken from the set the run will
-actually offer or it refuses a name the run did not have.
-
-These hold the record to being that one answer, and to carrying a broken
-catalogue rather than raising over the rest of the inventory.
-"""
+"""One answer to "what does this workspace offer", not two."""
 
 from __future__ import annotations
 
@@ -33,10 +24,9 @@ TOOLS = [probe_one]
 def _populate(cfg) -> None:
     """Put one of each kind in the workspace.
 
-    Every axis, deliberately. Written against an empty workspace, the assertion
-    below reads `() == ()` on three of the four and passes whatever the code
-    does -- which is what a mutation caught: emptying `offered["skills"]`
-    outright left it green.
+    Every axis, deliberately. Written against an empty workspace, the assertion below
+    reads `() == ()` on three of the four and passes whatever the code does -- which
+    is what a mutation caught: emptying `offered["skills"]` outright left it green.
     """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
@@ -58,17 +48,7 @@ def _populate(cfg) -> None:
 
 
 def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):
-    """The guard this whole record exists for.
-
-    Two implementations of "what may a request activate here" is one more than
-    can be kept in step, and the drift is invisible: `--without-skills X`
-    refusing a name that `--list` had just printed, or worse, letting one
-    through. Derived rather than stored, so they cannot come apart.
-
-    Each axis is asserted non-empty first. Without that this passes on an empty
-    workspace no matter what `offered` returns, which is how it survived having
-    `skills` replaced with `()`.
-    """
+    """The guard this whole record exists for."""
     _populate(cfg)
 
     found = inventory(cfg)
@@ -81,12 +61,7 @@ def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):
 
 
 def test_the_driver_and_the_record_agree_about_what_is_offered(cfg, capsys):
-    """The two callers, against each other rather than against a literal.
-
-    `the driver` prints one and subtracts from the other. Asserting both against
-    the same record is what says the split into printer and computation did not
-    quietly change either.
-    """
+    """The two callers, against each other rather than against a literal."""
     from tests.integration import driver
 
     _populate(cfg)
@@ -104,12 +79,7 @@ def test_the_driver_and_the_record_agree_about_what_is_offered(cfg, capsys):
 
 
 def test_a_tool_catalogue_that_will_not_load_is_carried_not_raised(cfg):
-    """A listing is where someone goes *because* something is broken.
-
-    Raising here put a traceback over the rest of the inventory. The error is a
-    field, so the printer decides what to say -- and skills and subagents are
-    still answered, which is the half a traceback took away.
-    """
+    """A listing is where someone goes *because* something is broken."""
     directory = tools_dir(cfg) / "research"
     directory.mkdir(parents=True)
     (directory / "t.py").write_text(
@@ -136,13 +106,9 @@ def test_a_subagent_catalogue_that_will_not_load_is_carried_too(cfg):
 
 
 def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
-    """An inventory that says a workspace is fine while a run refuses it is the
-    failure this whole file exists to prevent, and a cycle was exactly that: it
-    is checked when an agent is built, and `--list` does not build one.
-
-    Not caught by reading the definitions, which is why it needs asking for. A
-    file naming a helper is well-formed on its own -- the loop only exists
-    across files, so no single parse can see it.
+    """An inventory that says a workspace is fine while a run refuses it is the failure
+    this whole file exists to prevent, and a cycle was exactly that: it is checked
+    when an agent is built, and `--list` does not build one.
     """
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "a")):
@@ -160,8 +126,7 @@ def test_a_delegation_cycle_is_carried_like_any_other_failure(cfg):
 
 
 def test_a_workspace_with_no_cycle_reports_none(cfg):
-    """The negative control. A definition naming a helper, and a helper naming
-    its own, is the shape a cycle is written in -- and is perfectly legal."""
+    """The negative control."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
     for name, helper in (("a", "b"), ("b", "c")):
         (subagents_dir(cfg) / f"{name}.yaml").write_text(
@@ -177,9 +142,9 @@ def test_a_workspace_with_no_cycle_reports_none(cfg):
 
 
 def test_answering_leaves_no_session_behind(cfg):
-    """An agent needs a session to root its backend at, and what a workspace
-    *offers* is a question about the workspace. A session left here is one
-    `keep_runs` would eventually reap a real one to make room for."""
+    """An agent needs a session to root its backend at, and what a workspace *offers* is
+    a question about the workspace.
+    """
     before = set((cfg.workspace / "sessions").glob("*")) if (
         cfg.workspace / "sessions"
     ).is_dir() else set()
@@ -193,9 +158,10 @@ def test_answering_leaves_no_session_behind(cfg):
 
 
 def test_a_tool_says_which_module_defined_it(cfg):
-    """Not decoration: a folder cannot reach a tool's name, so a package
-    contributes tools under names that are not its own and `csv_columns` comes
-    from `csv_profile/` with no slash in sight."""
+    """Not decoration: a folder cannot reach a tool's name, so a package contributes
+    tools under names that are not its own and `csv_columns` comes from
+    `csv_profile/` with no slash in sight.
+    """
     (tools_dir(cfg)).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
 
@@ -205,14 +171,7 @@ def test_a_tool_says_which_module_defined_it(cfg):
 
 
 def test_the_record_says_where_each_catalogue_resolved_to(cfg):
-    """A catalogue can be deployed outside the workspace and shared. Three bugs
-    have come from a path going stale, so the answer names them.
-
-    All four kinds, which it could not before: the record carried
-    `skills_source`, `subagents_source` and `agents_source` as loose strings and
-    had no field for `tools` at all, so the one catalogue nobody could see was
-    the one nobody had added a line for.
-    """
+    """A catalogue can be deployed outside the workspace and shared."""
     found = inventory(cfg)
 
     assert found.origins.skills.path == cfg.skills_dir
@@ -221,8 +180,7 @@ def test_the_record_says_where_each_catalogue_resolved_to(cfg):
 
 
 def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
-    """Frozen, and its mappings are proxies. A caller that could edit the
-    sources in place would be editing what the next caller reads."""
+    """Frozen, and its mappings are proxies."""
     found = inventory(cfg)
 
     with pytest.raises(AttributeError):
@@ -232,9 +190,7 @@ def test_the_record_cannot_be_edited_after_it_is_handed_back(cfg):
 
 
 def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
-    """A caller that already has one hands it over. Resolving again is not just
-    waste -- it is a second read of the same directories, which is how the two
-    halves came to disagree in the first place."""
+    """A caller that already has one hands it over."""
     from kingfisher.application import inventory as module
     from kingfisher.infrastructure.catalogue import resolve_definitions
 
@@ -251,9 +207,10 @@ def test_a_resolved_catalogue_is_not_resolved_twice(cfg, monkeypatch):
 
 
 def test_the_record_is_the_only_shape_callers_need(cfg):
-    """`Inventory` is what phase 2 makes public, so it is worth saying out loud
-    that it carries every field the driver prints -- a caller who has one needs
-    nothing else from the library to render a listing."""
+    """`Inventory` is what phase 2 makes public, so it is worth saying out loud that it
+    carries every field the driver prints -- a caller who has one needs nothing else
+    from the library to render a listing.
+    """
     found = inventory(cfg)
 
     assert isinstance(found, Inventory)
@@ -271,17 +228,7 @@ def test_the_record_is_the_only_shape_callers_need(cfg):
 
 
 def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
-    """What phase 2 is for, and what the CLI will be held to.
-
-    A consumer -- the server today, the shipped command next -- may write
-    `from kingfisher import X` and nothing deeper. If seeding or the inventory
-    needed a reach into `infrastructure`, the claim that any caller can do this
-    was never true; it simply had nothing testing it.
-
-    Imported here the way a consumer would, not through the modules that define
-    them, so a name quietly dropped from `_EXPORTS` fails this rather than
-    passing on the module import.
-    """
+    """What phase 2 is for, and what the CLI will be held to."""
     from kingfisher import Inventory, Seeded, inventory, kinds_at, seed
 
     written = seed(cfg, shipped)
@@ -298,10 +245,10 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
 def test_the_public_names_cost_no_provider_sdk_to_reach(cfg):
     """Reaching them must stay cheap; *calling* `inventory` is another matter.
 
-    Answering builds an agent, so `harness.agent` is imported inside the
-    function rather than at module scope. Measured at 21-50ms and 148-192
-    modules against 3,100 for a provider -- the split that keeps `--help` from
-    paying for a model it will never build.
+    Answering builds an agent, so `harness.agent` is imported inside the function
+    rather than at module scope. Measured at 21-50ms and 148-192 modules against
+    3,100 for a provider -- the split that keeps `--help` from paying for a model it
+    will never build.
     """
     import subprocess
     import sys

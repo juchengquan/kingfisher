@@ -1,12 +1,4 @@
-"""What keeps `execute` off the rest of the host.
-
-The behavioural tests here run a real shell through a real sandbox rather than
-inspecting the profile text, because a profile that parses is not the same claim
-as a file that cannot be read. They are macOS-only for the same reason the
-feature is: `sandbox-exec` is what this platform offers, and a test that asserted
-the wrapping without exercising it would pass on a machine where the boundary
-does not exist.
-"""
+"""What keeps `execute` off the rest of the host."""
 
 from __future__ import annotations
 
@@ -64,8 +56,7 @@ def test_off_is_warned_about_on_every_start(cfg, tmp_path):
 
 
 def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
-    """A container that mounts only the workspace has provided the boundary.
-    Warning there would train operators to ignore the warning."""
+    """A container that mounts only the workspace has provided the boundary."""
     chosen = confinement.resolve(
         confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
@@ -94,9 +85,7 @@ def test_auto_confines_and_says_nothing(cfg, tmp_path):
 
 
 def test_the_profile_lives_in_harness_state_not_the_workspace(cfg, tmp_path):
-    """A boundary the agent can edit is not a boundary. `/runs` and `/derived`
-    are writable through the file tools; the state directory is not addressable
-    at all."""
+    """A boundary the agent can edit is not a boundary."""
     confinement.resolve(
         confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
@@ -108,10 +97,8 @@ def test_the_profile_lives_in_harness_state_not_the_workspace(cfg, tmp_path):
 
 
 def test_the_interpreter_stays_readable_or_python_stops_working(cfg, tmp_path):
-    """A venv's `python3` is usually a symlink onto an interpreter installed
-    under the home -- uv puts it in `~/.local/share/uv/`. Denying the home
-    without re-allowing `sys.base_prefix` leaves the agent unable to run Python
-    at all, which is how this was found.
+    """A venv's `python3` is usually a symlink onto an interpreter installed under the
+    home -- uv puts it in `~/.local/share/uv/`.
     """
     import sys
 
@@ -133,13 +120,8 @@ def test_paths_a_deployment_put_on_path_stay_readable(cfg, tmp_path):
 
 @macos
 def test_the_shell_cannot_read_a_secret_outside_the_workspace(cfg, session_dir, tmp_path):
-    """The measured hole: unconfined, this shell could read the deployment's own
-    API keys, `~/.aws`, and the GitHub CLI's token. `http_fetch` is a registered
-    tool, so reading and sending are one turn apart.
-
-    Written against a file in the operator's home rather than a real credential,
-    so the test proves the boundary without depending on what happens to be on
-    the machine.
+    """The measured hole: unconfined, this shell could read the deployment's own API
+    keys, `~/.aws`, and the GitHub CLI's token.
     """
     secret = Path.home() / ".kingfisher-confinement-probe"
     secret.write_text("token", encoding="utf-8")
@@ -155,8 +137,9 @@ def test_the_shell_cannot_read_a_secret_outside_the_workspace(cfg, session_dir, 
 
 @macos
 def test_the_async_path_is_confined_too(cfg, session_dir):
-    """`aexecute` is what the interpreter's code-side dispatch runs on, so the
-    boundary must not depend on which entry point a caller happened to use."""
+    """`aexecute` is what the interpreter's code-side dispatch runs on, so the boundary
+    must not depend on which entry point a caller happened to use.
+    """
     secret = Path.home() / ".kingfisher-confinement-probe-async"
     secret.write_text("token", encoding="utf-8")
     try:
@@ -190,13 +173,7 @@ class Elsewhere(Recorder):
 
 
 def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
-    """A confinement is a command prefix naming paths on *this* host.
-
-    Applied to something that runs elsewhere it produces
-    `sandbox-exec -f /Users/.../shell.sb ...` shipped to a machine with no such
-    file -- which fails looking like a broken remote shell rather than like a
-    wrong prefix, so the fix is a long way from the symptom.
-    """
+    """A confinement is a command prefix naming paths on *this* host."""
     runner = Elsewhere()
     backend = build_backend(cfg, session_dir, runner=runner)
     backend.default.confinement = replace(
@@ -209,9 +186,7 @@ def test_a_runner_that_is_not_here_gets_the_command_unwrapped(cfg, session_dir):
 
 
 def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
-    """The default is the safe one on purpose. A runner added to gain something
-    else -- resource limits, another user, timings -- is still here, and losing
-    `sandbox-exec` without being asked is the failure this seam is about."""
+    """The default is the safe one on purpose."""
 
     class SaysNothing:
         def __init__(self):
@@ -237,13 +212,7 @@ def test_a_runner_that_says_nothing_keeps_the_fence(cfg, session_dir):
 
 
 def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
-    """Applying the confinement stays on this side of the seam.
-
-    A runner that ships the command to another machine cannot forget a step it
-    is never asked to perform, and the alternative -- handing over the raw
-    command and the `Confinement` with it -- makes every implementation
-    responsible for the boundary rather than for running things.
-    """
+    """Applying the confinement stays on this side of the seam."""
     runner = Recorder()
     backend = build_backend(cfg, session_dir, runner=runner)
     backend.default.confinement = replace(
@@ -256,9 +225,7 @@ def test_a_runner_is_given_the_command_already_confined(cfg, session_dir):
 
 
 def test_what_a_runner_returns_reaches_the_model(cfg, session_dir):
-    """The seam is only useful if the result travels. Kingfisher's own type
-    goes in and the harness's comes out, which is the conversion that keeps
-    the framework out of a contract a deployment implements."""
+    """The seam is only useful if the result travels."""
     backend = build_backend(cfg, session_dir, runner=Recorder(output="elsewhere", exit_code=3))
 
     result = backend.execute("whoami")
@@ -271,15 +238,9 @@ def test_the_only_runner_kingfisher_builds_for_itself_is_a_fence(cfg, session_di
     """`None` is not "do nothing" -- it is upstream's own execution, unchanged.
 
     A default runner would be 110 lines of upstream's truncation, timeout and
-    exit-code handling copied into this repository to be kept in step. So the
-    only runner built here is a fence, and where the platform has no fence
-    there is no runner at all.
-
-    Said that way rather than `is None`, which is what it said and what only
-    held on the platform it was written on. On Linux `_fence_for` builds a
-    `LandlockRunner` -- correctly, that is the feature -- and this failed the
-    first time a Linux job ran the suite. The property was never that the
-    runner is absent; it is that kingfisher owns no execution path of its own.
+    exit-code handling copied into this repository to be kept in step. So the only
+    runner built here is a fence, and where the platform has no fence there is no
+    runner at all.
     """
     backend = build_backend(cfg, session_dir)
 
@@ -292,9 +253,10 @@ def test_the_only_runner_kingfisher_builds_for_itself_is_a_fence(cfg, session_di
 
 
 def test_the_async_path_reaches_a_runner_too(cfg, session_dir):
-    """The same delegation the test below pins, seen from the other side: a
-    deployment running commands elsewhere must not have an async path that
-    quietly runs them here instead."""
+    """The same delegation the test below pins, seen from the other side: a deployment
+    running commands elsewhere must not have an async path that quietly runs them
+    here instead.
+    """
     runner = Recorder()
     backend = build_backend(cfg, session_dir, runner=runner)
 
@@ -307,14 +269,8 @@ def test_the_async_path_reaches_a_runner_too(cfg, session_dir):
 
 
 def test_the_async_path_still_routes_through_execute(cfg, session_dir):
-    """`ConfinedLocalShellBackend` overrides only `execute`, because upstream's `aexecute`
-    is `asyncio.to_thread(self.execute, ...)`. Overriding both wrapped every
-    async command twice, nesting one sandbox inside another -- which still
-    confined, so nothing failed and only the command string showed it.
-
-    This pins the delegation that makes one override sufficient. A deepagents
-    release that gives `aexecute` its own body fails here, rather than leaving
-    the async path unconfined and silent.
+    """`ConfinedLocalShellBackend` overrides only `execute`, because upstream's
+    `aexecute` is `asyncio.to_thread(self.execute, ...)`.
     """
     seen: list[str] = []
     backend = build_backend(cfg, session_dir)
@@ -331,8 +287,9 @@ def test_the_async_path_still_routes_through_execute(cfg, session_dir):
 
 @macos
 def test_the_workspace_itself_stays_fully_usable(cfg, session_dir):
-    """Confinement that broke the agent's own working directory would be
-    swapped straight back out."""
+    """Confinement that broke the agent's own working directory would be swapped
+    straight back out.
+    """
     backend = build_backend(cfg, session_dir)
     backend.write("/derived/note.txt", "hello")
 
@@ -356,10 +313,7 @@ def test_python_still_runs_with_its_dependencies(cfg, session_dir):
 
 @macos
 def test_a_command_with_shell_metacharacters_still_runs_confined(cfg, session_dir):
-    """The agent's command is quoted into the outer `sandbox-exec` invocation.
-    Getting that wrong either breaks ordinary pipelines or lets the command
-    break out of the wrapper -- so both halves are checked.
-    """
+    """The agent's command is quoted into the outer `sandbox-exec` invocation."""
     backend = build_backend(cfg, session_dir)
 
     piped = backend.execute("echo 'a b' | tr ' ' '-'")
@@ -373,8 +327,9 @@ def test_a_command_with_shell_metacharacters_still_runs_confined(cfg, session_di
 
 @macos
 def test_off_really_does_leave_the_shell_open(cfg, session_dir):
-    """The escape hatch has to actually be an escape hatch -- otherwise a
-    deployment that hits a false positive has no way past it."""
+    """The escape hatch has to actually be an escape hatch -- otherwise a deployment
+    that hits a false positive has no way past it.
+    """
     secret = Path.home() / ".kingfisher-confinement-probe-off"
     secret.write_text("token", encoding="utf-8")
     try:
@@ -390,9 +345,7 @@ def test_off_really_does_leave_the_shell_open(cfg, session_dir):
 
 @macos
 def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
-    """`system.md` says to stop and report rather than reach outside the
-    workspace. In an observed run the agent did it anyway, so the rule is the
-    kernel's now."""
+    """`system.md` says to stop and report rather than reach outside the workspace."""
     target = Path.home() / ".kingfisher-write-probe"
     backend = build_backend(cfg, session_dir)
     try:
@@ -406,9 +359,7 @@ def test_the_shell_cannot_write_outside_the_workspace(cfg, session_dir):
 
 @macos
 def test_a_literal_tmp_write_is_refused(cfg, session_dir):
-    """The prompt says to write scratch under `$TMPDIR`, never a literal
-    `/tmp`. The observed run wrote `/tmp/preview.pdf` regardless. `/tmp` is
-    world-writable, which is the reason the rule exists."""
+    """The prompt says to write scratch under `$TMPDIR`, never a literal `/tmp`."""
     target = Path("/tmp/kingfisher-write-probe")
     backend = build_backend(cfg, session_dir)
     try:
@@ -421,9 +372,7 @@ def test_a_literal_tmp_write_is_refused(cfg, session_dir):
 
 @macos
 def test_installing_into_the_environment_is_refused(cfg, session_dir):
-    """Two `pip install` attempts in one observed run. They failed only because
-    this venv has no `pip` -- which is luck, not a boundary. The venv stays
-    readable so Python runs, and unwritable so nothing can be added to it."""
+    """Two `pip install` attempts in one observed run."""
     import sys
 
     backend = build_backend(cfg, session_dir)
@@ -443,9 +392,9 @@ def test_installing_into_the_environment_is_refused(cfg, session_dir):
 
 @macos
 def test_tmpdir_stays_writable_wherever_it_is_pointed(cfg, session_dir, tmp_path):
-    """`$TMPDIR` is where the prompt sends scratch, and
-    `KINGFISHER_SCRATCH_DIR` can move it out of the workspace. Denying it would
-    close the one place the agent is told to use."""
+    """`$TMPDIR` is where the prompt sends scratch, and `KINGFISHER_SCRATCH_DIR` can
+    move it out of the workspace.
+    """
     outside = tmp_path / "scratch-elsewhere"
     relocated = replace(cfg, scratch_root=outside)
     backend = build_backend(relocated, session_dir)
@@ -469,9 +418,10 @@ def test_redirecting_to_dev_null_still_works(cfg, session_dir):
 
 @macos
 def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
-    """Confinement that broke the deliverable would be reverted, so this is the
-    other half of the bargain: `/derived` survives the turn, the run directory
-    holds scratch, and both are the agent's to write."""
+    """Confinement that broke the deliverable would be reverted, so this is the other
+    half of the bargain: `/derived` survives the turn, the run directory holds
+    scratch, and both are the agent's to write.
+    """
     backend = build_backend(cfg, session_dir)
 
     for command in (
@@ -486,14 +436,9 @@ def test_the_agent_can_still_write_everything_it_is_meant_to(cfg, session_dir):
 
 @macos
 def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_dir, tmp_path):
-    """`KINGFISHER_SKILLS_DIR` exists so several deployments can share one
-    reviewed catalogue, which means it commonly sits outside the workspace --
-    and a shared directory lives in somebody's home as often as not.
-
-    Denying the home without re-allowing it gave the agent a split view rather
-    than a refusal: file tools are routed and reached the catalogue, the shell
-    was denied, so reading a `SKILL.md` worked while running the script beside
-    it did not.
+    """`KINGFISHER_SKILLS_DIR` exists so several deployments can share one reviewed
+    catalogue, which means it commonly sits outside the workspace -- and a shared
+    directory lives in somebody's home as often as not.
     """
     catalogue = Path.home() / "kingfisher-catalogue-probe" / "skills"
     (catalogue / "demo").mkdir(parents=True, exist_ok=True)
@@ -515,13 +460,7 @@ def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_
 
 @pytest.fixture
 def workspace_in_the_home():
-    """A workspace where a workspace normally is: inside the operator's home.
-
-    Every other test here builds one under `tmp_path`, which on macOS is
-    `/private/var/folders/...` -- outside the one directory this profile denies.
-    That is why nothing caught the bug below: the fixture put the workspace on
-    the safe side of the only rule that matters.
-    """
+    """A workspace where a workspace normally is: inside the operator's home."""
     root = Path(tempfile.mkdtemp(prefix="kingfisher-home-probe-", dir=Path.home()))
     try:
         yield ensure_layout(root / "ws")
@@ -531,21 +470,7 @@ def workspace_in_the_home():
 
 @macos
 def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspace_in_the_home):
-    """Denying the home as a subpath denies the way *in* to the workspace too.
-
-    Re-allowing the workspace re-opens the destination and not the path to it:
-    `~/x/ws` is readable while `~` and `~/x` stay denied. Anything that resolves
-    a path in one kernel call never notices -- `chdir` and `open` both work --
-    but anything that walks it component by component gets refused on the first
-    denied one, and reports it as `ENOTDIR` rather than as a permission error.
-
-    `/bin/sh`'s `cd` builtin walks it, and `/bin/sh` is the shell every command
-    runs in. In one observed run `cd runs/t001/input` came back "Not a
-    directory" against a directory `ls` had just listed, and it was not that
-    path: every `cd` in the workspace failed, so the agent spent four commands
-    concluding its own run directory was broken. `uv` fails the same way on the
-    venv's `python3` ("failed to canonicalize path"), which cost another six.
-    """
+    """Denying the home as a subpath denies the way *in* to the workspace too."""
     session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
     (session / "runs" / "t001").mkdir(parents=True)
     backend = build_backend(replace(cfg, workspace=workspace_in_the_home), session)
@@ -558,14 +483,8 @@ def test_the_shell_can_walk_into_a_workspace_that_lives_in_the_home(cfg, workspa
 
 @macos
 def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_the_home):
-    """The way in is metadata only: the directories on it can be `stat`ed and
-    nothing more.
-
-    This is the rule the fix could plausibly have broken, and the reason it
-    grants `file-read-metadata` on exact paths rather than re-allowing reads on
-    a subpath. `~` and `~/x` are on the way to `~/x/ws`, and re-opening either
-    one as a subpath would hand back the whole home -- which is the hole this
-    profile exists to close.
+    """The way in is metadata only: the directories on it can be `stat`ed and nothing
+    more.
     """
     session = ensure_session_layout(workspace_in_the_home / "sessions" / "s")
     secret = Path.home() / ".kingfisher-traversal-probe"
@@ -583,13 +502,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
 
 
 def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
-    """The distinction `EXTERNAL` exists for, made readable downstream.
-
-    Nothing wraps the command either way, so `confined` is false for both this
-    and a deployment that configured nothing — and a reader with only that flag
-    reports a container mounting only the workspace as an exposure. `doctor` did
-    exactly that until `elsewhere` existed.
-    """
+    """The distinction `EXTERNAL` exists for, made readable downstream."""
     chosen = confinement.resolve(
         confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
     )
@@ -613,13 +526,9 @@ def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
 
 
 def test_a_supplied_runner_that_is_not_here_stops_the_confinement_claiming(cfg, session_dir):
-    """Measured before this existed: a runner declaring `local = False` ran the
-    command with no wrap applied, and the `Confinement` still reported
+    """Measured before this existed: a runner declaring `local = False` ran the command
+    with no wrap applied, and the `Confinement` still reported
     `mechanism='sandbox-exec'` and `confined=True`.
-
-    The claim was false *inside the process*, not merely invisible to `doctor` --
-    and a check reporting a fence that is not running is worse than one
-    reporting nothing.
     """
     backend = build_backend(cfg, session_dir, runner=Elsewhere())
     confined = backend.default.confinement
@@ -631,8 +540,7 @@ def test_a_supplied_runner_that_is_not_here_stops_the_confinement_claiming(cfg, 
 
 
 def test_a_supplied_runner_that_is_here_keeps_the_mechanism_and_adds_itself(cfg, session_dir):
-    """The other case, and it is not the same fact. A local runner still receives
-    the confined command, so the mechanism holds -- it has only gained company."""
+    """The other case, and it is not the same fact."""
     backend = build_backend(cfg, session_dir, runner=Recorder())
     confined = backend.default.confinement
 
@@ -651,22 +559,7 @@ def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
 @macos
 @pytest.mark.parametrize("kind", ["agents", "skills", "subagents", "tools"])
 def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir, kind):
-    """A definition the agent can rewrite says whatever the agent likes.
-
-    `tools/` is the loud one: `LocalToolRepository` *executes* its modules to
-    read them and a graph is built per request, so a file the shell wrote was
-    imported and run -- in this process, outside this profile -- on the next
-    turn. That is a route from a confined shell to unconfined execution, using a
-    directory `writable_roots` deliberately includes.
-
-    The other three decide rather than execute, and are here for the same
-    reason one level along: an agent that edits its own `agents/*.yaml` strikes
-    out the `groups:` line saying who may reach it, and groups are read when the
-    catalogue loads.
-
-    Only `skills/` was protected before this, and only because a skill is prompt
-    text the agent follows. The premise was always broader than the rule.
-    """
+    """A definition the agent can rewrite says whatever the agent likes."""
     root = cfg.catalogue_roots[kind]
     # Created first, or the write fails for want of a directory and the test
     # passes without the profile doing anything. `agents/` is not in the
@@ -686,13 +579,7 @@ def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir, kind):
 @macos
 @pytest.mark.parametrize("kind", ["agents", "skills", "subagents", "tools"])
 def test_a_definition_root_stays_readable(cfg, session_dir, kind):
-    """Denied writes, not denied access. The agent reads what it was granted.
-
-    The negative control that matters, because the cheap way to pass the test
-    above is to deny the directory outright -- which would stop an agent reading
-    the skill it was told to follow, and stop `execute` running a script the
-    catalogue ships beside one.
-    """
+    """Denied writes, not denied access."""
     root = cfg.catalogue_roots[kind]
     root.mkdir(parents=True, exist_ok=True)
     (root / "readable.txt").write_text("from the catalogue\n", encoding="utf-8")
@@ -706,12 +593,7 @@ def test_a_definition_root_stays_readable(cfg, session_dir, kind):
 
 @macos
 def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
-    """The bound on the rule. A turn's work happens in the workspace.
-
-    Protecting four directories inside a writable root is only correct if the
-    root stays writable -- the mistake in the other direction is a profile that
-    reads as tighter and stops an agent doing its job.
-    """
+    """The bound on the rule."""
     backend = build_backend(cfg, session_dir)
     target = cfg.workspace / "ordinary-work.txt"
 
@@ -721,20 +603,7 @@ def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
 
 
 def test_every_definition_root_is_protected(cfg):
-    """The property, not the four names, so a fifth kind arrives covered.
-
-    `DEFINITION_KINDS` is derived from the fields of `Definitions`, so adding a
-    kind adds a directory to `catalogue_roots` without anyone editing a list.
-    The parametrised tests above would not notice; this is what does.
-
-    It is the reason *Middleware as a definition kind* can be written at all: a
-    `middleware/` directory has to be denied to the shell the day it exists, not
-    the day somebody remembers to add it here.
-
-    No `@macos`: this reads the tuple the profile is built from rather than the
-    profile, so it holds the rule on every platform, including the ones where
-    the confinement is bubblewrap or nothing at all.
-    """
+    """The property, not the four names, so a fifth kind arrives covered."""
     protected = confinement.protected_roots(
         cfg.skills_dir, tuple(cfg.catalogue_roots.values())
     )
@@ -752,13 +621,7 @@ def test_every_definition_root_is_protected(cfg):
 
 
 def test_a_root_named_twice_is_protected_once(cfg):
-    """`skills` is passed separately *and* is a catalogue root.
-
-    The backend derives a session's own skills directory, which is not always
-    the workspace's, so both have to reach `protected` -- and in the ordinary
-    deployment they are the same path. Deduplicated the way `writable_roots`
-    deduplicates, or the profile names one directory twice.
-    """
+    """`skills` is passed separately *and* is a catalogue root."""
     roots = tuple(cfg.catalogue_roots.values())
 
     protected = confinement.protected_roots(cfg.catalogue_roots["skills"], roots)
@@ -768,12 +631,7 @@ def test_a_root_named_twice_is_protected_once(cfg):
 
 
 def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
-    """A profile is written once, and `seed` runs after it at least once.
-
-    Filtering absent directories would mean a workspace seeded after the
-    confinement resolved had a protection nobody removed and nothing applied.
-    A rule naming a directory that is not there is inert; a missing rule is not.
-    """
+    """A profile is written once, and `seed` runs after it at least once."""
     absent = tmp_path / "not-created"
 
     protected = confinement.protected_roots(None, (absent,))

@@ -12,17 +12,7 @@ from tests.conftest import StubCheckpointer, start
 
 
 class StubAgent:
-    """Stands in for the compiled graph so the orchestration is testable.
-
-    Emits the same (namespace, mode, chunk) shape LangGraph does for
-    `stream_mode=["updates", "values", "messages"]` with `subgraphs=True`. A
-    `messages` chunk is a `(message, metadata)` pair, which is why `tokens` is a
-    list of pairs.
-
-    `namespace` is `()` for the agent the caller asked and `("tools:<id>",)`
-    for a delegate running inside a `task` call -- `delegate` fills that in, so
-    a test can emit a delegate's chunks without a real two-level graph.
-    """
+    """Stands in for the compiled graph so the orchestration is testable."""
 
     def __init__(
         self,
@@ -48,14 +38,7 @@ class StubAgent:
         yield ((), "values", {"messages": [AIMessage(content=self.answer)]})
 
     def get_state(self, config):
-        """What a real graph holds when the turn ends.
-
-        A stub that could not answer this would make every test about the
-        transcript pass for the wrong reason -- the turn would write nothing and
-        the assertion would be about a stub's silence rather than a graph's
-        state. It answers with what it was sent plus what it said, which is what
-        a real conversation is.
-        """
+        """What a real graph holds when the turn ends."""
         del config
         sent = list((self.state or {}).get("messages", []))
         return SimpleNamespace(values={"messages": [*sent, AIMessage(content=self.answer)]})
@@ -135,9 +118,10 @@ def test_run_logs_usage_shaped_records(cfg):
 
 
 def test_a_turn_disposes_of_nothing(cfg):
-    """Retention used to run here and keep the newest N sessions, counting
-    every caller's together -- so a busy caller evicted a quiet one on a turn
-    that had nothing to do with it. Disposal is asked for now."""
+    """Retention used to run here and keep the newest N sessions, counting every
+    caller's together -- so a busy caller evicted a quiet one on a turn that had
+    nothing to do with it.
+    """
     for name in ("s1", "s2", "s3"):
         start(cfg, name)
     start(cfg, "s4")
@@ -151,8 +135,9 @@ def test_a_turn_disposes_of_nothing(cfg):
 
 
 def test_a_second_turn_does_not_overwrite_the_first(cfg):
-    """The defect this tier exists to fix: two turns in one session shared a
-    directory, so turn two clobbered turn one's report and result."""
+    """The defect this tier exists to fix: two turns in one session shared a directory,
+    so turn two clobbered turn one's report and result.
+    """
     start(cfg, "sess")
     ck = StubCheckpointer()
     first = run(
@@ -175,8 +160,9 @@ def test_a_second_turn_does_not_overwrite_the_first(cfg):
 
 
 def test_request_inputs_land_in_the_turn_not_in_data(cfg, tmp_path):
-    """Files supplied with a request are not project data: they arrive fresh
-    each round and leave with the turn."""
+    """Files supplied with a request are not project data: they arrive fresh each round
+    and leave with the turn.
+    """
     start(cfg, "s")
     supplied = tmp_path / "upload.csv"
     supplied.write_text("a,b\n1,2\n")
@@ -241,8 +227,7 @@ def test_coerce_is_idempotent():
 
 
 def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
-    """A typo in a capability name must not be destructive. This used to raise
-    only after the sweep had already removed old sessions."""
+    """A typo in a capability name must not be destructive."""
     from kingfisher.domain.capabilities import Capabilities, CapabilityError
 
     workspace = cfg.workspace
@@ -267,15 +252,7 @@ def test_a_rejected_request_sweeps_nothing(cfg, monkeypatch):
 
 
 def test_the_framework_never_asks_for_files_of_its_own(cfg):
-    """Wanting a written report is one kind of task among many. Nothing in the
-    plumbing may privilege a convention -- not the system prompt, not the turn
-    envelope. If the caller wants files, it says so in the task, and that is
-    the only route by which those names reach the model.
-
-    Both failure modes of the old design showed up live in one afternoon: a
-    greeting that deliberated over two files nobody wanted, and, once the
-    demand was softened to a suggestion, a real analysis that recorded nothing.
-    """
+    """Wanting a written report is one kind of task among many."""
     quiet = StubAgent("ok")
     result = run(Request("say hello"), cfg=cfg, graph=quiet, checkpointer=StubCheckpointer())
     sent = quiet.state["messages"][0]["content"]
@@ -296,8 +273,9 @@ def test_the_framework_never_asks_for_files_of_its_own(cfg):
 
 
 def test_supplied_data_is_still_there_on_the_next_turn(cfg):
-    """The property `--input` deliberately lacks, and the whole reason this
-    exists: a turn's `input/` leaves with the turn, `/data` does not."""
+    """The property `--input` deliberately lacks, and the whole reason this exists: a
+    turn's `input/` leaves with the turn, `/data` does not.
+    """
     source = cfg.workspace / "sales.csv"
     source.write_text("a,b\n1,2\n")
 
@@ -370,8 +348,9 @@ def test_the_agent_is_told_what_arrived_in_data(cfg):
 
 
 def test_the_result_names_the_turn_the_way_the_agent_does(cfg):
-    """Machine-independent, and the same string the agent was given, so a
-    caller reading the answer and a caller reading the files agree."""
+    """Machine-independent, and the same string the agent was given, so a caller reading
+    the answer and a caller reading the files agree.
+    """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 
@@ -381,8 +360,7 @@ def test_the_result_names_the_turn_the_way_the_agent_does(cfg):
 
 
 def test_everything_but_the_host_paths_is_json(cfg):
-    """The half a server sends. If this stopped being true, an API would grow
-    a bespoke converter and they would each pick something different."""
+    """The half a server sends."""
     import dataclasses
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
@@ -398,9 +376,7 @@ def test_everything_but_the_host_paths_is_json(cfg):
 
 
 def test_the_host_paths_refuse_to_serialise(cfg):
-    """Deliberate, and the reason they are named in the docstring. A server
-    reaching for `default=str` would put the server's filesystem layout in
-    every response; raising is what sends them looking."""
+    """Deliberate, and the reason they are named in the docstring."""
     import dataclasses
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
@@ -412,8 +388,7 @@ def test_the_host_paths_refuse_to_serialise(cfg):
 
 
 def test_the_virtual_directory_and_the_artifacts_share_a_root(cfg):
-    """Both are rooted at the session, so they read together. A caller that
-    joins them gets a path the agent would recognise."""
+    """Both are rooted at the session, so they read together."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     service.start_session("s")
 

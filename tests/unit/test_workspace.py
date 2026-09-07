@@ -26,13 +26,9 @@ def test_layout_is_created_and_idempotent(tmp_path):
 
 
 def test_the_layout_carries_the_catalogue_example(tmp_path):
-    """`models.yaml` is required and has no fallback, so its worked example is
-    the one document a new deployment cannot start without reading -- and the
-    error it hits without one names this file as the place to look.
-
-    Laid out rather than seeded. It was seeded until seeding gained the ability
-    to refuse, at which point a deployment naming no definitions would have been
-    told to write `models.yaml` and given nothing to write it from.
+    """`models.yaml` is required and has no fallback, so its worked example is the one
+    document a new deployment cannot start without reading -- and the error it hits
+    without one names this file as the place to look.
     """
     ws = ensure_layout(tmp_path / "ws")
 
@@ -41,18 +37,7 @@ def test_the_layout_carries_the_catalogue_example(tmp_path):
 
 
 def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
-    """Neither of the two obvious rules.
-
-    Writing every time would touch the disk on every run for nothing --
-    `ensure_layout` is called on each invocation, not only on a first one.
-    Writing only when absent would mean an upgrade never refreshed the example,
-    so a deployment would keep reading last year's annotations for a file that
-    had grown fields; re-seeding used to be what refreshed it.
-
-    Both halves are asserted because they fail separately: the first catches a
-    write that should not have happened, the second an upgrade that never
-    arrives.
-    """
+    """Neither of the two obvious rules."""
     ws = ensure_layout(tmp_path / "ws")
     example = ws / EXAMPLE
     untouched = example.stat().st_mtime_ns
@@ -66,15 +51,7 @@ def test_the_catalogue_example_is_refreshed_but_not_rewritten(tmp_path):
 
 
 def test_the_example_lands_beside_a_relocated_catalogue(tmp_path):
-    """Beside the file it is an example of, which is not always the workspace.
-
-    `KINGFISHER_MODELS_FILE` points a fleet at one reviewed catalogue, and
-    `compose.yaml` ships exactly that arrangement. The example went into the
-    workspace regardless, so seeding such a deployment wrote the annotated
-    catalogue into a directory nothing reads -- while the error for the missing
-    one said `kingfisher seed` writes it next to the file. It had, into the
-    other directory, and the two never met.
-    """
+    """Beside the file it is an example of, which is not always the workspace."""
     ws = tmp_path / "ws"
     shared = tmp_path / "catalogue" / "models.yaml"
 
@@ -85,18 +62,7 @@ def test_the_example_lands_beside_a_relocated_catalogue(tmp_path):
 
 
 def test_no_groups_example_is_placed_anywhere(tmp_path):
-    """`groups.yaml.example` shipped and was placed for two days, and went.
-
-    An example ships one vocabulary and a workspace needs whichever names its
-    own definitions ask for, so the file could not be the file you needed --
-    `seed` named three groups and put a template declaring five others beside
-    them. The remedy travels in the message now, where it can name the ones
-    actually missing. See `presentation.cli.__main__._declare`.
-
-    Asserted rather than left to the absence of a test: a placement that came
-    back by accident would be furniture nobody decided on, and the relocation
-    path below is exactly where a second file would quietly reappear.
-    """
+    """`groups.yaml.example` shipped and was placed for two days, and went."""
     ws = tmp_path / "ws"
     policy = tmp_path / "policy" / "groups.yaml"
 
@@ -109,13 +75,7 @@ def test_no_groups_example_is_placed_anywhere(tmp_path):
 
 @pytest.mark.skipif(os.geteuid() == 0, reason="root writes into a mode 0o500 directory")
 def test_an_unwritable_destination_falls_back_to_the_workspace(tmp_path):
-    """Furniture is best-effort, and a shared catalogue is often read-only.
-
-    A fleet mounting one reviewed `models.yaml` read-only is the case this
-    exists for. Failing the layout there would take `kingfisher seed` down for
-    the deployment that relocated -- so the example goes where it always went,
-    which is no worse than before it could follow the file at all.
-    """
+    """Furniture is best-effort, and a shared catalogue is often read-only."""
     ws = tmp_path / "ws"
     locked = tmp_path / "locked"
     locked.mkdir()
@@ -132,10 +92,8 @@ def test_an_unwritable_destination_falls_back_to_the_workspace(tmp_path):
 
 
 def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
-    """Kingfisher ran git once -- `pre_run_commit` snapshotted the tracked tier
-    before each turn -- and that went with `adapters/workspace_git.py`. The
-    ignore file outlived it, describing a review workflow the code no longer
-    had, for a repo nothing created or read.
+    """Kingfisher ran git once -- `pre_run_commit` snapshotted the tracked tier before
+    each turn -- and that went with `adapters/workspace_git.py`.
 
     It was also wrong rather than merely idle: it named two of the five things a
     workspace holds, so `Library/` sat outside it and a `git add -A` offered to
@@ -146,12 +104,7 @@ def test_no_gitignore_is_written_for_a_repository_nothing_manages(workspace):
 
 
 def sweep(workspace, keep, checkpointer):
-    """What `reap()` does: list, choose by age, apply.
-
-    `keep` is read as "keep sessions younger than this many seconds", which is
-    what replaced keeping the newest N -- a count compares every caller's
-    sessions against each other, and age asks only about the session itself.
-    """
+    """What `reap()` does: list, choose by age, apply."""
     import time
 
     dirs = LocalSessionDirs()
@@ -161,8 +114,9 @@ def sweep(workspace, keep, checkpointer):
 
 
 def test_sweep_keeps_the_newest_and_deletes_thread_with_directory(workspace):
-    """A swept session loses its directory and its thread together, so the
-    checkpointer can never point at files that no longer exist."""
+    """A swept session loses its directory and its thread together, so the checkpointer
+    can never point at files that no longer exist.
+    """
     import time
 
     now = time.time()
@@ -196,8 +150,9 @@ class BrokenCheckpointer:
 
 
 def test_sweep_deletes_the_thread_before_the_directory(workspace):
-    """No transaction spans a filesystem and sqlite, so the order is chosen to
-    make the surviving failure benign."""
+    """No transaction spans a filesystem and sqlite, so the order is chosen to make the
+    surviving failure benign.
+    """
     order: list[str] = []
 
     class Recording:
@@ -224,9 +179,10 @@ def test_sweep_deletes_the_thread_before_the_directory(workspace):
 
 
 def test_a_failed_thread_delete_leaves_the_session_whole(workspace):
-    """Nothing is half-deleted: if the thread will not go, the directory stays,
-    so the next sweep retries an intact session rather than finding a thread
-    that points at files which are gone."""
+    """Nothing is half-deleted: if the thread will not go, the directory stays, so the
+    next sweep retries an intact session rather than finding a thread that points at
+    files which are gone.
+    """
     d = workspace / "runs" / "old"
     d.mkdir(parents=True)
 
@@ -239,8 +195,9 @@ def test_a_failed_thread_delete_leaves_the_session_whole(workspace):
 
 
 def test_sweep_failures_are_reported_not_swallowed(workspace):
-    """A checkpointer that can never delete should be visible, not tolerated
-    silently on every single run."""
+    """A checkpointer that can never delete should be visible, not tolerated silently on
+    every single run.
+    """
     for name in ("a", "b"):
         (workspace / "runs" / name).mkdir(parents=True)
 
@@ -253,22 +210,14 @@ def test_sweep_failures_are_reported_not_swallowed(workspace):
 
 
 def test_the_layout_names_no_genre_of_output():
-    """`/reports` privileged one kind of result in the workspace structure
-    itself. Durability is the only thing the layout should encode: `/derived`
-    survives, `runs/` does not, and what you call the file is your business."""
+    """`/reports` privileged one kind of result in the workspace structure itself."""
     assert "reports" not in LAYOUT_DIRS
     assert "reports" not in SESSION_DIRS
     assert "derived" in SESSION_DIRS
 
 
 def test_one_pass_makes_a_whole_session(tmp_path):
-    """What `build_backend` used to finish off, and the reason this exists.
-
-    A session's names lived in two places: four in `SESSION_DIRS`, and `.home`
-    and `skills/uploaded` in a line of `build_backend` -- which also re-made
-    `data` and `memory`, so nothing created a whole session and the two halves
-    could disagree. A backend is now built against a session that exists.
-    """
+    """What `build_backend` used to finish off, and the reason this exists."""
     session = ensure_session_layout(tmp_path / "s")
 
     for name in (*SESSION_DIRS, *SESSION_PLUMBING):
@@ -276,10 +225,9 @@ def test_one_pass_makes_a_whole_session(tmp_path):
 
 
 def test_the_plumbing_is_listed_apart_from_what_the_agent_addresses():
-    """`SESSION_DIRS` means "the names a prompt can refer to", which is why
-    `.home` was left out of it rather than forgotten. Keeping the two lists
-    separate is what lets that stay a single meaning -- a reader asking what the
-    agent can name should not have to filter the answer."""
+    """`SESSION_DIRS` means "the names a prompt can refer to", which is why `.home` was
+    left out of it rather than forgotten.
+    """
     assert not set(SESSION_DIRS) & set(SESSION_PLUMBING)
     assert AGENT_HOME in SESSION_PLUMBING
     assert AGENT_HOME.startswith("."), "the agent's home is plumbing, not a name it types"
@@ -288,17 +236,7 @@ def test_the_plumbing_is_listed_apart_from_what_the_agent_addresses():
 
 
 def test_turn_names_are_claimed_exclusively(workspace):
-    """The one filesystem guarantee kingfisher's correctness rests on.
-
-    `allocate_turn` is atomic *because* mkdir fails on an existing name -- that
-    is why `SessionDirs` has `create_exclusive` at all. A shared filesystem
-    that does not honour it would let two concurrent turns share a directory,
-    which is the defect the turn tier was built to fix, silently restored.
-
-    Threads rather than processes because the primitive is the kernel's: what
-    is being checked is that two callers racing for one name produce one
-    winner.
-    """
+    """The one filesystem guarantee kingfisher's correctness rests on."""
     from concurrent.futures import ThreadPoolExecutor
 
     dirs = LocalSessionDirs()

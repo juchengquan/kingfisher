@@ -1,9 +1,4 @@
-"""The shipped presets have to work.
-
-A preset that does not parse is worse than none: it is copied, it fails, and
-the format gets blamed. These run against the real loaders, and reach the
-definitions the way an installed kingfisher would.
-"""
+"""The shipped presets have to work."""
 
 from __future__ import annotations
 
@@ -49,43 +44,19 @@ def fixture_pack():
 
 @pytest.fixture(scope="session")
 def formats_doc():
-    """`docs/guides/formats.md` -- the format reference these tests check against.
-
-    A repository path now, not package data. It lived in `kingfisher.reference`
-    beside the catalogue example and shipped in the wheel, where nothing in
-    `src/` ever read it. These are its only readers, and they run from the
-    checkout.
-
-    Named for the file rather than the directory it used to live in. It was
-    `shipped`, then `reference_tree`, and both names meant a different directory
-    from the `shipped` in `conftest` -- which is the definitions `seed` copies.
-    """
+    """`docs/guides/formats.md` -- the format reference these tests check against."""
     return REPO / "docs" / "guides" / "formats.md"
 
 
 def test_a_seeded_skill_is_discovered(cfg):
-    """Seeding puts a skill where discovery looks. Asserted against the fixture
-    pack: the claim is about the two halves meeting, not about which skills
-    kingfisher ships."""
+    """Seeding puts a skill where discovery looks."""
     seeding.seed(cfg, FIXTURE)
 
     assert "probe-skill" in available_skills(cfg, None)
 
 
 def _materialise(readme: str, cfg) -> None:
-    """Write the README's own inline examples into a workspace.
-
-    So the two tests below still *build* rather than merely parse, without the
-    shipped files they used to lean on. The page is the fixture: if an example
-    on it stops being a loadable definition, these fail for the same reason a
-    reader would be misled.
-
-    Which directory a block lands in follows the heading above it, for the
-    reason `test_every_complete_definition_in_the_readme_parses` reads them with
-    two different readers: the page documents two YAML formats that look alike,
-    and an agent example written into `subagents/` fails on a field the other
-    format does not have.
-    """
+    """Write the README's own inline examples into a workspace."""
     import re
 
     for section in re.split(r"\n## ", readme):
@@ -115,8 +86,9 @@ def _materialise(readme: str, cfg) -> None:
 
 
 def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, formats_doc):
-    """The table is the reference a caller builds an allowlist from, so a stale
-    row is a CapabilityError someone has to debug."""
+    """The table is the reference a caller builds an allowlist from, so a stale row is a
+    CapabilityError someone has to debug.
+    """
     from langchain_core.messages import AIMessage
 
     from tests.conftest import FakeToolCallingModel, dispatched
@@ -141,11 +113,6 @@ def test_the_readme_tool_table_matches_the_real_tool_surface(cfg, session_dir, f
 def test_the_readme_call_is_valid(cfg, session_dir, formats_doc):
     """Exactly the capabilities the README shows, built for real -- against the
     definitions the README itself writes out.
-
-    It used to seed the shipped presets, which is why it named `code-review` and
-    `reviewer`: those files happened to exist. The page names them because it
-    shows them, so the page is now the fixture and the test is about the same
-    thing it always was -- that the call it documents actually builds.
     """
     from dataclasses import replace
 
@@ -168,16 +135,8 @@ def test_the_readme_call_is_valid(cfg, session_dir, formats_doc):
 
 
 def test_a_skill_hidden_below_the_deepest_source_is_reported_not_ignored(tmp_path):
-    """Reach is two levels: a skill at the root, or one inside a folder that
-    becomes its own source. A third level is where deepagents stops looking.
-
-    Grouping one level further is the obvious next thing to try, and it yields
-    nothing: no error, no warning, a skill that simply never appears. The
-    layout is a contract, so breaking it should say so.
-
-    It reports the skill's own path, not the folder above it. Naming the folder
-    was right when any folder was too deep; now that one level loads, it would
-    indict `grouped/` for what `grouped/deeper/` did.
+    """Reach is two levels: a skill at the root, or one inside a folder that becomes its
+    own source.
     """
 
     for path in ("flat/SKILL.md", "grouped/nested/SKILL.md", "a/b/deep/SKILL.md"):
@@ -191,9 +150,7 @@ def test_a_skill_hidden_below_the_deepest_source_is_reported_not_ignored(tmp_pat
 
 
 def test_one_folder_of_grouping_is_not_misplaced(tmp_path):
-    """The negative control for the level that now works. Reported here, this
-    warning would contradict `--list`'s own skills listing one line above it --
-    which is exactly what it did before this was fixed."""
+    """The negative control for the level that now works."""
     from kingfisher.skills.catalogue import LocalSkillRepository
 
     target = tmp_path / "research" / "lookup" / "SKILL.md"
@@ -204,8 +161,9 @@ def test_one_folder_of_grouping_is_not_misplaced(tmp_path):
 
 
 def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
-    """The negative control: only folders that actually hide one are named, or
-    every stray directory in a catalogue becomes a warning."""
+    """The negative control: only folders that actually hide one are named, or every
+    stray directory in a catalogue becomes a warning.
+    """
 
     (tmp_path / "notes").mkdir()
     (tmp_path / "notes" / "readme.txt").write_text("nothing to see", encoding="utf-8")
@@ -214,12 +172,7 @@ def test_a_directory_with_no_skill_anywhere_is_not_reported(tmp_path):
 
 
 def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
-    """The whole point: a file in the workspace becomes a tool the agent has.
-
-    Against the fixture pack, because the claim is about *any* workspace tool
-    reaching the agent. Naming `http_fetch` tied a test of the loading path to
-    which tools kingfisher happens to ship.
-    """
+    """The whole point: a file in the workspace becomes a tool the agent has."""
     from tests.conftest import dispatched
 
     shutil.copytree(fixture_pack / "tools", cfg.workspace / "tools", dirs_exist_ok=True)
@@ -231,8 +184,9 @@ def test_a_workspace_tool_reaches_the_assembled_agent(cfg, fixture_pack):
 
 
 def test_a_workspace_tool_may_not_shadow_a_builtin(cfg):
-    """`tools_by_name` is a dict, so the real `read_file` would just stop
-    existing -- quietly, which is the failure this refuses everywhere else."""
+    """`tools_by_name` is a dict, so the real `read_file` would just stop existing --
+    quietly, which is the failure this refuses everywhere else.
+    """
     tools_dir = cfg.workspace / "tools"
     tools_dir.mkdir(parents=True, exist_ok=True)
     (tools_dir / "shadow.py").write_text(
@@ -266,17 +220,7 @@ def test_seeding_a_fresh_catalogue_overwrites_nothing(cfg):
 
 
 def test_seeding_does_not_claim_the_catalogue_example(cfg):
-    """It is not a definition, and it is no longer seeding's to write.
-
-    `ensure_layout` places it, because it must arrive whether or not a
-    deployment has definitions at all -- and seeding is now able to refuse when
-    it has no source. A file that a refusal would take with it cannot be the
-    one worked example of a mandatory configuration file.
-
-    Asserted as absence from the *report*, not from the disk. The example is
-    beside `models.yaml` either way; what changed is who put it there, and a
-    test reading only the filesystem could not tell the difference.
-    """
+    """It is not a definition, and it is no longer seeding's to write."""
     result = seeding.seed(cfg, FIXTURE)
 
     assert not [entry for entry in result.written if entry.endswith(".example")]
@@ -284,25 +228,7 @@ def test_seeding_does_not_claim_the_catalogue_example(cfg):
 
 
 def test_seeding_alone_leaves_a_workspace_that_can_start(tmp_path):
-    """The other half of the test above, and the one the library got wrong.
-
-    Seeding does not *report* the catalogue example -- `ensure_layout` places
-    it, and that separation is right. What was missing is that nothing made a
-    library caller lay the workspace out at all. The obvious two lines,
-
-        paths = paths_from_env()
-        seed(paths, definitions_source(paths))
-
-    copied fourteen definitions, reported success, and left no
-    `models.yaml.example`: a deployment told to write `models.yaml` and given no
-    example of one, which is the dead end that write was moved to avoid. The CLI
-    had the ordering and a docstring saying why; a caller reading the signature
-    had neither.
-
-    So `seed` lays out first. Asserted from the disk here rather than the
-    report, because the report is deliberately silent about it -- the two tests
-    are the same distinction from opposite sides.
-    """
+    """The other half of the test above, and the one the library got wrong."""
     from kingfisher import paths_from_env
 
     fresh = tmp_path / "untouched"
@@ -317,14 +243,7 @@ def test_seeding_alone_leaves_a_workspace_that_can_start(tmp_path):
 
 
 def test_seeding_never_writes_the_catalogue_itself(cfg):
-    """The one file seeding must not touch.
-
-    It overwrites by design, which is what makes re-seeding after an upgrade
-    possible. `models.yaml` names every endpoint this deployment reaches and
-    whose credentials pay for them, so a template landing on top of a working
-    one is the worst thing this could do -- and it would look like a successful
-    seed.
-    """
+    """The one file seeding must not touch."""
     catalogue = cfg.workspace / "models.yaml"
     catalogue.write_text("mine: do not touch\n", encoding="utf-8")
 
@@ -334,19 +253,8 @@ def test_seeding_never_writes_the_catalogue_itself(cfg):
 
 
 def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
-    """The guard that only had to hold one level deep until a preset tool could
-    be a package.
-
-    It skipped `__pycache__` among the top-level entries and then copied any
-    directory wholesale, which was safe only while a preset tool was always a
-    single file. A package puts bytecode one level below where the check looked.
-
-    The debris is planted here rather than waited for. `_import` now suppresses
-    bytecode when it loads a workspace tool, so a test run no longer leaves any
-    in the preset tree -- which would make this pass whether the filter existed
-    or not. Something else can still put it there: a developer importing a
-    preset directly, or a wheel built with it. The seeder must not carry it
-    either way, and a test of that has to create the condition it is about.
+    """The guard that only had to hold one level deep until a preset tool could be a
+    package.
     """
     source = tmp_path / "presets"
     package = source / "tools" / "csv_profile"
@@ -367,16 +275,7 @@ def test_seeding_never_carries_bytecode_into_a_workspace(cfg, tmp_path):
 
 
 def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
-    """`seed` reads one field and declines to copy on it.
-
-    The only thing seeding has ever decided about a *file* rather than a path.
-    It earns that: a definition naming middleware is refused when it is built on
-    a deployment that has not registered the name, so copying one into a fresh
-    workspace produces a file that cannot run and says nothing about why.
-
-    Planted rather than read off `assets_examples/`, so this holds whatever that tree
-    happens to contain.
-    """
+    """`seed` reads one field and declines to copy on it."""
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
     (source / "agents" / "plain.yaml").write_text(
@@ -395,13 +294,8 @@ def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
 
 
 def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
-    """`middleware: ["*"]` resolves against whatever the deployment registered,
-    which on an empty registry is nothing -- and raises nothing either way.
-
-    That is what makes it the one form a definition can carry anywhere, and it
-    is the shape `assistant.yaml` ships. A rule that skipped it would leave a
-    fresh workspace without its general agent to protect it from a middleware
-    it was never going to get.
+    """`middleware: ["*"]` resolves against whatever the deployment registered, which on
+    an empty registry is nothing -- and raises nothing either way.
     """
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
@@ -417,12 +311,8 @@ def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
 
 
 def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
-    """A delegate in `subagents/analysis/` names middleware exactly as easily as
-    one beside it.
-
-    The debris filter learned this the hard way -- it checked the top level and
-    copied any directory wholesale -- and a rule with the same hole would be one
-    the catalogue's own nesting walks straight through.
+    """A delegate in `subagents/analysis/` names middleware exactly as easily as one
+    beside it.
     """
     source = tmp_path / "presets"
     nested = source / "subagents" / "analysis"
@@ -444,11 +334,7 @@ def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
 
 
 def test_everything_takes_what_the_default_leaves(cfg, tmp_path):
-    """For the deployment that has already registered the names.
-
-    Skipping is a fact about the workspace rather than a judgement about the
-    file, so a deployment that has done the registering says so and gets them.
-    """
+    """For the deployment that has already registered the names."""
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
     (source / "agents" / "wired.yaml").write_text(
@@ -463,12 +349,8 @@ def test_everything_takes_what_the_default_leaves(cfg, tmp_path):
 
 
 def test_a_definition_that_does_not_parse_is_copied_rather_than_judged(cfg, tmp_path):
-    """Seeding is not a validator, and a broken file has a loader whose job is
-    to say so in the terms of its own format.
-
-    Reporting a definition's syntax error as a seeding failure would put the
-    complaint in the wrong place and, worse, hide the file from the thing that
-    knows how to explain it.
+    """Seeding is not a validator, and a broken file has a loader whose job is to say so
+    in the terms of its own format.
     """
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
@@ -481,8 +363,7 @@ def test_a_definition_that_does_not_parse_is_copied_rather_than_judged(cfg, tmp_
 
 
 def test_seeding_twice_unchanged_is_silent(cfg):
-    """By content, not by presence. A warning that fires on the ordinary path
-    is one people learn to scroll past."""
+    """By content, not by presence."""
     seeding.seed(cfg, FIXTURE)
 
     assert seeding.seed(cfg, FIXTURE).overwritten == ()
@@ -501,8 +382,7 @@ def test_an_edited_copy_is_reported_and_still_replaced(cfg):
 
 
 def test_a_file_added_beside_a_preset_is_not_reported(cfg):
-    """`copytree` merges, so this one survives. Reporting it would be a warning
-    about a loss that did not happen."""
+    """`copytree` merges, so this one survives."""
     seeding.seed(cfg, FIXTURE)
     (cfg.skills_dir / "probe-skill" / "notes.md").write_text("mine", encoding="utf-8")
 
@@ -519,11 +399,8 @@ def test_an_edited_file_inside_a_skill_is_named_exactly(cfg):
 
 
 def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
-    """The table is where a contributor learns which fields exist, and now that
-    an unlisted one is an error, a stale row is a definition that will not load.
-
-    It had gone stale three times over -- `skills`, `middleware` and `provider`
-    all shipped without a row.
+    """The table is where a contributor learns which fields exist, and now that an
+    unlisted one is an error, a stale row is a definition that will not load.
     """
     from kingfisher.subagents.reading import KNOWN
 
@@ -539,14 +416,7 @@ def test_the_readme_subagent_table_matches_the_real_field_set(formats_doc):
 
 
 def test_the_readme_links_into_no_asset_tree(formats_doc):
-    """The page has to stand on its own, because the files are leaving.
-
-    It used to link at its examples -- `[reviewer.yaml](subagents/reviewer.yaml)`
-    -- and a test checked every target existed. That check was the right one
-    while they shipped alongside; once they are a separate distribution the link
-    cannot resolve and, worse, would rot quietly: someone renames a file over
-    there and nothing here fails. The examples are written out on the page now.
-    """
+    """The page has to stand on its own, because the files are leaving."""
     import re
 
     readme = (formats_doc).read_text(encoding="utf-8")
@@ -557,17 +427,9 @@ def test_the_readme_links_into_no_asset_tree(formats_doc):
 
 
 def test_every_complete_definition_in_the_readme_parses(formats_doc):
-    """The README shows a whole definition before it shows the field table, and
-    a documented example that does not load is worse than none -- it is copied,
-    it fails, and the format gets blamed.
-
-    Only the complete ones: a fenced block starting with `name:` is a
-    definition, while the fragments showing one field are not.
-
-    Which reader a block gets is decided by the heading above it, because the
-    page now documents two YAML formats that look alike and are not. Reading an
-    agent example with the subagent reader would fail on `memory:` and read as a
-    broken example rather than as a test that does not know where it is.
+    """The README shows a whole definition before it shows the field table, and a
+    documented example that does not load is worse than none -- it is copied, it
+    fails, and the format gets blamed.
     """
     import re
     from pathlib import Path as _Path
@@ -601,20 +463,10 @@ DEFINITION_FIELDS = ("tools:", "skills:", "subagents:", "middleware:", "builtin_
 def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
     """The other half of the page, and the half that rotted.
 
-    Its neighbour above reads only blocks starting with `name:`, and says so --
-    the fragments showing one field are not definitions. Nothing read them, so
-    when the audienced fields changed shape on 2026-09-03 every fragment showing
-    the old one stayed on the page, correct-looking and wrong, and the whole
-    suite passed.
-
-    A fragment is a definition with the required fields left out, so this puts
-    them back and reads the result. What that cannot check is whether the
-    fragment says what the prose around it claims; what it can check is that a
-    reader who copies it gets a file that loads, which is the failure that
-    actually happened.
-
-    Which reader, by the heading above it, for the same reason the neighbour
-    gives: the page documents two formats that look alike.
+    Its neighbour above reads only blocks starting with `name:`, and says so -- the
+    fragments showing one field are not definitions. Nothing read them, so when the
+    audienced fields changed shape on 2026-09-03 every fragment showing the old one
+    stayed on the page, correct-looking and wrong, and the whole suite passed.
     """
     import re
     from pathlib import Path as _Path
@@ -640,12 +492,7 @@ def test_every_field_fragment_in_the_readme_parses_too(formats_doc):
 
 
 def test_the_readme_run_on_example_is_valid(cfg, session_dir, formats_doc):
-    """The second call the README shows, built for real.
-
-    A documented example that does not work is worse than none: it is copied,
-    it fails, and the format gets blamed. Both delegates it names are written
-    out on the page, so the page supplies them.
-    """
+    """The second call the README shows, built for real."""
     from langchain_core.messages import AIMessage
 
     from kingfisher import RunOn

@@ -1,15 +1,4 @@
-"""The definitions this distribution ships have to work.
-
-A definition that does not parse is worse than none: it is copied, it fails,
-and the format gets blamed. These run against kingfisher's real loaders and
-reach the files the way an installed pack is reached — through
-`importlib.resources`, not by a path relative to this file.
-
-They live here rather than in kingfisher because they describe *content*. The
-framework's own tests are about seeding, discovery and the formats; whether
-`reviewer` reaches for a helper is this package's business, and a preset added
-here should not turn a test red over there.
-"""
+"""The definitions this distribution ships have to work."""
 
 from __future__ import annotations
 
@@ -73,19 +62,7 @@ def test_every_preset_subagent_parses(shipped):
 
 
 def test_every_preset_skill_parses(shipped):
-    """The mirror of the subagent version, and absent until a probe went looking.
-
-    Seeding a fourth skill preset left the entire suite green, and dropping a
-    shipped one would have too. `test_preset_skills_are_discovered` asserts a
-    *superset*, which is the right shape for that test -- it is about discovery
-    reaching the catalogue -- and the wrong shape for declaring what ships.
-
-    The header's name is checked against the directory because the two are read
-    by different paths: a catalogue skill is found by directory
-    (`LocalSkillRepository.names`), while an uploaded one is filed under the name in its
-    header (`uploads.skill_name`). A preset whose halves disagree is copied,
-    uploaded, and lands somewhere its author did not mean.
-    """
+    """The mirror of the subagent version, and absent until a probe went looking."""
     root = shipped / "skills"
     shipped_skills = LocalSkillRepository(root).names
 
@@ -104,8 +81,9 @@ def test_every_preset_skill_parses(shipped):
 
 
 def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
-    """Both optional fields appear in at least one example, or they are
-    documented in the README and shown nowhere."""
+    """Both optional fields appear in at least one example, or they are documented in
+    the README and shown nowhere.
+    """
     extractor = LocalSubagentRepository(shipped / "subagents").specs["extractor"]
 
     assert extractor.tools is not None
@@ -114,14 +92,7 @@ def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
 
 
 def test_every_preset_tool_loads(shipped):
-    """A tool is code, so "does it parse" means "does it import".
-
-    `csv_profile` and `csv_columns` come from a *package* -- `tools/csv_profile/`
-    with an `__init__.py` -- and arrive in this flat set under their own names,
-    because a folder cannot reach a name either. That they import at all is the
-    part worth having: the package uses a relative import, which is exactly what
-    a standalone-module loader cannot resolve.
-    """
+    """A tool is code, so "does it parse" means "does it import"."""
     tools = LocalToolRepository(shipped / "tools").tools
 
     assert {tool_name(t) for t in tools} == {
@@ -136,14 +107,8 @@ def test_every_preset_tool_loads(shipped):
 
 
 def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
-    """`docs/guides/tools.md` documents three ways to write a tool, and a reference
-    that describes a shape nothing ships is a shape somebody has to take on
-    trust. Asserted by shape rather than by name so that renaming a preset does
-    not quietly drop the coverage it was carrying.
-
-    The class is the one worth having an example of: the other two infer their
-    schema from the annotations, and it is the only shape that can describe an
-    argument to the model.
+    """`docs/guides/tools.md` documents three ways to write a tool, and a reference that
+    describes a shape nothing ships is a shape somebody has to take on trust.
     """
     from langchain_core.tools import BaseTool
 
@@ -162,9 +127,10 @@ def test_the_shipped_set_shows_all_three_tool_shapes(shipped):
 
 
 def test_the_class_shaped_preset_exports_an_instance(shipped):
-    """The near miss the format refuses by name: `TOOLS = [SqlExplain]` is a
-    class, which is callable, so nothing would notice until the model called it
-    and got a tool object back instead of an answer."""
+    """The near miss the format refuses by name: `TOOLS = [SqlExplain]` is a class,
+    which is callable, so nothing would notice until the model called it and got a
+    tool object back instead of an answer.
+    """
     tools = LocalToolRepository(shipped / "tools").tools
     found = next(t for t in tools if tool_name(t) == "sql_explain")
 
@@ -175,17 +141,7 @@ def test_the_class_shaped_preset_exports_an_instance(shipped):
 
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
-    """The docstring is what the model reads when deciding whether to call it.
-    An example without a real one teaches the wrong shape.
-
-    Read as `.description` or as `__doc__`, because the shipped set holds both
-    kinds now and the first version of this test assumed one. A `BaseTool` puts
-    the docstring on `.description` when it is built; a plain function still has
-    it on `__doc__`, and deepagents reads it from there when it wraps the
-    function. The model sees the same sentence either way -- which is the whole
-    claim `line_count` exists to make -- so a test about what the model reads
-    should not care which kind it was handed.
-    """
+    """The docstring is what the model reads when deciding whether to call it."""
     for tool in LocalToolRepository(shipped / "tools").tools:
         described = getattr(tool, "description", None) or (tool.__doc__ or "")
         assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
@@ -196,16 +152,11 @@ def test_every_preset_tool_describes_itself_to_the_model(shipped):
 def test_no_preset_names_a_model(shipped):
     """A file inside the wheel cannot portably name a vendor's model id.
 
-    `extractor` and `profiler` said `MiniMax-M2.5` once, and a delegate that
-    has since gone said `gpt-5`. The catalogue is closed now, so any of those
-    would refuse to start
-    for a deployment whose `models.yaml` lacks the entry -- and before it was
-    closed they were worse, reaching whatever endpoint was configured and
-    failing as a 404 mid-run.
-
-    Which model is cheap *here* is a deployment's answer, not a preset's: the
-    same reason `KINGFISHER_MODEL_SUBAGENT` was deleted for being the wrong
-    granularity. The cost-routing demonstration lives in the README instead.
+    `extractor` and `profiler` said `MiniMax-M2.5` once, and a delegate that has
+    since gone said `gpt-5`. The catalogue is closed now, so any of those would
+    refuse to start for a deployment whose `models.yaml` lacks the entry -- and
+    before it was closed they were worse, reaching whatever endpoint was configured
+    and failing as a 404 mid-run.
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
 
@@ -216,12 +167,9 @@ def test_no_preset_names_a_model(shipped):
 
 
 def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
-    """Seeding a catalogue that refuses to load would be the worst kind of
-    example: copied, broken on the first run, and the format blamed.
-
-    It checked the one-level rule until delegation learned to nest. The rule
-    that replaced it is the only thing left that a catalogue can violate here,
-    so this follows it rather than being deleted."""
+    """Seeding a catalogue that refuses to load would be the worst kind of example:
+    copied, broken on the first run, and the format blamed.
+    """
     from kingfisher.subagents.rules import refuse_cycles
 
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
@@ -232,18 +180,7 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
 def test_the_readme_snippet_runs_and_uses_only_the_public_api(
     tmp_path, monkeypatch, capsys, shipped
 ):
-    """The README's Python block, executed rather than eyeballed.
-
-    It is a promise about the front door now -- `from kingfisher import
-    paths_from_env, seed` -- where it used to read
-    `from kingfisher.infrastructure import seeding`, reaching past the public
-    API into a module carrying no stability promise. Nothing checked it either
-    way: the framework's own README has six tests holding it to the code and
-    this one had none.
-
-    Both halves are asserted. That it *runs* catches a rename; that it imports
-    nothing deeper catches the reach coming back.
-    """
+    """The README's Python block, executed rather than eyeballed."""
     import re
 
     import kingfisher
@@ -274,8 +211,9 @@ def test_the_readme_snippet_runs_and_uses_only_the_public_api(
 
 
 def test_every_preset_agent_parses(shipped):
-    """`agents/` was the one kind nothing here loaded, and two of the two
-    definitions in it could not run."""
+    """`agents/` was the one kind nothing here loaded, and two of the two definitions in
+    it could not run.
+    """
     specs = LocalAgentRepository(shipped / "agents").specs
 
     # `researcher` names middleware and `analyst` names groups, so `seed`
@@ -290,18 +228,7 @@ def test_every_preset_agent_parses(shipped):
 
 
 def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
-    """The test that was missing, and the reason two broken definitions shipped.
-
-    Every other check here reads a definition or loads a tool. None of them put
-    the two together -- and the failure was exactly in the join: `surveyor`
-    grants `csv_profile::csv_profile` and `analysis/profiler.yaml` grants
-    `csv_profile::csv_columns`, both the documented long form for a tool no
-    other file defines, and both refused as unknown by every run.
-
-    `refuse_unknown` rather than a comparison of names, because it is what a
-    build calls. A test that agreed with the loader about spelling and not with
-    the checker is how this got here.
-    """
+    """The test that was missing, and the reason two broken definitions shipped."""
     offering = Offering.of(LocalToolRepository(shipped / "tools").found)
     defined = {
         **LocalAgentRepository(shipped / "agents").specs,
@@ -318,30 +245,14 @@ def test_every_preset_names_tools_this_distribution_actually_offers(shipped):
 
 
 def compiled(shipped, tools, responses):
-    """The shipped `show-your-work` graph, built the way a run would build it.
-
-    Through `LocalSubagentRepository` rather than by importing
-    `kingfisher.assets.subagents.show_your_work`, and the difference is not
-    ceremony. `assets/subagents/` has no `__init__.py`, so that import resolves
-    only as a namespace package -- `test_every_kingfisher_import_in_this_
-    repository_names_a_module_that_exists` refuses it, correctly, and it is not
-    how anything reaches an asset. The catalogue loads these by path, so a test
-    that does anything else exercises a route no deployment has.
-    """
+    """The shipped `show-your-work` graph, built the way a run would build it."""
     spec = LocalSubagentRepository(shipped / "subagents").specs["show-your-work"]
     assert spec.build is not None
     return spec.build(FakeToolCallingModel(responses=responses), tools)
 
 
 def preset_module(shipped):
-    """The preset as a module, loaded the way the catalogue loads it.
-
-    `from kingfisher.assets.subagents import show_your_work` resolves only as
-    a namespace package -- `assets/subagents/` has no `__init__.py` -- and the
-    dangling-import rule refuses it. It caught this test doing exactly what
-    the preset's own docstring warns against. `importing.load` is what reads
-    a definition module for real.
-    """
+    """The preset as a module, loaded the way the catalogue loads it."""
     return load(shipped / "subagents" / "show_your_work.py", declares="SUBAGENTS")
 
 
@@ -359,9 +270,8 @@ def calling(name, args, call_id="1"):
 
 
 def test_the_compiled_preset_records_after_answering(shipped):
-    """The claim the preset exists to make is structural: there is no edge that
-    reaches the end without passing through the record node. So this asserts the
-    edge, not a transcript.
+    """The claim the preset exists to make is structural: there is no edge that reaches
+    the end without passing through the record node.
     """
     graph = compiled(shipped, [line_count], [AIMessage(content="done")])
 
@@ -372,9 +282,7 @@ def test_the_compiled_preset_records_after_answering(shipped):
 
 
 def test_the_record_names_the_tool_and_its_arguments(shipped):
-    """A model asked which tools it used gives a claim. This is computed from
-    the tool calls, so it cannot be talked out of what happened.
-    """
+    """A model asked which tools it used gives a claim."""
     graph = compiled(shipped, [line_count], calling("line_count", {"path": "/data/rows.csv"}))
 
     answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
@@ -385,10 +293,8 @@ def test_the_record_names_the_tool_and_its_arguments(shipped):
 
 
 def test_the_answer_survives_the_record(shipped):
-    """deepagents returns a delegate's result by walking back to the last
-    `AIMessage` with non-empty text. A record appended as its own message would
-    not accompany the answer -- it would replace it, and the caller would get the
-    footer and lose the reply.
+    """deepagents returns a delegate's result by walking back to the last `AIMessage`
+    with non-empty text.
     """
     graph = compiled(shipped, [line_count], calling("line_count", {"path": "x"}))
 
@@ -401,9 +307,8 @@ def test_the_answer_survives_the_record(shipped):
 
 
 def test_a_failed_call_is_recorded_as_failed(shipped):
-    """The pair a model is least reliable about: "I verified the totals" after
-    the verification tool raised. Read from `ToolMessage.status`, which is a
-    field rather than a string to sniff.
+    """The pair a model is least reliable about: "I verified the totals" after the
+    verification tool raised.
     """
     messages = [
         AIMessage(content="", tool_calls=[{"name": "checker", "args": {}, "id": "7"}]),
@@ -415,10 +320,7 @@ def test_a_failed_call_is_recorded_as_failed(shipped):
 
 
 def test_an_answer_that_used_nothing_says_so(shipped):
-    """The most useful line this delegate ever prints. An answer produced
-    without touching the files it is about is exactly what an auditor looks for,
-    and an empty footer reads as though the question was never asked.
-    """
+    """The most useful line this delegate ever prints."""
     graph = compiled(shipped, [line_count], [AIMessage(content="I already knew that.")])
 
     answer = graph.invoke({"messages": [HumanMessage(content="how long is it?")]})
@@ -427,9 +329,8 @@ def test_an_answer_that_used_nothing_says_so(shipped):
 
 
 def test_long_arguments_are_cut_rather_than_dropped(shipped):
-    """A display limit, not a judgement: it decides how much of a known value to
-    show, never what a value means. That is the difference from the path
-    heuristic this preset replaced.
+    """A display limit, not a judgement: it decides how much of a known value to show,
+    never what a value means.
     """
     module = preset_module(shipped)
 
@@ -440,12 +341,9 @@ def test_long_arguments_are_cut_rather_than_dropped(shipped):
 
 
 def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
-    """Measured rather than trusted: this module is imported whenever the
-    subagent catalogue is read, `kingfisher list` included, and
-    `from langchain.agents import create_agent` costs about 370 ms.
-
-    Read as source rather than by timing, because a timing test would pass on a
-    warm interpreter -- every other test here has already imported langchain.
+    """Measured rather than trusted: this module is imported whenever the subagent
+    catalogue is read, `kingfisher list` included, and `from langchain.agents import
+    create_agent` costs about 370 ms.
     """
     import ast
 
@@ -460,19 +358,7 @@ def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
 
 
 def test_every_shipped_tool_taking_a_path_says_it_is_a_session_path(shipped):
-    """The convention, reversed once the mismatch it documented was removed.
-
-    It used to require the opposite sentence -- `path` is a *host* path, not one
-    of the agent's virtual ones. That was true, and was the honest thing to write
-    while a tool had no way to be told where a session was: a workspace tool is a
-    plain function, and deepagents hands its backend to nobody.
-
-    `WorkspaceToolPaths` bridges that, so a tool now receives a real path
-    resolved from the virtual one the agent wrote. The docstring is the
-    description the model reads, so a tool still saying "host path" would be
-    teaching the exact hunt this closed -- find the layout, build an absolute
-    path, reach any session with it.
-    """
+    """The convention, reversed once the mismatch it documented was removed."""
     import ast
 
     missing = []
@@ -510,12 +396,7 @@ def _call_cap_module(shipped):
 
 
 def _documented_registry(shipped):
-    """The wiring block the examples tell you to paste, pasted.
-
-    Both example modules at once, because the block is one block: a deployment
-    copying it registers three names over three classes, and a test that built
-    half of it would not be checking the thing the comment promises.
-    """
+    """The wiring block the examples tell you to paste, pasted."""
     cap = _call_cap_module(shipped)
     note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
     return {
@@ -534,23 +415,12 @@ WIRING = re.compile(r'"([a-z0-9-]+)":\s+(\w+),')
 def _wiring_per_example(shipped) -> dict[str, dict[str, str]]:
     """`filename -> {name: class name}`, read out of each wiring block separately.
 
-    The third copy of a fact the other two already share, and until this it was
-    the only one nothing read. `researcher.yaml` names `call-cap-strict` and
-    `_documented_registry` binds it, and those two are pinned to each other --
-    but the block a deployment is actually told to paste lives in a *docstring*,
-    and a docstring is not executed. Renaming an entry there left every test
-    passing and the instructions wrong.
-
     Kept per file rather than merged, and that is not tidiness. The first draft
     merged with `dict.update`, and `tool_note.py` prints the cap's two entries as
     well as its own -- so renaming a class in `call_cap.py`'s block was silently
-    overwritten by the correct copy in the other, and the mutation that should
-    have caught it passed. Two blocks that repeat entries have to be checked
-    against each other, not folded together.
-
-    Parsed from `__doc__` rather than from the file's text, so the block being
-    inside the docstring is part of what is asserted. Move it into a comment and
-    this finds nothing, which is the first failure below.
+    overwritten by the correct copy in the other, and the mutation that should have
+    caught it passed. Two blocks that repeat entries have to be checked against each
+    other, not folded together.
     """
     return {
         filename: dict(
@@ -571,11 +441,10 @@ def _documented_wiring(shipped) -> dict[str, str]:
 def test_the_two_wiring_blocks_do_not_contradict_each_other(shipped):
     """`tool_note.py` prints the cap's entries too, so they can disagree.
 
-    One block is what a deployment pastes; both being right matters more than
-    either. This is also what makes the class-name check below bite: merged
-    naively, a rename in one block is papered over by the correct copy in the
-    other, which is exactly how the first version of these tests passed a
-    mutation it was written to catch.
+    One block is what a deployment pastes; both being right matters more than either.
+    This is also what makes the class-name check below bite: merged naively, a rename
+    in one block is papered over by the correct copy in the other, which is exactly
+    how the first version of these tests passed a mutation it was written to catch.
     """
     blocks = _wiring_per_example(shipped)
 
@@ -589,18 +458,7 @@ def test_the_two_wiring_blocks_do_not_contradict_each_other(shipped):
 
 
 def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
-    """The block a deployment pastes has to name code that is there.
-
-    Middleware is the one thing kingfisher cannot ship: it is not a
-    `DEFINITION_KIND`, `seed` never copies it, and no name in it is bound
-    anywhere in the shipped tree. What a deployment gets is these two docstrings
-    and an instruction to copy them, which makes the prose the deliverable and
-    a rename in it a broken deliverable.
-
-    So every class the block names is looked up on the module that defines it.
-    `CallCap` becoming `ToolCallCap` leaves the docstring naming something that
-    is not there, and nothing else in this file would have noticed.
-    """
+    """The block a deployment pastes has to name code that is there."""
     modules = {
         name: load(shipped / "middleware" / filename, declares=name)
         for filename, name in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
@@ -631,12 +489,7 @@ def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
 
 
 def test_the_wiring_block_and_the_registry_the_tests_paste_are_one_fact(shipped):
-    """`_documented_registry` says it is "the wiring block ... pasted". Held to it.
-
-    It was pasted by hand, so the two agreed only for as long as somebody kept
-    them agreeing. This is what makes an edit to either show up as a failure
-    rather than as a test that still passes while the documentation drifts.
-    """
+    """`_documented_registry` says it is "the wiring block ..."""
     assert set(_documented_wiring(shipped)) == set(_documented_registry(shipped)), (
         "the block the examples print and the registry these tests build from it "
         "no longer register the same names"
@@ -644,14 +497,7 @@ def test_the_wiring_block_and_the_registry_the_tests_paste_are_one_fact(shipped)
 
 
 def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(shipped):
-    """The other end of it: a definition may not name what the block never wires.
-
-    `researcher.yaml` and `sweeper.yaml` are the only definitions here that name
-    middleware, and `seed` leaves both behind precisely because a workspace has
-    not registered these. The instruction that makes them runnable is the block,
-    so a name in a definition with no line in the block is a curriculum that
-    cannot be completed by following it.
-    """
+    """The other end of it: a definition may not name what the block never wires."""
     wired = set(_documented_wiring(shipped))
     named: set[str] = set()
     for definition in ("agents/researcher.yaml", "subagents/sweeper.yaml"):
@@ -669,11 +515,6 @@ def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(ship
 def test_the_middleware_example_is_not_a_definition_kind(shipped):
     """It sits under `assets_examples/` and `seed` does not copy it, which is the one
     surprising thing about this folder and therefore the thing to pin.
-
-    `DEFINITION_KINDS` is the fields of `Definitions`, and `seed` walks exactly
-    those. Middleware is not among them by design: a middleware read out of the
-    workspace would be code the agent can edit, wrapped around the agent that
-    edited it.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
@@ -682,26 +523,7 @@ def test_the_middleware_example_is_not_a_definition_kind(shipped):
 
 
 def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path):
-    """The curriculum has to keep running after a `kingfisher seed`.
-
-    A definition naming `call-cap-strict` is refused when it is built --
-    `names unregistered middleware` -- on every deployment that has not written
-    the factory. Seeding one into a fresh workspace hands somebody a file that
-    cannot run and no reason why.
-
-    This used to be a rule about *folders*: the two definitions naming
-    middleware lived under `assets_examples/middleware/`, which `seed` does not walk,
-    and this test asserted that nothing in `agents/` or `subagents/` named one.
-    That kept a fresh checkout working and cost the thing it was checking --
-    an agent and a delegate filed away from their own kinds, hand-parsed by
-    this file because no repository could be pointed at the folder holding
-    them.
-
-    So the rule moved to where the decision is. `seed` reads the field and
-    leaves such a definition behind, at any depth, and the files live with
-    their kind. Driven against the real tree rather than asserted over it,
-    because what could regress is the copying rather than the wording.
-    """
+    """The curriculum has to keep running after a `kingfisher seed`."""
     from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
@@ -749,12 +571,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
 
 def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_path):
-    """The deployment that already registered the names wants its own examples.
-
-    Skipping is a fact about the *workspace* -- one that has registered nothing
-    cannot build these -- rather than a judgement about the files, so a
-    deployment that has done the registering says so and gets them.
-    """
+    """The deployment that already registered the names wants its own examples."""
     from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
@@ -779,14 +596,7 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
 
 
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
-    """The property the rule exists for, checked over the result rather than
-    the inputs.
-
-    The test above pins the two files this tree happens to have. This one holds
-    the *invariant*: whatever lands in a seeded workspace can be built against
-    an empty registry. A definition added later that names middleware turns
-    this red without anybody remembering to list it.
-    """
+    """The property the rule exists for, checked over the result rather than the inputs."""
     from kingfisher.infrastructure.documents import middleware_named
     from kingfisher.infrastructure.workspace.seeding import seed
 
@@ -815,18 +625,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
 
 
 def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped):
-    """The property the rule above now rests on, driven rather than argued.
-
-    `assistant` carries `middleware: ["*"]`, so this is the exact path a first
-    run takes on a checkout that has registered nothing. What it has to do is
-    produce no middleware *quietly* -- not raise, which is what a name would do,
-    and not report a shortfall either, because a caller cannot register a
-    middleware and telling it what it could not have asked for is noise.
-
-    Read off the shipped file rather than a spec built here, because the thing
-    that could regress is the file: delete the star and this still passes if it
-    asserts on a spec of its own making.
-    """
+    """The property the rule above now rests on, driven rather than argued."""
     from kingfisher.infrastructure.harness.agent import declared_middleware
 
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
@@ -838,11 +637,6 @@ def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped
 def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
     """It is code, so "does it parse" means "does it run" -- the same bar
     `test_every_preset_tool_loads` sets for `tools/`.
-
-    Driven rather than inspected: a scripted model asks for three tool calls
-    against a cap of two, and the third has to come back refused while the turn
-    keeps going. A cap that ended the turn would be a worse thing wearing the
-    same name.
     """
     cap = _call_cap(shipped)
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
@@ -874,11 +668,6 @@ def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
 def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
     """It is code, so "does it parse" means "does it run" -- the same bar
     `test_the_middleware_example_caps_a_turn` sets for the cap two tests up.
-
-    Driven by a scripted model rather than by calling `_annotate` directly,
-    because what could be wrong is the wiring: a middleware that annotates
-    correctly and is never reached by the graph passes every unit assertion and
-    does nothing at all.
     """
     note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
@@ -913,27 +702,15 @@ def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
 
 
 def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
-    """`CallCap(0)` would refuse the first call and every one after it, which
-    is not a narrower cap but a broken agent. Omitting the name is how you say
-    'none', on this axis as on every other."""
+    """`CallCap(0)` would refuse the first call and every one after it, which is not a
+    narrower cap but a broken agent.
+    """
     with pytest.raises(ValueError, match="omit the middleware instead"):
         _call_cap(shipped)(0)
 
 
 def _example_definitions(shipped):
-    """The agent and delegate that name middleware, from the kinds they belong to.
-
-    Through the ordinary repositories, which is the point of the move that put
-    them there. They used to sit beside `call_cap.py` and be hand-parsed here,
-    because a folder holding an agent, a delegate and two modules is a folder no
-    repository can be pointed at -- it would have tried to read `sweeper` as an
-    agent.
-
-    What kept them out of these folders was that `seed` copied everything in
-    them, and a definition naming middleware cannot run in a workspace that has
-    registered nothing. That is `seed`'s rule now rather than the layout's, so
-    the layout is free to say what these files *are*.
-    """
+    """The agent and delegate that name middleware, from the kinds they belong to."""
     return (
         LocalAgentRepository(shipped / "agents").specs["researcher"],
         LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
@@ -941,18 +718,7 @@ def _example_definitions(shipped):
 
 
 def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
-    """Unseeded is not unchecked.
-
-    Nothing copies this folder and nothing loads it, so these two files have no
-    run to fail on -- which is exactly the condition documentation rots under.
-    `call_cap.py` is driven by a scripted model two tests up for the same
-    reason: an example that only ever gets read is an example nobody notices
-    has gone stale.
-
-    So they are parsed by the real formats, and the names they exist to
-    demonstrate are asserted rather than assumed. A rename of either registry
-    entry in `call_cap.py`'s wiring block turns this red.
-    """
+    """Unseeded is not unchecked."""
     agent, delegate = _example_definitions(shipped)
 
     assert agent.name == "researcher"
@@ -976,18 +742,7 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
 
 
 def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
-    """The reason they sit here rather than under `agents/` and `subagents/`.
-
-    `test_no_shipped_definition_names_a_middleware` states the rule; this drives
-    the harm behind it. Against a deployment that registered nothing -- which is
-    every fresh checkout -- both are refused when the definition is built, and
-    refused by name rather than quietly built without the cap they specified.
-
-    Which is also why the rule cannot simply be relaxed for these two. It is not
-    that they are unfinished; it is that a definition naming middleware is only
-    loadable somewhere the factory exists, and a seeded workspace is not that
-    place until its deployment says so.
-    """
+    """The reason they sit here rather than under `agents/` and `subagents/`."""
     agent, delegate = _example_definitions(shipped)
 
     for spec, kind in ((agent, "agent"), (delegate, "subagent")):
@@ -996,17 +751,7 @@ def test_the_middleware_examples_are_why_they_are_not_seeded(shipped):
 
 
 def test_the_middleware_examples_build_against_the_registry_they_document(shipped):
-    """The wiring block in `call_cap.py` is copy-pasteable, checked by pasting it.
-
-    The registry below is that block's two entries over the one class, which is
-    the lesson those two names carry: a cap a definition could set is not a cap,
-    so the variants are registered and a definition chooses among them.
-
-    The delegate's middleware is built from the same registry and is a separate
-    object, which is the other half of what this pair shows. A subagent inherits
-    none of its parent's middleware, so `researcher` running out of calls says
-    nothing about how many `sweeper` has left.
-    """
+    """The wiring block in `call_cap.py` is copy-pasteable, checked by pasting it."""
     registry = _documented_registry(shipped)
     agent, delegate = _example_definitions(shipped)
 
@@ -1024,16 +769,7 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
 
 
 def test_the_note_example_is_one_class_configured_two_ways(shipped):
-    """The half of the axis `call_cap.py` cannot show, driven end to end.
-
-    One registry entry, named by both definitions, built into two objects
-    carrying the sentences their own files wrote. That is what a setting buys
-    and what two-names-over-two-classes cannot express -- and it is the reason
-    `ToolNote` opens `text` where `CallCap` opens nothing.
-
-    Read off the built objects rather than the specs, because the specs were
-    already asserted two tests up. What could still be wrong here is the merge.
-    """
+    """The half of the axis `call_cap.py` cannot show, driven end to end."""
     registry = _documented_registry(shipped)
     agent, delegate = _example_definitions(shipped)
 
@@ -1049,12 +785,8 @@ def test_the_note_example_is_one_class_configured_two_ways(shipped):
 
 
 def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
-    """`max_length` is a ceiling on what a definition may inject into every tool
-    result, so it is shut for the same reason `limit` is.
-
-    Driven against the real class rather than a fixture, because the thing that
-    could regress is `ToolNote.yaml_settable` -- someone adding `max_length` to
-    it to make a long note fit would pass every other test in this file.
+    """`max_length` is a ceiling on what a definition may inject into every tool result,
+    so it is shut for the same reason `limit` is.
     """
     from dataclasses import replace
 
@@ -1070,13 +802,7 @@ def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
 
 
 def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
-    """`middleware: [tool-note]` with no settings is a working line, not a no-op.
-
-    `defaults` holds a real sentence rather than an empty string, so a
-    definition that names the middleware and says no more still gets a note.
-    Worth pinning: an empty default would make the bare form silently do
-    nothing, which is the shape of a feature nobody notices is broken.
-    """
+    """`middleware: [tool-note]` with no settings is a working line, not a no-op."""
     from dataclasses import replace
 
     registry = _documented_registry(shipped)
@@ -1090,14 +816,7 @@ def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
 
 
 def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
-    """The shape the whole argument rests on, pinned where it can rot.
-
-    `CallCap.yaml_settable` is empty, so no definition can write `limit:` --
-    and the way a deployment offers a looser ceiling is a second class, not a
-    second key. If someone later adds `limit` to `yaml_settable` to save a
-    class, this fails and says why that trade is the one the module argues
-    against.
-    """
+    """The shape the whole argument rests on, pinned where it can rot."""
     module = _call_cap_module(shipped)
 
     assert module.CallCap.yaml_settable == frozenset(), (
@@ -1119,8 +838,9 @@ def _vocabulary(shipped):
 
 
 def test_the_vocabulary_ships_and_reads(shipped):
-    """It is not seeded -- `seed` copies definitions and this is not one -- so
-    nothing else here would notice if it stopped parsing."""
+    """It is not seeded -- `seed` copies definitions and this is not one -- so nothing
+    else here would notice if it stopped parsing.
+    """
     groups = _vocabulary(shipped)
 
     assert groups is not None
@@ -1135,25 +855,16 @@ def test_the_vocabulary_ships_and_reads(shipped):
 
 
 def test_the_containing_group_reaches_what_it_contains(shipped):
-    """`reviewers` appears on no definition in this set, which is the point of
-    shipping it: a group that reaches things without being written on them."""
+    """`reviewers` appears on no definition in this set, which is the point of shipping
+    it: a group that reaches things without being written on them.
+    """
     groups = _vocabulary(shipped)
 
     assert groups.expand(["reviewers"]) == frozenset({"reviewers", "analysts", "auditors"})
 
 
 def test_every_group_the_presets_name_is_declared(shipped):
-    """The assertion that keeps this set honest.
-
-    A definition naming an undeclared group is refused when a deployment reads
-    its catalogue -- so a preset that named one would be a file we ship, tell
-    people to copy, and which stops their server. It would also be demonstrating
-    the exact failure the vocabulary exists to prevent.
-
-    Checked here rather than trusted, because nothing else looks: these files
-    are not seeded by default and a workspace without `groups.yaml` never
-    resolves them at all.
-    """
+    """The assertion that keeps this set honest."""
     from kingfisher.infrastructure.documents import groups_named
 
     declared = set(_vocabulary(shipped).names)
@@ -1169,8 +880,9 @@ def test_every_group_the_presets_name_is_declared(shipped):
 
 
 def test_the_group_presets_narrow_for_a_narrower_caller(shipped):
-    """The compounding case, asserted against the files rather than described:
-    one delegate, and an auditor holds fewer tools than an analyst."""
+    """The compounding case, asserted against the files rather than described: one
+    delegate, and an auditor holds fewer tools than an analyst.
+    """
     specs = LocalSubagentRepository(shipped / "subagents").specs
     groups = _vocabulary(shipped)
     auditor = specs["auditor"]
@@ -1191,9 +903,9 @@ def test_the_group_presets_narrow_for_a_narrower_caller(shipped):
 
 
 def test_an_entry_that_states_nothing_inherits(shipped):
-    """`analyst.yaml` restricts one tool and leaves two bare -- which is the
-    rule most likely to be got wrong, so it is asserted rather than only
-    commented."""
+    """`analyst.yaml` restricts one tool and leaves two bare -- which is the rule most
+    likely to be got wrong, so it is asserted rather than only commented.
+    """
     specs = LocalAgentRepository(shipped / "agents").specs
     groups = _vocabulary(shipped)
     analyst = specs["analyst"]
@@ -1210,11 +922,7 @@ def test_an_entry_that_states_nothing_inherits(shipped):
 
 
 def test_a_shipped_requirement_takes_both_groups_at_once(shipped):
-    """The `all_of` case, asserted against the files rather than described.
-
-    An analyst reaches `sql_query` and not `http_fetch`; the same analyst who is
-    also senior reaches both. One definition, and the difference is a second
-    group rather than a second file."""
+    """The `all_of` case, asserted against the files rather than described."""
     specs = LocalAgentRepository(shipped / "agents").specs
     groups = _vocabulary(shipped)
     analyst = specs["analyst"]
@@ -1235,8 +943,7 @@ def test_a_shipped_requirement_takes_both_groups_at_once(shipped):
 
 
 def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
-    """It is derived, so claiming it would be claiming the conclusion. The
-    refusal names the parts to send instead."""
+    """It is derived, so claiming it would be claiming the conclusion."""
     from kingfisher.domain.access import AccessError
 
     with pytest.raises(AccessError, match=r"all of \[analysts, senior\]"):
@@ -1244,13 +951,8 @@ def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
 
 
 def test_the_long_entry_form_is_shown_on_every_field_that_takes_one(shipped):
-    """`tools`, `subagents` and `skills` read identically, and the set showed
-    that on one of the three.
-
-    One long form across all three fields is the reason an entry is
-    `{name, groups}` rather than a shape per field -- a claim `docs/guides/formats.md`
-    makes and nothing held the examples to. Asserted by parsing the files rather
-    than the specs, because what is being checked is how somebody *wrote* it.
+    """`tools`, `subagents` and `skills` read identically, and the set showed that on
+    one of the three.
     """
     import yaml
 
@@ -1274,9 +976,9 @@ def test_the_long_entry_form_is_shown_on_every_field_that_takes_one(shipped):
 
 
 def test_a_bare_entry_sits_beside_a_long_one(shipped):
-    """Mixing the two spellings in one list is the ordinary case, not a special
-    one -- an entry with nothing to attach writes nothing. A set where every
-    list was uniformly long would teach the opposite."""
+    """Mixing the two spellings in one list is the ordinary case, not a special one --
+    an entry with nothing to attach writes nothing.
+    """
     import yaml
 
     document = yaml.safe_load(
@@ -1290,8 +992,7 @@ def test_a_bare_entry_sits_beside_a_long_one(shipped):
 
 
 def test_the_other_presets_still_restrict_nobody(shipped):
-    """Adding a policied set must not quietly narrow the ones that were here.
-    Every other preset carries no `groups:` line and stays reachable by all."""
+    """Adding a policied set must not quietly narrow the ones that were here."""
     from kingfisher.domain.capabilities import ALL
 
     agents = LocalAgentRepository(shipped / "agents").specs

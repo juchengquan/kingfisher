@@ -1,13 +1,4 @@
-"""Which skills the agent will actually have, versus which look like skills.
-
-Two readers disagreed. Kingfisher listed directories; deepagents opened them and
-kept what it could parse. A skill it drops was advertised anyway, so activating
-one passed validation, allowed the name through the filter, and produced an
-agent with no skills and no complaint.
-
-These pin both halves: what the registry answers, and that naming something it
-does not hold is now refused rather than silently honoured.
-"""
+"""Which skills the agent will actually have, versus which look like skills."""
 
 from __future__ import annotations
 
@@ -45,8 +36,7 @@ def test_it_offers_what_deepagents_will_load(cfg):
 
 
 def test_a_skill_with_no_description_is_not_offered(cfg):
-    """deepagents refuses it, so the agent will never hear of it. Advertising it
-    is what let a caller activate one and get nothing."""
+    """deepagents refuses it, so the agent will never hear of it."""
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 
     registry = _read(cfg.skills_dir)
@@ -56,9 +46,7 @@ def test_a_skill_with_no_description_is_not_offered(cfg):
 
 
 def test_a_header_naming_something_else_is_offered_under_the_header_name(cfg):
-    """The folder is not the name -- deepagents files it under what the header
-    says. So it is neither missing nor loadable-as-typed: it is present under a
-    name nobody wrote, which is why it is offered and not reported."""
+    """The folder is not the name -- deepagents files it under what the header says."""
     _skill(cfg.skills_dir, "folder", GOOD.format(name="header", desc="Disagrees."))
 
     registry = _read(cfg.skills_dir)
@@ -74,8 +62,7 @@ def test_a_description_comes_back_for_a_listing(cfg):
 
 
 def test_an_empty_catalogue_is_not_an_error(cfg):
-    """A deployment may legitimately ship no skills. What it must not be is an
-    empty catalogue nobody mentioned, which `unloadable` covers."""
+    """A deployment may legitimately ship no skills."""
     cfg.skills_dir.mkdir(parents=True, exist_ok=True)
 
     assert _read(cfg.skills_dir).names == ()
@@ -92,9 +79,7 @@ def test_validation_offers_only_what_will_load(cfg):
 
 
 def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):
-    """It used to build. The grant was accepted, `NarrowedSkills` allowed the
-    name, deepagents never listed it, and the agent got no skills at all --
-    with nothing anywhere saying so."""
+    """It used to build."""
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 
     with pytest.raises(CapabilityError, match="unknown skill"):
@@ -119,9 +104,7 @@ def test_a_loadable_skill_still_builds(cfg, session_dir):
 
 
 def test_the_catalogue_reads_it_once(cfg):
-    """Warmed with the rest and cached. deepagents itself loads once per session
-    and checkpoints the answer, so re-reading per turn would be answering a
-    question nobody re-asks."""
+    """Warmed with the rest and cached."""
     _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
     catalogue = Definitions.from_config(cfg)
 
@@ -135,11 +118,6 @@ def test_the_private_lister_is_still_there():
     """`SkillMetadata` is public and the lister is not, so this reaches for an
     underscore -- the same coupling `WorkspaceScopedBackend` takes on
     `_get_backend_and_key`, and pinned for the same reason.
-
-    Without this, a deepagents release that renames it turns the registry empty:
-    every skill becomes unloadable, every activation is refused, and the message
-    blames the catalogue. That is the original bug wearing a different hat, so
-    the rename has to fail *here* instead.
     """
     from deepagents.middleware.skills import _list_skills_with_errors
 
@@ -147,10 +125,10 @@ def test_the_private_lister_is_still_there():
 
 
 def test_the_metadata_still_carries_what_the_registry_reads():
-    """Three keys are load-bearing: `name` is what a request activates, `path`
-    is what tells a loaded skill from a missing one, and `description` is what
-    a listing prints. A shape change upstream should fail here rather than
-    silently produce a registry of blanks."""
+    """Three keys are load-bearing: `name` is what a request activates, `path` is what
+    tells a loaded skill from a missing one, and `description` is what a listing
+    prints.
+    """
     from deepagents.middleware.skills import SkillMetadata
 
     assert {"name", "path", "description"} <= set(SkillMetadata.__annotations__)
@@ -160,14 +138,7 @@ def test_the_metadata_still_carries_what_the_registry_reads():
 
 
 def test_a_header_naming_something_else_is_reported(cfg):
-    """The gap the two neighbouring reports left open.
-
-    `unloadable` is a skill the agent will never hear about; `misplaced` is one
-    sitting too deep to load. This is neither -- it loads, it is offered, and it
-    answers to a name that is not in the directory tree. deepagents files it by
-    its header and logs a warning nobody reads, so until this the only sign was
-    a caller typing the directory name and being told there is no such skill.
-    """
+    """The gap the two neighbouring reports left open."""
     _skill(cfg.skills_dir, "company-lookup", GOOD.format(name="find-company", desc="Looks up."))
 
     registry = _read(cfg.skills_dir)
@@ -178,25 +149,26 @@ def test_a_header_naming_something_else_is_reported(cfg):
 
 
 def test_a_header_that_agrees_is_not_reported(cfg):
-    """The negative control, and the one that matters most: every well-formed
-    skill in every catalogue takes this path, so a false positive here is a
-    warning on every listing."""
+    """The negative control, and the one that matters most: every well-formed skill in
+    every catalogue takes this path, so a false positive here is a warning on every
+    listing.
+    """
     _skill(cfg.skills_dir, "tidy", GOOD.format(name="tidy", desc="Tidies."))
 
     assert _read(cfg.skills_dir).misfiled == ()
 
 
 def test_a_nested_skill_is_judged_by_its_own_directory(cfg):
-    """Not by the folder above it. `research/lookup/` is filed correctly when
-    its header says `lookup`, and the source label is not part of the name."""
+    """Not by the folder above it."""
     _skill(cfg.skills_dir, "research/lookup", GOOD.format(name="lookup", desc="Looks up."))
 
     assert _read(cfg.skills_dir).misfiled == ()
 
 
 def test_a_nested_skill_can_be_misfiled_too(cfg):
-    """And the report names the directory, not the reference -- it is the
-    directory somebody has to rename."""
+    """And the report names the directory, not the reference -- it is the directory
+    somebody has to rename.
+    """
     _skill(cfg.skills_dir, "research/lookup", GOOD.format(name="finder", desc="Finds."))
 
     assert _read(cfg.skills_dir).misfiled == (("lookup", "finder"),)

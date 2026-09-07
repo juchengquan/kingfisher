@@ -1,11 +1,4 @@
-"""A turn's view: the deployment's catalogue with the session's own on top.
-
-The merge used to be two inline expressions in `agent.py` that quietly did
-different things -- a sorted set union for skills, a right-wins `dict |` for
-subagents -- with nothing saying why. These are the rules, stated, plus the
-composition that keeps the catalogue's half from being re-read to add one
-uploaded file to it.
-"""
+"""A turn's view: the deployment's catalogue with the session's own on top."""
 
 from __future__ import annotations
 
@@ -43,8 +36,7 @@ class InMemory:
         return self.held
 
     def files(self, name):
-        """Enough to satisfy `SkillRepository`. The skill tests below use
-        `Files`, which carries real bytes; this only has to exist."""
+        """Enough to satisfy `SkillRepository`."""
         if name not in self.held:
             raise KeyError(name)
         return {"SKILL.md": ""}
@@ -72,19 +64,19 @@ def _upload_subagent(session_dir, name, prompt="from the session"):
 
 
 def test_skills_are_a_flat_sorted_union():
-    """`capabilities.skills` names skills and not sources, so a request granting
-    one should not have to know which half offered it. Sorted so two sessions
-    holding the same names build the same agent."""
+    """`capabilities.skills` names skills and not sources, so a request granting one
+    should not have to know which half offered it.
+    """
     layered = LayeredSkills(base=InMemory({"b": 1, "a": 1}), overlay=InMemory({"c": 1}))
 
     assert layered.names == ("a", "b", "c")
 
 
 def test_a_session_subagent_wins_a_collision():
-    """Unreachable today -- `uploads` refuses a name the catalogue defines -- so
-    what this settles is which way to fall if that check ever fails: to the
-    definition belonging to the one request, not to the reviewed catalogue every
-    other request shares. A session may then only harm itself.
+    """Unreachable today -- `uploads` refuses a name the catalogue defines -- so what
+    this settles is which way to fall if that check ever fails: to the definition
+    belonging to the one request, not to the reviewed catalogue every other request
+    shares.
     """
     layered = LayeredSubagents(
         base=InMemory({"reviewer": _spec("reviewer", "reviewed")}),
@@ -95,8 +87,9 @@ def test_a_session_subagent_wins_a_collision():
 
 
 def test_layering_does_not_write_into_the_catalogues_own_mapping():
-    """The catalogue's copy is cached and shared by every turn, so merging into
-    it would leak one session's uploads into the next one's view."""
+    """The catalogue's copy is cached and shared by every turn, so merging into it would
+    leak one session's uploads into the next one's view.
+    """
     shared = {"reviewer": _spec("reviewer")}
     catalogue_side = InMemory(shared)
 
@@ -110,8 +103,9 @@ def test_layering_does_not_write_into_the_catalogues_own_mapping():
 
 
 def test_a_layer_satisfies_the_same_port_as_what_it_layers():
-    """The whole reason `AssetRepository` is a port and not a base class:
-    nothing downstream can tell a layered view from a plain one."""
+    """The whole reason `AssetRepository` is a port and not a base class: nothing
+    downstream can tell a layered view from a plain one.
+    """
     skills = LayeredSkills(base=InMemory({"a": 1}), overlay=InMemory({}))
     subagents = LayeredSubagents(base=InMemory({}), overlay=InMemory({"x": _spec("x")}))
 
@@ -121,9 +115,8 @@ def test_a_layer_satisfies_the_same_port_as_what_it_layers():
 
 def test_the_two_halves_need_not_be_the_same_kind_of_store(cfg, session_dir):
     """A directory-backed catalogue with an in-memory session overlay is now
-    expressible, and the merge rules ask only for `names` and `specs` -- so it
-    works, rather than working by accident. Worth pinning: a deployment holding
-    its catalogue in a database still gets uploads off the session's disk.
+    expressible, and the merge rules ask only for `names` and `specs` -- so it works,
+    rather than working by accident.
     """
     _upload_subagent(session_dir, "uploaded")
     catalogue = replace(
@@ -139,27 +132,26 @@ def test_the_two_halves_need_not_be_the_same_kind_of_store(cfg, session_dir):
 
 
 def test_a_turns_view_is_itself_a_catalogue(cfg, session_dir):
-    """Which is what keeps every caller downstream unchanged: `build_agent` asks
-    for `catalogue.skills.names` whether or not a session is involved."""
+    """Which is what keeps every caller downstream unchanged: `build_agent` asks for
+    `catalogue.skills.names` whether or not a session is involved.
+    """
     turn = for_session(Definitions.from_config(cfg), session_dir)
 
     assert isinstance(turn, Definitions)
 
 
 def test_no_session_is_the_catalogue_itself_and_not_a_layer_over_nothing(cfg):
-    """A turn with no session directory has no uploads by definition, and
-    wrapping two empty repositories would cost a listing of a directory that is
-    not there on every call that does not need one."""
+    """A turn with no session directory has no uploads by definition, and wrapping two
+    empty repositories would cost a listing of a directory that is not there on every
+    call that does not need one.
+    """
     catalogue = Definitions.from_config(cfg)
 
     assert for_session(catalogue, None) is catalogue
 
 
 def test_the_catalogue_is_not_re_read_to_add_one_uploaded_definition(cfg, session_dir):
-    """The reason this wraps rather than rebuilds. A catalogue's repositories
-    are read when the deployment is wired; a session arriving with one file must
-    not cost a second walk of the reviewed set.
-    """
+    """The reason this wraps rather than rebuilds."""
     reads = []
 
     @dataclass(frozen=True)
@@ -187,11 +179,7 @@ def test_the_catalogue_is_not_re_read_to_add_one_uploaded_definition(cfg, sessio
 
 
 def test_tools_are_not_layered(cfg, session_dir):
-    """Not an oversight. A tool is Python imported into this process, and a
-    session cannot upload one -- `uploads` accepts `skill_refs` and
-    `subagent_refs` and nothing else. A layer here would advertise a capability
-    that does not exist.
-    """
+    """Not an oversight."""
     catalogue = Definitions.from_config(cfg)
 
     turn = for_session(catalogue, session_dir)
@@ -200,9 +188,10 @@ def test_tools_are_not_layered(cfg, session_dir):
 
 
 def test_uploads_reach_the_agents_view_of_both_kinds(cfg, session_dir):
-    """End to end through the real directories, which is what the two path
-    helpers are for -- `uploads` writes there and this reads there, and a
-    disagreement between them would be silent."""
+    """End to end through the real directories, which is what the two path helpers are
+    for -- `uploads` writes there and this reads there, and a disagreement between
+    them would be silent.
+    """
     _upload_skill(session_dir, "session-only")
     _upload_subagent(session_dir, "session-only")
 
@@ -213,9 +202,10 @@ def test_uploads_reach_the_agents_view_of_both_kinds(cfg, session_dir):
 
 
 def test_one_sessions_uploads_are_invisible_to_another(cfg, session_dir, tmp_path):
-    """The layer is built per turn against one session directory, so this is
-    structural rather than enforced -- but it is the property that matters most
-    and nothing else states it."""
+    """The layer is built per turn against one session directory, so this is structural
+    rather than enforced -- but it is the property that matters most and nothing else
+    states it.
+    """
     _upload_subagent(session_dir, "mine")
     other = tmp_path / "other-session"
     other.mkdir()
@@ -228,8 +218,9 @@ def test_one_sessions_uploads_are_invisible_to_another(cfg, session_dir, tmp_pat
 
 @pytest.mark.parametrize("kind", ["skills", "subagents"])
 def test_an_empty_session_adds_nothing(cfg, session_dir, kind):
-    """The common case: most turns upload nothing, and a missing uploads
-    directory reads as empty rather than as a failure."""
+    """The common case: most turns upload nothing, and a missing uploads directory reads
+    as empty rather than as a failure.
+    """
     catalogue = Definitions.from_config(cfg)
     plain = getattr(catalogue, kind).names
 
@@ -237,17 +228,8 @@ def test_an_empty_session_adds_nothing(cfg, session_dir, kind):
 
 
 def test_every_implementation_offers_names_in_a_stable_order(cfg, session_dir):
-    """The port says stable, because the agent is built from this list and two
-    processes reading the same definitions must offer the model the same one.
-
-    `available_skills` used to `sorted()` at the call site, which worked only
-    while there was a single implementation to sort. There are three now -- the
-    local one, the layer, and whatever a deployment supplies -- so the guarantee
-    had to move into the contract.
-
-    "Every implementation" meant skills, which were the case in hand when this
-    was written. There are four kinds, each walking the directory its own way,
-    and only one of them was held to the sentence above.
+    """The port says stable, because the agent is built from this list and two processes
+    reading the same definitions must offer the model the same one.
     """
     for name in ("b-second", "a-first", "c-third"):
         _upload_skill(session_dir, name)
@@ -269,7 +251,8 @@ def test_every_implementation_offers_names_in_a_stable_order(cfg, session_dir):
 
 def _write_ordered(cfg) -> None:
     """One definition of each other kind, named so a filesystem that answered in
-    creation order would be caught out."""
+    creation order would be caught out.
+    """
     roots = cfg.catalogue_roots
     roots["agents"].mkdir(parents=True, exist_ok=True)
     for name in ("z-last", "a-first"):
@@ -297,13 +280,13 @@ def _write_ordered(cfg) -> None:
 
 
 def test_a_layered_skill_prefers_the_sessions_copy_of_the_files(tmp_path):
-    """The precedence `files` has to pick, and the one `names` never faces --
-    a union is not something you can do to two sets of file contents.
+    """The precedence `files` has to pick, and the one `names` never faces -- a union is
+    not something you can do to two sets of file contents.
 
-    Found by mutation testing: reversing these two lines changed nothing that
-    any test noticed, because the mount is handed the deployment's catalogue
-    and a session's uploads travel by their own route. The rule is still the
-    port's to honour, so it is pinned here.
+    Found by mutation testing: reversing these two lines changed nothing that any
+    test noticed, because the mount is handed the deployment's catalogue and a
+    session's uploads travel by their own route. The rule is still the port's to
+    honour, so it is pinned here.
     """
 
     @dataclass(frozen=True)

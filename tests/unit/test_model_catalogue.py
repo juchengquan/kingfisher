@@ -1,9 +1,4 @@
-"""Reading `models.yaml`.
-
-The file decides where every prompt in a deployment goes, so the failures worth
-testing are the quiet ones: a key that parses and is dropped, an endpoint that
-silently vanishes, a param that looks set and is not.
-"""
+"""Reading `models.yaml`."""
 
 from __future__ import annotations
 
@@ -77,8 +72,7 @@ def test_every_param_is_carried(tmp_path):
 
 
 def test_an_unset_param_stays_unset(tmp_path):
-    """Not filled in with a number kingfisher chose. `temperature` is the one
-    that matters: a default would silently change every deployment."""
+    """Not filled in with a number kingfisher chose."""
     models = loaded(tmp_path).models
     plain = models["main-model"]
 
@@ -99,17 +93,14 @@ def test_an_unset_param_stays_unset(tmp_path):
 )
 def test_a_key_this_format_does_not_define_is_refused(tmp_path, body, expected):
     """The rule `subagents.reading` states, for the same reason: ignoring a key is
-    indistinguishable from honouring it. `max_token:` singular would parse, be
-    dropped, and hand back the default with no error anywhere.
+    indistinguishable from honouring it.
     """
     with pytest.raises(ConfigError, match=expected):
         loaded(tmp_path, body)
 
 
 def test_extra_cannot_overrule_a_param_the_format_defines(tmp_path):
-    """`Adapter.extra` already carries this rule: additive only. A row that
-    could overrule a named param would silently discard a value written three
-    lines above it."""
+    """`Adapter.extra` already carries this rule: additive only."""
     body = GOOD.replace("      reasoning_effort: high", "      max_tokens: 1")
 
     with pytest.raises(ConfigError, match="already defines"):
@@ -120,8 +111,9 @@ def test_extra_cannot_overrule_a_param_the_format_defines(tmp_path):
 
 
 def test_a_model_naming_an_undefined_endpoint_is_refused(tmp_path):
-    """A mistake in the file, and distinct from an endpoint dropped for want of
-    a key -- which is this machine's situation rather than the file's."""
+    """A mistake in the file, and distinct from an endpoint dropped for want of a key --
+    which is this machine's situation rather than the file's.
+    """
     body = GOOD.replace("  tuned:\n    endpoint: gateway", "  tuned:\n    endpoint: typo")
 
     with pytest.raises(ConfigError, match="does not define"):
@@ -144,19 +136,7 @@ def test_an_endpoint_without_its_key_is_dropped_with_its_models(tmp_path):
 
 
 def test_an_api_kingfisher_cannot_build_is_refused_as_the_file_loads(tmp_path):
-    """`api` is a closed set that nothing checked until a turn started.
-
-    Every other closed thing in this file is checked as it is read -- an
-    unknown key, a model absent from the table, a default naming neither. This
-    one loaded, built, and failed inside the first request with an error from
-    somebody else's server.
-
-    `openai` is the case worth naming rather than a nonsense string, because it
-    is the mistake people actually make: it was the name of the Responses-API
-    row, everything else in this ecosystem means `/v1/chat/completions` by
-    "OpenAI-compatible", and a gateway configured the obvious way went all the
-    way to a live call before saying so.
-    """
+    """`api` is a closed set that nothing checked until a turn started."""
     body = GOOD.replace("api: anthropic", "api: openai", 1)
 
     with pytest.raises(ConfigError, match="cannot build") as caught:
@@ -170,16 +150,7 @@ def test_an_api_kingfisher_cannot_build_is_refused_as_the_file_loads(tmp_path):
 
 
 def test_an_unbuildable_api_is_refused_before_a_missing_key_drops_it(tmp_path):
-    """Order matters here, and it is the whole reason this is not a warning.
-
-    An endpoint whose credential is absent is *dropped*, because a missing key
-    is a fact about one machine and a shared catalogue must survive it. An
-    unbuildable `api` is a fact about the file. Checked in the other order, a
-    typo on an endpoint whose key this machine does not hold would be dropped
-    quietly here and refused on the machine that does hold it -- the same file
-    behaving differently in two places, which is what `key_env` being dropped
-    is carefully arranged to avoid.
-    """
+    """Order matters here, and it is the whole reason this is not a warning."""
     body = GOOD.replace(
         "default: main-model",
         "  other:\n    api: openai\n    base_url: https://example.invalid/v1\n"
@@ -192,8 +163,9 @@ def test_an_unbuildable_api_is_refused_before_a_missing_key_drops_it(tmp_path):
 
 
 def test_the_warning_names_the_variable_not_the_endpoint(tmp_path):
-    """"endpoint 'other' has no credentials" sends someone to the YAML, where
-    everything looks correct. The variable name sends them somewhere useful."""
+    """"endpoint 'other' has no credentials" sends someone to the YAML, where everything
+    looks correct.
+    """
     body = GOOD.replace("key_env: GATEWAY_API_KEY", "key_env: SOMETHING_ELSE")
 
     with pytest.raises(ConfigError), pytest.warns(UserWarning, match="SOMETHING_ELSE"):
@@ -232,15 +204,9 @@ def test_a_model_missing_its_endpoint_is_refused(tmp_path):
 
 
 def test_a_profile_keyed_by_another_name_is_refused():
-    """`ModelProfile.model` is the id sent on the wire and the key is what
-    everything looks up by, so a pair that disagree means a delegate asking for
-    one model and a client built for another -- silently, since both names are
-    real.
-
-    `Endpoint` carries no name at all for the same reason this check exists:
-    there was nothing it could say that `ModelProfile.endpoint` did not already,
-    so the field went rather than gaining a guard. A profile's model id has
-    nowhere else to be, so it stays and is checked.
+    """`ModelProfile.model` is the id sent on the wire and the key is what everything
+    looks up by, so a pair that disagree means a delegate asking for one model and a
+    client built for another -- silently, since both names are real.
     """
     with pytest.raises(ConfigError, match="the two cannot differ"):
         Models(
@@ -251,8 +217,9 @@ def test_a_profile_keyed_by_another_name_is_refused():
 
 
 def test_the_loader_cannot_produce_a_mismatch(tmp_path):
-    """It builds every profile from its key, so this is a guard for a fixture or
-    a caller assembling one by hand -- not for `load`."""
+    """It builds every profile from its key, so this is a guard for a fixture or a
+    caller assembling one by hand -- not for `load`.
+    """
     catalogue = loaded(tmp_path)
 
     assert all(name == profile.model for name, profile in catalogue.models.items())
@@ -262,15 +229,9 @@ def test_the_loader_cannot_produce_a_mismatch(tmp_path):
 
 
 def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
-    """Where models.yaml is read from is a `Config` field, and `Models` is a
-    record a deployment may build itself -- so holding the model catalogue in a
-    database, or assembling it in code, needs no file, no path, and no loader.
-
-    Asserted rather than left implicit. It is true today only by accident of the
-    fixtures: `conftest.FAKE_CATALOGUE` is exactly this, so the whole suite
-    already runs on an injected catalogue and no test says so. That made it look
-    like a gap the way skills, subagents and tools each had one -- and unlike
-    those, closing it would have meant adding a port over a seam that works.
+    """Where models.yaml is read from is a `Config` field, and `Models` is a record a
+    deployment may build itself -- so holding the model catalogue in a database, or
+    assembling it in code, needs no file, no path, and no loader.
     """
     from kingfisher import Kingfisher
     from kingfisher.domain.request import Request
@@ -288,9 +249,10 @@ def test_a_deployment_can_supply_models_without_a_file_at_all(tmp_path):
 
 
 def test_the_loader_is_the_only_thing_that_needs_the_file(tmp_path):
-    """The other half of the same point, and what keeps `source` honest: a
-    catalogue that *was* read names where it came from, so a refusal can point
-    at the file that should have defined what it could not find."""
+    """The other half of the same point, and what keeps `source` honest: a catalogue
+    that *was* read names where it came from, so a refusal can point at the file that
+    should have defined what it could not find.
+    """
     catalogue = loaded(tmp_path)
 
     assert catalogue.source == written(tmp_path)
@@ -320,13 +282,7 @@ models:
 
 
 def test_a_model_on_an_unkeyed_endpoint_is_not_reported_as_undefined(tmp_path):
-    """The message this whole change exists to fix.
-
-    `far-model` is defined in the file. Its endpoint was dropped because this
-    machine has no key for it, and the answer used to be "no model 'far-model'
-    defined in <that very file>" -- true of nothing, and it sent its reader to
-    edit YAML that was correct. The fix is a variable, and the message names it.
-    """
+    """The message this whole change exists to fix."""
     models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
 
     with pytest.raises(ConfigError) as refused:
@@ -340,8 +296,9 @@ def test_a_model_on_an_unkeyed_endpoint_is_not_reported_as_undefined(tmp_path):
 
 def test_a_name_the_file_never_defined_still_says_so(tmp_path):
     """The other half, and why the two cannot share one message: this one *is*
-    undefined, and telling its reader about a credential would send them hunting
-    for a variable that has nothing to do with it."""
+    undefined, and telling its reader about a credential would send them hunting for
+    a variable that has nothing to do with it.
+    """
     models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
 
     with pytest.raises(ConfigError) as refused:
@@ -355,12 +312,7 @@ def test_a_name_the_file_never_defined_still_says_so(tmp_path):
 
 
 def test_what_cannot_run_is_kept_apart_from_what_can(tmp_path):
-    """`models` means what can run and has to keep meaning it.
-
-    Which is why `unreachable` holds sentences rather than profiles: a caller
-    reaching into it for something to run gets a string, so the mistake reads
-    wrong instead of half-working.
-    """
+    """`models` means what can run and has to keep meaning it."""
     models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)
 
     assert set(models.models) == {"main-model"}
@@ -369,8 +321,7 @@ def test_what_cannot_run_is_kept_apart_from_what_can(tmp_path):
 
 
 def test_a_catalogue_with_every_key_reaches_nothing_unreachable(tmp_path):
-    """The negative control. Without it the assertions above would pass on a
-    record that marked everything unreachable."""
+    """The negative control."""
     models = load(
         written(tmp_path, TWO_ENDPOINTS),
         {**KEYS, "ELSEWHERE_API_KEY": "sk-elsewhere"},
@@ -382,14 +333,8 @@ def test_a_catalogue_with_every_key_reaches_nothing_unreachable(tmp_path):
 
 
 def test_a_removed_key_says_what_replaces_it_rather_than_looking_like_a_typo(tmp_path):
-    """`aliases:` was a table this format defined, and every deployment that used
-    one has a `models.yaml` that stops loading on upgrade.
-
-    Named individually for the reason `NOT_COMPILED` gives one layer out: the
-    generic "unknown key" reads as a misspelling and sends its reader looking for
-    the right one, when what they need is to know the key is gone and what to
-    write instead. This is the upgrade path, and it only exists if the message
-    carries it.
+    """`aliases:` was a table this format defined, and every deployment that used one
+    has a `models.yaml` that stops loading on upgrade.
     """
     written = GOOD + "\naliases:\n  cheap: tuned\n"
     path = tmp_path / "models.yaml"

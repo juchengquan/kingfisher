@@ -63,17 +63,7 @@ def _write_subagent(workspace, text=SUBAGENT, filename="reviewer.yaml"):
 
 
 def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
-    """The default narrows nothing, which is what it has always meant.
-
-    `subagents` no longer proves that by being absent -- every axis defaults to
-    `"*"` now, and `"*"` means whatever the agent declares. A workspace with no
-    delegates in it still hands the build none, which is what this asserts;
-    filtering is the thing that must not appear.
-
-    "None" is read past `general-purpose`, which is supplied on every build and
-    is not something a request activated -- it is where the caller's ceiling and
-    the deployment's middleware are attached for the delegate nobody declares.
-    """
+    """The default narrows nothing, which is what it has always meant."""
     captured = capture_build(monkeypatch)
     build_agent(
         cfg,
@@ -87,9 +77,10 @@ def test_no_capabilities_means_no_filtering(cfg, monkeypatch, session_dir):
 
 
 def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, session_dir):
-    """Run for real rather than at the construction seam: the point of the
-    allowlist is that the model is never *offered* the tool, and only a live
-    model call proves that."""
+    """Run for real rather than at the construction seam: the point of the allowlist is
+    that the model is never *offered* the tool, and only a live model call proves
+    that.
+    """
     model = RecordingModel(responses=[AIMessage(content="ok")])
 
     agent = build_agent(cfg, session_dir=session_dir,
@@ -103,8 +94,9 @@ def test_restricting_tools_removes_the_shell_from_what_the_model_sees(cfg, sessi
 
 
 def test_an_unrestricted_run_is_offered_the_shell(cfg, session_dir):
-    """The negative control for the test above — otherwise it would pass even
-    if the shell were never wired in the first place."""
+    """The negative control for the test above — otherwise it would pass even if the
+    shell were never wired in the first place.
+    """
     model = RecordingModel(responses=[AIMessage(content="ok")])
 
     build_agent(
@@ -182,14 +174,8 @@ def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, s
 
 
 def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, monkeypatch, session_dir):
-    """`()` activates none where the default `ALL` activates every one the
-    workspace offers -- so the reviewer written above is absent here.
-
-    Asserted on the declared specs rather than on the whole kwarg, which is
-    what this read before. `general-purpose` is supplied on every build now, so
-    the raw list is never empty and "empty" stopped being a way to say "nothing
-    was activated". What the request asked for is unchanged; only the way to
-    read it back is.
+    """`()` activates none where the default `ALL` activates every one the workspace
+    offers -- so the reviewer written above is absent here.
     """
     _write_subagent(cfg.workspace)
     captured = capture_build(monkeypatch)
@@ -223,8 +209,9 @@ def test_naming_something_the_workspace_lacks_fails_loudly(cfg, caps, message, s
 
 
 def test_an_unnamed_tool_survives_the_allowlist():
-    """The allowlist governs kingfisher's named surface; dropping something it
-    cannot identify would be the worse failure."""
+    """The allowlist governs kingfisher's named surface; dropping something it cannot
+    identify would be the worse failure.
+    """
 
     unnamed = {"type": "web_search_20250305"}
 
@@ -239,8 +226,7 @@ def test_an_unnamed_tool_survives_the_allowlist():
 
 
 def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
-    """It was built elsewhere, so the restrictions were never applied to it.
-    Refusing beats running with more access than the caller asked for."""
+    """It was built elsewhere, so the restrictions were never applied to it."""
     from kingfisher.application.run import run
     from kingfisher.domain.request import Request
 
@@ -262,9 +248,7 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
 
 
 def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, session_dir):
-    """The filter is not the boundary. A live run showed MiniMax-M3 calling
-    `execute` from memory after it was filtered out of the offered tools, and
-    ToolNode running it, because the tool is still registered there."""
+    """The filter is not the boundary."""
     responses = [
         AIMessage(
             content="",
@@ -289,8 +273,9 @@ def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, s
 
 
 def test_a_typo_in_a_tool_name_is_caught(cfg, session_dir):
-    """Without this, `read_fil` silently narrows the allowlist and the agent
-    runs crippled -- the same quiet failure skills and subagents refuse."""
+    """Without this, `read_fil` silently narrows the allowlist and the agent runs
+    crippled -- the same quiet failure skills and subagents refuse.
+    """
     with pytest.raises(CapabilityError, match="unknown tool"):
         build_agent(cfg, session_dir=session_dir,
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -299,9 +284,7 @@ def test_a_typo_in_a_tool_name_is_caught(cfg, session_dir):
 
 
 def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
-    """Pins the introspection the check above depends on. If deepagents or
-    LangGraph moves the tool node, this fails loudly here rather than silently
-    turning tool validation into a no-op."""
+    """Pins the introspection the check above depends on."""
 
     graph = build_agent(
         cfg,
@@ -315,14 +298,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
-    """Still no crash, and now it says which of the two answers it is giving.
-
-    `()` was both "dispatches nothing" and "cannot read this", which was fine
-    while every graph here was one `build_agent` made. It stops being fine the
-    moment kingfisher is handed a graph it did not build, because a listing that
-    prints "no tools" for a graph it could not read has stated a fact it does
-    not have.
-    """
+    """Still no crash, and now it says which of the two answers it is giving."""
     from kingfisher.tools.harness import registered_tools
 
     assert registered_tools(object()) is None
@@ -338,10 +314,9 @@ system_prompt: |
 
 
 def test_a_subagent_with_restricted_tools_builds_for_real(cfg, session_dir):
-    """Regression: `SubAgent.tools` takes tool *objects* deepagents will
-    register, not a selection by name. Passing names raised inside ToolNode.
-    The spy-based test below never caught it, and the live run used a subagent
-    with no `tools:` field."""
+    """Regression: `SubAgent.tools` takes tool *objects* deepagents will register, not a
+    selection by name.
+    """
     _write_subagent(cfg.workspace, RESTRICTED_SUBAGENT, "reader.yaml")
 
     build_agent(cfg, session_dir=session_dir,
@@ -377,9 +352,10 @@ system_prompt: |
 
 
 def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch, session_dir):
-    """A bare name would go to deepagents' `init_chat_model`, which infers its
-    own provider and reads credentials from the environment -- around the
-    configured endpoint entirely."""
+    """A bare name would go to deepagents' `init_chat_model`, which infers its own
+    provider and reads credentials from the environment -- around the configured
+    endpoint entirely.
+    """
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,
@@ -397,18 +373,7 @@ def test_a_subagents_model_is_built_through_our_provider_table(cfg, monkeypatch,
 
 
 def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir):
-    """The definition is the only author of where a delegate runs.
-
-    `KINGFISHER_MODEL_SUBAGENT` used to win here, on the theory that cost is an
-    operator's call and should not need editing content someone else owns. One
-    variable can only say "every delegate", which is not the granularity the
-    decision has: `second-opinion` exists in order *not* to be the model beside
-    it, and a blanket override defeats it without saying so.
-
-    Set through the environment, the way a deployment would, rather than onto
-    `Config` -- the field it used to land in is what this change removed, so a
-    test that built one by hand would be asserting against its own fixture.
-    """
+    """The definition is the only author of where a delegate runs."""
     _write_subagent(cfg.workspace, MODEL_SUBAGENT, "cheap.yaml")
     monkeypatch.setenv("KINGFISHER_MODEL_SUBAGENT", "operator-choice")
     monkeypatch.setenv("KINGFISHER_PROVIDER_SUBAGENT", "openai")
@@ -425,9 +390,9 @@ def test_the_environment_cannot_reroute_a_delegate(cfg, monkeypatch, session_dir
 
 
 def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeypatch, session_dir):
-    """The rule that makes two axes safe rather than confusing: `Config` says
-    what is wired and shapes the cached prompt; a request narrows within it.
-    Asking for memory a deployment never wired does not conjure it."""
+    """The rule that makes two axes safe rather than confusing: `Config` says what is
+    wired and shapes the cached prompt; a request narrows within it.
+    """
     captured = capture_build(monkeypatch)
     build_agent(cfg, session_dir=session_dir,  # memory_enabled is False
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
@@ -437,8 +402,9 @@ def test_narrowing_can_only_subtract_from_what_the_deployment_wired(cfg, monkeyp
 
 
 def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, monkeypatch, session_dir):
-    """The prompt still describes memory -- it is the cached prefix and must
-    not vary per request -- so a deny rule is what actually stops the read."""
+    """The prompt still describes memory -- it is the cached prefix and must not vary
+    per request -- so a deny rule is what actually stops the read.
+    """
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, memory_enabled=True),
@@ -454,8 +420,9 @@ def test_declining_memory_drops_the_mount_and_denies_the_file(cfg, monkeypatch, 
 
 
 def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch, session_dir):
-    """The negative control: without it the two tests above would pass even if
-    memory were never wired at all."""
+    """The negative control: without it the two tests above would pass even if memory
+    were never wired at all.
+    """
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, memory_enabled=True),
@@ -467,11 +434,7 @@ def test_memory_is_mounted_when_wired_and_not_declined(cfg, monkeypatch, session
 
 
 def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path):
-    """One reviewed set of definitions, deployed once, serving every workspace.
-
-    That is what making these roots configurable buys: a copy per workspace is
-    a copy nobody can audit centrally.
-    """
+    """One reviewed set of definitions, deployed once, serving every workspace."""
     catalogue = tmp_path / "catalogue" / "skills"
     (catalogue / "shared").mkdir(parents=True)
     (catalogue / "shared" / "SKILL.md").write_text(
@@ -491,7 +454,8 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
 
 def test_subagents_relocate_independently_of_skills(cfg, tmp_path):
     """A deployment may share one catalogue of procedures while keeping its own
-    delegates, or the reverse -- so they are two roots, not one."""
+    delegates, or the reverse -- so they are two roots, not one.
+    """
     catalogue = tmp_path / "catalogue" / "subagents"
     catalogue.mkdir(parents=True)
     (catalogue / "reviewer.yaml").write_text(
@@ -528,22 +492,13 @@ def test_a_definition_chooses_when_no_operator_says_otherwise(cfg, session_dir, 
 
 
 class _CustomState(TypedDict):
-    """At module scope on purpose.
-
-    `from __future__ import annotations` makes every annotation a string, and a
-    `TypedDict` resolves its own against the *module* globals -- so declaring
-    this inside a function gives `NameError: Annotated` at class creation.
-    """
+    """At module scope on purpose."""
 
     messages: Annotated[list, operator.add]
 
 
 def _hand_written_graph():
-    """A graph kingfisher did not build: no model node, no tool node.
-
-    The shape a compiled subagent may have, and the reason the two answers had
-    to come apart.
-    """
+    """A graph kingfisher did not build: no model node, no tool node."""
     # ty reads langgraph's `StateT` bound as unsatisfied by a
     # `typing_extensions.TypedDict` under `from __future__ import annotations`.
     # The graph compiles and runs; the limitation is in the checker's model of
@@ -560,10 +515,10 @@ def _hand_written_graph():
 
 
 def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
-    """Measured, because the obvious reading is wrong: `create_agent(tools=[])`
-    compiles to `['__start__', 'model']` with **no tool node at all**, which is
-    exactly the shape of a graph that dispatches nothing for a different reason.
-    The `model` node is what separates them."""
+    """Measured, because the obvious reading is wrong: `create_agent(tools=[])` compiles
+    to `['__start__', 'model']` with **no tool node at all**, which is exactly the
+    shape of a graph that dispatches nothing for a different reason.
+    """
     from langchain.agents import create_agent
 
     from kingfisher.tools.harness import registered_tools
@@ -578,13 +533,7 @@ def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
 
 
 def test_a_real_build_is_readable(cfg, session_dir):
-    """The pin. Every other caller reads `None` as "assume nothing" so that an
-    upstream rename cannot take down a build -- which means an upstream rename
-    would otherwise be silent, and the built-in set would quietly empty.
-
-    So this is where it fails instead: a graph `build_agent` made must always be
-    readable, and must dispatch something.
-    """
+    """The pin."""
     from kingfisher.infrastructure.harness.agent import build_agent
     from kingfisher.tools.harness import registered_tools
 
@@ -595,15 +544,7 @@ def test_a_real_build_is_readable(cfg, session_dir):
 
 
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
-    """The reason any of this changed. `--list` reported no built-in tools for a
-    graph it failed to read, which is a fact it did not have -- and it looked
-    exactly like a deployment that genuinely had none.
-
-    Patched at `tools.harness`, which is where `inventory` imports it from at
-    call time -- it moved there with the rest of the tool picture, and this test
-    patches the module rather than the caller's name precisely so that a move
-    like that surfaces here rather than passing against a stale attribute.
-    """
+    """The reason any of this changed."""
     from kingfisher.application import inventory as inventory_module
     from kingfisher.tools import harness as surface_module
 
@@ -627,18 +568,7 @@ TOOLS = [shout]
 
 
 def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_dir):
-    """The grant is the security boundary, and it matches on a name.
-
-    `ToolAllowlist` reads `.name` and *keeps* anything it cannot identify --
-    deliberately, since silently dropping an unrecognised tool would be the
-    worse failure of the two. A plain function has `__name__` and no `.name`,
-    so whether a withheld one is really withheld rests on deepagents wrapping
-    it before the allowlist ever sees it.
-
-    It does. That is upstream behaviour rather than something kingfisher
-    guarantees, which is why it is asserted rather than assumed now that a
-    plain function is a documented way to write a tool.
-    """
+    """The grant is the security boundary, and it matches on a name."""
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)

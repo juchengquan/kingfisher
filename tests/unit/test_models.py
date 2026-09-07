@@ -1,9 +1,4 @@
-"""Model construction.
-
-Constructing a chat model touches no network, so these are ordinary unit tests
-even though they build the real classes. The values they pin are the ones with
-documented failure modes — everything else here is LangChain's business.
-"""
+"""Model construction."""
 
 from __future__ import annotations
 
@@ -18,26 +13,14 @@ OPENAI = Endpoint("openai_responses", "https://api.openai.com/v1", "sk-not-real"
 
 
 def test_openai_uses_the_responses_api(cfg):
-    """The openai adapter targets `/v1/responses`, and only that.
-
-    `ChatOpenAI` defaults `use_responses_api` to `None`, which lets LangChain
-    pick a surface per request — so the endpoint kingfisher talks to would vary
-    with the features a given call happens to use. Pinning it keeps the surface
-    the same on every call, which is what the run log claims when it records
-    the endpoint.
-    """
+    """The openai adapter targets `/v1/responses`, and only that."""
     model = build_model(cfg.models.models["fake-model"], OPENAI)
 
     assert model.use_responses_api is True
 
 
 def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
-    """`extra` is additive: it may not name a value the profile carries.
-
-    A row that did would silently discard a value the operator set. The
-    duplicate keyword raises instead, so the mistake surfaces at construction
-    rather than as a deployment that quietly ignores its own `max_tokens`.
-    """
+    """`extra` is additive: it may not name a value the profile carries."""
     colliding = Adapter("langchain_openai:ChatOpenAI", {"max_tokens": 1})
     monkeypatch.setitem(ADAPTERS, "openai_responses", colliding)
 
@@ -46,12 +29,7 @@ def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
 
 
 def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
-    """The same rule from the other side: `extra` in `models.yaml`.
-
-    `model_catalogue` refuses this at parse time so the error can name the
-    file. This is the backstop for a `ModelProfile` built any other way — the
-    duplicate keyword still raises rather than one value silently winning.
-    """
+    """The same rule from the other side: `extra` in `models.yaml`."""
     profile = replace(cfg.models.models["fake-model"], extra={"max_tokens": 1})
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):
@@ -61,10 +39,6 @@ def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
 def test_the_model_comes_from_the_profile_it_is_handed(cfg):
     """How a delegate runs elsewhere, now that there is no `Config` parameter:
     `delegation.as_subagent` looks the profile up and hands it over.
-
-    Without this, `build_model` could quietly read some other source and every
-    delegate would run the deployment's own model while its definition said
-    otherwise.
     """
     profile, endpoint = cfg.models.resolve("cheap-model")
 
@@ -73,12 +47,7 @@ def test_the_model_comes_from_the_profile_it_is_handed(cfg):
 
 
 def test_an_unset_param_is_not_passed_at_all(cfg):
-    """Omitted means absent, not "passed as a default we chose".
-
-    `temperature` is why the distinction is worth a test. Sending `0.0` because
-    nobody wrote a number would silently change what every existing deployment
-    does, from the one file whose purpose is to hand that decision over.
-    """
+    """Omitted means absent, not "passed as a default we chose"."""
     unset = cfg.models.models["fake-model"]
     assert unset.temperature is None
     assert "temperature" not in unset.kwargs()
@@ -129,13 +98,7 @@ def test_every_adapter_has_landing_sites():
 
 
 def test_an_unbuildable_api_fails_with_a_readable_error(cfg):
-    """An endpoint naming a wire format kingfisher does not ship.
-
-    `model_catalogue` could refuse this at load, and the message would be
-    better placed there. It is checked here too because `ADAPTERS` is the only
-    thing that actually knows, and a bare `KeyError` from a dict lookup is not
-    something anyone can act on.
-    """
+    """An endpoint naming a wire format kingfisher does not ship."""
     endpoint = Endpoint("gemini", "https://example.invalid", "sk-not-real")
 
     with pytest.raises(ConfigError, match="names api 'gemini'"):
@@ -143,13 +106,9 @@ def test_an_unbuildable_api_fails_with_a_readable_error(cfg):
 
 
 def test_describing_an_adapter_does_not_import_its_sdk():
-    """A deployment uses the wire formats its endpoints name, so naming the
-    classes meant importing every provider's SDK to describe endpoints none of
-    them would build.
-
-    This buys nothing while deepagents imports `langchain_openai` itself
-    wherever it is installed. What it buys is the option of not installing it,
-    which holding the class made impossible.
+    """A deployment uses the wire formats its endpoints name, so naming the classes
+    meant importing every provider's SDK to describe endpoints none of them would
+    build.
     """
     import subprocess
     import sys
@@ -166,8 +125,9 @@ def test_describing_an_adapter_does_not_import_its_sdk():
 
 
 def test_a_row_naming_an_absent_class_fails_where_it_is_built():
-    """Deferring the import defers the error too, so it has to still be a clear
-    one -- a typo'd row must not surface as a mysterious attribute failure."""
+    """Deferring the import defers the error too, so it has to still be a clear one -- a
+    typo'd row must not surface as a mysterious attribute failure.
+    """
     row = Adapter("langchain_openai:NoSuchModel")
     with pytest.raises(AttributeError, match="NoSuchModel"):
         row.resolve()

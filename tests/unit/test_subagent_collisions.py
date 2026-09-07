@@ -1,16 +1,4 @@
-"""Two subagents called `surveyor`, from folders nobody coordinated.
-
-The last of the three. Skills got sources, tools got references, and this is
-the same clash in the last place that still refused it outright -- which killed
-the whole catalogue, not just the pair, and could not be fixed by anyone who
-owned neither file.
-
-Unlike tools, the refusal here is a plain refusal rather than a split grant.
-The difference is what each axis defaults to: `subagents` activates nothing
-unless asked, so a caller who never wanted two can never trip this. `tools`
-defaults to everything, which is why that axis had to separate what a run may
-draw on from what an agent carries.
-"""
+"""Two subagents called `surveyor`, from folders nobody coordinated."""
 
 from __future__ import annotations
 
@@ -53,8 +41,9 @@ def _build(cfg, session_dir, subagents):
 
 
 def test_two_folders_may_each_define_one_name(cfg):
-    """This took the whole catalogue down, not just the pair: `--list` returned
-    an error and no run could start."""
+    """This took the whole catalogue down, not just the pair: `--list` returned an error
+    and no run could start.
+    """
     _two_vendors(cfg)
 
     assert sorted(LocalSubagentRepository(subagents_dir(cfg)).specs) == [
@@ -77,10 +66,7 @@ def test_a_unique_name_stays_flat(cfg):
 
 
 def test_activating_both_is_refused(cfg, session_dir):
-    """The safety property, and the reason the catalogue can afford to keep
-    both. A roster is keyed by name: handing deepagents two subagents called
-    `surveyor` compiles one, with no error and nothing saying which survived.
-    """
+    """The safety property, and the reason the catalogue can afford to keep both."""
     _two_vendors(cfg)
 
     with pytest.raises(CapabilityError, match="would never run"):
@@ -106,9 +92,10 @@ def test_the_refusal_names_both_files(cfg, session_dir):
 
 
 def test_a_bare_name_two_files_offer_is_refused(cfg, session_dir):
-    """Told apart from activating both, because they are different mistakes:
-    one is a caller who has not noticed there are two, the other is a caller who
-    wants both and cannot have them."""
+    """Told apart from activating both, because they are different mistakes: one is a
+    caller who has not noticed there are two, the other is a caller who wants both
+    and cannot have them.
+    """
     _two_vendors(cfg)
 
     with pytest.raises(CapabilityError, match="more than one source offers"):
@@ -116,9 +103,8 @@ def test_a_bare_name_two_files_offer_is_refused(cfg, session_dir):
 
 
 def test_activating_every_subagent_is_refused_when_two_share_a_name(cfg, session_dir):
-    """`*` cannot mean "both" here, and quietly meaning "one of them" is the
-    failure this exists to stop. Cheap to refuse: `subagents` activates nothing
-    by default, so only a caller who explicitly asked for everything sees it.
+    """`*` cannot mean "both" here, and quietly meaning "one of them" is the failure
+    this exists to stop.
     """
     _two_vendors(cfg)
 
@@ -142,8 +128,9 @@ def test_an_unknown_name_is_still_unknown(cfg, session_dir):
 
 
 def test_two_different_names_are_not_a_clash(cfg, session_dir):
-    """The rule is about the name a roster keys on, not about how many
-    delegates a request activates."""
+    """The rule is about the name a roster keys on, not about how many delegates a
+    request activates.
+    """
     _two_vendors(cfg)
     (subagents_dir(cfg) / "other.yaml").write_text(
         SPEC.format(name="other", vendor="third"), encoding="utf-8"
@@ -156,9 +143,8 @@ def test_two_different_names_are_not_a_clash(cfg, session_dir):
 
 
 def test_the_activated_delegate_keeps_its_plain_name(cfg, session_dir, monkeypatch):
-    """A reference is how a *request* says which; the model reaches a delegate
-    by `subagent_type`, and that stays `surveyor`. Only one is ever activated,
-    so there is nothing to tell apart at that end.
+    """A reference is how a *request* says which; the model reaches a delegate by
+    `subagent_type`, and that stays `surveyor`.
     """
     _two_vendors(cfg)
     captured = capture_build(monkeypatch)
@@ -174,10 +160,7 @@ def test_the_activated_delegate_keeps_its_plain_name(cfg, session_dir, monkeypat
 
 
 def test_subtracting_something_else_still_hits_the_clash(cfg, session_dir):
-    """The reachable path the CLI actually has. `--subagents '*'` is library-only
-    -- the driver never parses a bare `*` -- so a caller reaches "everything" by
-    subtracting, and everything still contains both.
-    """
+    """The reachable path the CLI actually has."""
     from kingfisher.domain.capabilities import all_but
 
     _two_vendors(cfg)

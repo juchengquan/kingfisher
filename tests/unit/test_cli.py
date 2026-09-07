@@ -1,12 +1,4 @@
-"""`kingfisher seed` and `kingfisher list`, and the rule they are held to.
-
-The command exists because a pip-installed kingfisher had the definitions and no
-way to put them anywhere: both operations lived behind flags in `the driver`, which
-is a development driver and is not in the wheel.
-
-Held to the front door, like `kingfisher_service`. `test_architecture`
-enforces that against every module here; these are about what the command does.
-"""
+"""`kingfisher seed` and `kingfisher list`, and the rule they are held to."""
 
 from __future__ import annotations
 
@@ -20,13 +12,7 @@ from tests.conftest import subagents_dir, verbs
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
-    """The safe default a shipped command needs.
-
-    `the driver` with no arguments runs the eval smoke -- a real model call against
-    whatever key the deployment holds. Right for a driver you type daily, and
-    the wrong first contact for someone who just installed this. Nothing is read
-    and nothing is written: help does not need a workspace.
-    """
+    """The safe default a shipped command needs."""
     assert main([]) == 0
 
     printed = capsys.readouterr().out
@@ -35,12 +21,7 @@ def test_bare_invocation_prints_help_and_does_nothing(capsys):
 
 
 def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys, shipped):
-    """The point of running on the paths half of the configuration.
-
-    `models.yaml` lives *inside* the workspace, so a first run has none --
-    requiring one would make this unusable exactly when it is wanted. Asserted
-    against a workspace with no catalogue at all.
-    """
+    """The point of running on the paths half of the configuration."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
@@ -56,12 +37,7 @@ def test_seeding_needs_no_model_catalogue(cfg, monkeypatch, capsys, shipped):
 def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
     cfg, monkeypatch, capsys, shipped, tmp_path
 ):
-    """`compose.yaml` sets `KINGFISHER_MODELS_FILE`, so this is the shipped case.
-
-    Seeding wrote `models.yaml.example` into the workspace and the container
-    read `/config/models.yaml`, so the one file a deployment cannot start
-    without had its worked example in a directory nobody looks at.
-    """
+    """`compose.yaml` sets `KINGFISHER_MODELS_FILE`, so this is the shipped case."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
     elsewhere = tmp_path / "config"
@@ -73,19 +49,7 @@ def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
 
 
 def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, shipped):
-    """A remedy is only actionable if it is about the groups you are missing.
-
-    This named `groups.yaml.example` for two days, and `ensure_layout` placed
-    it. Both halves were true and the pair still did not help: an example ships
-    one vocabulary and a workspace needs whichever names its own definitions ask
-    for, so seeding this repository's own set said "declare analysts, auditors,
-    senior-analysts" and put a file beside it declaring readers, writers, staff,
-    senior and senior-writers. Five names, none of them the three.
-
-    So the shape travels in the message, where it can be built from the names
-    actually missing. Asserted as a paste rather than as prose: what makes it
-    actionable is that the line works unedited.
-    """
+    """A remedy is only actionable if it is about the groups you are missing."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
@@ -102,10 +66,9 @@ def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, sh
 def test_the_line_is_printed_once_for_every_definition_skipped(
     cfg, monkeypatch, capsys, shipped
 ):
-    """Two definitions are skipped for groups and they want overlapping but
-    different sets. One line naming the union unblocks both; a copy each would
-    print two partial lists and leave whoever pasted the first skipped again on
-    the second."""
+    """Two definitions are skipped for groups and they want overlapping but different
+    sets.
+    """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
@@ -117,8 +80,7 @@ def test_the_line_is_printed_once_for_every_definition_skipped(
 
 
 def test_no_line_is_printed_when_nothing_wanted_a_group(cfg, monkeypatch, capsys, tmp_path):
-    """It earns its lines or it has none. A set with no `groups:` anywhere gets
-    no advice about a file it has no reason to write."""
+    """It earns its lines or it has none."""
     plain = tmp_path / "plain" / "skills" / "only"
     plain.mkdir(parents=True)
     (plain / "SKILL.md").write_text(
@@ -136,8 +98,7 @@ def test_no_line_is_printed_when_nothing_wanted_a_group(cfg, monkeypatch, capsys
 def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(
     tmp_path, monkeypatch, capsys, shipped
 ):
-    """`ensure_layout` before the copy. A destination has to exist before
-    anything lands in it, and this is the command someone runs first."""
+    """`ensure_layout` before the copy."""
     workspace = tmp_path / "brand-new"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
@@ -149,17 +110,7 @@ def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(
 
 
 def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_path):
-    """A caller pointing `--from` at a directory with nothing in it.
-
-    Non-zero, which it was not. This was nearly unreachable while a set shipped
-    -- it always held all four kinds -- and is now among the likelier mistakes,
-    since `--from ./assets_examples/skills` names a directory that exists, is readable
-    and holds none of them. Exiting 0 after copying nothing is indistinguishable
-    from success to the script that ran it.
-
-    The message names the four kinds, because the mistake is almost always one
-    directory level in the wrong direction.
-    """
+    """A caller pointing `--from` at a directory with nothing in it."""
     empty = tmp_path / "empty"
     empty.mkdir()
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
@@ -174,11 +125,7 @@ def test_seeding_from_an_empty_directory_says_so(cfg, monkeypatch, capsys, tmp_p
 
 
 def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys):
-    """Non-zero, because a listing gets read by scripts.
-
-    Printed and returned apart, a caller could report a broken catalogue and
-    exit 0 -- and the thing reading it carries on.
-    """
+    """Non-zero, because a listing gets read by scripts."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")  # or the endpoint is dropped
@@ -191,8 +138,7 @@ def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys
 
 
 def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatch, capsys):
-    """The one error a caller causes and can fix. It also says `.env` is not
-    read, because the other driver reads one and the difference is invisible."""
+    """The one error a caller causes and can fix."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
 
@@ -230,18 +176,7 @@ def _catalogue(cfg) -> object:
 
 
 def test_both_drivers_render_through_the_same_code(cfg, capsys):
-    """Two doors printing one block, and now by construction.
-
-    `show_inventory` calls `listing.render`; there is no second formatter to
-    keep in step. It was a copy for one step, and the copy was already wrong:
-    written from the version of `show_inventory` I had in hand rather than the
-    one on disk, it missed a change that had landed days earlier -- two folders
-    may each define a `surveyor`, and then the listing must not print the file
-    twice. This test passed anyway, because its workspace had no such pair.
-
-    So the fixture has one now. A comparison is only worth the cases it covers,
-    and the case it did not cover is the one that broke.
-    """
+    """Two doors printing one block, and now by construction."""
     from kingfisher import inventory
     from kingfisher.presentation.cli.listing import render
     from tests.integration import driver
@@ -256,9 +191,7 @@ def test_both_drivers_render_through_the_same_code(cfg, capsys):
 
 
 def _seed_something(cfg) -> None:
-    """One skill and one subagent, so the comparison has something to disagree
-    about. Against an empty workspace both sides print the same three headings
-    whatever the renderer does."""
+    """One skill and one subagent, so the comparison has something to disagree about."""
     skill = cfg.skills_dir / "probe-skill"
     skill.mkdir(parents=True, exist_ok=True)
     (skill / "SKILL.md").write_text(
@@ -286,19 +219,7 @@ def _seed_something(cfg) -> None:
 
 
 def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
-    """`help` was kept for this one case, and argparse already covers it.
-
-    `kingfisher help teleport` answered "no such command: teleport. kingfisher
-    knows doctor, help, list, seed, serve", which is the only thing that verb
-    did better than `--help`. argparse refuses an unknown subcommand with the
-    valid choices listed and the same exit code, so what was lost is the
-    wording, not the answer.
-
-    It *raises* `SystemExit(2)` where the verb *returned* 2. From a shell the
-    two are indistinguishable -- the exit code is the same -- and in process
-    they are not, which is the whole of what removing the verb changed for a
-    caller of `main`.
-    """
+    """`help` was kept for this one case, and argparse already covers it."""
     with pytest.raises(SystemExit) as exit_code:
         main(["teleport"])
 
@@ -309,8 +230,9 @@ def test_an_unknown_verb_is_named_along_with_the_ones_that_exist(capsys):
 
 
 def test_the_help_verb_is_gone_and_the_four_other_routes_are_not(capsys):
-    """`-h`, `--help`, a bare invocation and `<verb> --help` all reach the same
-    text; a fifth road to it was a verb that could go stale on its own."""
+    """`-h`, `--help`, a bare invocation and `<verb> --help` all reach the same text; a
+    fifth road to it was a verb that could go stale on its own.
+    """
     from kingfisher.presentation.cli.__main__ import build_parser
 
     assert "help" not in verbs(build_parser())
@@ -330,17 +252,8 @@ def test_the_help_verb_is_gone_and_the_four_other_routes_are_not(capsys):
 
 
 def test_serve_is_offered_whether_or_not_the_extra_is_installed():
-    """A command that exists and says what to install beats one that is silently
-    absent -- the same choice `kingfisher-server` already made.
-
-    The design argued the other way once: that a subcommand "would be missing on
-    a plain install". It would not, and the existing script had already shown
-    why.
-
-    Asserted against the parser's own choices, not against a substring of the
-    help text. The first version looked for "serve" in what `main([])` printed,
-    and renaming the verb to `srv` left it green -- the word survives elsewhere
-    on the page.
+    """A command that exists and says what to install beats one that is silently absent
+    -- the same choice `kingfisher-server` already made.
     """
     from kingfisher.presentation.cli.__main__ import build_parser
 
@@ -382,12 +295,7 @@ def test_serve_without_the_extra_says_what_to_install(monkeypatch, capsys):
 def test_a_missing_server_extra_does_not_take_the_other_verbs_down(
     monkeypatch, capsys, cfg, shipped
 ):
-    """The reason the import is inside the function.
-
-    `kingfisher_service` reaches fastapi as it loads. Imported at module
-    scope, a verb nobody asked for would break the two they did -- on exactly
-    the installs that chose not to have the extra.
-    """
+    """The reason the import is inside the function."""
     import builtins
 
     real = builtins.__import__
@@ -407,9 +315,7 @@ def test_a_missing_server_extra_does_not_take_the_other_verbs_down(
 
 
 def test_serve_hands_off_rather_than_deciding_anything(monkeypatch):
-    """One implementation behind two names. If this assembled its own settings
-    or set up its own logging, `kingfisher serve` and `kingfisher-server` would
-    be two servers that merely look alike."""
+    """One implementation behind two names."""
     from kingfisher_service import __main__ as server
 
     calls = []
@@ -423,14 +329,7 @@ def test_serve_hands_off_rather_than_deciding_anything(monkeypatch):
 
 
 def test_the_json_document_carries_every_field_the_record_has(cfg):
-    """"Field for field" is a claim, and this is the mechanism.
-
-    A key here that `Inventory` does not have would be inventing an answer; a
-    field it has that is missing here would be hiding one. Either happens by a
-    field being added to the record and nobody thinking about the serialiser,
-    which is exactly the kind of drift nobody notices in a format only scripts
-    read.
-    """
+    """"Field for field" is a claim, and this is the mechanism."""
     from dataclasses import fields
 
     from kingfisher import inventory
@@ -442,12 +341,7 @@ def test_the_json_document_carries_every_field_the_record_has(cfg):
 
 
 def test_the_json_document_survives_a_round_trip(cfg):
-    """It is only worth having if `json.dumps` accepts it.
-
-    `Path`, `MappingProxyType` and tuples are all things the record holds and
-    `json` refuses, so this is not a formality -- it is the whole reason the
-    mapping exists rather than `asdict`.
-    """
+    """It is only worth having if `json.dumps` accepts it."""
     import json
 
     from kingfisher import inventory
@@ -469,13 +363,7 @@ def test_the_json_document_survives_a_round_trip(cfg):
 
 
 def test_the_header_names_every_catalogue_including_tools(cfg):
-    """The regression this record was built to make impossible.
-
-    The header was four hand-written lines naming the workspace, agents, skills
-    and subagents. `tools` was in neither the header nor the record behind it --
-    not a decision, just a fourth line nobody added -- so the one question a
-    reader most often has about a relocated catalogue had no answer.
-    """
+    """The regression this record was built to make impossible."""
     from kingfisher import inventory
     from kingfisher.presentation.cli.listing import render
 
@@ -488,14 +376,7 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
 
 
 def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
-    """Two things the header deliberately does not do.
-
-    The header spells anything under the workspace as `./name`, which is a
-    reading aid -- it leaves the entries that moved as the only absolute paths
-    on the page. A script wants the path it can open, and it wants the kind,
-    because "nothing is configured" and "you handed me a store" are two
-    situations it must not have to tell apart by matching on prose.
-    """
+    """Two things the header deliberately does not do."""
     import json
     from dataclasses import replace
 
@@ -511,8 +392,7 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
 
 
 def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, capsys):
-    """Two formats, one answer. A document that disagreed with the listing would
-    be worse than no document at all -- a script would act on it."""
+    """Two formats, one answer."""
     import json
 
     _seed_something(cfg)
@@ -537,8 +417,9 @@ def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, c
 
 
 def test_a_broken_workspace_is_non_zero_in_either_format(cfg, monkeypatch, capsys):
-    """The exit code does not depend on the format, and the reason is in the
-    document too -- so a script can find out either way round."""
+    """The exit code does not depend on the format, and the reason is in the document
+    too -- so a script can find out either way round.
+    """
     import json
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
@@ -564,13 +445,7 @@ def test_json_is_asked_for_rather_than_assumed(cfg, monkeypatch, capsys):
 
 
 def test_every_verb_the_parser_offers_has_something_to_run_it():
-    """The one risk the dispatch table introduces.
-
-    A chain of `if`s ended in a fallthrough, so a verb nobody wired reached
-    `list` -- wrong, but quiet. A table raises `KeyError` instead, which is
-    louder and still only at runtime, in front of whoever typed the verb. This
-    is what makes it neither.
-    """
+    """The one risk the dispatch table introduces."""
     from kingfisher.presentation.cli.__main__ import HANDLERS, build_parser
 
     offered = set(verbs(build_parser()))
@@ -615,8 +490,9 @@ def _subagent_catalogue(cfg):
 
 
 def test_the_listing_marks_a_compiled_delegate(cfg):
-    """Marked because the rest of the listing means something different for it,
-    and nothing else in the output would say so."""
+    """Marked because the rest of the listing means something different for it, and
+    nothing else in the output would say so.
+    """
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
@@ -630,9 +506,7 @@ def test_the_listing_marks_a_compiled_delegate(cfg):
 
 
 def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
-    """The assumption a reader would otherwise make. deepagents runs the graph
-    as given and never applies our allowlist to it, so a tool grant is a
-    suggestion there rather than a limit."""
+    """The assumption a reader would otherwise make."""
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
@@ -644,8 +518,9 @@ def test_the_listing_says_what_a_compiled_delegate_costs(cfg):
 
 
 def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
-    """The note is about a minority, so it stays absent for everyone else --
-    a caveat printed to every reader is one none of them reads."""
+    """The note is about a minority, so it stays absent for everyone else -- a caveat
+    printed to every reader is one none of them reads.
+    """
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
@@ -659,9 +534,7 @@ def test_a_workspace_with_no_compiled_delegate_says_nothing_about_them(cfg):
 
 
 def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(cfg):
-    """`_from` stays silent when the name already tells you the file. There are
-    two spellings now, so the obvious filename depends on the kind -- comparing
-    a `.py` definition against `<name>.yaml` would annotate every one of them."""
+    """`_from` stays silent when the name already tells you the file."""
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import render
 
@@ -675,8 +548,9 @@ def test_a_compiled_delegate_is_not_annotated_with_the_file_you_can_already_see(
 
 
 def test_the_json_listing_carries_it_too(cfg):
-    """`--json` is what a script reads, and a script deciding whether a grant
-    means anything needs the same fact the text gives a person."""
+    """`--json` is what a script reads, and a script deciding whether a grant means
+    anything needs the same fact the text gives a person.
+    """
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import as_json
 
@@ -686,9 +560,9 @@ def test_the_json_listing_carries_it_too(cfg):
 
 
 def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeypatch, capsys):
-    """`--list` is where somebody goes *because* a grant was refused for a skill
-    they can see in the tree. deepagents files it by its header and warns to a
-    log nobody reads, so this line is the only place the two names meet."""
+    """`--list` is where somebody goes *because* a grant was refused for a skill they
+    can see in the tree.
+    """
     directory = cfg.skills_dir / "company-lookup"
     directory.mkdir(parents=True, exist_ok=True)
     (directory / "SKILL.md").write_text(
@@ -711,12 +585,7 @@ def test_a_skill_offered_under_another_name_is_named_in_the_listing(cfg, monkeyp
 
 
 def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped):
-    """The failure this was written for.
-
-    A checkout keeps its keys in `.env`, and reading the environment alone left
-    `kingfisher list` failing on a deployment where `tests/integration/driver.py --list` worked --
-    with the key three lines away in a file.
-    """
+    """The failure this was written for."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
         f"KINGFISHER_WORKSPACE={tmp_path / 'ws'}\n", encoding="utf-8"
@@ -730,13 +599,7 @@ def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped)
 
 
 def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
-    """The objection that was right, kept.
-
-    `load_dotenv()` with no argument walks *upward* from the calling file, which
-    for an installed package starts in `site-packages`. Naming the path is what
-    takes that away, so a file one directory up must stay invisible -- somebody
-    standing in a subdirectory should not silently inherit it.
-    """
+    """The objection that was right, kept."""
     (tmp_path / ".env").write_text("KINGFISHER_WORKSPACE=/should/never/be/read\n", encoding="utf-8")
     below = tmp_path / "below"
     below.mkdir()
@@ -749,12 +612,7 @@ def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
 
 
 def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys, shipped):
-    """`override=False`, and it matters.
-
-    Somebody writing `KINGFISHER_WORKSPACE=... kingfisher seed` has said exactly
-    where they mean. A file they may not have known was in the directory must
-    not quietly replace it.
-    """
+    """`override=False`, and it matters."""
     monkeypatch.chdir(tmp_path)
     (tmp_path / ".env").write_text(
         f"KINGFISHER_WORKSPACE={tmp_path / 'from-the-file'}\n", encoding="utf-8"
@@ -769,8 +627,9 @@ def test_the_environment_wins_over_the_file(tmp_path, monkeypatch, capsys, shipp
 
 
 def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys, shipped):
-    """An installed kingfisher usually has none, so absent must be silent and
-    must not stop the command reaching the environment."""
+    """An installed kingfisher usually has none, so absent must be silent and must not
+    stop the command reaching the environment.
+    """
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
@@ -782,9 +641,9 @@ def test_no_env_file_is_the_ordinary_case(tmp_path, monkeypatch, capsys, shipped
 
 
 def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
-    """A caller standing one directory from theirs is told about a variable that
-    is set, just not here. Naming the path is the difference between that and a
-    hunt."""
+    """A caller standing one directory from theirs is told about a variable that is set,
+    just not here.
+    """
     monkeypatch.chdir(tmp_path)
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
@@ -797,15 +656,7 @@ def test_the_refusal_names_the_file_it_looked_at(tmp_path, monkeypatch, capsys):
 
 
 def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys):
-    """The kind that arrived last, and the one `failed` did not name.
-
-    The field was added, the section printed "cannot load", and the predicate
-    still listed the two kinds that existed when it was written -- so a
-    workspace whose agents will not load reported the failure and exited 0.
-    Which is the exact sentence in that function's own docstring: "a caller
-    could report a broken catalogue and exit 0 -- which is how a listing gets
-    read by a script that then carries on".
-    """
+    """The kind that arrived last, and the one `failed` did not name."""
     import json
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
@@ -821,12 +672,8 @@ def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys)
 
 
 def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatch, capsys):
-    """One unloadable catalogue must not take the others down with it, which is
-    this record's own rule and was not true of tools.
-
-    A single unparseable `.py` returned early and hid the skills and subagents
-    sections entirely -- from the person who by definition is looking at a
-    broken workspace, which is the worst moment to be shown less of it.
+    """One unloadable catalogue must not take the others down with it, which is this
+    record's own rule and was not true of tools.
     """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
@@ -903,9 +750,7 @@ def policied(cfg, monkeypatch):
 
 
 def test_the_operator_sees_audiences_per_definition(policied, capsys):
-    """The unscoped listing is the operator's audit view. It is exempt from the
-    refusal that covers a *turn* -- listing is read-only, and whoever runs it is
-    on the host with the definitions already in front of them."""
+    """The unscoped listing is the operator's audit view."""
     assert main(["list"]) == 0
 
     shown = capsys.readouterr().out
@@ -962,8 +807,9 @@ def test_an_inline_conjunction_reads_as_a_plus_b(cfg, monkeypatch, capsys):
 
 
 def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypatch, capsys):
-    """The by-definition view and the roll-up print the same audience, and a
-    reader comparing the two should not have to translate."""
+    """The by-definition view and the roll-up print the same audience, and a reader
+    comparing the two should not have to translate.
+    """
     _workspace(cfg, monkeypatch, BOTH)
 
     shown = capsys.readouterr().out if main(["list"]) == 0 else ""
@@ -973,8 +819,9 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypa
 
 
 def test_a_named_compound_says_what_it_requires(cfg, monkeypatch, capsys):
-    """A name tells a reader nothing on the line it appears on, and every line
-    it appears on needs it -- so it is said once, above."""
+    """A name tells a reader nothing on the line it appears on, and every line it
+    appears on needs it -- so it is said once, above.
+    """
     _workspace(
         cfg, monkeypatch, NAMED, vocabulary="groups:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n"
     )
@@ -988,16 +835,16 @@ def test_a_named_compound_says_what_it_requires(cfg, monkeypatch, capsys):
 
 
 def test_a_vocabulary_with_no_compounds_gets_no_such_section(policied, capsys):
-    """It exists to make audiences readable, so it earns its lines or it has
-    none."""
+    """It exists to make audiences readable, so it earns its lines or it has none."""
     assert main(["list"]) == 0
 
     assert "groups that require others" not in capsys.readouterr().out
 
 
 def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
-    """`json` holds neither a set nor a tuple, so this is not a formality: an
-    audience carrying a conjunction used to be unencodable outright."""
+    """`json` holds neither a set nor a tuple, so this is not a formality: an audience
+    carrying a conjunction used to be unencodable outright.
+    """
     import json
 
     from kingfisher import config_from_env, inventory
@@ -1031,8 +878,7 @@ system_prompt: |
 
 
 def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, capsys):
-    """It used to be refused. Now it runs and says so, because the same line is
-    what somebody trying to widen would have written by accident."""
+    """It used to be refused."""
     _workspace(cfg, monkeypatch, NARROWED, vocabulary="groups: [A, B, C]\n")
 
     assert main(["list"]) == 0
@@ -1043,12 +889,7 @@ def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, ca
 
 
 def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, monkeypatch):
-    """The report is not the point -- this is. A caller in A and C opens the
-    agent and gets the tool; a caller in A alone opens it and does not.
-
-    Asserted on the grant rather than on `list`, because the `--tools` section
-    describes what the *workspace* offers and would answer a different
-    question."""
+    """The report is not the point -- this is."""
     from kingfisher import config_from_env
     from kingfisher.domain.access import reaches
     from kingfisher.infrastructure.catalogue.agents import LocalAgentRepository
@@ -1131,8 +972,9 @@ def test_as_parses_a_comma_separated_list():
 
 
 def test_as_unscoped_is_spelled_out_rather_than_implied():
-    """An empty `--as` is far more likely to be a shell variable that did not
-    expand than a considered decision to run with no caller."""
+    """An empty `--as` is far more likely to be a shell variable that did not expand
+    than a considered decision to run with no caller.
+    """
     from kingfisher.domain.access import UNSCOPED
     from kingfisher.presentation.cli.__main__ import _held
 
@@ -1142,11 +984,8 @@ def test_as_unscoped_is_spelled_out_rather_than_implied():
 
 def test_the_listing_reports_a_definition_naming_an_undeclared_group(cfg, monkeypatch, capsys):
     """The listing is where somebody diagnosing this looks, and it goes through
-    `inventory` rather than `Kingfisher` -- so the check has to be in both or
-    the one place a reader would check shows a broken definition as ordinary.
-
-    Reported rather than raised, which is this listing's rule: it is where you
-    go *because* something is broken.
+    `inventory` rather than `Kingfisher` -- so the check has to be in both or the one
+    place a reader would check shows a broken definition as ordinary.
     """
     from tests.conftest import an_agent
 
@@ -1211,8 +1050,7 @@ def _finished(stop_reason="end_turn"):
 
 
 def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, capsys):
-    """What makes the verb compose. `> answer.md` has to hold the answer and
-    nothing else, and `2>/dev/null` has to give silence."""
+    """What makes the verb compose."""
     from kingfisher import RunEvent
 
     _ran(monkeypatch, [RunEvent(kind="run_start", text="/runs/t001"),
@@ -1228,8 +1066,7 @@ def test_the_answer_goes_to_stdout_and_the_watching_to_stderr(cfg, monkeypatch, 
 
 
 def test_a_delegates_prose_is_progress_rather_than_answer(cfg, monkeypatch, capsys):
-    """A reviewer's working notes are not what you asked for. On one stream the
-    speaker tag is what keeps them apart; on two, the streams are."""
+    """A reviewer's working notes are not what you asked for."""
     from kingfisher import RunEvent
 
     _ran(monkeypatch, [RunEvent(kind="token", text="mine"),
@@ -1244,9 +1081,7 @@ def test_a_delegates_prose_is_progress_rather_than_answer(cfg, monkeypatch, caps
 
 
 def test_a_turn_stopped_at_a_bound_exits_non_zero(cfg, monkeypatch, capsys):
-    """`kingfisher run ... > report.md && publish report.md` must not publish a
-    report that stopped halfway. stdout is prose, so the exit code is the only
-    thing a script has to read."""
+    """`kingfisher run ..."""
     _ran(monkeypatch, [_finished(stop_reason="max_steps")], cfg)
 
     assert main(["run", "t", "--agent", "assistant"]) == 1
@@ -1254,8 +1089,7 @@ def test_a_turn_stopped_at_a_bound_exits_non_zero(cfg, monkeypatch, capsys):
 
 
 def test_the_agent_is_required_because_there_is_no_honest_default(cfg, monkeypatch):
-    """An agent decides which endpoint the prompts go to and whose credentials
-    pay. A default would put that choice where the command line never says it."""
+    """An agent decides which endpoint the prompts go to and whose credentials pay."""
     _ran(monkeypatch, [_finished()], cfg)
 
     with pytest.raises(SystemExit) as exit_code:
@@ -1273,8 +1107,9 @@ def test_a_file_that_is_not_there_is_refused_before_the_model(cfg, monkeypatch, 
 
 
 def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
-    """`--as` is not decoration: on a workspace that declares groups the library
-    refuses a turn that names nobody, and names this flag when it does."""
+    """`--as` is not decoration: on a workspace that declares groups the library refuses
+    a turn that names nobody, and names this flag when it does.
+    """
     stub = _ran(monkeypatch, [_finished()], cfg)
 
     main(["run", "t", "--agent", "a", "--as", "A,B"])
@@ -1293,9 +1128,10 @@ def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
 def test_seeding_lands_in_the_catalogue_not_the_workspace(
     cfg, tmp_path, shipped, monkeypatch, capsys
 ):
-    """They are the same directory until a deployment moves them, and a preset
-    written to `workspace/skills` is invisible to an agent reading the relocated
-    one -- the bug this has caught before."""
+    """They are the same directory until a deployment moves them, and a preset written
+    to `workspace/skills` is invisible to an agent reading the relocated one -- the
+    bug this has caught before.
+    """
     catalogue = tmp_path / "catalogue"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
@@ -1310,8 +1146,9 @@ def test_seeding_lands_in_the_catalogue_not_the_workspace(
 
 
 def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, monkeypatch):
-    """The default, and the case the old code got right -- worth keeping, or the
-    fix above could quietly break the ordinary setup."""
+    """The default, and the case the old code got right -- worth keeping, or the fix
+    above could quietly break the ordinary setup.
+    """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
@@ -1320,12 +1157,7 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, m
 
 
 def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkeypatch):
-    """The third catalogue, and the third chance to seed where nothing reads.
-
-    `KINGFISHER_TOOLS_DIR` relocates it the way the other two do, so a tool
-    written to `workspace/tools` would be invisible to the agent for exactly the
-    reason that was fixed for skills.
-    """
+    """The third catalogue, and the third chance to seed where nothing reads."""
     from kingfisher.tools.catalogue import LocalToolRepository
 
     catalogue = tmp_path / "catalogue"

@@ -1,8 +1,4 @@
-"""Loading a workspace's own tools.
-
-Unlike a skill or a subagent, a tool is *code*. Everything here is about that
-difference: what gets imported, what is refused, and what is never guessed at.
-"""
+"""Loading a workspace's own tools."""
 
 from __future__ import annotations
 
@@ -48,9 +44,7 @@ def test_an_empty_directory_contributes_nothing(tmp_path):
 
 
 def test_a_module_without_an_export_list_is_refused_by_name(tmp_path):
-    """Scanning the module for anything callable would guess. The repo's other
-    formats make the definition state its own name; this makes it state its own
-    exports."""
+    """Scanning the module for anything callable would guess."""
     directory = _write(tmp_path / "tools", "quiet.py", "def add(a, b):\n    return a + b\n")
 
     with pytest.raises(ToolError, match=r"quiet\.py"):
@@ -58,8 +52,9 @@ def test_a_module_without_an_export_list_is_refused_by_name(tmp_path):
 
 
 def test_a_module_that_cannot_be_imported_is_refused_loudly(tmp_path):
-    """Skipping it would give an agent quietly fewer tools than the workspace
-    offers -- the same failure `CapabilityError` exists to prevent."""
+    """Skipping it would give an agent quietly fewer tools than the workspace offers --
+    the same failure `CapabilityError` exists to prevent.
+    """
     directory = _write(tmp_path / "tools", "broken.py", "import a_module_that_is_not_installed\n")
 
     with pytest.raises(ToolError, match=r"broken\.py"):
@@ -78,9 +73,7 @@ def test_two_modules_claiming_one_tool_name_both_load(tmp_path):
 
 
 def test_one_module_claiming_a_name_twice_is_refused(tmp_path):
-    """Where the refusal still belongs. There is no second file to tell these
-    apart, so no reference could pick between them and nothing downstream could
-    offer a way to say which."""
+    """Where the refusal still belongs."""
     body = MODULE.replace("TOOLS = [add]", "TOOLS = [add, add]")
     directory = _write(tmp_path / "tools", "twice.py", body)
 
@@ -89,8 +82,9 @@ def test_one_module_claiming_a_name_twice_is_refused(tmp_path):
 
 
 def test_private_modules_are_skipped(tmp_path):
-    """So a tool can be split across files without every part being a module
-    that must export TOOLS."""
+    """So a tool can be split across files without every part being a module that must
+    export TOOLS.
+    """
     directory = _write(tmp_path / "tools", "maths.py", MODULE)
     _write(directory, "_helpers.py", "VALUE = 1\n")
 
@@ -114,13 +108,9 @@ def test_modules_load_in_a_stable_order(tmp_path):
 
 
 def test_importing_a_tool_leaves_no_bytecode_in_the_catalogue(tmp_path):
-    """`__pycache__` beside the source means inside the tools catalogue -- a
-    directory holding what a person authored, and the one an operator is most
-    likely to version. Observed in a fresh workspace: two `.pyc` files sitting
-    next to the two tools, noise in `git status` at best.
-
-    Asserted on the directory rather than on `sys.dont_write_bytecode`, because
-    what matters is that nothing was written, not how that was arranged.
+    """`__pycache__` beside the source means inside the tools catalogue -- a directory
+    holding what a person authored, and the one an operator is most likely to
+    version.
     """
     catalogue = _write(tmp_path / "tools", "maths.py", MODULE)
 

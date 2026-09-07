@@ -1,41 +1,4 @@
-"""Find rules written more than once. Run it; it asserts nothing.
-
-    uv run python tests/audit_duplication.py
-
-Not a test, deliberately. It catches the case tests are blind to -- a copy that
-has *not* drifted yet, and so behaves identically everywhere it is exercised.
-`subagent_skills` carried one for months, equal to `narrowed` on every input;
-no behaviour test could have failed on it. As an assertion this would also fire
-on any legitimately similar pair and get muted, which is worse than absent.
-
-Two passes:
-
-  structural   statement sequences with identifiers normalised to the order
-               they appear, so a copy that renamed its variables still matches
-  literal      strings spelled in more than one module, which is how a route
-               or a filename comes to have two definitions
-
-**What it catches, and what it does not.** It found `_narrow_tools`, a whole
-function duplicating `capabilities._narrow` with the arguments swapped, and
-reintroducing that today still lights it up. It did *not* find the copy at the
-end of `subagent_skills`, and could not have: `narrowed` binds `allowed =
-set(by)` and tests `name in allowed`, where the copy tested `name in activated`
-directly. Equal on every input, different tree.
-
-So this catches a rule *transcribed*, not a rule *rewritten*. The second kind
-was found by reading a docstring that claimed two things were the same rule and
-then running both over the same inputs to check -- which is a different
-technique, and one no static pass will do for you. When a docstring here says
-some rule is "the same as" another, that is the thing to go and verify.
-
-Windows rather than whole functions because a rule transcribed into the middle
-of a longer function is the case a function-level hash cannot see, and the more
-likely one.
-
-The literal pass is advisory. Most of its hits are dict keys, and the ones that
-do name something shared were checked by hand: renaming either spelling turns
-the suite red, so behaviour already binds them.
-"""
+"""Find rules written more than once. Run it; it asserts nothing."""
 
 from __future__ import annotations
 

@@ -1,17 +1,4 @@
-"""Where a tool came from, in the places that have to say so.
-
-Two questions this answers, and they arrived together. A refusal that lists
-names alone leaves the reader grepping once tools may sit in folders -- so both
-tool refusals now name the file each one is defined in. And reading those files
-means *executing* them, so the origins have to come off the same walk that
-loaded the tools rather than a second one.
-
-What is deliberately not here: a way to write `csv_profile.csv_columns` in a
-subagent definition. A qualified name would select nothing, because two tools
-cannot share a name in the first place -- the catalogue refuses to load. It
-could only ever assert where a file sits, which is a check that fires on a
-harmless refactor and guards against nothing.
-"""
+"""Where a tool came from, in the places that have to say so."""
 
 from __future__ import annotations
 
@@ -62,12 +49,7 @@ def _tool(directory, name):
 
 
 def test_the_origins_come_off_the_same_walk_that_loaded_the_tools(cfg, capfd):
-    """A tool module is Python, so reading it runs it.
-
-    `load_tools` and `sources` were separate passes, and anything wanting both
-    -- a listing, a refusal -- executed every workspace module twice. Any
-    module-level side effect happened twice with it.
-    """
+    """A tool module is Python, so reading it runs it."""
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "noisy.py").write_text(NOISY, encoding="utf-8")
 
@@ -79,9 +61,9 @@ def test_the_origins_come_off_the_same_walk_that_loaded_the_tools(cfg, capfd):
 
 
 def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
-    """`--list` needs the origins *and* a compiled graph, and the graph is the
-    only way to know the built-in set. Fetching them apart ran every tool
-    module a second time, so the walk is handed in."""
+    """`--list` needs the origins *and* a compiled graph, and the graph is the only way
+    to know the built-in set.
+    """
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "noisy.py").write_text(NOISY, encoding="utf-8")
 
@@ -102,12 +84,7 @@ def test_a_prewalked_catalogue_is_not_walked_again(cfg, capfd):
 
 
 def test_a_request_naming_an_unknown_tool_is_told_where_the_real_ones_live(cfg):
-    """The reader mistyped a name and needs to scan for the one they meant.
-
-    One per line with its file, rather than a parenthesised tuple: the tuple is
-    the shape nobody finishes reading, and a bare name is what sends someone
-    grepping through `tools/` for a file that could be anywhere.
-    """
+    """The reader mistyped a name and needs to scan for the one they meant."""
     _tool(tools_dir(cfg) / "research", "find_company")
 
     with pytest.raises(CapabilityError) as raised:
@@ -125,11 +102,7 @@ def test_a_request_naming_an_unknown_tool_is_told_where_the_real_ones_live(cfg):
 
 
 def test_a_subagent_naming_an_unknown_tool_is_told_the_same_thing(cfg):
-    """The case that prompted this: someone editing a YAML by hand.
-
-    Same wording as the request-side refusal, because the two disagreeing about
-    format would be its own small confusion.
-    """
+    """The case that prompted this: someone editing a YAML by hand."""
     _tool(tools_dir(cfg) / "research", "find_company")
     spec = SubagentSpec(
         name="typo",
@@ -153,11 +126,7 @@ def test_a_subagent_naming_an_unknown_tool_is_told_the_same_thing(cfg):
 
 
 def test_a_builtin_is_listed_without_a_file(cfg):
-    """It has no file, and a blank column against `read_file` would be noise.
-
-    The two axes are reported apart already -- that separation exists because
-    "3 tools not granted" meant nothing when it could have been either kind.
-    """
+    """It has no file, and a blank column against `read_file` would be noise."""
     listing = offered({"find_company": "research/find_company.py"},
                                  ["find_company", "read_file"])
 
@@ -166,6 +135,7 @@ def test_a_builtin_is_listed_without_a_file(cfg):
 
 
 def test_an_empty_workspace_says_so_rather_than_printing_nothing(cfg):
-    """A refusal that trails off after "this workspace offers" reads as a bug
-    in kingfisher rather than an empty catalogue."""
+    """A refusal that trails off after "this workspace offers" reads as a bug in
+    kingfisher rather than an empty catalogue.
+    """
     assert offered({}, []) == "  (none)"

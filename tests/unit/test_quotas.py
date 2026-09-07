@@ -1,9 +1,4 @@
-"""What one session may consume.
-
-Session-scoped, because that is what kingfisher can see: it is tenant-blind by
-design, so bounding a *caller* belongs to whatever knows who is calling. These
-protect the process from one runaway session, not one caller from another.
-"""
+"""What one session may consume."""
 
 from __future__ import annotations
 
@@ -39,8 +34,9 @@ class SlowAgent:
 
 
 def test_a_turn_that_runs_past_its_bound_stops(cfg):
-    """`recursion_limit` bounds steps and `timeout_s` bounds one call; nothing
-    bounded their product, so a turn could hold a process for hours."""
+    """`recursion_limit` bounds steps and `timeout_s` bounds one call; nothing bounded
+    their product, so a turn could hold a process for hours.
+    """
     agent = SlowAgent(steps=50)
     kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=agent, threads=StubCheckpointer())
 
@@ -53,8 +49,9 @@ def test_a_turn_that_runs_past_its_bound_stops(cfg):
 
 
 def test_being_cut_short_keeps_the_work(cfg):
-    """The artifacts are already on disk and the manifest lists them, so
-    discarding the answer would hide work rather than undo it."""
+    """The artifacts are already on disk and the manifest lists them, so discarding the
+    answer would hide work rather than undo it.
+    """
     kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=SlowAgent(), threads=StubCheckpointer())
 
     result = kf.run(Request("go"))
@@ -64,8 +61,9 @@ def test_being_cut_short_keeps_the_work(cfg):
 
 
 def test_the_caller_is_told_rather_than_left_to_guess(cfg):
-    """An answer that quietly overstates what was checked is worse than one
-    that admits a gap -- which is what system.md already tells the agent."""
+    """An answer that quietly overstates what was checked is worse than one that admits
+    a gap -- which is what system.md already tells the agent.
+    """
     kf = Kingfisher(replace(cfg, turn_timeout_s=0), graph=SlowAgent(), threads=StubCheckpointer())
 
     kinds = [e.kind for e in kf.stream(Request("go"))]
@@ -75,8 +73,7 @@ def test_the_caller_is_told_rather_than_left_to_guess(cfg):
 
 
 def test_an_ordinary_turn_is_untouched(cfg):
-    """An hour is far past any real turn, so this only fires on the
-    pathological case."""
+    """An hour is far past any real turn, so this only fires on the pathological case."""
     result = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer()).run(Request("go"))
 
     assert result.stop_reason == "end_turn"
@@ -87,11 +84,7 @@ def test_an_ordinary_turn_is_untouched(cfg):
 
 
 class RunawayAgent:
-    """A graph that never stops, as langgraph reports it: by raising.
-
-    `recursion_limit` is enforced inside `Pregel.stream`, so a turn that hits it
-    does not return -- it raises out of the generator the service is draining.
-    """
+    """A graph that never stops, as langgraph reports it: by raising."""
 
     def stream(self, state, config, stream_mode=None, subgraphs=False):
         yield ((), "updates", {"agent": {"messages": [AIMessage(content="working")]}})
@@ -100,17 +93,7 @@ class RunawayAgent:
 
 
 def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
-    """The other bound on a turn, and it behaved nothing like the first.
-
-    `turn_timeout_s` ends a turn as a `RunResult` whose `stop_reason` is
-    `max_duration`;
-    `recursion_limit` ended it as a `GraphRecursionError` out of `stream`, so
-    the caller got a langgraph traceback instead of the work. Observed on a run
-    that had already written its report and validated it -- the file was on
-    disk, and the driver printed a stack trace and no path to it.
-
-    Two bounds on one turn should read the same way to whoever called it.
-    """
+    """The other bound on a turn, and it behaved nothing like the first."""
     kf = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer())
 
     result = kf.run(Request("go"))
@@ -122,8 +105,9 @@ def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
 
 
 def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):
-    """A cut-short that does not say which of the two bounds it hit sends the
-    reader to the wrong setting."""
+    """A cut-short that does not say which of the two bounds it hit sends the reader to
+    the wrong setting.
+    """
     kf = Kingfisher(cfg, graph=RunawayAgent(), threads=StubCheckpointer())
 
     events = list(kf.stream(Request("go")))
@@ -139,8 +123,9 @@ def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):
 
 
 def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
-    """Checked before a turn, never during: `execute` writes without any file
-    tool seeing it, so there is nothing to intercept mid-turn."""
+    """Checked before a turn, never during: `execute` writes without any file tool
+    seeing it, so there is nothing to intercept mid-turn.
+    """
     kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
                     threads=StubCheckpointer())
     session_id = kf.start_session()
@@ -151,8 +136,9 @@ def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
 
 
 def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
-    """No honest default exists: workspaces vary by orders of magnitude, and
-    refusing a turn over a number nobody chose is worse than not bounding it."""
+    """No honest default exists: workspaces vary by orders of magnitude, and refusing a
+    turn over a number nobody chose is worse than not bounding it.
+    """
     assert cfg.session_max_bytes is None
 
     kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
@@ -163,8 +149,9 @@ def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
 
 
 def test_session_bytes_counts_everything_the_session_holds(cfg, session_dir):
-    """Run scratch counts too: the question is what the session costs the
-    host, not what is worth keeping."""
+    """Run scratch counts too: the question is what the session costs the host, not what
+    is worth keeping.
+    """
     (session_dir / "derived" / "kept.bin").write_bytes(b"x" * 100)
     (session_dir / "runs").mkdir(exist_ok=True)
     (session_dir / "runs" / "scratch.bin").write_bytes(b"y" * 50)
@@ -188,13 +175,7 @@ def test_reap_falls_back_to_the_configured_ttl(cfg):
 
 
 def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_path):
-    """The two features meet here, and the order is the point.
-
-    `place_data` copies files into `/data`, which grows the session. Checking
-    afterwards would let a request that is already over budget add to it and
-    only then be refused -- leaving the session larger than the bound it was
-    rejected for.
-    """
+    """The two features meet here, and the order is the point."""
     supplied = tmp_path / "report.pdf"
     supplied.write_bytes(b"z" * 500)
 

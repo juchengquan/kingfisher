@@ -1,10 +1,4 @@
-"""What tools exist to be granted, and the rules over that.
-
-The rule these cover had two implementations -- one in `agent` for a request,
-one in `delegation` for a subagent -- with an identical loop over the same
-five-tuple and different wording. `delegation` said so itself: "`_refuse_unknown_tools`
-says the same thing to a request, for the same reason."
-"""
+"""What tools exist to be granted, and the rules over that."""
 
 from __future__ import annotations
 
@@ -24,8 +18,7 @@ WORKSPACE = Offering(
 
 
 def test_a_name_on_the_wrong_axis_is_not_called_unknown():
-    """The mistake the split creates. `read_file` plainly exists, and telling
-    someone it is unknown sends them hunting for a bug in kingfisher."""
+    """The mistake the split creates."""
     with pytest.raises(CapabilityError) as raised:
         WORKSPACE.refuse_unknown(ALL, ("read_file",), subject="this request")
 
@@ -39,7 +32,8 @@ def test_a_name_on_the_wrong_axis_is_not_called_unknown():
 )
 def test_both_callers_get_the_same_two_refusals(subject):
     """One implementation, and the caller names itself -- the shape
-    `refuse_ungranted_models` already uses a file away."""
+    `refuse_ungranted_models` already uses a file away.
+    """
     with pytest.raises(CapabilityError, match="unknown tool"):
         WORKSPACE.refuse_unknown(ALL, ("nope",), subject=subject)
 
@@ -51,9 +45,9 @@ def test_both_callers_get_the_same_two_refusals(subject):
 def test_the_refusal_names_the_subject_that_made_it(asked):
     """Two lines in one log, from one rule, and a reader can tell which is which.
 
-    Both refusals, not one: the subject was dropped from the misplaced branch by
-    a mutation and the unknown-branch test did not notice, which is what a
-    single-path test buys you.
+    Both refusals, not one: the subject was dropped from the misplaced branch by a
+    mutation and the unknown-branch test did not notice, which is what a single-path
+    test buys you.
     """
     with pytest.raises(CapabilityError, match="subagent 'reviewer'"):
         WORKSPACE.refuse_unknown(ALL, asked, subject="subagent 'reviewer'")
@@ -63,13 +57,8 @@ def test_the_refusal_names_the_subject_that_made_it(asked):
 
 
 def test_an_unknown_name_is_told_where_the_real_ones_live():
-    """Nesting exists so a person can find a file again, and a bare list of
-    names is exactly what sends them grepping for it.
-
-    Without a package's trailing slash, which this asserted until a `tools:`
-    entry could carry a path. The listing and a definition now spell a source
-    the same way, so what is printed here is what gets pasted there -- and
-    `csv_profile/` would be a near-miss someone has to notice.
+    """Nesting exists so a person can find a file again, and a bare list of names is
+    exactly what sends them grepping for it.
     """
     with pytest.raises(CapabilityError) as raised:
         WORKSPACE.refuse_unknown(ALL, ("csv_colums",), subject="this request")
@@ -80,8 +69,9 @@ def test_an_unknown_name_is_told_where_the_real_ones_live():
 
 
 def test_naming_nothing_cannot_name_something_wrong():
-    """`ALL` and `None` are the two ends of the lattice; neither picks a name,
-    so neither can pick a wrong one."""
+    """`ALL` and `None` are the two ends of the lattice; neither picks a name, so
+    neither can pick a wrong one.
+    """
     WORKSPACE.refuse_unknown(ALL, ALL, subject="this request")
     WORKSPACE.refuse_unknown(None, None, subject="this request")
 
@@ -90,8 +80,7 @@ def test_naming_nothing_cannot_name_something_wrong():
 
 
 def test_narrowing_one_axis_does_not_cost_the_other():
-    """The whole point of the split. `tools=("http_fetch",)` no longer costs a
-    caller `read_file`."""
+    """The whole point of the split."""
     permitted = WORKSPACE.permitted(ALL, ("http_fetch",))
 
     assert set(permitted or ()) == {"read_file", "execute", "http_fetch"}
@@ -111,13 +100,7 @@ def test_a_grant_cannot_reach_past_what_is_offered():
 
 
 def test_a_delegate_is_narrowed_by_the_grant_not_by_the_workspace():
-    """The mistake this nearly shipped as an `Offering` method.
-
-    A delegate is bounded by what the *request was granted*, not by what the
-    workspace offers -- and the two differ exactly when a request narrowed
-    something, which is the case the ceiling exists for. Narrowing against the
-    offering would hand a delegate back the tool its caller withheld.
-    """
+    """The mistake this nearly shipped as an `Offering` method."""
     allowed = ceiling(
         ALL,
         ALL,
@@ -131,14 +114,14 @@ def test_a_delegate_is_narrowed_by_the_grant_not_by_the_workspace():
 
 
 def test_a_delegate_nobody_narrowed_gets_no_allowlist():
-    """`ALL` here where `permitted` answers `None`: a delegate's selection is
-    narrowed again downstream, a request's goes to a middleware."""
+    """`ALL` here where `permitted` answers `None`: a delegate's selection is narrowed
+    again downstream, a request's goes to a middleware.
+    """
     assert ceiling(ALL, ALL, granted_builtin=ALL, granted_tools=ALL, subject="x") == ALL
 
 
 def test_one_axis_left_unresolved_is_refused_rather_than_guessed():
-    """`ALL` is the string `"*"`. Unpacked into the union it contributes a tool
-    *named* `*` and drops the axis it stood for."""
+    """`ALL` is the string `"*"`."""
     with pytest.raises(ValueError, match="one tool axis resolved"):
         ceiling(ALL, ("a",), granted_builtin=ALL, granted_tools=("a",), subject="x")
 

@@ -1,11 +1,4 @@
-"""The JavaScript sandbox: a surface `execute` can never be.
-
-`execute` is a real shell with the whole host behind it -- every safety note in
-this codebase ends by saying so. The interpreter is the opposite: capped
-memory, capped time, no filesystem, no network, and reachable tools limited to
-what the request granted. It is wired for that property, so that is what these
-check.
-"""
+"""The JavaScript sandbox: a surface `execute` can never be."""
 
 from __future__ import annotations
 
@@ -25,8 +18,9 @@ def _model():
 
 
 def test_it_is_off_unless_a_deployment_wires_it(cfg, session_dir):
-    """A second execution surface, and a beta dependency, should not arrive
-    because someone upgraded."""
+    """A second execution surface, and a beta dependency, should not arrive because
+    someone upgraded.
+    """
     graph = build_agent(cfg, session_dir=session_dir, model=_model())
     assert "eval" not in dispatched(graph)
 
@@ -39,8 +33,7 @@ def test_wiring_it_adds_one_tool(cfg, session_dir):
 
 
 def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
-    """No new axis. It is granted and withheld through `Capabilities.tools`
-    like anything else, which also means the tool-name validator covers it."""
+    """No new axis."""
     wired = replace(cfg, interpreter_enabled=True)
 
     without = build_agent(
@@ -55,9 +48,7 @@ def test_eval_is_an_ordinary_tool_a_request_may_withhold(cfg, session_dir):
 
 
 def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, session_dir, monkeypatch):
-    """The whole reason for adopting this. `ptc` is the request's own grant,
-    so a caller that withheld `execute` cannot call it from inside the
-    sandbox either."""
+    """The whole reason for adopting this."""
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, interpreter_enabled=True),
@@ -73,12 +64,7 @@ def test_a_request_that_withheld_the_shell_cannot_reach_it_from_code(cfg, sessio
 
 
 def test_an_unrestricted_request_gets_no_allowlist(cfg, session_dir, monkeypatch):
-    """`None`, not an empty tuple. The library reads `None` as "no allowlist";
-    an empty tuple would mean the opposite of what the caller asked for.
-
-    Consistent with the rest: restrictions attach to narrowing, and a caller
-    that narrowed nothing has nothing to escape from.
-    """
+    """`None`, not an empty tuple."""
     captured = capture_build(monkeypatch)
     build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
 
@@ -101,12 +87,8 @@ def _ptc(interpreter):
 
 
 def test_withholding_task_also_stops_dispatch_from_code(cfg, session_dir, monkeypatch):
-    """`task()` is a top-level global in the REPL, not a `tools.*` entry, so
-    the tool allowlist does not reach it.
-
-    Left at the library's default this would let a request that withheld `task`
-    delegate anyway from inside the sandbox -- a hole of exactly the shape the
-    delegate ceiling exists to close, arrived at by a different door.
+    """`task()` is a top-level global in the REPL, not a `tools.*` entry, so the tool
+    allowlist does not reach it.
     """
     captured = capture_build(monkeypatch)
     build_agent(
@@ -121,8 +103,9 @@ def test_withholding_task_also_stops_dispatch_from_code(cfg, session_dir, monkey
 
 
 def test_granting_task_allows_dispatch_from_code(cfg, session_dir, monkeypatch):
-    """The negative control: without it the test above would pass just as well
-    if dispatch were disabled for everyone."""
+    """The negative control: without it the test above would pass just as well if
+    dispatch were disabled for everyone.
+    """
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, interpreter_enabled=True),
@@ -135,9 +118,9 @@ def test_granting_task_allows_dispatch_from_code(cfg, session_dir, monkeypatch):
 
 
 def test_task_is_never_offered_through_the_tool_namespace(cfg, session_dir, monkeypatch):
-    """The library refuses it: `task()` is the global, and routing it through
-    `tools.*` as well would give two dispatch paths, the second losing
-    `responseSchema`. Undocumented, and only a live run found it."""
+    """The library refuses it: `task()` is the global, and routing it through `tools.*`
+    as well would give two dispatch paths, the second losing `responseSchema`.
+    """
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, interpreter_enabled=True),
@@ -159,14 +142,9 @@ def _dispatch_enabled(interpreter):
 
 
 def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir, monkeypatch):
-    """The library serialises the whole QuickJS heap into the checkpoint at the
-    end of every turn -- measured at a constant 1,280KB, written whether or not
-    `eval` was ever called. One observed run called it zero times out of
-    forty-five tool calls and still paid it. Capping took a workspace's thread
-    database from 2.94MB to 0.31MB across two turns.
-
-    Asserted against the cap the middleware is holding rather than the argument
-    passed, so the check survives the library renaming its keyword.
+    """The library serialises the whole QuickJS heap into the checkpoint at the end of
+    every turn -- measured at a constant 1,280KB, written whether or not `eval` was
+    ever called.
     """
     captured = capture_build(monkeypatch)
     build_agent(replace(cfg, interpreter_enabled=True), session_dir=session_dir, model=_model())
@@ -184,9 +162,8 @@ def test_the_vm_image_is_dropped_rather_than_checkpointed(cfg, session_dir, monk
 
 
 def test_the_cap_is_not_the_librarys_default(cfg, session_dir, monkeypatch):
-    """Left unset the cap becomes `memory_limit` -- 64MB, far above any real
-    image, so nothing is ever dropped. The point of setting it is that the
-    default keeps everything.
+    """Left unset the cap becomes `memory_limit` -- 64MB, far above any real image, so
+    nothing is ever dropped.
     """
     from langchain_quickjs import CodeInterpreterMiddleware
 
@@ -212,12 +189,12 @@ def _quickjs_workers() -> set[str]:
 def _force_close(graph) -> None:
     """Close the runtime whatever `release_interpreter` did, as a safety net.
 
-    Not a second implementation to keep in step -- a net under the test below,
-    and it exists because of how that test fails. A runtime left open does not
-    fail the process, it hangs it at exit, so without this a regression arrives
-    as a CI job that times out with no output rather than as a red assertion.
-    Measured by removing the fix: the assertion went red and pytest then sat
-    there until it was killed.
+    Not a second implementation to keep in step -- a net under the test below, and it
+    exists because of how that test fails. A runtime left open does not fail the
+    process, it hangs it at exit, so without this a regression arrives as a CI job
+    that times out with no output rather than as a red assertion. Measured by
+    removing the fix: the assertion went red and pytest then sat there until it was
+    killed.
     """
     from langchain_quickjs import CodeInterpreterMiddleware
 
@@ -230,19 +207,15 @@ def _force_close(graph) -> None:
 
 def test_the_runtime_is_given_back_when_a_turn_ends_by_exception(cfg, session_dir):
     """The interpreter's teardown is `after_agent`, and langgraph does not run
-    `after_agent` when the graph raises. So the runtime outlived the turn.
+    `after_agent` when the graph raises.
 
-    That is not a leaked handle. `quickjs_rs` pins its Runtime to one worker
-    thread because it is `!Send`, and closing it means collecting on *that*
-    thread; a sweep from anywhere else hits the drop check. The only sweep left
-    is `Py_FinalizeEx`, on the main thread, and there the finalizer deadlocks
-    rather than panicking -- so the process does not crash, it stops. Measured
-    on a real run that hit `recursion_limit`: traceback printed, report already
-    written to disk, and the process still sitting there minutes later.
-
-    Driven rather than inspected, and the `eval` is why: a turn that never
-    evaluated has no runtime to leave behind, so a version of this test without
-    it passes against the bug.
+    That is not a leaked handle. `quickjs_rs` pins its Runtime to one worker thread
+    because it is `!Send`, and closing it means collecting on *that* thread; a sweep
+    from anywhere else hits the drop check. The only sweep left is `Py_FinalizeEx`,
+    on the main thread, and there the finalizer deadlocks rather than panicking -- so
+    the process does not crash, it stops. Measured on a real run that hit
+    `recursion_limit`: traceback printed, report already written to disk, and the
+    process still sitting there minutes later.
     """
     from langgraph.errors import GraphRecursionError
 
@@ -284,13 +257,9 @@ def test_the_runtime_is_given_back_when_a_turn_ends_by_exception(cfg, session_di
 
 
 def test_a_real_build_is_releasable(cfg, session_dir):
-    """`release_interpreter` finds the middleware by walking the compiled
-    graph's nodes, which is not a published shape -- the same unpublished shape
-    `registered_tools` reads, pinned the same way.
-
-    Best-effort at runtime, because taking down a finished turn over an
-    introspection detail is the worse trade. This is what notices instead when
-    langgraph stops naming a node after the middleware that declared it.
+    """`release_interpreter` finds the middleware by walking the compiled graph's nodes,
+    which is not a published shape -- the same unpublished shape `registered_tools`
+    reads, pinned the same way.
     """
     from langchain_quickjs import CodeInterpreterMiddleware
 
@@ -309,9 +278,9 @@ def test_a_real_build_is_releasable(cfg, session_dir):
 
 
 def test_releasing_costs_nothing_when_the_interpreter_is_off(cfg, session_dir):
-    """It runs in the teardown of every turn, including the ones on a
-    deployment that never wired a sandbox. Those must not pay an import for
-    it -- `langchain_quickjs` is deferred precisely so they do not."""
+    """It runs in the teardown of every turn, including the ones on a deployment that
+    never wired a sandbox.
+    """
     graph = build_agent(cfg, session_dir=session_dir, model=_model())
 
     release_interpreter(cfg, graph)

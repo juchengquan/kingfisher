@@ -3,108 +3,8 @@
 Under `tests/integration/` because that is what it is: the one thing here that
 reaches a real model and spends real money, where the 1,600 tests beside it are
 offline and finish in eleven seconds. It is not collected -- pytest takes
-`test_*.py`, and this is deliberately not that, because a module whose job is to
-call a model must never be run by a bare `pytest`.
-
-It is still a driver rather than a test. You type it to *run a task*, and its
-`--list`, `--session`, `--input` and `--data` have nothing to do with asserting
-anything. What makes it belong here is the axis it sits on, not the noun.
-
-`test_architecture` counts it as production despite the directory, and says why:
-this file *calls* `seed` in order to seed a workspace, where a test constructs a
-call in order to observe one. Three live helpers were reported as dead the last
-two times that distinction was lost.
-
-Still not a CLI in the sense that matters -- kingfisher is a library and this
-just drives it -- but the hand-matched argument list is gone. That approach was
-right for one flag and stopped being right somewhere around the fourth, because
-a request now carries a session, files, and a capability set, and none of that
-was reachable from here.
-
-    uv run tests/integration/driver.py --agent assistant            # the smoke task, checked
-    uv run tests/integration/driver.py --agent assistant --no-checks       # no pass/fail gate
-    uv run tests/integration/driver.py --agent assistant "Summarise /data/x.csv"
-
-`--agent` names one of the workspace's `agents/`, and every run that reaches a
-model needs one. There is no default and the refusal says so: an agent decides
-which endpoint the session's prompts go to and whose credentials pay, and a
-driver that picked for you would put that choice somewhere the command line
-never mentions. `--list` shows what this workspace offers.
-
-    uv run tests/integration/driver.py --list          # what this workspace offers
-
-`--seed`, `--from` and `--all` are gone. They kept their place on the argument
-that this is "the driver you already have open" -- true while nothing else could
-run a task, and untrue since `kingfisher run` shipped. Re-seeding an existing
-workspace is `kingfisher seed`, which takes the same `--from` and `--all` and
-means the same thing by them.
-
-A workspace that has never been used still seeds itself on its first run and
-prints what it wrote. That is not the removed flag by another name: it happens
-once, to a directory that is empty by definition, so nothing can be overwritten
--- which is exactly why `--seed` had to be asked for and this does not.
-
-`--list` stayed, and not as a listing: `kingfisher list` prints the same block
-through the same renderer, so as a listing it is a duplicate too. What it also
-is, and what nothing else here provides, is the one way to reach `main` and have
-it return without calling a model. The tests that cover workspace creation and
-first-run seeding are built on that.
-
-    uv run tests/integration/driver.py "Review it" --skills code-review --subagents reviewer
-    uv run tests/integration/driver.py "Count the rows" --tools read_file,write_file
-    uv run tests/integration/driver.py "Just this once" --no-memory
-    uv run tests/integration/driver.py "And now?" --session 7f3a91c2b4e0
-    uv run tests/integration/driver.py "Profile this" --input ~/data.csv
-    uv run tests/integration/driver.py "Analyse these" --data ~/a.pdf --data ~/b.pdf
-
-`--input` and `--data` differ only in how long the file lives, which is the
-only reason there are two. `--input` puts it in this turn's `/runs/<turn>/input`
-and it leaves with the turn. `--data` puts it in the session's `/data`, where
-the next turn still finds it without being handed it again. `/data` is
-read-only to the agent, and `--data` is the supported way to write there --
-copying files in by hand fails, and working around that with `sudo` leaves
-files the harness cannot manage.
-
-Nothing is written unless the task asks for it. Wanting a report on disk is one
-kind of request among many, so there is no flag for it -- say what you want in
-the task, and name the files if you care what they are called.
-
-`--builtin-tools`, `--tools`, `--skills` and `--subagents` are per-request
-capability grants. Omitting one means "everything this workspace offers";
-passing it with an empty value means none. Naming something that does not exist
-is an error, not a silently narrower run -- `--list` shows the valid names.
-
-Tools come in two kinds and are granted apart. `--builtin-tools` names what the
-agent ships with (`read_file`, `execute`); `--tools` names what this workspace
-defines in `tools/`. Naming one under the other is refused rather than resolved,
-and `--list` prints them under separate headings for exactly that reason.
-
-    uv run tests/integration/driver.py "Review it" --without-builtin-tools execute,delete
-
-`--without-builtin-tools` and its three siblings say the same thing by
-subtraction, which is usually what you mean: "not the shell" rather than the
-other eleven names.
-
-It resolves against what the workspace offers *now* and stores the result, so a
-grant written this way is an ordinary list and behaves like one -- including
-going stale if the workspace later gains a tool. That is deliberate: a grant
-that kept subtracting would let a future tool through by default, and a run
-says which names it left out either way.
-
-Pass one form or the other for a given kind, not both.
-
-`--no-checks` skips the verification, not the analysis: the run costs the same.
-It exists so a smoke run can be watched without a non-zero exit breaking
-whatever is driving it.
-
-Output is live. The model's prose is printed as it is written, untagged and
-keeping its own formatting, while progress stays tagged and aligned. The
-answer is not repeated at the end -- you watched it arrive.
-
-Configuration comes from .env (copy .env.example). Where prompts go is
-models.yaml: an endpoint names the wire format it speaks and a model names an
-endpoint. An `api` no adapter can build is refused as the file loads, so a
-gateway on the wrong row fails at startup rather than mid-turn.
+`test_*.py`, and this is deliberately not that, because a module whose job is to call
+a model must never be run by a bare `pytest`.
 """
 
 from __future__ import annotations
@@ -166,20 +66,14 @@ GRANTS: tuple[str, ...] = ("builtin_tools", "tools", "skills", "subagents")
 
 
 def _selection(value: str | None) -> tuple[str, ...] | None:
-    """A comma-separated flag into a capability selection.
-
-    `None` (flag absent) and `()` (flag present but empty) mean opposite
-    things, which is the entire point of the type, so the empty string has to
-    survive as an empty tuple rather than collapsing back to unrestricted.
-    """
+    """A comma-separated flag into a capability selection."""
     if value is None:
         return None
     return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
 def _usage_summary(log_path: Path) -> str:
-    """Render what `read_usage` totalled. Formatting is the driver's business;
-    knowing the log's shape is the log's."""
+    """Render what `read_usage` totalled."""
     usage = read_usage(log_path)
     if not usage.calls:
         return "no model calls logged"
@@ -191,16 +85,7 @@ def _usage_summary(log_path: Path) -> str:
 
 
 def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
-    """Put the smoke's fixtures where the agent will look for them.
-
-    `/data` is a *session's* directory, not the workspace's, so the dataset
-    cannot be seeded until the session it belongs to is known -- which is why
-    the smoke now fixes its session id before the run rather than letting one
-    be minted inside it.
-
-    Skills are not session-scoped and stay where they were: they are shared
-    definitions, and `/skills` still routes to the workspace.
-    """
+    """Put the smoke's fixtures where the agent will look for them."""
     session = Session.open(workspace, session_id, LocalSessionDirs())
     ensure_session_layout(session.directory)
 
@@ -215,16 +100,9 @@ def prepare_smoke(cfg: Config, workspace: Path, session_id: str) -> list[str]:
 def show_inventory(cfg: Config, workspace: Path) -> int:
     """Print what a request may activate here, which is what `--list` is for.
 
-    Neither half is here any more. Working out what is on offer is
-    `application.inventory`, because this and `--without-skills` were
-    computing it apart; formatting it is `cli.listing`, because `kingfisher
-    list` prints the same block and a second copy of a listing is how two
-    listings come to disagree.
-
-    Two doors, one implementation -- which is the whole reason this driver keeps
-    its flags rather than losing them to the shipped command. Removing them
-    would have cost 23 edits across 8 files to buy something this import already
-    gives.
+    Two doors, one implementation -- which is the whole reason this driver keeps its
+    flags rather than losing them to the shipped command. Removing them would have
+    cost 23 edits across 8 files to buy something this import already gives.
     """
     from kingfisher.application.inventory import inventory
     from kingfisher.presentation.cli.listing import failed, render
@@ -239,9 +117,9 @@ def warn_if_unconfined(cfg: Config) -> None:
     """Say once, on every start, when nothing is keeping `execute` off the host.
 
     Printed rather than logged because the person who can act on it is the one
-    reading this output. Silence means confined -- an unconfined shell that
-    announced nothing would look exactly like a confined one, which is how this
-    went unnoticed until it was measured.
+    reading this output. Silence means confined -- an unconfined shell that announced
+    nothing would look exactly like a confined one, which is how this went unnoticed
+    until it was measured.
     """
     confined = confinement.shell_confinement(cfg)
     if confined.warning:
@@ -305,16 +183,7 @@ def build_parser() -> argparse.ArgumentParser:
 
 
 def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
-    """What this workspace offers right now, per kind.
-
-    One line, because the question is answered in one place. It used to build
-    its own agent here -- a second implementation of `--list`, and the one that
-    mattered more: a subtraction has to be taken from the set the run will
-    actually offer, or `--without-skills X` refuses a name the run did not have.
-
-    Only called when a `--without-*` flag asked, so a run that does not subtract
-    still pays nothing for it.
-    """
+    """What this workspace offers right now, per kind."""
     from kingfisher.application.inventory import inventory
 
     return inventory(cfg).offered
@@ -323,18 +192,7 @@ def _offered(cfg: Config) -> dict[str, tuple[str, ...]]:
 def _refuse_the_other_axis(
     excluded: dict[str, tuple[str, ...] | None], offered: dict[str, tuple[str, ...]]
 ) -> None:
-    """Name the flag a subtraction meant, when it named the other axis.
-
-    `--without-tools execute` is what this driver's docstring advertised until
-    the two axes were split, so it is the mistake someone arrives with. Left to
-    `all_but` it comes back as "cannot exclude unknown name(s): execute" beside
-    a list that does not contain it -- true, unhelpful, and the reader has no
-    way to know a second flag exists.
-
-    The same sentence a request already gets for the same mistake, said one step
-    earlier: `_refuse_unknown_tools` tells a caller naming `read_file` under
-    `tools` that it is a builtin tool. This tells them where to subtract it.
-    """
+    """Name the flag a subtraction meant, when it named the other axis."""
     for kind, other, describes in (
         ("tools", "builtin_tools", "builtin tool"),
         ("builtin_tools", "tools", "tool of this workspace"),
@@ -354,17 +212,7 @@ def _refuse_the_other_axis(
 
 
 def _grants(cfg: Config, args: argparse.Namespace) -> dict[str, tuple[str, ...] | None]:
-    """Each grant, whether it was written as a list or as a subtraction.
-
-    `--tools` and `--without-tools` are two ways to say the same thing, so
-    passing both is refused rather than resolved: whichever precedence we chose,
-    the other reading is the one somebody meant.
-
-    Four kinds, not three. `builtin_tools` is its own grant because the library
-    has always had it and this driver simply never offered it -- so `--tools`
-    narrowed the workspace half while every built-in stayed granted, and there
-    was no way from a command line to withhold `execute` at all.
-    """
+    """Each grant, whether it was written as a list or as a subtraction."""
     chosen: dict[str, tuple[str, ...] | None] = {}
     excluded = {kind: _selection(getattr(args, f"without_{kind}")) for kind in GRANTS}
     both = [k for k in excluded if getattr(args, k) is not None and excluded[k] is not None]

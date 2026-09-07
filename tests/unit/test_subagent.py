@@ -68,8 +68,9 @@ def test_optional_fields_and_quoting():
     ],
 )
 def test_malformed_definitions_are_rejected(text, because):
-    """Loudly, at build time — a subagent that silently loses its prompt would
-    fail much later and much less legibly."""
+    """Loudly, at build time — a subagent that silently loses its prompt would fail much
+    later and much less legibly.
+    """
     with pytest.raises(SubagentError, match=because):
         reading.read(text, Path("broken.yaml"))
 
@@ -88,9 +89,7 @@ def test_specs_key_on_the_declared_name_not_the_filename(tmp_path):
 
 
 def test_two_files_claiming_one_name_are_told_apart_by_file(tmp_path):
-    """One used to shadow the other by sort order, so the loader refused the
-    pair. Both load now, and the file is what says which -- the refusal is an
-    agent's, because an agent's roster is what cannot hold two."""
+    """One used to shadow the other by sort order, so the loader refused the pair."""
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "a.yaml").write_text(MINIMAL, encoding="utf-8")
@@ -103,13 +102,7 @@ def test_two_files_claiming_one_name_are_told_apart_by_file(tmp_path):
 
 
 def test_folded_and_block_list_fields_are_accepted(tmp_path):
-    """Two parsers read one format, and ours was the stricter.
-
-    deepagents reads a skill's header with `yaml.safe_load`. A block list is
-    the Agent Skills spec's documented form for `allowed-tools`, and a folded
-    scalar is how anyone writes a description longer than a line. Rejecting
-    them made a skill that loads from the catalogue impossible to upload.
-    """
+    """Two parsers read one format, and ours was the stricter."""
     definition = (
         "name: extractor\n"
         "description: >-\n"
@@ -138,10 +131,7 @@ def _definition(*extra_lines: str) -> str:
 
 
 def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
-    """The bug this closes. `tolls:` was dropped in silence, and dropping it is
-    indistinguishable from honouring it: a missing `tools` means *inherit*, so
-    the delegate came out holding every tool its parent had.
-    """
+    """The bug this closes."""
     with pytest.raises(SubagentError, match="tolls") as raised:
         reading.read(_definition("tolls: [read_file]"), tmp_path / "reviewer.yaml")
 
@@ -149,8 +139,9 @@ def test_a_typo_of_an_optional_field_is_refused_not_ignored(tmp_path):
 
 
 def test_a_typo_of_a_required_field_names_the_typo(tmp_path):
-    """Not "missing required field 'name'", which sends the author looking for
-    something they can plainly see they wrote."""
+    """Not "missing required field 'name'", which sends the author looking for something
+    they can plainly see they wrote.
+    """
     body = "nmae: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n"
 
     with pytest.raises(SubagentError, match="nmae") as raised:
@@ -160,9 +151,8 @@ def test_a_typo_of_a_required_field_names_the_typo(tmp_path):
 
 
 def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
-    """No near match, so no guess -- just the field set, which is the only
-    honest thing to offer. There is nowhere to put your own keys yet, and the
-    message does not pretend otherwise.
+    """No near match, so no guess -- just the field set, which is the only honest thing
+    to offer.
     """
     with pytest.raises(SubagentError, match="additional_abc") as raised:
         reading.read(_definition("additional_abc: 1"), tmp_path / "reviewer.yaml")
@@ -174,8 +164,7 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
 
 
 def test_every_unaccepted_field_is_reported_at_once(tmp_path):
-    """Not just the first. Two typos used to take two runs to find, and the
-    second only after fixing the first."""
+    """Not just the first."""
     with pytest.raises(SubagentError) as raised:
         reading.read(
             _definition("tolls: [read_file]", "temperature: 0.2", "permissions: [deny]"),
@@ -191,8 +180,7 @@ def test_every_unaccepted_field_is_reported_at_once(tmp_path):
 
 @pytest.mark.parametrize("field", sorted(REFUSED))
 def test_a_deliberately_unexposed_field_says_why(tmp_path, field):
-    """These are not "not yet". Honouring them would be wrong, and the generic
-    message reads as an omission someone might work around."""
+    """These are not "not yet"."""
     with pytest.raises(SubagentError, match=field) as raised:
         reading.read(_definition(f"{field}: something"), tmp_path / "reviewer.yaml")
 
@@ -202,9 +190,9 @@ def test_a_deliberately_unexposed_field_says_why(tmp_path, field):
 
 
 def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
-    """The one worth a test of its own: it is written to *tighten* a delegate
-    and silently did nothing, so the definition read stricter than the agent it
-    produced."""
+    """The one worth a test of its own: it is written to *tighten* a delegate and
+    silently did nothing, so the definition read stricter than the agent it produced.
+    """
     with pytest.raises(SubagentError) as raised:
         reading.read(_definition("permissions: [deny]"), tmp_path / "reviewer.yaml")
 
@@ -214,21 +202,7 @@ def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
 
 
 def test_response_format_does_not_claim_deepagents_has_nowhere_to_put_one(tmp_path):
-    """The other one worth its own test, and for the opposite reason.
-
-    This reason was false. It said a delegate "returns prose to its caller" and
-    that "there is nothing here to hand a schema to", and deepagents 0.7.6 does
-    both things it denies: `_compile_spec` takes a `response_format`, and
-    `middleware/subagents.py` serialises the structured response into the
-    `ToolMessage` the parent reads.
-
-    The refusal survived the check and the reason did not, so what is pinned
-    here is the true one -- that the shape is flattened to text at the boundary,
-    which is why kingfisher gains nothing by exposing the field. A refusal
-    stating a reason upstream contradicts is worse than the generic message
-    this table exists to replace: whoever checks it has no reason to trust the
-    rest of the table.
-    """
+    """The other one worth its own test, and for the opposite reason."""
     with pytest.raises(SubagentError) as raised:
         reading.read(_definition("response_format: {}"), tmp_path / "reviewer.yaml")
 
@@ -242,8 +216,9 @@ def test_response_format_does_not_claim_deepagents_has_nowhere_to_put_one(tmp_pa
 
 
 def test_every_known_field_still_parses(tmp_path):
-    """The negative control: strictness that rejected a valid definition would
-    be a worse bug than the one it fixes."""
+    """The negative control: strictness that rejected a valid definition would be a
+    worse bug than the one it fixes.
+    """
     body = (
         "name: reviewer\n"
         "description: d\n"
@@ -271,23 +246,7 @@ FOLDED_INTO = {"model": "wanted"}
 
 
 def test_the_known_set_matches_the_spec_it_builds():
-    """Two lists that must agree, in both directions.
-
-    A field added to the dataclass but not to KNOWN would be refused as unknown
-    the moment anyone used it. A key added to KNOWN with nothing behind it is
-    the opposite failure and the quieter one: the parser accepts it, nothing
-    reads it, and the definition that wrote it is obeyed by nobody.
-
-    Derived fields are excluded, and have to say so on themselves rather than
-    being listed here -- a name in two places is the drift this test exists to
-    catch. `tool_sources` is the first: it is read out of `tools`, and writing
-    `tool_sources:` in a definition is refused like any other unknown key.
-
-    `FOLDED_INTO` is the one thing that cannot be said on a field, because it is
-    a fact about keys that have no field. It is checked rather than trusted: a
-    key claiming to be folded somewhere that is not a derived field would be a
-    hole in the direction this test just gained.
-    """
+    """Two lists that must agree, in both directions."""
     fields_by_name = SubagentSpec.__dataclass_fields__
     written = {
         name for name, f in fields_by_name.items() if not f.metadata.get("derived")
@@ -303,8 +262,7 @@ def test_the_known_set_matches_the_spec_it_builds():
 
 
 def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
-    """Deliberately the opposite rule. Kingfisher does not own the skill format,
-    so refusing keys there would reject what deepagents considers valid."""
+    """Deliberately the opposite rule."""
     body = "---\nname: code-review\nallowed-tools: [read_file]\nlicense: MIT\n---\nBody.\n"
 
     assert name_from(body) == "code-review"
@@ -313,39 +271,25 @@ def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
 def test_a_skill_without_frontmatter_says_which_delimiter_is_missing():
     """A skill is markdown with a `---` header, and a file without one is not one.
 
-    Found by mutation rather than by review: this check and the one below moved
-    from two other modules when reading a skill's name became one function, and
-    deleting either left the whole suite green. They had never been exercised --
-    the gap is older than the move, which is what made it worth writing down.
-
-    The message names the delimiter because that is the thing to add. "Cannot
-    read frontmatter" would send someone to inspect YAML they have not written
-    yet.
+    Found by mutation rather than by review: this check and the one below moved from
+    two other modules when reading a skill's name became one function, and deleting
+    either left the whole suite green. They had never been exercised -- the gap is
+    older than the move, which is what made it worth writing down.
     """
     with pytest.raises(SkillError, match="delimited by ---"):
         name_from("name: code-review\n\nNo header at all.\n")
 
 
 def test_a_skill_name_that_is_a_path_is_refused():
-    """The name becomes a directory name, so a separator in it writes elsewhere.
-
-    deepagents validates `name` against the parent directory, so an upload has
-    to be unpacked under the name it declares -- which means a declared name of
-    `../elsewhere` is a request to unpack outside the directory the caller
-    believes it is filling.
-    """
+    """The name becomes a directory name, so a separator in it writes elsewhere."""
     for written in ("../elsewhere", "nested/skill", ".", ".."):
         with pytest.raises(SkillError, match="not usable as a directory name"):
             name_from(f"---\nname: {written}\n---\nBody.\n")
 
 
 def test_a_prompt_that_begins_indented_still_loads(tmp_path):
-    """`system_prompt: |` takes its indentation from the first line, so a prompt
-    opening with a code example *fails to parse*. The `2` pins the block to a
-    fixed column, which is why the presets and the docs use it.
-
-    The prompt's outer whitespace is still stripped, as the markdown body always
-    was -- what the indicator buys is that the document loads at all.
+    """`system_prompt: |` takes its indentation from the first line, so a prompt opening
+    with a code example *fails to parse*.
     """
     lines = "      ls -la /data\n  Then report what you found.\n"
     header = "name: reviewer\ndescription: d\nsystem_prompt: "
@@ -360,9 +304,7 @@ def test_a_prompt_that_begins_indented_still_loads(tmp_path):
 
 
 def test_indentation_inside_a_prompt_is_preserved(tmp_path):
-    """Only the outer edges are stripped. A numbered list's continuation lines
-    carry their indent into the delegate's prompt, which is how the shipped
-    presets are written."""
+    """Only the outer edges are stripped."""
     definition = (
         "name: reviewer\n"
         "description: d\n"
@@ -384,8 +326,9 @@ STEPS = "  1. Recompute the figure.\n  2. Say which definition you applied.\n"
 
 @pytest.mark.parametrize("style", ["|", "|2", "|-", "|+"])
 def test_every_literal_block_is_accepted(tmp_path, style):
-    """The indicator and the chomping marker are none of this check's business
-    -- they are all the same style, and all of them keep the line breaks."""
+    """The indicator and the chomping marker are none of this check's business -- they
+    are all the same style, and all of them keep the line breaks.
+    """
     spec = reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
 
     assert "Recompute the figure.\n2. Say" in spec.system_prompt
@@ -393,8 +336,9 @@ def test_every_literal_block_is_accepted(tmp_path, style):
 
 @pytest.mark.parametrize("style", [">", ">-", ">2"])
 def test_a_folded_prompt_is_refused(tmp_path, style):
-    """`>` joins consecutive lines, so two numbered steps reach the delegate as
-    one run-on line -- valid YAML, correct-looking file, odd-behaving agent."""
+    """`>` joins consecutive lines, so two numbered steps reach the delegate as one
+    run-on line -- valid YAML, correct-looking file, odd-behaving agent.
+    """
     with pytest.raises(SubagentError, match="reflows it") as raised:
         reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
 
@@ -413,8 +357,9 @@ def test_a_quoted_prompt_is_refused(tmp_path):
 
 
 def test_folding_is_what_the_refusal_is_about(tmp_path):
-    """The negative control, so the rule is justified rather than asserted:
-    this is what a folded prompt would have handed the delegate."""
+    """The negative control, so the rule is justified rather than asserted: this is what
+    a folded prompt would have handed the delegate.
+    """
     import yaml as _yaml
 
     folded = _yaml.safe_load(HEAD + "system_prompt: >\n" + STEPS)["system_prompt"]
@@ -423,8 +368,7 @@ def test_folding_is_what_the_refusal_is_about(tmp_path):
 
 
 def test_the_description_may_still_be_folded(tmp_path):
-    """Only the prompt is checked. A description is one paragraph, and `>-` is
-    how anyone writes one longer than a line -- the skill spec's own form."""
+    """Only the prompt is checked."""
     definition = (
         "name: reviewer\n"
         "description: >-\n"
@@ -458,21 +402,14 @@ def test_a_definition_that_pins_nothing_runs_what_everything_else_does():
 
 
 def test_the_definition_decides():
-    """The only author, and now the whole of what this resolves.
-
-    It was `resolved_endpoint` and returned a `(provider, model)` pair with two
-    refusals attached: an operator override that could only ever say "every
-    delegate", and the endpoint grant. The first went before this change. The
-    second cannot live in the domain any more -- an endpoint follows from the
-    model through a catalogue only `Config` holds -- so it is
-    `refuse_ungranted_endpoint`, called where the lookup happens.
-    """
+    """The only author, and now the whole of what this resolves."""
     assert resolved_model(_spec("gpt-5").wanted) == "gpt-5"
 
 
 def test_a_request_replaces_what_the_file_said():
-    """Wholesale, which is now the only shape an override can have: there is no
-    second field to take half of."""
+    """Wholesale, which is now the only shape an override can have: there is no second
+    field to take half of.
+    """
     assert resolved_model(_spec("gpt-5").wanted, override=RunOn(model="cheap-one")) == "cheap-one"
 
 
@@ -480,8 +417,7 @@ def test_a_request_replaces_what_the_file_said():
 
 
 def test_metadata_is_carried_verbatim(tmp_path):
-    """Kingfisher does not interpret it. Whatever YAML made of the mapping is
-    what a middleware factory will be handed."""
+    """Kingfisher does not interpret it."""
     definition = (
         "name: reviewer\ndescription: d\n"
         "metadata:\n  tier: gold\n  retries: 3\n  tags: [a, b]\n"
@@ -494,8 +430,9 @@ def test_metadata_is_carried_verbatim(tmp_path):
 
 
 def test_metadata_defaults_to_empty(tmp_path):
-    """Absent is the common case, and an empty mapping saves every reader a
-    `None` check for a field that means "nothing extra"."""
+    """Absent is the common case, and an empty mapping saves every reader a `None` check
+    for a field that means "nothing extra".
+    """
     spec = reading.read(MINIMAL, tmp_path / "reviewer.yaml")
 
     assert spec.metadata == {}
@@ -503,8 +440,9 @@ def test_metadata_defaults_to_empty(tmp_path):
 
 @pytest.mark.parametrize("written", ["metadata: gold", "metadata: [a, b]", "metadata: 3"])
 def test_metadata_must_be_a_mapping(tmp_path, written):
-    """A bag with no shape cannot be looked up by key, which is the only thing
-    anyone will do with it."""
+    """A bag with no shape cannot be looked up by key, which is the only thing anyone
+    will do with it.
+    """
     definition = f"name: reviewer\ndescription: d\n{written}\nsystem_prompt: |\n  You review.\n"
 
     with pytest.raises(SubagentError, match="metadata"):
@@ -512,17 +450,16 @@ def test_metadata_must_be_a_mapping(tmp_path, written):
 
 
 def test_empty_metadata_is_allowed(tmp_path):
-    """`metadata:` with nothing under it is not the same mistake as a blank
-    required field -- it is a caller who has none, spelled out."""
+    """`metadata:` with nothing under it is not the same mistake as a blank required
+    field -- it is a caller who has none, spelled out.
+    """
     definition = "name: reviewer\ndescription: d\nmetadata:\nsystem_prompt: |\n  You review.\n"
 
     assert reading.read(definition, tmp_path / "reviewer.yaml").metadata == {}
 
 
 def test_metadata_survives_loading_the_catalogue(tmp_path):
-    """The only consumer there is. A deployment reads its own keys by loading
-    the directory itself -- no seam into a run, and none needed.
-    """
+    """The only consumer there is."""
     directory = tmp_path / "subagents"
     directory.mkdir()
     (directory / "reviewer.yaml").write_text(
@@ -544,14 +481,9 @@ def test_metadata_survives_loading_the_catalogue(tmp_path):
 
 
 def test_provider_is_no_longer_a_field(tmp_path):
-    """It named an endpoint by style, and moved in lockstep with `model` --
-    naming one without the other was refused, because a model sent somewhere
-    that has never heard of it is a 404 if you are lucky.
-
-    A model names its own endpoint through the catalogue now, so the field has
-    nothing left to say. It is refused like any other unknown key rather than
-    ignored: a definition still carrying `provider: openai` would otherwise
-    keep running, silently somewhere else than its author wrote.
+    """It named an endpoint by style, and moved in lockstep with `model` -- naming one
+    without the other was refused, because a model sent somewhere that has never
+    heard of it is a 404 if you are lucky.
     """
     definition = (
         "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
@@ -571,10 +503,7 @@ def test_provider_is_no_longer_a_field(tmp_path):
 
 
 def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):
-    """One field, where there were two. The endpoint is not absent from the
-    definition -- it is derived from the model, which is why there is nothing
-    left to keep in step.
-    """
+    """One field, where there were two."""
     definition = (
         "name: reviewer\ndescription: d\nmodel: cheap-one\nsystem_prompt: |\n  You review.\n"
     )
@@ -605,15 +534,14 @@ def test_one_model_reads_as_a_list_of_one(tmp_path):
 
 
 def test_naming_several_models_is_refused_rather_than_stringified(tmp_path):
-    """`model:` took a list while an `alias:` beside it could be passed over for
-    being unbound, and #243 removed both -- leaving a shape that parsed and
-    meant nothing.
+    """`model:` took a list while an `alias:` beside it could be passed over for being
+    unbound, and #243 removed both -- leaving a shape that parsed and meant nothing.
 
     Measured on main before this: `model: [gpt-5, claude-4]` was read as a model
-    *named* `"['gpt-5', 'claude-4']"`, brackets and quotes included, and got as
-    far as `resolve` before failing with `no model "['gpt-5', 'claude-4']"
-    defined in models.yaml` -- one request in, naming no file, and telling its
-    reader to go and define one.
+    *named* `"['gpt-5', 'claude-4']"`, brackets and quotes included, and got as far
+    as `resolve` before failing with `no model "['gpt-5', 'claude-4']" defined in
+    models.yaml` -- one request in, naming no file, and telling its reader to go and
+    define one.
     """
     definition = (
         "name: reviewer\ndescription: d\nmodel: [gpt-5, claude-4]\n"

@@ -66,11 +66,7 @@ def test_stream_surfaces_tool_names_and_cache_usage(cfg):
 
 
 def _agent_with_content_blocks() -> StubAgent:
-    """What the Responses API returns: content as a list of blocks.
-
-    Chat Completions returns a plain string, so this shape did not arise before
-    the openai style moved to `/v1/responses`.
-    """
+    """What the Responses API returns: content as a list of blocks."""
     return StubAgent(
         "42",
         updates=[
@@ -102,11 +98,7 @@ def _agent_with_content_blocks() -> StubAgent:
 
 
 def test_content_blocks_are_read_as_text_not_repr(cfg):
-    """`str(content)` on a block list renders its Python repr into the answer.
-
-    The assistant half of this now travels as tokens rather than as a
-    completed message -- see `test_token_content_blocks_are_read_as_text`.
-    """
+    """`str(content)` on a block list renders its Python repr into the answer."""
     tool_result = next(
         e for e in _events(cfg, _agent_with_content_blocks()) if e.kind == "tool_result"
     )
@@ -116,11 +108,7 @@ def test_content_blocks_are_read_as_text_not_repr(cfg):
 
 
 def test_a_message_that_is_only_a_state_shuffle_emits_nothing(cfg):
-    """No tools, no text, no usage: nobody took a turn, so there is nothing to say.
-
-    Reasoning-only content blocks are the shape that raised this — `.text`
-    yields "" for them.
-    """
+    """No tools, no text, no usage: nobody took a turn, so there is nothing to say."""
     message = AIMessage(content=[{"type": "reasoning", "summary": []}])
     agent = StubAgent("42", updates=[{"agent": {"messages": [message]}}])
 
@@ -128,10 +116,7 @@ def test_a_message_that_is_only_a_state_shuffle_emits_nothing(cfg):
 
 
 def test_a_turn_that_only_spoke_is_still_a_model_call(cfg):
-    """`message` is collapsed: a completed turn is a completed turn.
-
-    Its prose is not repeated here; that is the token stream's job.
-    """
+    """`message` is collapsed: a completed turn is a completed turn."""
     agent = StubAgent(
         "ok", updates=[{"agent": {"messages": [AIMessage(content="thinking out loud")]}}]
     )

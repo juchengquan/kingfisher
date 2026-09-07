@@ -1,13 +1,4 @@
-"""What an agent definition actually does to a run.
-
-`tests/test_agent_format.py` covers what a file may say. This covers what
-saying it changes: the tools the graph holds, the model it runs, the prompt it
-is given, and what a request can still take away.
-
-The rule underneath all of it is one sentence. The agent file is the baseline
-and a request only ever subtracts from it, so a caller cannot reach past what
-the deployment reviewed.
-"""
+"""What an agent definition actually does to a run."""
 
 from __future__ import annotations
 
@@ -51,14 +42,7 @@ def _spec(cfg, name: str):
 
 
 def _offered(captured) -> set[str]:
-    """The tools the model will actually be offered.
-
-    Off the allowlist rather than off the compiled graph, and the difference is
-    the whole mechanism: deepagents registers its whole built-in set whatever we
-    say, and `ToolAllowlist` is what decides which of them reach a model call.
-    Reading `tools_by_name` would show every tool for every agent and pass no
-    matter what a definition declared.
-    """
+    """The tools the model will actually be offered."""
     for middleware in captured["middleware"]:
         allowed = getattr(middleware, "_allowed", None)
         if allowed is not None:
@@ -71,8 +55,7 @@ def _offered(captured) -> set[str]:
 
 
 def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir, monkeypatch):
-    """The whole point of the file. `write_file` and `execute` are absent
-    because the definition did not name them, not because a caller asked."""
+    """The whole point of the file."""
     _agents(cfg, NARROW)
     captured = capture_build(monkeypatch)
 
@@ -89,9 +72,7 @@ def test_an_agent_holds_only_the_tools_its_file_names(cfg, session_dir, monkeypa
 
 
 def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir, monkeypatch):
-    """A caller asking for a tool the agent never held gets the overlap, which
-    is empty. That is what makes an untrusted caller safe to accept: every axis
-    here subtracts, and none of them adds."""
+    """A caller asking for a tool the agent never held gets the overlap, which is empty."""
     _agents(cfg, NARROW)
     captured = capture_build(monkeypatch)
 
@@ -109,8 +90,7 @@ def test_a_request_narrows_the_agent_and_cannot_widen_it(cfg, session_dir, monke
 
 
 def test_the_agents_prompt_is_added_after_the_harness_and_the_workspace(cfg):
-    """Three parts, most specific last. Replacing the first would not give a
-    leaner agent -- it would give one holding tools nobody told it about."""
+    """Three parts, most specific last."""
     (cfg.workspace / "PROMPT.md").write_text("House rule: be terse.", encoding="utf-8")
 
     assembled = system_prompt(cfg, "You read files and say what is in them.")
@@ -122,8 +102,9 @@ def test_the_agents_prompt_is_added_after_the_harness_and_the_workspace(cfg):
 
 
 def test_the_agent_runs_the_model_its_file_names(cfg, session_dir, monkeypatch):
-    """`cheap` is bound by the deployment, not written in the file: an agent
-    that travels between deployments cannot portably name a vendor's id."""
+    """`cheap` is bound by the deployment, not written in the file: an agent that
+    travels between deployments cannot portably name a vendor's id.
+    """
     _agents(cfg, CHEAP)
     captured = capture_build(monkeypatch)
 
@@ -138,9 +119,7 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir, monkeypatch):
 
 
 def test_a_request_that_names_no_agent_is_refused_once_the_workspace_has_any(cfg):
-    """No default and no implicit one. The agent decides where every prompt in
-    the session goes and what it costs, and a default would put that choice
-    somewhere the call site never mentions."""
+    """No default and no implicit one."""
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg)
 
@@ -157,8 +136,7 @@ def test_the_refusal_lists_what_the_workspace_actually_offers(cfg):
 
 
 def test_an_empty_workspace_is_told_how_to_get_one(cfg):
-    """The other half of that message. "No agent named x, this workspace offers
-    none" is where somebody stops; naming the command is where they carry on."""
+    """The other half of that message."""
     service = Kingfisher(cfg)
 
     with pytest.raises(CapabilityError, match="kingfisher seed"):
@@ -166,19 +144,15 @@ def test_an_empty_workspace_is_told_how_to_get_one(cfg):
 
 
 def test_naming_one_is_required_even_where_there_is_nothing_to_name(cfg):
-    """No default, and no exemption for an empty workspace either.
-
-    The softer rule -- refuse only once `agents/` holds something -- would mean
-    a deployment's behaviour changing the moment somebody added a first agent,
-    which is the least expected time for it to change.
-    """
+    """No default, and no exemption for an empty workspace either."""
     with pytest.raises(CapabilityError, match="names no agent"):
         Kingfisher(cfg).agent_named(None)
 
 
 def test_the_request_carries_the_name_and_nothing_more(cfg):
     """Names, never definitions -- so an untrusted caller can activate what the
-    deployment reviewed and invent nothing."""
+    deployment reviewed and invent nothing.
+    """
     asked = Request("go", agent="narrow")
 
     assert asked.agent == "narrow"
@@ -187,9 +161,7 @@ def test_the_request_carries_the_name_and_nothing_more(cfg):
 
 
 def test_a_request_naming_no_agent_is_still_a_valid_request(cfg):
-    """Refused where the catalogue is known, not in the record. `Request` has no
-    catalogue to check against, and a rule that fires in two places disagrees in
-    one of them eventually."""
+    """Refused where the catalogue is known, not in the record."""
     assert Request("go").agent is None
 
 
@@ -197,12 +169,8 @@ def test_a_request_naming_no_agent_is_still_a_valid_request(cfg):
 
 
 def test_a_later_turn_runs_what_the_session_opened_with(cfg):
-    """Editing an agent file mid-conversation must not change the instructions
-    under a history that already happened.
-
-    A deploy mid-session is ordinary -- the catalogue is read when a deployment
-    is wired, so a restart is exactly when a live session would otherwise pick
-    up a different prompt from the one its own transcript was produced under.
+    """Editing an agent file mid-conversation must not change the instructions under a
+    history that already happened.
     """
     _agents(cfg, NARROW)
     service = Kingfisher(cfg)
@@ -215,8 +183,9 @@ def test_a_later_turn_runs_what_the_session_opened_with(cfg):
 
 
 def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
-    """Honouring it is wrong and ignoring it is worse: the caller asked a
-    question and would be told nothing."""
+    """Honouring it is wrong and ignoring it is worse: the caller asked a question and
+    would be told nothing.
+    """
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg)
     service._agent_for(Request("go", agent="narrow", session_id="s"), "s")
@@ -226,8 +195,9 @@ def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
 
 
 def test_naming_the_same_agent_again_is_fine(cfg):
-    """A stateless caller sends the same payload every turn and should not have
-    to remember what it opened the session with."""
+    """A stateless caller sends the same payload every turn and should not have to
+    remember what it opened the session with.
+    """
     _agents(cfg, NARROW)
     service = Kingfisher(cfg)
     asked = Request("go", agent="narrow", session_id="s")
@@ -237,8 +207,7 @@ def test_naming_the_same_agent_again_is_fine(cfg):
 
 
 def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
-    """The session decides, not the turn. A caller that named the agent when it
-    opened the conversation has said everything it needs to."""
+    """The session decides, not the turn."""
     _agents(cfg, NARROW)
     service = Kingfisher(cfg)
     service._agent_for(Request("go", agent="narrow", session_id="s"), "s")
@@ -247,12 +216,7 @@ def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
 
 
 def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
-    """The property that makes it a snapshot rather than a cache.
-
-    Its only caller checks first, so this holds it directly: a second writer
-    added later would otherwise reintroduce exactly the thing the file exists to
-    prevent, and every test above would still pass.
-    """
+    """The property that makes it a snapshot rather than a cache."""
     from kingfisher.infrastructure.workspace.snapshots import agent_started_with, remember_agent
 
     remember_agent(tmp_path, "s", "name: first\ndescription: One.\n")

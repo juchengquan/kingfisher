@@ -46,8 +46,9 @@ def test_run_scratch_is_not_reported(cfg):
 
 
 def test_inputs_are_not_reported(cfg):
-    """`/data` came from the caller and is read-only; handing it back would be
-    asking them to store what they already have."""
+    """`/data` came from the caller and is read-only; handing it back would be asking
+    them to store what they already have.
+    """
     start(cfg, "s")
     session = cfg.workspace / "sessions" / "s"
     result = run(Request("t", session_id="s"), cfg=cfg, graph=StubAgent("ok"),
@@ -69,9 +70,10 @@ def test_paths_are_relative_to_the_session(cfg, session_dir):
 
 
 def test_a_shell_write_is_reported_even_though_no_tool_saw_it(session_dir):
-    """The reason this is a filesystem walk and not a record of tool calls:
-    `execute` bypasses the file tools, and running a script is how most of
-    `/derived` gets produced."""
+    """The reason this is a filesystem walk and not a record of tool calls: `execute`
+    bypasses the file tools, and running a script is how most of `/derived` gets
+    produced.
+    """
     import subprocess
 
     subprocess.run(

@@ -1,18 +1,4 @@
-"""The two ports that had no tests at all, and now have contracts.
-
-`SessionRoot` and `CommandRunner` were named in no test file in this repository.
-Their implementations were exercised -- `LocalSessionRoot` through every turn a
-test runs, a runner through `test_confinement` -- but nothing was written against
-the *ports*, so the rules a deployment has to keep lived only in two docstrings.
-`docs/guides/ports.md` wrote them down; this makes them run.
-
-The two halves are not symmetric, and the reason is worth knowing before reading
-on. `SessionRoot` ships an implementation, so its kit is proved the way the store
-kits are: against the thing it was extracted from. `CommandRunner` ships none --
-`runner=None` means kingfisher runs the command itself, inside the shell backend
--- so there is nothing to point the kit at, and a reference runner is written
-here instead.
-"""
+"""The two ports that had no tests at all, and now have contracts."""
 
 from __future__ import annotations
 
@@ -30,11 +16,7 @@ from kingfisher.testing import COMMAND_RUNNER_CONTRACT, SESSION_ROOT_CONTRACT
 
 @pytest.mark.parametrize("check", SESSION_ROOT_CONTRACT, ids=lambda c: c.__name__)
 def test_the_local_session_root_keeps_the_port_contract(check, tmp_path):
-    """The kit, against the implementation it was written from.
-
-    A fresh workspace per check, because several of them create directories and
-    one holds two sessions at once.
-    """
+    """The kit, against the implementation it was written from."""
     made = 0
 
     def make():
@@ -49,18 +31,11 @@ def test_the_local_session_root_keeps_the_port_contract(check, tmp_path):
 class ReferenceRunner:
     """A `CommandRunner` written the way the port asks, for the kit to run on.
 
-    Not shipped, and not a suggestion that it should be: `runner=None` already
-    means "run it here", and its own comment explains why a default runner would
-    be *"110 lines of upstream's truncation, timeout and exit-code shaping,
-    copied to be kept in step"*. What this is for is proving the contract is
-    satisfiable, and showing the one thing every implementer gets to decide
-    wrongly.
-
-    That one thing is the timeout. `subprocess.run(timeout=...)` raises, so the
-    obvious runner propagates `TimeoutExpired` -- and the port wants a result
-    with `exit_code` 124 instead, so the model reads a tool result it can retry
-    rather than the turn ending. Four lines, and the whole reason the check
-    exists.
+    Not shipped, and not a suggestion that it should be: `runner=None` already means
+    "run it here", and its own comment explains why a default runner would be *"110
+    lines of upstream's truncation, timeout and exit-code shaping, copied to be kept
+    in step"*. What this is for is proving the contract is satisfiable, and showing
+    the one thing every implementer gets to decide wrongly.
     """
 
     #: Declared, though `True` is what kingfisher assumes of a runner that says
@@ -91,19 +66,14 @@ class ReferenceRunner:
 @pytest.mark.skipif(sys.platform == "win32", reason="the checks run POSIX shell commands")
 @pytest.mark.parametrize("check", COMMAND_RUNNER_CONTRACT, ids=lambda c: c.__name__)
 def test_a_reference_runner_keeps_the_port_contract(check):
-    """A kit with nothing to run against is a kit nobody has run.
-
-    Which is the failure the session store's twelve checks were written to
-    avoid, and it applies harder here: `CommandRunner` had no implementation in
-    this repository at all, so every rule in these checks came from a docstring
-    rather than from something that works.
-    """
+    """A kit with nothing to run against is a kit nobody has run."""
     check(ReferenceRunner)
 
 
 def test_the_contracts_are_not_quietly_empty():
-    """Both are hand-maintained tuples, and a parametrised test over an empty
-    one passes by not existing."""
+    """Both are hand-maintained tuples, and a parametrised test over an empty one passes
+    by not existing.
+    """
     assert len(SESSION_ROOT_CONTRACT) >= 6
     assert len(COMMAND_RUNNER_CONTRACT) >= 5
     assert all(callable(check) for check in (*SESSION_ROOT_CONTRACT, *COMMAND_RUNNER_CONTRACT))
@@ -171,8 +141,9 @@ def _run(contract, name, subject):
 
 
 def test_two_sessions_in_one_directory_is_caught(tmp_path):
-    """The security-relevant one: every path is legal, and each session reads
-    the other's files as its own."""
+    """The security-relevant one: every path is legal, and each session reads the
+    other's files as its own.
+    """
     with pytest.raises(AssertionError, match="Two sessions in one directory"):
         _run(
             SESSION_ROOT_CONTRACT,
@@ -182,8 +153,9 @@ def test_two_sessions_in_one_directory_is_caught(tmp_path):
 
 
 def test_a_hold_that_swallows_a_failure_is_caught(tmp_path):
-    """A turn that failed reported as one that succeeded, with whatever was
-    mounted still mounted."""
+    """A turn that failed reported as one that succeeded, with whatever was mounted
+    still mounted.
+    """
     with pytest.raises(AssertionError, match="would be swallowed"):
         _run(
             SESSION_ROOT_CONTRACT,
@@ -194,8 +166,9 @@ def test_a_hold_that_swallows_a_failure_is_caught(tmp_path):
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the check runs a POSIX shell command")
 def test_a_timeout_that_raises_is_caught():
-    """The one every implementer gets to write wrongly, because every timeout
-    API in Python raises."""
+    """The one every implementer gets to write wrongly, because every timeout API in
+    Python raises.
+    """
     with pytest.raises(AssertionError, match="timeout is a result"):
         _run(
             COMMAND_RUNNER_CONTRACT,
