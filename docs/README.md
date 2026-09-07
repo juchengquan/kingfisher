@@ -58,19 +58,18 @@ slices land.
   when a caller wants a schema, and why the format that prompted it is not
   named in the source. Its first slice has landed; the rest waits for something
   that renders.
-- [A session owns what it
-  costs](design/2026-09-08-a-session-owns-what-it-costs.md) — why every
-  per-session file moves into the session directory, where the agent may not
-  reach it, and what that removes. Carries one thing that is not a proposal: the
-  macOS shell sandbox can be escaped, and that fix is its first slice.
 
-Three have passed through and left the way the rule says. *A store a deployment
+Others have passed through and left the way the rule says -- named rather than
+counted, because the count above this list said "three" while five were named,
+which is the drift this page exists to catch. *A store a deployment
 can name* was built in four slices; its decisions are under *Wiring a store* in
 `decisions.md`. *The front door is for outsiders* was built in three; its
 decisions are under *The front door* in `decisions.md`. *A definition is not the
 agent's to edit* lasted a day and was built in one, under *Confining the shell*.
 *Middleware as a definition kind* lasted the same day and is under *The
-catalogue*.
+catalogue*. *A session owns what it costs* was built in four the day after it was
+written; its decisions are split between *Confining the shell* and *Sessions:
+what persists and where*, which is where the two halves of it belonged.
 
 A document belongs there while it is arguing for something; once it is built its
 decisions move to `decisions.md`, anything it measured about upstream moves to

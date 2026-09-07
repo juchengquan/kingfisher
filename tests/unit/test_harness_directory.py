@@ -231,6 +231,19 @@ def test_the_run_log_and_the_claim_go_with_the_session(cfg):
 # -- a workspace laid out by a version that arranged it differently -------
 
 
+def test_the_harness_owned_directory_is_protected_too(cfg):
+    """The profile lives in it, and after `TMPDIR` moved out nothing in it is the
+    agent's -- so it is denied as a directory rather than as one named file."""
+    from kingfisher.infrastructure.sandbox import confinement
+    from kingfisher.layout import HARNESS_OWNED
+
+    protected = confinement.protected_roots(
+        cfg.workspace, cfg.skills_dir, tuple(cfg.catalogue_roots.values())
+    )
+
+    assert (cfg.workspace / HARNESS_OWNED).resolve() in protected
+
+
 def test_an_older_workspace_is_refused_rather_than_silently_relaid(tmp_path):
     """Silence is the danger, not breakage. Code looking in `.harness` for a pin that
     is still at the old path does not error -- it finds none and re-pins, possibly

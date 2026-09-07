@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
@@ -196,14 +195,6 @@ def test_tmpdir_is_created_private(cfg, session_dir):
     it -- and `ensure_session_layout` says so where it does this.
     """
     assert (session_dir / ".tmp").stat().st_mode & 0o077 == 0
-
-
-def test_state_dir_defaults_and_relocates(cfg, tmp_path):
-    """The sandbox profile moves with `state_dir`, and the agent addresses neither."""
-    assert cfg.state_dir == cfg.workspace / ".kingfisher"
-
-    relocated = replace(cfg, state_root=tmp_path / "state")
-    assert relocated.state_dir == tmp_path / "state"
 
 
 def test_the_run_log_is_the_session_s_own(session_dir):

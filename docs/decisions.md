@@ -686,6 +686,51 @@ workspace files and both are writable, but `config_from_env` runs once when
 next request. A different shape, and its own argument about who writes
 `groups.yaml` and when. *(2026-09-07.)*
 
+**The profile was not the agent's to edit either, and was.** The rule above
+applied one object further in than anybody had looked: `shell.sb` sat inside the
+region its own rules declared writable. `state_dir` defaults to
+`<workspace>/.kingfisher`, `writable_roots` returned the whole workspace, and
+`protected_roots` named only the definition roots -- so two commands in one turn
+were enough. Write `(allow default)` over the profile; run under it.
+`sandbox-exec -f` re-reads the file for every command while `resolve` rewrites it
+only per backend build.
+
+Measured through `confinement.profile` at the path `resolve` writes: the second
+command read the operator's home and created `skills/PWNED.md`, both refused by
+the profile a moment earlier. macOS `auto` only -- bwrap reads no profile, and
+`external` and `off` have nothing to defeat.
+
+The entry under *Wiring a store* had already stated the rule and attributed it to
+`confinement.resolve` -- *"host-side configuration, and a file the agent could
+edit is not a boundary"*. **That attribution was stale**: `f99d2ce` trimmed the
+sentence out of the docstring, so this page cited a docstring that no longer said
+it, about a state directory that *was* the workspace by default. The rule
+survived in prose and had never been true in the code.
+
+`profile` now takes the path it will be written to and denies writes to it, last,
+by `path` rather than `subpath`. Required rather than defaulted: a caller who
+forgets it gets no boundary, which is the failure being fixed. Four ways are
+covered rather than the obvious one -- overwrite, append, unlink and rename-over
+are all `file-write*` against that name. The profile is also replaced rather than
+truncated in place, so a turn cannot bind itself to half a profile while another
+rewrites it; the content cannot differ between turns, every input coming from one
+`Config`, so that is a torn read rather than a disagreement.
+
+`.kingfisher` is protected as a directory as well, which is what the single-path
+rule became once `TMPDIR` moved out of it. It could not have been a `subpath`
+deny before: the denies are written after the allows and would have covered the
+one directory in there the shell had to be able to write.
+
+**A session's `.harness` is denied to the shell too, by a pattern.** One static
+profile covers every session -- `(deny file-write* (regex #"^…/sessions/[^/]+/\.harness…"))`
+-- because `shell.sb` has one fixed path, so a profile naming the sessions that
+existed when it was written would have to be rewritten as sessions arrive, and
+two concurrent turns would then race to write different bytes to the file each is
+bound by. On Linux it is a later read-only bind for bubblewrap and a nested
+readable grant for Landlock, whose most-nested-rule resolution is what makes the
+carve-out work; `tests/linux/test_fence_escapes.py` asserts it, because the
+machine this was written on cannot. *(2026-09-08.)*
+
 ## Sessions: what persists and where
 
 These began as decisions in *Nothing at rest on this machine* and were built
@@ -773,6 +818,70 @@ that a mount is released when the turn ends however it ended. `LocalSessionStore
 and `LocalSessionRoot` are the defaults, and **a local directory is a perfectly
 good implementation of either** -- what the constraint forbids is kingfisher
 *assuming* a disk, not a deployment choosing one.
+
+**A session owns what it costs: everything per-session lives in the session.**
+Four things did not. The agent a session opened with, its conversation, the lock
+a turn holds and its run log sat under `state_dir`, one directory per kind keyed
+by session id, and the shell's `TMPDIR` was one directory shared by the whole
+workspace. Two properties this page already states about single files -- deleted
+with the session, counted by `session_bytes` -- were true of none of them.
+
+Nothing swept them. `delete_session` removes the directory, the thread and the
+store's copy; `reap` sweeps expired sessions; neither ever touched
+`<state_dir>/agents/<id>.yaml` or `<state_dir>/runs/<id>.jsonl`, so a workspace
+kept one of each per session that had ever existed. The same shape as the 132
+orphaned threads above, arrived at by a different route.
+
+And shared scratch was a channel between tenants: both fences granted it
+writable, so what one caller's agent derived sat where another caller's agent
+could read it. `prepare_scratch`'s `0700` check was written about other Unix
+users on the host and had nothing to say about other sessions.
+
+**Uniform rather than by size**, which is the decision worth recording. Moving
+the large things and leaving the small ones -- the pin is a kilobyte, a claim is
+an empty directory -- buys the same two properties for a smaller diff, and is
+where the reasoning would have gone to hide: the pin is small, and it is also the
+file that decides which endpoint a session's prompts reach and whose credentials
+pay. A layout whose rule is "unless it is small" cannot be checked by reading it.
+
+**Two enforcement points, because one is bypassable.** `.harness` carries read
+*and* write denies for the file tools and a rule in the sandbox for the shell.
+The read deny is what makes it invisible rather than visibly forbidden: a deny
+filters entries out of `ls`, `glob` and `grep` instead of erroring, so the model
+never sees a directory it would then try to open.
+
+**The pin crosses a machine now, which closed a hole rather than tidying one.**
+It lived where `SessionStore` never saw it, so a session resumed on another host
+found none, re-pinned from *that* host's catalogue, and accepted whatever agent
+the request named -- *"a session is fixed to the agent it opened with"* held on
+one machine and quietly failed across two. `keep_from` carries it beside the
+transcript. The claim and the run log stay behind: a restored claim would make
+the session look busy for `claim_stale_after` -- minutes -- and the log is
+diagnostics that would be re-uploaded whole every turn.
+
+**The claim moving in deleted `_discard_dead_claims` outright.** It existed
+because a claim could outlive the session it named; one inside that session
+cannot. `busy` is a stat per session rather than a listing of a shared directory,
+which is the cost. `domain.session.claim` takes the slot's path rather than the
+root every slot sat in, because where inside a session is a layout question and
+the domain does not import `layout` -- the reason `layout.py` left `domain/`.
+
+**No migration and no fallback reader; the marker carries a layout version.**
+The failure a fallback would paper over is silence rather than breakage: a pin
+the new code cannot find means a session re-pins and may change agent
+mid-conversation, and a transcript read from the new path means the conversation
+comes back empty. A fallback also has no forcing function to be removed -- the
+day the old paths are gone, nothing says so. `.kingfisher/WORKSPACE` had always
+held one line nothing ever read, so the version cost nothing and the next layout
+change inherits the check.
+
+**`KINGFISHER_STATE_DIR` and `KINGFISHER_SCRATCH_DIR` are gone.** Scratch first:
+per-session and relocatable are not both expressible, because `session_bytes`
+counts one directory and anywhere else is a cost the quota cannot see. Then
+state, which was left holding one generated file. Both were documented and
+neither was set anywhere -- `.env.example` had them commented out. *(2026-09-08,
+in four slices. `docs/design/2026-09-08-a-session-owns-what-it-costs.md` argued
+it and is removed.)*
 
 **Containerise and use a sized tmpfs; do not adopt mirage for the filesystem.**
 That was *Nothing at rest*'s closing recommendation and it is what shipped. A

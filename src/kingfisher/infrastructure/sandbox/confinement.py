@@ -27,7 +27,7 @@ from dataclasses import dataclass, replace
 from pathlib import Path
 
 from kingfisher.config import Config
-from kingfisher.layout import HARNESS
+from kingfisher.layout import HARNESS, HARNESS_OWNED, SANDBOX_PROFILE
 
 #: `landlock_create_ruleset`, which is 444 on every architecture that has it --
 #: the three Landlock calls were added to the syscall table in one go rather
@@ -201,7 +201,6 @@ def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement
     return resolve(
         cfg.shell_sandbox,
         workspace=cfg.workspace,
-        state_dir=cfg.state_dir,
         extra=cfg.shell_path_extra,
         skills=cfg.skills_dir if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
@@ -339,9 +338,34 @@ def writable_roots(workspace: Path) -> tuple[Path, ...]:
     return (Path(workspace).resolve(),)
 
 
-def protected_roots(skills: Path | None, definitions: tuple[Path, ...]) -> tuple[Path, ...]:
-    """Everywhere inside a writable root the shell must still not write."""
-    roots = (*((Path(skills),) if skills is not None else ()), *definitions)
+def profile_path(workspace: Path) -> Path:
+    """Where this workspace's sandbox profile is written.
+
+    Fixed rather than configurable. `KINGFISHER_STATE_DIR` used to move it, along
+    with the run logs, claims, pinned agents and scratch that shared that
+    directory; those are inside their sessions now, and a setting that relocates
+    one generated file is a knob with nothing behind it.
+    """
+    return Path(workspace) / HARNESS_OWNED / SANDBOX_PROFILE
+
+
+def protected_roots(
+    workspace: Path, skills: Path | None, definitions: tuple[Path, ...]
+) -> tuple[Path, ...]:
+    """Everywhere inside a writable root the shell must still not write.
+
+    The harness's own directory is one of them, which is what lets the profile
+    stop naming itself by path: everything in `.kingfisher` is the harness's --
+    the marker, and the profile that says what the shell may do -- and none of it
+    is a session's. It could not be a `subpath` deny while `TMPDIR` lived under
+    it, because the denies are written after the allows and would have covered
+    the one directory the shell must be able to write.
+    """
+    roots = (
+        Path(workspace) / HARNESS_OWNED,
+        *((Path(skills),) if skills is not None else ()),
+        *definitions,
+    )
     return tuple(dict.fromkeys(p.resolve() for p in roots))
 
 
@@ -355,9 +379,8 @@ def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
     return wrap
 
 
-def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
-    # and each is separately relocatable by its own environment variable
-    mode: str, *, workspace: Path, state_dir: Path,
+def resolve(
+    mode: str, *, workspace: Path,
     extra: tuple[str, ...] = (), skills: Path | None = None,
     definitions: tuple[Path, ...] = (),
 ) -> Confinement:
@@ -390,7 +413,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
         )
 
     home = Path.home().resolve()
-    path = Path(state_dir) / "shell.sb"
+    path = profile_path(workspace)
     path.parent.mkdir(parents=True, exist_ok=True)
     _write_atomically(
         path,
@@ -411,7 +434,7 @@ def resolve(  # noqa: PLR0913 -- one parameter per root the profile has to name,
             # the other deployments sharing a relocated one. Read at the tool level too,
             # by the deny rule `kingfisher.layout` declares for this route; both are
             # needed, because the shell bypasses tool permissions entirely.
-            protected=protected_roots(skills, definitions),
+            protected=protected_roots(workspace, skills, definitions),
         ),
     )
     return Confinement(wrap=_sandbox_exec(path), mechanism="sandbox-exec")

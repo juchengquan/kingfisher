@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+#: The harness's own directory in a workspace: not a session's, and not the
+#: agent's. Declared before `LAYOUT_DIRS`, which creates it, and named again
+#: by `MARKER` and by the sandbox profile that lives in it.
+HARNESS_OWNED = ".kingfisher"
+
 #: Created once in the workspace: the definitions the sessions share, and the
 #: harness's own directory.
 LAYOUT_DIRS: tuple[str, ...] = (
@@ -19,12 +24,18 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "tools",
     # Sessions are the unit of isolation; each one is a backend root.
     "sessions",
-    # `.kingfisher` holds the marker. Its `runs/` subdirectory is not created
-    # here: it is relocatable (`KINGFISHER_STATE_DIR`) and is created by
-    # whatever opens it, so creating it here would leave an empty decoy behind
-    # when it is moved.
-    ".kingfisher",
+    # The harness's own, and the only directory in a workspace the agent may
+    # neither write nor be told about: the marker, and the sandbox profile that
+    # says what the shell may do. It held per-session state too -- run logs,
+    # claims, pinned agents, scratch -- and `KINGFISHER_STATE_DIR` existed to
+    # move all of that somewhere else. What is left describes the workspace
+    # rather than any session in it, and there is nothing left to relocate.
+    HARNESS_OWNED,
 )
+
+#: Its two contents, named so `protected_roots` and the profile writer agree on
+#: where they are without either spelling the path a second time.
+SANDBOX_PROFILE = "shell.sb"
 
 #: Created inside every session directory, which is the backend root. These are
 #: the names the agent addresses, so they mean the same thing in every session
@@ -229,7 +240,7 @@ def routed_paths() -> tuple[str, ...]:
     """The paths the composite mounts itself, families excluded."""
     return tuple(r.path for r in ROUTES if r.routed and not r.family)
 
-MARKER = ".kingfisher/WORKSPACE"
+MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 
 #: What the marker says, and the whole of the compatibility story. The file has
 #: always held `kingfisher workspace\n` and nothing has ever read its contents --

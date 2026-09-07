@@ -146,32 +146,27 @@ def test_hosted_tracing_is_disabled_explicitly(monkeypatch):
     assert os.environ["LANGCHAIN_TRACING_V2"] == "false"
 
 
-def test_state_defaults_to_the_workspace(env):
-    """Unset means self-contained: nothing is written outside the workspace."""
-    cfg = config_from_env(env)
+def test_the_host_side_roots_are_no_longer_settings(env):
+    """Both existed to move harness state out of the workspace, and there is none
+    left to move: run logs, claims, pinned agents and conversations are inside
+    their sessions, and what remains in `.kingfisher` -- the marker and the
+    sandbox profile -- describes the workspace rather than any session in it.
 
-    assert cfg.state_root is None
-    assert cfg.state_dir == cfg.workspace / ".kingfisher"
-
-
-def test_state_can_be_pointed_elsewhere(env, tmp_path):
-    """Host-side state is relocatable; the agent addresses none of it by path."""
-    cfg = config_from_env({**env, "KINGFISHER_STATE_DIR": str(tmp_path / "state")})
-
-    assert cfg.state_dir == tmp_path / "state"
-
-
-def test_there_is_no_knob_for_the_agent_s_tmpdir(env):
-    """`TMPDIR` is a session directory, so it cannot be pointed out of the session.
-
-    `KINGFISHER_SCRATCH_DIR` existed to move it, and a scratch directory that is
-    both per-session and elsewhere is not expressible: `session_bytes` counts one
-    directory, so anywhere else is a cost the quota cannot see.
+    `KINGFISHER_SCRATCH_DIR` could not have survived either way. `TMPDIR` is a
+    session directory now, and `session_bytes` counts one directory, so a scratch
+    directory that is both per-session and elsewhere is a cost the quota cannot
+    see -- which is half of why it moved.
     """
-    cfg = config_from_env({**env, "KINGFISHER_SCRATCH_DIR": "/tmp/somewhere"})
+    cfg = config_from_env(
+        {
+            **env,
+            "KINGFISHER_STATE_DIR": "/somewhere/else",
+            "KINGFISHER_SCRATCH_DIR": "/tmp/somewhere",
+        }
+    )
 
-    assert not hasattr(cfg, "scratch_dir")
-    assert not hasattr(cfg, "scratch_root")
+    for gone in ("state_dir", "state_root", "scratch_dir", "scratch_root"):
+        assert not hasattr(cfg, gone), f"{gone} is still a setting"
 
 
 def test_the_catalogue_defaults_inside_the_workspace(env):
