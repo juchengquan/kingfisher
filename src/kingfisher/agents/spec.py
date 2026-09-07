@@ -133,6 +133,13 @@ class AgentSpec:
                 self.subagents, audiences=self.audiences.get("subagents", {}),
                 default=self.groups, held=held,
             ),
+            # Narrowed, unlike the two below, because middleware is not additive
+            # in effect: `call-cap-generous` is a *looser* ceiling than
+            # `call-cap-strict`, so a delegate free to name any registered entry
+            # could pick the roomiest one a deployment happens to offer and leave
+            # the bound its parent runs under. This is what makes an agent decide
+            # which its delegates may choose from -- and why an agent lists one it
+            # does not use itself when a delegate needs it.
             middleware=self.middleware,
             endpoints=ALL,
             models=ALL,
