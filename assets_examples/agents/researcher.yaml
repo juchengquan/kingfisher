@@ -51,8 +51,23 @@ description: Answers questions from a workspace's files under a ceiling on how m
 #
 # Omission grants none, like `skills` and `subagents` and unlike the two tool
 # axes. An agent that says nothing here runs with no middleware of its own.
+#
+# `call-cap-generous` is listed and *not the ceiling this agent runs under*,
+# which needs saying because it reads as a mistake. An agent's `middleware:` is
+# also the grant its delegates are clamped by -- `AgentSpec.declares` returns
+# this list as the request's -- so a name absent here is one no delegate may
+# reach. `sweeper` names `call-cap-generous`, so this file has to grant it.
+#
+# The cost is visible and worth stating: this agent is wrapped in both caps and
+# the stricter one decides, so it still stops at twenty. Two objects doing one
+# job is what the grant and the ceiling being one field costs.
+#
+# Nothing granted it until 2026-09-07 and nothing noticed. With no middleware
+# registered anywhere, `researcher` failed earlier for want of a registry, so
+# the pairing these two files exist to demonstrate had never once been built.
 middleware:
   - call-cap-strict
+  - call-cap-generous
   - name: tool-note
     settings:
       text: Cite the path and line for anything you assert.

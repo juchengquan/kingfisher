@@ -64,6 +64,26 @@ class ToolRepository(AssetRepository, Protocol):
 
 
 @runtime_checkable
+class MiddlewareRepository(AssetRepository, Protocol):
+    """Middleware a workspace defines, as classes a definition may name.
+
+    `classes` rather than `found`, unlike `ToolRepository`: what a caller needs
+    is the mapping a registry already is, because the deployment's own registry
+    answers the same question and the two are merged. The pair-with-its-file
+    lives on the local implementation, where a refusal can reach it.
+
+    The same host constraint `ToolRepository` states applies -- these are Python
+    that gets *imported*, so an implementation backed by anything else stages to
+    disk first.
+    """
+
+    @property
+    def classes(self) -> Mapping[str, type]:
+        """Every middleware held, by the name a definition would write."""
+        ...
+
+
+@runtime_checkable
 class ThreadStore(Protocol):
     """The checkpointer, seen from the domain: something that forgets a thread."""
 

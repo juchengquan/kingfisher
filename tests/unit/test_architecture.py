@@ -686,6 +686,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # The fourth kind, and the only one whose set is empty: an agent's runtime
     # half is `harness/agent.py`, which is not this package's.
     "agents": frozenset(),
+    # The fifth, and back on the boundary: `middleware.catalogue` refuses a class
+    # that is not an `AgentMiddleware` as the directory is read rather than at the
+    # first turn, which cannot be done without naming the type.
+    "middleware": frozenset({"langchain"}),
     # The one consumer still in this distribution. `presentation` was the other and is
     # now `kingfisher-service`, a package of its own with its own rules -- so fastapi
     # and uvicorn are no longer anything this table has an opinion about, and an area
@@ -1732,8 +1736,13 @@ DEPLOYMENT_ERRORS = frozenset({
     # `MissingStoreError` is here rather than above on purpose: a request naming files
     # by id with no `FileStore` wired is a deployment that forgot one, and nothing the
     # caller sends can fix it.
+    #
+    # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
+    # while `SubagentError` sits above: a caller may upload a subagent and cannot
+    # upload middleware, so a `middleware/` file that will not load is always the
+    # deployment's own.
     "AccessError", "AgentError", "ConfigError", "DataError", "HostPathError",
-    "LoadError", "MissingStoreError", "ToolError",
+    "LoadError", "MiddlewareError", "MissingStoreError", "ToolError",
 })
 
 

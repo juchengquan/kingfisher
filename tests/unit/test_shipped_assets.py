@@ -499,14 +499,27 @@ def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(ship
     )
 
 
-def test_the_middleware_example_is_not_a_definition_kind(shipped):
-    """It sits under `assets_examples/` and `seed` does not copy it, which is the one
-    surprising thing about this folder and therefore the thing to pin.
+def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(shipped):
+    """It stopped being the one folder a workspace could not have.
+
+    This asserted the opposite until 2026-09-07, on the argument that a
+    middleware read out of the workspace would be code the agent can edit,
+    wrapped around the agent that edited it -- true while the shell could write
+    into a definition root, and false the moment `protected` was widened to
+    every one of them.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+    from kingfisher.middleware import LocalMiddlewareRepository
 
     assert (shipped / "middleware").is_dir()
-    assert "middleware" not in DEFINITION_KINDS
+    assert "middleware" in DEFINITION_KINDS
+
+    offered = LocalMiddlewareRepository(shipped / "middleware")
+
+    assert set(offered.names) == set(_documented_registry(shipped)), (
+        "the directory offers different names from the wiring block beside it, so "
+        "seeding it and pasting the block would give a workspace two vocabularies"
+    )
 
 
 def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path):
@@ -542,7 +555,10 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     # and "names groups" to a file, so one sentence for both would send half
     # its readers to the wrong place.
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
-        "agents/researcher.yaml": ("middleware", ("call-cap-strict", "tool-note")),
+        "agents/researcher.yaml": (
+            "middleware",
+            ("call-cap-strict", "call-cap-generous", "tool-note"),
+        ),
         "subagents/sweeper.yaml": ("middleware", ("call-cap-generous", "tool-note")),
         "agents/analyst.yaml": ("groups", ("analysts", "auditors", "senior-analysts")),
         "subagents/auditor.yaml": (
@@ -709,7 +725,10 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     agent, delegate = _example_definitions(shipped)
 
     assert agent.name == "researcher"
-    assert agent.middleware == ("call-cap-strict", "tool-note")
+    # Three, not two: `call-cap-generous` is granted here so `sweeper` may name
+    # it, since an agent's `middleware:` is the ceiling its delegates are
+    # clamped by. The agent runs under both caps and the stricter one decides.
+    assert agent.middleware == ("call-cap-strict", "call-cap-generous", "tool-note")
     assert delegate.name == "sweeper"
     assert delegate.middleware == ("call-cap-generous", "tool-note")
     assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
@@ -745,9 +764,16 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
     built = declared_middleware(agent, registry, ALL, kind="agent")
     delegated = declared_middleware(delegate, registry, ALL, kind="subagent")
 
-    assert [type(m).__name__ for m in built] == ["CallCap", "ToolNote"]
+    # `CallCapGenerous` is in the agent's list because `sweeper` names it and an
+    # agent grants what its delegates may reach. It is built for the agent too,
+    # which the file says out loud -- the stricter cap beside it still decides.
+    assert [type(m).__name__ for m in built] == ["CallCap", "CallCapGenerous", "ToolNote"]
     assert [type(m).__name__ for m in delegated] == ["CallCapGenerous", "ToolNote"]
     assert built[0] is not delegated[0], "one instance for both would share a budget"
+    assert built[1] is not delegated[0], (
+        "the same class named by both is still built twice, or the budget the "
+        "agent spends would come out of the delegate's"
+    )
     # The ceilings the two classes document, read off the objects rather than
     # off `defaults`: the point of registering a class is that the build path
     # applies its defaults, so asserting the attribute would assert nothing.
@@ -760,8 +786,15 @@ def test_the_note_example_is_one_class_configured_two_ways(shipped):
     registry = _documented_registry(shipped)
     agent, delegate = _example_definitions(shipped)
 
-    note = declared_middleware(agent, registry, ALL, kind="agent")[1]
-    delegated = declared_middleware(delegate, registry, ALL, kind="subagent")[1]
+    # Selected by type rather than by position, which is what this read before.
+    # A third entry on the agent moved `[1]` from the note to a cap and the
+    # failure was an `AttributeError` about `_text` -- a test that indexes a list
+    # asserts the order as much as the thing, and only one of those is the point.
+    def _note(built):
+        return next(m for m in built if type(m).__name__ == "ToolNote")
+
+    note = _note(declared_middleware(agent, registry, ALL, kind="agent"))
+    delegated = _note(declared_middleware(delegate, registry, ALL, kind="subagent"))
 
     assert note._text == "Cite the path and line for anything you assert."
     assert delegated._text == "Return the path and line, not the file."
@@ -989,3 +1022,42 @@ def test_the_other_presets_still_restrict_nobody(shipped):
         "researcher",
         "surveyor",
     }
+
+
+def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):
+    """The curriculum, run rather than read.
+
+    `researcher` and `sweeper` are the only shipped definitions that name
+    middleware, and the pair exists to show two ceilings over one behaviour.
+    Nothing had ever built them together. With no registry wired anywhere they
+    failed for want of one, and every test that touched them either replaced the
+    spec or supplied a registry of its own -- so the mismatch underneath was
+    invisible for as long as the example existed.
+
+    It was real: `researcher` granted `call-cap-strict` and `tool-note`, and
+    `sweeper` named `call-cap-generous`, which its parent therefore refused. An
+    agent's `middleware:` is the ceiling its delegates are clamped by, so a
+    delegate can only name what the agent granted.
+
+    Built from the workspace with no `middleware_registry=` at all, which is the
+    thing that could not be done before `middleware/` was a kind: the whole
+    example now runs from a `kingfisher seed`.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.catalogue import Definitions
+
+    roots = Definitions.from_roots(
+        {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middleware")}
+    )
+    spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
+
+    graph = build_agent(
+        replace(cfg, skills_enabled=True),
+        agent=spec,
+        catalogue=roots,
+        session_dir=session_dir,
+    )
+
+    assert graph is not None
+

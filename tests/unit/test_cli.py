@@ -367,10 +367,10 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
     from kingfisher import inventory
     from kingfisher.presentation.cli.listing import render
 
-    header = list(render(inventory(cfg)))[:11]
+    header = list(render(inventory(cfg)))[:12]
 
     assert [line.split(" :")[0].strip() for line in header] == [
-        "workspace", "agents", "skills", "subagents", "tools",
+        "workspace", "agents", "middleware", "skills", "subagents", "tools",
         "models", "groups", "seed", "state", "scratch", "sessions",
     ]
 

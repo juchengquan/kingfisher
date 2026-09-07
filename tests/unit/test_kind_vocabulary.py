@@ -34,7 +34,10 @@ NOT_UPLOADABLE = {
 #: Why a kind is not read from the catalogue directories.
 NOT_ON_DISK = {
     "builtin_tools": "deepagents brings them",
-    "middleware": "registered in the process, not staged as files",
+    # `middleware` left this table on 2026-09-07. It was here for as long as the
+    # workspace was writable by the agent's shell; once the definition roots were
+    # denied, a `middleware/` directory became an ordinary kind and this entry
+    # became a claim the catalogue contradicts.
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
     "memory": "a switch, not names",
@@ -47,7 +50,12 @@ NOT_ON_DISK = {
 NOT_BUNDLED = {
     "builtin_tools": "deepagents brings them; there is no folder to put one in",
     "subagents": "a bundle is one subagent's own, so nesting makes 'whose' unanswerable",
-    "middleware": "registered in the process, not staged as files",
+    # Still not bundled, and the reason had to be rewritten rather than kept: it
+    # said "registered in the process, not staged as files", which stopped being
+    # true when `middleware/` became a kind. What holds now is narrower and is
+    # about audience -- a bundle is a delegate's own tools and skills, and
+    # middleware is granted by the deployment rather than carried by a delegate.
+    "middleware": "granted by the deployment, so a delegate cannot bring its own",
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
     "memory": "a switch, not names",
@@ -122,13 +130,12 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
 
 #: Directories under `assets_examples/` that are not a catalogue kind, and why each is
 #: there in spite of that.
-NOT_A_KIND = {
-    "middleware": (
-        "deployment code, not a definition -- a middleware name selects code "
-        "the deployment wrote, and one read out of the workspace would be code "
-        "the agent can edit wrapped around the agent that edited it"
-    ),
-}
+#: Empty since 2026-09-07. `middleware` was its only entry, on the argument that
+#: one read out of the workspace would be code the agent could edit wrapped
+#: around the agent that edited it -- true until the definition roots were
+#: denied to the shell. The table stays because the next folder that wants to
+#: break the rule needs somewhere to argue for itself.
+NOT_A_KIND: dict[str, str] = {}
 
 
 def test_the_shipped_definitions_hold_only_kinds_the_catalogue_reads(shipped):

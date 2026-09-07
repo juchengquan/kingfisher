@@ -50,6 +50,7 @@ class Origins:
     workspace: Path
 
     agents: Origin
+    middleware: Origin
     skills: Origin
     subagents: Origin
     tools: Origin
@@ -61,9 +62,12 @@ class Origins:
     groups: Origin
 
     #: Where `kingfisher seed` copies *from*, which is the opposite direction to
-    #: the four catalogues above. Named `seed` rather than `assets` for that
-    #: reason: beside `skills` and `tools`, a fifth noun reads like a fifth
-    #: place definitions are read from.
+    #: the catalogues above. Named `seed` rather than `assets` for that reason:
+    #: beside `skills` and `tools`, that noun reads like one more place
+    #: definitions are read from.
+    #:
+    #: It said "the four catalogues" until there were five, which is the count
+    #: this file now declines to keep -- the fields are the count.
     seed: Origin
 
     state: Origin
