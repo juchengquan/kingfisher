@@ -127,14 +127,9 @@ class Reader:
             )
             raise self.error(msg)
         if isinstance(value, Mapping):
-            # `names` would fall through to `(text(value),)` and read the whole
-            # mapping as one name -- `builtin_tools: {execute: {groups: [A]}}`
-            # became a built-in called "{'execute': ...}", offered to nobody and
-            # reported nowhere.
-            #
-            # The three are spelled out rather than imported: `domain.access`
-            # imports this module, so naming `AUDIENCED` here would be a cycle.
-            # `test_only_the_audienced_fields_take_a_mapping` pins the pair.
+            # `names` would fall through to `(text(value),)` and read the whole mapping
+            # as one name -- `builtin_tools: {execute: {groups: [A]}}` became a built-in
+            # called "{'execute': ...}", offered to nobody and reported nowhere.
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. A "
                 f"mapping says who reaches each entry, and only tools, subagents "

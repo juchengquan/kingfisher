@@ -35,25 +35,12 @@ class TurnBody(BaseModel):
     #: that rule -- the kind that drifts, because this model is what people edit
     #: when adding a field. The refusal becomes a 422 in `turn_for`.
     task: str
-    #: What this request asks to be allowed. Absent means the deployment's
-    #: defaults, which is not the same as `{}` -- an empty object is a request
-    #: that named no axis and gets the same defaults, while naming an axis as
-    #: `null` asks for nothing on it.
-    #:
-    #: Only ever narrows. `Kingfisher` clamps with
-    #: `grants.intersect(request.capabilities)`, so this states intent and the
-    #: deployment decides what intent is honoured.
+    #: What this request asks to be allowed. Absent means the deployment's defaults,
+    #: which is not the same as `{}` -- an empty object is a request that named no axis
+    #: and gets the same defaults, while naming an axis as `null` asks for nothing on
+    #: it.
     capabilities: CapabilitiesBody | None = None
     #: Files, by id, resolved by whatever `FileStore` the deployment wired.
-    #:
-    #: Ids rather than bytes, so kingfisher never receives a payload over its
-    #: own wire -- the same decision `skill_refs` made one phase earlier, for
-    #: the same reason. `inputs` and `data` stay host paths for CLI and library
-    #: callers; these are the remote form of the same two.
-    #:
-    #: The distinction is lifetime and nothing else: `data_refs` land in the
-    #: session's `/data` and are there next turn, `input_refs` land in this
-    #: turn's `input/` and leave with it.
     input_refs: list[str] = []
     data_refs: list[str] = []
 

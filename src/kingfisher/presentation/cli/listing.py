@@ -11,18 +11,13 @@ from collections.abc import Iterator
 
 from kingfisher import Inventory, Origins
 
-# The renderer's own vocabulary, taken where it lives. A listing prints
-# audiences, tells a bare name from a `where::what` reference, and quotes the
-# sentence a refusal quotes -- none of which anybody outside this wheel has ever
-# asked for, and all of which were on the front door because *this file* was
-# forbidden to reach for them. `offered` is the one worth naming: a renderer in
-# the domain looks odd until you see that the block a refusal prints is the
-# block a listing prints, so a name two files define reads the same in both.
-# Shared for that reason, not promised for it.
-#
-# `Inventory` and `Origins` stay above because they are answers the library
-# gives anybody who asks, and `test_architecture` refuses the other spelling for
-# them. See *The front door* in `docs/decisions.md`.
+# The renderer's own vocabulary, taken where it lives. A listing prints audiences, tells
+# a bare name from a `where::what` reference, and quotes the sentence a refusal quotes
+# -- none of which anybody outside this wheel has ever asked for, and all of which were
+# on the front door because *this file* was forbidden to reach for them. `offered` is
+# the one worth naming: a renderer in the domain looks odd until you see that the block
+# a refusal prints is the block a listing prints, so a name two files define reads the
+# same in both. Shared for that reason, not promised for it.
 from kingfisher.domain.access import AUDIENCED, Audience, spell
 from kingfisher.domain.capabilities import ALL
 from kingfisher.infrastructure.workspace.seeding import SEED_HINT
@@ -272,15 +267,8 @@ def as_json(found: Inventory) -> dict[str, object]:
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
-        # The vocabulary, or `null` where this deployment declares none. Who
-        # reaches what is `audiences` below, keyed the way the definitions
-        # themselves are.
-        #
-        # Two keys because a vocabulary says two things: what a name grants,
-        # already closed over `contains`, and what a caller must hold for one to
-        # apply. This was the `names` mapping alone until `all_of` existed, and
-        # a compound has no honest place in it -- so the shape grew rather than
-        # the second fact being dropped.
+        # The vocabulary, or `null` where this deployment declares none. Who reaches
+        # what is `audiences` below, keyed the way the definitions themselves are.
         "access": (
             None
             if found.access is None

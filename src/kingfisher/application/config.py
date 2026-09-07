@@ -21,22 +21,8 @@ from kingfisher.infrastructure import access_policy, model_catalogue
 # — is the whole point of it sitting where it does.
 __all__ = ["config_from_env", "enforce_local_only_tracing"]
 
-#: What each capability flag used to be called, new name to old. Read for the
-#: length of a deprecation, warned about once per read, and then removed.
-#:
-#: `KINGFISHER_SKILLS` is why this exists rather than being tidiness. It named
-#: two different things at once: a deployment's yes/no here, and the *path* to
-#: the skills catalogue that `shell_env` exports into the agent's shell, which
-#: is how a skill's own scripts find their neighbours. A deployment writing the
-#: path -- the natural mistake, since that is what the name means everywhere the
-#: agent can see it -- set a value no flag parser recognises, and skills went
-#: off with no error anywhere. `_ENABLED` says which question is being answered,
-#: and reads correctly beside `KINGFISHER_SKILLS_DIR`, which answers the other.
-#:
-#: The other three did not collide with anything and were renamed anyway: four
-#: flags that read identically should not need a reader to remember which one
-#: carries a suffix. A set with one bad name is fixed by renaming one; a set
-#: with no rule is worse than either.
+#: What each capability flag used to be called, new name to old. Read for the length of
+#: a deprecation, warned about once per read, and then removed.
 RENAMED = {
     "KINGFISHER_SKILLS_ENABLED": "KINGFISHER_SKILLS",
     "KINGFISHER_MEMORY_ENABLED": "KINGFISHER_MEMORY",
@@ -154,16 +140,9 @@ class Environment:
         # and models cross-reference, and splitting them would let half a
         # catalogue load.
         models_file = paths.authored_files["models.yaml"]
-        # The group vocabulary, and nothing else: who reaches what is written in
-        # the definitions themselves. Defaults and relocates exactly as the
-        # catalogue above does, through the same function.
-        #
-        # Optional, unlike the catalogue -- `load` answers `None` for a file
-        # that is not there, which is the whole of what "this deployment
-        # controls nothing by group" means. A file that is there and will not
-        # parse raises instead: a vocabulary that cannot be read leaves every
-        # definition's audience uncheckable, and coming up anyway is how a
-        # server serves everyone everything.
+        # The group vocabulary, and nothing else: who reaches what is written in the
+        # definitions themselves. Defaults and relocates exactly as the catalogue above
+        # does, through the same function.
         access_file = paths.authored_files["groups.yaml"]
 
         return Config(

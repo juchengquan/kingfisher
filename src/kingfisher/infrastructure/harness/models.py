@@ -69,18 +69,10 @@ ADAPTERS: Mapping[str, Adapter] = {
     # format lives here — see models.yaml.example, which recommends this style.
     "anthropic": Adapter("langchain_anthropic:ChatAnthropic"),
     # OpenAI proper, on the Responses API. This adapter is *not* a general
-    # OpenAI-compatible client: `/v1/responses` is what we target, and
-    # virtually no gateway imitating OpenAI implements it. Point a gateway at
-    # the anthropic adapter instead. A future Chat-Completions row would be a
-    # new entry here, not a flag on this one.
-    #
-    # Named for the endpoint it speaks to rather than the vendor, because
-    # `openai` was the name and the name was the trap. Everything else in this
-    # ecosystem means `/v1/chat/completions` by "OpenAI-compatible", so the
-    # obvious `api: openai` on a gateway was accepted at load, built without
-    # complaint, and failed at the first turn with an error from somebody
-    # else's server. It is now a name nothing builds, and
-    # `model_catalogue.load` refuses it while naming what it can build.
+    # OpenAI-compatible client: `/v1/responses` is what we target, and virtually no
+    # gateway imitating OpenAI implements it. Point a gateway at the anthropic adapter
+    # instead. A future Chat-Completions row would be a new entry here, not a flag on
+    # this one.
     "openai_responses": Adapter(
         "langchain_openai:ChatOpenAI",
         MappingProxyType({"use_responses_api": True}),

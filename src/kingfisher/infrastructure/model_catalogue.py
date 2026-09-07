@@ -46,14 +46,10 @@ KNOWN_MODEL: frozenset[str] = frozenset(
 )
 
 
-#: Keys this format used to define, named individually rather than folded into
-#: "unknown key" for the reason `NOT_COMPILED` gives one layer out: the generic
-#: message reads as a typo and sends its reader looking for the right spelling,
-#: when what they need is to know the key is gone and what replaces it.
-#:
-#: This one is the upgrade path. A deployment that bound aliases has a
-#: `models.yaml` that stopped loading, and the fix is two lines of editing --
-#: but only if the message says so.
+#: Keys this format used to define, named individually rather than folded into "unknown
+#: key" for the reason `NOT_COMPILED` gives one layer out: the generic message reads as
+#: a typo and sends its reader looking for the right spelling, when what they need is to
+#: know the key is gone and what replaces it.
 REMOVED: Mapping[str, str] = MappingProxyType(
     {
         "aliases": (
@@ -104,21 +100,12 @@ def _endpoints(
                 raise ConfigError(msg)
         api = str(entry["api"]).strip()
         if api not in ADAPTERS:
-            # Refused here rather than in `build_model`, which is where it used
-            # to happen -- meaning a wire format kingfisher cannot speak loaded
-            # without complaint and failed when a turn started, from inside a
-            # request. Every other closed set in this file is checked as it is
-            # read: an unknown key is refused, a model absent from the table is
-            # refused, a default naming neither is refused. `api` was the one
-            # that was not.
-            #
-            # Before the credential check below, deliberately. Checked after it,
-            # a typo on an endpoint whose key this machine happens not to hold
-            # would be dropped rather than refused -- so the same file would
-            # load here and fail on the machine that *does* hold the key, which
-            # is precisely the machine-dependence a shared catalogue must not
-            # have. A missing key is a fact about a machine; an unbuildable
-            # `api` is a fact about the file.
+            # Refused here rather than in `build_model`, which is where it used to
+            # happen -- meaning a wire format kingfisher cannot speak loaded without
+            # complaint and failed when a turn started, from inside a request. Every
+            # other closed set in this file is checked as it is read: an unknown key is
+            # refused, a model absent from the table is refused, a default naming
+            # neither is refused. `api` was the one that was not.
             msg = (
                 f"{source}: endpoint {name!r} names api {api!r}, which kingfisher "
                 f"cannot build; known: {tuple(sorted(ADAPTERS))}"
@@ -217,23 +204,10 @@ def load(path: Path, environ: Mapping[str, str]) -> Models:
             f"    models:\n"
             f"      MiniMax-M3:\n"
             f"        endpoint: minimax\n\n"
-            # The minimal one above is enough to start; the annotated example
-            # is the one that explains `extra` and why an omitted
-            # `temperature` is not a defaulted one. It ships with the framework
-            # rather than with an asset pack, so this can promise it even to a
-            # deployment that installed no pack.
-            #
-            # Which of the two sentences depends on whether it is there yet. It
-            # said "run this to get one" unconditionally, and that was a dead
-            # end: running it hit this same error, because the driver built its
-            # config before it seeded. A first run seeds before loading now, so
-            # by the time anyone reads this the file is usually already beside
-            # them -- and telling someone to run a command that has just run is
-            # how a message stops being read.
-            #
-            # `kingfisher seed` rather than `--seed-assets`: the flag is on a
-            # file that is not in the wheel, so it names nothing a pip user has,
-            # while the command is on `PATH` for both audiences.
+            # The minimal one above is enough to start; the annotated example is the one
+            # that explains `extra` and why an omitted `temperature` is not a defaulted
+            # one. It ships with the framework rather than with an asset pack, so this
+            # can promise it even to a deployment that installed no pack.
             + (
                 f"An annotated {EXAMPLE} is next to it; copy it across.\n"
                 if (path.parent / EXAMPLE).is_file()

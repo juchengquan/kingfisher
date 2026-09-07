@@ -63,23 +63,6 @@ if TYPE_CHECKING:
 ENV_FILE = ".env"
 
 #: What `seed` did *not* look at before leaving a definition behind, per kind.
-#:
-#: These said "this workspace cannot build" and "this workspace does not
-#: declare", which read as findings and were not ones. `_deployment_specific`
-#: opens the definition and nothing else: it never sees a registry, and `seed`
-#: is not handed a group vocabulary at all. So a deployment that had declared
-#: every name in its `groups.yaml` was still told the workspace did not declare
-#: them -- a sentence its own file contradicted, with a remedy it had already
-#: carried out.
-#:
-#: Saying what was skipped and what was not consulted is true of every run, and
-#: it is also the sentence that explains the surprise: a reader who has done the
-#: work needs to know the check cannot see it, or the next step looks broken.
-#:
-#: Still two entries rather than one. The thing not consulted differs, and so
-#: does where it lives -- a registry is in the deployment's own code, a
-#: vocabulary is a file in the workspace -- which is the same split `REMEDY`
-#: below makes and for the same reason.
 UNCONSULTED = {
     "middleware": "what this deployment registered",
     "groups": "your groups.yaml",
@@ -308,16 +291,8 @@ def build_parser() -> argparse.ArgumentParser:
 def _seed(source: str | None = None, *, everything: bool = False) -> int:
     """Fill the workspace with definitions."""
     paths = paths_from_env()
-    # The destination has to exist before anything is copied into it, and this
-    # is idempotent -- an already-laid-out workspace is untouched.
-    #
-    # Before the source is resolved, deliberately. Laying out a workspace writes
-    # `models.yaml.example`, and that has to happen even when there is nothing
-    # to seed: a deployment told to write `models.yaml` and given no example of
-    # one is the dead end this ordering exists to avoid.
-    #
-    # And beside wherever the catalogue is actually read from, which is not
-    # always the workspace: `compose.yaml` sets `KINGFISHER_MODELS_FILE`.
+    # The destination has to exist before anything is copied into it, and this is
+    # idempotent -- an already-laid-out workspace is untouched.
     ensure_layout(paths.workspace, authored=paths.authored_files)
 
     tree = definitions_source(paths, source)
@@ -343,18 +318,10 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
         # copy, so losing one is the line that has to survive being skimmed.
         print(f"warning: overwrote your edited {name}")
 
-    # Non-zero, and this changed with the definitions leaving the wheel. It was
-    # nearly unreachable before -- the shipped set always held all four kinds --
-    # and is now one of the likelier mistakes: `--from ./assets_examples/skills` names
-    # a directory that exists, is readable, and holds none of them.
-    #
-    # `doctor` only warns about the same state, and that is not an
-    # inconsistency. It reports on a deployment, which runs fine on a workspace
-    # seeded months ago. This is an action, and the action did not happen.
-    #
-    # The four kinds are named because the mistake is almost always one
-    # directory level in the wrong direction, and "holds no definitions" leaves
-    # a reader guessing which direction.
+    # Non-zero, and this changed with the definitions leaving the wheel. It was nearly
+    # unreachable before -- the shipped set always held all four kinds -- and is now one
+    # of the likelier mistakes: `--from ./assets_examples/skills` names a directory that
+    # exists, is readable, and holds none of them.
     if not written.written:
         if written.skipped:
             # A different failure from an empty directory, and the remedy is
@@ -549,13 +516,10 @@ def main(argv: list[str] | None = None) -> int:
         return 2
     except REFUSALS as exc:
         # Nine errors that reached a stranger as a traceback until `run` existed,
-        # because nothing but `run` could raise them from a command. Every one is
-        # the same shape as `ConfigError` below: something the person at the
-        # terminal wrote and can fix -- an agent they cannot reach, a session id
-        # that is not there, a file reference that does not resolve.
-        #
-        # Named by type, because "what went wrong" is the useful half and the
-        # class is what says which kind of thing it was.
+        # because nothing but `run` could raise them from a command. Every one is the
+        # same shape as `ConfigError` below: something the person at the terminal wrote
+        # and can fix -- an agent they cannot reach, a session id that is not there, a
+        # file reference that does not resolve.
         print(f"{type(exc).__name__}: {exc}", file=sys.stderr)
         return 2
     except AccessError as exc:

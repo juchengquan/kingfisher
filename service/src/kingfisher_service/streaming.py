@@ -73,20 +73,9 @@ async def body(
                 return
             yield frame(event)
     finally:
-        # Reached on a hangup as well as on a finished turn, and the two need
-        # different treatment for the same outcome -- `astream`'s `finally`
-        # running, which is what gives the session's claim back.
-        #
-        # With a `__anext__` still in flight the run is *inside* the generator,
-        # and `aclose()` there raises "asynchronous generator is already
-        # running". Cancelling the task is the way in: the `CancelledError` is
-        # thrown at the generator's own suspension point and unwinds it from
-        # there.
-        #
-        # The `await` makes the stop have happened rather than be scheduled. No
-        # test can show the difference -- a loop that keeps running gets there
-        # anyway, which is every real server and `asyncio.run` both -- so this
-        # is determinism at teardown rather than a fix for anything observed.
+        # Reached on a hangup as well as on a finished turn, and the two need different
+        # treatment for the same outcome -- `astream`'s `finally` running, which is what
+        # gives the session's claim back.
         if pending is not None:
             pending.cancel()
             with suppress(asyncio.CancelledError):

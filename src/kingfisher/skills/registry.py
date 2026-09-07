@@ -97,14 +97,8 @@ class SkillRegistry:
     offered: Mapping[str, Any]
     unloadable: tuple[str, ...] = ()
     #: Skills deepagents filed under a name their directory does not have, as
-    #: `(directory, name)`. Loaded, offered, and reachable -- under the name in
-    #: the header, which is the one nobody typed.
-    #:
-    #: Not `unloadable`, and the difference is the whole reason this is separate:
-    #: one is a skill the agent will never hear about, the other is a skill it
-    #: will hear about under another name. Reported rather than refused, because
-    #: deepagents accepts it and refusing here would make a working catalogue
-    #: fail to start over a spelling.
+    #: `(directory, name)`. Loaded, offered, and reachable -- under the name in the
+    #: header, which is the one nobody typed.
     misfiled: tuple[tuple[str, str], ...] = ()
     #: The folders under the catalogue root that hold skills, in the order they
     #: were read. What `skills_sources` turns into one source each -- kept here
@@ -229,16 +223,9 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
         for one in found:
             offered[qualified(label, one["name"])] = one
 
-    # A directory that looked like a skill and did not come back. deepagents says
-    # why in a warning it logs; what matters here is only which ones, so a
-    # reader can go and look at the file rather than wonder why a skill they
-    # wrote is not on offer.
-    #
-    # Walked rather than taken from `repository.names`, which lists the root and
-    # stops. That was right while every skill sat at the root; with folders it
-    # made a broken *nested* skill invisible -- dropped by deepagents, absent
-    # from `names`, so reported by nobody. Precisely the silence this registry
-    # exists to end, and it would have reopened it one directory down.
+    # A directory that looked like a skill and did not come back. deepagents says why in
+    # a warning it logs; what matters here is only which ones, so a reader can go and
+    # look at the file rather than wonder why a skill they wrote is not on offer.
     kept = {one["path"] for one in loaded}
     missing = tuple(
         sorted(
@@ -249,14 +236,10 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
         if root
         else sorted(name for name in repository.names if not any(f"/{name}/" in p for p in kept))
     )
-    # A skill whose header names something its directory does not. deepagents
-    # files it under the header and logs a warning nobody reads, so `--list`
-    # shows a name that is not in the tree and a caller who typed the directory
-    # name gets "unknown skill" for a skill that is plainly there.
-    #
-    # Read off what came back rather than by parsing again: `path` is where the
-    # file is and `name` is what deepagents decided to call it, which is exactly
-    # the pair that can disagree.
+    # A skill whose header names something its directory does not. deepagents files it
+    # under the header and logs a warning nobody reads, so `--list` shows a name that is
+    # not in the tree and a caller who typed the directory name gets "unknown skill" for
+    # a skill that is plainly there.
     misfiled = tuple(
         sorted(
             (directory, one["name"])

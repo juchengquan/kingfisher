@@ -115,14 +115,10 @@ class AgentSpec:
     skills: Selection = None
     subagents: Selection = None
     middleware: Selection = None
-    #: What each `middleware:` entry wrote under `settings:`. Beside the names
-    #: rather than folded into them, like `tool_sources` beside `tools`: granting
-    #: and narrowing are operations on names, and neither has anything to say
-    #: about a value passed to one.
-    #:
-    #: Read against the class the deployment registered, by `approved_settings` at
-    #: build time. Nothing here is checked when the file is parsed, because which
-    #: keys a name accepts is declared by code this layer cannot see.
+    #: What each `middleware:` entry wrote under `settings:`. Beside the names rather
+    #: than folded into them, like `tool_sources` beside `tools`: granting and narrowing
+    #: are operations on names, and neither has anything to say about a value passed to
+    #: one.
     middleware_settings: Mapping[str, Mapping[str, object]] = field(
         default_factory=dict
     )
@@ -135,23 +131,9 @@ class AgentSpec:
     memory: bool | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
     #: Who may open a session on this agent.
-    #:
-    #: `ALL` when the file says nothing, because an absent optional field means
-    #: no restriction everywhere else in this format. Reading it as "nobody"
-    #: would stop every unannotated definition working the moment a vocabulary
-    #: file appeared, which makes adopting access control all-or-nothing rather
-    #: than incremental. What keeps that from being silent is the startup report
-    #: naming every definition with no line here.
     groups: Audience = ALL
     #: Field name -> entry name -> who reaches that entry, for the fields in
     #: `AUDIENCED`. Empty for a definition written as plain lists.
-    #:
-    #: Beside the selections rather than replacing them, so `tools` stays the
-    #: `Selection` every consumer already reads, and this is consulted only where a
-    #: caller's groups are known.
-    #:
-    #: `derived`, because no definition writes `audiences:` -- it is read *out of*
-    #: the three selection fields, the way `tool_sources` is read out of `tools`.
     audiences: Mapping[str, Mapping[str, Audience]] = field(
         default_factory=dict, metadata={"derived": True}
     )

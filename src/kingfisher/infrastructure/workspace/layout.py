@@ -17,47 +17,24 @@ from pathlib import Path
 
 from kingfisher.layout import LAYOUT_DIRS, MARKER
 
-#: Where the shipped templates sit, as an import path rather than a filesystem
-#: one -- an installed package is not in this repository's directory tree.
-#:
-#: A directory of its own, beside `kingfisher/prompts/`, because the package root
-#: is modules and layers and a `.yaml.example` sitting among them reads as
-#: something nobody meant to commit. Data-only and deliberately not a package:
-#: `resources.files` reaches it either way, and an `__init__.py` would invite an
-#: import of what is furniture rather than code.
+#: Where the shipped templates sit, as an import path rather than a filesystem one -- an
+#: installed package is not in this repository's directory tree.
 TEMPLATES = "kingfisher.templates"
 
 
 #: The worked example of the one file a deployment *must* write. It lived at the
 #: repository root once, which meant it existed only in a checkout: `packages =
 #: ["src/kingfisher"]`, so anything one level up is not in the wheel. That is the
-#: mistake `test_the_package_ships_the_catalogue_example` guards against, made
-#: for the file a new deployment needs first. Moving it into `templates/` is the
-#: same file one directory in, and that guard asserts both halves of it -- inside
-#: the package, and reachable the way an install reaches it -- so the tidying
-#: cannot quietly repeat the mistake.
-#:
-#: Read from here by `model_catalogue`, which names it in the error a deployment
-#: without a `models.yaml` hits. It moved out of `seeding` with the code that
-#: writes it: the example is workspace furniture, and seeding is about to become
-#: able to refuse.
+#: mistake `test_the_package_ships_the_catalogue_example` guards against, made for the
+#: file a new deployment needs first. Moving it into `templates/` is the same file one
+#: directory in, and that guard asserts both halves of it -- inside the package, and
+#: reachable the way an install reaches it -- so the tidying cannot quietly repeat the
+#: mistake.
 EXAMPLE = "models.yaml.example"
 
 
-#: The same furniture for the other file a deployment may be told to write.
-#: The one example this package places, and the reason it is the only one.
-#:
-#: `groups.yaml` had one too, for two days. It went because the file it pointed
-#: at could not be the file you needed: an example ships one vocabulary and a
-#: workspace needs whichever names its own definitions ask for, so `seed` named
-#: a set of groups and then handed you a template declaring five different ones.
-#: The remedy now travels in the message, where it can name the groups actually
-#: missing -- see `presentation.cli.__main__`. `assets_examples/groups.yaml` is the
-#: worked set, outside the wheel, for anyone reading this repository.
-#:
-#: `models.yaml` keeps its example for the reason the two were never alike:
-#: it is required with no fallback, its example is a hundred lines of annotation
-#: about endpoints and keys, and no file anywhere else carries that.
+#: The same furniture for the other file a deployment may be told to write. The one
+#: example this package places, and the reason it is the only one.
 EXAMPLES = (EXAMPLE,)
 
 

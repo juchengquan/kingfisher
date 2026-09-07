@@ -167,14 +167,9 @@ def opening_events(  # noqa: PLR0913, PLR0917 -- one parameter per warning
                 text=f"{len(names)} {what}(s) not granted: {', '.join(names)}",
             )
         )
-    # Granted, and still not in the agent's own hands. Two files may each define
-    # a `fetch`, and an agent dispatches by name -- so the pair goes to whichever
-    # delegate names one, and the agent holding the grant gets neither.
-    #
-    # Said out loud because the alternative is the failure this codebase refuses
-    # everywhere: quietly holding less than was asked for. It is deliberately
-    # *not* folded into `withheld`, which means "you did not ask for this" --
-    # here the caller did ask, and the answer is "name which one, in a delegate".
+    # Granted, and still not in the agent's own hands. Two files may each define a
+    # `fetch`, and an agent dispatches by name -- so the pair goes to whichever delegate
+    # names one, and the agent holding the grant gets neither.
     if delegate_only:
         events.append(
             RunEvent(

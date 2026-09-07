@@ -208,27 +208,16 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     granted = [one.tool for one in select(narrowed(written, by=tools), catalogue)]
 
     runnable = spec.build(model, granted)
-    # Against `Runnable`, which is what `CompiledSubAgent` declares this field
-    # to be -- the same reason `test_the_compiled_shape_is_deepagents_own` pins
-    # the *keys* against their declaration rather than a copy of it.
+    # Against `Runnable`, which is what `CompiledSubAgent` declares this field to be --
+    # the same reason `test_the_compiled_shape_is_deepagents_own` pins the *keys*
+    # against their declaration rather than a copy of it.
     #
-    # This was a duck-type on `invoke`, which was too loose in a way the tests
-    # had to admit: deepagents also calls `with_config`, so an object with only
-    # `invoke` got past here and failed there. Measured against the four cases
-    # that matter -- a compiled graph, an `invoke`-only stub, whatever a class
-    # constructs to, and `None` -- `Runnable` is the only one of the three
-    # candidate checks that separates the first from the other three.
-    #
-    # Not `isinstance(runnable, CompiledStateGraph)`, which was the objection
-    # that produced the duck-type and is still right: that is an implementation
-    # class upstream may rename, and a rule broken by a rename would take every
-    # compiled delegate down to enforce a spelling. `Runnable` is the published
-    # interface, and a rename there is a breaking change we should hear about.
-    #
-    # `None` is caught by the same line rather than separately: it was the only
-    # thing caught here once, and it is the least likely mistake -- nobody
-    # writes `build` meaning to return nothing, where naming a class is an easy
-    # reach and `callable()` accepts one.
+    # This was a duck-type on `invoke`, which was too loose in a way the tests had to
+    # admit: deepagents also calls `with_config`, so an object with only `invoke` got
+    # past here and failed there. Measured against the four cases that matter -- a
+    # compiled graph, an `invoke`-only stub, whatever a class constructs to, and `None`
+    # -- `Runnable` is the only one of the three candidate checks that separates the
+    # first from the other three.
     if not isinstance(runnable, Runnable):
         made = "None" if runnable is None else type(runnable).__name__
         msg = (
@@ -334,32 +323,15 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     if private:
         owned = {one.name for one in private}
         mine = tuple(one for one in mine if one.name not in owned)
-    # Unconditional, for the reason the parent gives: the backend rejects host
-    # paths on every run, so the thing that turns that rejection into a
-    # correction must always be here. A delegate is built with the parent's
-    # backend and inherits none of the parent's middleware, so the rejection
-    # fired for it exactly as it fires above and had nothing to become --
-    # `HostPathError` came out of the graph and killed the run.
-    #
-    # The one with the widest reach of the two, and it needs no workspace tools
-    # at all: `write_file` is a built-in, and a delegate that leaves
-    # `builtin_tools` out has every one of them.
+    # Unconditional, for the reason the parent gives: the backend rejects host paths on
+    # every run, so the thing that turns that rejection into a correction must always be
+    # here. A delegate is built with the parent's backend and inherits none of the
+    # parent's middleware, so the rejection fired for it exactly as it fires above and
+    # had nothing to become -- `HostPathError` came out of the graph and killed the run.
     middleware.append(HostPathGuard())
-    # Then the workspace tools' own failures. Both wrap every call this delegate
-    # makes -- they catch different exceptions, so the order between them is the
-    # parent's rather than a requirement.
-    #
-    # A delegate is handed the workspace's tool *objects* and inherits none of
-    # its parent's middleware, so the guard the parent installed stopped at the
-    # parent while the code it guards went one level down. That was rare while a
-    # delegate ran only when a caller named one; an agent declares its own
-    # roster now and `subagents` defaults to everything in it, so several
-    # delegates holding the workspace's tools is the ordinary case.
-    #
-    # Built from everything walked rather than from what this delegate was
-    # granted, for the reason the parent gives: a delegate that holds none of
-    # them cannot reach one, and narrowing it here would mean building the guard
-    # from a set that is decided afterwards.
+    # Then the workspace tools' own failures. Both wrap every call this delegate makes
+    # -- they catch different exceptions, so the order between them is the parent's
+    # rather than a requirement.
     if catalogue or private:
         names = frozenset(entry.name for entry in (*catalogue, *private))
         middleware.append(WorkspaceToolErrors(names))
@@ -377,25 +349,8 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         if root is not None:
             middleware.append(WorkspaceToolPaths(names, root))
     if allowed != ALL:
-        # `None` is a delegate permitted nothing, which is an empty allowlist
-        # rather than an absent one -- the same split the parent makes.
-        #
-        # Flattened to bare names, because the middleware compares against
-        # `tool.name` and a tool is called `fetch` however a definition spelled
-        # it. Safe here for the same reason it is safe for the parent: what this
-        # delegate holds was just selected, and `Offering.carried` drops a name
-        # two files both define rather than letting one of them win in silence.
-        #
-        # Private names are added rather than filtered against, and leaving them
-        # out was a silent failure rather than a missing feature: the tool is
-        # registered on the delegate either way, so the model sees it, calls it,
-        # and this refuses -- a capability that exists and cannot be used, with
-        # nothing in the output saying why. They are held whatever the request
-        # granted, so there is nothing here for them to be narrowed by.
-        # Named, because this allowlist is mostly the definition's doing and a
-        # refusal that said "this request" pointed at the wrong file. `ceiling`
-        # above already says whose narrowing it is applying; this says it to the
-        # model that hits the wall.
+        # `None` is a delegate permitted nothing, which is an empty allowlist rather
+        # than an absent one -- the same split the parent makes.
         middleware.append(
             ToolAllowlist(
                 tuple(split_reference(one)[1] for one in (allowed or ()))
@@ -426,17 +381,10 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
         middleware.append(
             NarrowedSkills(allowed=skills, backend=backend, sources=skill_sources or [])
         )
-    # What lets this delegate delegate. deepagents gives a subagent no `task`
-    # tool of its own -- `create_sub_agent` calls `create_agent` with the
-    # spec's tools and nothing else -- so the only way in is the one field a
-    # spec has that carries code, and `SubAgentMiddleware` is exactly what
-    # supplies `task` to the main agent.
-    #
-    # `helpers` are already built, by a caller that did *not* pass them helpers
-    # of their own. That is the whole of the depth bound: not a check, but a
-    # call that is never made. `SubAgentMiddleware` refuses an empty list, so
-    # an unhelped delegate gets no middleware and no `task` tool -- which is
-    # also what a caller who withheld the helper should see.
+    # What lets this delegate delegate. deepagents gives a subagent no `task` tool of
+    # its own -- `create_sub_agent` calls `create_agent` with the spec's tools and
+    # nothing else -- so the only way in is the one field a spec has that carries code,
+    # and `SubAgentMiddleware` is exactly what supplies `task` to the main agent.
     if helpers:
         middleware.append(SubAgentMiddleware(backend=backend, subagents=helpers))
     # Last, so a deployment's middleware sees the tool and skill narrowing
@@ -445,20 +393,11 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
     if middleware:
         subagent["middleware"] = middleware
 
-    # A *name* here would be resolved by deepagents' `init_chat_model`, which
-    # infers its own provider and reads credentials from the environment --
-    # around the catalogue, its endpoint's base_url, and every param the
-    # profile carries. It also re-enables the profile behaviour that
-    # `infrastructure.harness.models` exists to avoid. So we build the instance
-    # ourselves.
-    #
-    # The definition decides, and nothing here second-guesses it. An operator
-    # pair -- `KINGFISHER_MODEL_SUBAGENT` / `KINGFISHER_PROVIDER_SUBAGENT` --
-    # used to win over this, on the theory that cost is an operator's call and
-    # should not need editing content. It said "every delegate" or nothing,
-    # which made it useless for the one thing a per-delegate model is for: a
-    # delegate that exists in order *not* to be the model beside it, which a
-    # blanket override silently defeats. The file says where it runs.
+    # A *name* here would be resolved by deepagents' `init_chat_model`, which infers its
+    # own provider and reads credentials from the environment -- around the catalogue,
+    # its endpoint's base_url, and every param the profile carries. It also re-enables
+    # the profile behaviour that `infrastructure.harness.models` exists to avoid. So we
+    # build the instance ourselves.
     if mine or private or tool_objects is not None:
         # Objects, not names -- `SubAgent.tools` is what deepagents registers,
         # and handing it names raises inside `ToolNode`. Narrowing still

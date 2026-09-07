@@ -235,15 +235,10 @@ class Offering:
         # tools" when the model reached for it.
         tools = self.spelt(tools)
         # The workspace half comes back to bare names, because that is what the
-        # middleware compares against: it filters by `tool.name`, and a tool's
-        # name is `fetch` however a grant spelled it. Safe to flatten because
-        # `carried` has already dropped every clashing pair from what the agent
-        # holds, so within one agent the names are unique and two spellings can
-        # never land on one entry here.
-        #
-        # Said as `carried` rather than as a refusal, which is what this named
-        # for a while: nothing refuses an ambiguous name. The pair is dropped
-        # and `ambiguous` reports it, for the reason `carried` gives.
+        # middleware compares against: it filters by `tool.name`, and a tool's name is
+        # `fetch` however a grant spelled it. Safe to flatten because `carried` has
+        # already dropped every clashing pair from what the agent holds, so within one
+        # agent the names are unique and two spellings can never land on one entry here.
         granted = narrowed(tools, by=self.workspace) or ()
         return (
             *(narrowed(builtin, by=self.builtin) or ()),

@@ -161,17 +161,6 @@ def _instantiate(
 
 
 #: The two deepagents will not run without, by the `.name` each answers to.
-#:
-#: Not a ban. Replacing either is a deployment's business -- a fence of one's own
-#: over the filesystem is a reasonable thing to build, and refusing it here would
-#: be kingfisher inventing a policy deepagents does not have. What these two buy
-#: is a louder sentence in the warning below, because the consequence of getting
-#: one wrong is not a missing hook but an agent whose file tools no longer
-#: enforce `permissions`.
-#:
-#: Written here rather than imported from `_REQUIRED_MIDDLEWARE_NAMES`, which is
-#: private: an upstream rename would otherwise change what this says with nobody
-#: deciding, and `test_the_required_names_match_deepagents` fails loudly instead.
 REQUIRED_BY_DEEPAGENTS = ("FilesystemMiddleware", "SubAgentMiddleware")
 
 

@@ -18,19 +18,9 @@ from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.skills.catalogue import LocalSkillRepository
 from tests.conftest import repository_root, subagents_dir, tools_dir
 
-#: The pack the seeding tests below use. A real one, reached the way a shipped
-#: pack is reached -- `opened()` through `importlib.resources` -- so those tests
-#: exercise the real path without depending on what kingfisher happens to ship.
-#:
-#: They used to seed the presets. That made them fail for reasons unrelated to
-#: seeding: adding a third subagent preset broke a test about reporting withheld
-#: capabilities, and a preset count broke another about grants. A test of the
-#: seeder should break when the seeder breaks.
-#: A directory now, not a pack. `seed` takes a path, so the fixture needs no
-#: metadata and no installed distribution to stand in for one -- which is most
-#: of what the pack machinery was for here.
-#: The checkout, for the one file these tests read from the repository
-#: rather than from the installed package.
+#: The pack the seeding tests below use. A real one, reached the way a shipped pack is
+#: reached -- `opened()` through `importlib.resources` -- so those tests exercise the
+#: real path without depending on what kingfisher happens to ship.
 REPO = repository_root()
 
 FIXTURE = Path(__file__).resolve().parent / "seed_source"

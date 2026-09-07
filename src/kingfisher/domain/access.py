@@ -41,14 +41,10 @@ Requires = frozenset[str]
 
 #: Who may reach one thing: `"*"` for everyone, or exactly these entries.
 #:
-#: The tuple is an **or** and an entry may be an **and**: a plain name is held or
-#: it is not, and a `Requires` is satisfied only in full. That gives or-of-ands,
-#: which is the shape access rules actually take, out of one field and with no
-#: rule about how two fields combine.
-#:
-#: No `None`. "Nobody" is not a state a definition can be in -- the absence of
-#: an audience means it inherits the one around it, and a definition nobody may
-#: reach is written by giving it a group nobody holds.
+#: The tuple is an **or** and an entry may be an **and**: a plain name is held or it is
+#: not, and a `Requires` is satisfied only in full. That gives or-of-ands, which is the
+#: shape access rules actually take, out of one field and with no rule about how two
+#: fields combine.
 Audience = Literal["*"] | tuple[str | Requires, ...]
 
 @dataclass(frozen=True)
@@ -91,21 +87,8 @@ class _Unscoped:
 #: This has to be typed, which means it can be grepped for in a review.
 UNSCOPED: Final[_Unscoped] = _Unscoped()
 
-#: What a call may say about who is making it: the groups held, or the explicit
-#: refusal to say.
-#:
-#: `None` is a third thing and means *nobody said*, which is why this is not
-#: spelled `Sequence[str] | None`. Once a vocabulary exists those two must not
-#: collapse: "run without a caller" is a decision somebody made, and "nobody
-#: said" is a handler that forgot the boundary. One is honoured, the other is
-#: refused.
-#:
-#: A `Sequence`, not a tuple: `["A"]` is the obvious thing to write, and every use
-#: of this alias is a *parameter*, so widening it loosens no guarantee.
-#:
-#: A `str` satisfies `Sequence[str]` and always will, so the type cannot catch
-#: `groups="analysts"` -- eight one-letter group names. `Kingfisher.held_for`
-#: refuses it at runtime instead.
+#: What a call may say about who is making it: the groups held, or the explicit refusal
+#: to say.
 Held = Sequence[str] | _Unscoped
 
 
@@ -147,24 +130,12 @@ def spell(audience: Audience) -> str:
 class AccessReport:
     """What a deployment's policy leaves open, said once at startup."""
 
-    #: Definitions carrying no `groups:` line, and so reachable by everyone, as
-    #: `(kind, name)`.
-    #:
-    #: Named because default-open must not also be silent. Reading an absent
-    #: `groups:` as "nobody" would stop every unannotated definition working the
-    #: moment a vocabulary file appeared -- but default-open makes "we have not
-    #: restricted that one yet" invisible, and this line is what stands between
-    #: that and nobody noticing.
+    #: Definitions carrying no `groups:` line, and so reachable by everyone, as `(kind,
+    #: name)`.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
     #: Entries naming a group their definition's own audience never mentions, as
     #: `(where, audience)`. Reached only by a caller holding one of each.
-    #:
-    #: Reported rather than refused, because a refusal cannot tell the two readings
-    #: apart: `[senior]` under `[analysts, auditors]` is a deliberate second
-    #: requirement, and `[auditors]` under `[analysts]` is somebody who meant to
-    #: widen and has written something that reaches nobody. Same shape, opposite
-    #: intents, and only the author knows which.
     narrowed: tuple[tuple[str, str], ...] = ()
 
     @property

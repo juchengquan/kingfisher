@@ -20,13 +20,6 @@ from kingfisher.domain.result import RunEvent
 from kingfisher.domain.transcript import Message, Role, ToolCall
 
 #: What langgraph raises out of `stream` when a turn uses up `recursion_limit`.
-#:
-#: Re-exported rather than imported where it is caught, because the layer that
-#: catches it is `application` and only `infrastructure/harness` may name
-#: langgraph -- the same reason `STREAM_MODES` lives here. It is an exception
-#: type rather than a shape, so there is nothing to translate: what the ACL
-#: adds is the import, and the guarantee that swapping the runtime changes one
-#: line here rather than one in the orchestration.
 OutOfSteps = GraphRecursionError
 
 #: How much of a tool result or message to keep on an event.
@@ -35,16 +28,9 @@ PREVIEW = 300
 #: A `messages` chunk is a (message, metadata) pair.
 TOKEN_CHUNK_PARTS = 2
 
-#: The stream modes we ask for. `updates` drives progress events; `values`
-#: carries the full state, whose last emission holds the final answer;
-#: `messages` carries the model's output as it is generated.
-#:
-#: `messages` is not a display choice. LangGraph installs a streaming callback
-#: handler to serve it, which makes `_should_stream` true and turns every model
-#: call into SSE. That is the point of asking for it: a non-streaming request
-#: has to complete the whole generation inside `timeout_s`, while SSE resets
-#: the read clock on every chunk. Streaming is how a long turn survives, not
-#: only how it is watched -- so it is not a flag, and `run()` gets it too.
+#: The stream modes we ask for. `updates` drives progress events; `values` carries the
+#: full state, whose last emission holds the final answer; `messages` carries the
+#: model's output as it is generated.
 STREAM_MODES: list[StreamMode] = ["updates", "values", "messages"]
 
 

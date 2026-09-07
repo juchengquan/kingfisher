@@ -21,15 +21,10 @@ if TYPE_CHECKING:
 
     pass
 
-# The repository root, so `evals` imports when this is run by path. Python puts
-# the *script's* directory on `sys.path`, which was the root while this file was
-# `main.py` and is `tests/integration/` now -- so `uv run
-# tests/integration/driver.py` would fail on an import that has not changed.
-#
-# `python -m tests.integration.driver` needs none of this, and neither does
-# importing it from a test. But the path is what anyone will type, and a driver
-# that only works when invoked the less obvious way is a trap. The spikes carry
-# the same three lines for the same reason.
+# The repository root, so `evals` imports when this is run by path. Python puts the
+# *script's* directory on `sys.path`, which was the root while this file was `main.py`
+# and is `tests/integration/` now -- so `uv run tests/integration/driver.py` would fail
+# on an import that has not changed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
 from evals.artifacts import load_result, promote_report
@@ -267,20 +262,9 @@ def main(argv: list[str]) -> int:
         print(f"created a new workspace at {workspace}")
 
     # A new workspace seeds itself. It is empty by definition, so nothing can be
-    # overwritten, and this is the first moment the destination exists. It says
-    # what it wrote, because `is_new_workspace` also fires on a *misconfigured*
-    # one -- a wrong path holding ten files reads more like success than an
-    # empty one does.
-    #
-    # Here and never in `Kingfisher.__init__`: constructing a library object
-    # must not write to somebody's disk.
-    #
-    # Stops rather than warns when no source is configured. Warning and carrying
-    # on was the alternative, and the smoke would even have run -- it copies its
-    # own sample skill. But that warning fires once per workspace, in the middle
-    # of "created a new workspace at ...", and is the one line saying something
-    # did *not* happen. An error nobody can walk past is the right shape for a
-    # condition hit once whose fix is a line in `.env`.
+    # overwritten, and this is the first moment the destination exists. It says what it
+    # wrote, because `is_new_workspace` also fires on a *misconfigured* one -- a wrong
+    # path holding ten files reads more like success than an empty one does.
     if fresh:
         try:
             source = seeding.definitions_source(paths)

@@ -40,19 +40,8 @@ class Attempt:
     task: str
     started: float
     settings: ServiceConfig
-    #: The groups this request was resolved as, or `None` where the deployment
-    #: controls nothing by group.
-    #:
-    #: Here rather than in `access`, which is the other log and deliberately
-    #: carries no session id because that is a bearer credential. A group name
-    #: is not one -- it cannot be replayed -- so the reason that log omits
-    #: identity does not transfer. What does transfer is the caution: this
-    #: logger has no handler until a deployment attaches one, so a deployment
-    #: uneasy about group names in logs attaches none.
-    #:
-    #: Written on refusals as well as turns, and the refusals are the half that
-    #: earns it: it is how somebody tells a gateway that has drifted from its
-    #: vocabulary apart from a caller who genuinely may not.
+    #: The groups this request was resolved as, or `None` where the deployment controls
+    #: nothing by group.
     groups: tuple[str, ...] | None = None
 
     @property

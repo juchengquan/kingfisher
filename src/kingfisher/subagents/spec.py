@@ -57,18 +57,11 @@ class SubagentSpec:
     #: axis against its own offered set.
     builtin_tools: Selection = ALL
     tools: Selection = ALL
-    #: Where each `tools:` entry claimed its tool lives, by name, for the
-    #: entries written `where::what`. Beside `tools` rather than inside it,
-    #: because a path is a claim to be checked and a name is what everything
-    #: downstream keys on -- folding them together would make every consumer
-    #: learn a spelling that only the checker cares about.
-    #:
-    #: Empty when every entry used the short form, which stays valid: the long
-    #: one buys a check, and a definition that did not ask for one is not wrong.
-    #:
-    #: `derived`, so it is not in `KNOWN`. A definition cannot write this: it is
-    #: read out of `tools`, and a `tool_sources:` key in a YAML file is refused
-    #: like any other name this format does not define.
+    #: Where each `tools:` entry claimed its tool lives, by name, for the entries
+    #: written `where::what`. Beside `tools` rather than inside it, because a path is a
+    #: claim to be checked and a name is what everything downstream keys on -- folding
+    #: them together would make every consumer learn a spelling that only the checker
+    #: cares about.
     tool_sources: Mapping[str, str] = field(
         default_factory=dict, metadata={"derived": True}
     )
@@ -82,47 +75,21 @@ class SubagentSpec:
     #: deployment supplies. A name here selects *code*, which is why it is the
     #: one field never widened for an uploaded definition.
     middleware: Selection = None
-    #: What each `middleware:` entry wrote under `settings:`, for the entries
-    #: that wrote one. Keyed by name and kept beside them, the way
-    #: `tool_sources` sits beside `tools`: a name is what gets granted and
-    #: narrowed, and a value passed to the code behind it is neither.
-    #:
-    #: `derived`, so it is not in `KNOWN`. It is read out of `middleware`, and
-    #: a `middleware_settings:` key in a definition is refused like any other
-    #: name this format does not define.
+    #: What each `middleware:` entry wrote under `settings:`, for the entries that wrote
+    #: one. Keyed by name and kept beside them, the way `tool_sources` sits beside
+    #: `tools`: a name is what gets granted and narrowed, and a value passed to the code
+    #: behind it is neither.
     middleware_settings: Mapping[str, Mapping[str, object]] = field(
         default_factory=dict, metadata={"derived": True}
     )
-    #: Delegates this one may consult, by name, from the same catalogue. Absent
-    #: means none -- like `skills`, and for the same reason: a delegate that
-    #: needed the whole catalogue would not have been worth defining.
-    #:
-    #: The only one of these five fields that refuses `["*"]`, and this is the
-    #: sentence it refuses on. It was accepted for a while because all five share
-    #: one type and one reader, not because anyone chose it -- and everything
-    #: here includes the definition asking, so it was always a loop. Named
-    #: delegates, or none.
-    #:
-    #: Any depth: a delegate named here may name its own. `refuse_cycles` is
-    #: what stops a catalogue coming back to where it started, and it runs over
-    #: the whole catalogue at load, so nobody writes a `subagents:` line that is
-    #: silently ignored. Each definition is built once per position it holds
-    #: rather than once per route to it, which is what makes reuse affordable.
+    #: Delegates this one may consult, by name, from the same catalogue. Absent means
+    #: none -- like `skills`, and for the same reason: a delegate that needed the whole
+    #: catalogue would not have been worth defining.
     subagents: Selection = None
-    #: The model this delegate runs, out of what the catalogue defines. `None`
-    #: means whatever summoned it. Naming one decides where the prompt goes and
-    #: whose credentials pay -- the endpoint follows from the model -- which is
-    #: why it is granted rather than free.
-    #:
-    #: One name rather than a list of candidates. A list meant "try these in
-    #: order", and the only thing that ever passed one over was an alias this
-    #: deployment had not bound -- so when `alias` went, every entry after the
-    #: first became unreachable. A model this deployment cannot run refuses on
-    #: the spot and always did; there is nothing for a second choice to catch.
-    #:
-    #: `derived`, like `tool_sources`, and for the same reason: no definition
-    #: writes `wanted:`. It is read out of `model:`, and a file spelling this
-    #: field's own name is refused like any other key the format does not define.
+    #: The model this delegate runs, out of what the catalogue defines. `None` means
+    #: whatever summoned it. Naming one decides where the prompt goes and whose
+    #: credentials pay -- the endpoint follows from the model -- which is why it is
+    #: granted rather than free.
     wanted: str | None = field(default=None, metadata={"derived": True})
     #: The caller's own keys, carried and never interpreted. Kingfisher reads
     #: nothing here and never will: the moment it did, this would be a field
@@ -132,44 +99,14 @@ class SubagentSpec:
     #: Read by whatever loads the catalogue, not by the run -- see the module
     #: docstring for why the seam into a turn was left unbuilt.
     metadata: Mapping[str, object] = field(default_factory=dict)
-    #: What assembles this delegate, when a workspace declared it in Python
-    #: rather than YAML. Called with a model and the tools it was granted, and
-    #: it returns a graph deepagents runs as given.
-    #:
-    #: `Any` for the same reason `tools.spec.Found.tool` is, and it is worth
-    #: being as honest about it here. What this holds is, in practice, a
-    #: callable returning a LangGraph graph. The domain never calls one, never
-    #: imports the type and never depends on its shape -- it carries the thing
-    #: from the loader that imported it to the adapter that runs it. If that
-    #: stops being true, the fix is a domain-owned description of a graph, not a
-    #: wider import here.
-    #:
-    #: `derived`, so it is not in `KNOWN`: a YAML document cannot write it, and
-    #: writing `build:` in one is refused like any other key this format does
-    #: not define. The Python declaration has its own key set, `DECLARED`.
+    #: What assembles this delegate, when a workspace declared it in Python rather than
+    #: YAML. Called with a model and the tools it was granted, and it returns a graph
+    #: deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
     #: Who may reach this delegate, wherever it is used.
-    #:
-    #: Its intrinsic ceiling rather than the whole answer: an agent naming it
-    #: may narrow further for its own context, and the two intersect. `ALL`
-    #: when the file says nothing, for the reason `AgentSpec.groups` gives.
-    #:
-    #: Enforced even for a compiled delegate, and it is the one thing that is:
-    #: whether a graph gets built at all is kingfisher's decision, so there is
-    #: nothing here for a graph to ignore.
     groups: Audience = ALL
     #: Field name -> entry name -> who reaches that entry, for the fields in
     #: `AUDIENCED`. Empty for a definition written as plain lists.
-    #:
-    #: For a compiled delegate this narrows what is *handed* to `build` and is
-    #: no more of a boundary than the plain `tools` list already is there --
-    #: deepagents applies no allowlist to a graph it did not build, which
-    #: `subagents.harness.compiled` says out loud and `--list` flags.
-    #:
-    #: `derived`, because no definition writes `audiences:` -- it is read
-    #: *out of* the three selection fields, the way `tool_sources` is read out
-    #: of `tools`. Writing the key in a document is refused like any other the
-    #: format does not define.
     audiences: Mapping[str, Mapping[str, Audience]] = field(
         default_factory=dict, metadata={"derived": True}
     )

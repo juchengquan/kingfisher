@@ -42,39 +42,9 @@ SUGGESTION = Path("assets_examples")
 DESTINATION = Path("assets")
 
 #: How the four "this workspace is empty" messages tell a reader to fill it.
-#:
-#: One string, because four wordings drift and the one seen daily is the one
-#: nobody reviews.
-#:
-#: `--from DIR` rather than the bare verb, because that form works whether or not
-#: `KINGFISHER_ASSETS` is set -- which is the whole property these messages need.
-#: The bare verb hits a refusal for a source that was never configured.
 SEED_HINT = "`kingfisher seed --from DIR`"
 
 #: The other half of that answer, for the reader `SEED_HINT` cannot help.
-#:
-#: `--from DIR` needs a DIR, and `SUGGESTION` deliberately names none to
-#: somebody who installed the package -- correctly, because neither directory it
-#: could name exists for them. Correct and terminal: an empty workspace, a hint
-#: that needs something they have not got, and `docs/guides/formats.md` to read before
-#: anything runs.
-#:
-#: So the smallest agent that works, printed where the refusal is. The pattern is
-#: `model_catalogue`'s, which prints a working catalogue inline for the same
-#: reason and in the same situation -- a file you cannot start without and have
-#: not written.
-#:
-#: Not a shipped `agents/assistant.yaml.example`. `groups.yaml.example` was
-#: deleted for being a *choice* wearing a template's clothes: it shipped one
-#: vocabulary while a workspace needs whichever its own definitions ask for, so
-#: following the pointer led away from the answer. This has no such content --
-#: three fields, no delegates that must exist, no middleware to register, no
-#: groups -- which is the same property that let `models.yaml.example` survive
-#: that cull.
-#:
-#: Verified rather than assumed: an agent with exactly these three fields loads,
-#: is listed, and compiles to a real graph. A minimal example that turned out to
-#: be refused would be `groups.yaml.example` again.
 STARTER_AGENT = """\
 An agent is a file in agents/, and three fields are required. A minimal one:
 
@@ -237,27 +207,13 @@ def definitions_source(paths: Source, override: str | Path | None = None) -> Pat
 
 def seed(into: Destination, source: Path, *, everything: bool = False) -> Seeded:
     """Copy definitions into this deployment's catalogues, and say what changed."""
-    # Before anything is copied, and not left to the caller. Seeding into a
-    # workspace that was never laid out succeeds, reports every definition
-    # written, and leaves no `models.yaml.example` -- which is the dead end that
-    # write was moved into `ensure_layout` to avoid: a deployment told to write
-    # `models.yaml` and given no example of one. The CLI got the ordering right
-    # and nothing made a library caller do the same, so the obvious two-liner
-    # produced a workspace that looked seeded and could not start.
-    #
-    # Idempotent, and safe on a workspace that is already in use: it creates
-    # directories and refreshes `models.yaml.example`, which is a shipped
-    # template rather than anybody's file. A real `models.yaml` is never touched.
-    #
-    # `authored_files` because both examples belong beside the file they are an
-    # example of, and both files relocate. A library caller who seeds a
-    # deployment with `KINGFISHER_MODELS_FILE` set would otherwise get the
-    # annotated catalogue in the workspace and read the real one elsewhere.
-    #
-    # It does not cover every route to the same state. A caller whose
-    # `definitions_source` raises never reaches this line, and gets an
-    # unlaid-out workspace with an exception to explain it -- which is the
-    # loud version of the same thing, and why the CLI still lays out first.
+    # Before anything is copied, and not left to the caller. Seeding into a workspace
+    # that was never laid out succeeds, reports every definition written, and leaves no
+    # `models.yaml.example` -- which is the dead end that write was moved into
+    # `ensure_layout` to avoid: a deployment told to write `models.yaml` and given no
+    # example of one. The CLI got the ordering right and nothing made a library caller
+    # do the same, so the obvious two-liner produced a workspace that looked seeded and
+    # could not start.
     ensure_layout(into.workspace, authored=into.authored_files)
 
     if not source.is_dir():

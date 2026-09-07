@@ -10,45 +10,23 @@ from typing import TYPE_CHECKING, Any
 
 __version__ = "0.1.0"
 
-#: Public name -> the module that defines it. The single source for both
-#: `__getattr__` and `__all__`, so the two cannot drift.
+#: Public name -> the module that defines it. The single source for both `__getattr__`
+#: and `__all__`, so the two cannot drift.
 #:
-#: Eleven names left this table without leaving the package: `build_agent`,
-#: `build_backend`, `build_model`, `system_prompt`,
-#: `writable_data`, `protect_data`, `shell_env`, `normalize_answer`,
-#: `AccessReport`, `Groups` and `Stated`. Every one is live -- `build_backend`
-#: alone is called from dozens of places -- and every one of those callers
-#: imports it from the module that defines it. Nothing had ever come through the
-#: front door for them.
+#: **A caller means a caller outside this wheel**, which is the rule eleven names --
+#: `build_agent`, `build_backend`, `build_model` and the rest -- were removed under.
+#: Every one is live, and every one of their callers already imports it from the module
+#: that defines it, so nothing had ever come through the front door for them. The
+#: command ships in this distribution and is family: it reaches such a name directly,
+#: and still comes through the front door for every name that *is* here. The service is
+#: a distribution of its own and keeps the strict rule, because a promise is what it has
+#: instead of a shared wheel.
 #:
-#: That is the distinction this table exists to draw and had stopped drawing.
-#: The comments below record why a name is public one at a time -- "the fourth
-#: name the consumer rule has forced public", "public because it reached" --
-#: and nothing recorded the opposite, so a name added on a guess looked exactly
-#: like a name added on a caller. A door advertising what nobody walks through
-#: cannot answer the only question asked of it, which is what a caller may rely
-#: on.
-#:
-#: **A caller means a caller outside this wheel.** That is new, and it is the
-#: rule the eleven above were removed under without anyone saying so. The command
-#: ships in this distribution and is family: it reaches a name this table does
-#: not carry at the module defining it, exactly as `build_backend`'s callers do,
-#: and still comes through the front door for every name that *is* here. The
-#: service is a distribution of its own and keeps the strict rule, because a
-#: promise is what it has instead of a shared wheel.
-#:
-#: Applied to the command, the old reading did the opposite of what a door is
-#: for: `doctor` wanting a sandbox probe turned the probe into a promise made to
-#: everybody. `Confinement` and `unrunnable_delegates` are the first two out --
-#: both were recorded here as forced public by a consumer, which was this table
-#: saying out loud that nobody outside had asked. See *The front door* in
-#: `docs/decisions.md`.
-#:
-#: Narrowed rather than deleted. `from kingfisher.infrastructure.harness.agent
-#: import build_agent` still works and is what the package itself does. An
-#: outside caller on the old spelling changes one import line, which is a real
-#: cost measured against users this repository cannot see -- accepted at 0.1.0,
-#: and noted here rather than discovered later.
+#: Narrowed rather than deleted. `from kingfisher.infrastructure.harness.agent import
+#: build_agent` still works and is what the package itself does. An outside caller on
+#: the old spelling changes one import line, which is a real cost measured against users
+#: this repository cannot see -- accepted at 0.1.0, and noted here rather than
+#: discovered later.
 _EXPORTS = {
     "Held": "kingfisher.domain.access",
     "AccessError": "kingfisher.domain.access",

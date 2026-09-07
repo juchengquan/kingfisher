@@ -15,14 +15,10 @@ SRC = repository_root() / "src" / "kingfisher"
 #: Short enough that a rule transcribed as a couple of lines is still visible.
 MIN_STATEMENTS = 2
 
-#: And it has to *decide* something. Length does not separate signal from noise
-#: at this size -- measured on the pass's own output, a two-statement narrowing
-#: dumps to 351 characters while a pair of `x: list[str] = []` declarations
-#: dumps to 236, so a length floor either loses findings or keeps idioms.
-#:
-#: What separates them is whether the window computes: a rule compares, filters
-#: or combines, while an idiom declares or guards. Every false positive this
-#: pass produced had none of these; the narrowing had three.
+#: And it has to *decide* something. Length does not separate signal from noise at this
+#: size -- measured on the pass's own output, a two-statement narrowing dumps to 351
+#: characters while a pair of `x: list[str] = []` declarations dumps to 236, so a length
+#: floor either loses findings or keeps idioms.
 COMPUTES = (ast.comprehension, ast.Compare, ast.BoolOp, ast.BinOp, ast.IfExp)
 MIN_COMPUTES = 2
 

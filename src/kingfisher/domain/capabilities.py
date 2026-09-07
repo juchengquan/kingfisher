@@ -79,27 +79,12 @@ class Capabilities:
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike the three above it is never widened by `including` -- see there.
     middleware: Selection = ALL
-    #: Endpoints a definition may reach. Granted like `middleware` and for a
-    #: stronger reason: this one decides which credentials are used and which
-    #: endpoint receives the run's prompts and files. Checked against where a
-    #: named model *resolves to*, since definitions name models rather than
-    #: endpoints.
-    #:
-    #: It overlaps `models` below without being redundant: different subjects,
-    #: deliberately opposite defaults. This narrows what *reviewed definitions* may
-    #: reach and starts open; that gates what an *untrusted caller* may name and
-    #: starts closed. Collapsing them would force one default on both.
+    #: Endpoints a definition may reach. Granted like `middleware` and for a stronger
+    #: reason: this one decides which credentials are used and which endpoint receives
+    #: the run's prompts and files. Checked against where a named model *resolves to*,
+    #: since definitions name models rather than endpoints.
     endpoints: Selection = ALL
     #: Models a request may put a delegate on, overriding what its file says.
-    #:
-    #: `None` by default, and that default is the point. Every other axis only
-    #: takes something away -- a request picks from what the workspace offers and
-    #: cannot invent anything, which is what makes an untrusted caller safe to
-    #: accept. Naming a model *chooses* rather than narrows, and models differ in
-    #: price by more than an order of magnitude. So it is off until a deployment
-    #: grants it, and granted per name rather than as a switch: "on" with no list
-    #: means any caller may name the most expensive model you have credentials
-    #: for.
     models: Selection = None
     memory: bool | None = None
 

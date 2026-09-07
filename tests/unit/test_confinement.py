@@ -24,17 +24,11 @@ macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
 )
 
-#: Two tests need the agent's shell to start *this* interpreter, with this
-#: project's dependencies importable, from inside the sandbox. That works on a
-#: developer's machine and does not on a GitHub macOS runner: `python3` there
-#: resolves to Xcode's shim rather than the venv, which then cannot write its
-#: `xcrun` cache and cannot import `yaml`.
-#:
-#: Skipped rather than weakened, and skipped narrowly -- every other confinement
-#: test runs on CI, including the ones that prove the home directory is denied.
-#: What is not covered there is the *re-allowing*: that a real toolchain still
-#: works inside the boundary. That is a gap in CI, not in the boundary, and it
-#: is checked on every developer machine that runs the suite.
+#: Two tests need the agent's shell to start *this* interpreter, with this project's
+#: dependencies importable, from inside the sandbox. That works on a developer's machine
+#: and does not on a GitHub macOS runner: `python3` there resolves to Xcode's shim
+#: rather than the venv, which then cannot write its `xcrun` cache and cannot import
+#: `yaml`.
 needs_a_real_toolchain = pytest.mark.skipif(
     os.environ.get("CI") == "true",
     reason="the runner's python3 is Xcode's shim, not the project venv",

@@ -60,21 +60,15 @@ STATUS: dict[type[Exception], tuple[int, str]] = {
     SubagentError: (HTTPStatus.BAD_REQUEST, "bad_subagent"),
 }
 
-#: Deployment errors that still earn a name. A second table rather than entries
-#: in the one above, because that one is *exactly* the caller-facing set and a
-#: rule checks it in both directions -- an error in it that a caller cannot
-#: cause would be a status nobody decided on, which is the drift that rule
-#: exists to catch.
+#: Deployment errors that still earn a name. A second table rather than entries in the
+#: one above, because that one is *exactly* the caller-facing set and a rule checks it
+#: in both directions -- an error in it that a caller cannot cause would be a status
+#: nobody decided on, which is the drift that rule exists to catch.
 #:
-#: What these have in common is that nothing the caller sends can fix them, so
-#: they stay 5xx and the code is not really a contract: it is a name, worth
-#: having because "500 error" and "500 the deployment's identity has drifted
-#: from its policy" are the same line in a log otherwise.
-#:
-#: `AccessError` covers `MissingGroups` through the MRO walk in `outcome`. The
-#: two are one problem seen from two places -- a header nothing set, a group the
-#: vocabulary never declared -- and a caller told them apart would learn
-#: something about the deployment and could act on neither.
+#: What these have in common is that nothing the caller sends can fix them, so they stay
+#: 5xx and the code is not really a contract: it is a name, worth having because "500
+#: error" and "500 the deployment's identity has drifted from its policy" are the same
+#: line in a log otherwise.
 DEPLOYMENT_STATUS: dict[type[Exception], tuple[int, str]] = {
     AccessError: (HTTPStatus.INTERNAL_SERVER_ERROR, "misconfigured"),
 }
@@ -143,14 +137,11 @@ def install(app: FastAPI) -> None:
     async def from_kingfisher(_: Request, error: Exception) -> JSONResponse:
         status, code = outcome(error)
         if isinstance(error, AccessError):
-            # The one refusal whose message may not be repeated. It names every
-            # group this deployment declares -- "unknown group(s): Q; this
-            # deployment defines A, B, C" -- which is exactly the enumeration
-            # that filtering listings and refusals exists to prevent, handed
-            # over by the one path that was not filtering anything.
-            #
-            # Logged rather than dropped, at ERROR on the service's own logger,
-            # because the operator who can act on it is the one reading that.
+            # The one refusal whose message may not be repeated. It names every group
+            # this deployment declares -- "unknown group(s): Q; this deployment defines
+            # A, B, C" -- which is exactly the enumeration that filtering listings and
+            # refusals exists to prevent, handed over by the one path that was not
+            # filtering anything.
             logger.error("cannot resolve the caller's groups: %s", error)
             return problem(status, code, RESOLUTION_FAILED)
         return problem(status, code, str(error))

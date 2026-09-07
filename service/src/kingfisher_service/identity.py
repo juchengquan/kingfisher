@@ -11,13 +11,6 @@ if TYPE_CHECKING:
     from fastapi import Request
 
 #: What a deployment supplies: a request in, the caller's groups out.
-#:
-#: `Iterable[str]` rather than `Held`, which is the whole of the rule in the
-#: type: there is no spelling of `UNSCOPED` a source can return.
-#:
-#: Imported for real rather than under `TYPE_CHECKING`, because this is
-#: evaluated at module scope -- the same reason `dependencies` imports `Request`
-#: for real, one line down from a comment saying so.
 GroupsFrom = Callable[[Any], Iterable[str]]
 
 

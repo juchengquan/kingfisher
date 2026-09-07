@@ -22,23 +22,10 @@ from kingfisher.subagents.reading import EXPORT, NEAR_MISS, SUFFIX, declared
 from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.spec import reference
 
-#: What a bundle's own assets are kept in, and therefore the two directory
-#: names that are not organisation here. A folder under `subagents/` is
-#: normally free -- it groups definitions and nothing else -- but these two
-#: hold a subagent's private tools and skills, and the definition walk must not
-#: descend into them.
-#:
-#: Not a rule about bundles, deliberately: it applies wherever the names appear,
-#: because the alternative needs to know whether a folder is a bundle *before*
-#: reading the definition that decides it. What it costs is a grouping folder
-#: literally called `tools` or `skills`, which would be a confusing thing to
-#: own under `subagents/` in any case.
-#:
-#: A skill folder may hold whatever a skill needs -- a JSON fixture, a CSV, a
-#: prompt, a `config.yaml` -- and that last one is why this exists rather than
-#: being left to chance: without it, a skill's own settings file parses as a
-#: subagent definition and the catalogue fails to load over a file that was
-#: never one.
+#: What a bundle's own assets are kept in, and therefore the two directory names that
+#: are not organisation here. A folder under `subagents/` is normally free -- it groups
+#: definitions and nothing else -- but these two hold a subagent's private tools and
+#: skills, and the definition walk must not descend into them.
 ASSET_DIRECTORIES: frozenset[str] = frozenset({"tools", "skills"})
 
 

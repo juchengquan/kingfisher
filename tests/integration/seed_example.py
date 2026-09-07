@@ -22,18 +22,8 @@ def seed_workspace(
     """Copy definitions into `workspace`, and return what happened."""
     paths = WorkspacePaths(workspace)
 
-    # Belt-and-braces rather than an ordering that has to be got right: `seed`
-    # lays the workspace out itself, so `models.yaml.example` arrives either way.
-    #
-    # What this line buys is the path `seed` never reaches. `definitions_source`
-    # below refuses when a deployment has named no assets, and it refuses before
-    # seeding starts -- so without this, that deployment gets an empty directory
-    # and a traceback instead of a laid-out workspace and an error explaining
-    # itself. `test_the_example_script_refuses_with_no_source_configured` drives
-    # exactly that path.
-    #
-    # `authored` because both examples belong beside the file they describe, and
-    # both files relocate.
+    # Belt-and-braces rather than an ordering that has to be got right: `seed` lays the
+    # workspace out itself, so `models.yaml.example` arrives either way.
     ensure_layout(paths.workspace, authored=paths.authored_files)
 
     # An explicit path wins, else `KINGFISHER_ASSETS`, else a `ConfigError`

@@ -15,20 +15,14 @@ from typing import Literal
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
 
-# Everything below is past the front door on purpose, and this is the file to
-# read if you want to know what that door is now for. These are `doctor`'s
-# probes: what fences this host offers, what the kernel supports, what the
-# cgroup files say, and the sentence that tells a reader where their own
-# definitions go. Every one of them was public because *this file* reached for
-# it -- the export table said so in as many words -- and a probe only `doctor`
-# has ever wanted is not a promise worth making to everybody who runs
-# `pip install kingfisher`. The command ships in this wheel, so it takes each
-# name where it lives.
-#
-# What stays above is the half that is not a relaxation: `Config`, `inventory`
-# and the rest are names the door does carry, so they still come through it.
-# `test_architecture` refuses the other spelling, which is what keeps the claim
-# in `cli/__init__.py` honest. See *The front door* in `docs/decisions.md`.
+# Everything below is past the front door on purpose, and this is the file to read if
+# you want to know what that door is now for. These are `doctor`'s probes: what fences
+# this host offers, what the kernel supports, what the cgroup files say, and the
+# sentence that tells a reader where their own definitions go. Every one of them was
+# public because *this file* reached for it -- the export table said so in as many words
+# -- and a probe only `doctor` has ever wanted is not a promise worth making to
+# everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
+# takes each name where it lives.
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.infrastructure.sandbox.confinement import (
@@ -65,14 +59,10 @@ def _catalogue(cfg: Config) -> Iterator[Check]:
     )
 
     # A dropped endpoint is a warning, not a failure. A shared catalogue naming
-    # endpoints this machine cannot reach is the normal case by the loader's own
-    # account -- "one reviewed file works across a fleet holding different
-    # subsets of keys" -- so failing here would fail on the arrangement the
-    # format encourages. It becomes a failure through the definitions check,
-    # when something actually names one.
-    #
-    # Reported at all because it was not: the drop is announced by a warning at
-    # load and then discarded, so this printed a tick over a lost endpoint.
+    # endpoints this machine cannot reach is the normal case by the loader's own account
+    # -- "one reviewed file works across a fleet holding different subsets of keys" --
+    # so failing here would fail on the arrangement the format encourages. It becomes a
+    # failure through the definitions check, when something actually names one.
     if models.unreachable:
         named = ", ".join(f"{name} ({why})" for name, why in sorted(models.unreachable.items()))
         yield Check(
@@ -328,13 +318,6 @@ FULL_LANDLOCK_ABI = 6
 
 
 #: Appended to every answer this check gives, because it qualifies all of them.
-#:
-#: `doctor` builds a `Config` from the environment and never sees a
-#: `Kingfisher`, so a deployment that supplied its own `CommandRunner` or
-#: `SessionRoot` is invisible here. Reporting the built-in path as though it
-#: were the running one is the failure this file exists to prevent, and the
-#: cheapest honest fix is to say which one is being described rather than to
-#: plumb a service into a command that does not have one.
 FROM_CONFIG = " (from configuration; an injected runner is not visible here)"
 
 

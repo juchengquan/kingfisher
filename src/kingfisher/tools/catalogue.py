@@ -94,20 +94,14 @@ class LocalToolRepository:
                 raise ToolError(msg)
 
             for tool in exported:
-                # A class is never a tool, and this is the one mistake in this
-                # area that produces a *successful* wrong answer rather than an
-                # error. `TOOLS = [Shout]` instead of `[Shout()]` loads, is
-                # advertised under the class name rather than its own `name`
-                # field -- on a pydantic model that field is not a class
-                # attribute, so `tool_name` falls through to `__name__` -- and
-                # then calling it *instantiates* it. Measured: the model gets
-                # `status="success"` and the repr of a `CallbackManager`, and
+                # A class is never a tool, and this is the one mistake in this area that
+                # produces a *successful* wrong answer rather than an error. `TOOLS =
+                # [Shout]` instead of `[Shout()]` loads, is advertised under the class
+                # name rather than its own `name` field -- on a pydantic model that
+                # field is not a class attribute, so `tool_name` falls through to
+                # `__name__` -- and then calling it *instantiates* it. Measured: the
+                # model gets `status="success"` and the repr of a `CallbackManager`, and
                 # the run carries on.
-                #
-                # The same family as the container check above, one level in:
-                # there the whole export was a pydantic model that iterated,
-                # here one entry is a class that instantiates. Both pass a duck
-                # test and neither says anything.
                 if isinstance(tool, type):
                     msg = (
                         f"{where}: {EXPORT} names the class {tool.__name__!r} rather "
@@ -116,39 +110,24 @@ class LocalToolRepository:
                         f"new instance as if it were an answer"
                     )
                     raise ToolError(msg)
-                # And an entry that is not a tool in any of the three shapes the
-                # format documents: a `BaseTool` from `@tool`, an instantiated
-                # `BaseTool` subclass, or a plain function. Anything else was
-                # accepted and named by its `repr` -- measured, a workspace
-                # writing `TOOLS = ["line_count"]` for the *name* of its tool got
-                # one advertised as `'line_count'`, quotes included, and a build
-                # that died with `AttributeError: 'function' object has no
-                # attribute 'name'` naming neither the file nor the entry.
+                # And an entry that is not a tool in any of the three shapes the format
+                # documents: a `BaseTool` from `@tool`, an instantiated `BaseTool`
+                # subclass, or a plain function. Anything else was accepted and named by
+                # its `repr` -- measured, a workspace writing `TOOLS = ["line_count"]`
+                # for the *name* of its tool got one advertised as `'line_count'`,
+                # quotes included, and a build that died with `AttributeError:
+                # 'function' object has no attribute 'name'` naming neither the file nor
+                # the entry.
                 #
-                # Asked as `named`, which is the domain's own rule rather than
-                # a second copy of it: `tool_name` is `.name or .__name__ or
-                # repr(tool)`, and that last fallback is the hole. It is there so
-                # naming never raises, which a listing needs -- and it means
-                # anything at all gets *a* name instead of a refusal.
-                #
-                # It is also langchain's rule, which is why it is the right one
-                # and not just the one available here. Measured against
-                # `convert_to_openai_tool`: a plain function is named `shout`, a
-                # lambda `<lambda>`, and everything without one of those two
-                # attributes -- a `functools.partial`, an instance with
-                # `__call__` -- dies there with the same `AttributeError` this
-                # refuses, only later and naming no file. So `callable` would
-                # have been wrong twice over: a `BaseTool` is *not* callable and
-                # would be refused, a `partial` is and would be let through.
-                #
-                # Not `isinstance(tool, BaseTool)`, the first attempt: this area
-                # may import `yaml` and nothing else, because a catalogue reads
-                # files and `Found.tool` is `Any` on purpose. The architecture
-                # rule caught it and was right to.
-                #
-                # A class passes this check -- it has `__name__` -- so the class
-                # refusal above is not made redundant by it and neither ordering
-                # would change what either one says.
+                # It is also langchain's rule, which is why it is the right one and not
+                # just the one available here. Measured against
+                # `convert_to_openai_tool`: a plain function is named `shout`, a lambda
+                # `<lambda>`, and everything without one of those two attributes -- a
+                # `functools.partial`, an instance with `__call__` -- dies there with
+                # the same `AttributeError` this refuses, only later and naming no file.
+                # So `callable` would have been wrong twice over: a `BaseTool` is *not*
+                # callable and would be refused, a `partial` is and would be let
+                # through.
                 if not named(tool):
                     msg = (
                         f"{where}: {EXPORT} holds {type(tool).__name__} "

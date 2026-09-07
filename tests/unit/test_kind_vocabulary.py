@@ -74,15 +74,6 @@ def test_a_bundle_holds_only_kinds_the_catalogue_reads():
 
 
 #: Why something the catalogue holds is not an axis a request narrows.
-#:
-#: The one entry is the whole reason this set exists: every other kind is a
-#: *set* a request picks from, and an agent is the thing doing the picking. A
-#: request names one, and the capabilities then apply to what that agent
-#: declared -- so "narrow the agents" is not a sentence with a meaning.
-#:
-#: It is also the one kind a caller cannot upload, and that follows from the
-#: same fact rather than being a second rule: what you would be uploading is
-#: not a set to choose from, it is the thing choosing.
 NOT_AN_AXIS = {
     "agents": "a request names one rather than narrowing a set of them",
 }
@@ -131,16 +122,6 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
 
 #: Directories under `assets_examples/` that are not a catalogue kind, and why each is
 #: there in spite of that.
-#:
-#: The rule below is that this repository's worked set holds only what a
-#: catalogue reads, so that seeding it produces a workspace where every file is
-#: found. An entry here is a folder that breaks the rule on purpose, and the
-#: value is the argument for it -- written next to the check rather than in the
-#: commit that added the folder.
-#:
-#: Kept honest by `test_a_folder_that_is_not_a_kind_is_not_seeded_either`: the
-#: harm the rule names is a file "copied where nothing looks", so an exception
-#: has to be a folder that is not copied at all.
 NOT_A_KIND = {
     "middleware": (
         "deployment code, not a definition -- a middleware name selects code "

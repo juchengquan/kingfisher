@@ -298,15 +298,6 @@ class CommandRunner(Protocol):
     """
 
     #: Whether the command runs on this machine.
-    #:
-    #: Read with a default of True, so an object that never meets a type checker
-    #: still gets the safe answer: forgetting it yields *more* confinement than
-    #: needed, never less.
-    #:
-    #: The case this exists for is not the remote one. A runner that adds resource
-    #: limits, or runs as another user, or records timings, is still here -- and
-    #: under a rule of "a supplied runner means no local fence" every one of those
-    #: would quietly lose `sandbox-exec` on macOS.
     local: bool = True
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:

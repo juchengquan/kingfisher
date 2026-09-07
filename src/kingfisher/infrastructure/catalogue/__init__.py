@@ -263,28 +263,9 @@ class Definitions:
 
 
 #: The kinds, taken from the type that already has one field per kind.
-#:
-#: Derived rather than written out, because this vocabulary appears three times
-#: over -- here, `Definitions`' fields, and the module names -- with nothing but
-#: `test_the_catalogue_holds_one_module_per_kind` holding them together.
-#:
-#: Field order is load-bearing now rather than by coincidence: `seeding` walks
-#: this to decide what to copy and in what order, so reordering `Definitions` is
-#: a change to seeding rather than a cosmetic edit.
 DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 
 #: The kinds a *supplied* catalogue has to name and stage itself.
-#:
-#: `agents` is deliberately outside it, and not because it matters less. It
-#: arrived after this seam was published, and a deployment that spelled out the
-#: three kinds it knew about should not stop starting because a fourth exists.
-#: Omitted, the directory lands beside the others and holds nothing -- which is
-#: the same answer a derived catalogue gives before anyone seeds it.
-#:
-#: The silence this leaves is covered elsewhere and better: a request names the
-#: agent it wants, so an empty `agents/` is reported as "no agent by that name,
-#: this workspace has none" rather than as a missing directory. That is the
-#: message somebody can act on.
 STAGED_KINDS: tuple[str, ...] = tuple(k for k in DEFINITION_KINDS if k != AGENT_DIRECTORY)
 
 

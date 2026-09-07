@@ -69,29 +69,17 @@ from kingfisher.tools.spec import claimed_sources
 DIRECTORY = "subagents"
 SUFFIX = ".yaml"
 
-#: The spelling people reach for, and the one that used to vanish. `.yml` is
-#: valid YAML everywhere else, so a file named that way is a definition someone
-#: wrote and kingfisher silently did not read.
-#:
-#: Named rather than "any extension we do not recognise", which was the first
-#: draft. A folder here may now be a Python package, and a package is entitled
-#: to hold whatever it needs beside its `__init__.py` -- a JSON fixture, a CSV,
-#: a prompt in a text file. Refusing every unfamiliar suffix would break that
-#: for the sake of one confusion, so the one confusion is named.
+#: The spelling people reach for, and the one that used to vanish. `.yml` is valid YAML
+#: everywhere else, so a file named that way is a definition someone wrote and
+#: kingfisher silently did not read.
 NEAR_MISS = ".yml"
-#:
-#: Here rather than in `catalogue`, which is where it was: it is a fact
-#: about what the format's files are called, like `SUFFIX` directly above,
-#: and the agent repository needs both. Reaching a catalogue for the second
-#: one closed an import loop through this package.
-#: Every field this format defines. A key outside it is refused rather than
-#: ignored, because ignoring one is indistinguishable from honouring it: a
-#: definition writing `tolls:` got a delegate holding *every* tool its parent
-#: had, since a missing `tools` means inherit.
-#:
-#: This is a rule for subagents and not for skills. Kingfisher owns this format;
-#: deepagents owns the skill format and decides what a skill may say, so
-#: refusing keys there would reject fields valid in a format we do not define.
+#: Here rather than in `catalogue`, which is where it was: it is a fact about what the
+#: format's files are called, like `SUFFIX` directly above, and the agent repository
+#: needs both. Reaching a catalogue for the second one closed an import loop through
+#: this package. Every field this format defines. A key outside it is refused rather
+#: than ignored, because ignoring one is indistinguishable from honouring it: a
+#: definition writing `tolls:` got a delegate holding *every* tool its parent had, since
+#: a missing `tools` means inherit.
 KNOWN: frozenset[str] = frozenset(
     {
         "name",
@@ -123,23 +111,13 @@ REFUSED: Mapping[str, str] = MappingProxyType(
             "needs a checkpointer and a human to answer the interrupt, neither of "
             "which a delegate has here"
         ),
-        # Corrected 2026-09-06, and the correction is the point of the entry.
-        # This read "a delegate returns prose to its caller, which is the
-        # caller's to shape -- there is nothing here to hand a schema to", and
-        # deepagents disproves both halves: `_compile_spec` takes a
-        # `response_format`, and `middleware/subagents.py` serialises what comes
-        # back -- `model_dump_json`, or `json.dumps` for anything else -- into
-        # the `ToolMessage` the parent reads. There is somewhere to hand it, and
-        # it is handed there.
-        #
-        # What survives the check is the refusal, not the reason. A schema
-        # shapes what the delegate produces and then that shape is flattened to
-        # text at the boundary, so the parent is reading prose-or-JSON either
-        # way and kingfisher is handed nothing it could carry as structure.
-        #
-        # Checked against deepagents 0.7.6. A reason upstream contradicts is
-        # worse than the generic message this table exists to replace: whoever
-        # checks one and finds it false has no reason to trust the other two.
+        # Corrected 2026-09-06, and the correction is the point of the entry. This read
+        # "a delegate returns prose to its caller, which is the caller's to shape --
+        # there is nothing here to hand a schema to", and deepagents disproves both
+        # halves: `_compile_spec` takes a `response_format`, and
+        # `middleware/subagents.py` serialises what comes back -- `model_dump_json`, or
+        # `json.dumps` for anything else -- into the `ToolMessage` the parent reads.
+        # There is somewhere to hand it, and it is handed there.
         "response_format": (
             "deepagents does support one here, and nothing structured survives it "
             "-- a delegate's response is serialised into the tool result, so its "
@@ -367,15 +345,12 @@ def read(text: str, source: Path) -> SubagentSpec:
 
 
 
-# `tools:` used to be stripped to bare names here, on the reasoning that a name
-# is the only thing a grant, an allowlist or the agent's dispatch dictionary
-# keys on. That held while a name could only mean one tool. Two folders may now
-# each define a `fetch`, and the reference is the only thing that says which --
-# so a definition keeps what it wrote, and the flattening happens at the two
-# places that genuinely need a bare name: `ToolAllowlist`, and `permitted`.
-#
-# `claimed_sources` still reads the same entries to check the claim is true.
-# One reference, doing two jobs now rather than one.
+# `tools:` used to be stripped to bare names here, on the reasoning that a name is the
+# only thing a grant, an allowlist or the agent's dispatch dictionary keys on. That held
+# while a name could only mean one tool. Two folders may now each define a `fetch`, and
+# the reference is the only thing that says which -- so a definition keeps what it
+# wrote, and the flattening happens at the two places that genuinely need a bare name:
+# `ToolAllowlist`, and `permitted`.
 
 
 

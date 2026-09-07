@@ -24,15 +24,9 @@ def _repository_root(start: Path | None = None) -> Path:
     raise AssertionError(msg)
 
 
-#: The checkout, and the library inside it. Everything path-shaped here starts
-#: from one of these two, so a move is one line rather than four -- which is how
-#: three of the four came to disagree the last time this tree changed shape.
-#:
-#: Deriving `SRC` from `REPO` rather than counting to it again is unobservable
-#: today and left that way deliberately: in this layout the two expressions
-#: name the same directory, so a mutation swapping them survives and no test can
-#: separate them. They part company exactly when the tree moves, which is the
-#: case this whole finder exists for and the one a test cannot stage.
+#: The checkout, and the library inside it. Everything path-shaped here starts from one
+#: of these two, so a move is one line rather than four -- which is how three of the
+#: four came to disagree the last time this tree changed shape.
 REPO = _repository_root()
 SRC = REPO / "src" / "kingfisher"
 
@@ -266,19 +260,11 @@ def test_the_second_distribution_is_in_scope():
     )
 
 
-#: What a prose reference can be rooted at, and the only form of it that can be
-#: checked. `models.yaml`, `run.py` and `uploads.provision` are shaped exactly
-#: like module paths; `infrastructure.harness.backend` cannot be anything else.
-#: Measured across this repository: the rooted form gives fifty references and
-#: finds thirteen that are wrong, while the unrestricted form gives 143 and calls
-#: 115 of them broken.
-#:
-#: Named for layers until three of these stopped being layers. `tools`, `skills`
-#: and `subagents` moved to the package root and fell out of the pattern with no
-#: rule going red, so prose about them went unchecked for as long as they have
-#: existed -- a blind spot introduced by the change that created them, which is
-#: exactly what a rule keyed to a fixed list of names will do when the list is a
-#: layout rather than a principle.
+#: What a prose reference can be rooted at, and the only form of it that can be checked.
+#: `models.yaml`, `run.py` and `uploads.provision` are shaped exactly like module paths;
+#: `infrastructure.harness.backend` cannot be anything else. Measured across this
+#: repository: the rooted form gives fifty references and finds thirteen that are wrong,
+#: while the unrestricted form gives 143 and calls 115 of them broken.
 def _prose_roots(root: Path = SRC) -> tuple[str, ...]:
     """Every package and root module a prose reference may be rooted at."""
     return tuple(sorted(
@@ -610,16 +596,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # functions behind an `ImportError` or a platform check, and a macOS install
     # never sees it.
     "infrastructure": frozenset({"sandlock", "yaml"}),
-    # Registering skills means handing them to the runtime that reads them:
-    # `registry` asks deepagents which skills an agent will actually have, and
-    # `backend` mounts the directory it reads them from. Neither can be done
-    # from outside, and inverting them behind a port would put one
-    # implementation behind an interface derived from it.
-    #
-    # This is the price of a kind owning its own registration, paid once here
-    # rather than argued at each import. `docs/decisions.md` records the trade;
-    # what this entry does is keep it *named*, so a third directory reaching the
-    # runtime is a line somebody writes rather than a thing that happens.
+    # Registering skills means handing them to the runtime that reads them: `registry`
+    # asks deepagents which skills an agent will actually have, and `backend` mounts the
+    # directory it reads them from. Neither can be done from outside, and inverting them
+    # behind a port would put one implementation behind an interface derived from it.
     "skills": frozenset({"deepagents", "langchain_core", "langgraph"}),
     # `tools.harness` reads the tool roster off a compiled graph, which is a
     # langgraph object, and resolves what a request may call against it. The
@@ -631,21 +611,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # reach the runtime, and the reason the swap boundary is now stated as a
     # list of areas rather than one directory.
     "subagents": frozenset({"deepagents", "langchain_core"}),
-    # The one consumer still in this distribution. `presentation` was the other
-    # and is now `kingfisher-service`, a package of its own with its own rules --
-    # so fastapi and uvicorn are no longer anything this table has an opinion
-    # about, and an area that named them would be permitting what it cannot see.
-    #
-    # `kingfisher_service` is foreign for exactly that reason, and named here
-    # because `kingfisher serve` is the one thing in this distribution allowed to
-    # reach for it -- inside a function, behind `except ImportError`, to say how
-    # to install it. The rule below keeps the *library* clear of it; this area is
-    # not covered by that rule, which is what makes naming it here the decision
-    # rather than an oversight.
-    # `dotenv` because the command reads `./.env` before anything asks the
-    # environment. A driver's business rather than the library's: `config_from_env`
-    # takes a mapping and does not care where it came from, which is what keeps
-    # this on one side of the line.
+    # The one consumer still in this distribution. `presentation` was the other and is
+    # now `kingfisher-service`, a package of its own with its own rules -- so fastapi
+    # and uvicorn are no longer anything this table has an opinion about, and an area
+    # that named them would be permitting what it cannot see.
     "presentation/cli": frozenset({"kingfisher_service", "dotenv"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
     # the table is total and an unlisted area cannot mean "anything goes".
@@ -751,21 +720,10 @@ def test_the_harness_package_is_the_one_speaking_to_the_harness():
     )
 
 
-#: Which flat `infrastructure/` modules may reach into `infrastructure/harness/`,
-#: and what each one reaches for. Deny by default, like `THIRD_PARTY`: an edge
-#: named nowhere below fails, so this table is what has to be edited to add one,
-#: and editing it is where someone asks whether the edge belongs.
-#:
-#: The split's argument was that the line runs *one way* -- harness modules read
-#: the adapters, not the reverse -- with a single exception reasoned about in the
-#: design note. That claim decayed without saying so: two more edges arrived
-#: nine hours after the note was written, neither of them wrong and neither of
-#: them noticed. This is the claim turned into a rule, which is the same move
-#: `_modules_in` made when nine rules quietly stopped covering a subpackage.
-#:
-#: The enforced import rule is scoped to *foreign* packages on purpose (L4a), so
-#: nothing here forbids these edges. What it forbids is a fourth one arriving
-#: unremarked.
+#: Which flat `infrastructure/` modules may reach into `infrastructure/harness/`, and
+#: what each one reaches for. Deny by default, like `THIRD_PARTY`: an edge named nowhere
+#: below fails, so this table is what has to be edited to add one, and editing it is
+#: where someone asks whether the edge belongs.
 def _harness_consumers() -> list[Path]:
     """Every module the harness table is about, in both layers that reach it."""
     return [
@@ -784,14 +742,8 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # registry is `skills.registry` now, which is not the harness, so this is
     # no longer an edge into it at all.
     "catalogue": frozenset(),
-    # Asks the registry what names are taken before accepting an upload, which
-    # is the same question `catalogue` asks and the same answer.
-    #
-    # Keyed `workspace.uploads` since the module moved into a subpackage: the
-    # key is a module's path below its layer, so grouping files renames their
-    # entries. That is the table working -- a move that silently kept an old key
-    # would be an edge nobody had named any more.
-    # The same edge, from the other asker, and gone the same way.
+    # Asks the registry what names are taken before accepting an upload, which is the
+    # same question `catalogue` asks and the same answer.
     "workspace.uploads": frozenset(),
     # Builds an agent to enumerate what it registered -- the only way to know
     # the built-in tool set is to assemble one and look.
@@ -1228,14 +1180,8 @@ def test_importing_kingfisher_does_not_pull_in_deepagents():
 LIGHT_EXPORTS = frozenset({
     "Capabilities", "Config", "ConfigError", "Request", "RunEvent", "RunOn",
     "RunResult", "SessionInfo",
-    # The errors a caller must tell apart. Public so a consumer outside the
-    # package can catch them by name -- the server being the first such
-    # consumer.
-    #
-    # It listed two saver builders as well, because `astream` once refused to
-    # run without an async one. `InMemorySaver` serves both halves now, so the
-    # server opens nothing and the builders went with the sqlite dependencies
-    # that carried them.
+    # The errors a caller must tell apart. Public so a consumer outside the package can
+    # catch them by name -- the server being the first such consumer.
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
     "UnknownReferenceError", "LocalFileStore",
@@ -1271,14 +1217,10 @@ LIGHT_EXPORTS = frozenset({
     # -- paying for three provider SDKs to find out where `skills/` goes would
     # be the wrong shape entirely.
     "paths_from_env", "WorkspacePaths",
-    # Seeding, and asking what a workspace offers. Measured at 21-50ms and
-    # 148-192 modules with no SDK loaded -- heavier than `system_prompt` at 90,
-    # because `yaml` and `importlib.metadata` come with them, and nowhere near
-    # the 3,100 a provider costs.
-    #
-    # `inventory` is light to *reach*, not to call: answering builds an agent,
-    # so `harness.agent` is imported inside the function. That is the shape
-    # this classification is about -- what a name costs to touch.
+    # Seeding, and asking what a workspace offers. Measured at 21-50ms and 148-192
+    # modules with no SDK loaded -- heavier than `system_prompt` at 90, because `yaml`
+    # and `importlib.metadata` come with them, and nowhere near the 3,100 a provider
+    # costs.
     "seed", "definitions_source", "kinds_at", "Seeded", "inventory", "Inventory",
     # Where a deployment reads from. Light for the reason `paths_from_env` is:
     # the question "which directories?" must not cost three provider SDKs, and
@@ -1716,23 +1658,9 @@ CALLER_FACING_ERRORS = frozenset({
 #: private -- `ConfigError` was public long before this rule existed -- it
 #: means a consumer is not expected to branch on it.
 DEPLOYMENT_ERRORS = frozenset({
-    # `MissingStoreError` is here rather than above on purpose: a request naming
-    # files by id with no `FileStore` wired is a deployment that forgot one, and
-    # nothing the caller sends can fix it.
-    #
-    # `AgentError` sits here and `SubagentError` sits above, which looks like an
-    # inconsistency and is the rule working: a caller may *upload* a subagent, so
-    # a malformed one is their text and their fault. Agents come from the
-    # catalogue only, so a malformed one is always the deployment's own file.
-    #
-    # `AccessError` is here for a reason worth stating, because "access" sounds
-    # caller-facing and is not. Every way of raising it is the *integrator*
-    # being wrong: a policy file that will not parse, a call that did not say
-    # who was calling, a group name outside the closed vocabulary. A caller who
-    # is merely denied something never sees it -- an asset out of their reach
-    # reads as one the workspace does not offer, so what reaches them is the
-    # `CapabilityError` that any absent name produces. If this ever becomes
-    # something a caller can provoke, it has moved above.
+    # `MissingStoreError` is here rather than above on purpose: a request naming files
+    # by id with no `FileStore` wired is a deployment that forgot one, and nothing the
+    # caller sends can fix it.
     "AccessError", "AgentError", "ConfigError", "DataError", "HostPathError",
     "LoadError", "MissingStoreError", "ToolError",
 })
@@ -1788,21 +1716,9 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
 # caller-facing errors, `async_checkpointer`, and a way to send a file.
 
 
-#: Every consumer held to the front door, and the directory each one lives in.
-#: The claim that any caller can drive this library is worth something only if
-#: the callers that ship with it are held to it -- which is why `offered` and
-#: `SKILL_LAYOUT` are public.
-#:
-#: The paths are here because one of them is not under `src/`. `presentation`
-#: used to be, and became `kingfisher-service`, a wheel of its own -- at which
-#: point this collector, which read `SRC / name`, stopped finding it. The rule
-#: kept its name, kept passing, and covered the CLI alone. A comment here said
-#: the service "holds itself to the same rule in its own tests"; it does not,
-#: and there is no architecture test under `service/tests/` at all.
-#:
-#: Kept in this suite rather than moved there, deliberately: the rule is about
-#: *this* package's public API, and a base that can break its own contract
-#: without its own tests noticing is the arrangement that produced the gap.
+#: Every consumer held to the front door, and the directory each one lives in. The claim
+#: that any caller can drive this library is worth something only if the callers that
+#: ship with it are held to it -- which is why `offered` and `SKILL_LAYOUT` are public.
 CONSUMERS: dict[str, Path] = {
     "cli": SRC / "presentation" / "cli",
     "kingfisher_service": REPO / "service" / "src" / "kingfisher_service",
@@ -1820,18 +1736,8 @@ def _reaches_past_the_public_api(module: str) -> bool:
     return not module.startswith("kingfisher.presentation.cli")
 
 
-#: Consumers that ship in this wheel, and may therefore reach for a name the
-#: front door does not carry.
-#:
-#: The door is a promise to callers *outside* the distribution, which is what
-#: makes the two rules below different rules rather than one applied unevenly.
-#: A stranger holding `pip install kingfisher` has the export list and nothing
-#: else; the command has the source tree it ships in.
-#:
-#: Named rather than derived from where the file sits, so a second family
-#: member is a decision somebody makes here -- the same reason `MAY_NAME_IT` in
-#: `test_the_base_stands_alone.py` lists a path instead of waving a rule
-#: through.
+#: Consumers that ship in this wheel, and may therefore reach for a name the front door
+#: does not carry.
 FAMILY = frozenset({"cli"})
 
 
@@ -2138,20 +2044,8 @@ def test_the_branch_reader_reads_branches():
 # could not have been right if revived. `Capabilities.intersect` was the same
 # shape, and T1 caught that one by hand.
 
-#: Where a caller may live. Tests deliberately do not count -- a test is what
-#: kept every instance of this alive.
-#:
-#: `tests/integration/driver.py` is in this list while living under `tests/`,
-#: which reads like a contradiction and is not. The rule is about *calls*: the
-#: driver calls `seed` in order to seed a workspace, where a test constructs a
-#: call in order to observe one. That difference is the whole subject here, and
-#: it does not depend on which directory the caller sits in.
-#:
-#: Named rather than derived, because getting this wrong is silent in the
-#: direction that matters. It was `main.py` at the repository root; when the
-#: library moved under `packages/` and this walk lost it, three live helpers were
-#: reported as defined for tests alone. Moving the driver into `tests/` did it
-#: again, to the same three.
+#: Where a caller may live. Tests deliberately do not count -- a test is what kept every
+#: instance of this alive.
 PRODUCTION = ("src/kingfisher", "tests/integration/driver.py", "evals")
 
 #: Names dispatched by something other than a call in this repository. Each is a
@@ -2192,15 +2086,9 @@ def _names_read(source: str) -> set[str]:
             seen.add(node.attr)
         elif isinstance(node, ast.ImportFrom):
             # Both halves, and the two forms differ. `from x import DIRECTORY as
-            # AGENT_DIRECTORY` reads `DIRECTORY` as surely as a bare import
-            # does; recording only the alias made the original invisible, so a
-            # constant reached this way by its only caller read as dead.
-            #
-            # It was invisible and harmless while *some other* constant of the
-            # same name was read plainly: `domain.agent.DIRECTORY` was aliased
-            # here and `domain.skill.DIRECTORY` was not, and this matches by
-            # bare name, so one sighting covered both. Moving the second one out
-            # is what removed the cover.
+            # AGENT_DIRECTORY` reads `DIRECTORY` as surely as a bare import does;
+            # recording only the alias made the original invisible, so a constant
+            # reached this way by its only caller read as dead.
             for alias in node.names:
                 seen.add(alias.name.split(".")[-1])
                 if alias.asname:
@@ -2311,20 +2199,10 @@ def test_nothing_is_defined_for_tests_alone():
 #: the rule already exempts, and reaching for this table instead would be the way
 #: to publish something without saying so.
 READ_ELSEWHERE = frozenset({
-    # The SSE event names. Nothing in `src/`, the driver, `evals/` or
-    # `service/src/` reads it -- `payloads.frame` puts `event.kind` on the wire
-    # straight from the event and only *mentions* `KINDS` in prose -- so its
-    # readers are the clients subscribing to those event names, and they are not
-    # in this repository to be counted.
-    #
-    # Which is why `AXES`' fix does not transfer. That one was deleted and
-    # re-derived in the tests that wanted it, because deriving it from
-    # `fields(Capabilities)` is one line and cannot drift from the type it asks.
-    # `KINDS` has nothing to derive from: it is the declaration, and the two
-    # rules above are what pin it -- one against the kinds the package
-    # constructs, one against the kinds it branches on. Deriving it in a test
-    # would leave both comparing a list against itself, which is the tautology
-    # the `AXES` commit deleted two tests for.
+    # The SSE event names. Nothing in `src/`, the driver, `evals/` or `service/src/`
+    # reads it -- `payloads.frame` puts `event.kind` on the wire straight from the event
+    # and only *mentions* `KINDS` in prose -- so its readers are the clients subscribing
+    # to those event names, and they are not in this repository to be counted.
     "KINDS",
     # The stop reasons, and the same argument one line for line: it goes on the
     # wire as `stop_reason` in the turn payload, so its readers are the clients

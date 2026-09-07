@@ -27,15 +27,6 @@ def normalize_answer(text: str) -> str:
 
 
 #: Why a turn stopped, and the whole of it.
-#:
-#: Named after the Messages API's `stop_reason` rather than invented, so a caller
-#: who has used one knows what to do with the other. The values are kingfisher's
-#: own because the bounds are: a turn here runs out of *seconds* or *steps*, never
-#: tokens, so `max_tokens` would be a familiar word for a thing that cannot
-#: happen.
-#:
-#: A tuple rather than a `Literal`: this grows, and a consumer meeting a reason it
-#: does not know should treat the turn as ended rather than fail.
 STOP_REASONS: tuple[str, ...] = (
     # The turn finished because the agent was done.
     "end_turn",
@@ -56,14 +47,10 @@ class RunResult:
     #: Machine-independent, so this is the one a caller somewhere else can use, and
     #: it pairs with `artifacts`, which is relative to the same root.
     virtual_dir: str = ""
-    #: Host paths, and the two fields here that must not leave the machine. They
-    #: name a directory on the server's disk, which a remote caller cannot read and
-    #: should not be told about. They are here because a *local* caller is on the
-    #: host: the driver prints `run_dir` to say where your files landed.
-    #:
-    #: Worth knowing before reaching for `json.dumps`: it raises on these rather
-    #: than serialising them, which is deliberate. The fix is to send `virtual_dir`
-    #: and `artifacts`, not to stringify these.
+    #: Host paths, and the two fields here that must not leave the machine. They name a
+    #: directory on the server's disk, which a remote caller cannot read and should not
+    #: be told about. They are here because a *local* caller is on the host: the driver
+    #: prints `run_dir` to say where your files landed.
     run_dir: Path = Path()
     log_path: Path = Path()
     #: Everything under `/derived` and `/memory` at the end of this turn, as paths
@@ -72,14 +59,9 @@ class RunResult:
     #: filesystem's, and a caller persisting incrementally diffs against the
     #: previous turn's manifest -- which also tells it what was deleted.
     artifacts: tuple[str, ...] = ()
-    #: Why this turn stopped. `end_turn` is the ordinary case; anything else means
-    #: the answer is what had been reached when a bound was hit, and `artifacts`
-    #: still lists what was written -- discarding either would hide work rather
-    #: than undo it.
-    #:
-    #: An enumerated field rather than a flag, which is the shape the Messages API
-    #: and every provider like it settled on: a flag cannot say *which* bound was
-    #: hit, and it grows without another field being added.
+    #: Why this turn stopped. `end_turn` is the ordinary case; anything else means the
+    #: answer is what had been reached when a bound was hit, and `artifacts` still lists
+    #: what was written -- discarding either would hide work rather than undo it.
     stop_reason: str = "end_turn"
 
 

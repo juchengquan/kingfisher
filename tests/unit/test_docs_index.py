@@ -233,17 +233,12 @@ PYTHON_FENCE = re.compile(r"^```python\n(.*?)^```", re.M | re.S)
 
 #: Which documents have their Python held to the package, and which do not.
 #:
-#: The split is the one `CLAUDE.md` already draws. A document describing what
-#: exists can be checked against it. **A proposal names things that do not exist
-#: yet, which is what makes it a proposal** -- so resolving its imports would
-#: fail for the one reason that is not a defect. Every entry is checked today,
-#: because every document left describes what exists; the `False` case is kept
-#: in the type rather than deleted, since the next proposal will need it.
-#:
-#: Deny by default. A new document with Python in it fails
-#: `test_every_document_with_python_is_classified` until it appears here, which
-#: is where somebody decides which kind it is rather than discovering later that
-#: nothing looked.
+#: The split is the one `CLAUDE.md` already draws. A document describing what exists can
+#: be checked against it. **A proposal names things that do not exist yet, which is what
+#: makes it a proposal** -- so resolving its imports would fail for the one reason that
+#: is not a defect. Every entry is checked today, because every document left describes
+#: what exists; the `False` case is kept in the type rather than deleted, since the next
+#: proposal will need it.
 CHECKED_SNIPPETS: dict[str, bool] = {
     "README.md": True,
     "docs/guides/formats.md": True,

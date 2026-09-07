@@ -96,14 +96,10 @@ class WorkspacePaths:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
-    #: The two single files, relocated. Not beside the four above because they
-    #: are not directories and do not move together with them: one reviewed
-    #: `models.yaml` shared across a fleet is the arrangement `compose.yaml`
-    #: ships, and a group policy may sit somewhere else again.
-    #:
-    #: Carried here rather than only on `Config` because laying a workspace out
-    #: places the worked example for each, and that runs before a catalogue can
-    #: be read. A relocation this record cannot see is one seeding writes past.
+    #: The two single files, relocated. Not beside the four above because they are not
+    #: directories and do not move together with them: one reviewed `models.yaml` shared
+    #: across a fleet is the arrangement `compose.yaml` ships, and a group policy may
+    #: sit somewhere else again.
     models_file: Path | None = None
     groups_file: Path | None = None
     #: Where definitions are *copied from*, which is the opposite direction to
@@ -149,14 +145,8 @@ class Models:
     #: -- `model_catalogue.load` refuses a file where it is not, which is what
     #: makes `resolve()` total.
     default: str
-    #: Models this file defines that this machine cannot reach, and why -- keyed
-    #: by model name, valued as the clause `resolve` drops into its refusal.
-    #:
-    #: Not somewhere to look a model up. `models` is what can run and stays the
-    #: only answer to that; this exists so that "there is no such model" can stop
-    #: being said about a model that is right there in the file, on an endpoint
-    #: with no key. Named to make the mistake read wrong: `unreachable[name]`
-    #: gives a sentence, never a profile.
+    #: Models this file defines that this machine cannot reach, and why -- keyed by
+    #: model name, valued as the clause `resolve` drops into its refusal.
     unreachable: Mapping[str, str] = field(default_factory=dict)
     #: Where all of it was read from. Informational, so a refusal can name the
     #: file that should have defined what it could not find.
@@ -227,45 +217,12 @@ class Config:
     #: invariants between its parts that siblings of `shell_sandbox` could not
     #: express. See `Models`.
     models: Models
-    #: Which groups reach which agents, subagents and tools, or `None` where
-    #: this deployment writes no policy.
-    #:
-    #: Beside `models` because it is the same kind of thing: a static,
-    #: operator-authored table, read once at startup, whose absence is a
-    #: legitimate state rather than a setting somebody forgot. `None` is the
-    #: whole of what "this deployment does not control access by group" means,
-    #: and every deployment that predates this field has exactly that.
-    #:
-    #: Read once rather than per turn, unlike the catalogue. The catalogue is
-    #: re-read because a workspace directory is edited between turns and a
-    #: stale view of it is a wrong answer about what exists; a policy is a
-    #: deployment setting, and a revocation lands on restart the way every
-    #: other one here does.
+    #: Which groups reach which agents, subagents and tools, or `None` where this
+    #: deployment writes no policy.
     access: Groups | None = None
     #: Where the policy above was looked for, whether or not one was found.
-    #:
-    #: Beside `access` rather than on `Groups`, and the absent case is what
-    #: decides it: with no file there is no `Groups` to carry a path, and "not
-    #: set, and here is where I looked" is the one line this field exists to
-    #: make possible. A `groups.yaml` written one directory off leaves a
-    #: deployment silently open to everyone, and the symptom is nothing at all.
-    #:
-    #: It would also put a filesystem path on a `domain/` record whose own
-    #: docstring says it reads no file. `Models` carries its `source` because it
-    #: sits here, above the layers, and because a model catalogue is required --
-    #: there is always an object to hang it on.
-    #:
-    #: `None` when nothing resolved a path: a `Config` assembled in code rather
-    #: than read from the environment.
     access_source: Path | None = None
     #: What bounds one shell command or one interpreter run.
-    #:
-    #: Not the model timeout. This was `timeout_s` and served three unrelated
-    #: consumers -- the model call, `execute`, and the interpreter sandbox --
-    #: which is the same conflation `api_style` was. The model half moved into
-    #: the table, where it is per-model; what is left is renamed for the two it
-    #: still bounds. Splitting those two further is deferred until someone has a
-    #: case for diverging values.
     execution_timeout_s: int = 120
     # What one session may consume. Session-scoped because that is what
     # kingfisher can see: it is tenant-blind by design (T1), so bounding a
@@ -320,80 +277,32 @@ class Config:
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.
     assets: Path | None = None
-    # Where a session's files are kept when the machine may not keep them. Unset
-    # means the session directory is the only copy, which is right wherever the
-    # host is allowed to hold data and is a silent disaster where it is not --
-    # `doctor` says so when the workspace turns out to be in memory.
-    #
-    # A directory, which is the shape a deployment keeping sessions on this host
-    # names. Somewhere else entirely is `session_store_factory` below.
-    #
-    # This comment used to end "a deployment reaching for that passes an object
-    # rather than a path", and both halves of that were wrong. An environment
-    # variable can name a factory -- `models.yaml` already reaches a chat class
-    # through a `module:Name` string -- and passing an object only reaches the
-    # one construction site a deployment controls, which is neither of the two
-    # kingfisher ships.
+    # Where a session's files are kept when the machine may not keep them. Unset means
+    # the session directory is the only copy, which is right wherever the host is
+    # allowed to hold data and is a silent disaster where it is not -- `doctor` says so
+    # when the workspace turns out to be in memory.
     session_store: Path | None = None
-    # The same port, named rather than built here: `module:name` for something
-    # callable with no arguments that returns a `SessionStore`.
-    #
-    # A factory rather than a class, because kingfisher does not know whether a
-    # store wants a bucket, a DSN or a mount point, and inventing a URL grammar
-    # for stores it knows nothing about is the version of this that ages worst.
-    # The deployment's own configuration stays the deployment's.
-    #
-    # Read here rather than only by the service, so that both entry points get
-    # it. That is the whole reason this is a setting and not a constructor
-    # argument -- `presentation/cli/__main__.py` builds its own `Kingfisher` and
-    # there is nowhere to point it.
-    #
-    # An environment variable and never a workspace file. `confinement`'s
-    # writable roots are the whole workspace with only `skills/` carved out, so
-    # a settings file naming code to import would be code the agent can edit --
-    # the rule `confinement.resolve` already states about its own profile.
+    # The same port, named rather than built here: `module:name` for something callable
+    # with no arguments that returns a `SessionStore`.
     session_store_factory: str | None = None
-    # What this deployment *wires*. Distinct from `Capabilities`, which is what
-    # a single request may *use* of it -- and the distinction is not stylistic:
-    # these two flags shape `render_system_prompt`, which is the cached prefix
-    # every turn is compared against. Varying them per request would trade a
-    # measured ~90% cache hit for a per-caller prompt.
-    #
-    # So: wiring is deployment-stable and lives here; narrowing is per-turn and
-    # lives on the request. Narrowing may only subtract -- a request asking for
-    # memory this deployment never wired does not get it.
-    #
-    # Off by default: a self-editing prompt makes runs non-reproducible, and
-    # reproducibility is what the smoke task depends on.
+    # What this deployment *wires*. Distinct from `Capabilities`, which is what a single
+    # request may *use* of it -- and the distinction is not stylistic: these two flags
+    # shape `render_system_prompt`, which is the cached prefix every turn is compared
+    # against. Varying them per request would trade a measured ~90% cache hit for a
+    # per-caller prompt.
     skills_enabled: bool = False
     memory_enabled: bool = False
-    # A JavaScript sandbox the agent can compute in: no filesystem, no network,
-    # capped memory and time, and reachable tools limited to what the request
-    # granted. It is the one execution surface `execute` can never be, which is
-    # why a deployment may want both.
-    #
-    # Dispatching subagents from inside it needs the async path -- `task()` in
-    # the REPL awaits, and a sync saver raises partway through a workflow.
-    #
-    # Off by default. The sandbox ships with kingfisher rather than behind an
-    # extra: the flag is already the gate, and a second one bought nothing but a
-    # bare ModuleNotFoundError for anyone who set the flag without it. Importing
-    # it is deferred to the point of use, so an install that never turns this on
-    # pays nothing for carrying it.
+    # A JavaScript sandbox the agent can compute in: no filesystem, no network, capped
+    # memory and time, and reachable tools limited to what the request granted. It is
+    # the one execution surface `execute` can never be, which is why a deployment may
+    # want both.
     interpreter_enabled: bool = False
-    # Whether a turn remembers the one before it. On, because a session that
-    # forgets is a surprising default for something that issues session ids.
+    # Whether a turn remembers the one before it. On, because a session that forgets is
+    # a surprising default for something that issues session ids.
     #
-    # Off makes a deployment stateless in the only sense kingfisher can be:
-    # there is no checkpointer, so no database, nothing to contend on, orphan or
-    # vacuum. Files are unaffected -- `/data`, `/derived` and `/memory` are on
-    # disk and a resumed session still finds them. It is the conversation that
-    # goes, so `--session` still names the same files while the agent starts each
-    # turn cold.
-    #
-    # Worth turning off for a request/response API, where a caller sends one task
-    # and reads one answer. Measured: with it on, a two-turn workspace carries a
-    # ~0.4MB database it never reads back.
+    # Worth turning off for a request/response API, where a caller sends one task and
+    # reads one answer. Measured: with it on, a two-turn workspace carries a ~0.4MB
+    # database it never reads back.
     conversation_enabled: bool = True
 
     def __post_init__(self) -> None:

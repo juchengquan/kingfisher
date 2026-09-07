@@ -332,29 +332,20 @@ def _fence_for(
     if confined.mechanism not in ("bubblewrap", "Landlock"):
         return None
 
-    # One answer for both fences rather than the same three lines twice.
-    # `argv_for` and `policy_for` take the same arguments and mean the same
-    # thing by them, so a path added to one branch and not the other fences the
-    # shell differently depending on which mechanism the host happens to have --
-    # and the suite would not catch it, because a run only ever exercises the
-    # one mechanism its own kernel offers. That is the divergence this function
-    # already avoids one question earlier by deriving from `Confinement`.
+    # One answer for both fences rather than the same three lines twice. `argv_for` and
+    # `policy_for` take the same arguments and mean the same thing by them, so a path
+    # added to one branch and not the other fences the shell differently depending on
+    # which mechanism the host happens to have -- and the suite would not catch it,
+    # because a run only ever exercises the one mechanism its own kernel offers. That is
+    # the divergence this function already avoids one question earlier by deriving from
+    # `Confinement`.
     #
-    # The toolchain, because `shell_env` puts this venv's `bin` first on the
-    # agent's `PATH` and an allow-list that has not heard of it does not refuse
-    # -- it falls through to whatever interpreter is under `/usr`, which is a
-    # different Python without the `agent` dependency group, and the venv's
-    # `site-packages` is unreadable besides. Silent, and invisible on macOS,
-    # where the profile is `(allow default)` and has granted the same roots
-    # through `readable_roots` since the day denying the home broke Python
-    # there.
-    #
-    # Not `readable_roots`, which is the obvious call and the wrong one: it also
-    # returns the *workspace*, which is right where the home is denied and the
-    # workspace re-allowed inside it, and catastrophic here. Sessions live under
-    # the workspace, so granting it hands every tenant back the directory this
-    # fence exists to take away -- measured, before the fence: tenant B read
-    # tenant A's `derived/secret.txt` with `cat ../<A>/...`, exit 0.
+    # Not `readable_roots`, which is the obvious call and the wrong one: it also returns
+    # the *workspace*, which is right where the home is denied and the workspace
+    # re-allowed inside it, and catastrophic here. Sessions live under the workspace, so
+    # granting it hands every tenant back the directory this fence exists to take away
+    # -- measured, before the fence: tenant B read tenant A's `derived/secret.txt` with
+    # `cat ../<A>/...`, exit 0.
     readable = [*confinement.toolchain_roots(cfg.shell_path_extra)]
     if skills_dir is not None:
         readable.append(skills_dir)
@@ -483,15 +474,9 @@ def build_backend(
 
 
 #: Which arguments name a file. The convention this repository already keeps --
-#: `test_every_shipped_tool_taking_a_path_says_which_kind` walks the shipped
-#: tools looking for exactly this parameter name -- so widening it is a line
-#: here and a test, rather than a design question.
-#:
-#: A tool calling it `input_file` is missed, and that is visible rather than
-#: silent: the translation does not happen, the tool gets the agent's own name,
-#: and it fails to find the file on the first call. The failure that matters is
-#: the other direction, and it cannot happen -- a name that is *not* translated
-#: cannot reach outside the session, because nothing gave it a way to.
+#: `test_every_shipped_tool_taking_a_path_says_which_kind` walks the shipped tools
+#: looking for exactly this parameter name -- so widening it is a line here and a test,
+#: rather than a design question.
 PATH_ARGUMENTS: frozenset[str] = frozenset({"path"})
 
 
@@ -540,20 +525,16 @@ class WorkspaceToolPaths(AgentMiddleware):
         if not isinstance(value, str) or not value.strip():
             return value
         landed = within(self.session_dir, value.lstrip("/"))
-        # The second check `within` tells adapters to do, and it is not optional
-        # here: that one is lexical, on purpose, because the domain may not touch
-        # the filesystem -- and a session directory is one the agent can write
-        # to. `execute` is rooted there, so it can make a symlink pointing out,
-        # hand a tool the virtual path to it, and be read the target.
+        # The second check `within` tells adapters to do, and it is not optional here:
+        # that one is lexical, on purpose, because the domain may not touch the
+        # filesystem -- and a session directory is one the agent can write to. `execute`
+        # is rooted there, so it can make a symlink pointing out, hand a tool the
+        # virtual path to it, and be read the target.
         #
         # Measured before this existed: a link at `/derived/link.txt` pointing at
-        # another session returned `TENANT-A-PRIVATE` through a tool, while
-        # `read_file` refused the same path. deepagents resolves and compares;
-        # this had only half of that.
-        #
-        # Both sides resolved, since a workspace can itself sit under a symlink
-        # -- `/tmp` is `/private/tmp` on macOS -- and comparing one resolved path
-        # to one unresolved root refuses everything.
+        # another session returned `TENANT-A-PRIVATE` through a tool, while `read_file`
+        # refused the same path. deepagents resolves and compares; this had only half of
+        # that.
         real = landed.resolve()
         if not real.is_relative_to(self.session_dir.resolve()):
             msg = (

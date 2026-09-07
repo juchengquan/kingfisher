@@ -152,20 +152,6 @@ if TYPE_CHECKING:
 
 
 #: `kingfisher.origins`, and deliberately not `kingfisher`.
-#:
-#: The library has had no logger until now, and the name matters more than that
-#: sounds: `kingfisher.audit` already exists in the service, whose own comment
-#: says it is "unconfigured. Nothing is written until a deployment attaches a
-#: handler, which is how 'may session ids be written here' stays a decision
-#: somebody makes rather than a default they inherit". A logger named
-#: `kingfisher` is that one's *parent*, so raising it to INFO -- which the
-#: server does, to get this line -- would start writing session ids as a side
-#: effect of asking where the definitions live. A sibling cannot.
-#:
-#: One record, at construction, and that is the whole budget. `print` is not an
-#: option: a library that writes to stdout cannot be used by a server, which is
-#: said twice in this codebase. `warnings.warn` is the wrong instrument -- it
-#: means "this is probably not what you meant", and a summary is not that.
 logger = logging.getLogger("kingfisher.origins")
 
 #: "Nothing was supplied", distinct from `None`, which is a deliberate choice to
@@ -239,36 +225,15 @@ class Kingfisher(Sessions, Disposal):
         # to say so. `--list` deliberately does not do this -- see `warm`.
         self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
 
-        # Injected, or derived from configuration, or nothing -- the same
-        # order `catalogue` follows and for the same reason: derive from `cfg`,
-        # never invent.
-        #
-        # Configuration now has two ways to say it, and this is where they meet:
-        # a factory for a store that is not a directory on this host, a
-        # directory for one that is. `Config.__post_init__` has already refused
-        # a deployment that set both, so the order here settles nothing -- it
-        # reads as precedence and never acts as any.
-        #
-        # Written out rather than chained with `or`, which is how the middle
-        # rung was first spelled and is a bug waiting for the first store that
-        # defines `__len__`: an empty one would be falsy, and a deployment's
-        # store would be silently replaced by the fallback below it.
+        # Injected, or derived from configuration, or nothing -- the same order
+        # `catalogue` follows and for the same reason: derive from `cfg`, never invent.
         self.sessions_store: SessionStore | None = _session_store(sessions, self.cfg)
         self.dirs: Any = dirs if dirs is not None else LocalSessionDirs()
-        # Where a session's files are for the length of a turn. The default
-        # keeps them under the workspace and leaves them there, which is what
-        # this did before there was a port for it; a deployment whose tree
-        # exists only while a turn runs supplies its own and gets the release
-        # for free, because the turn is what closes it.
-        #
-        # This governs the *turn*, and only the turn. `sessions()`, `reap` and
-        # `session_bytes` still read `sessions_root(workspace)`, so a provider
-        # that puts its sessions elsewhere gets an inventory that reports nothing
-        # and a janitor with nothing to sweep. That is survivable for a tree
-        # whose whole point is not to outlive the turn -- there is nothing to
-        # inventory -- and wrong for one that does. Whichever it is, the store
-        # is what a caller should be asking, and that is not what those three
-        # ask today.
+        # Where a session's files are for the length of a turn. The default keeps them
+        # under the workspace and leaves them there, which is what this did before there
+        # was a port for it; a deployment whose tree exists only while a turn runs
+        # supplies its own and gets the release for free, because the turn is what
+        # closes it.
         self.session_root: SessionRoot = session_root or LocalSessionRoot(self.workspace)
         # A callable, and only a callable. A runner is built for one turn --
         # kingfisher's own Landlock fence is, because its policy is generated
@@ -291,15 +256,10 @@ class Kingfisher(Sessions, Disposal):
         # could delete. `state_dir` is the one place the agent never addresses.
         self._claims: Path = self.cfg.state_dir / "claims"
         self.dirs.ensure(self._claims)
-        # Three shapes, and the difference is who owns the connection. An
-        # instance is a shared store the deployment made and manages; a callable
-        # is a factory this service calls per session and closes after the turn;
-        # `None` means the default, which is a database inside each session.
-        #
-        # `_shared` is the instance case only. `Session.discard` and `reap` use
-        # it to forget a thread, and both correctly do nothing when it is absent:
-        # a per-session database is deleted by removing the directory it sits in,
-        # which is the whole reason orphaned threads stop being possible.
+        # Three shapes, and the difference is who owns the connection. An instance is a
+        # shared store the deployment made and manages; a callable is a factory this
+        # service calls per session and closes after the turn; `None` means the default,
+        # which is a database inside each session.
         self.threads: Any = threads
         self._shared: Any = threads if (threads is not None and not callable(threads)) else None
         # No default. A deployment that never serves uploaded definitions has
@@ -329,27 +289,17 @@ class Kingfisher(Sessions, Disposal):
         # its own guard for `build_agent`, which takes a registry directly.
         refuse_unbuildable_middleware(self.middleware)
         self._graph = graph
-        # There is nothing to reconcile, and that is the shape of the design
-        # rather than an omission. Audiences live in the definitions, so a
-        # definition *is* the asset it is about -- there is no such thing as a
-        # line naming something the workspace does not offer, and a definition
-        # naming a tool that does not exist was already refused by
-        # `Offering.refuse_unknown` long before any of this.
-        #
-        # What is left to say is what the vocabulary cannot: which definitions
-        # restrict nobody. Default-open must not also be silent.
+        # There is nothing to reconcile, and that is the shape of the design rather than
+        # an omission. Audiences live in the definitions, so a definition *is* the asset
+        # it is about -- there is no such thing as a line naming something the workspace
+        # does not offer, and a definition naming a tool that does not exist was already
+        # refused by `Offering.refuse_unknown` long before any of this.
         self.access: Groups | None = self.cfg.access
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
-            # One walk of the definitions, not three. `defined_subagents` reads
-            # a directory, and asking it once per question is how this came to
-            # do it three times at every startup.
-            #
-            # `session_dir=None` because this is the shared catalogue, before
-            # any session exists. What a session adds is a request's own upload,
-            # which is the caller's own text and carries no audience anyone else
-            # wrote -- so the listing, which may be describing one, passes its
-            # own set to the same functions.
+            # One walk of the definitions, not three. `defined_subagents` reads a
+            # directory, and asking it once per question is how this came to do it three
+            # times at every startup.
             kinds = (
                 ("agent", self.catalogue.agents.specs),
                 ("subagent", defined_subagents(self.cfg, None, catalogue=self.catalogue)),
@@ -359,15 +309,9 @@ class Kingfisher(Sessions, Disposal):
             access.refuse_undeclared(*kinds, vocabulary=self.access)
             self.access_report = access.audit(*kinds, vocabulary=self.access)
 
-        # Last, so the line reports what was resolved rather than what was
-        # asked for -- and so a wiring failure raises instead of announcing a
-        # deployment that never came up.
-        #
-        # Guarded rather than left to the `%s`, which is what `audit._write`
-        # does and for the same reason: the argument here is a *built string*,
-        # so deferring the interpolation would defer nothing. With no logging
-        # configured this costs one attribute lookup and the record is never
-        # assembled.
+        # Last, so the line reports what was resolved rather than what was asked for --
+        # and so a wiring failure raises instead of announcing a deployment that never
+        # came up.
         if logger.isEnabledFor(logging.INFO):
             logger.info("reading from: %s", self.origins.line())
 
@@ -500,15 +444,11 @@ class Kingfisher(Sessions, Disposal):
     ) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue."""
         offered = self.catalogue.agents.specs
-        # Filtered before the listing is built, not after, so the message a
-        # caller reads never names an agent they cannot open. An agent out of
-        # reach is spelled exactly the way an agent that was never written is:
-        # anything else lets a caller enumerate the catalogue by guessing, and
-        # sends them off to try something they will only be refused for.
-        #
-        # An agent is not a `Capabilities` axis, which is why this is here and
-        # not in the grant: a request names one before there is anything to
-        # narrow, so the check has to be at the moment the name is resolved.
+        # Filtered before the listing is built, not after, so the message a caller reads
+        # never names an agent they cannot open. An agent out of reach is spelled
+        # exactly the way an agent that was never written is: anything else lets a
+        # caller enumerate the catalogue by guessing, and sends them off to try
+        # something they will only be refused for.
         if (reach := self.access) is not None:
             if groups is None:
                 msg = (
@@ -523,15 +463,11 @@ class Kingfisher(Sessions, Disposal):
                     n: spec for n, spec in offered.items() if reaches(spec.groups, held)
                 }
         listing = ", ".join(sorted(offered)) if offered else "none"
-        # Two refusals, one remedy, and the remedy is different when there is
-        # nothing at all. `SEED_HINT` says `--from DIR`, which needs a DIR --
-        # and `SUGGESTION` names none to a reader who installed the package,
-        # because neither directory it could name exists for them. Correct, and
-        # a dead end: the next thing that reader needs is the file itself.
-        #
-        # `model_catalogue` answers the same shape of question the same way,
-        # printing a working catalogue inline. This is that, for the other file
-        # a workspace cannot run without.
+        # Two refusals, one remedy, and the remedy is different when there is nothing at
+        # all. `SEED_HINT` says `--from DIR`, which needs a DIR -- and `SUGGESTION`
+        # names none to a reader who installed the package, because neither directory it
+        # could name exists for them. Correct, and a dead end: the next thing that
+        # reader needs is the file itself.
         empty = "" if offered else f" -- try {SEED_HINT}, or write one:\n\n{STARTER_AGENT}"
         if name is None:
             msg = f"this request names no agent; this workspace offers {listing}{empty}"
@@ -780,15 +716,10 @@ class Kingfisher(Sessions, Disposal):
         self._record(prepared)
         kept = collect_artifacts(prepared.session.directory)
         if self.sessions_store is not None:
-            # The transcript is named separately rather than collected. It sits
-            # at the session root, and `collect_artifacts` walks `/derived` and
-            # `/memory` -- so a first draft wrote it and never kept it, and a
-            # session that outlived its machine came back with its files and no
-            # conversation.
-            #
-            # And it stays out of `kept`, which is what the caller is handed:
-            # `artifacts` is what a turn *produced*, and a transcript is
-            # plumbing for the same reason `.home` is.
+            # The transcript is named separately rather than collected. It sits at the
+            # session root, and `collect_artifacts` walks `/derived` and `/memory` -- so
+            # a first draft wrote it and never kept it, and a session that outlived its
+            # machine came back with its files and no conversation.
             keep_from(
                 self.sessions_store,
                 prepared.session.id,

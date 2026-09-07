@@ -59,14 +59,11 @@ def bubblewrap_available() -> bool:
     if platform.system() != "Linux" or shutil.which("bwrap") is None:
         return False
     try:
-        # `/` read-only, so this asks one question -- can a namespace be made --
-        # and not a second one about which paths a real policy binds. The first
-        # version bound `/usr` and ran `/bin/true`, which is not in `/usr`: it
-        # reported "unavailable" on a host where bubblewrap worked perfectly.
-        # Wrong in the safe direction, and wrong.
-        #
-        # `which` above resolved it; using that path rather than the name keeps
-        # the probe honest about which binary answered.
+        # `/` read-only, so this asks one question -- can a namespace be made -- and not
+        # a second one about which paths a real policy binds. The first version bound
+        # `/usr` and ran `/bin/true`, which is not in `/usr`: it reported "unavailable"
+        # on a host where bubblewrap worked perfectly. Wrong in the safe direction, and
+        # wrong.
         done = subprocess.run(  # noqa: S603 -- fixed argv, no shell, no caller input
             [str(shutil.which("bwrap")), "--ro-bind", "/", "/", "--unshare-all", "/bin/true"],
             capture_output=True,

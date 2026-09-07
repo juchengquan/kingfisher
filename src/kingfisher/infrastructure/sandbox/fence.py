@@ -174,19 +174,11 @@ class LandlockRunner:
                 exit_code=124,
             )
         except (OSError, subprocess.SubprocessError) as failed:
-            # The fence failing to *build* used to arrive as an exit code with
-            # two empty byte strings, which is what a command with no output
-            # looks like -- so a fence that never applied read as a broken
-            # image. Both types are caught because a `preexec_fn` that raises
-            # comes back as a `SubprocessError` wrapping the child's exception
-            # rather than as the exception itself.
-            #
-            # Failing closed either way: the child is already dead, so there is
-            # no unfenced run to leak. What this decides is only whether anyone
-            # is told why -- and mostly they cannot be. `subprocess` discards
-            # the child's exception and raises "Exception occurred in
-            # preexec_fn." with no detail, so the message says which side failed
-            # rather than pretending to a reason it was not given.
+            # The fence failing to *build* used to arrive as an exit code with two empty
+            # byte strings, which is what a command with no output looks like -- so a
+            # fence that never applied read as a broken image. Both types are caught
+            # because a `preexec_fn` that raises comes back as a `SubprocessError`
+            # wrapping the child's exception rather than as the exception itself.
             return CommandResult(
                 output=(
                     f"[fence] the command did not run: the Landlock fence could not be "

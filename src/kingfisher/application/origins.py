@@ -23,20 +23,6 @@ if TYPE_CHECKING:
 __all__ = ["Kind", "Origin", "Origins"]
 
 #: What an entry turned out to be.
-#:
-#: `default` is the derived location -- what kingfisher would use having been
-#: told nothing. `relocated` is any other configured path, including one a
-#: deployment named that happens to be somewhere else entirely; the two are
-#: separated because "empty" means opposite things across that line, and a
-#: consumer should not have to test whether a string starts with a dot.
-#:
-#: `overridden` is the one worth being loud about: the configuration says one
-#: place and something else is being read. A deployment in that state has a
-#: setting that does nothing, and somebody will edit it and watch nothing change.
-#:
-#: `supplied` is a repository with no directory behind it at all. `unset` is an
-#: optional thing nobody configured, and carries where it was looked for when
-#: there is such a place.
 Kind = Literal["default", "relocated", "overridden", "supplied", "unset"]
 
 

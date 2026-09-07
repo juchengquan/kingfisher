@@ -40,15 +40,10 @@ def serve(settings: ServiceConfig) -> None:
 
 def main() -> int:
     """The console entry point. Returns an exit code rather than calling `exit`."""
-    # WARNING at the root, INFO for the three that have something to say.
-    # Setting the root to INFO turns on every library at once -- httpx then logs
-    # a line per outbound model call, which is noise in a server and the sort of
-    # default that later logs something nobody meant to keep.
-    #
-    # `kingfisher.origins` and not `kingfisher`, which would be the parent of
-    # `kingfisher.audit` as well -- and that one is unconfigured on purpose, so
-    # that writing session ids stays a decision a deployment makes. Asking where
-    # the definitions live must not turn it on.
+    # WARNING at the root, INFO for the three that have something to say. Setting the
+    # root to INFO turns on every library at once -- httpx then logs a line per outbound
+    # model call, which is noise in a server and the sort of default that later logs
+    # something nobody meant to keep.
     logging.basicConfig(level=logging.WARNING, format="%(asctime)s %(name)s %(message)s")
     logging.getLogger("kingfisher_service").setLevel(logging.INFO)
     logging.getLogger("kingfisher.origins").setLevel(logging.INFO)

@@ -25,22 +25,9 @@ from tests.conftest import FakeToolCallingModel, repository_root
 def test_every_preset_subagent_parses(shipped):
     specs = LocalSubagentRepository(shipped / "subagents").specs
 
-    # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the
-    # same: a subagent is named by its `name:` field, so a folder cannot reach
-    # it. Its presence in this flat set is the assertion that nesting works.
-    #
-    # `redactor` ships in a folder too, and in the other kind: `subagents/
-    # redactor/` holds the definition it is named after, which makes it that
-    # delegate's bundle. It is named `redactor` here for the same reason
-    # `profiler` is named `profiler` -- the folder decides what a definition
-    # *brings*, never what it is called.
-    # `first-look` is the third shape: a Python module that assembles its own
-    # graph and exports it as `SUBAGENTS`. It has no `system_prompt` and cannot
-    # -- whatever prompt it uses is inside the graph -- which is why the loop
-    # below asks each spec for the half it actually has.
-    # `sweeper` is the fourth shape and the newest: a definition that names
-    # middleware, which is why `seed` leaves it behind and why it lives here
-    # rather than in a folder of its own. It parses like any other.
+    # `profiler` ships in `subagents/analysis/`, and is named `profiler` all the same: a
+    # subagent is named by its `name:` field, so a folder cannot reach it. Its presence
+    # in this flat set is the assertion that nesting works.
     assert set(specs) == {
         "auditor",
         "reviewer",

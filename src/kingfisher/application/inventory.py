@@ -43,15 +43,11 @@ _NO_AUDIENCES: Mapping[str, Mapping[str, Stated]] = MappingProxyType({})
 class Inventory:
     """What this workspace offers right now, per kind, with where each came from."""
 
-    #: Where every part of this deployment was read from, including the four
-    #: catalogue directories. One record rather than the three loose strings
-    #: that were here -- `skills_source`, `subagents_source`, `agents_source` --
-    #: which named three of the four kinds and left `tools` out, because a
-    #: fourth field is a thing somebody has to remember to add and nobody did.
-    #:
-    #: It carries the workspace too, so `Inventory` no longer holds its own. Two
-    #: fields answering one question is the drift this record exists to end, and
-    #: `render` used to take a third answer as an argument.
+    #: Where every part of this deployment was read from, including the four catalogue
+    #: directories. One record rather than the three loose strings that were here --
+    #: `skills_source`, `subagents_source`, `agents_source` -- which named three of the
+    #: four kinds and left `tools` out, because a fourth field is a thing somebody has
+    #: to remember to add and nobody did.
     origins: Origins
 
     #: Agent name -> its description. First in the record because it is first in
@@ -116,14 +112,10 @@ class Inventory:
     #: `tools_error`, so a listing says which delegate to go and look at.
     bundles_error: str | None = None
 
-    #: Which of them are graphs the workspace built rather than definitions
-    #: kingfisher assembles. Carried because it changes what the rest of the
-    #: listing *means* for them: deepagents runs a compiled graph as given and
-    #: never applies a tool allowlist to it, so `--tools` is not a limit on one.
-    #:
-    #: A separate tuple rather than a flag folded into `subagents`, whose values
-    #: are descriptions and are printed as such. Two facts about one name, and
-    #: the second one is about a minority.
+    #: Which of them are graphs the workspace built rather than definitions kingfisher
+    #: assembles. Carried because it changes what the rest of the listing *means* for
+    #: them: deepagents runs a compiled graph as given and never applies a tool
+    #: allowlist to it, so `--tools` is not a limit on one.
     compiled_subagents: tuple[str, ...] = ()
 
     #: Kept so a caller does not have to reach for `cfg` to know whether an
@@ -247,14 +239,10 @@ def _access(
     stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
     if cfg.access is None:
         return stated, AccessReport(), None, {}
-    # The same walk `Kingfisher` runs at construction, and the same functions --
-    # which is the point. A listing that disagreed with startup about who
-    # reaches what would be worse than neither saying anything, and until these
-    # were shared nothing but a docstring held them together.
-    #
-    # Raw specs rather than `stated` above: that mapping drops the definitions
-    # restricting nobody, which are exactly the ones `unrestricted` is looking
-    # for.
+    # The same walk `Kingfisher` runs at construction, and the same functions -- which
+    # is the point. A listing that disagreed with startup about who reaches what would
+    # be worse than neither saying anything, and until these were shared nothing but a
+    # docstring held them together.
     kinds = (("agent", agents), ("subagent", subagents))
     report = access.audit(*kinds, vocabulary=cfg.access)
     broken = {
@@ -365,15 +353,11 @@ def inventory(
         # with a default does not help, because the property raises rather than
         # being absent.
         specs = resolved.subagents.specs
-        # Asked here as well as at `build_agent`, and that is the point rather
-        # than duplication. A cycle is a property of the catalogue, so an
-        # inventory that reports the catalogue has to report it: this said a
-        # workspace was fine while a run refused it, which is the same shape as
-        # `--list` advertising a skill the agent would not load.
-        #
-        # Reading `specs` cannot raise it -- a definition naming a helper is
-        # perfectly well-formed on its own, and the loop only exists across
-        # files.
+        # Asked here as well as at `build_agent`, and that is the point rather than
+        # duplication. A cycle is a property of the catalogue, so an inventory that
+        # reports the catalogue has to report it: this said a workspace was fine while a
+        # run refused it, which is the same shape as `--list` advertising a skill the
+        # agent would not load.
         refuse_cycles(specs)
         subagents = {name: spec.description for name, spec in specs.items()}
         compiled_subagents = tuple(

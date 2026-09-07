@@ -47,21 +47,11 @@ def _reader(source: Mapping[str, str]) -> Callable[[str, Any], Any]:
 class ServiceConfig:
     """How to serve, as opposed to what to serve."""
 
-    #: Loopback by default, and that is a decision rather than a placeholder.
-    #: This server authenticates nobody -- authentication and per-caller quotas
-    #: belong to whatever sits in front of it -- so a default of `0.0.0.0` would
-    #: publish an unauthenticated API to the network the moment someone ran it.
-    #: Binding wider is a thing to opt into once something is in front.
-    #:
-    #: It does now *ask* who is calling, which is a smaller claim than it
-    #: sounds and does not soften this one. A deployment with an access policy
-    #: supplies a `groups_from` to `create_app`, and the shipped reader takes
-    #: those groups off a header -- which is trustworthy exactly insofar as
-    #: whatever sets it also strips it from inbound requests. Bound to
-    #: `0.0.0.0` with nothing in front, that header is a request field any
-    #: caller can write, so identity would be self-asserted and the policy
-    #: would decide nothing. The reason for loopback is unchanged; there is
-    #: simply more riding on it.
+    #: Loopback by default, and that is a decision rather than a placeholder. This
+    #: server authenticates nobody -- authentication and per-caller quotas belong to
+    #: whatever sits in front of it -- so a default of `0.0.0.0` would publish an
+    #: unauthenticated API to the network the moment someone ran it. Binding wider is a
+    #: thing to opt into once something is in front.
     host: str = "127.0.0.1"
     port: int = 8000
     #: A ceiling on a request body. `task` is unbounded text and every other
@@ -72,37 +62,16 @@ class ServiceConfig:
     #: here. Deliberate: reading a body to measure it is the cost this avoids.
     max_body_bytes: int = 1 << 20
     #: How often a quiet stream sends an SSE comment.
-    #:
-    #: Two jobs, and the second is the one that matters. Proxies drop idle
-    #: connections -- that is the obvious one. But a disconnect is only noticed
-    #: when the server next tries to send, so this is also what bounds how long
-    #: a hung-up client keeps paying for model calls during a quiet tool call.
-    #: Fifteen seconds is well inside the usual sixty-second proxy idle timeout
-    #: and coarse enough to be invisible next to a turn.
     heartbeat_s: float = 15.0
     #: Where `input_refs` and `data_refs` are fetched from, or nowhere.
     #:
-    #: Unset by default, and a request naming files by id is then a 500 saying
-    #: no store is wired -- which is the honest answer, because it is the
-    #: deployment that has not decided where files come from. Set it and the
-    #: default app serves the shipped local store.
-    #:
-    #: This said "wire something else by building the `Kingfisher` yourself and
-    #: handing it to `create_app`", which is the advice `file_store_factory`
-    #: below replaces. It was never wrong so much as narrow: a deployment that
-    #: writes its own entry point can do anything, and one that would rather
-    #: not had no way to name a store that is not a directory.
+    #: Unset by default, and a request naming files by id is then a 500 saying no store
+    #: is wired -- which is the honest answer, because it is the deployment that has not
+    #: decided where files come from. Set it and the default app serves the shipped
+    #: local store.
     file_store_dir: Path | None = None
-    #: The same port, named rather than built: `module:name` for something
-    #: callable with no arguments that returns a `FileStore`.
-    #:
-    #: Here rather than on `Config`, unlike `KINGFISHER_SESSION_STORE_FACTORY`,
-    #: and the asymmetry is the point rather than an oversight. A `FileStore`
-    #: resolves *refs* -- the vocabulary of a caller who has no host paths --
-    #: and `kingfisher run` takes `--input` and `--data` as paths on this
-    #: machine, so it neither builds one nor could use one. The setting belongs
-    #: where the port is used, and both halves of this port's configuration
-    #: staying together is worth more than matching the shape of the other one.
+    #: The same port, named rather than built: `module:name` for something callable with
+    #: no arguments that returns a `FileStore`.
     file_store_factory: str | None = None
     #: Whether the audit log carries the task and the answer, or only what
     #: happened. Off, because what may be kept and for how long is a question
