@@ -51,8 +51,8 @@ setting reached it.
 
 ## Checking what you wrote
 
-Two ports ship their contract as runnable checks. Import them and point them at
-your adapter:
+Every port on this page ships its contract as runnable checks. Import them and
+point them at your adapter:
 
 ```python
 from kingfisher import SESSION_STORE_CONTRACT
@@ -64,6 +64,12 @@ def test_my_store_keeps_the_contract(check):
 
 No test framework comes with them — the checks are plain functions that raise
 `AssertionError` — so unittest or a loop works as well as pytest.
+
+Two of the four do more than read, and that is the ports rather than the kits:
+`SESSION_ROOT_CONTRACT` creates directories inside what your provider yields,
+because that is what kingfisher does with it, and `COMMAND_RUNNER_CONTRACT` runs
+commands — one of them waits a second for a timeout. Run those where you would
+run an integration test.
 
 They are worth running even if your adapter looks obviously correct. `knows()`
 had no test anywhere in this repository until the kit was written, and a store
@@ -123,8 +129,9 @@ Verified with `FILE_STORE_CONTRACT` — four checks.
 for a deployment whose session tree exists only while a turn runs — a tmpfs, a
 mount made per turn, a volume attached on demand.
 
-**No kit, and no tests naming it.** So the contract is written out here, because
-it is subtle in four ways and nothing else will tell you:
+Verified with `SESSION_ROOT_CONTRACT` — six checks. The contract is subtle in
+four ways, and the checks cover the two where being wrong is a security or
+correctness failure rather than an inconvenience:
 
 - **A directory, not a backend.** The file tools and the shell are two views of
   one directory, and the harness cannot tell a plain directory from a mount: it
@@ -144,7 +151,14 @@ it is subtle in four ways and nothing else will tell you:
 
 Kingfisher creates the layout inside what you hand it. A provider that created
 `data`, `memory` and the rest would break every time this repository adds a
-directory.
+directory — so the directory you yield need not exist yet, and the kit does not
+ask that it does. `LocalSessionRoot` yields a path it has not made.
+
+The two the kit is really for: **two session ids must not resolve to one
+directory** (every path would be legal, and each session would read the other's
+files as its own), and **an exception inside the block must propagate** — a
+context manager whose `__exit__` returns true reports a failed turn as a
+successful one, with whatever you mounted still mounted.
 
 ## `CommandRunner` — what runs a shell command
 
@@ -157,7 +171,8 @@ built for one turn — kingfisher's own Landlock fence is, because its policy is
 generated from the session — and a shared instance could not know which session
 it was running for.
 
-**No kit, and no tests naming it.** Three things to know:
+Verified with `COMMAND_RUNNER_CONTRACT` — five checks, which run commands.
+Three things to know:
 
 - **`local` decides whether the fence is applied.** The command arrives already
   confined when `local` is True, which is the default and what you get by not
@@ -170,7 +185,15 @@ it was running for.
   needed, never less.
 - **A timeout is a result, not an exception**: `exit_code` 124, the shell's own,
   with output saying so. Raising would make your failure the model's problem
-  rather than a tool result it can read and retry.
+  rather than a tool result it can read and retry. This is the one the kit
+  exists for: every timeout API in Python raises, `subprocess.run(timeout=...)`
+  included, so the obvious implementation gets it wrong and nothing else would
+  say so.
+
+`CommandResult` is exported from `kingfisher` — you return one of these, so you
+need it. It carries `output`, `exit_code` and `truncated`; `exit_code` is not
+optional, because a caller deciding whether a command worked has nothing to do
+with `None` but guess.
 
 Only *running* the command is delegated. File access is not, and deliberately:
 the shell backend is also the filesystem for every unrouted path, so handing over

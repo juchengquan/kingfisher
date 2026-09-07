@@ -1,8 +1,18 @@
 """The port contracts, as checks a deployment can run against its own adapter.
 
-Two of them: `SESSION_STORE_CONTRACT` and `FILE_STORE_CONTRACT`. They take
-different arguments and the difference is the ports rather than a preference --
-one writes and one does not. See `Planted`.
+Four of them, one per port a deployment realistically replaces:
+`SESSION_STORE_CONTRACT`, `FILE_STORE_CONTRACT`, `SESSION_ROOT_CONTRACT` and
+`COMMAND_RUNNER_CONTRACT`.
+
+Three take a factory and one takes a `Planted`, and the difference is the ports
+rather than a preference: a check can fill a session store, hold a session root
+and run a command, but it cannot put a file into a file store, because that port
+has no verb for writing.
+
+The last two do more than read. `SESSION_ROOT_CONTRACT` creates directories
+inside what the provider yields -- which is what kingfisher does with it -- and
+`COMMAND_RUNNER_CONTRACT` runs commands, one of which waits a second for a
+timeout. Run those where you would run an integration test.
 
 `SessionStore` is four methods over bytes and its docstring says a bucket is as
 good an implementation as a directory. That invitation was unbacked: a
@@ -47,18 +57,25 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from dataclasses import dataclass
+from pathlib import Path
 from typing import TYPE_CHECKING
 
 from kingfisher.domain.references import UnknownReferenceError, UnsafeReferenceError
 
-# `Mapping` at runtime rather than under `TYPE_CHECKING`: the file store's shape
-# check is an `isinstance` against it, because the mistake it catches -- a store
-# handing back bare bytes -- is invisible to an annotation nobody runs.
+# `Mapping` and `Path` at runtime rather than under `TYPE_CHECKING`: both are
+# `isinstance` arguments rather than only annotations. The mistakes they catch --
+# a file store handing back bare bytes, a session root yielding a `str` -- are
+# invisible to an annotation nobody runs.
 
 if TYPE_CHECKING:
     from collections.abc import Callable
 
-    from kingfisher.domain.ports import FileStore, SessionStore
+    from kingfisher.domain.ports import (
+        CommandRunner,
+        FileStore,
+        SessionRoot,
+        SessionStore,
+    )
 
     #: What a check is handed: something that builds a fresh, empty store.
     Factory = Callable[[], SessionStore]
@@ -457,4 +474,291 @@ FILE_STORE_CONTRACT: tuple[Callable[[Planted], None], ...] = (
     the_result_is_bytes_under_string_keys,
     a_ref_the_store_does_not_hold_is_refused,
     a_ref_that_names_somewhere_else_is_refused,
+)
+
+
+# -- the session root -------------------------------------------------------
+#
+# A factory again, like the session store: these checks call `hold` themselves
+# and several want a provider that has not been used yet.
+#
+# These do more than read. A check creates directories inside what it is handed,
+# because that is what kingfisher does with it -- `ensure_session_layout` runs
+# `mkdir(parents=True)` inside the yielded path before anything else touches the
+# session. A provider that cannot be written into cannot serve a turn, and there
+# is no way to find that out without writing.
+
+#: Session ids the checks hold. Two, because the property that matters most is
+#: that they do not collide.
+CONTRACT_SESSIONS = ("kingfisher-contract-a", "kingfisher-contract-b")
+
+
+def hold_yields_a_path(make: Callable[[], SessionRoot]) -> None:
+    """A `Path`, not a string.
+
+    Worth checking because the annotation is not enforced anywhere and the
+    mistake is quiet: kingfisher does `session_dir / name` immediately, and a
+    `str` fails there with a `TypeError` about unsupported operands, which reads
+    like a bug in kingfisher rather than in the provider.
+    """
+    with make().hold(CONTRACT_SESSIONS[0]) as directory:
+        _must_be(
+            directory,
+            Path,
+            doing="hold(...)",
+            why="the yielded value is a pathlib.Path, which kingfisher joins names onto",
+        )
+
+
+def kingfisher_can_lay_a_session_out_inside_it(make: Callable[[], SessionRoot]) -> None:
+    """The directory need not exist, and must be creatable.
+
+    `LocalSessionRoot` yields a path it has not made -- its own docstring says
+    `hold` "creates nothing and releases nothing" -- because
+    `ensure_session_layout` runs `mkdir(parents=True, exist_ok=True)` inside it
+    a moment later. So a check for `is_dir()` on the way out would fail the
+    shipped implementation, and be wrong to.
+
+    What a provider does owe is a path that can be *made*: on a filesystem that
+    is writable, under a parent that exists or can be created.
+    """
+    with make().hold(CONTRACT_SESSIONS[0]) as directory:
+        probe = Path(directory) / "data" / "nested"
+        try:
+            probe.mkdir(parents=True, exist_ok=True)
+        except OSError as refused:
+            msg = (
+                f"hold(...) yielded {directory}, which kingfisher cannot lay a session "
+                f"out inside ({refused}). It runs mkdir(parents=True) there before the "
+                f"turn starts"
+            )
+            raise AssertionError(msg) from refused
+
+
+def a_child_of_the_session_stays_inside_it(make: Callable[[], SessionRoot]) -> None:
+    """A session cannot be composed out of links to shared content.
+
+    The root itself may be a symlink or a mount -- kingfisher resolves it once,
+    in `ensure_session_layout`, and that is the point of the port. What cannot
+    happen is a *child* resolving somewhere else, because containment is checked
+    per access against the resolved root: a provider that links `data/` at
+    shared content gets every access to it refused, and the symptom is the agent
+    being unable to read its own inputs.
+    """
+    with make().hold(CONTRACT_SESSIONS[0]) as directory:
+        root = Path(directory).resolve()
+        child = Path(directory) / "data"
+        child.mkdir(parents=True, exist_ok=True)
+        if root not in child.resolve().parents:
+            msg = (
+                f"hold(...) yielded a directory whose child {child.name!r} resolves to "
+                f"{child.resolve()}, outside the session root {root}. Containment is "
+                f"checked against the resolved root, so every access to it is refused"
+            )
+            raise AssertionError(msg)
+
+
+def two_sessions_are_two_directories(make: Callable[[], SessionRoot]) -> None:
+    """The isolation the whole port rests on.
+
+    `ensure_session_layout` calls it structural -- *"two sessions share a parent
+    and nothing else"* -- and structural is exactly what a provider can undo. A
+    root that ignores the id, or derives a path from something coarser than it,
+    puts two callers in one directory and there is no later check that would
+    notice: every path is legal, and each session reads the other's files as its
+    own.
+    """
+    root = make()
+    first, second = CONTRACT_SESSIONS
+    with root.hold(first) as one, root.hold(second) as two:
+        if Path(one).resolve() == Path(two).resolve():
+            msg = (
+                f"hold({first!r}) and hold({second!r}) both yielded "
+                f"{Path(one).resolve()}. Two sessions in one directory is two callers "
+                f"reading each other's files"
+            )
+            raise AssertionError(msg)
+
+
+def a_session_can_be_held_again(make: Callable[[], SessionRoot]) -> None:
+    """Once per turn, and a session has many turns.
+
+    A provider that mounts on the way in and unmounts on the way out is the case
+    this port exists for, and it has to survive being asked twice -- a second
+    turn of the same conversation is the ordinary path, not an edge.
+    """
+    root = make()
+    with root.hold(CONTRACT_SESSIONS[0]) as first:
+        first_path = Path(first).resolve()
+    with root.hold(CONTRACT_SESSIONS[0]) as second:
+        _equal(
+            Path(second).resolve(),
+            first_path,
+            doing=f"holding {CONTRACT_SESSIONS[0]!r} a second time",
+        )
+
+
+def a_failed_turn_still_leaves_the_hold(make: Callable[[], SessionRoot]) -> None:
+    """*"Released when the turn ends however it ended"*, and the half that bites.
+
+    A context manager whose `__exit__` returns true swallows the exception, and
+    a turn that failed is then reported as one that succeeded -- with whatever
+    the provider mounted still mounted. Written as `@contextmanager` around a
+    bare `yield` this cannot happen; written by hand it is one wrong return
+    value away.
+    """
+    held = make().hold(CONTRACT_SESSIONS[0])
+    held.__enter__()
+    # Asked of `__exit__` directly rather than by raising inside a `with`, which
+    # is the same question one layer down and answers it without inventing an
+    # exception type to throw. A correct manager either re-raises what it was
+    # handed or returns something falsy; only `True` means swallowed.
+    try:
+        swallowed = held.__exit__(ValueError, ValueError("a turn that failed"), None)
+    except ValueError:
+        return
+    if swallowed:
+        msg = (
+            "hold(...).__exit__ returned True, so an exception raised inside the "
+            "block would be swallowed. A turn that failed would be reported as one "
+            "that succeeded, and whatever was held would still be held"
+        )
+        raise AssertionError(msg)
+
+
+#: Every check a `SessionRoot` must pass. These create directories inside what
+#: the provider yields, because that is what kingfisher does with it.
+SESSION_ROOT_CONTRACT: tuple[Callable[[Callable[[], SessionRoot]], None], ...] = (
+    hold_yields_a_path,
+    kingfisher_can_lay_a_session_out_inside_it,
+    a_child_of_the_session_stays_inside_it,
+    two_sessions_are_two_directories,
+    a_session_can_be_held_again,
+    a_failed_turn_still_leaves_the_hold,
+)
+
+
+# -- the command runner -----------------------------------------------------
+#
+# These run commands. There is no way to check that a runner runs things without
+# running things, and a runner that ships them to another machine will be as
+# slow here as it is in a turn -- one of the checks waits for a timeout on
+# purpose. Run them where you would run an integration test.
+#
+# They assume a POSIX-ish shell, which `execute` already assumes: the prompt
+# hands the model shell commands and the backend passes them through.
+
+#: What the checks run. Kept together so a deployment whose runner needs
+#: something else can see exactly what it is being asked for.
+SUCCEEDS = "echo kingfisher-contract"
+FAILS = "exit 3"
+SLEEPS = "sleep 30"
+
+
+def a_runner_says_where_it_runs(make: Callable[[], CommandRunner]) -> None:
+    """`local` decides whether the fence is applied, so it is read before a
+    command is.
+
+    Kingfisher reads it with a default of `True`, so an object that never
+    declares it still gets the safe answer. This checks the other thing: that a
+    runner which *does* declare it declares a boolean, since `local = "no"` is
+    truthy and would keep the local fence on a command going somewhere else.
+    """
+    runner = make()
+    declared = getattr(runner, "local", True)
+    _must_be(
+        declared,
+        bool,
+        doing="reading `local` off the runner",
+        why="it says whether the command runs on this machine, and a non-boolean is "
+        "truthy in ways that quietly keep or lose the fence",
+    )
+
+
+def a_command_that_works_reports_that_it_worked(make: Callable[[], CommandRunner]) -> None:
+    """Exit code zero, and the output the command wrote."""
+    result = make().run(SUCCEEDS)
+
+    _equal(result.exit_code, 0, doing=f"run({SUCCEEDS!r}).exit_code")
+    if "kingfisher-contract" not in result.output:
+        msg = (
+            f"run({SUCCEEDS!r}).output does not contain what the command printed: "
+            f"{result.output!r}. The model reads this as the tool result"
+        )
+        raise AssertionError(msg)
+
+
+def a_command_that_fails_is_a_result_and_not_an_exception(
+    make: Callable[[], CommandRunner],
+) -> None:
+    """A non-zero exit is ordinary. The agent runs commands that fail and reads
+    the code to decide what to do next, so raising here turns a normal tool
+    result into a turn that ended."""
+    result = make().run(FAILS)
+
+    _equal(result.exit_code, 3, doing=f"run({FAILS!r}).exit_code")
+
+
+def a_result_is_shaped_the_way_a_caller_reads_it(make: Callable[[], CommandRunner]) -> None:
+    """`exit_code` is not optional, and that is a decision the port records:
+    *"the harness's equivalent allows `None`, and a caller deciding whether a
+    command worked has nothing to do with that but guess."*"""
+    result = make().run(SUCCEEDS)
+
+    _must_be(
+        result.exit_code,
+        int,
+        doing=f"run({SUCCEEDS!r}).exit_code",
+        why="it is always a number -- None would leave a caller guessing whether the "
+        "command worked",
+    )
+    _must_be(
+        result.output,
+        str,
+        doing=f"run({SUCCEEDS!r}).output",
+        why="output is text, decoded by the runner",
+    )
+    _must_be(
+        getattr(result, "truncated", False),
+        bool,
+        doing=f"run({SUCCEEDS!r}).truncated",
+        why="a caller cannot tell a cut result from a short one unless the runner says",
+    )
+
+
+def a_timeout_is_a_result_and_not_an_exception(make: Callable[[], CommandRunner]) -> None:
+    """The one most likely to be got wrong, because every timeout API raises.
+
+    `subprocess.run(timeout=...)` raises `TimeoutExpired`, so a runner written
+    the obvious way propagates it -- and the port says otherwise: *"a timeout is
+    a result, not an exception: `exit_code` 124, the shell's own, with output
+    saying so. Raising would make every runner's failure the model's problem
+    rather than a tool result it can read and retry."*
+
+    124 rather than any non-zero code, because it is what `timeout(1)` returns
+    and the number a reader of the output will recognise.
+
+    This check waits for the timeout it asks for.
+    """
+    try:
+        result = make().run(SLEEPS, timeout=1)
+    except Exception as raised:
+        msg = (
+            f"run({SLEEPS!r}, timeout=1) raised {type(raised).__name__}: {raised}. A "
+            f"timeout is a result -- exit_code 124 -- so the model can read it and "
+            f"retry rather than the turn ending"
+        )
+        raise AssertionError(msg) from raised
+
+    _equal(result.exit_code, 124, doing=f"run({SLEEPS!r}, timeout=1).exit_code")
+
+
+#: Every check a `CommandRunner` must pass. These run commands, and one waits
+#: for a timeout.
+COMMAND_RUNNER_CONTRACT: tuple[Callable[[Callable[[], CommandRunner]], None], ...] = (
+    a_runner_says_where_it_runs,
+    a_command_that_works_reports_that_it_worked,
+    a_command_that_fails_is_a_result_and_not_an_exception,
+    a_result_is_shaped_the_way_a_caller_reads_it,
+    a_timeout_is_a_result_and_not_an_exception,
 )
