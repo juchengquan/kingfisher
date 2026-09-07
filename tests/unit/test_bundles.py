@@ -19,12 +19,12 @@ from langchain_core.messages import AIMessage
 from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
-from kingfisher.domain.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.listing import _catalogue, failed
 from kingfisher.subagents.catalogue import LocalSubagentRepository
 from kingfisher.subagents.spec import SubagentError

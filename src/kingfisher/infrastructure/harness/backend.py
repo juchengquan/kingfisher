@@ -28,7 +28,11 @@ from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import ToolMessage
 
 from kingfisher.config import Config, ConfigError
-from kingfisher.domain.layout import (
+from kingfisher.domain.ports import CommandRunner
+from kingfisher.domain.references import UnsafeReferenceError, within
+from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
+from kingfisher.infrastructure.sandbox import confinement
+from kingfisher.layout import (
     AGENT_HOME,
     BUNDLED_SKILLS_ROUTE,
     DATA,
@@ -43,10 +47,6 @@ from kingfisher.domain.layout import (
     UPLOADED_SKILLS_ROUTE,
     routed_paths,
 )
-from kingfisher.domain.ports import CommandRunner
-from kingfisher.domain.references import UnsafeReferenceError, within
-from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
-from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.skills.backend import skills_backend
 from kingfisher.subagents.spec import SubagentError
 
@@ -669,7 +669,7 @@ def build_backend(
         timeout=cfg.execution_timeout_s,
     )
     # What backs each path. Keyed by the table rather than written as one dict
-    # so that a route declared in `domain.layout` and forgotten here raises when
+    # so that a route declared in `kingfisher.layout` and forgotten here raises when
     # the backend is built, instead of reaching a turn as a path that resolves
     # to the default backend and quietly ignores its own deny rule.
     backing = {
@@ -684,7 +684,7 @@ def build_backend(
     }
     missing = [path for path in routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test
-        msg = f"routes declared in domain.layout with nothing to back them: {missing}"
+        msg = f"routes declared in kingfisher.layout with nothing to back them: {missing}"
         raise ConfigError(msg)
 
     routes: dict[str, Any] = {path: backing[path]() for path in routed_paths()}

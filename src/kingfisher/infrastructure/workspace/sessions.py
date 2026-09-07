@@ -19,14 +19,14 @@ from collections.abc import Iterator
 from contextlib import contextmanager, suppress
 from pathlib import Path
 
-from kingfisher.domain.layout import (
+from kingfisher.domain.session import sessions_root
+from kingfisher.infrastructure.workspace.permissions import unlock_and_retry
+from kingfisher.layout import (
     AGENTS_SCAFFOLD,
     ARTIFACT_DIRS,
     SESSION_DIRS,
     SESSION_PLUMBING,
 )
-from kingfisher.domain.session import sessions_root
-from kingfisher.infrastructure.workspace.permissions import unlock_and_retry
 
 
 class LocalSessionDirs:

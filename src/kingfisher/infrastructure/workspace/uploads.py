@@ -18,7 +18,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.domain import layout
+from kingfisher import layout
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.skills import spec as skill
 from kingfisher.skills.reading import name_from

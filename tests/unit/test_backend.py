@@ -7,7 +7,6 @@ import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher.config import ConfigError
-from kingfisher.domain.layout import BUNDLED_SKILLS_ROUTE, ROUTES, denied_scopes, routed_paths
 from kingfisher.infrastructure.harness.agent import read_only_permissions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
@@ -16,6 +15,7 @@ from kingfisher.infrastructure.harness.backend import (
     shell_env,
 )
 from kingfisher.infrastructure.harness.runlog import log_path
+from kingfisher.layout import BUNDLED_SKILLS_ROUTE, ROUTES, denied_scopes, routed_paths
 
 
 def test_shell_env_carries_no_credentials(cfg, session_dir):
@@ -109,7 +109,7 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
 
     assert declared <= set(backend.routes), "declared in the layout, mounted nowhere"
     assert set(backend.routes) - generated == declared, (
-        "mounted by the builder, absent from domain.layout.ROUTES -- add it there, "
+        "mounted by the builder, absent from kingfisher.layout.ROUTES -- add it there, "
         "or it has no deny rule and nothing says it exists"
     )
 

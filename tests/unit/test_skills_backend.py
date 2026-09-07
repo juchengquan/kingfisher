@@ -16,10 +16,10 @@ from dataclasses import dataclass, replace
 
 import pytest
 
-from kingfisher.domain.layout import SKILLS_ROUTE
 from kingfisher.domain.ports import SkillRepository
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.harness.backend import build_backend, shell_env
+from kingfisher.layout import SKILLS_ROUTE
 from kingfisher.skills.backend import skills_backend
 from kingfisher.skills.catalogue import LocalSkillRepository
 

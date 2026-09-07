@@ -1,8 +1,19 @@
-"""The workspace layout, as data.
+"""The workspace layout, as data. Belongs to no layer, which is why it sits here.
 
 Every name and tier here is policy: which directories exist, which hold what a
 person wrote, which are disposable. None of it creates anything -- making the
 layout real is `infrastructure.workspace.layout`, and this is what it is told to make.
+
+It lived in `domain/` and was moved for the reason `config.py` beside it was:
+**no domain rule reads it.** Every one of its readers is in `infrastructure/`,
+`skills/`, `tools/` or `subagents/`, and it sat in the innermost layer so those
+could share it without depending on each other -- which is *"reasoning about
+import direction, not modelling"*, the sentence that moved `Config` out.
+
+The names are the vocabulary the prompt teaches the model, so this reads more
+like the domain than `base_url` ever did. That is the honest counter and it does
+not change the test: vocabulary no domain rule uses is a record held for the
+outer layers, and the layer that holds it should not claim otherwise.
 
 The split matters because the tiers are a decision that wants reviewing, and it
 was previously buried among mkdir calls and subprocess invocations.

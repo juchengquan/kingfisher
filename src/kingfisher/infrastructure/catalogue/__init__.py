@@ -43,7 +43,7 @@ writes what `layered` then reads; splitting the pair costs less than filing a
 per-request concern under a per-deployment one.
 
 Split out of `workspace_fs`, which is "the filesystem, doing what
-`domain.layout` describes" -- and a catalogue is the one thing here that need
+`kingfisher.layout` describes" -- and a catalogue is the one thing here that need
 not be in a workspace at all. `KINGFISHER_SKILLS_DIR` and its siblings -- one per
 kind -- exist so several deployments can share one reviewed set, so these
 directories are as likely to sit somewhere else entirely as inside a workspace.

@@ -1035,11 +1035,12 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     "domain": frozenset(),
     "application": frozenset(),
     # The modules at the package root, which belong to no layer: `__init__.py`,
-    # `config.py`, and `testing.py` -- the port contracts a deployment runs
-    # against its own adapter. Nothing, and `testing.py` is the one that has to
-    # stay that way on purpose rather than by luck: a kit importing pytest would
-    # put a test framework in the runtime wheel, which is why it raises
-    # `AssertionError` by hand instead.
+    # `config.py`, `layout.py` -- the workspace layout as data -- and
+    # `testing.py`, the port contracts a deployment runs against its own
+    # adapter. Nothing, and `testing.py` is the one that has to stay that way on
+    # purpose rather than by luck: a kit importing pytest would put a test
+    # framework in the runtime wheel, which is why it raises `AssertionError` by
+    # hand instead.
     "": frozenset(),
 }
 

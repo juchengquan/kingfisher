@@ -33,7 +33,7 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
-from kingfisher.domain.layout import UPLOADED_SKILL_DIR as UPLOADED
+from kingfisher.layout import UPLOADED_SKILL_DIR as UPLOADED
 from kingfisher.skills import spec as skill
 from kingfisher.skills.catalogue import reachable
 
