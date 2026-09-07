@@ -46,7 +46,8 @@ Split out of `workspace_fs`, which is "the filesystem, doing what
 `domain.layout` describes" -- and a catalogue is the one thing here that need
 not be in a workspace at all. `KINGFISHER_SKILLS_DIR` and its siblings -- one per
 kind -- exist so several deployments can share one reviewed set, so these
-directories are as likely to sit somewhere else entirely as inside a workspace. Keeping them
+directories are as likely to sit somewhere else entirely as inside a workspace.
+Keeping them
 beside `ensure_layout` read as misfiled rather than as a deliberate exception.
 
 What it holds is one repository per kind rather than a path each. A path is what
