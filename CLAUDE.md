@@ -53,13 +53,25 @@ files deliberately, and the originals are in git if an entry is not enough.
 
 ## Conventions
 
-**Comments carry the reasoning, not the mechanics.** This codebase explains *why*
-a thing is the way it is, including what was tried and abandoned. Match the
-surrounding density -- a terse comment in a file of long ones reads as an
-oversight.
+**Comments carry the reasoning, not the mechanics.** A comment earns its place
+only if removing it would let a competent editor make a change that is wrong.
+Write that reason once, at the point the mistake would be made.
 
-**A test's docstring says why the test exists**, not what the assertion does. When
-a test guards against a specific past failure, name it.
+Four kinds do not earn it, and are the ones to cut on sight:
+
+  - how the code got here -- what it was before, what was tried, what a previous
+    version did. That is `docs/decisions.md`, or `git log`.
+  - a paragraph restating the paragraph above it at greater length.
+  - framing that announces the argument instead of making it ("Two halves, and
+    the split is the design").
+  - the contract a signature already states.
+
+There is no density to match. A file of one-line comments is not under-explained,
+and the shortest version that still stops the mistake is the right one.
+
+**A test's docstring names the failure it would catch**, in one sentence. When it
+guards a specific past bug, name the bug -- that sentence is often the only
+record of it, and it stays however short the rest gets.
 
 **Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
 imports: `domain/` imports nothing foreign, and only `infrastructure/harness/`
