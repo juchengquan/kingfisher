@@ -14,6 +14,7 @@ file count it refuses to print.
 | [`guides/tools.md`](guides/tools.md) | How to write a workspace tool: the shapes, what it returns, what the loader refuses. | Writing or changing a tool. |
 | [`guides/configuration.md`](guides/configuration.md) | Every setting a deployment reads from the environment, and what it defaults to. | Standing one up, or wondering what a variable does. |
 | [`guides/ports.md`](guides/ports.md) | How to write an adapter for one of the twelve ports, and how to check it. | Putting sessions, files or commands somewhere kingfisher did not choose. |
+| [`guides/middleware.md`](guides/middleware.md) | How to register middleware a definition can name, what it may configure, and what it sees. | Wrapping the agent in code of your own. |
 | [`decisions.md`](decisions.md) | Why the code is shaped this way, and what was tried and reversed. | **Before proposing a change** to something it lists. |
 | [`findings.md`](findings.md) | What deepagents, langchain and the model surfaces actually do. | Before touching streaming, middleware or delegation. |
 
@@ -29,13 +30,16 @@ reader is holding: `formats.md` is a definition -- YAML, fields, what each one
 may say; `tools.md` is Python, which has rules of its own because it is code
 this process imports and calls rather than data it reads; `configuration.md` is
 the environment around both, which belongs to the deployment rather than to any
-file in the workspace; and `ports.md` is for a deployment that has to put
-sessions, files or commands somewhere this package did not choose.
+file in the workspace; `ports.md` is for a deployment that has to put sessions,
+files or commands somewhere this package did not choose; and `middleware.md` is
+the other code a deployment writes -- not an adapter for something kingfisher
+asks for, but a wrapper around the agent that a definition may then select by
+name.
 
 Two audiences, and the second one arrived late. The first two pages are for
-somebody authoring content *for* the agent; the last two are for somebody
+somebody authoring content *for* the agent; the last three are for somebody
 hosting kingfisher. This section said "build something that runs *on*
-kingfisher" while both of the latter were being written, and each of them
+kingfisher" while the first two of those were being written, and each of them
 widened it independently -- which is the sentence doing its job late rather than
 twice.
 

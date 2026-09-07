@@ -1,5 +1,10 @@
 """A ceiling on how many tools one turn may call, and the thing it demonstrates.
 
+`docs/guides/middleware.md` is the page for the half a deployment writes --
+registering, what a definition may configure, what a middleware sees and what
+refuses. It points here for the arguments rather than repeating them, so this
+file and `tool_note.py` are still where the reasoning lives.
+
 This is the only example here that a workspace does **not** load. Every other
 file under `assets_examples/` is a definition -- an agent, a skill, a subagent, a tool
 -- copied into a workspace by `kingfisher seed` and found there by name.

@@ -183,7 +183,7 @@ in the workspace.
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
 | `subagents` | optional | Delegates it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
-| `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
+| `middleware` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
@@ -513,7 +513,7 @@ entry after the first was unreachable, and `model:` takes one name.
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none |
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure |
-| `middleware` | optional | Names entries from a registry the deployment supplies. The one field that selects *code*, so it is granted, never inherited |
+| `middleware` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |

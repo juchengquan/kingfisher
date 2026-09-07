@@ -16,7 +16,7 @@ from kingfisher.infrastructure.harness.middleware import (
     declared_middleware,
 )
 from kingfisher.infrastructure.prompting import system_prompt
-from tests.conftest import FakeToolCallingModel, capture_build
+from tests.conftest import FakeToolCallingModel, capture_build, repository_root
 from tests.unit.test_confinement import needs_a_real_toolchain
 
 
@@ -315,6 +315,29 @@ def test_the_required_names_match_deepagents():
     from deepagents.graph import _REQUIRED_MIDDLEWARE_NAMES
 
     assert set(REQUIRED_BY_DEEPAGENTS) == set(_REQUIRED_MIDDLEWARE_NAMES)
+
+
+def test_the_guide_names_the_same_required_middleware():
+    """The third copy, and the one with nothing else watching it.
+
+    `docs/guides/middleware.md` writes both names out, because a page that said
+    "two of deepagents' own are required and the warning will tell you which"
+    makes the reader wait for the failure it exists to prevent.
+
+    Here rather than beside the other documentation rules, because the person
+    who breaks this is not the person editing docs. It is whoever updates the
+    tuple after the test above goes red, and this is the next test down from
+    the one that sent them.
+    """
+    page = repository_root() / "docs" / "guides" / "middleware.md"
+    text = page.read_text(encoding="utf-8")
+
+    missing = [name for name in REQUIRED_BY_DEEPAGENTS if name not in text]
+
+    assert not missing, (
+        f"{missing} are in REQUIRED_BY_DEEPAGENTS and not in {page.name}, which "
+        "tells a deployment which two classes it must not shadow by accident"
+    )
 
 
 def test_deepagents_own_middleware_is_discovered_across_the_package():
