@@ -820,6 +820,54 @@ out of the shell's reach"* -- leaving the agent able to read its inputs and unab
 to run anything over them. Object storage reaches a session as a mount
 (`SessionRoot`) or by being copied in and out, and both work today.
 
+**What the agent addresses is a table in `domain.layout`.** One entry per path,
+saying whether the composite mounts it, which scope denies writes under it, and
+whether its members are generated per catalogue. `harness.backend` turns the
+entries into mounts and `harness.agent` turns the scopes into deny rules. Policy
+here, the runtime's objects there -- the division this module's first line
+already describes. *(2026-09-07.)*
+
+**It exists because one route was three facts in two modules.** The path was a
+constant in `harness/backend.py`, the mount was a dict literal inside
+`build_backend`, and whether it was writable was a `FilesystemPermission` in
+`harness/agent.py` whose `paths=["/data/**"]` was a string typed a second time
+with nothing tying it to `DATA_ROUTE = "/data/"`. They have to agree --
+`FilesystemMiddleware` refuses `permissions=` outright unless every rule is
+scoped to a route -- and nothing made them agree except care, with the failure
+arriving at a turn rather than at the definition.
+
+**The route constants were a second spelling of names this file already owned.**
+`SESSION_DIRS` held `"data"` and `"memory"`; `backend.py` held `"/data/"` and
+`"/memory/"`; `ARTIFACT_DIRS` spelled two of them a third time. The leaves are
+named once now and everything is composed from them, which is what this module
+already recorded doing for `UPLOADED_SKILLS`: *"a second spelling is how the two
+halves of this layout drifted apart in the first place."*
+
+**Writability hangs on a scope, not on a route.** `/skills/**` is one rule
+covering the catalogue, a session's uploads and every bundle's mount. A rule per
+route would make a deployment's permission list grow with the number of bundles
+its catalogue ships, protecting nothing more, and it would have stopped this
+being a refactor that changes nothing observable -- which is the property that
+made it safe to land.
+
+**Agreed as "a test ties them" and built one step stronger, because a rule
+refused the agreed form.** `routed_paths` would have been read by nothing but a
+test, which `test_nothing_is_defined_for_tests_alone` catches -- and that would
+have left `routed=False` on `/derived` as pure documentation. So `build_backend`
+keys its dict off the table: a route declared with nothing to back it now raises
+where it is declared. The harness still decides *what* backs each path; only the
+keys moved.
+
+**Unrouted paths are in the table.** `/derived` and `/runs` reach the default
+backend, which is the shell's, and before this a reader learned that by not
+finding them in a dict literal. An absence is not a record.
+
+**Still not opened: the seam.** The entry below defers a backend factory on
+`Kingfisher` and that stands -- execution is swapped through `CommandRunner` and
+storage through `SessionRoot`, both of which exist and neither of which this
+touches. What changed is that "routes only, never the default slot" is now a
+thing someone could implement without first untangling three files.
+
 **Considered and rejected with it:** a backend factory on `Kingfisher` (deferred,
 and if ever opened then routes only, never the default slot); kingfisher shipping
 an S3 store behind a closed table like `ADAPTERS`, which would put this package in

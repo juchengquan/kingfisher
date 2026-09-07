@@ -19,6 +19,7 @@ import pytest
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.layout import SKILLS_ROUTE
 from kingfisher.domain.ports import SubagentRepository
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
@@ -27,7 +28,7 @@ from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
 )
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, build_backend
+from kingfisher.infrastructure.harness.backend import build_backend
 from kingfisher.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.tools.harness import workspace_tool_names
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
@@ -487,7 +488,7 @@ def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, ses
     needs file contents and a name cannot supply them -- but it was a limit of
     the port, not of the route, and it read as a limit of the design.
     """
-    from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE
+    from kingfisher.domain.layout import SKILLS_ROUTE
 
     @dataclass(frozen=True)
     class Nowhere:

@@ -28,9 +28,10 @@ from deepagents import FilesystemPermission
 from kingfisher.config import ConfigError
 from kingfisher.domain import layout
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
+from kingfisher.domain.layout import SKILLS_ROUTE
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
-from kingfisher.infrastructure.harness.backend import SKILLS_ROUTE, bundled_skills_route
+from kingfisher.infrastructure.harness.backend import bundled_skills_route
 from kingfisher.skills import registry as skill_registry
 from kingfisher.skills.registry import SkillRegistry
 from kingfisher.subagents.harness import indistinct, model_for

@@ -19,15 +19,11 @@ from langchain_core.messages import AIMessage
 from kingfisher.application.inventory import inventory
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import (
-    BUNDLED_SKILLS_ROUTE,
-    SKILLS_ROUTE,
-    build_backend,
-    skills_sources,
-)
+from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.presentation.cli.listing import _catalogue, failed
 from kingfisher.subagents.catalogue import LocalSubagentRepository
@@ -543,6 +539,29 @@ def test_a_bundles_skill_is_mounted_read_only(cfg, session_dir):
     mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
     assert mounted == ["/skills/subagents/surveyor/"]
     assert all(route.startswith(SKILLS_ROUTE) for route in mounted)
+
+
+def test_a_bundles_skills_add_a_mount_and_no_rule(cfg, session_dir):
+    """A mount per bundle, and still one deny rule for all of `/skills/`.
+
+    The reason the table hangs writability on a *scope* rather than on each
+    route. Deriving a rule per mount would read identically on a workspace with
+    no bundles and grow with one that ships four, so a deployment's permission
+    list would change shape with its catalogue -- and nothing it protects
+    changes, because every one of those mounts is under the prefix the single
+    rule already covers.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    with_private_skill(cfg)
+
+    backend = build_backend(cfg, session_dir)
+    mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
+
+    assert mounted, "no bundle mounted, so this asserts nothing about bundles"
+    assert denied_scopes() == ("/data/**", "/skills/**")
+    assert all(route.startswith("/skills/") for route in mounted), (
+        "a mount outside the scope the one rule covers would be writable"
+    )
 
 
 def test_a_bundles_skill_is_not_in_the_shared_registry(cfg, session_dir, monkeypatch):

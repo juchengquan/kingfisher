@@ -7,6 +7,8 @@ import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher.config import ConfigError
+from kingfisher.domain.layout import BUNDLED_SKILLS_ROUTE, ROUTES, denied_scopes, routed_paths
+from kingfisher.infrastructure.harness.agent import read_only_permissions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     build_backend,
@@ -91,6 +93,58 @@ def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
     backend = build_backend(cfg, session_dir)
     assert "/skills/" in backend.routes
     assert str((cfg.workspace / "skills").resolve()) == str(backend.routes["/skills/"].cwd)
+
+
+def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_dir):
+    """The table and what backs it are in two modules, so something has to tie them.
+
+    `build_backend` keys its dict off `routed_paths`, which catches a route
+    declared with nothing to back it. This is the other direction: a mount added
+    to the builder and never declared would have no deny rule and no entry
+    saying it exists, and nothing else would notice.
+    """
+    backend = build_backend(cfg, session_dir)
+    declared = set(routed_paths())
+    generated = {r for r in backend.routes if r.startswith(BUNDLED_SKILLS_ROUTE)}
+
+    assert declared <= set(backend.routes), "declared in the layout, mounted nowhere"
+    assert set(backend.routes) - generated == declared, (
+        "mounted by the builder, absent from domain.layout.ROUTES -- add it there, "
+        "or it has no deny rule and nothing says it exists"
+    )
+
+
+def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
+    """Pinned rather than derived twice.
+
+    This is the wiring as it stood before the table existed -- two rules, these
+    paths, this order -- and the table's whole claim is that it produces the
+    same. Deriving the expectation from `denied_scopes` as well would assert
+    that a function equals itself.
+
+    That the count stays at two *however many bundles a catalogue ships* is the
+    other half, and it needs a catalogue with some:
+    `test_bundles.test_a_bundles_skills_add_a_mount_and_no_rule`.
+    """
+    assert denied_scopes() == ("/data/**", "/skills/**")
+    assert [p.paths for p in read_only_permissions()] == [["/data/**"], ["/skills/**"]]
+    assert {p.mode for p in read_only_permissions()} == {"deny"}
+    assert {tuple(p.operations) for p in read_only_permissions()} == {("write",)}
+
+
+def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
+    """The absence used to be the only record of it.
+
+    `/derived` and `/runs` reach the default backend, which is the shell's,
+    rooted at the session. That is deliberate -- what a run produces is the
+    agent's to write -- but before the table a reader learned it by not finding
+    them in a dict literal.
+    """
+    backend = build_backend(cfg, session_dir)
+    unrouted = {r.path for r in ROUTES if not r.routed}
+
+    assert unrouted == {"/derived/", "/runs/"}
+    assert not (unrouted & set(backend.routes)), "an unrouted path was mounted"
 
 
 def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):

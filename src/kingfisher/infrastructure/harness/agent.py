@@ -43,6 +43,7 @@ from kingfisher.domain.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
+from kingfisher.domain.layout import denied_scopes
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.harness.activation import (
@@ -115,48 +116,31 @@ MEMORY_IS_DENIED = FilesystemPermission(
 
 
 
-# `/data` holds what a caller supplied and nothing else has a copy of: it is
-# never re-derivable from the workspace, and kingfisher versions nothing.
-# `FilesystemOperation` is just read|write and `delete` maps to write, so this
-# single rule covers write_file, edit_file and delete.
-#
-# It does not cover `execute` — filesystem permissions are applied by
-# FilesystemMiddleware at the tool level, and the shell bypasses them entirely,
-# which is why `protect_data()` drops the write bits underneath this.
-DATA_IS_READ_ONLY = FilesystemPermission(
-    operations=["write"],
-    paths=["/data/**"],
-    mode="deny",
-)
+def read_only_permissions() -> list[FilesystemPermission]:
+    """A deny rule for every scope the layout refuses writes under.
 
+    Built from `layout.denied_scopes` rather than written here, because a rule
+    and the route it is scoped to have to agree: `FilesystemMiddleware` refuses
+    `permissions=` outright unless every rule path sits under a route, and while
+    these were two constants the agreement was a string typed in two modules.
 
-# The catalogue is *instructions the agent follows*, which makes it the one
-# route where a write outlasts the request that made it. `/memory` and
-# `/derived` belong to a session and go when it does; a skill belongs to the
-# deployment, and `KINGFISHER_SKILLS_DIR` exists so several deployments can
-# share one reviewed set -- so a skill edited during one request is read by
-# every later request, in every deployment pointing at that directory.
-#
-# Measured before adding, because `/data` had a rule and this did not:
-# `backend.write("/skills/demo/PWNED.md", ...)` and `backend.edit(...)` both
-# succeeded against the catalogue on disk. Nothing depended on it -- a request's
-# own skills are written host-side by `uploads`, never through a file tool.
-#
-# `/skills/uploaded/**` is covered too, and deliberately. It is a session's own
-# half rather than the deployment's, but kingfisher writes it host-side for the
-# same reason, and an agent able to rewrite an uploaded skill could rewrite the
-# instructions it was about to follow.
-#
-# Same `write` operation as above, so it covers write_file, edit_file and
-# delete. It does not cover `execute` either -- which is why
-# `confinement.resolve` denies writes to the same directory in the sandbox
-# profile. Both halves are needed and neither is sufficient: the profile is
-# macOS-only and can be switched off, and this one never sees the shell.
-SKILLS_ARE_READ_ONLY = FilesystemPermission(
-    operations=["write"],
-    paths=["/skills/**"],
-    mode="deny",
-)
+    Deduplicated there, so `/skills/**` is one rule covering the catalogue, a
+    session's uploads and every bundle. One rule per *mount* would make the
+    count depend on how many bundles a catalogue ships, for no gain.
+
+    **What this does not reach is the shell.** Filesystem permissions are applied
+    by `FilesystemMiddleware` at the tool level, so they cover `write_file`,
+    `edit_file` and `delete` -- `FilesystemOperation` is read|write and delete
+    maps to write -- and `execute` bypasses them entirely. The other half of each
+    rule is elsewhere and neither half is sufficient: `workspace.permissions`
+    drops the write bits under `/data`, and `confinement.resolve` denies writes
+    to the skills directory in the sandbox profile, which is macOS-only and can
+    be switched off.
+    """
+    return [
+        FilesystemPermission(operations=["write"], paths=[scope], mode="deny")
+        for scope in denied_scopes()
+    ]
 
 
 
@@ -307,7 +291,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]
-    permissions = [DATA_IS_READ_ONLY, SKILLS_ARE_READ_ONLY]
+    permissions = read_only_permissions()
     extras: dict[str, Any] = {}
 
     # Two axes, and this is where they meet: `cfg` says what is wired, the
