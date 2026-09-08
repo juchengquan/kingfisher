@@ -175,8 +175,8 @@ def test_the_module_scope_rule_can_actually_fire(tmp_path):
 
 
 def test_the_rule_above_walks_something():
-    """The guard the skip needed."""
+    """`SRC` resolving somewhere with no modules, which the rule above cannot notice."""
     assert len(MODULES) > 20, (
-        f"{len(MODULES)} modules found under {SRC} — the rule above parametrizes "
-        "over this list, and an empty one skips rather than fails"
+        f"{len(MODULES)} modules found under {SRC} — the rule above walks this list "
+        "in a loop, and an empty one gathers no complaints and passes"
     )
