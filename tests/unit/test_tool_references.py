@@ -54,21 +54,25 @@ def _spec(name="d", tools="csv_columns"):
 # -- how a reference is written and read ----------------------------------
 
 
-@pytest.mark.parametrize(
-    ("written", "expected"),
-    [
-        ("csv_profile::csv_columns", ("csv_profile", "csv_columns")),
-        ("sql_query.py::sql_tables", ("sql_query.py", "sql_tables")),
-        ("research/legal/x.py::find", ("research/legal/x.py", "find")),
-        ("plain_name", (None, "plain_name")),
-        # `--list` prints a package with its trailing slash for other reasons;
-        # pasting that in should not be a near-miss someone has to spot.
-        ("csv_profile/::csv_columns", ("csv_profile", "csv_columns")),
-        ("  spaced  ::  around  ", ("spaced", "around")),
-    ],
-)
-def test_a_written_reference_splits_into_a_claim_and_a_name(written, expected):
-    assert split_reference(written) == expected
+#: How each written form splits. `--list` prints a package with its trailing slash
+#: for other reasons; pasting that in should not be a near-miss someone has to spot.
+SPLITS = [
+    ("csv_profile::csv_columns", ("csv_profile", "csv_columns")),
+    ("sql_query.py::sql_tables", ("sql_query.py", "sql_tables")),
+    ("research/legal/x.py::find", ("research/legal/x.py", "find")),
+    ("plain_name", (None, "plain_name")),
+    ("csv_profile/::csv_columns", ("csv_profile", "csv_columns")),
+    ("  spaced  ::  around  ", ("spaced", "around")),
+]
+
+
+def test_a_written_reference_splits_into_a_claim_and_a_name():
+    wrong = [
+        f"{written!r} split to {split_reference(written)}, wanted {expected}"
+        for written, expected in SPLITS
+        if split_reference(written) != expected
+    ]
+    assert not wrong, "\n".join(wrong)
 
 
 def test_a_package_reference_carries_no_trailing_slash():
@@ -101,13 +105,13 @@ def test_the_claims_travel_beside_the_names():
     assert "plain" not in spec.tool_sources, "the short form claims nothing"
 
 
-@pytest.mark.parametrize("written", ['"*"', ""])
-def test_a_selection_naming_nothing_carries_no_claims(written):
+def test_a_selection_naming_nothing_carries_no_claims():
     """`["*"]` is everything and `[]` is nothing."""
-    spec = _spec(tools=written)
+    for written in ('"*"', ""):
+        spec = _spec(tools=written)
 
-    assert dict(spec.tool_sources) == {}
-    assert spec.tools in (ALL, ())
+        assert dict(spec.tool_sources) == {}, written
+        assert spec.tools in (ALL, ()), written
 
 
 def test_the_derived_field_cannot_be_written_by_hand():
@@ -210,16 +214,13 @@ UNIQUE = {"csv_columns": "csv_profile/"}
 CLASHING = ("a/t.py::fetch", "b/t.py::fetch")
 
 
-@pytest.mark.parametrize(
-    ("written", "expected"),
-    [
-        ("csv_profile::csv_columns", "csv_columns"),
-        ("csv_profile/::csv_columns", "csv_columns"),
-        ("csv_columns", "csv_columns"),
-    ],
-)
-def test_either_spelling_of_a_unique_tool_reaches_the_offering(written, expected):
-    assert _offering(UNIQUE).spelt((written,)) == (expected,)
+def test_either_spelling_of_a_unique_tool_reaches_the_offering():
+    wrong = [
+        f"{written!r} reached {_offering(UNIQUE).spelt((written,))}"
+        for written in ("csv_profile::csv_columns", "csv_profile/::csv_columns", "csv_columns")
+        if _offering(UNIQUE).spelt((written,)) != ("csv_columns",)
+    ]
+    assert not wrong, "\n".join(wrong)
 
 
 def test_a_name_the_offering_cannot_place_comes_back_as_written():
@@ -227,9 +228,9 @@ def test_a_name_the_offering_cannot_place_comes_back_as_written():
     assert _offering(UNIQUE).spelt(("typo::nonesuch",)) == ("typo::nonesuch",)
 
 
-@pytest.mark.parametrize("written", [ALL, None])
-def test_a_grant_that_names_nothing_is_left_alone(written):
-    assert _offering(UNIQUE).spelt(written) == written
+def test_a_grant_that_names_nothing_is_left_alone():
+    for written in (ALL, None):
+        assert _offering(UNIQUE).spelt(written) == written, written
 
 
 def test_the_long_form_of_a_unique_tool_is_not_an_unknown_tool():

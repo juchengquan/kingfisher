@@ -285,18 +285,16 @@ def test_the_result_is_an_ordinary_grant_that_narrowing_still_clamps():
 # they were free to drift apart in the first place.
 
 
-@pytest.mark.parametrize("kind", ["skill", "subagent", "tool"])
-@pytest.mark.parametrize(
-    "subject", ["this request", "subagent 'reviewer'"], ids=["request", "definition"]
-)
-def test_a_name_nothing_offers_is_refused_whoever_named_it(kind, subject):
-    with pytest.raises(CapabilityError) as raised:
-        refuse_unoffered(("nope",), offered=("real",), kind=kind, subject=subject)
+def test_a_name_nothing_offers_is_refused_whoever_named_it():
+    for kind in ("skill", "subagent", "tool"):
+        for subject in ("this request", "subagent 'reviewer'"):
+            with pytest.raises(CapabilityError) as raised:
+                refuse_unoffered(("nope",), offered=("real",), kind=kind, subject=subject)
 
-    message = str(raised.value)
-    assert subject in message
-    assert f"unknown {kind}(s): nope" in message
-    assert "real" in message
+            message = str(raised.value)
+            assert subject in message, (kind, subject)
+            assert f"unknown {kind}(s): nope" in message, (kind, subject)
+            assert "real" in message, (kind, subject)
 
 
 def test_the_refusal_says_all_four_things_a_reader_needs():

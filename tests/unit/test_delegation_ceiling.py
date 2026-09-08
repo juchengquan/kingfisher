@@ -423,12 +423,17 @@ def as_identities(selection):
     return tuple(f"catalogue::{name}" for name in selection)
 
 
-@pytest.mark.parametrize(("selection", "cap", "expected"), DECLARED)
-def test_a_delegates_skills_are_narrowed_by_it(selection, cap, expected):
+def test_a_delegates_skills_are_narrowed_by_it():
     """The fourth place, and the one the whole-function hash could not see."""
-    spec = replace(reading.read(HELPER, Path("helper.yaml")), skills=selection)
+    assert DECLARED, "no declared cases -- this walks nothing and passes"
+    wrong = []
+    for selection, cap, expected in DECLARED:
+        spec = replace(reading.read(HELPER, Path("helper.yaml")), skills=selection)
+        got = subagent_skills(spec, offering("a", "b", "c"), cap)
+        if got != as_identities(expected):
+            wrong.append(f"skills={selection!r} under {cap!r} gave {got}, wanted {expected!r}")
 
-    assert subagent_skills(spec, offering("a", "b", "c"), cap) == as_identities(expected)
+    assert not wrong, "\n".join(wrong)
 
 
 def test_undeclared_skills_mean_none_and_undeclared_tools_inherit():
