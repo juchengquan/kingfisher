@@ -286,6 +286,9 @@ ignore = ["ANN401"]
 # lives beside the tests because the AST tooling does -- `test_architecture`
 # reads the same trees -- and pytest does not collect it.
 "tests/unit/audit_duplication.py" = ["T201"]
+# The other one, for the same reason. It also edits `src/` in place and puts it
+# back, which is why it says so in its own first paragraph rather than here.
+"tests/unit/mutation_report.py" = ["T201"]
 # Throwaway probes, kept as a record of what was verified against the live
 # gateway rather than as maintained code.
 "spikes/**" = ["T201", "ANN", "PLC0415"]
