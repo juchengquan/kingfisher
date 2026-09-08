@@ -33,6 +33,21 @@ def test_concurrent_allocation_never_collides(workspace, dirs):
     assert len(set(ids)) == 40, f"{len(ids) - len(set(ids))} duplicates"
 
 
+def test_a_stray_entry_beside_the_turns_does_not_stop_the_next_one(workspace, dirs):
+    """The scan reads a turn id out of a name, so it has to be sure the name is one.
+
+    Anything can land in a session directory: an editor's swap file, a
+    half-finished copy, a folder somebody made by hand. Reading a number out of
+    `tmp` raises, and the turn that would have been allocated is lost.
+    """
+    session = Session.open(workspace, "littered", dirs)
+    first = session.allocate_turn(dirs)
+    for debris in ("tmp", "t", "notes.txt", "trash"):
+        (first.directory.parent / debris).mkdir(exist_ok=True)
+
+    assert session.allocate_turn(dirs).id == "t002"
+
+
 def test_allocated_ids_are_sequential_and_readable(workspace, dirs):
     session = Session.open(workspace, "ordered", dirs)
     assert [session.allocate_turn(dirs).id for _ in range(3)] == ["t001", "t002", "t003"]

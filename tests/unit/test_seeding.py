@@ -283,6 +283,26 @@ def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
     assert [(s.label, s.names) for s in done.skipped] == [("agents/wired.yaml", ("audit",))]
 
 
+def test_a_tools_own_json_is_not_read_as_a_definition(cfg, tmp_path):
+    """`seed` decides what to leave behind by reading one YAML field, and it has to
+    check the extension before the content: JSON is valid YAML.
+
+    A tool shipping `{"middleware": [...]}` beside itself is configuration for
+    that tool, not a definition naming this deployment's middleware. Dropping it
+    leaves the workspace a tool that cannot start, and the skip list would not
+    mention it -- that list is about definitions.
+    """
+    source = tmp_path / "presets"
+    (source / "tools").mkdir(parents=True)
+    (source / "tools" / "note.py").write_text("TOOLS = []\n", encoding="utf-8")
+    (source / "tools" / "note.json").write_text('{"middleware": ["audit"]}\n', encoding="utf-8")
+
+    done = seeding.seed(cfg, source)
+
+    assert "tools/note.json" in done.written
+    assert not done.skipped
+
+
 def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
     """`middleware: ["*"]` resolves against whatever the deployment registered, which on
     an empty registry is nothing -- and raises nothing either way.
