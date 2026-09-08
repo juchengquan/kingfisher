@@ -309,6 +309,17 @@ testpaths = ["tests", "service/tests"]
 # and the library's own test directory, so the other package can reach the
 # fixtures that describe a workspace -- `service/tests/conftest.py` says why.
 pythonpath = ["."]
+# One traceback line per failure. Measured: a single wrong `and` in
+# `src/kingfisher/layout.py` fails 385 tests and prints 35,495 lines -- and 345
+# of those failures are one exception from one line of
+# `src/kingfisher/infrastructure/harness/backend.py`, raised on each test's way
+# to an assertion it never reached. The run carries one line of information and
+# prints it 345 times; at `--tb=line` the same run is 1,415 lines.
+#
+# So the default is sized for the run that goes wrong across the whole suite,
+# which is the one nobody can read. Pass `--tb=long` for the single test you are
+# debugging, where the frames are the point.
+addopts = ["--tb=line"]
 
 [tool.ty.environment]
 python-version = "3.12"
