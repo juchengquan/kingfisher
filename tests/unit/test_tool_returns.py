@@ -108,6 +108,11 @@ def _results(cfg, session_dir, body: str) -> list[ToolMessage]:
 def test_what_the_model_is_shown(cfg, session_dir, body: str, shown: str) -> None:
     """The four rows of the table the guide prints, asserted as the model sees them
     rather than as langchain computes them.
+
+    `status` is asserted with the content because the guide's claim is that *nothing
+    fails*: a tool returning the wrong shape reports success and tells the model
+    something unhelpful, and a row that started raising would still pass a content-only
+    check on the other three.
     """
     results = _results(cfg, session_dir, body)
 

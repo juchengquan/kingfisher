@@ -649,7 +649,12 @@ def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
 
 
 def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
-    """"confined" was true and unhelpful."""
+    """"confined" was true and unhelpful.
+
+    Asserted against `_mechanism` rather than a real `examine`, because the confined
+    branch is only reachable on a host with `sandbox-exec`, and a test that quietly
+    asserts nothing on the CI runner is worse than no test.
+    """
     from kingfisher.infrastructure.sandbox.confinement import Confinement, _unwrapped
 
     assert health._mechanism(Confinement(wrap=lambda c: c, mechanism="sandbox-exec")) == (

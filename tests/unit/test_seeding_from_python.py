@@ -106,7 +106,11 @@ def test_everything_takes_what_the_default_leaves(tmp_path, assets_examples):
 
 
 def test_a_workspace_paths_is_destination_enough(tmp_path, assets_examples):
-    """`seed` takes a destination, not a whole `Config`."""
+    """`seed` takes a destination, not a whole `Config`.
+
+    Driven rather than asserted about the annotation, because what matters is that it
+    works with no catalogue on disk -- the state this asserts by never writing one.
+    """
     paths = WorkspacePaths(tmp_path / "ws")
     ensure_layout(paths.workspace)
     assert not (paths.workspace / "models.yaml").exists(), "no catalogue yet, deliberately"

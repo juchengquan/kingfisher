@@ -22,7 +22,12 @@ def _definitions(root: Path, *entries: str) -> Path:
 
 
 def test_nothing_ships_to_seed_from(shipped):
-    """This asserted the opposite until the definitions left the wheel."""
+    """This asserted the opposite until the definitions left the wheel.
+
+    `kinds_at` answers about a directory now, because that is the only kind of answer
+    there is: no set arrives with the install, so "did they come with it" has no
+    subject.
+    """
     assert seeding.kinds_at(shipped) == (
         "agents",
         "skills",

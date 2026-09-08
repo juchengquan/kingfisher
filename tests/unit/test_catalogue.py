@@ -144,7 +144,12 @@ def test_the_skills_route_follows_the_catalogue(tmp_path, cfg, session_dir):
 
 @macos
 def test_the_shell_reaches_a_supplied_catalogue(cfg, session_dir):
-    """The other half of the same answer, and the half a route check cannot see."""
+    """The other half of the same answer, and the half a route check cannot see.
+
+    Staged under the operator's home on purpose: the profile denies the home and re-
+    allows what has to stay readable, so a catalogue anywhere else is readable
+    regardless and would prove nothing.
+    """
     probe = Path.home() / "kingfisher-supplied-catalogue-probe"
     roots = _staged(probe)
     (roots.skills.root / "demo").mkdir()

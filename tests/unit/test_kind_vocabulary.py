@@ -1,5 +1,8 @@
 """One list of the kinds, and everything by-kind checked against it.
 
+The vocabulary is shared and the shapes are not, so what these tests ask is only that a
+kind is either handled or written down as deliberately absent.
+
 Adding a ninth axis to `Capabilities` passed the whole suite, ruff and ty without a
 word, which is how a feature comes to silently not exist.
 """
