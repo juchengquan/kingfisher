@@ -51,34 +51,52 @@ ESCAPES = [
 
 
 @needs_bubblewrap
-@pytest.mark.parametrize(("what", "command"), ESCAPES, ids=[e[0] for e in ESCAPES])
-def test_the_sandbox_holds(fenced, two_sessions, what, command):
-    """Every way out that was tried."""
+def test_the_sandbox_holds(fenced, two_sessions):
+    """Every way out that was tried.
+
+    One runner for all of them, and it is the failure of every case that makes that
+    safe: what an escape manages before it fails is a symlink or an empty directory
+    inside the session it is already allowed to write, and no later case reads either.
+    """
+    assert ESCAPES, "no escapes listed -- this walks nothing and passes"
     mine, theirs = two_sessions
-    spelled = command.format(
-        secret=mine / "derived" / "secret.txt", sessions=theirs.parent
-    )
+    leaked = []
+    for what, command in ESCAPES:
+        spelled = command.format(
+            secret=mine / "derived" / "secret.txt", sessions=theirs.parent
+        )
 
-    result = fenced.run(spelled)
+        result = fenced.run(spelled)
 
-    assert "TENANT-A-PRIVATE" not in result.output, f"the sandbox let a tenant {what}"
+        if "TENANT-A-PRIVATE" in result.output:
+            leaked.append(f"the sandbox let a tenant {what}")
+
+    assert not leaked, "\n".join(leaked)
 
 
-@pytest.mark.parametrize(("what", "command"), ESCAPES[:3], ids=[e[0] for e in ESCAPES[:3]])
-def test_each_escape_works_when_nothing_is_sandboxing_it(two_sessions, what, command):
-    """The control, and it runs everywhere."""
+def test_each_escape_works_when_nothing_is_sandboxing_it(two_sessions):
+    """The control, and it runs everywhere.
+
+    The first three need no `SYS_ADMIN` and so mount nothing: two read and the third
+    overwrites its own symlink, which is why one pair of sessions serves all three.
+    """
+    portable = ESCAPES[:3]
+    assert portable, "no portable escapes -- this control proves nothing"
     mine, theirs = two_sessions
-    spelled = command.format(
-        secret=mine / "derived" / "secret.txt", sessions=theirs.parent
-    )
+    blunt = []
+    for what, command in portable:
+        spelled = command.format(
+            secret=mine / "derived" / "secret.txt", sessions=theirs.parent
+        )
 
-    done = subprocess.run(  # noqa: S602 -- the control, deliberately unsandboxed
-        spelled, shell=True, cwd=str(theirs), capture_output=True, text=True, check=False
-    )
+        done = subprocess.run(  # noqa: S602 -- the control, deliberately unsandboxed
+            spelled, shell=True, cwd=str(theirs), capture_output=True, text=True, check=False
+        )
 
-    assert "TENANT-A-PRIVATE" in (done.stdout + done.stderr), (
-        f"the control cannot {what}, so it proves nothing"
-    )
+        if "TENANT-A-PRIVATE" not in (done.stdout + done.stderr):
+            blunt.append(f"the control cannot {what}, so it proves nothing")
+
+    assert not blunt, "\n".join(blunt)
 
 
 @needs_bubblewrap

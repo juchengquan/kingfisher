@@ -91,16 +91,27 @@ ESCAPES = [
 
 
 @needs_landlock
-@pytest.mark.parametrize(("what", "command"), ESCAPES, ids=[e[0] for e in ESCAPES])
-def test_the_fence_holds(fenced, two_sessions, what, command):
-    """Every way out that was tried, and every one of them fails."""
+def test_the_fence_holds(fenced, two_sessions):
+    """Every way out that was tried, and every one of them fails.
+
+    One runner for all of them, which is safe only because every case fails: the
+    escapes that write before they fail leave a symlink or an empty directory inside
+    the session that is allowed to have them, and nothing later reads either.
+    """
+    assert ESCAPES, "no escapes listed -- this walks nothing and passes"
     mine, theirs = two_sessions
-    spelled = command.format(secret=mine / "derived" / "secret.txt", theirs=theirs)
+    leaked = []
+    for what, command in ESCAPES:
+        spelled = command.format(secret=mine / "derived" / "secret.txt", theirs=theirs)
 
-    result = fenced.run(spelled)
+        result = fenced.run(spelled)
 
-    assert "TENANT-A-PRIVATE" not in result.output, f"the fence let a tenant {what}"
-    assert result.exit_code != 0
+        if "TENANT-A-PRIVATE" in result.output:
+            leaked.append(f"the fence let a tenant {what}")
+        elif result.exit_code == 0:
+            leaked.append(f"{what!r} was allowed to succeed, so it read nothing by luck")
+
+    assert not leaked, "\n".join(leaked)
 
 
 #: The escapes whose control needs nothing but a filesystem, so it runs on the
@@ -110,20 +121,29 @@ def test_the_fence_holds(fenced, two_sessions, what, command):
 PORTABLE = ESCAPES[:3]
 
 
-@pytest.mark.parametrize(("what", "command"), PORTABLE, ids=[e[0] for e in PORTABLE])
-def test_each_escape_works_when_nothing_is_fencing_it(two_sessions, what, command):
+def test_each_escape_works_when_nothing_is_fencing_it(two_sessions):
     """The control, and it runs everywhere rather than only where Landlock does.
 
     Without it the test above would pass against a misspelled path just as happily as
     against a working fence, which is the failure that makes a security test worse than
     none.
+
+    `PORTABLE` is the three that need no `SYS_ADMIN`, so none of them mounts anything:
+    two read and the third overwrites its own symlink, which is why one pair of
+    sessions serves all three.
     """
+    assert PORTABLE, "no portable escapes -- this control proves nothing"
     mine, theirs = two_sessions
-    spelled = command.format(secret=mine / "derived" / "secret.txt", theirs=theirs)
+    blunt = []
+    for what, command in PORTABLE:
+        spelled = command.format(secret=mine / "derived" / "secret.txt", theirs=theirs)
 
-    _, output = unfenced(spelled, cwd=theirs)
+        _, output = unfenced(spelled, cwd=theirs)
 
-    assert "TENANT-A-PRIVATE" in output, f"the control cannot {what}, so it proves nothing"
+        if "TENANT-A-PRIVATE" not in output:
+            blunt.append(f"the control cannot {what}, so it proves nothing")
+
+    assert not blunt, "\n".join(blunt)
 
 
 @needs_landlock
