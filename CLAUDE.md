@@ -88,7 +88,7 @@ bites -- break the thing it guards and confirm it goes red, then restore.
 ## Landing work
 
 Independent slices, one green commit each, a pull request per slice off `main`.
-Do not stack branches: this repository rebase-merges, which orphans a child PR.
+Do not stack branches: this repository squash-merges, which orphans a child PR.
 
 Commit messages here are prose, in the imperative, explaining why the change is
 right -- not bullet lists of what changed. Match what `git log` already shows.
