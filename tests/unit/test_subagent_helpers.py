@@ -181,6 +181,9 @@ def test_a_definition_naming_itself_is_a_cycle():
 def test_a_helper_is_built_without_a_task_tool(cfg, session_dir):
     """The depth bound is a call that is not made, so this is what proves it: the helper
     holds no `task`, so it could not delegate even if it tried.
+
+    Asked of the helper *inside* `reviewer`, not the standalone delegate of the same
+    name -- that one has no helpers either, so it would pass whatever this change did.
     """
     _define(cfg, REVIEWER, HELPER)
 

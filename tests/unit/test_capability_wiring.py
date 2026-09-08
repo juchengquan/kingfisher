@@ -574,7 +574,12 @@ TOOLS = [shout]
 
 
 def test_a_plain_function_is_withheld_when_the_grant_withholds_it(cfg, session_dir):
-    """The grant is the security boundary, and it matches on a name."""
+    """The grant is the security boundary, and it matches on a name.
+
+    `ToolAllowlist` reads `.name` and deliberately *keeps* anything it cannot identify,
+    and a plain function has `__name__` and no `.name` -- so whether a withheld one is
+    really withheld rests on deepagents wrapping it before the allowlist ever sees it.
+    """
     from tests.conftest import tools_dir
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)

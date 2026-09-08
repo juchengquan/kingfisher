@@ -17,7 +17,11 @@ from tests.integration.seed_example import main, seed_workspace
 
 @pytest.fixture
 def assets_examples():
-    """The tree this repository actually ships, not a planted one."""
+    """The tree this repository actually ships, not a planted one.
+
+    A fixture would pass while `assets_examples/` held a definition no deployment could
+    seed.
+    """
     return repository_root() / "assets_examples"
 
 

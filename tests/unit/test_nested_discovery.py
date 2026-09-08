@@ -79,7 +79,12 @@ def test_a_package_is_one_unit_and_its_helpers_are_not_scanned(tmp_path):
 
 
 def test_two_catalogues_may_each_hold_a_package_of_the_same_name(tmp_path):
-    """The isolation the flat loader was built for, kept."""
+    """The isolation the flat loader was built for, kept.
+
+    The loader keys on the full path, so each of `wsA/research` and `wsB/research`
+    resolves its *own* helper -- which is the part a name collision would break
+    silently.
+    """
     for workspace in ("wsA", "wsB"):
         pkg = tmp_path / workspace / "research"
         pkg.mkdir(parents=True)

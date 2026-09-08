@@ -29,7 +29,11 @@ def test_an_adapter_row_cannot_overrule_a_configured_value(cfg, monkeypatch):
 
 
 def test_a_model_entrys_extra_cannot_overrule_its_own_params(cfg):
-    """The same rule from the other side: `extra` in `models.yaml`."""
+    """The same rule from the other side: `extra` in `models.yaml`.
+
+    `model_catalogue` refuses this at parse time so the error can name the file; this is
+    the backstop for a `ModelProfile` built any other way.
+    """
     profile = replace(cfg.models.models["fake-model"], extra={"max_tokens": 1})
 
     with pytest.raises(TypeError, match="multiple values for keyword argument"):

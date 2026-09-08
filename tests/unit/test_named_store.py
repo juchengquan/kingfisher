@@ -188,7 +188,12 @@ def test_wiring_neither_is_not_an_error(workspace):
 
 
 def test_naming_a_store_twice_is_refused(workspace, tmp_path):
-    """Refused rather than resolved by precedence."""
+    """Refused rather than resolved by precedence.
+
+    Preferring one silently would leave a deployment's sessions in the directory it
+    stopped meaning to use, and the message names both variables because the fix is to
+    unset one.
+    """
     with pytest.raises(ConfigError, match="configured twice") as caught:
         config(
             workspace,

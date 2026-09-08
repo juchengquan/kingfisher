@@ -1,4 +1,9 @@
-"""What keeps `execute` off the rest of the host."""
+"""What keeps `execute` off the rest of the host.
+
+The behavioural tests here run a real shell through a real sandbox rather than
+inspecting the profile text, because a profile that parses is not the same claim as a
+file that cannot be read.
+"""
 
 from __future__ import annotations
 

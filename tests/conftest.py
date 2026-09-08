@@ -175,7 +175,12 @@ def fake_model():
 
 
 def dispatched(graph) -> tuple[str, ...]:
-    """`registered_tools` for a graph the tests built themselves."""
+    """`registered_tools` for a graph the tests built themselves.
+
+    It answers `None` for a graph it cannot read, and reading that as the empty tuple is
+    how a rename upstream would empty the built-in set with every assertion still
+    passing.
+    """
     from kingfisher.tools.harness import registered_tools
 
     names = registered_tools(graph)

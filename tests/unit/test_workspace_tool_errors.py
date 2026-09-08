@@ -295,7 +295,12 @@ system_prompt: |
 
 
 def test_a_helper_below_a_delegate_is_guarded_too(cfg, session_dir):
-    """Worth its own test rather than assumed from the one above."""
+    """Worth its own test rather than assumed from the one above.
+
+    A helper is built by a different call than a delegate the request activated, so
+    reaching for the top-level instance instead is an easy mistake that passes -- a
+    standalone delegate has neither the helper nor the bug.
+    """
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.infrastructure.harness.agent import build_agent
     from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir

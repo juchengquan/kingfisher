@@ -612,6 +612,9 @@ def test_a_definition_naming_no_tools_is_unaffected(cfg, session_dir):
 def test_a_builtin_named_under_tools_says_which_list_it_belongs_in(cfg, session_dir):
     """The mistake this split creates, and the one every definition written before it
     will make: `tools: [read_file]` was correct until now.
+
+    Falling through to "unknown tool: read_file" would send someone looking for a bug in
+    kingfisher, because `read_file` plainly exists.
     """
     definition = TYPO.replace("builtin_tools: [reed_file]", "tools: [read_file]")
 

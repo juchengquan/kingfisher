@@ -236,7 +236,12 @@ def test_the_plumbing_is_listed_apart_from_what_the_agent_addresses():
 
 
 def test_turn_names_are_claimed_exclusively(workspace):
-    """The one filesystem guarantee kingfisher's correctness rests on."""
+    """The one filesystem guarantee kingfisher's correctness rests on.
+
+    `allocate_turn` is atomic *because* mkdir fails on an existing name; a shared
+    filesystem that did not honour it would let two concurrent turns share a directory,
+    silently restoring the defect the turn tier was built to fix.
+    """
     from concurrent.futures import ThreadPoolExecutor
 
     dirs = LocalSessionDirs()

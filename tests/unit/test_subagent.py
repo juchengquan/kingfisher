@@ -484,6 +484,10 @@ def test_provider_is_no_longer_a_field(tmp_path):
     """It named an endpoint by style, and moved in lockstep with `model` -- naming one
     without the other was refused, because a model sent somewhere that has never
     heard of it is a 404 if you are lucky.
+
+    Refused like any other unknown key rather than ignored: a definition still carrying
+    `provider: openai` would otherwise keep running, silently somewhere else than its
+    author wrote.
     """
     definition = (
         "name: reviewer\ndescription: d\nprovider: openai\nmodel: gpt-5\n"
