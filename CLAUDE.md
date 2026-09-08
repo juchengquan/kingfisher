@@ -66,6 +66,17 @@ Four kinds do not earn it, and are the ones to cut on sight:
     the split is the design").
   - the contract a signature already states.
 
+One kind reads like the first four and is none of them. A sentence saying why a
+check is built the way it is -- driven rather than inspected, the control beside
+the escape, the real tree rather than a fixture -- looks like commentary on
+method, and is what stops the next editor simplifying the check into one that
+passes against the thing it was written for.
+`test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry` carries
+"delete the star and this still passes if it asserts on a spec of its own
+making", and `test_no_rule_here_is_parametrized_over_nothing` exists because a
+rule with no cases passes whatever it was meant to check. Cutting those was the
+largest thing the prose pass got wrong.
+
 There is no density to match. A file of one-line comments is not under-explained,
 and the shortest version that still stops the mistake is the right one.
 
