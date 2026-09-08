@@ -232,13 +232,10 @@ class Kingfisher(Sessions, Disposal):
             )
             raise TypeError(msg)
         self._runner = runner
-        # Host-side, beside the run logs, because the session directory is the
-        # agent's own root -- a claim kept there would be something `execute`
-        # could delete. `state_dir` is the one place the agent never addresses.
         # Three shapes, and the difference is who owns the connection. An instance is a
         # shared store the deployment made and manages; a callable is a factory this
         # service calls per session and closes after the turn; `None` means the default,
-        # which is a database inside each session.
+        # which is `InMemorySaver` and holds nothing after the turn that made it.
         self.threads: Any = threads
         self._shared: Any = threads if (threads is not None and not callable(threads)) else None
         # No default. A deployment that never serves uploaded definitions has
