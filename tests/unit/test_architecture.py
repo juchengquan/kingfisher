@@ -89,6 +89,28 @@ def _imported_names(path: Path) -> dict[str, frozenset[str]]:
     return {module: frozenset(names) for module, names in taken.items()}
 
 
+def _every(collection: list[Path], what: str) -> list[Path]:
+    """The files a rule is about, refused when there are none.
+
+    A rule that walks a collection, gathers offenders and asserts the list is empty
+    passes when the collection is empty too -- the loop simply never runs. That is
+    the failure `test_no_rule_here_is_parametrized_over_nothing` exists for, and it
+    watches five collections *by name*, so a rule walking a sixth was never covered
+    by it. Asked here instead, by every rule at the point it walks anything, which is
+    the one place the question cannot be forgotten.
+
+    It matters more since these rules stopped being parametrised. One case per module
+    at least made an empty collection visible as a test that vanished from the run;
+    collapsed to a single case, the rule goes on reporting success over nothing.
+    """
+    assert collection, (
+        f"{what} collected no files — the rule reading it walks nothing, gathers no "
+        "offenders and passes, which is the shape of a rule that has stopped being "
+        "about anything"
+    )
+    return collection
+
+
 def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     """Every module in a layer, subpackages included.
 
@@ -769,6 +791,12 @@ def test_no_rule_here_is_parametrized_over_nothing():
     Found by mutation while renaming `server/` to `presentation/`: pointing the
     collector at the old name left one rule covering fifteen modules one moment and zero
     the next, with a green run either way.
+
+    `_every` is what each rule asks now, and this is the half that survives a rule
+    forgetting to ask: it names the collections rather than the rules, so dropping the
+    call still fails here. It only reaches a collection somebody wrote down, which is
+    why `_server_modules` is on the list -- it was the one a collapsed rule walked and
+    this did not.
     """
     collections = {
         "domain": _modules_in("domain"),
@@ -776,6 +804,7 @@ def test_no_rule_here_is_parametrized_over_nothing():
         "infrastructure": _modules_in("infrastructure"),
         "the package": _package_modules(),
         "consumers": _consumer_modules(),
+        "the server": _server_modules(),
     }
     empty = sorted(name for name, found in collections.items() if not found)
     assert not empty, (
@@ -794,8 +823,7 @@ def test_compiled_files_are_not_mistaken_for_modules(tmp_path):
     assert [p.name for p in _modules_in("domain", root=tmp_path)] == ["real.py"]
 
 
-@pytest.mark.parametrize("path", _modules_in("domain"), ids=_module_id)
-def test_domain_imports_only_the_standard_library_and_itself(path):
+def test_domain_imports_only_the_standard_library_and_itself():
     """Deny by default, replacing three rules that were allowlists by omission.
 
     **One exception, measured rather than granted.** A domain module may name an
@@ -804,17 +832,21 @@ def test_domain_imports_only_the_standard_library_and_itself(path):
     the agent runtime, against the 888ms `decisions.md` quotes for the bad case. A
     `catalogue` or a `harness` would not be free, and those stay refused.
     """
-    outside = {
-        module
-        for module in _imported_modules(path)
-        if module.split(".")[0] not in sys.stdlib_module_names
-        and not _inside_domain(module)
-        and not _is_asset_spec(module)
-    }
+    outside = []
+    for path in _every(_modules_in("domain"), "the domain"):
+        foreign = {
+            module
+            for module in _imported_modules(path)
+            if module.split(".")[0] not in sys.stdlib_module_names
+            and not _inside_domain(module)
+            and not _is_asset_spec(module)
+        }
+        if foreign:
+            outside.append(f"{_module_id(path)} imports {sorted(foreign)}")
+
     assert not outside, (
-        f"{_module_id(path)} imports {sorted(outside)} -- the domain takes the standard "
-        "library, itself, and an asset kind's `spec`; have an adapter do the rest "
-        "and hand it the result"
+        f"{outside} -- the domain takes the standard library, itself, and an asset "
+        "kind's `spec`; have an adapter do the rest and hand it the result"
     )
 
 
@@ -972,8 +1004,7 @@ def test_a_subpackage_is_judged_by_its_own_area():
     assert _area_of(buried) == "infrastructure"
 
 
-@pytest.mark.parametrize("path", _package_modules(), ids=_module_id)
-def test_a_module_imports_only_what_its_area_may_depend_on(path):
+def test_a_module_imports_only_what_its_area_may_depend_on():
     """One table, replacing two rules that were allowlists by omission.
 
     Both of the old rules had the same hole: `FOREIGN` named five packages where six of
@@ -983,18 +1014,25 @@ def test_a_module_imports_only_what_its_area_may_depend_on(path):
     The second of the two passed while *any one* file in `infrastructure/` imported from
     its tuple, so it had stopped being about the file it was written for.
     """
-    area = _area_of(path)
-    used = {
-        m.split(".")[0]
-        for m in _imported_modules(path)
-        if m.split(".")[0] not in sys.stdlib_module_names and m.split(".")[0] != "kingfisher"
-    }
-    stray = _undeclared(used, area)
+    stray = []
+    for path in _every(_package_modules(), "the package"):
+        area = _area_of(path)
+        used = {
+            m.split(".")[0]
+            for m in _imported_modules(path)
+            if m.split(".")[0] not in sys.stdlib_module_names
+            and m.split(".")[0] != "kingfisher"
+        }
+        if undeclared := _undeclared(used, area):
+            stray.append(
+                f"{_module_id(path)} imports {sorted(undeclared)}; "
+                f"{area or 'the package root'} may import "
+                f"{sorted(THIRD_PARTY[area]) or 'nothing third-party'}"
+            )
+
     assert not stray, (
-        f"{_module_id(path)} imports {sorted(stray)}; "
-        f"{area or 'the package root'} may import "
-        f"{sorted(THIRD_PARTY[area]) or 'nothing third-party'} — have an adapter in an "
-        "area that may do that, and hand this one the result"
+        "\n".join(stray) + "\n— have an adapter in an area that may do that, and hand "
+        "this one the result"
     )
 
 
@@ -1704,11 +1742,15 @@ def _world_contact(path: Path) -> list[str]:
     return found
 
 
-@pytest.mark.parametrize("path", _modules_in("domain"), ids=_module_id)
-def test_domain_touches_nothing_outside_the_process(path):
+def test_domain_touches_nothing_outside_the_process():
     """The boundary the older tests were mistaken for."""
-    contact = _world_contact(path)
-    assert not contact, f"{_module_id(path)} reaches the world: {contact}"
+    reaching = [
+        f"{_module_id(path)}: {contact}"
+        for path in _every(_modules_in("domain"), "the domain")
+        if (contact := _world_contact(path))
+    ]
+
+    assert not reaching, f"the domain reaches the world: {reaching}"
 
 
 #: Calls that *change* the filesystem, as opposed to reading it or the
@@ -2143,33 +2185,47 @@ def test_the_rule_above_still_finds_every_consumer():
     )
 
 
-@pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
-def test_a_consumer_uses_the_library_only_through_its_public_api(path):
+def test_a_consumer_uses_the_library_only_through_its_public_api():
     """`from kingfisher import X`, never `from kingfisher.domain.y import X`."""
-    family = _consumer_of(path) in FAMILY
-    taken = frozenset().union(
-        *(
-            _taken_by_the_back_door(module, names, family=family)
-            for module, names in _imported_names(path).items()
-        ),
-        frozenset(),
-    )
-    assert not taken, (
-        f"{_module_id(path)} reaches for {sorted(taken)} — "
-        + (
-            "a name the front door carries comes through the front door, even for a "
-            "consumer shipping in this wheel; that is what keeps the claim testable"
-            if family
-            else "a consumer outside this wheel takes `kingfisher` and nothing deeper; "
-            "if it needs something private, export it on purpose"
+    reaching = []
+    for path in _every(_consumer_modules(), "the consumers"):
+        family = _consumer_of(path) in FAMILY
+        taken = frozenset().union(
+            *(
+                _taken_by_the_back_door(module, names, family=family)
+                for module, names in _imported_names(path).items()
+            ),
+            frozenset(),
         )
-    )
+        if taken:
+            reaching.append(
+                f"{_module_id(path)} reaches for {sorted(taken)} — "
+                + (
+                    "a name the front door carries comes through the front door, even "
+                    "for a consumer shipping in this wheel; that is what keeps the "
+                    "claim testable"
+                    if family
+                    else "a consumer outside this wheel takes `kingfisher` and nothing "
+                    "deeper; if it needs something private, export it on purpose"
+                )
+            )
+
+    assert not reaching, "\n".join(reaching)
 
 
-@pytest.mark.parametrize("path", _consumer_modules(), ids=_module_id)
-def test_both_import_collectors_see_the_same_modules(path):
+def test_both_import_collectors_see_the_same_modules():
     """`_imported_names` may add names; it may not lose an import."""
-    assert set(_imported_names(path)) == _imported_modules(path)
+    disagree = [
+        _module_id(path)
+        for path in _every(_consumer_modules(), "the consumers")
+        if set(_imported_names(path)) != _imported_modules(path)
+    ]
+
+    assert not disagree, (
+        f"{disagree} are read differently by the two collectors — a rule reading one "
+        "while another reads the other is how an import becomes invisible to half "
+        "this file"
+    )
 
 
 def test_the_back_door_rule_tells_the_two_consumers_apart():
@@ -2222,23 +2278,28 @@ def _server_modules() -> list[Path]:
     return sorted(CONSUMERS[ON_AN_EVENT_LOOP].rglob("*.py"))
 
 
-@pytest.mark.parametrize("path", _server_modules(), ids=_module_id)
-def test_the_server_calls_the_async_turn_methods(path):
+def test_the_server_calls_the_async_turn_methods():
     """`arun` and `astream`, never `run` and `stream`."""
-    tree = ast.parse(path.read_text(encoding="utf-8"))
-    offenders = sorted({
-        node.func.attr
-        for node in ast.walk(tree)
-        if isinstance(node, ast.Call)
-        and isinstance(node.func, ast.Attribute)
-        and node.func.attr in BLOCKING_METHODS
-        and not (
-            isinstance(node.func.value, ast.Name) and node.func.value.id in NOT_KINGFISHER
-        )
-    })
-    assert not offenders, (
-        f"{_module_id(path)} calls {offenders} — use arun/astream; the sync pair "
-        "blocks every other turn on this loop, not just this one"
+    blocking = []
+    for path in _every(_server_modules(), "the server"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        called = sorted({
+            node.func.attr
+            for node in ast.walk(tree)
+            if isinstance(node, ast.Call)
+            and isinstance(node.func, ast.Attribute)
+            and node.func.attr in BLOCKING_METHODS
+            and not (
+                isinstance(node.func.value, ast.Name)
+                and node.func.value.id in NOT_KINGFISHER
+            )
+        })
+        if called:
+            blocking.append(f"{_module_id(path)} calls {called}")
+
+    assert not blocking, (
+        f"{blocking} — use arun/astream; the sync pair blocks every other turn on "
+        "this loop, not just this one"
     )
 
 

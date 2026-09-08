@@ -24,44 +24,69 @@ def asked(**body) -> Capabilities:
 # -- the four states -------------------------------------------------------
 
 
-@pytest.mark.parametrize("axis", AXES)
-def test_an_absent_axis_takes_the_deployments_default(axis):
+def test_an_absent_axis_takes_the_deployments_default():
     """The state with no spelling."""
-    assert getattr(asked(), axis) == getattr(Capabilities(), axis)
+    wrong = [axis for axis in AXES if getattr(asked(), axis) != getattr(Capabilities(), axis)]
+    assert not wrong, f"{wrong} do not take the deployment's default when the wire omits them"
 
 
-@pytest.mark.parametrize("axis", AXES)
-def test_a_null_axis_asks_for_nothing_on_it(axis):
+def test_a_null_axis_asks_for_nothing_on_it():
     """The state pydantic would have swallowed."""
-    assert getattr(asked(**{axis: None}), axis) is None
+    wrong = [axis for axis in AXES if getattr(asked(**{axis: None}), axis) is not None]
+    assert not wrong, f"{wrong} do not read `null` as asking for nothing"
 
 
-@pytest.mark.parametrize("axis", AXES)
-def test_a_star_axis_asks_for_everything_the_workspace_offers(axis):
-    assert getattr(asked(**{axis: "*"}), axis) == "*"
+def test_a_star_axis_asks_for_everything_the_workspace_offers():
+    wrong = [axis for axis in AXES if getattr(asked(**{axis: "*"}), axis) != "*"]
+    assert not wrong, f"{wrong} do not read `\"*\"` as everything the workspace offers"
 
 
-@pytest.mark.parametrize("axis", AXES)
-def test_a_list_axis_becomes_a_tuple_of_exactly_those_names(axis):
+def test_a_list_axis_becomes_a_tuple_of_exactly_those_names():
     """Converted here rather than relying on `Capabilities.__post_init__`, whose
     leniency about lists is documented as a backstop: "a caller holding a list should
     convert at its own edge".
     """
-    assert getattr(asked(**{axis: ["a", "b"]}), axis) == ("a", "b")
+    wrong = [axis for axis in AXES if getattr(asked(**{axis: ["a", "b"]}), axis) != ("a", "b")]
+    assert not wrong, f"{wrong} do not convert a list to a tuple of exactly those names"
 
 
-@pytest.mark.parametrize("axis", WIDE)
-def test_null_and_absent_differ_on_every_wide_axis(axis):
-    """The whole reason this module exists, stated once per axis it applies to."""
-    assert getattr(asked(**{axis: None}), axis) != getattr(asked(), axis)
+def test_null_and_absent_differ_on_every_wide_axis():
+    """The whole reason this module exists."""
+    same = [
+        axis for axis in WIDE
+        if getattr(asked(**{axis: None}), axis) == getattr(asked(), axis)
+    ]
+    assert not same, (
+        f"{same} read `null` and absent alike, and they default to `\"*\"` — a caller "
+        "asking for nothing on one of these would be handed everything"
+    )
 
 
-@pytest.mark.parametrize("axis", NARROW)
-def test_null_and_absent_agree_on_the_narrow_axes(axis):
+def test_null_and_absent_agree_on_the_narrow_axes():
     """Not a contradiction -- these default to nothing, so asking for nothing and saying
     nothing land in the same place.
     """
-    assert getattr(asked(**{axis: None}), axis) == getattr(asked(), axis)
+    differ = [
+        axis for axis in NARROW
+        if getattr(asked(**{axis: None}), axis) != getattr(asked(), axis)
+    ]
+    assert not differ, f"{differ} default to nothing, so `null` and absent must agree"
+
+
+def test_the_three_axis_lists_are_not_empty():
+    """Seven rules above walk these, and a rule walking nothing passes.
+
+    `AXES` comes off the dataclass and `WIDE`/`NARROW` are filtered from it by what
+    each axis defaults to, so a default changing shape is what would empty one --
+    quietly, now that these are loops rather than one case per axis.
+    """
+    assert AXES, "no axes read off `Capabilities`"
+    assert WIDE, "no axis defaults to `*`"
+    assert NARROW, "no axis defaults to nothing"
+    assert set(WIDE) | set(NARROW) == set(AXES), (
+        f"{sorted(set(AXES) - set(WIDE) - set(NARROW))} default to neither `*` nor "
+        "nothing, so the two rules below cover less than every axis"
+    )
 
 
 def test_an_empty_object_is_not_an_opinion_about_anything():
@@ -81,13 +106,16 @@ def test_every_axis_of_the_lattice_is_on_the_wire():
     assert set(CapabilitiesBody.model_fields) == set(AXES)
 
 
-@pytest.mark.parametrize("axis", AXES)
-def test_the_wire_model_declares_the_lattices_own_default(axis):
+def test_the_wire_model_declares_the_lattices_own_default():
     """The declared defaults are what the generated schema shows a client, so a wrong
     one is a lie in the docs rather than a bug in the behaviour -- the quieter
     failure of the two, and the reason it is checked.
     """
-    assert CapabilitiesBody.model_fields[axis].default == getattr(Capabilities(), axis)
+    wrong = [
+        axis for axis in AXES
+        if CapabilitiesBody.model_fields[axis].default != getattr(Capabilities(), axis)
+    ]
+    assert not wrong, f"{wrong} declare a default the lattice does not have"
 
 
 def test_an_unknown_axis_is_refused_rather_than_ignored():

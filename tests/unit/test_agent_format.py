@@ -61,12 +61,13 @@ def test_three_fields_are_required_and_nothing_else_is():
     assert spec.wanted is None
 
 
-@pytest.mark.parametrize("missing", sorted(REQUIRED))
-def test_a_missing_required_field_is_refused_by_name(missing):
-    written = "".join(text for field, text in REQUIRED.items() if field != missing)
+def test_a_missing_required_field_is_refused_by_name():
+    assert REQUIRED, "no required fields -- this walks nothing and passes"
+    for missing in sorted(REQUIRED):
+        written = "".join(text for field, text in REQUIRED.items() if field != missing)
 
-    with pytest.raises(AgentError, match=f"missing required field '{missing}'"):
-        _read(written, "plain.yaml")
+        with pytest.raises(AgentError, match=f"missing required field '{missing}'"):
+            _read(written, "plain.yaml")
 
 
 @pytest.mark.parametrize(

@@ -12,8 +12,6 @@ import ast
 import importlib
 import re
 
-import pytest
-
 from tests.conftest import repository_root
 
 #: `[text](path)` with a relative target. Absolute URLs are somebody else's
@@ -270,11 +268,6 @@ def _snippets() -> list[tuple[str, int, str]]:
     return out
 
 
-def _snippet_id(case: tuple[str, int, str]) -> str:
-    name, line, _ = case
-    return f"{name}:{line}"
-
-
 def test_every_document_with_python_is_classified() -> None:
     """A document nobody classified is one nobody checks, silently."""
     present = _documents_with_python()
@@ -285,38 +278,43 @@ def test_every_document_with_python_is_classified() -> None:
     )
 
 
-@pytest.mark.parametrize("case", _snippets(), ids=_snippet_id)
-def test_a_documented_snippet_parses(case: tuple[str, int, str]) -> None:
+def test_a_documented_snippet_parses() -> None:
     """Code in a document is code. Nothing imports it, so nothing compiled it."""
-    name, line, source = case
-    try:
-        ast.parse(source)
-    except SyntaxError as exc:
-        pytest.fail(f"{name}:{line} does not parse -- {exc.msg} at offset {exc.offset}")
-
-
-@pytest.mark.parametrize("case", _snippets(), ids=_snippet_id)
-def test_a_documented_snippet_imports_what_exists(case: tuple[str, int, str]) -> None:
-    """The check that would have caught the bug this rule was written after."""
-    name, line, source = case
-    for node in ast.walk(ast.parse(source)):
-        if not isinstance(node, ast.ImportFrom) or node.level:
-            continue
-        if not node.module or node.module.split(".")[0] != "kingfisher":
-            continue
+    broken = []
+    for name, line, source in _snippets():
         try:
-            module = importlib.import_module(node.module)
-        except ImportError as exc:
-            pytest.fail(f"{name}:{line} imports {node.module}, which does not import -- {exc}")
-        for alias in node.names:
-            assert hasattr(module, alias.name), (
-                f"{name}:{line} imports {alias.name} from {node.module}, which does "
-                "not define it"
-            )
+            ast.parse(source)
+        except SyntaxError as exc:
+            broken.append(f"{name}:{line} does not parse -- {exc.msg} at offset {exc.offset}")
+
+    assert not broken, "\n".join(broken)
+
+
+def test_a_documented_snippet_imports_what_exists() -> None:
+    """The check that would have caught the bug this rule was written after."""
+    wrong = []
+    for name, line, source in _snippets():
+        for node in ast.walk(ast.parse(source)):
+            if not isinstance(node, ast.ImportFrom) or node.level:
+                continue
+            if not node.module or node.module.split(".")[0] != "kingfisher":
+                continue
+            try:
+                module = importlib.import_module(node.module)
+            except ImportError as exc:
+                wrong.append(f"{name}:{line} imports {node.module}, which does not import -- {exc}")
+                continue
+            wrong += [
+                f"{name}:{line} imports {alias.name} from {node.module}, which does not define it"
+                for alias in node.names
+                if not hasattr(module, alias.name)
+            ]
+
+    assert not wrong, "\n".join(wrong)
 
 
 def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
-    """A rule parametrised over an empty list passes.
+    """A rule that walks an empty list passes, having checked nothing.
 
     A collector reading the wrong root went unnoticed twice in `test_architecture`, and
     this one reads two roots.
