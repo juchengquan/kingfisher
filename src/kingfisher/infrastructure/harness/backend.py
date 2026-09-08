@@ -320,7 +320,7 @@ def _fence_for(
     if skills_dir is not None:
         readable.append(skills_dir)
     # Nothing beyond the session, which both fences grant already: `TMPDIR` is
-    # inside it now, so the writable set is exactly the directory this turn owns.
+    # inside it now, so the writable set is exactly the session this turn owns.
     writable: list[Path] = []
 
     if confined.mechanism == "bubblewrap":

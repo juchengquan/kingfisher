@@ -42,7 +42,7 @@ from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.ports import CommandResult
-from kingfisher.layout import HARNESS
+from kingfisher.layout import HARNESS, SESSION_DIRS, SESSION_PLUMBING
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -75,6 +75,28 @@ def _present(paths: Iterable[Path | str]) -> list[str]:
     return [str(path) for path in paths if Path(path).exists()]
 
 
+def _session_writable(session_dir: Path) -> list[Path]:
+    """Everywhere inside one session the shell may write: its directories, one by one.
+
+    **Never the session directory itself, and that is the whole of why this is a
+    list rather than one path.** Landlock rules only ever grant. A write walks up
+    from the file to the first rule that allows it, so a read-only grant on
+    `.harness` is stepped straight over and a writable grant on the directory
+    above answers in its place -- measured on a real kernel, where the fenced
+    shell overwrote the agent definition its own session is pinned to. Granting
+    the contents and not the container is what leaves that walk nothing to find.
+
+    The cost is that the shell cannot write into its own working directory, which
+    is the session; `tests/linux/test_fence_escapes.py` holds it, so changing it
+    back is a decision rather than an accident.
+    """
+    return [
+        Path(session_dir) / name
+        for name in (*SESSION_DIRS, *SESSION_PLUMBING)
+        if name != HARNESS
+    ]
+
+
 def policy_for(
     session_dir: Path,
     *,
@@ -99,16 +121,12 @@ def policy_for(
     from sandlock import Sandbox  # noqa: PLC0415
 
     return Sandbox(
-        # `.harness` is named readable while the session around it is writable,
-        # and Landlock resolves a path by its most nested matching rule -- so the
-        # deeper grant is the one that applies and the harness stays read-only.
-        # If that reading is wrong the rule is simply subsumed and `.harness`
-        # stays writable to the shell, which is where it was before this: the
-        # failure direction is the status quo rather than a broken fence.
-        # `tests/linux/test_fence_escapes.py` is what settles it, on the only
-        # kind of host that can run it.
-        fs_readable=_present([*SYSTEM_PATHS, *readable, Path(session_dir) / HARNESS]),
-        fs_writable=_present([session_dir, *writable]),
+        # The session is readable whole -- the shell starts in it, and one that
+        # cannot list its own working directory gets swapped out for no fence at
+        # all. Writable is narrower than readable here, and `_session_writable`
+        # says why it has to be.
+        fs_readable=_present([*SYSTEM_PATHS, *readable, session_dir]),
+        fs_writable=_present([*_session_writable(session_dir), *writable]),
     )
 
 

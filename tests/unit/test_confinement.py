@@ -78,6 +78,7 @@ def test_auto_confines_and_says_nothing(cfg, tmp_path):
     assert confinement.profile_path(cfg.workspace).is_file(), "profile not written"
 
 
+@macos
 def test_the_profile_has_one_place_it_can_be(cfg):
     """`.kingfisher/shell.sb`, and no setting moves it.
 

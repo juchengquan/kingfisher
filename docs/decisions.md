@@ -726,10 +726,26 @@ profile covers every session -- `(deny file-write* (regex #"^…/sessions/[^/]+/
 -- because `shell.sb` has one fixed path, so a profile naming the sessions that
 existed when it was written would have to be rewritten as sessions arrive, and
 two concurrent turns would then race to write different bytes to the file each is
-bound by. On Linux it is a later read-only bind for bubblewrap and a nested
-readable grant for Landlock, whose most-nested-rule resolution is what makes the
-carve-out work; `tests/linux/test_fence_escapes.py` asserts it, because the
-machine this was written on cannot. *(2026-09-08.)*
+bound by. On Linux, bubblewrap binds the directory read-only over the session it
+has already mounted. *(2026-09-08.)*
+
+**Landlock cannot take back what it has granted, and the Linux job is what
+established that.** The first version of this granted the session writable and
+`<session>/.harness` readable, on the reading that the kernel resolves a path by
+its most nested matching rule. It does not. A Landlock rule only ever grants, and
+a write walks up from the file until one of them answers -- so the read-only rule
+was stepped over and the session's writable rule answered in its place. On the
+first run of `tests/linux/test_fence_escapes.py` the fenced shell overwrote the
+agent definition its own session was pinned to.
+
+`policy_for` grants a session's directories one at a time instead, and never the
+session, which leaves that walk nothing to find. The price is that the shell
+cannot write into the directory it starts in on a Landlock host, where it can
+under bubblewrap and on macOS -- both of which can express a carve-out and both of
+which still do. `data`, `derived`, `memory`, `runs`, `.home`, `.tmp` and
+`skills/uploaded` stay writable, so what stops working is scratch dropped straight
+into the session; the alternative was leaving the pinned agent, the conversation,
+the turn lock and the run log writable by the shell they belong to. *(2026-09-08.)*
 
 ## Sessions: what persists and where
 
