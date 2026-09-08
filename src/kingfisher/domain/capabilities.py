@@ -77,7 +77,8 @@ class Capabilities:
     #: graph -- 5-6ms each, re-measured 2026-09-03.
     subagents: Selection = ALL
     #: Middleware a definition may name, out of what the deployment registered.
-    #: Unlike the three above it is never widened by `including` -- see there.
+    #: Unlike `tools`, `skills` and `subagents` it is never widened by `including`
+    #: -- see there.
     middleware: Selection = ALL
     #: Endpoints a definition may reach. Granted like `middleware` and for a stronger
     #: reason: this one decides which credentials are used and which endpoint receives

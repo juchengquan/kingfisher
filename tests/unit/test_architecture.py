@@ -463,6 +463,79 @@ def test_no_prose_cites_a_line_number():
     )
 
 
+#: Prose counting its neighbours instead of naming them -- "the four above", "the
+#: two below". A position and a count, so editing either end falsifies it in
+#: silence, and no rule here can see it: every check in this file resolves
+#: *names*, which is exactly what this shape declines to write.
+#:
+#: A count that says what it counts is left alone. "the two refusals above" and
+#: "the two tests above" name a kind a reader can find, where a bare number names
+#: a place that moves. So is a singular -- "the one above" is adjacency rather
+#: than a count, and there is no number in it to drift.
+#:
+#: This file is skipped, structurally: the examples the companion asserts on are
+#: the shape being refused, so the rule matches its own source.
+PROSE_BARE_COUNT = re.compile(
+    r"\b(?:the|these|those)\s+"
+    r"(?:two|three|four|five|six|seven|eight|nine|ten|eleven|twelve|\d+)\s+"
+    r"(?:above|below)\b",
+    re.IGNORECASE,
+)
+
+
+def test_no_prose_counts_its_neighbours():
+    """A bare count of what is nearby is a claim nothing here can check.
+
+    Eleven were written and one had already broken: `config.py` said the
+    definition roots were `None` "for a different reason than the two above",
+    and the two were `state_root` and `scratch_root`, which left `Config` in a
+    later change. `shell_sandbox` is what sits above it now. Naming them instead
+    is what puts the claim in reach of `test_prose_names_class_attributes_that_exist`
+    and the module rule, neither of which can see a number.
+    """
+    counting = []
+    here = Path(__file__).resolve()
+    for path in _prose_bearing_files():
+        if path.resolve() == here:
+            continue
+        text = _prose_run_together(path) if path.suffix == ".py" else path.read_text(
+            encoding="utf-8"
+        )
+        counting += [
+            f"{path.relative_to(REPO).as_posix()} -> {hit!r}"
+            for hit in PROSE_BARE_COUNT.findall(text)
+        ]
+
+    assert not counting, (
+        f"{counting} count what is above or below instead of naming it — write the "
+        "names, so that a rule can tell when one of them goes"
+    )
+
+
+def test_the_bare_count_rule_leaves_a_count_that_says_what_it_counts(tmp_path):
+    """The rule is about the missing noun, not about numbers in prose."""
+    assert PROSE_BARE_COUNT.search("Not beside the four above because they are not")
+    assert PROSE_BARE_COUNT.search("Narrowed, unlike the two below, because")
+    assert PROSE_BARE_COUNT.search("the paragraph naming the eleven above went")
+
+    for kept in (
+        "The case the two refusals above do not cover",
+        "without it the two tests above would pass",
+        "the two halves of `tool_name` above are the two shapes",
+    ):
+        assert not PROSE_BARE_COUNT.search(kept), kept
+
+    # And it reads prose that was wrapped, which is how the `config.py` one hid:
+    # "the two" ended a line and "above" opened the next.
+    wrapped = tmp_path / "wrapped.py"
+    wrapped.write_text(
+        '"""A file."""\n\n#: Derived from the workspace, for a different reason than the two\n'
+        "#: above: these hold content a person authored.\nX = 1\n",
+        encoding="utf-8",
+    )
+    assert PROSE_BARE_COUNT.search(_prose_run_together(wrapped))
+
+
 #: Prose sending a reader to the top of the file for the reason it is about. The
 #: guard and the thing it guards end up apart, so a cut to either end leaves a
 #: pointer at nothing and nothing goes red. All four in the library named a
@@ -1216,7 +1289,7 @@ def test_the_stub_block_and_the_export_table_name_the_same_things(package, path)
 #: commit because nothing told a name added on a caller from a name added on a
 #: guess, and two more left on this rule.
 #:
-#: Four witnesses:
+#: Three witnesses:
 #:
 #: `service`  -- `kingfisher-service` imports it. Read off the service's own
 #:               imports below, so this half cannot rot.
@@ -1233,7 +1306,7 @@ def test_the_stub_block_and_the_export_table_name_the_same_things(package, path)
 #: the last of them rather than staying as a value that is always an error.
 #:
 #: What replaces it is the rule below and nothing else, which is enough: a name
-#: whose only caller is the command can be given none of the three above without
+#: whose only caller is the command can be given no witness at all without
 #: somebody writing a false reason, and the reason is the part a reader can
 #: check. *The front door* in `docs/decisions.md`.
 #:
@@ -1474,7 +1547,8 @@ LIGHT_EXPORTS = frozenset({
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",
-    # A sentence that stats one directory. Cheaper than the two above it and
+    # A sentence that stats one directory. Cheaper than the renderer and the
+    # sentence above it, and
     # public for the same reason `SEED_HINT` is -- `doctor` is a consumer.
     "destination_hint",
     # The access policy, its report, its error and the sentinel for running

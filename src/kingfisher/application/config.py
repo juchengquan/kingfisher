@@ -106,7 +106,7 @@ class Environment:
             tools_root=self.optional_path("KINGFISHER_TOOLS_DIR"),
             agents_root=self.optional_path("KINGFISHER_AGENTS_DIR"),
             # Read here rather than only in `config` below for the reason the
-            # four above are: laying a workspace out places the worked example
+            # definition roots are: laying a workspace out places the worked example
             # for each of these, and that happens before a catalogue can be
             # read. A deployment that relocated its catalogue and got the
             # example in the workspace has been handed an annotated file for a

@@ -1915,7 +1915,7 @@ and closing them adds tests. Nobody has separated the two, and that is the open
 work here.
 
 If deletions are ever proposed, the gate is a mutation corpus generated *after*
-the deletion list is frozen, for the reason the 89 above gives. *(Measured
+the deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
 2026-09-08.)*
 
 ## Proposals, and what became of them
