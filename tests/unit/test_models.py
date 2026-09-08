@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import inspect
+import re
 from dataclasses import replace
 
 import pytest
@@ -50,14 +52,34 @@ def test_the_model_comes_from_the_profile_it_is_handed(cfg):
     assert build_model(*cfg.models.resolve()).model == cfg.models.default
 
 
-def test_an_unset_param_is_not_passed_at_all(cfg):
+#: The params `kwargs` passes only when they are set. Listed rather than written
+#: into the test below, because the test below was written for `temperature` and
+#: `top_p` sat one line under it in `kwargs` for as long, unnamed by anything.
+OPTIONAL = ("temperature", "top_p")
+
+
+@pytest.mark.parametrize("field", OPTIONAL)
+def test_an_unset_param_is_not_passed_at_all(cfg, field):
     """Omitted means absent, not "passed as a default we chose"."""
     unset = cfg.models.models["fake-model"]
-    assert unset.temperature is None
-    assert "temperature" not in unset.kwargs()
+    assert getattr(unset, field) is None
+    assert field not in unset.kwargs()
 
-    chosen = replace(unset, temperature=0.5)
-    assert chosen.kwargs()["temperature"] == 0.5
+    chosen = replace(unset, **{field: 0.5})
+    assert chosen.kwargs()[field] == 0.5
+
+
+def test_every_param_kwargs_omits_is_named_above():
+    """A third optional param would otherwise arrive with no case, the way the
+    second one did.
+    """
+    source = inspect.getsource(ModelProfile.kwargs)
+    guarded = tuple(re.findall(r"if self\.(\w+) is not None:", source))
+
+    assert guarded == OPTIONAL, (
+        f"`kwargs` omits {guarded} when unset and this file names {OPTIONAL} — "
+        "add the new one to OPTIONAL, which is what gives it a case"
+    )
 
 
 #: Where each value lands, per adapter. The classes do not agree on the names —
