@@ -121,8 +121,6 @@ def test_the_agent_runs_the_model_its_file_names(cfg, session_dir, monkeypatch):
     assert captured["model"].model == "cheap-model"
 
 
-
-
 # -- naming one -------------------------------------------------------------
 
 

@@ -213,8 +213,6 @@ def test_the_model_fields_mean_what_they_mean_in_yaml():
     assert spec.wanted == "cheap-model"
 
 
-
-
 def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():
     """Checked on the record rather than promised by two parsers, so a spec built in
     code cannot be the one shape neither parser can produce.
@@ -270,8 +268,6 @@ def test_the_compiled_shape_is_deepagents_own(cfg, monkeypatch, session_dir):
 
     (delegate,) = declared_subagents(captured)
     assert set(delegate) == set(CompiledSubAgent.__required_keys__)
-
-
 
 
 def test_a_build_that_returns_nothing_is_refused(cfg, monkeypatch, session_dir):

@@ -69,7 +69,6 @@ def _model():
     return FakeToolCallingModel(responses=[AIMessage(content="ok")])
 
 
-
 def tool_ceiling(spec, *, builtin, workspace):
     """The rule as `as_subagent` calls it, with the spec's two axes unpacked."""
     return ceiling(
@@ -660,7 +659,6 @@ def test_a_delegate_that_does_not_exist_still_names_it():
 
     assert refusal is not None
     assert "'nobody' is not a delegate" in refusal.content
-
 
 
 # -- the delegate nobody declared ------------------------------------------

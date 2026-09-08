@@ -498,14 +498,6 @@ def test_provider_is_no_longer_a_field(tmp_path):
         reading.read(definition, tmp_path / "reviewer.yaml")
 
 
-
-
-
-
-
-
-
-
 def test_a_model_names_where_it_runs_by_naming_what_it_runs(tmp_path):
     """One field, where there were two."""
     definition = (

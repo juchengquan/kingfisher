@@ -30,6 +30,7 @@ def _bare(written: str) -> str:
     """A written name with any source stripped off, for a caller comparing names."""
     return written.rpartition(SEPARATOR)[2].strip()
 
+
 #: `"*"` is everything, a tuple is exactly those names, `None` is nothing.
 #:
 #: The declared contract is `ALL` or a tuple, and consumers can rely on that.

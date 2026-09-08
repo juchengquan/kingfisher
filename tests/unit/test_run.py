@@ -133,7 +133,6 @@ def test_a_turn_disposes_of_nothing(cfg):
         assert (cfg.workspace / "sessions" / name).is_dir(), name
 
 
-
 def test_a_second_turn_does_not_overwrite_the_first(cfg):
     """The defect this tier exists to fix: two turns in one session shared a directory,
     so turn two clobbered turn one's report and result.

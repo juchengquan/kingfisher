@@ -93,7 +93,6 @@ def offered(sources: Mapping[str, str], names: Sequence[str]) -> str:
     )
 
 
-
 def written_form(one: Found, *, among: Mapping[str, int]) -> str:
     """How a grant names this tool: flat where the name is its own, else the file."""
     return one.reference if among.get(one.name, 0) > 1 else one.name
@@ -120,6 +119,7 @@ def select(granted: Selection, found: Sequence[Found]) -> tuple[Found, ...]:
         return tuple(found)
     wanted = set(granted)
     return tuple(one for one in found if written_form(one, among=among) in wanted)
+
 
 def _placed(entry: str, offered: set[str]) -> str:
     """One written entry as the offering spells it, or unchanged if it cannot."""
@@ -156,7 +156,6 @@ class Offering:
     def ambiguous(self, granted: Selection, found: Sequence[Found]) -> tuple[str, ...]:
         """The names `carried` had to leave behind, for a caller that must say so."""
         return duplicated(select(granted, found))
-
 
     def spelt(self, selection: Selection) -> Selection:
         """A written grant in the spelling this offering uses.
@@ -237,8 +236,6 @@ class Offering:
             *(narrowed(builtin, by=self.builtin) or ()),
             *(split_reference(one)[1] for one in granted),
         )
-
-
 
 
 def claimed_sources(written: Selection) -> Mapping[str, str]:

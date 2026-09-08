@@ -342,17 +342,6 @@ class Kingfisher(Sessions, Disposal):
         self.access.expand(groups)
         return self.grants
 
-
-
-
-
-
-
-
-
-
-
-
     def _graph_for(
         self,
         request: Request,
@@ -498,9 +487,6 @@ class Kingfisher(Sessions, Disposal):
                 return await stack.enter_async_context(made)
             return made
         return self.threads
-
-
-
 
     def _admit(
         self,

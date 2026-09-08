@@ -252,7 +252,6 @@ def test_an_injected_graph_cannot_honour_capabilities(cfg, session_dir):
     assert run(Request(task="go"), cfg=cfg, graph=prebuilt).answer == "ok"
 
 
-
 def test_a_disallowed_tool_is_refused_even_when_the_model_calls_it_anyway(cfg, session_dir):
     """The filter is not the boundary."""
     responses = [
@@ -511,6 +510,7 @@ def _hand_written_graph():
     # the bound, and narrowing the suppression to these two lines keeps it from
     # covering anything else in the file.
     builder = StateGraph(_CustomState)  # ty: ignore[invalid-argument-type]
+
     def work(_state: _CustomState) -> dict[str, Any]:
         return {"messages": []}
 

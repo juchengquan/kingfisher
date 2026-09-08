@@ -90,6 +90,7 @@ def known(entries: Sequence[tuple[str, float]]) -> tuple[SessionInfo, ...]:
         for name, modified in sorted(entries, key=lambda entry: -entry[1])
     )
 
+
 def still_held(
     entries: Sequence[tuple[str, float]], *, stale_after: float, now: float
 ) -> tuple[str, ...]:

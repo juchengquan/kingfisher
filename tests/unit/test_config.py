@@ -279,6 +279,7 @@ def test_no_message_names_a_variable_nothing_reads():
         "something with no effect, and nothing else would ever notice"
     )
 
+
 def test_the_variables_that_chose_a_model_are_gone(env):
     """`KINGFISHER_MODEL`, `KINGFISHER_API_STYLE` and `KINGFISHER_MAX_TOKENS` are the
     catalogue's job now, and the per-role pair went before them.
@@ -309,6 +310,7 @@ def test_the_execution_timeout_is_named_for_what_it_bounds(env):
 
     assert cfg.execution_timeout_s == 45
     assert not [f for f in fields(cfg) if f.name == "timeout_s"]
+
 
 def test_the_paths_half_honours_the_catalogue_overrides(monkeypatch, tmp_path):
     """The reason seeding reads `paths_from_env` rather than one env var."""

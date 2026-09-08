@@ -35,8 +35,6 @@ def test_a_healthy_workspace_passes_everything(cfg):
     assert worst(checks) != "fail"
 
 
-
-
 def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
     """And it names the file, because the reader has to go and fix one."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
@@ -351,8 +349,6 @@ def test_a_missing_credential_is_a_warning_not_a_failure(cfg, tmp_path):
     checks = {check.name: check for check in examine(_half_keyed(cfg, tmp_path))}
 
     assert checks["credentials"].verdict == "warn"
-
-
 
 
 def test_a_definition_that_cannot_run_is_named(cfg, tmp_path):

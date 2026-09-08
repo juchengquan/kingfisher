@@ -16,6 +16,7 @@ if TYPE_CHECKING:
 
     from kingfisher.config import Endpoint, ModelProfile
 
+
 @dataclass(frozen=True)
 class Adapter:
     """One wire format: which class speaks it, and what it needs to be told.

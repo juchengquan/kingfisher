@@ -63,6 +63,7 @@ def test_the_index_links_nothing_that_moved() -> None:
 #: long enough that the index is what a reader trusts instead of scrolling.
 DECISIONS = DOCS / "decisions.md"
 
+
 #: A GitHub heading anchor: lowercased, punctuation dropped, spaces to hyphens.
 #: Enough for the headings this page has -- none of them repeat, which is what
 #: would otherwise need a `-1` suffix.

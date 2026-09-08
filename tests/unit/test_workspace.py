@@ -140,7 +140,6 @@ def test_sweep_is_a_noop_when_under_the_limit(workspace):
     assert result.removed == ()
 
 
-
 class BrokenCheckpointer:
     """A checkpointer whose thread deletion fails."""
 
@@ -231,8 +230,6 @@ def test_the_plumbing_is_listed_apart_from_what_the_agent_addresses():
     assert not set(SESSION_DIRS) & set(SESSION_PLUMBING)
     assert AGENT_HOME in SESSION_PLUMBING
     assert AGENT_HOME.startswith("."), "the agent's home is plumbing, not a name it types"
-
-
 
 
 def test_turn_names_are_claimed_exclusively(workspace):

@@ -23,6 +23,7 @@ if TYPE_CHECKING:
 #: behaviour would be the silent-drop bug wearing a spellchecker.
 SIMILARITY = 0.7
 
+
 def entry_fields(extra: str) -> tuple[str, ...]:
     """The keys one long-form entry may write, for a field carrying `extra`."""
     return ("name", extra)

@@ -286,6 +286,7 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     ]
     return [*catalogue, (UPLOADED_SKILLS_ROUTE, "uploaded")]
 
+
 #: The one memory file the agent is told to read. `/memory/` is a route so a
 #: request that declined memory can be given a deny rule for it.
 MEMORY_SOURCES = [f"{MEMORY_ROUTE}AGENTS.md"]

@@ -153,8 +153,6 @@ def test_every_preset_tool_describes_itself_to_the_model(shipped):
         assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
 
 
-
-
 def test_no_preset_names_a_model(shipped):
     """A file inside the wheel cannot portably name a vendor's model id.
 
@@ -170,8 +168,6 @@ def test_no_preset_names_a_model(shipped):
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 
-
-
 def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     """Seeding a catalogue that refuses to load would be the worst kind of example:
     copied, broken on the first run, and the format blamed.
@@ -179,8 +175,6 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     from kingfisher.subagents.rules import refuse_cycles
 
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
-
-
 
 
 def test_the_readme_snippet_runs_and_uses_only_the_public_api(
@@ -1194,4 +1188,3 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     )
 
     assert graph is not None
-

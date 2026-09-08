@@ -45,6 +45,7 @@ Requires = frozenset[str]
 #: fields combine.
 Audience = Literal["*"] | tuple[str | Requires, ...]
 
+
 @dataclass(frozen=True)
 class Stated:
     """What one definition says about who reaches what."""

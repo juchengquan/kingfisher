@@ -206,7 +206,6 @@ def _bundled(
     return tools, skills, shadowed, error
 
 
-
 def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
     """What each definition of one kind says about who reaches what."""
     found: dict[str, Stated] = {}

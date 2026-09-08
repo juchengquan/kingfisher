@@ -138,12 +138,6 @@ def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
     assert "same host" in _found(cfg, session_dir, ("cheap",))["cheap"]
 
 
-
-
-
-
-
-
 def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
     """`reviewer` runs on the deployment's own model on purpose."""
     _define(cfg, ASKED_FOR_NOTHING)
@@ -276,14 +270,6 @@ def _spec_from(text):
     return reading.read(text, Path("elsewhere.yaml"))
 
 
-
-
-
-
-
-
-
-
 def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
     """Kingfisher cannot know that a delegate needs to differ, so this is only ever a
     report: `reviewer` names the deployment's own model on purpose.
@@ -295,13 +281,3 @@ def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
 
     assert model_for(spec) == cfg.models.default
     assert "cheap" in _found(cfg, session_dir, ("cheap",))
-
-
-
-
-
-
-
-
-
-
