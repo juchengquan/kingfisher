@@ -155,7 +155,9 @@ def test_a_bad_reference_gives_the_claim_back(service, cfg):
     with pytest.raises(UnknownReferenceError):
         service.run(Request("go", session_id=session_id, input_refs=("nope.txt",)))
 
-    assert not (cfg.state_dir / "claims" / session_id).exists()
+    from kingfisher.infrastructure.workspace.sessions import claim_path
+
+    assert not claim_path(cfg.workspace / "sessions" / session_id).exists()
     assert service.run(Request("again", session_id=session_id)).turn_id
 
 

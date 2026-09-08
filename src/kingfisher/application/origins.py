@@ -70,8 +70,6 @@ class Origins:
     #: this file now declines to keep -- the fields are the count.
     seed: Origin
 
-    state: Origin
-    scratch: Origin
     sessions: Origin
 
     @classmethod
@@ -91,8 +89,6 @@ class Origins:
             models=_file(cfg.models.source, cfg.workspace / "models.yaml"),
             groups=_groups(cfg),
             seed=_configured(cfg.assets),
-            state=_file(cfg.state_dir, cfg.workspace / ".kingfisher"),
-            scratch=_file(cfg.scratch_dir, cfg.state_dir / "tmp"),
             sessions=_sessions(cfg, sessions),
         )
 

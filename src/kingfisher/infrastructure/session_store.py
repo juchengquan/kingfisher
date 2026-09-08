@@ -15,6 +15,7 @@ from typing import TYPE_CHECKING
 
 from kingfisher.domain.references import within
 from kingfisher.domain.transcript import Message, as_json, from_json
+from kingfisher.layout import HARNESS, TRANSCRIPT_FILE
 
 if TYPE_CHECKING:
     from kingfisher.domain.ports import SessionStore
@@ -83,11 +84,14 @@ def keep_from(store: SessionStore, session_id: str, directory: Path, names: Sequ
     )
 
 
-#: Where a session's conversation is kept. Dotted and not in `SESSION_DIRS`,
-#: for the reason `.home` is not: those are the names the agent addresses, and
-#: this is plumbing. It sits at the session root so it is deleted with the
-#: session, counted by `session_bytes`, and carried by whatever keeps the rest.
-TRANSCRIPT = ".transcript.jsonl"
+#: Where a session's conversation is kept: inside the session, so it is deleted
+#: with the session, counted by `session_bytes`, and carried by whatever keeps
+#: the rest -- and under `.harness`, so the agent cannot edit it.
+#:
+#: It sat at the session root, which bought the first three and not the last: the
+#: shell roots at the session, so the conversation the next turn is rebuilt from
+#: was one the current turn could rewrite.
+TRANSCRIPT = f"{HARNESS}/{TRANSCRIPT_FILE}"
 
 
 def read_transcript(directory: Path) -> tuple[Message, ...]:
@@ -100,5 +104,9 @@ def read_transcript(directory: Path) -> tuple[Message, ...]:
 
 def write_transcript(directory: Path, messages: tuple[Message, ...]) -> None:
     """Replace this session's transcript with what it now holds."""
-    Path(directory).mkdir(parents=True, exist_ok=True)
-    (Path(directory) / TRANSCRIPT).write_text(as_json(messages), encoding="utf-8")
+    # The transcript's own directory, not the session's: `TRANSCRIPT` is a path
+    # under `.harness` now, and a session restored onto a host that has only the
+    # store has neither yet.
+    path = Path(directory) / TRANSCRIPT
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(as_json(messages), encoding="utf-8")

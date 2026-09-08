@@ -27,6 +27,14 @@ system_prompt: |
 """
 
 
+def _session(cfg, session_id: str):
+    """One session's directory, made. `_agent_for` takes the directory now: the pin
+    lives inside the session rather than in a directory keyed by its name."""
+    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+
+    return ensure_session_layout(cfg.workspace / "sessions" / session_id)
+
+
 def _agents(cfg, *bodies: str) -> None:
     directory = cfg.catalogue_roots["agents"]
     directory.mkdir(parents=True, exist_ok=True)
@@ -176,10 +184,10 @@ def test_a_later_turn_runs_what_the_session_opened_with(cfg):
     service = Kingfisher(cfg)
     asked = Request("go", agent="narrow", session_id="s")
 
-    opened = service._agent_for(asked, "s")
+    opened = service._agent_for(asked, _session(cfg, "s"))
     _agents(cfg, NARROW.replace("Reads and nothing else.", "Reads and writes now."))
 
-    assert service._agent_for(asked, "s").description == opened.description
+    assert service._agent_for(asked, _session(cfg, "s")).description == opened.description
 
 
 def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
@@ -188,10 +196,10 @@ def test_naming_a_different_agent_later_is_refused_rather_than_ignored(cfg):
     """
     _agents(cfg, NARROW, CHEAP)
     service = Kingfisher(cfg)
-    service._agent_for(Request("go", agent="narrow", session_id="s"), "s")
+    service._agent_for(Request("go", agent="narrow", session_id="s"), _session(cfg, "s"))
 
     with pytest.raises(CapabilityError, match="running 'narrow'"):
-        service._agent_for(Request("again", agent="cheap-one", session_id="s"), "s")
+        service._agent_for(Request("again", agent="cheap-one", session_id="s"), _session(cfg, "s"))
 
 
 def test_naming_the_same_agent_again_is_fine(cfg):
@@ -201,25 +209,25 @@ def test_naming_the_same_agent_again_is_fine(cfg):
     _agents(cfg, NARROW)
     service = Kingfisher(cfg)
     asked = Request("go", agent="narrow", session_id="s")
-    service._agent_for(asked, "s")
+    service._agent_for(asked, _session(cfg, "s"))
 
-    assert service._agent_for(asked, "s").name == "narrow"
+    assert service._agent_for(asked, _session(cfg, "s")).name == "narrow"
 
 
 def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
     """The session decides, not the turn."""
     _agents(cfg, NARROW)
     service = Kingfisher(cfg)
-    service._agent_for(Request("go", agent="narrow", session_id="s"), "s")
+    service._agent_for(Request("go", agent="narrow", session_id="s"), _session(cfg, "s"))
 
-    assert service._agent_for(Request("again", session_id="s"), "s").name == "narrow"
+    assert service._agent_for(Request("again", session_id="s"), _session(cfg, "s")).name == "narrow"
 
 
 def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
     """The property that makes it a snapshot rather than a cache."""
     from kingfisher.infrastructure.workspace.snapshots import agent_started_with, remember_agent
 
-    remember_agent(tmp_path, "s", "name: first\ndescription: One.\n")
-    remember_agent(tmp_path, "s", "name: second\ndescription: Two.\n")
+    remember_agent(tmp_path, "name: first\ndescription: One.\n")
+    remember_agent(tmp_path, "name: second\ndescription: Two.\n")
 
-    assert agent_started_with(tmp_path, "s").startswith("name: first")
+    assert agent_started_with(tmp_path).startswith("name: first")

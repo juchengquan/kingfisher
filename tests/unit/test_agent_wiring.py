@@ -83,7 +83,7 @@ def test_planning_and_permissions_are_wired(cfg, monkeypatch, session_dir):
         rule.paths[0] for rule in captured["permissions"]
         if rule.mode == "deny" and "write" in rule.operations
     }
-    assert read_only == {"/data/**", "/skills/**"}
+    assert read_only == {"/.harness/**", "/data/**", "/skills/**"}
 
     assert captured["system_prompt"] == system_prompt(cfg)
     # M2 capabilities are off by default, so neither is passed through.

@@ -55,7 +55,7 @@ from kingfisher.infrastructure.harness.narrowing import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.prompting import system_prompt
-from kingfisher.layout import denied_scopes
+from kingfisher.layout import denied_read_scopes, denied_scopes
 from kingfisher.subagents.harness import (
     as_subagent,
     model_object,
@@ -117,6 +117,9 @@ def read_only_permissions() -> list[FilesystemPermission]:
     return [
         FilesystemPermission(operations=["write"], paths=[scope], mode="deny")
         for scope in denied_scopes()
+    ] + [
+        FilesystemPermission(operations=["read"], paths=[scope], mode="deny")
+        for scope in denied_read_scopes()
     ]
 
 

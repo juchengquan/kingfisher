@@ -126,8 +126,12 @@ def test_activating_a_skill_scopes_the_index_and_denies_the_rest(cfg, monkeypatc
     # SkillsMiddleware alongside ours; ours has to be the only one.
     assert "skills" not in captured
 
+    # `.harness` is denied reads unconditionally, by the layout rather than by
+    # this request, so what a *granted skill list* adds is what is left over.
     denied = [
-        r for r in captured["permissions"] if r.mode == "deny" and "read" in r.operations
+        r
+        for r in captured["permissions"]
+        if r.mode == "deny" and "read" in r.operations and r.paths != ["/.harness/**"]
     ]
     assert [r.paths for r in denied] == [["/skills/tabular-qa/**"]]
 
@@ -152,9 +156,11 @@ def test_leaving_skills_unset_keeps_the_stock_middleware(cfg, monkeypatch, sessi
 
     assert captured["skills"] == skills_sources()
     assert not any(isinstance(m, NarrowedSkills) for m in captured["middleware"])
-    # The two unconditional read-only routes and nothing skill-specific: a
-    # request that granted no skills adds no per-skill denials.
-    assert {r.paths[0] for r in captured["permissions"]} == {"/data/**", "/skills/**"}
+    # The unconditional routes and nothing skill-specific: a request that
+    # granted no skills adds no per-skill denials.
+    assert {r.paths[0] for r in captured["permissions"]} == {
+        "/.harness/**", "/data/**", "/skills/**",
+    }
 
 
 def test_activating_a_subagent_passes_its_definition_through(cfg, monkeypatch, session_dir):

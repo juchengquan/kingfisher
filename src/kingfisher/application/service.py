@@ -72,6 +72,7 @@ from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import (
     Session,
+    sessions_root,
 )
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
@@ -107,9 +108,11 @@ from kingfisher.infrastructure.workspace.seeding import SEED_HINT, STARTER_AGENT
 from kingfisher.infrastructure.workspace.sessions import (
     LocalSessionDirs,
     LocalSessionRoot,
+    claim_path,
     collect_artifacts,
 )
 from kingfisher.infrastructure.workspace.snapshots import (
+    AGENT_SNAPSHOT,
     agent_snapshot,
     agent_started_with,
     remember_agent,
@@ -232,8 +235,6 @@ class Kingfisher(Sessions, Disposal):
         # Host-side, beside the run logs, because the session directory is the
         # agent's own root -- a claim kept there would be something `execute`
         # could delete. `state_dir` is the one place the agent never addresses.
-        self._claims: Path = self.cfg.state_dir / "claims"
-        self.dirs.ensure(self._claims)
         # Three shapes, and the difference is who owns the connection. An instance is a
         # shared store the deployment made and manages; a callable is a factory this
         # service calls per session and closes after the turn; `None` means the default,
@@ -373,7 +374,7 @@ class Kingfisher(Sessions, Disposal):
 
         return build_agent(
             self.cfg,
-            agent=self._agent_for(request, session_dir.name, groups=groups),
+            agent=self._agent_for(request, session_dir, groups=groups),
             held=self.held_for(groups),
             # Called here rather than passed down. This is where a turn first
             # has a session directory, and `build_agent` is where one is already
@@ -390,24 +391,28 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def remember_agent(self, session_id: str, name: str | None) -> None:
-        """Have this session keep the agent it opened with."""
+        """Have this session keep the agent it opened with.
+
+        Takes an id rather than a directory because the service calls it with
+        one, knowing a session by its name and not by where it sits.
+        """
         if name is None:
             return
         documents = getattr(self.catalogue.agents, "documents", {})
         if (text := documents.get(name)) is not None:
-            remember_agent(self.cfg.state_dir, session_id, text)
+            remember_agent(sessions_root(self.workspace) / session_id, text)
 
     def _agent_for(
-        self, request: Request, session_id: str, *, groups: Held | None = None
+        self, request: Request, session_dir: Path, *, groups: Held | None = None
     ) -> AgentSpec | None:
         """The agent this turn runs, which is the one its session opened with."""
-        kept = agent_started_with(self.cfg.state_dir, session_id)
+        kept = agent_started_with(session_dir)
         if kept is None:
             spec = self.agent_named(request.agent, groups=groups)
-            self.remember_agent(session_id, request.agent)
+            self.remember_agent(session_dir.name, request.agent)
             return spec
 
-        started = read(kept, agent_snapshot(self.cfg.state_dir, session_id))
+        started = read(kept, agent_snapshot(session_dir))
         if request.agent is not None and request.agent != started.name:
             msg = (
                 f"this session is running {started.name!r}; it was fixed when the "
@@ -519,11 +524,13 @@ class Kingfisher(Sessions, Disposal):
         dirs.mark_used(session.directory)
         # Before the other refusals rather than after: those read the session,
         # and a turn arriving halfway through would be reading it as it moved.
-        session.claim(dirs, self._claims, stale_after=cfg.claim_stale_after, now=time())
+        session.claim(
+            dirs, claim_path(session.directory), stale_after=cfg.claim_stale_after, now=time()
+        )
         try:
             return self._admitted(request, session, cfg, checkpointer, groups=groups)
         except BaseException:
-            session.release(dirs, self._claims)
+            session.release(dirs, claim_path(session.directory))
             raise
 
     def _admitted(
@@ -621,7 +628,7 @@ class Kingfisher(Sessions, Disposal):
                 # an injected graph never resolves one, which is exactly the
                 # case every test that hands in its own graph is.
                 agent=(
-                    self._agent_for(request, session.directory.name, groups=groups)
+                    self._agent_for(request, session.directory, groups=groups)
                     if held is not None
                     else None
                 ),
@@ -649,7 +656,7 @@ class Kingfisher(Sessions, Disposal):
         place_inputs(request.inputs, turn.input_dir, contents=admitted.fetched_inputs)
 
         logger = JsonlRunLogger(
-            log_path(cfg.state_dir, session_id),
+            log_path(session.directory),
             model=cfg.models.default,
             endpoint=cfg.models.resolve()[0].endpoint,
             session_id=session_id,
@@ -694,15 +701,30 @@ class Kingfisher(Sessions, Disposal):
         self._record(prepared)
         kept = collect_artifacts(prepared.session.directory)
         if self.sessions_store is not None:
-            # The transcript is named separately rather than collected. It sits at the
-            # session root, and `collect_artifacts` walks `/derived` and `/memory` -- so
-            # a first draft wrote it and never kept it, and a session that outlived its
-            # machine came back with its files and no conversation.
+            # Two names beyond what `collect_artifacts` walks, which is `/derived`
+            # and `/memory`. Both are under `.harness` and both have to survive a
+            # machine, and neither is an artifact -- what a turn *produced* is what
+            # the caller is handed, and these are what a session *is*.
+            #
+            # The transcript, or a session that outlived its machine comes back
+            # with its files and no conversation -- measured, of a first draft that
+            # wrote it and never kept it.
+            #
+            # And the pinned agent, which the store never saw while it lived under
+            # `state_dir`. A session moving between hosts found no pin on the new
+            # one, re-pinned from *that* host's catalogue, and accepted whatever
+            # agent the request named -- so "a session is fixed to the agent it
+            # opened with" held on one machine and quietly failed across two.
+            #
+            # The claim and the run log stay behind, and deliberately. A restored
+            # claim would make the session look busy for `claim_stale_after` --
+            # minutes -- before anyone could take the slot; the log is diagnostics
+            # that would be re-uploaded whole every turn as it grows.
             keep_from(
                 self.sessions_store,
                 prepared.session.id,
                 prepared.session.directory,
-                (*kept, TRANSCRIPT),
+                (*kept, TRANSCRIPT, AGENT_SNAPSHOT),
             )
         return kept
 
@@ -719,7 +741,7 @@ class Kingfisher(Sessions, Disposal):
                 answer=answer,
                 virtual_dir=prepared.turn.virtual_dir,
                 run_dir=prepared.turn.directory,
-                log_path=log_path(self.cfg.state_dir, prepared.session.id),
+                log_path=log_path(prepared.session.directory),
                 # Collected after the graph has finished, so it reflects what
                 # the turn actually left behind -- including what the shell
                 # wrote, which no file tool would have reported.
@@ -815,7 +837,7 @@ class Kingfisher(Sessions, Disposal):
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
-                prepared.session.release(self.dirs, self._claims)
+                prepared.session.release(self.dirs, claim_path(prepared.session.directory))
             # And so does the connection, when this service opened one. A
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.
@@ -907,7 +929,7 @@ class Kingfisher(Sessions, Disposal):
             finally:
                 # The slot goes back however the turn ended -- answered, refused
                 # mid-stream, or cut short by its deadline.
-                prepared.session.release(self.dirs, self._claims)
+                prepared.session.release(self.dirs, claim_path(prepared.session.directory))
             # And so does the connection, when this service opened one. A
             # per-session database is a file descriptor per session, so a
             # process serving many would otherwise hold every one it touched.

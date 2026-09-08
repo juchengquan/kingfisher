@@ -6,7 +6,13 @@ from collections.abc import Mapping
 from importlib import resources
 from pathlib import Path
 
-from kingfisher.layout import LAYOUT_DIRS, MARKER
+from kingfisher.config import ConfigError
+from kingfisher.layout import (
+    LAYOUT_DIRS,
+    LAYOUT_VERSION,
+    MARKER,
+    MARKER_TEXT,
+)
 
 #: Where the shipped templates sit, as an import path rather than a filesystem one -- an
 #: installed package is not in this repository's directory tree.
@@ -34,6 +40,49 @@ def is_new_workspace(workspace: Path) -> bool:
     return not (Path(workspace) / MARKER).exists()
 
 
+def _layout_of(marker: Path) -> int:
+    """The layout version a workspace was made under. `1` for one that predates
+    the marker carrying a number at all."""
+    for line in marker.read_text(encoding="utf-8").splitlines():
+        if line.startswith("layout "):
+            return int(line.removeprefix("layout ").strip() or 0)
+    return 1
+
+
+def check_layout(workspace: Path) -> None:
+    """Refuse a workspace laid out by a version that arranged it differently.
+
+    Loudly, because the failure without it is silent: a session's pinned agent
+    and its transcript moved into `<session>/.harness`, and code looking there
+    for files that are still at the old paths does not error -- it finds no pin
+    and re-pins from the current catalogue, possibly under a different agent, and
+    finds no transcript and starts the conversation again from nothing.
+
+    There is no migration and no fallback reader on purpose. A fallback would
+    have to stay for as long as anyone might have an old workspace, which is
+    forever, and nothing would ever say the day had come to remove it. Sessions
+    are disposable here; the authored tier that is not is what
+    `KINGFISHER_SKILLS_DIR` keeps somewhere else.
+    """
+    marker = Path(workspace) / MARKER
+    if not marker.is_file():
+        return
+    found = _layout_of(marker)
+    if found == LAYOUT_VERSION:
+        return
+    msg = (
+        f"{workspace} was laid out by kingfisher layout {found}, and this is layout "
+        f"{LAYOUT_VERSION}. A session's agent, conversation, turn lock and run log "
+        f"moved into <session>/.harness, and the old ones are not where this looks -- "
+        f"a session opened under {found} would silently lose its conversation and "
+        f"could change agent mid-way. Delete sessions/ and .kingfisher/"
+        f"{{agents,runs,claims,tmp}} in that workspace, or point KINGFISHER_WORKSPACE "
+        f"at a new one; definitions relocate with KINGFISHER_SKILLS_DIR and its "
+        f"siblings and do not have to move."
+    )
+    raise ConfigError(msg)
+
+
 def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None) -> Path:
     """Create the workspace layout. Idempotent.
 
@@ -49,12 +98,16 @@ def ensure_layout(workspace: Path, *, authored: Mapping[str, Path] | None = None
     belongs there rather than around the sessions.
     """
     workspace = Path(workspace).expanduser().resolve()
+    # Before anything is created in it, so a workspace this version cannot serve
+    # is refused rather than half-relaid. An empty path has no marker and is not
+    # an old workspace; `check_layout` says nothing about it.
+    check_layout(workspace)
     for name in LAYOUT_DIRS:
         (workspace / name).mkdir(parents=True, exist_ok=True)
 
     marker = workspace / MARKER
     if not marker.exists():
-        marker.write_text("kingfisher workspace\n", encoding="utf-8")
+        marker.write_text(MARKER_TEXT, encoding="utf-8")
 
     _place_example(workspace, authored)
     return workspace

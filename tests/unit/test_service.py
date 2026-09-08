@@ -659,14 +659,14 @@ def test_a_conversation_survives_losing_its_directory(cfg, tmp_path):
     service.run(Request(task="and the colour blue", session_id=first.session_id))
 
     directory = cfg.workspace / "sessions" / first.session_id
-    before = (directory / ".transcript.jsonl").read_text(encoding="utf-8")
+    before = (directory / ".harness" / "transcript.jsonl").read_text(encoding="utf-8")
     assert "forty" in before and "blue" in before
 
     # The machine goes.
     shutil.rmtree(directory)
     service.run(Request(task="what did I say?", session_id=first.session_id))
 
-    after = (directory / ".transcript.jsonl").read_text(encoding="utf-8")
+    after = (directory / ".harness" / "transcript.jsonl").read_text(encoding="utf-8")
     assert "forty" in after, "the first turn is gone from the conversation"
     assert "blue" in after
     assert "what did I say?" in after

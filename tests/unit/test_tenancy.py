@@ -258,8 +258,11 @@ def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
 # double-click.
 
 
-def _claims(cfg) -> Path:
-    return cfg.state_dir / "claims"
+def _claim(cfg, session_id: str) -> Path:
+    """One session's turn slot, which lives inside the session it guards."""
+    from kingfisher.infrastructure.workspace.sessions import claim_path
+
+    return claim_path(cfg.workspace / "sessions" / session_id)
 
 
 def test_a_second_turn_on_a_busy_session_is_refused(cfg):
@@ -270,7 +273,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     session = service.start_session("s")
 
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
-    held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+    held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
 
     with pytest.raises(SessionBusyError, match="already has a turn running"):
         service.run(Request("go", session_id=session))
@@ -285,7 +288,7 @@ def test_the_slot_goes_back_when_the_turn_ends(cfg):
     second = service.run(Request("second", session_id="s"))
 
     assert second.turn_id == "t002"
-    assert not (_claims(cfg) / "s").exists()
+    assert not _claim(cfg, "s").exists()
 
 
 def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
@@ -298,7 +301,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     with pytest.raises(ValueError):
         service.run(Request("go", session_id="s", data=(tmp_path / "gone.csv",)))
 
-    assert not (_claims(cfg) / "s").exists()
+    assert not _claim(cfg, "s").exists()
     assert service.run(Request("after", session_id="s")).turn_id == "t001"
 
 
@@ -307,25 +310,35 @@ def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
-    held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+    held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
 
     # The same claim, seen from far enough in the future.
-    taken = held.claim(service.dirs, _claims(cfg), stale_after=1.0, now=1e12)
+    taken = held.claim(service.dirs, _claim(cfg, session), stale_after=1.0, now=1e12)
 
-    assert taken == _claims(cfg) / session
+    assert taken == _claim(cfg, session)
 
 
 def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     """The session directory is the backend root, so a claim kept there is something
-    `execute` could delete.
+    `execute` could delete -- which is why it is under `.harness` rather than merely
+    inside the session.
+
+    It used to sit outside the session entirely, and this asserted that. What moved
+    it in is that a claim there could outlive the session it named; what makes it
+    safe there is the pair of denials `.harness` carries, so that is what this
+    asserts instead of a location.
     """
+    from kingfisher.layout import HARNESS, denied_read_scopes, denied_scopes
+
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
     session = service.start_session("s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
-    claim = held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+    claim = held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
 
-    assert cfg.workspace / "sessions" not in claim.parents
-    assert claim.is_relative_to(cfg.state_dir)
+    assert claim.is_relative_to(cfg.workspace / "sessions" / session)
+    assert claim.parent.name == HARNESS
+    assert f"/{HARNESS}/**" in denied_scopes()
+    assert f"/{HARNESS}/**" in denied_read_scopes()
 
 
 def test_two_sessions_do_not_block_each_other(cfg):
@@ -335,7 +348,7 @@ def test_two_sessions_do_not_block_each_other(cfg):
     other = service.start_session("other")
 
     held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
-    held.claim(service.dirs, _claims(cfg), stale_after=3600, now=1000.0)
+    held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=1000.0)
 
     assert service.run(Request("go", session_id=other)).turn_id == "t001"
 
@@ -379,7 +392,7 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     directory = cfg.workspace / "sessions" / session
 
     held = Session(id=session, directory=directory)
-    held.claim(service.dirs, cfg.state_dir / "claims", stale_after=3600, now=time.time())
+    held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=time.time())
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
 
@@ -399,7 +412,7 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     idle = service.start_session("idle")
 
     held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
-    held.claim(service.dirs, cfg.state_dir / "claims", stale_after=3600, now=time.time())
+    held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=time.time())
     stale = time.time() - 10_000
     for name in (busy, idle):
         os.utime(cfg.workspace / "sessions" / name, (stale, stale))
@@ -453,7 +466,7 @@ def test_asking_does_not_disturb_the_session(cfg):
     assert kf.sessions()
 
     assert directory.stat().st_mtime == pytest.approx(stale, abs=1)
-    assert not (cfg.state_dir / "claims" / session).exists()
+    assert not _claim(cfg, session).exists()
 
 
 def test_sessions_come_back_most_recently_used_first(cfg):
@@ -537,7 +550,7 @@ def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
 
     kf = service(cfg)
     crashed = kf.start_session()
-    (cfg.state_dir / "claims" / crashed).mkdir(parents=True, exist_ok=True)
+    _claim(cfg, crashed).mkdir(parents=True, exist_ok=True)
 
     decade = time.time() + 10 * 365 * 24 * 3600
     result = kf.reap(older_than_seconds=0.0, now=decade)
@@ -552,13 +565,13 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
 
     kf = service(cfg)
     running = kf.start_session()
-    (cfg.state_dir / "claims" / running).mkdir(parents=True, exist_ok=True)
+    _claim(cfg, running).mkdir(parents=True, exist_ok=True)
 
     result = kf.reap(older_than_seconds=0.0, now=time.time())
 
     assert result.removed == ()
     assert kf.session(running) is not None
-    assert (cfg.state_dir / "claims" / running).exists()
+    assert _claim(cfg, running).exists()
 
 
 def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
@@ -567,7 +580,7 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
 
     kf = service(cfg)
     held = kf.start_session()
-    (cfg.state_dir / "claims" / held).mkdir(parents=True, exist_ok=True)
+    _claim(cfg, held).mkdir(parents=True, exist_ok=True)
     now = time.time()
 
     inside = kf.reap(older_than_seconds=0.0, now=now + cfg.claim_stale_after - 60)
@@ -585,10 +598,10 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
 
     kf = service(cfg)
     held = kf.start_session()
-    claims = cfg.state_dir / "claims"
+    slot = _claim(cfg, held)
     session = Session(id=held, directory=cfg.workspace / "sessions" / held)
     taken = time.time()
-    session.claim(kf.dirs, claims, stale_after=cfg.claim_stale_after, now=taken)
+    session.claim(kf.dirs, slot, stale_after=cfg.claim_stale_after, now=taken)
 
     # The instant the turn runs out of time, and a little after.
     at_deadline = taken + cfg.turn_timeout_s
@@ -599,7 +612,7 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     # And a second caller is refused for the whole of that window.
     with pytest.raises(SessionBusyError):
         Session(id=held, directory=session.directory).claim(
-            kf.dirs, claims, stale_after=cfg.claim_stale_after, now=at_deadline
+            kf.dirs, slot, stale_after=cfg.claim_stale_after, now=at_deadline
         )
 
     # Long enough after, the slot is takeable again -- a holder that died must
@@ -610,26 +623,30 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
 
 
 def test_a_sweep_leaves_no_claim_behind(cfg):
-    """After the session sweep rather than before, so one pass clears a crashed holder:
-    the session goes first, which is what makes the claim residue.
+    """There is no step that clears claim residue, because there is no residue.
+
+    `_discard_dead_claims` used to run after the session sweep, so one pass cleared
+    a crashed holder: the session went first, and that is what made its claim an
+    orphan. A claim inside the session it guards cannot be orphaned -- it goes with
+    the directory -- so that step is gone and this asserts the property directly.
     """
     import time
 
     kf = service(cfg)
     crashed = kf.start_session()
-    claim = cfg.state_dir / "claims" / crashed
+    claim = _claim(cfg, crashed)
     claim.mkdir(parents=True, exist_ok=True)
 
     kf.reap(older_than_seconds=0.0, now=time.time() + 10 * 365 * 24 * 3600)
 
     assert not claim.exists()
-    assert list((cfg.state_dir / "claims").iterdir()) == []
+    assert not (cfg.workspace / "sessions" / crashed).exists()
 
 
 def test_deleting_a_session_takes_its_claim_with_it(cfg):
     kf = service(cfg)
     session = kf.start_session()
-    claim = cfg.state_dir / "claims" / session
+    claim = _claim(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
 
     kf.delete_session(session)
@@ -641,7 +658,7 @@ def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
     """Why the leftover mattered rather than merely accumulated."""
     kf = service(cfg)
     kf.start_session("reused")
-    (cfg.state_dir / "claims" / "reused").mkdir(parents=True, exist_ok=True)
+    _claim(cfg, "reused").mkdir(parents=True, exist_ok=True)
     kf.delete_session("reused")
 
     kf.start_session("reused")

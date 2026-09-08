@@ -46,7 +46,7 @@ def test_nothing_is_written_to_a_workspace_wide_database(cfg):
 
     kf.run(Request("go"))
 
-    assert not (cfg.state_dir / "threads.db").exists()
+    assert not (cfg.workspace / ".kingfisher" / "threads.db").exists()
 
 
 def test_the_conversation_counts_against_the_session_quota(cfg):

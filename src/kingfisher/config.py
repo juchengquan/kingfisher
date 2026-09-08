@@ -253,11 +253,6 @@ class Config:
     # shell could read this deployment's own API keys, `~/.aws` and the GitHub
     # CLI's token, and `http_fetch` is one tool call away from sending them.
     shell_sandbox: str = "auto"
-    # Overrides for the two host-side roots. `None` means "derive from the
-    # workspace", which is what keeps a workspace self-contained and copyable
-    # by default. Read them through `state_dir` / `scratch_dir`, never directly.
-    state_root: Path | None = None
-    scratch_root: Path | None = None
     # Where the definitions live. Also `None` for "derive from the workspace",
     # but for a different reason than the two above: these hold *content a
     # person authored*, and pointing several deployments at one directory is
@@ -331,16 +326,6 @@ class Config:
             # defaulted to rather than zero, which would restore the overlap.
             default=ModelProfile.timeout_s,
         )
-
-    @property
-    def state_dir(self) -> Path:
-        """Where harness state lives: run logs and the thread database."""
-        return self.state_root or self.workspace / ".kingfisher"
-
-    @property
-    def scratch_dir(self) -> Path:
-        """Where the agent's shell puts temporary files (`TMPDIR`)."""
-        return self.scratch_root or self.state_dir / "tmp"
 
     @property
     def skills_dir(self) -> Path:

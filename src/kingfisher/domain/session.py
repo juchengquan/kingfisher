@@ -127,19 +127,28 @@ class Session:
         return self.directory / "runs"
 
     def claim(
-        self, dirs: SessionDirs, claims: Path, *, stale_after: float, now: float
+        self, dirs: SessionDirs, path: Path, *, stale_after: float, now: float
     ) -> Path:
-        """Take this session's turn slot, or refuse because someone holds it."""
-        path = claims / self.id
+        """Take this session's turn slot, or refuse because someone holds it.
+
+        The slot's *path* rather than the directory every session's slot sits in,
+        which is what this took while there was one. It is inside the session
+        now, and where inside is a layout question -- which this layer does not
+        get to ask, for the reason `layout.py` sits outside `domain/`.
+
+        Moving it there removes a failure mode rather than merely tidying: a
+        claim can no longer outlive the session it names, so there is nothing to
+        sweep and `_discard_dead_claims` goes.
+        """
         if dirs.create_exclusive(path):
             return path
 
-        held = dict(dirs.listing(claims))
         # A claim that vanished between the two calls counts as held: `now` makes
         # its age zero, so a race resolves toward refusing rather than toward
         # taking over a slot whose owner may be about to write.
-        mine = ((self.id, held.get(self.id, now)),)
-        if self.id in still_held(mine, stale_after=stale_after, now=now):
+        held = dict(dirs.listing(path.parent))
+        mine = ((path.name, held.get(path.name, now)),)
+        if path.name in still_held(mine, stale_after=stale_after, now=now):
             msg = (
                 f"session {self.id} already has a turn running; "
                 f"wait for it to finish or start another session"
@@ -152,9 +161,9 @@ class Session:
         msg = f"session {self.id} already has a turn running"
         raise SessionBusyError(msg)
 
-    def release(self, dirs: SessionDirs, claims: Path) -> None:
+    def release(self, dirs: SessionDirs, path: Path) -> None:
         """Give the slot back. Safe to call when it was never taken."""
-        dirs.remove_tree(claims / self.id)
+        dirs.remove_tree(path)
 
     def allocate_turn(self, dirs: SessionDirs, turn_id: str | None = None) -> Turn:
         """Create the next turn's directory and return it."""

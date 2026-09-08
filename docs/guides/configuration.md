@@ -4,8 +4,8 @@ Every setting kingfisher reads from the environment, what it does, and what
 happens if you leave it alone.
 
 [`.env.example`](../../.env.example) is the file you copy and edit. It carries
-the same settings with the reasoning attached — why scratch is created `0700`,
-why the sandbox is on by default — and it is where an argument for a particular
+the same settings with the reasoning attached — why the workspace has to be
+absolute, why the sandbox is on by default — and it is where an argument for a particular
 value belongs. This page is the list, for when you want to know what exists
 rather than why.
 
@@ -23,8 +23,6 @@ mentions.
 | `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from. Without it seeding lays the workspace out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODELS_FILE` | The model catalogue: which models exist, where each runs, which key it uses. | `<workspace>/models.yaml` |
 | `KINGFISHER_GROUPS_FILE` | The group vocabulary. No file means access control is off entirely. | `<workspace>/groups.yaml` |
-| `KINGFISHER_STATE_DIR` | Harness state the agent never addresses — run logs, session claims. | `<workspace>/.kingfisher` |
-| `KINGFISHER_SCRATCH_DIR` | The agent's `$TMPDIR`. Created `0700` and checked; a directory that is not yours is refused rather than used. | `<state dir>/tmp` |
 | `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
 | `KINGFISHER_SKILLS_DIR` | Relocate the skills catalogue — this is how several deployments share one reviewed set. | inside the workspace |
 | `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |

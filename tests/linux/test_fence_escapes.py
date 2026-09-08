@@ -29,11 +29,19 @@ needs_landlock = pytest.mark.skipif(not landlock_ready(), reason=_why_not())
 
 @pytest.fixture
 def two_sessions(tmp_path):
-    """A tenant with a secret, and a tenant without one."""
+    """A tenant with a secret, and a tenant without one.
+
+    Laid out by `ensure_session_layout` rather than one `mkdir`, because the writable
+    rules are one per directory in a session: a session missing them is fenced by a
+    policy that grants nothing, and every escape below would fail for that reason
+    instead of the one being tested.
+    """
+    from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+
     mine = tmp_path / "sessions" / "a"
     theirs = tmp_path / "sessions" / "b"
     for session in (mine, theirs):
-        (session / "derived").mkdir(parents=True)
+        ensure_session_layout(session)
     (mine / "derived" / "secret.txt").write_text("TENANT-A-PRIVATE\n", encoding="utf-8")
     return mine, theirs
 
@@ -61,12 +69,22 @@ def unfenced(command: str, cwd):
     return done.returncode, done.stdout + done.stderr
 
 
+#: The two that need somewhere to put a link or a mountpoint use `derived/` and not
+#: the working directory. The session directory is readable and not writable -- see
+#: `_session_writable` -- so scratch made there fails before the escape it sets up is
+#: ever attempted, and the case passes without having tried anything.
 ESCAPES = [
     ("read it directly", "cat {secret}"),
     ("climb out with a relative path", "cd .. && cat a/derived/secret.txt"),
-    ("follow a symlink into it", "ln -sf {secret} link.txt && cat link.txt"),
+    (
+        "follow a symlink into it",
+        "ln -sf {secret} derived/link.txt && cat derived/link.txt",
+    ),
     ("go round through /proc", "cat /proc/self/root{secret}"),
-    ("bind-mount it somewhere allowed", "mkdir -p in && mount --bind {theirs} in"),
+    (
+        "bind-mount it somewhere allowed",
+        "mkdir -p derived/in && mount --bind {theirs} derived/in",
+    ),
     ("hide the fence under a tmpfs", "mount -t tmpfs none {theirs}"),
     ("take a new mount namespace", "unshare -m sh -c 'cat {secret}'"),
 ]
@@ -134,3 +152,80 @@ def test_the_agent_reaches_its_own_interpreter(fenced):
     assert sys.prefix in result.output, (
         f"the fenced shell reached a different interpreter: {result.output.strip()}"
     )
+
+
+# -- the harness directory, which only a real kernel can answer for -------
+
+
+def _runner_for(session):
+    from kingfisher.infrastructure.sandbox.fence import LandlockRunner, policy_for
+
+    return LandlockRunner(
+        policy_for(session, readable=toolchain_roots()),
+        cwd=session,
+        env={"PATH": f"{Path(sys.executable).parent}:/usr/bin:/bin:/usr/local/bin"},
+    )
+
+
+@needs_landlock
+def test_the_shell_cannot_write_the_sessions_own_harness(two_sessions):
+    """The Linux half of the pair `.harness` is denied by.
+
+    It caught the bug it was written to catch. `policy_for` used to grant the session
+    writable and name `<session>/.harness` readable, on the reading that the kernel
+    resolves a path by its most nested matching rule; it does not, so the shell
+    overwrote the agent definition its own session was pinned to. Landlock rules only
+    grant, and a write walks up until one of them answers.
+    """
+    from kingfisher.layout import HARNESS
+
+    _, theirs = two_sessions
+    pinned = theirs / HARNESS / "agent.yaml"
+    pinned.write_text("name: pinned\n", encoding="utf-8")
+
+    _runner_for(theirs).run(f'printf "name: mine" > {pinned}')
+
+    assert pinned.read_text(encoding="utf-8") == "name: pinned\n", (
+        "the shell rewrote the agent definition its own session is pinned to"
+    )
+
+
+@needs_landlock
+def test_the_rest_of_the_session_stays_writable(two_sessions):
+    """The bound on the rule above: one directory is left out of the grants, not the
+    session's own.
+    """
+    _, theirs = two_sessions
+
+    outcome = _runner_for(theirs).run(f'echo fine > {theirs / "derived" / "ok.txt"}')
+
+    assert outcome.exit_code == 0, outcome.output
+
+
+@needs_landlock
+def test_the_shell_cannot_write_into_the_session_directory_itself(two_sessions):
+    """What denying `.harness` costs, asserted so that paying it stays a decision.
+
+    Landlock cannot take a grant back, so the only way to deny `.harness` is to grant
+    nothing above it -- which leaves the directory the shell starts in readable and not
+    writable. Anything that makes a write here succeed has re-opened `.harness` with it.
+    """
+    _, theirs = two_sessions
+
+    outcome = _runner_for(theirs).run("echo scratch > note.txt")
+
+    assert outcome.exit_code != 0
+    assert not (theirs / "note.txt").exists()
+
+
+@needs_landlock
+def test_the_shell_can_still_list_the_directory_it_starts_in(two_sessions):
+    """The bound on that cost: the session is readable, only not writable. A shell that
+    cannot `ls` its own working directory is one an operator switches the fence off for.
+    """
+    _, theirs = two_sessions
+
+    outcome = _runner_for(theirs).run("ls")
+
+    assert outcome.exit_code == 0, outcome.output
+    assert "derived" in outcome.output

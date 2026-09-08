@@ -2,8 +2,6 @@
 
 from __future__ import annotations
 
-import os
-import stat
 import sys
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
@@ -22,9 +20,12 @@ from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.layout import (
     AGENT_HOME,
+    AGENT_TMP,
     BUNDLED_SKILLS_ROUTE,
     DATA,
     DATA_ROUTE,
+    HARNESS,
+    HARNESS_ROUTE,
     MEMORY,
     MEMORY_ROUTE,
     RESERVED_SKILL_FOLDER,
@@ -73,7 +74,7 @@ def shell_env(
         "HOME": str(agent_home(session_dir)),
         "LANG": "en_US.UTF-8",
         "LC_ALL": "en_US.UTF-8",
-        "TMPDIR": str(cfg.scratch_dir),
+        "TMPDIR": str(session_dir / AGENT_TMP),
     }
     # Only when there is a directory to name. A catalogue held in a store is
     # readable by the file tools -- `skills.backend` mounts it -- but a skill's
@@ -235,30 +236,6 @@ class WorkspaceScopedBackend(CompositeBackend):
         return super()._get_backend_and_key(key)
 
 
-def prepare_scratch(cfg: Config) -> Path:
-    """Create the scratch directory and refuse to use an unsafe one.
-
-    Scratch defaults inside the workspace, where ownership is not in question.
-    Pointing it at `/tmp` -- mode 1777, one fixed location per machine -- means
-    anything the agent derives from `/data` is readable by every local user unless
-    the directory is private, and another user can pre-create the name, so finding it
-    already there is not proof that we own it.
-    """
-    scratch = cfg.scratch_dir
-    scratch.mkdir(mode=0o700, parents=True, exist_ok=True)
-
-    info = scratch.lstat()
-    if not stat.S_ISDIR(info.st_mode):
-        msg = f"scratch directory {scratch} is a symlink or not a directory"
-        raise ConfigError(msg)
-    if hasattr(os, "getuid") and info.st_uid != os.getuid():
-        msg = f"scratch directory {scratch} is owned by uid {info.st_uid}, not by us"
-        raise ConfigError(msg)
-    if info.st_mode & (stat.S_IRWXG | stat.S_IRWXO):
-        scratch.chmod(0o700)
-    return scratch
-
-
 def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
     """Every bundle that has skills to mount, or none."""
     try:
@@ -342,7 +319,9 @@ def _fence_for(
     readable = [*confinement.toolchain_roots(cfg.shell_path_extra)]
     if skills_dir is not None:
         readable.append(skills_dir)
-    writable = [cfg.scratch_dir]
+    # Nothing beyond the session, which both fences grant already: `TMPDIR` is
+    # inside it now, so the writable set is exactly the session this turn owns.
+    writable: list[Path] = []
 
     if confined.mechanism == "bubblewrap":
         from kingfisher.infrastructure.sandbox.bubblewrap import (  # noqa: PLC0415
@@ -398,7 +377,6 @@ def build_backend(
     # Anything else is mounted from what the repository can hand over.
     skills_dir = catalogue_root(skills)
 
-    prepare_scratch(cfg)
     _require_layout(session_dir)
     uploaded = session_dir / UPLOADED_SKILLS
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
@@ -440,6 +418,11 @@ def build_backend(
             else skills_backend(skills)
         ),
         MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
+        # Mounted so it can be refused. Every operation through it is denied by
+        # `read_only_permissions`, and a rule is only expressible against a path
+        # the composite routes -- so the mount is what makes the refusal legal,
+        # not a way in.
+        HARNESS_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / HARNESS)),
         UPLOADED_SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(uploaded)),
     }
     missing = [path for path in routed_paths() if path not in backing]

@@ -1,21 +1,25 @@
 from __future__ import annotations
 
-from dataclasses import replace
 from pathlib import Path
 
 import pytest
 from deepagents.backends import CompositeBackend
 
-from kingfisher.config import ConfigError
 from kingfisher.infrastructure.harness.agent import read_only_permissions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
     build_backend,
-    prepare_scratch,
     shell_env,
 )
 from kingfisher.infrastructure.harness.runlog import log_path
-from kingfisher.layout import BUNDLED_SKILLS_ROUTE, ROUTES, denied_scopes, routed_paths
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.layout import (
+    BUNDLED_SKILLS_ROUTE,
+    ROUTES,
+    denied_read_scopes,
+    denied_scopes,
+    routed_paths,
+)
 
 
 def test_shell_env_carries_no_credentials(cfg, session_dir):
@@ -57,7 +61,8 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    with pytest.raises(ValueError, match=r"missing derived, memory, runs, \.home, skills/uploaded"):
+    wanted = r"missing derived, memory, runs, \.home, \.tmp, \.harness, skills/uploaded"
+    with pytest.raises(ValueError, match=wanted):
         build_backend(cfg, bare)
 
 
@@ -102,10 +107,13 @@ def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_
 
 def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
     """Pinned rather than derived twice."""
-    assert denied_scopes() == ("/data/**", "/skills/**")
-    assert [p.paths for p in read_only_permissions()] == [["/data/**"], ["/skills/**"]]
+    assert denied_scopes() == ("/.harness/**", "/data/**", "/skills/**")
+    assert denied_read_scopes() == ("/.harness/**",)
+    assert [p.paths for p in read_only_permissions()] == [
+        ["/.harness/**"], ["/data/**"], ["/skills/**"], ["/.harness/**"],
+    ]
     assert {p.mode for p in read_only_permissions()} == {"deny"}
-    assert {tuple(p.operations) for p in read_only_permissions()} == {("write",)}
+    assert {tuple(p.operations) for p in read_only_permissions()} == {("write",), ("read",)}
 
 
 def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
@@ -164,66 +172,35 @@ def test_every_read_and_write_path_resolves_through_the_guarded_hook():
     assert WorkspaceScopedBackend._get_backend_and_key is not CompositeBackend._get_backend_and_key
 
 
-def test_scratch_defaults_inside_the_workspace(cfg, session_dir):
-    """Unset means self-contained: scratch is disposed of with the workspace."""
-    assert cfg.scratch_dir == cfg.workspace / ".kingfisher" / "tmp"
-    assert shell_env(cfg, session_dir)["TMPDIR"] == str(cfg.scratch_dir)
+def test_tmpdir_is_the_session_s_own(cfg, session_dir):
+    """One shared scratch directory was swept by nothing, counted against nothing, and
+    readable by every other session's shell. Per session, `reap` and `session_bytes`
+    already cover it and neither fence has to grant anything extra.
+    """
+    assert shell_env(cfg, session_dir)["TMPDIR"] == str(session_dir / ".tmp")
 
 
-def test_scratch_can_be_relocated(cfg, tmp_path, session_dir):
-    """One fixed location per machine, e.g. /tmp, is a config change."""
-    relocated = replace(cfg, scratch_root=tmp_path / "kingfisher-scratch")
+def test_two_sessions_do_not_share_a_tmpdir(cfg, session_dir, workspace):
+    """The cross-session channel this closed: what one caller derived sat where another
+    caller's agent could read it."""
+    other = ensure_session_layout(workspace / "sessions" / "second")
 
-    assert relocated.scratch_dir == tmp_path / "kingfisher-scratch"
-    assert shell_env(relocated, session_dir)["TMPDIR"] == str(relocated.scratch_dir)
-
-
-def test_prepare_scratch_creates_a_private_directory(cfg, tmp_path):
-    """0700: /tmp is world-writable, and scratch derives from /data."""
-    relocated = replace(cfg, scratch_root=tmp_path / "scratch")
-
-    created = prepare_scratch(relocated)
-
-    assert created.is_dir()
-    assert created.stat().st_mode & 0o077 == 0
+    assert shell_env(cfg, session_dir)["TMPDIR"] != shell_env(cfg, other)["TMPDIR"]
 
 
-def test_prepare_scratch_tightens_an_existing_loose_directory(cfg, tmp_path):
-    """Every workspace made before this check has a 0755 scratch directory."""
-    existing = tmp_path / "existing"
-    existing.mkdir()
-    existing.chmod(0o755)
+def test_tmpdir_is_created_private(cfg, session_dir):
+    """The mode the shared scratch directory had, kept rather than quietly widened.
 
-    prepare_scratch(replace(cfg, scratch_root=existing))
-
-    assert existing.stat().st_mode & 0o077 == 0
+    Not a boundary on its own -- `derived/` sits beside it at whatever the umask gave
+    it -- and `ensure_session_layout` says so where it does this.
+    """
+    assert (session_dir / ".tmp").stat().st_mode & 0o077 == 0
 
 
-def test_prepare_scratch_refuses_something_that_is_not_a_directory(cfg, tmp_path):
-    """A symlink in /tmp is the classic way to redirect someone else's writes."""
-    target = tmp_path / "elsewhere"
-    target.mkdir()
-    link = tmp_path / "link"
-    link.symlink_to(target)
-
-    with pytest.raises(ConfigError, match="symlink or not a directory"):
-        prepare_scratch(replace(cfg, scratch_root=link))
-
-
-def test_state_dir_defaults_and_relocates(cfg, tmp_path):
-    """The run logs move with `state_dir`, and the agent addresses neither it nor them."""
-    assert cfg.state_dir == cfg.workspace / ".kingfisher"
-
-    relocated = replace(cfg, state_root=tmp_path / "state")
-    assert relocated.state_dir == tmp_path / "state"
-    assert log_path(relocated.state_dir, "s1") == tmp_path / "state" / "runs" / "s1.jsonl"
-
-
-def test_scratch_follows_a_relocated_state_dir(cfg, tmp_path):
-    """Scratch defaults *under* state, so moving state moves scratch with it."""
-    relocated = replace(cfg, state_root=tmp_path / "state")
-
-    assert relocated.scratch_dir == tmp_path / "state" / "tmp"
+def test_the_run_log_is_the_session_s_own(session_dir):
+    """It was `<state_dir>/runs/<id>.jsonl`, which nothing deleted when the session
+    went: one file per session that had ever existed, kept for good."""
+    assert log_path(session_dir) == session_dir / ".harness" / "runlog.jsonl"
 
 
 def test_a_refused_host_path_reaches_the_agent_as_a_tool_error(cfg, session_dir):

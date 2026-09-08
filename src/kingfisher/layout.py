@@ -9,6 +9,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+#: The harness's own directory in a workspace: not a session's, and not the
+#: agent's. Declared before `LAYOUT_DIRS`, which creates it, and named again
+#: by `MARKER` and by the sandbox profile that lives in it.
+HARNESS_OWNED = ".kingfisher"
+
 #: Created once in the workspace: the definitions the sessions share, and the
 #: harness's own directory.
 LAYOUT_DIRS: tuple[str, ...] = (
@@ -19,12 +24,18 @@ LAYOUT_DIRS: tuple[str, ...] = (
     "tools",
     # Sessions are the unit of isolation; each one is a backend root.
     "sessions",
-    # `.kingfisher` holds the marker. Its `runs/` and `tmp/` subdirectories are
-    # not created here: both are relocatable (`KINGFISHER_STATE_DIR`,
-    # `KINGFISHER_SCRATCH_DIR`) and each is created by whatever opens it, so
-    # creating them here would leave empty decoys behind when they are moved.
-    ".kingfisher",
+    # The harness's own, and the only directory in a workspace the agent may
+    # neither write nor be told about: the marker, and the sandbox profile that
+    # says what the shell may do. It held per-session state too -- run logs,
+    # claims, pinned agents, scratch -- and `KINGFISHER_STATE_DIR` existed to
+    # move all of that somewhere else. What is left describes the workspace
+    # rather than any session in it, and there is nothing left to relocate.
+    HARNESS_OWNED,
 )
+
+#: Its two contents, named so `protected_roots` and the profile writer agree on
+#: where they are without either spelling the path a second time.
+SANDBOX_PROFILE = "shell.sb"
 
 #: Created inside every session directory, which is the backend root. These are
 #: the names the agent addresses, so they mean the same thing in every session
@@ -52,8 +63,42 @@ UPLOADED_SKILL_DIR = "uploaded"
 
 UPLOADED_SKILLS = f"{SKILLS}/{UPLOADED_SKILL_DIR}"
 
+#: The agent's `TMPDIR`, for the reason `.home` is here: one shared scratch
+#: directory for the whole workspace was swept by nothing, counted against no
+#: session's quota, and readable by every other session's shell -- so what one
+#: caller derived sat where another caller's agent could read it. Per session,
+#: it is deleted with the session and counted by `session_bytes`, and neither
+#: fence has to grant anything beyond the session directory it already grants.
+AGENT_TMP = ".tmp"
+
+#: What the harness keeps about a session, inside the session and out of the
+#: agent's reach: the agent it opened with, its conversation, the lock a turn
+#: holds, and its run log. Every one of these used to live under `state_dir`,
+#: where nothing deleted it when the session went and nothing counted it against
+#: the session that caused it -- one file per session that ever existed, kept
+#: forever. Inside, `reap` and `session_bytes` cover them the way they already
+#: cover everything else a session holds.
+#:
+#: Reachable at `/.harness` -- the shell backend roots at the session -- which is
+#: why it is denied twice: a `Route` carrying read and write denies for the file
+#: tools, and a rule in the sandbox profile for the shell, which bypasses them.
+HARNESS = ".harness"
+
+#: The four things it holds. Named here rather than by the modules that write
+#: them, because `.harness` is a layout decision and those modules were each
+#: spelling a path of their own under `state_dir` before this.
+PINNED_AGENT = "agent.yaml"
+TRANSCRIPT_FILE = "transcript.jsonl"
+CLAIM = "claim"
+#: Not `runs.jsonl`: `/runs` already means per-turn scratch the agent addresses,
+#: and two things called "runs" in one session directory is how the last pair of
+#: names in this file drifted apart.
+RUNLOG = "runlog.jsonl"
+
 SESSION_PLUMBING: tuple[str, ...] = (
     AGENT_HOME,
+    AGENT_TMP,
+    HARNESS,
     UPLOADED_SKILLS,
 )
 
@@ -87,6 +132,12 @@ BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 DERIVED_ROUTE = _route(DERIVED)
 RUNS_ROUTE = _route(RUNS)
 
+#: A route the agent may not read or write, which is the only reason it is one:
+#: `FilesystemMiddleware` refuses `permissions=` outright unless every rule path
+#: sits under a route, so a path with no mount cannot carry a rule at all. What
+#: it holds is in `HARNESS`.
+HARNESS_ROUTE = _route(HARNESS)
+
 
 @dataclass(frozen=True)
 class Route:
@@ -99,6 +150,13 @@ class Route:
     #: catalogue, uploads and every bundle, and one rule per mount would make the
     #: rule count depend on how many bundles a catalogue happens to have.
     deny_write_under: str | None = None
+    #: The scope whose *read* deny covers this path, for the one route that is
+    #: mounted so it can be refused rather than so it can be reached. Denied
+    #: entries are filtered out of `ls`, `glob` and `grep` results rather than
+    #: erroring, so this makes a path invisible instead of visibly forbidden --
+    #: which is the difference between a model ignoring it and a model retrying
+    #: against it.
+    deny_read_under: str | None = None
     #: Whether the composite gives this path a backend of its own. `False` means
     #: it reaches the default, which is the shell's backend rooted at the session
     #: directory.
@@ -145,6 +203,16 @@ ROUTES: tuple[Route, ...] = (
     # it reaches the default backend along with everything else the session holds.
     Route(DERIVED_ROUTE, routed=False),
     Route(RUNS_ROUTE, routed=False),
+    # The one route that exists to be refused. Denied both ways: a run able to
+    # write here could rewrite the agent definition it is running under, or the
+    # conversation the next turn is rebuilt from, halfway through the
+    # conversation those produced; a run able to read here gains nothing it was
+    # not already told.
+    Route(
+        HARNESS_ROUTE,
+        deny_write_under=f"{HARNESS_ROUTE}**",
+        deny_read_under=f"{HARNESS_ROUTE}**",
+    ),
 )
 
 
@@ -158,11 +226,37 @@ def denied_scopes() -> tuple[str, ...]:
     return tuple(sorted({r.deny_write_under for r in ROUTES if r.deny_write_under}))
 
 
+def denied_read_scopes() -> tuple[str, ...]:
+    """Every scope a read is refused under, the same way.
+
+    A second function rather than a parameter on the first, because the two
+    answers go to two rules and a caller asking for one never wants the other:
+    a read deny on `/data/` would break the thing `/data/` is for.
+    """
+    return tuple(sorted({r.deny_read_under for r in ROUTES if r.deny_read_under}))
+
+
 def routed_paths() -> tuple[str, ...]:
     """The paths the composite mounts itself, families excluded."""
     return tuple(r.path for r in ROUTES if r.routed and not r.family)
 
-MARKER = ".kingfisher/WORKSPACE"
+MARKER = f"{HARNESS_OWNED}/WORKSPACE"
+
+#: What the marker says, and the whole of the compatibility story. The file has
+#: always held `kingfisher workspace\n` and nothing has ever read its contents --
+#: `is_new_workspace` asks only whether it exists -- so it is where a version can
+#: go without costing anything.
+#:
+#: It is here because the alternative was worse. When per-session state moved
+#: into the session, a workspace laid out the old way did not *break*: it went
+#: quiet and wrong. A pin the new code cannot find means the session silently
+#: re-pins and may change agent mid-conversation; a transcript read from the new
+#: path means the conversation comes back empty. Fallback readers would paper
+#: over both and have nothing to make anyone remove them -- the day the old paths
+#: are gone, nothing says so. A refusal is loud, and the next layout change
+#: inherits this rather than needing its own.
+LAYOUT_VERSION = 2
+MARKER_TEXT = f"kingfisher workspace\nlayout {LAYOUT_VERSION}\n"
 
 AGENTS_SCAFFOLD = """\
 # Project memory

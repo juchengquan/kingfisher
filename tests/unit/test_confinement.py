@@ -41,7 +41,7 @@ needs_a_real_toolchain = pytest.mark.skipif(
 def test_off_is_warned_about_on_every_start(cfg, tmp_path):
     """An exposure nobody is reminded of is one nobody fixes."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.OFF, workspace=cfg.workspace
     )
 
     assert not chosen.confined
@@ -52,7 +52,7 @@ def test_off_is_warned_about_on_every_start(cfg, tmp_path):
 def test_external_is_silent_because_the_runtime_already_did_it(cfg, tmp_path):
     """A container that mounts only the workspace has provided the boundary."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.EXTERNAL, workspace=cfg.workspace
     )
 
     assert chosen.warning == ""
@@ -63,28 +63,36 @@ def test_an_unknown_mode_is_refused_rather_than_treated_as_off(cfg, tmp_path):
     """A typo in a deployment's env must not silently unconfine it."""
     with pytest.raises(ValueError, match="unknown shell sandbox mode"):
         confinement.resolve(
-            "sandbox", workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+            "sandbox", workspace=cfg.workspace
         )
 
 
 @macos
 def test_auto_confines_and_says_nothing(cfg, tmp_path):
     chosen = confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.AUTO, workspace=cfg.workspace
     )
 
     assert chosen.confined
     assert chosen.warning == ""
-    assert (tmp_path / "shell.sb").is_file(), "profile not written"
+    assert confinement.profile_path(cfg.workspace).is_file(), "profile not written"
 
 
-def test_the_profile_lives_in_harness_state_not_the_workspace(cfg, tmp_path):
-    """A boundary the agent can edit is not a boundary."""
-    confinement.resolve(
-        confinement.AUTO, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
-    )
+@macos
+def test_the_profile_has_one_place_it_can_be(cfg):
+    """`.kingfisher/shell.sb`, and no setting moves it.
 
-    assert not list(Path(cfg.workspace).rglob("shell.sb"))
+    Two names ago this was `..._lives_in_harness_state_not_the_workspace`,
+    docstringed *"a boundary the agent can edit is not a boundary"*, and read as
+    proof the profile was out of the agent's reach. It never checked that: it
+    relocated `state_dir`, whose default is inside the workspace. What makes it a
+    boundary is `test_the_shell_cannot_rewrite_the_profile_it_runs_under`; what
+    this checks is that there is one answer to where it lives.
+    """
+    confinement.resolve(confinement.AUTO, workspace=cfg.workspace)
+
+    assert confinement.profile_path(cfg.workspace).is_file()
+    assert [p.name for p in Path(cfg.workspace).rglob("shell.sb")] == ["shell.sb"]
 
 
 # -- what the profile says ------------------------------------------------
@@ -385,13 +393,15 @@ def test_installing_into_the_environment_is_refused(cfg, session_dir):
 
 
 @macos
-def test_tmpdir_stays_writable_wherever_it_is_pointed(cfg, session_dir, tmp_path):
-    """`$TMPDIR` is where the prompt sends scratch, and `KINGFISHER_SCRATCH_DIR` can
-    move it out of the workspace.
+def test_tmpdir_is_writable_inside_the_session(cfg, session_dir):
+    """`$TMPDIR` is where the prompt sends scratch, so a shell that cannot write it
+    fails on its first command.
+
+    It used to be relocatable out of the workspace and named separately in the
+    writable set for that reason. Inside the session, it is covered by the
+    workspace allow the profile already emits.
     """
-    outside = tmp_path / "scratch-elsewhere"
-    relocated = replace(cfg, scratch_root=outside)
-    backend = build_backend(relocated, session_dir)
+    backend = build_backend(cfg, session_dir)
 
     result = backend.execute('echo hi > "$TMPDIR/note.txt" && cat "$TMPDIR/note.txt"')
 
@@ -498,7 +508,7 @@ def test_walking_in_does_not_open_the_home_it_walks_through(cfg, workspace_in_th
 def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
     """The distinction `EXTERNAL` exists for, made readable downstream."""
     chosen = confinement.resolve(
-        confinement.EXTERNAL, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.EXTERNAL, workspace=cfg.workspace
     )
 
     assert chosen.elsewhere
@@ -510,7 +520,7 @@ def test_external_is_confined_elsewhere_rather_than_unconfined(cfg, tmp_path):
 def test_nothing_configured_is_not_confined_elsewhere(cfg, tmp_path):
     """The other side, or the flag would say yes to everything."""
     chosen = confinement.resolve(
-        confinement.OFF, workspace=cfg.workspace, state_dir=tmp_path, scratch_dir=tmp_path
+        confinement.OFF, workspace=cfg.workspace
     )
 
     assert not chosen.elsewhere
@@ -599,7 +609,7 @@ def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
 def test_every_definition_root_is_protected(cfg):
     """The property, not the four names, so a fifth kind arrives covered."""
     protected = confinement.protected_roots(
-        cfg.skills_dir, tuple(cfg.catalogue_roots.values())
+        cfg.workspace, cfg.skills_dir, tuple(cfg.catalogue_roots.values())
     )
 
     missing = [
@@ -618,16 +628,109 @@ def test_a_root_named_twice_is_protected_once(cfg):
     """`skills` is passed separately *and* is a catalogue root."""
     roots = tuple(cfg.catalogue_roots.values())
 
-    protected = confinement.protected_roots(cfg.catalogue_roots["skills"], roots)
+    protected = confinement.protected_roots(cfg.workspace, cfg.catalogue_roots["skills"], roots)
 
     assert len(protected) == len(set(protected))
-    assert len(protected) == len(roots), "a duplicate survived, or a root was dropped"
+    assert len(protected) == len(roots) + 1, "a duplicate survived, or a root was dropped"
 
 
 def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
     """A profile is written once, and `seed` runs after it at least once."""
     absent = tmp_path / "not-created"
 
-    protected = confinement.protected_roots(None, (absent,))
+    protected = confinement.protected_roots(tmp_path / "ws", None, (absent,))
 
-    assert protected == (absent.resolve(),)
+    assert absent.resolve() in protected
+
+
+# -- the profile is not the agent's to edit either ------------------------
+
+
+@macos
+@pytest.mark.parametrize(
+    "how",
+    [
+        'printf x > "{profile}"',
+        'printf x >> "{profile}"',
+        'rm -f "{profile}"',
+        'printf x > "{beside}"; mv "{beside}" "{profile}"',
+    ],
+    ids=["overwrite", "append", "unlink", "rename-over"],
+)
+def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir, how):
+    """Two commands took the sandbox apart: write the rules, then run under them.
+
+    `sandbox-exec -f` re-reads the profile for every command and `resolve` rewrites
+    it only per backend, so a shell that could write it was unconfined for the rest
+    of the turn. It could: the profile sits in the workspace and
+    `writable_roots` returns the whole workspace, so the rules sat in the region
+    they declared writable. Measured before the fix -- the home became readable and
+    `skills/` became writable, both of which the profile above had just refused.
+
+    Four ways rather than one, because refusing an overwrite while allowing
+    `mv` over the same name is not a boundary.
+    """
+    profile = confinement.profile_path(cfg.workspace)
+    backend = build_backend(cfg, session_dir)
+    before = profile.read_text(encoding="utf-8")
+
+    backend.execute(how.format(profile=profile, beside=cfg.workspace / "beside.sb"))
+
+    assert profile.read_text(encoding="utf-8") == before, (
+        "the shell rewrote the profile that confines it, so the next command in "
+        "this turn would run under rules the agent chose"
+    )
+
+
+@macos
+def test_the_home_stays_denied_after_a_shell_tries_to_open_it(cfg, session_dir):
+    """The consequence, not the mechanism: what the escape was *for*."""
+    secret = Path.home() / ".kingfisher-profile-probe"
+    secret.write_text("PRIVATE", encoding="utf-8")
+    backend = build_backend(cfg, session_dir)
+    try:
+        profile = confinement.profile_path(cfg.workspace)
+        backend.execute(f'printf "(version 1)\\n(allow default)\\n" > "{profile}"')
+
+        result = backend.execute(f'cat "{secret}"')
+    finally:
+        secret.unlink(missing_ok=True)
+
+    assert "PRIVATE" not in str(result.output), "the shell rewrote its way into the home"
+
+
+def test_the_profile_refuses_itself_last(tmp_path):
+    """`sandbox-exec` takes the last matching rule, and this one has to beat the
+    allow that covers the directory it sits in."""
+    written = tmp_path / "ws" / ".kingfisher" / "shell.sb"
+
+    lines = confinement.profile(
+        home=tmp_path / "home",
+        workspace=tmp_path / "ws",
+        readable=(tmp_path / "ws",),
+        writable=(tmp_path / "ws",),
+        itself=written,
+        protected=(tmp_path / "ws" / "skills",),
+    ).splitlines()
+
+    # Last but one: the harness denial that follows it is the same kind of rule
+    # and covers a different path, so both have to sit after the allows.
+    assert f'(deny file-write* (path "{written}"))' in lines[-2:]
+    assert all(not line.startswith("(allow file-write*") for line in lines[-2:])
+
+
+@macos
+def test_a_profile_is_replaced_rather_than_truncated(tmp_path):
+    """A turn reading the profile while another rewrites it must not see half of one.
+
+    Every input to `profile` comes from one `Config`, so concurrent writers write the
+    same bytes; what is being prevented is the window in which the file is empty.
+    """
+    workspace = tmp_path / "ws"
+    for _ in range(2):
+        confinement.resolve(confinement.AUTO, workspace=workspace)
+
+    beside = confinement.profile_path(workspace).parent
+    assert sorted(p.name for p in beside.iterdir()) == ["shell.sb"], (
+        "a temporary profile was left beside the real one"
+    )

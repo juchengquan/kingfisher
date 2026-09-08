@@ -17,6 +17,8 @@ from kingfisher.infrastructure.sandbox.confinement import (
     landlock_ready,
 )
 from kingfisher.infrastructure.sandbox.fence import SYSTEM_PATHS, LandlockRunner, policy_for
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.layout import DERIVED, HARNESS
 
 #: A message short enough for `TRY003`, since what it says never survives
 #: `subprocess` anyway -- see the test that uses it.
@@ -46,9 +48,14 @@ def sandlock(monkeypatch):
 
 
 def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
-    """A policy for a session that exists, because only those are generated."""
+    """A policy for a session that exists, laid out as `build_backend` requires.
+
+    Through `ensure_session_layout` rather than a bare `mkdir`: the writable rules
+    are one per directory in a session, so a session with none of them produces an
+    empty list and every assertion below passes by saying nothing.
+    """
     session = tmp_path / "sessions" / "s1"
-    session.mkdir(parents=True, exist_ok=True)
+    ensure_session_layout(session)
     return policy_for(session, **kwargs)
 
 
@@ -59,9 +66,31 @@ def test_the_session_is_writable_and_nothing_above_it_is(sandlock, tmp_path):
     """The claim the fence exists to make."""
     policy = a_policy(tmp_path)
 
-    assert str(tmp_path / "sessions" / "s1") in policy.fs_writable
+    assert str(tmp_path / "sessions" / "s1" / DERIVED) in policy.fs_writable
     assert str(tmp_path / "sessions") not in policy.fs_writable
     assert str(tmp_path) not in policy.fs_writable
+
+
+def test_no_writable_rule_has_the_harness_underneath_it(sandlock, tmp_path):
+    """Landlock grants and never takes back, so a writable rule on *any* directory
+    above `.harness` re-opens it: a write that the read-only grant does not answer
+    walks up to that one instead. This is the guard on the bug it caused -- the fenced
+    shell rewrote the agent definition its own session was pinned to.
+    """
+    policy = a_policy(tmp_path)
+    harness = tmp_path / "sessions" / "s1" / HARNESS
+
+    for granted in policy.fs_writable:
+        assert not harness.is_relative_to(granted), f"{granted} re-opens {HARNESS}"
+
+
+def test_the_session_stays_readable_even_though_it_is_not_writable(sandlock, tmp_path):
+    """The shell starts in the session directory. A fence that could not list it would
+    be swapped out for no fence at all, which is the expensive way to lose one.
+    """
+    policy = a_policy(tmp_path)
+
+    assert str(tmp_path / "sessions" / "s1") in policy.fs_readable
 
 
 def test_another_session_appears_in_no_list_at_all(sandlock, tmp_path):
@@ -243,14 +272,14 @@ def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, 
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped
 
     session = tmp_path / "sessions" / "s1"
-    session.mkdir(parents=True)
+    ensure_session_layout(session)
     unfenced = Confinement(wrap=_unwrapped, warning="nothing here")
     assert _fence_for(cfg, session, unfenced, None, {}) is None
 
     fenced = Confinement(wrap=_unwrapped, mechanism="Landlock")
     runner = _fence_for(cfg, session, fenced, None, {})
     assert isinstance(runner, LandlockRunner)
-    assert str(session) in runner.policy.fs_writable
+    assert str(session / DERIVED) in runner.policy.fs_writable
 
 
 def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
@@ -289,7 +318,10 @@ def test_both_fences_are_handed_the_same_paths(cfg, tmp_path, monkeypatch):
     # And that the paths are the ones meant, so agreeing on nothing would fail.
     _, readable, writable = seen["Landlock"]
     assert skills in readable, "the shared catalogue is what a skill's scripts are read from"
-    assert writable == [cfg.scratch_dir], "$TMPDIR has to be writable or the first command fails"
+    assert writable == [], (
+        "$TMPDIR is inside the session both fences already grant, so naming it again "
+        "would grant a subpath of what is granted"
+    )
 
 
 def test_every_directory_on_the_agent_s_path_is_reachable(cfg, tmp_path, monkeypatch):
