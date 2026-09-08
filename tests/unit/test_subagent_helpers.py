@@ -427,8 +427,25 @@ def test_the_cycle_walk_still_reads_a_star_as_every_edge():
         name="greedy", description="Consults everything.", system_prompt="x", subagents=ALL
     )
 
-    with pytest.raises(SubagentError, match="reach themselves"):
+    with pytest.raises(SubagentError, match="reach themselves") as refusal:
         refuse_cycles({"greedy": greedy})
+
+    # The loop a star makes never names itself, so only the message can say why
+    # `greedy -> greedy` is one. Asserted here because the clause is the whole
+    # reason a reader believes the refusal.
+    assert "names every subagent with `*`" in str(refusal.value)
+
+
+def test_a_loop_written_out_by_name_is_not_blamed_on_a_star():
+    """The negative control for the clause above, which would otherwise read as
+    always-on and explain a loop the author did write.
+    """
+    specs = {"a": _spec("a", "[b]"), "b": _spec("b", "[a]")}
+
+    with pytest.raises(SubagentError, match="reach themselves") as refusal:
+        refuse_cycles(specs)
+
+    assert "names every subagent" not in str(refusal.value)
 
 
 def test_a_catalogue_without_a_star_is_untouched():
