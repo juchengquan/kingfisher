@@ -109,8 +109,10 @@ class ToolNote(AgentMiddleware):
         "max_length": 200,
     }
 
-    #: The one key a definition may write. `max_length` is absent on purpose --
-    #: see the module docstring for the test a key has to pass to be here.
+    #: The one key a definition may write. `max_length` is absent because the
+    #: test is not whether a key is harmless alone but whether *more* of it is a
+    #: failure mode: a definition wanting a longer note would raise the bound on
+    #: what it injects into every tool result, and be within its rights.
     yaml_settable: ClassVar[frozenset[str]] = frozenset({"text"})
 
     def __init__(self, text: str, max_length: int) -> None:

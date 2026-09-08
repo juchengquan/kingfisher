@@ -449,17 +449,21 @@ def test_no_prose_cites_a_line_number():
 #: has no layer, why the service's error list is a copy.
 DEFERS_TO_MODULE_DOCSTRING = re.compile(r"\bthe module docstring\b", re.IGNORECASE)
 
-#: Exempt by area, the way the sandbox modules were exempted by name. An example
-#: is read top to bottom and its module docstring is the lesson rather than
-#: somewhere a reason was put away: `tool_note.py` points at the paragraph
-#: stating the test a settable key must pass, which is the file's subject.
+#: Areas this rule reads that the collection every other prose rule uses does not.
+#: The shipped examples are the files most likely to defer -- an example has a
+#: module docstring worth reading, so pointing at it feels free -- and four did.
 #:
-#: This file is exempt as well, and structurally rather than by choice: the
-#: pattern above *is* the phrase it searches for, so the rule matches its own
-#: source however the prose around it is worded. The hole that leaves is real and
-#: small -- a genuine deferral written into this file would not be caught -- and
-#: is the same one `PROSE_GONE` accepts for naming a module on purpose.
-DEFERRAL_ALLOWED = ("assets_examples",)
+#: There is no exemption table, and the first draft's was worse than none: it
+#: excused `assets_examples/` on the argument that an example is read top to
+#: bottom, and mutating that entry proved it dead, because the walk had never
+#: reached the directory it named. An exemption nothing exercises is a comment
+#: asserting something untrue.
+#:
+#: This file is skipped, structurally rather than by choice: the pattern above
+#: *is* the phrase it searches for, so the rule matches its own source however
+#: the prose around it is worded. That hole is real and small, and is the one
+#: `PROSE_GONE` already accepts for naming a gone module on purpose.
+DEFERRAL_WALKS = ("assets_examples",)
 
 
 def _prose_run_together(path: Path) -> str:
@@ -473,6 +477,19 @@ def _prose_run_together(path: Path) -> str:
     return " ".join(re.sub(r"^\s*#:?", " ", text, flags=re.MULTILINE).split())
 
 
+def _deferral_walked() -> list[Path]:
+    """Everything this rule reads, named once so the companion can check it."""
+    return [
+        *_everything_that_imports_kingfisher(),
+        *sorted(
+            path
+            for area in DEFERRAL_WALKS
+            for path in (REPO / area).rglob("*.py")
+            if "__pycache__" not in path.parts
+        ),
+    ]
+
+
 def test_no_prose_defers_to_the_module_docstring():
     """A pointer at the top of the file outlives the paragraph it points at.
 
@@ -483,12 +500,11 @@ def test_no_prose_defers_to_the_module_docstring():
     """
     deferring = []
     here = Path(__file__).resolve()
-    for path in _everything_that_imports_kingfisher():
-        relative = path.relative_to(REPO).as_posix()
-        if relative.startswith(DEFERRAL_ALLOWED) or path.resolve() == here:
+    for path in _deferral_walked():
+        if path.resolve() == here:
             continue
         if DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(path)):
-            deferring.append(relative)
+            deferring.append(path.relative_to(REPO).as_posix())
 
     assert not deferring, (
         f"{deferring} send a reader to the module docstring for a reason — write "
@@ -517,7 +533,15 @@ def test_the_deferral_rule_reads_across_a_wrapped_line(tmp_path):
     beside.write_text('"""A file."""\n\n#: See the class docstring.\nX = 1\n', encoding="utf-8")
     assert not DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(beside))
 
-    assert len(_everything_that_imports_kingfisher()) > 100
+    # And the walk reaches what it says it does. The first draft named an area it
+    # excused without ever having read it, which mutating the table is what found
+    # -- so the emptiness check is here too, because an empty table would leave
+    # the loop below vacuous rather than satisfied.
+    walked = {path.relative_to(REPO).as_posix() for path in _deferral_walked()}
+    assert len(walked) > 100
+    assert DEFERRAL_WALKS
+    for area in DEFERRAL_WALKS:
+        assert any(name.startswith(f"{area}/") for name in walked), f"{area} is not walked"
 
 
 def test_the_driver_is_not_collected():

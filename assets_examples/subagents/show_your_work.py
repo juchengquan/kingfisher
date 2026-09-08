@@ -104,7 +104,7 @@ def _build(model: Any, tools: list[Any]) -> Any:
     compiled delegate is given no allowlist middleware, so this list is the whole
     of what it can call.
     """
-    from langchain.agents import create_agent  # noqa: PLC0415 -- see the module docstring
+    from langchain.agents import create_agent  # noqa: PLC0415 -- 370ms per listing
     from langchain_core.messages import AIMessage  # noqa: PLC0415
     from langgraph.graph import START, MessagesState, StateGraph  # noqa: PLC0415
 
@@ -143,8 +143,7 @@ SUBAGENTS = [
             "their arguments and whether any failed. Use when the answer will be "
             "checked, or when you need to know whether a check actually happened."
         ),
-        # No `tools:` line on purpose -- see the module docstring. It reports on
-        # whatever the request granted.
+        # No `tools:` line on purpose: it reports on whatever the request granted.
         #
         # No `model` key, so this runs whatever summoned it. Reporting is
         # cheap work: add `"model": "<one your models.yaml defines>"` to pin it,
