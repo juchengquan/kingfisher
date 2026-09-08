@@ -1926,27 +1926,37 @@ forever, and the most lethal mutant in the corpus was filed as a gap in the
 suite. Corrected and re-run: **279 mutants, 260 killed, 19 survivors** -- 6.8%
 rather than 18%.
 
-**Twelve of the 19 are real gaps.** A caller naming `groups` where the
-deployment has no vocabulary, which raises rather than refusing. The run log's
-`ok` on the `max_steps` path, whose staying true is explained in a comment and
-checked by nothing. `top_p` never reaching the model params, with `temperature`
-beside it in the same shape. The *everything or only what was named* branch,
-twice. A stray entry in a session's `runs`. A file that is not YAML on the
-seeding path. `all_of` given a mapping. The nothing-here line for agents, whose
-siblings for skills and subagents are both covered. `ensure_ascii`. The
-`*`-loop suffix that its own comment says the message has to carry. And
-`subgraphs`, which no stub graph can exercise and which therefore stays open.
+**Eleven of the 19 are real gaps.** The run log's `ok` on the `max_steps` path,
+whose staying true is explained in a comment and checked by nothing. `top_p`
+never reaching the model params, with `temperature` beside it in the same shape
+and a test written for one of them. The *everything or only what was named*
+branch, twice. A stray entry in a session's `runs`. A tool's own JSON on the
+seeding path, which matters because JSON is valid YAML and the extension check
+is what separates them. `all_of` given a mapping. The nothing-here line for
+agents, whose siblings for skills and subagents were both covered.
+`ensure_ascii`. The `*`-loop clause that its own comment says the message has to
+carry. And `subgraphs`, on both loops.
 
-**Five are not gaps**: one is `# pragma: no cover`, one is refused by a
+**Six are not gaps**: one is `# pragma: no cover`, one is refused by a
 `ConfigError` above it, one is a branch its comment says no definition can
-reach, and two are defensive keywords that show only on a second call. **Two
-need Linux**, where the fence is reachable at all, and CI's fence job is where
-they get settled.
+reach, and two are defensive keywords that show only on a second call. The sixth
+is `held_for`, which was written down as a gap and is not: a caller naming groups
+without a vocabulary, and a caller naming none with one, are both refused before
+that line is reached, so no combination that can arrive behaves differently. It
+was reclassified by writing the test and watching it fail against unmutated
+code, which is the only way that answer comes out. **Two need Linux**, where the
+fence is reachable at all, and CI's fence job is where they get settled.
 
-Twelve gaps is about eleven tests, because two pairs share a shape. Writing them
-is not done. What is done is that the next person does not have to re-derive
-which twelve: `tests/unit/mutation_report.py` is the corrected harness, and it
-reproduces these on a sample of five.
+The eleven are closed, in twelve tests -- two pairs share a shape, and one more
+came out of the reading: the `max_steps` flag is set twice, and the async copy
+sits three lines from the sampled one and was written by hand. Each was
+mutation-tested rather than assumed. None of them changed `src/`: every one was
+a test that was missing, not a behaviour that was wrong.
+
+One `src/` change came out of it anyway, from pointing a test at the wrong
+parser: `groups.yaml` read `all_of: {finance: senior}` as the single name
+`finance` and discarded the rest, because a mapping is truthy and iterates. That
+one is a defect, and it is fixed.
 
 If deletions are ever proposed, the gate is a mutation corpus generated *after*
 the deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
