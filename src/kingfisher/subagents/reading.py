@@ -253,7 +253,15 @@ def read(text: str, source: Path) -> SubagentSpec:
         document.get("middleware"), absent=None, key="middleware"
     )
     written_skills, skill_audiences = reader.audienced(
-        document.get("skills"), absent=None, key="skills"
+        document.get("skills"),
+        absent=None,
+        key="skills",
+        refuse_all=(
+            "it means whatever the request granted, and a delegate is given an "
+            "index only where its skills are named -- so against the ordinary "
+            "request, which grants every skill, the star reads as all of them "
+            "and arrives as none. Name the procedures this one uses"
+        ),
     )
     written_delegates, delegate_audiences = reader.audienced(
         document.get("subagents"),

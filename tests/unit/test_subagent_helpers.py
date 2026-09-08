@@ -373,16 +373,53 @@ def test_the_refusal_says_why_rather_than_only_no():
         _spec("greedy", '["*"]')
 
 
-def test_the_other_selections_still_take_a_star():
-    """The refusal is one field, not a change to the format."""
+def test_tools_still_takes_a_star():
+    """The refusals are two fields, not a change to the format.
+
+    This asserted `skills: ["*"]` parsed too, on the reasoning that the
+    `subagents` refusal was scoped to one field. It was, until the star on
+    `skills` was measured rather than assumed -- see the two tests below.
+    """
     spec = reading.read(
         "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
-        'skills: ["*"]\ntools: ["*"]\n',
+        'tools: ["*"]\n',
         Path("broad.yaml"),
     )
 
-    assert spec.skills == ALL
     assert spec.tools == ALL
+    assert spec.skills is None  # unwritten, which is what grants none
+
+
+def test_a_delegate_may_not_ask_for_every_skill():
+    """`skills: ["*"]` read as "all of them" and arrived as none.
+
+    It resolves to whatever the request granted, and a delegate is handed an
+    index only where its skills are *named* -- so under the ordinary request,
+    which grants every skill, the delegate got no index at all. It worked only
+    when the caller happened to narrow skills, which is a meaning no author of
+    the file can see.
+    """
+    body = (
+        "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+        'skills: ["*"]\n'
+    )
+
+    with pytest.raises(SubagentError, match=r"skills may not be"):
+        reading.read(body, Path("broad.yaml"))
+
+
+def test_the_skills_refusal_says_what_to_write_instead():
+    """A refusal naming no remedy sends the reader to the source, and the habit it
+    came from -- a request, where the star is the ordinary way to say everything --
+    is the same one the `subagents` refusal above exists to catch.
+    """
+    body = (
+        "name: broad\ndescription: A delegate.\nsystem_prompt: |\n  x\n"
+        'skills: ["*"]\n'
+    )
+
+    with pytest.raises(SubagentError, match="Name the procedures this one uses"):
+        reading.read(body, Path("broad.yaml"))
 
 
 def test_the_cycle_walk_still_reads_a_star_as_every_edge():
