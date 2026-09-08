@@ -240,6 +240,7 @@ def routed_paths() -> tuple[str, ...]:
     """The paths the composite mounts itself, families excluded."""
     return tuple(r.path for r in ROUTES if r.routed and not r.family)
 
+
 MARKER = f"{HARNESS_OWNED}/WORKSPACE"
 
 #: What the marker says, and the whole of the compatibility story. The file has

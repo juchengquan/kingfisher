@@ -2288,6 +2288,8 @@ def test_the_event_kinds_are_what_the_package_emits():
         "as the SSE event names, so an extra entry is a kind no client sees and a "
         "missing one is a kind nobody handles"
     )
+
+
 def test_the_stop_reasons_are_what_the_package_assigns():
     """`STOP_REASONS` is a wire contract like `KINDS`, and pinned the same way."""
     from kingfisher.domain.result import STOP_REASONS

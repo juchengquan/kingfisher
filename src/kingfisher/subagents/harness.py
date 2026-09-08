@@ -44,6 +44,7 @@ if TYPE_CHECKING:
     from kingfisher.config import Config
     from kingfisher.skills.registry import SkillRegistry
 
+
 def _identities(registry: SkillRegistry, selection: Selection) -> Selection:
     """A selection as the skills it means, rather than as the words somebody wrote.
 
@@ -183,7 +184,6 @@ def indistinct(
             f"same host as the default ({summoner})"
         )
     return None
-
 
 
 def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still

@@ -207,14 +207,6 @@ def test_a_delegate_nobody_activated_cannot_break_the_build(cfg, session_dir, mo
     assert build(cfg, session_dir, monkeypatch)["name"] == "reviewer"
 
 
-
-
-
-
-
-
-
-
 def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(
     cfg, session_dir, monkeypatch
 ):
@@ -225,8 +217,6 @@ def test_an_alias_a_deployment_did_not_bind_costs_nothing_until_activated(
     define(cfg, "name: reviewer\ndescription: d\nsystem_prompt: |\n  Go.\n")
 
     assert build(cfg, session_dir, monkeypatch)["name"] == "reviewer"
-
-
 
 
 # -- granted, like middleware ----------------------------------------------

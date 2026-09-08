@@ -122,4 +122,3 @@ def test_a_deployment_without_the_sandbox_is_left_alone(cfg, session_dir):
     )
 
     assert not _installed()
-

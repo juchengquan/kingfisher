@@ -18,7 +18,6 @@ __all__ = ["Kind", "Origin", "Origins"]
 Kind = Literal["default", "relocated", "overridden", "supplied", "unset"]
 
 
-
 @dataclass(frozen=True)
 class Origin:
     """One place, and what kind of place it turned out to be."""
@@ -105,6 +104,7 @@ class Origins:
             f"{name}={origin.spelled(self.workspace)}" for name, origin in self.entries()
         )
         return f"workspace={self.workspace} {pairs}"
+
     def block(self) -> tuple[str, ...]:
         """The same answer as a header, one place per line."""
         names = ("workspace", *(name for name, _ in self.entries()))

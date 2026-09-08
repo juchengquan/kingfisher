@@ -75,9 +75,6 @@ if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
 
-
-
-
 #: For a request that declined memory a deployment did wire. Reads are denied
 #: rather than the prompt rewritten: the prompt is the cached prefix.
 MEMORY_IS_DENIED = FilesystemPermission(
@@ -85,18 +82,6 @@ MEMORY_IS_DENIED = FilesystemPermission(
     paths=["/memory/**"],
     mode="deny",
 )
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def read_only_permissions() -> list[FilesystemPermission]:
@@ -123,10 +108,6 @@ def read_only_permissions() -> list[FilesystemPermission]:
     ]
 
 
-
-
-
-
 def _backend_for(
     cfg: Config,
     session_dir: Path | None,
@@ -141,18 +122,6 @@ def _backend_for(
         return build_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
     msg = "build_agent needs either a session_dir to root a backend at, or a backend"
     raise ValueError(msg)
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def _wanted_endpoints(
@@ -170,10 +139,6 @@ def _wanted_endpoints(
         (where.model for where in wanted.values()), granted=granted, subject="run_on"
     )
     return wanted
-
-
-
-
 
 
 def _running(

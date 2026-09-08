@@ -30,6 +30,7 @@ __all__ = [
 #: What a module must define: the tools it contributes, as a sequence.
 EXPORT = "TOOLS"
 
+
 class ToolError(LoadError):
     """A workspace's tool module could not be loaded, or should not be."""
 

@@ -300,7 +300,6 @@ def test_a_delegate_consults_its_helper_end_to_end(cfg, session_dir):
     assert "SECOND-OPINION-ANSWERED" not in transcript
 
 
-
 # -- what nesting must not have loosened ------------------------------------
 
 
@@ -531,5 +530,3 @@ def test_a_helper_under_an_unpinned_delegate_still_runs_the_agents_model(
 
     parent = {spec["name"]: spec for spec in captured["subagents"]}["reviewer"]
     assert _helper_specs(parent)["second-opinion"]["model"] is main
-
-

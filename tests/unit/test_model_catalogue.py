@@ -314,8 +314,6 @@ def test_a_name_the_file_never_defined_still_says_so(tmp_path):
     assert "API_KEY" not in said
 
 
-
-
 def test_what_cannot_run_is_kept_apart_from_what_can(tmp_path):
     """`models` means what can run and has to keep meaning it."""
     models = load(written(tmp_path, TWO_ENDPOINTS), KEYS)

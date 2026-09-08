@@ -306,13 +306,9 @@ def read(text: str, source: Path) -> SubagentSpec:
     )
 
 
-
 # `tools:` used to be stripped to bare names here, on the reasoning that a name is the
 # only thing a grant, an allowlist or the agent's dispatch dictionary keys on. That held
 # while a name could only mean one tool. Two folders may now each define a `fetch`, and
 # the reference is the only thing that says which -- so a definition keeps what it
 # wrote, and the flattening happens at the two places that genuinely need a bare name:
 # `ToolAllowlist`, and `permitted`.
-
-
-

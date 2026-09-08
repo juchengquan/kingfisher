@@ -127,8 +127,6 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
         reading.read(delegate, Path("d.yaml"))
 
 
-
-
 @pytest.mark.parametrize(
     ("field", "expected"),
     [
@@ -146,10 +144,6 @@ def test_an_unknown_field_is_refused_and_a_near_miss_is_named():
     """A key we ignore is a key the author believes took effect."""
     with pytest.raises(AgentError, match="did you mean 'tools'"):
         _read(MINIMAL.rstrip() + "\ntolls: []\n", "plain.yaml")
-
-
-
-
 
 
 def test_memory_has_three_states_and_absent_is_not_off():
