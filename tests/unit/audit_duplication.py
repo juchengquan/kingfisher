@@ -1,4 +1,10 @@
-"""Find rules written more than once. Run it; it asserts nothing."""
+"""Find rules written more than once. Run it; it asserts nothing.
+
+    PYTHONPATH=. uv run python tests/unit/audit_duplication.py
+
+`PYTHONPATH` because the import below is the one pytest's `pythonpath`
+setting serves, and nothing serves it when you run this by hand.
+"""
 
 from __future__ import annotations
 
