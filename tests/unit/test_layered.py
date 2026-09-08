@@ -4,8 +4,6 @@ from __future__ import annotations
 
 from dataclasses import dataclass, replace
 
-import pytest
-
 from kingfisher.domain.ports import SkillRepository, SubagentRepository
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import (
@@ -216,15 +214,15 @@ def test_one_sessions_uploads_are_invisible_to_another(cfg, session_dir, tmp_pat
     assert "mine" not in for_session(catalogue, other).subagents.specs
 
 
-@pytest.mark.parametrize("kind", ["skills", "subagents"])
-def test_an_empty_session_adds_nothing(cfg, session_dir, kind):
+def test_an_empty_session_adds_nothing(cfg, session_dir):
     """The common case: most turns upload nothing, and a missing uploads directory reads
     as empty rather than as a failure.
     """
     catalogue = Definitions.from_config(cfg)
-    plain = getattr(catalogue, kind).names
+    layered = for_session(catalogue, session_dir)
 
-    assert getattr(for_session(catalogue, session_dir), kind).names == plain
+    for kind in ("skills", "subagents"):
+        assert getattr(layered, kind).names == getattr(catalogue, kind).names, kind
 
 
 def test_every_implementation_offers_names_in_a_stable_order(cfg, session_dir):
