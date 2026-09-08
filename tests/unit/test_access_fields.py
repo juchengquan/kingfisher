@@ -149,6 +149,20 @@ def test_a_conjunction_is_one_entry_of_an_entry_audience():
     ) == (("sql_query",), {"sql_query": ("admin", frozenset({"finance", "senior"}))})
 
 
+@pytest.mark.parametrize("written", [{"finance": True}, 3, True])
+def test_a_requirement_that_is_not_a_list_is_refused(written):
+    """`{all_of: {finance: ...}}` fell through the guard and was iterated for its
+    keys, which reads as a requirement the author never wrote.
+
+    The string form has a refusal of its own because it looks like a list of
+    letters; everything else shares this one, and nothing named it.
+    """
+    with pytest.raises(AgentError, match="list of group names"):
+        read.audienced(
+            [{"name": "sql_query", "groups": [{"all_of": written}]}], absent=ALL, key="tools"
+        )
+
+
 def test_a_conjunction_of_one_is_that_one_name():
     """Not special-cased: a set of one is satisfied by holding one, which is what the
     bare name means.
