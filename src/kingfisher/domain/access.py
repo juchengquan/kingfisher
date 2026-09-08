@@ -303,8 +303,17 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
             if key not in body:
                 continue
             listed = body[key] or ()
-            if isinstance(listed, str):
-                msg = f"{source}: group {name!r}: {key!r} is a list of group names"
+            # A string is called out because it reads as a list of letters. A
+            # mapping is the one that was silently wrong: it is truthy and it
+            # iterates, so `all_of: {finance: senior}` became the single name
+            # `finance` and threw away what was written beside it. Everything else
+            # raised `TypeError` out of the comprehension below, which names
+            # neither the file nor the group.
+            if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
+                msg = (
+                    f"{source}: group {name!r}: {key!r} is a list of group names "
+                    f"-- got {listed!r}"
+                )
                 raise AccessError(msg)
             if not listed:
                 said = (
