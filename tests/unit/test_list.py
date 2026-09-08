@@ -21,6 +21,38 @@ def test_listing_reports_a_workspace_that_will_not_load(cfg, monkeypatch, capsys
     assert "cannot load" in capsys.readouterr().out
 
 
+def test_a_workspace_with_no_agents_says_so_and_says_what_to_do(cfg, monkeypatch, capsys):
+    """The empty listing for agents, which the ones for skills and subagents had
+    and this did not -- a mutation removing it went unnoticed.
+
+    It carries the seed hint because a workspace with no agents cannot serve a
+    request at all: every other emptiness here is survivable.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "(none)" in printed
+    assert "a request must name one" in printed
+
+
+def test_a_workspace_holding_an_agent_does_not_say_none(cfg, monkeypatch, capsys):
+    """So the rule above is not passing on a listing that says it whatever it holds."""
+    from tests.conftest import an_agent
+
+    an_agent(cfg, "analyst")
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+
+    assert main(["list"]) == 0
+
+    assert "a request must name one" not in capsys.readouterr().out
+
+
 def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatch, capsys):
     """The one error a caller causes and can fix."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
