@@ -1958,6 +1958,28 @@ parser: `groups.yaml` read `all_of: {finance: senior}` as the single name
 `finance` and discarded the rest, because a mapping is truthy and iterates. That
 one is a defect, and it is fixed.
 
+**The rate above is of covered lines, and the report walks more than those.**
+The corpus behind these numbers drew only from lines the tests execute, so a
+survivor meant a change nothing asserted. `mutation_report.py` walks every
+mutable line in the package instead, uncovered ones included, and those always
+survive -- so its rate is higher and the two do not compare. Reached this way it
+is one question rather than two: whether a line is asserted, and whether it runs
+at all.
+
+**Rerunning it found the report editing prose again.** The skip named `STRING`
+and `COMMENT`, and since 3.12 an f-string is neither -- it is a start, its
+literal pieces, and an end -- so the fix that removed 19 survivors covered plain
+strings and let every f-string through, which is how nearly every message here is
+written. Third time this measurement has been wrong in a way that read as a
+finding about the tests, and the first with a test of its own to stop the fourth.
+
+**And it found something the covered-lines corpus could not.** 23 of 61
+survivors were one edit: `frozen=True` off a dataclass. All 58 records in the
+package are frozen, one had a test, and its docstring said "frozen, like
+everything else a caller is handed here" -- true, and held up by nothing.
+`test_every_record_this_package_hands_out_is_frozen` is the rule now; the
+behavioural test stays as the half that watches a real refusal. *(2026-09-08.)*
+
 If deletions are ever proposed, the gate is a mutation corpus generated *after*
 the deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
 2026-09-08.)*
