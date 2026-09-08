@@ -138,9 +138,8 @@ class CallCap(AgentMiddleware):
     `cls(**defaults, **whatever the definition wrote)`, and `yaml_settable`
     decides which keys a definition is allowed to have written.
 
-    `limit` is deliberately absent from `yaml_settable`, and this is the same
-    argument the module docstring makes rather than a second one: a cap a
-    definition can set is not a cap. The class ships settable-by-nobody, which
+    `limit` is deliberately absent from `yaml_settable`: a cap a definition can
+    set is not a cap. The class ships settable-by-nobody, which
     is the right default for a middleware whose entire job is to say no.
     """
 

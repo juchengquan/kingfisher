@@ -444,6 +444,108 @@ def test_no_prose_cites_a_line_number():
     )
 
 
+#: Prose sending a reader to the top of the file for the reason it is about. The
+#: guard and the thing it guards end up apart, so a cut to either end leaves a
+#: pointer at nothing and nothing goes red. All four in the library named a
+#: paragraph that had gone -- why `builtin_tools` carries no audience, why `tools`
+#: has no layer, why the service's error list is a copy.
+DEFERS_TO_MODULE_DOCSTRING = re.compile(r"\bthe module docstring\b", re.IGNORECASE)
+
+#: Areas this rule reads that the collection every other prose rule uses does not.
+#: The shipped examples are the files most likely to defer -- an example has a
+#: module docstring worth reading, so pointing at it feels free -- and four did.
+#:
+#: There is no exemption table, and the first draft's was worse than none: it
+#: excused `assets_examples/` on the argument that an example is read top to
+#: bottom, and mutating that entry proved it dead, because the walk had never
+#: reached the directory it named. An exemption nothing exercises is a comment
+#: asserting something untrue.
+#:
+#: This file is skipped, structurally rather than by choice: the pattern above
+#: *is* the phrase it searches for, so the rule matches its own source however
+#: the prose around it is worded. That hole is real and small, and is the one
+#: `PROSE_GONE` already accepts for naming a gone module on purpose.
+DEFERRAL_WALKS = ("assets_examples",)
+
+
+def _prose_run_together(path: Path) -> str:
+    """A file's text with its comment markers and line breaks taken out.
+
+    The wrapping is the point. `spec.py` ended one `#:` line on "see the module"
+    and opened the next with "docstring for why", which no line-based search sees
+    -- and re-wrapping is exactly what a pass over the prose does.
+    """
+    text = path.read_text(encoding="utf-8")
+    return " ".join(re.sub(r"^\s*#:?", " ", text, flags=re.MULTILINE).split())
+
+
+def _deferral_walked() -> list[Path]:
+    """Everything this rule reads, named once so the companion can check it."""
+    return [
+        *_everything_that_imports_kingfisher(),
+        *sorted(
+            path
+            for area in DEFERRAL_WALKS
+            for path in (REPO / area).rglob("*.py")
+            if "__pycache__" not in path.parts
+        ),
+    ]
+
+
+def test_no_prose_defers_to_the_module_docstring():
+    """A pointer at the top of the file outlives the paragraph it points at.
+
+    Four were found at once, and one had been dangling long before the prose was
+    cut: `spec.py` sent a reader up for "why the seam into a turn was left
+    unbuilt", which no version of that docstring ever mentioned. Neither kind can
+    fail, because a reference resolves only in a reader's head.
+    """
+    deferring = []
+    here = Path(__file__).resolve()
+    for path in _deferral_walked():
+        if path.resolve() == here:
+            continue
+        if DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(path)):
+            deferring.append(path.relative_to(REPO).as_posix())
+
+    assert not deferring, (
+        f"{deferring} send a reader to the module docstring for a reason — write "
+        "it where the mistake would be made instead, so that cutting either end "
+        "cannot leave the other pointing at nothing"
+    )
+
+
+def test_the_deferral_rule_reads_across_a_wrapped_line(tmp_path):
+    """Every one it caught was wrapped, so a line-based search would have missed them."""
+    wrapped = tmp_path / "wrapped.py"
+    wrapped.write_text(
+        '"""A file."""\n\n#: Carried and never read -- see the module\n'
+        "#: docstring for why the seam was left unbuilt.\nX = 1\n",
+        encoding="utf-8",
+    )
+    assert DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(wrapped))
+
+    plain = tmp_path / "plain.py"
+    plain.write_text('"""A file."""\n\n#: Carried and never read.\nX = 1\n', encoding="utf-8")
+    assert not DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(plain))
+
+    # A pointer at a class or a function is left alone: it sits beside its target
+    # and moves when the target moves, which is the pair this rule is not about.
+    beside = tmp_path / "beside.py"
+    beside.write_text('"""A file."""\n\n#: See the class docstring.\nX = 1\n', encoding="utf-8")
+    assert not DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(beside))
+
+    # And the walk reaches what it says it does. The first draft named an area it
+    # excused without ever having read it, which mutating the table is what found
+    # -- so the emptiness check is here too, because an empty table would leave
+    # the loop below vacuous rather than satisfied.
+    walked = {path.relative_to(REPO).as_posix() for path in _deferral_walked()}
+    assert len(walked) > 100
+    assert DEFERRAL_WALKS
+    for area in DEFERRAL_WALKS:
+        assert any(name.startswith(f"{area}/") for name in walked), f"{area} is not walked"
+
+
 def test_the_driver_is_not_collected():
     """The one module here that spends money must never be run by `pytest`."""
     live = sorted(

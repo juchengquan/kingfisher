@@ -2,7 +2,11 @@
 
 from __future__ import annotations
 
-#: The library's list, restated. See the module docstring for why it is a copy.
+#: The library's list, copied rather than imported: the library may not import
+#: this package, so the side that can see both sets is this one. The library
+#: asserts the same set against its own error classes, so a new error fails there
+#: first -- what would go unnoticed is adding one there and not here, which is why
+#: the two names are identical.
 CALLER_FACING_ERRORS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownReferenceError", "UnknownSessionError",
