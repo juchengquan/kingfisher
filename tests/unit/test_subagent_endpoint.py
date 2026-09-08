@@ -159,7 +159,12 @@ def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir, mo
 
 
 def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
-    """**The guard this change exists for.**"""
+    """**The guard this change exists for.**
+
+    `as_subagent` built a delegate by copying the `Config` with four fields swapped, so
+    a fifth that nobody added to that copy was silently the deployment's value -- and a
+    per-model `max_tokens` would have been exactly that fifth field.
+    """
     define(cfg, "name: reviewer\ndescription: d\nmodel: cheap-model\nsystem_prompt: |\n  Go.\n")
 
     spec = build(cfg, session_dir, monkeypatch)

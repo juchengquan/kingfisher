@@ -62,7 +62,11 @@ def test_an_upload_cannot_shadow_the_catalogue(cfg, session_dir):
 
 
 def test_an_upload_cannot_shadow_a_skill_that_lives_in_a_folder(cfg, session_dir):
-    """The same rule, against the catalogue shape folders made possible."""
+    """The same rule, against the catalogue shape folders made possible.
+
+    It read `SkillRepository.names`, which lists the root and stops, so for a catalogue
+    whose skills all sit in folders it saw `()` and let every name through.
+    """
     (cfg.skills_dir / "research" / "extractor").mkdir(parents=True)
     (cfg.skills_dir / "research" / "extractor" / "SKILL.md").write_bytes(SKILL)
     store = FakeStore(skl_1={"SKILL.md": SKILL})

@@ -315,7 +315,11 @@ def test_a_documented_snippet_imports_what_exists(case: tuple[str, int, str]) ->
 
 
 def test_the_snippet_collector_finds_the_fences_it_claims_to() -> None:
-    """A rule parametrised over an empty list passes."""
+    """A rule parametrised over an empty list passes.
+
+    A collector reading the wrong root went unnoticed twice in `test_architecture`, and
+    this one reads two roots.
+    """
     collected = {name for name, _, _ in _snippets()}
     assert collected == {
         "README.md",

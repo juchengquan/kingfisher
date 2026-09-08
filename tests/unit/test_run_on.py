@@ -206,6 +206,10 @@ def test_an_endpoint_the_request_may_not_reach_is_still_refused(cfg, session_dir
 def test_naming_a_delegate_the_request_did_not_activate_is_refused(cfg, session_dir, monkeypatch):
     """A quietly ignored override is the failure this exists to prevent: the caller
     asked for the cheap model and would have been billed for the other.
+
+    The activated delegate pins nothing on purpose: with a pinned one the build fails
+    for its own reasons and this passes without the guard ever running, which is what
+    it did before.
     """
     _define(cfg, PLAIN, PINNED)
 

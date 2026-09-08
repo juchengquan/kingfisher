@@ -398,7 +398,12 @@ def test_no_flags_leaves_every_kind_unrestricted(cfg):
 
 
 def test_a_subtraction_becomes_the_enumerated_rest(cfg, shipped):
-    """And each subtraction is taken from its *own* axis."""
+    """And each subtraction is taken from its *own* axis.
+
+    Taken from the union, which is what `_offered` used to return, `--without-tools
+    execute,delete` -- the example the driver's own docstring gives -- came back as
+    "those are builtin tools".
+    """
     from kingfisher.infrastructure.workspace import seeding
 
     seeding.seed(cfg, shipped)
@@ -503,7 +508,12 @@ def test_the_agent_is_only_built_when_a_subtraction_asks(cfg, monkeypatch):
 
 
 def _intercepted(monkeypatch) -> list:
-    """Catch the `Request` the driver builds, without running a turn."""
+    """Catch the `Request` the driver builds, without running a turn.
+
+    Patched on `kingfisher` itself rather than on `kingfisher.application.run`: the lazy
+    export table caches, so patching the defining module worked for the first test in a
+    session and handed every later one whatever the first had cached.
+    """
     from tests.integration import driver
 
     seen: list = []

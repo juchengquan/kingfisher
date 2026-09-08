@@ -155,6 +155,10 @@ def test_a_broken_skill_inside_a_folder_is_still_reported(cfg):
 def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
     """`before_agent` and `abefore_agent` each build their own dictionary -- neither
     calls the other -- so overriding one leaves the other collapsing.
+
+    It fails *open* -- a synchronous run offers both skills and an `astream` run
+    silently offers one -- and "it delegates" is the assumption that let the shell
+    sandbox nest itself twice while thirteen tests passed.
     """
     _two_parties(cfg)
     backend = build_backend(replace(cfg, skills_enabled=True), session_dir)

@@ -82,7 +82,11 @@ def tool_ceiling(spec, *, builtin, workspace):
 
 
 def test_a_delegate_may_not_use_what_its_caller_was_denied(cfg, session_dir):
-    """The escape, driven rather than inspected."""
+    """The escape, driven rather than inspected.
+
+    Driven rather than inspected: what the delegate's `ToolNode` registers is identical
+    either way, which is how this went unnoticed.
+    """
     responses = [
         AIMessage(
             content="",

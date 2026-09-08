@@ -90,7 +90,12 @@ def _imported_names(path: Path) -> dict[str, frozenset[str]]:
 
 
 def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
-    """Every module in a layer, subpackages included."""
+    """Every module in a layer, subpackages included.
+
+    This was `glob`, one directory deep, and every rule here that walks a layer reads
+    it: the first module to move into a subpackage would have dropped out of all of
+    them at once, with all of them still passing.
+    """
     return sorted(
         p
         for p in (root / layer).rglob("*.py")
@@ -872,7 +877,11 @@ def test_a_subpackage_is_judged_by_its_own_area():
 
 @pytest.mark.parametrize("path", _package_modules(), ids=_module_id)
 def test_a_module_imports_only_what_its_area_may_depend_on(path):
-    """One table, replacing two rules that were allowlists by omission."""
+    """One table, replacing two rules that were allowlists by omission.
+
+    The second of the two passed while *any one* file in `infrastructure/` imported from
+    its tuple, so it had stopped being about the file it was written for.
+    """
     area = _area_of(path)
     used = {
         m.split(".")[0]
@@ -1590,7 +1599,12 @@ MUTATING_CALLS = frozenset({
 
 
 def test_the_application_layer_does_not_write_to_disk_itself():
-    """Orchestration decides what happens; an adapter is what makes it happen."""
+    """Orchestration decides what happens; an adapter is what makes it happen.
+
+    Measured against the real service before both went through `_checked`: two inputs
+    sharing a basename were accepted and one silently lost, and a missing one left the
+    earlier files behind in the turn.
+    """
     offenders = []
     for path in _modules_in("application"):
         tree = ast.parse(path.read_text(encoding="utf-8"))
@@ -1625,6 +1639,9 @@ def _mode_changes(path: Path) -> list[int]:
 def test_only_one_workspace_module_changes_a_mode():
     """`permissions` owns the write bits on `/data`, and used to own them by being a
     file.
+
+    Reaching for a mode change when a directory refused a copy is what once left
+    root-owned files in a workspace and made a session permanently unusable.
     """
     offenders = [
         f"{_module_id(path)}:{line}"
@@ -2684,7 +2701,11 @@ def _declared_distributions() -> set[str]:
 
 
 def _providers(module: str) -> set[str]:
-    """Which installed distributions ship this exact module, not merely its root."""
+    """Which installed distributions ship this exact module, not merely its root.
+
+    Several distributions answer to `langgraph`, so a check on the root name declared
+    `langgraph.errors` satisfied by `langgraph-checkpoint`, which does not ship it.
+    """
     from importlib.metadata import files, packages_distributions
 
     root, _, _ = module.partition(".")

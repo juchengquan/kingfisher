@@ -1,4 +1,8 @@
-"""One list of the kinds, and everything by-kind checked against it."""
+"""One list of the kinds, and everything by-kind checked against it.
+
+Adding a ninth axis to `Capabilities` passed the whole suite, ruff and ty without a
+word, which is how a feature comes to silently not exist.
+"""
 
 from __future__ import annotations
 
