@@ -19,6 +19,22 @@ def _reply(**usage):
     return LLMResult(generations=[[ChatGeneration(message=message)]])
 
 
+def test_a_task_keeps_its_own_alphabet_in_the_log(tmp_path):
+    """A run log is read by a person, and `\\u00e9` is not what they asked for.
+
+    Every task the log carries is text somebody typed, so most of the world's
+    tasks escape into hex under the default. Nothing named this, and the flag
+    that prevents it reads as an ordinary keyword.
+    """
+    logger = _logger(tmp_path)
+
+    logger.run_start("Résume le rapport trimestriel", "runs/t001")
+
+    written = (tmp_path / "session.jsonl").read_text(encoding="utf-8")
+    assert "Résume" in written
+    assert "\\u00e9" not in written
+
+
 def test_usage_survives_the_round_trip(tmp_path):
     """Written and read by one module, so the format is pinned to itself rather than to
     a second copy of the field names somewhere else.

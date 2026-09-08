@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from dataclasses import replace
 
 import pytest
@@ -102,6 +103,43 @@ def test_a_turn_that_runs_out_of_steps_is_cut_short_not_crashed(cfg):
     # carry, and the reason a reader was sent to the wrong setting.
     assert result.stop_reason == "max_steps"
     assert result.run_dir.is_dir(), "the turn's work went with the error"
+
+
+class AsyncRunawayAgent(RunawayAgent):
+    """The same runaway, on an event loop."""
+
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
+        for chunk in self.stream(state, config, stream_mode, subgraphs):
+            yield chunk
+
+
+@pytest.mark.parametrize("graph", [RunawayAgent, AsyncRunawayAgent], ids=["sync", "async"])
+def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg, graph):
+    """`ok` records that the turn ended in a way the caller was told about, not that
+    every step it wanted happened.
+
+    A comment says so where the flag is set, and nothing read it back. Logged
+    false, a bounded turn reads in the log like a crash, and the two want
+    different things done about them.
+
+    Both loops, because the flag is set twice -- the async copy is three lines
+    from the sync one and was written by hand.
+    """
+    import json
+
+    from kingfisher.infrastructure.harness.runlog import log_path
+
+    kf = Kingfisher(cfg, graph=graph(), threads=StubCheckpointer())
+
+    if graph is AsyncRunawayAgent:
+        result = asyncio.run(kf.arun(Request("go")))
+    else:
+        result = kf.run(Request("go"))
+
+    written = log_path(result.run_dir.parent.parent).read_text(encoding="utf-8")
+    ended = [json.loads(line) for line in written.splitlines() if line.strip()]
+    ends = [record for record in ended if record["event"] == "run_end"]
+    assert ends and ends[-1]["ok"] is True
 
 
 def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):
