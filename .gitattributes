@@ -1,0 +1,10 @@
+# Git's default hunk-header pattern matches any line starting in column one,
+# which inside a long class reports every method as the class. `Splitting a
+# file` in docs/decisions.md decides where a file's seams are by reading those
+# headers -- two definitions belong together when a commit touched both -- and
+# without this it sees a long module as one definition touched 232 times.
+#
+# That entry says so, and the setting it describes lived in `core.attributesFile`
+# on one machine, pointing into a temporary directory that no longer exists. A
+# measurement nobody else can run is a measurement that stops being checked.
+*.py diff=python
