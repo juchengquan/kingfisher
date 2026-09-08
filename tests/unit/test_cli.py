@@ -599,7 +599,12 @@ def test_the_env_file_beside_you_is_read(tmp_path, monkeypatch, capsys, shipped)
 
 
 def test_a_parent_directorys_env_file_is_not_read(tmp_path, monkeypatch):
-    """The objection that was right, kept."""
+    """The objection that was right, kept.
+
+    `load_dotenv()` with no argument walks *upward* from the calling file, which for an
+    installed package starts in `site-packages`; naming the path is what takes that
+    away.
+    """
     (tmp_path / ".env").write_text("KINGFISHER_WORKSPACE=/should/never/be/read\n", encoding="utf-8")
     below = tmp_path / "below"
     below.mkdir()

@@ -139,7 +139,12 @@ def test_a_store_mount_is_read_only_by_construction(cfg, session_dir):
 
 @pytest.mark.parametrize("operation", ["write", "edit", "delete", "upload"])
 def test_the_async_half_refuses_too(cfg, session_dir, operation):
-    """The half that gets forgotten, and the reason this file exists at all."""
+    """The half that gets forgotten, and the reason this file exists at all.
+
+    The scar this file was written after: overriding both `execute` and `aexecute` on
+    `LocalShellBackend` nested the sandbox twice and thirteen tests still passed,
+    because none of them drove the async path.
+    """
     import asyncio
 
     catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))

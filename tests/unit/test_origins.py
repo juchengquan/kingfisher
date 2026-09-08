@@ -13,7 +13,11 @@ from kingfisher.infrastructure.catalogue import Definitions
 
 
 def test_a_plain_workspace_reports_every_catalogue_as_derived(cfg):
-    """Four catalogues, and `tools` among them."""
+    """Four catalogues, and `tools` among them.
+
+    Named individually rather than looped, because the bug was one kind being silently
+    absent from the answer.
+    """
     found = Origins.of(cfg)
 
     for kind in ("agents", "skills", "subagents", "tools"):

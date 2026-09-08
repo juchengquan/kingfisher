@@ -464,7 +464,11 @@ def test_a_catalogue_deployed_outside_the_workspace_stays_readable(cfg, session_
 
 @pytest.fixture
 def workspace_in_the_home():
-    """A workspace where a workspace normally is: inside the operator's home."""
+    """A workspace where a workspace normally is: inside the operator's home.
+
+    Every other test here builds one under `tmp_path`, which on macOS sits outside the
+    one directory this profile denies -- which is why nothing caught the bug below.
+    """
     root = Path(tempfile.mkdtemp(prefix="kingfisher-home-probe-", dir=Path.home()))
     try:
         yield ensure_layout(root / "ws")

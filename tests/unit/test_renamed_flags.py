@@ -1,4 +1,9 @@
-"""The capability flags under their new names, and their old ones."""
+"""The capability flags under their new names, and their old ones.
+
+`KINGFISHER_SKILLS` was both a deployment's yes/no and the variable `shell_env` exports
+holding the path to the skills catalogue, so a deployment writing the path set the flag
+to a value no parser recognises and got skills off, silently.
+"""
 
 from __future__ import annotations
 
