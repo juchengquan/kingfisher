@@ -1,4 +1,9 @@
-"""Reading `models.yaml`."""
+"""Reading `models.yaml`.
+
+This file decides where every prompt in a deployment goes, so the failures worth testing
+are the quiet ones: a key that parses and is dropped, an endpoint that silently
+vanishes, a param that looks set and is not.
+"""
 
 from __future__ import annotations
 

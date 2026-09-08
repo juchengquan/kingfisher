@@ -209,6 +209,10 @@ def test_the_runtime_is_given_back_when_a_turn_ends_by_exception(cfg, session_di
     """The interpreter's teardown is `after_agent`, and langgraph does not run
     `after_agent` when the graph raises.
 
+    The `eval` is why this is driven rather than inspected: a turn that never evaluated
+    has no runtime to leave behind, so a version of this test without it passes against
+    the bug.
+
     That is not a leaked handle. `quickjs_rs` pins its Runtime to one worker thread
     because it is `!Send`, and closing it means collecting on *that* thread; a sweep
     from anywhere else hits the drop check. The only sweep left is `Py_FinalizeEx`,

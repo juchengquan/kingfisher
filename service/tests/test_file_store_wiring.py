@@ -94,7 +94,12 @@ def test_a_factory_returning_the_wrong_shape_is_refused():
 
 
 def test_the_refusal_names_this_setting_and_not_the_session_one():
-    """The check that the shared resolver is actually shared."""
+    """The check that the shared resolver is actually shared.
+
+    `store_named` was written session-store-shaped, with
+    `KINGFISHER_SESSION_STORE_FACTORY` spelled into all four of its messages, and every
+    other assertion in this file would pass against the wrong variable name.
+    """
     settings = ServiceConfig(file_store_factory="not_a_real_package_at_all:build")
 
     with pytest.raises(ConfigError) as caught:

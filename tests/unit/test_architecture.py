@@ -1029,7 +1029,12 @@ def _harness_reach(path: Path) -> set[str]:
 
 
 def test_only_the_named_adapters_reach_into_the_harness():
-    """The line runs one way, apart from the edges written down above."""
+    """The line runs one way, apart from the edges written down above.
+
+    Names, not counts: a rule saying "at most three" would pass while an edge moved from
+    one module to another, and the question is always *which* adapter took the coupling
+    on.
+    """
     escaped: list[str] = []
     # Both layers, and `application` was missing until `inventory` moved there
     # and took its edge out of sight. The hole was older than that move:
@@ -1492,7 +1497,12 @@ def test_every_watched_name_is_classified_light_or_heavy():
 
 
 def test_a_name_the_command_took_private_is_still_watched():
-    """The half of the re-keying that a passing tree cannot show."""
+    """The half of the re-keying that a passing tree cannot show.
+
+    `set(_EXPORTS)` and `set(_watched())` agree on every name but the two the command
+    took at their own address, so the rule above passes under either key and reverting
+    to the old one removes the coverage silently.
+    """
     import kingfisher
 
     private = set(_watched()) - set(kingfisher._EXPORTS)
@@ -1658,7 +1668,11 @@ def test_only_one_workspace_module_changes_a_mode():
 
 
 def test_the_mode_rule_can_tell_a_chmod_from_the_calls_around_it(tmp_path):
-    """The rule above runs over a tree with no offenders, so it has to be shown to bite."""
+    """The rule above runs over a tree with no offenders, so it has to be shown to bite.
+
+    Both directions, because a predicate answering "yes" to everything would pass the
+    first half of this on its own.
+    """
     guilty = tmp_path / "placement.py"
     guilty.write_text("def place(path):\n    path.mkdir()\n    path.chmod(0o600)\n")
     innocent = tmp_path / "layout.py"
@@ -1720,7 +1734,11 @@ def test_only_one_module_decides_what_a_skill_is():
 
 
 def test_no_definitions_live_inside_the_package():
-    """The package ships code."""
+    """The package ships code.
+
+    A definition reappearing under `src/` would be content read as code -- shipped, and
+    skipped by nothing here, because there is no longer anything to skip.
+    """
 
     documents = sorted(str(p.relative_to(SRC)) for p in _definition_documents(SRC))
 
@@ -1762,7 +1780,11 @@ def _definition_documents(root: Path) -> list[Path]:
 
 
 def test_this_repository_still_has_a_worked_set(shipped):
-    """The other half, and it fails separately."""
+    """The other half, and it fails separately.
+
+    `test_shipped_assets` is about the files this names, so without it those tests would
+    pass by having no subject.
+    """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 
     missing = sorted(kind for kind in DEFINITION_KINDS if not (shipped / kind).is_dir())

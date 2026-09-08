@@ -307,7 +307,12 @@ def compiled(shipped, tools, responses):
 
 
 def preset_module(shipped):
-    """The preset as a module, loaded the way the catalogue loads it."""
+    """The preset as a module, loaded the way the catalogue loads it.
+
+    `from kingfisher.assets.subagents import show_your_work` resolves only as a
+    namespace package and the dangling-import rule refuses it; `importing.load` is what
+    reads a definition module for real.
+    """
     return load(shipped / "subagents" / "show_your_work.py", declares="SUBAGENTS")
 
 
@@ -399,6 +404,9 @@ def test_the_compiled_presets_imports_stay_out_of_module_scope(shipped):
     """Measured rather than trusted: this module is imported whenever the subagent
     catalogue is read, `kingfisher list` included, and `from langchain.agents import
     create_agent` costs about 370 ms.
+
+    Read as source rather than by timing, because a timing test would pass on a warm
+    interpreter -- every other test here has already imported langchain.
     """
     import ast
 
@@ -591,7 +599,11 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
 
 
 def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path):
-    """The curriculum has to keep running after a `kingfisher seed`."""
+    """The curriculum has to keep running after a `kingfisher seed`.
+
+    Driven against the real tree rather than asserted over it, because what could
+    regress is the copying rather than the wording.
+    """
     from kingfisher.infrastructure.workspace.seeding import seed
 
     class Destination:
@@ -696,7 +708,11 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
 
 
 def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped):
-    """The property the rule above now rests on, driven rather than argued."""
+    """The property the rule above now rests on, driven rather than argued.
+
+    Read off the shipped file rather than a spec built here: delete the star and this
+    still passes if it asserts on a spec of its own making.
+    """
     from kingfisher.infrastructure.harness.agent import declared_middleware
 
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
@@ -875,6 +891,10 @@ def test_the_note_example_is_one_class_configured_two_ways(shipped):
 def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
     """`max_length` is a ceiling on what a definition may inject into every tool result,
     so it is shut for the same reason `limit` is.
+
+    Driven against the real class, because what could regress is
+    `ToolNote.yaml_settable` -- someone adding `max_length` to it to make a long note
+    fit would pass every other test in this file.
     """
     from dataclasses import replace
 
@@ -890,7 +910,11 @@ def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
 
 
 def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
-    """`middleware: [tool-note]` with no settings is a working line, not a no-op."""
+    """`middleware: [tool-note]` with no settings is a working line, not a no-op.
+
+    An empty default would make the bare form silently do nothing, which is the shape of
+    a feature nobody notices is broken.
+    """
     from dataclasses import replace
 
     registry = _documented_registry(shipped)

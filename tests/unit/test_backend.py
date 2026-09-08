@@ -167,7 +167,11 @@ def test_virtual_paths_still_work(cfg, virtual_path, session_dir):
 
 
 def test_every_read_and_write_path_resolves_through_the_guarded_hook():
-    """Pins the coupling to a private deepagents method."""
+    """Pins the coupling to a private deepagents method.
+
+    If an upgrade renames `_get_backend_and_key` the override stops being called and the
+    guard disappears silently, so this fails the build instead.
+    """
     assert hasattr(CompositeBackend, "_get_backend_and_key")
     assert WorkspaceScopedBackend._get_backend_and_key is not CompositeBackend._get_backend_and_key
 

@@ -112,7 +112,12 @@ PORTABLE = ESCAPES[:3]
 
 @pytest.mark.parametrize(("what", "command"), PORTABLE, ids=[e[0] for e in PORTABLE])
 def test_each_escape_works_when_nothing_is_fencing_it(two_sessions, what, command):
-    """The control, and it runs everywhere rather than only where Landlock does."""
+    """The control, and it runs everywhere rather than only where Landlock does.
+
+    Without it the test above would pass against a misspelled path just as happily as
+    against a working fence, which is the failure that makes a security test worse than
+    none.
+    """
     mine, theirs = two_sessions
     spelled = command.format(secret=mine / "derived" / "secret.txt", theirs=theirs)
 

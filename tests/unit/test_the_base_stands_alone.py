@@ -57,7 +57,12 @@ def _relative(path: Path) -> str:
 
 
 def _needs_absent(path: Path, name: str) -> list[str]:
-    """Every way this file requires something a base install does not have."""
+    """Every way this file requires something a base install does not have.
+
+    One function rather than two assertions, so both halves are reachable from a test
+    that can supply a violating file: the module-scope half has no case in `src/` by
+    design, and a rule with no cases passes.
+    """
     complaints = []
     named = _modules(path) & set(ABSENT)
     if name in MAY_NAME_IT:

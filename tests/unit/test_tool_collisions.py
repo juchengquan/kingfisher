@@ -268,7 +268,12 @@ def test_a_unique_name_is_still_granted_flat(cfg, session_dir):
 
 
 def test_a_delegate_still_cannot_reach_past_the_request(cfg, session_dir):
-    """The ceiling this change had to leave alone."""
+    """The ceiling this change had to leave alone.
+
+    Driven, not inspected: the delegate inherits the parent's registry and is stopped by
+    its allowlist, so what its `ToolNode` registers is identical either way and only
+    calling it proves anything.
+    """
     _two_vendors(cfg)
     _delegate(cfg, "vendor_b", grant="vendor_b/fetch.py::fetch")
 

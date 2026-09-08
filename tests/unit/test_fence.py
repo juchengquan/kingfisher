@@ -267,6 +267,9 @@ def test_three_things_have_to_hold_and_any_one_fails_quietly(monkeypatch):
 def test_the_fence_follows_the_confinement_rather_than_deciding_again(sandlock, cfg, tmp_path):
     """Two places answering "should this be fenced" would eventually disagree, and the
     failure is a shell running unfenced while `doctor` reports it confined.
+
+    Both directions, on every platform: a test that only checked the unfenced branch
+    would pass on this machine and prove nothing about the one the fence is for.
     """
     from kingfisher.infrastructure.harness.backend import _fence_for
     from kingfisher.infrastructure.sandbox.confinement import _unwrapped

@@ -457,6 +457,9 @@ def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
     by the same set membership everything else uses -- so a definition writing the
     documented long form for a tool no other file defines was handed an empty list,
     and a graph that needed it got nothing with no error at all.
+
+    The quietest of the sites this bug touched: the parent refused out loud, while this
+    one just built a delegate that could not work.
     """
     from langchain_core.runnables import RunnableLambda
     from langchain_core.tools import tool
