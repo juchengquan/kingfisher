@@ -2024,6 +2024,60 @@ def test_the_package_ships_the_catalogue_example():
         assert installed.is_file(), f"{name} is not reachable the way an install reaches it"
 
 
+# -- what a caller is handed ------------------------------------------------
+
+
+#: A dataclass here that is deliberately mutable, with the reason. Empty, and
+#: that is the finding: all 58 are frozen, so this is a rule rather than a list.
+#: Anything added has to say why a record somebody is handed can be edited
+#: underneath them.
+MAY_BE_MUTABLE: frozenset[str] = frozenset()
+
+
+def _dataclasses(tree: ast.Module) -> list[tuple[str, bool]]:
+    """Every `@dataclass` in a module, and whether it was frozen."""
+    found = []
+    for node in ast.walk(tree):
+        if not isinstance(node, ast.ClassDef):
+            continue
+        for decorator in node.decorator_list:
+            call = decorator if isinstance(decorator, ast.Call) else None
+            named = call.func if call else decorator
+            if (getattr(named, "id", None) or getattr(named, "attr", None)) != "dataclass":
+                continue
+            written = {
+                keyword.arg: getattr(keyword.value, "value", None)
+                for keyword in (call.keywords if call else ())
+            }
+            found.append((node.name, written.get("frozen") is True))
+    return found
+
+
+def test_every_record_this_package_hands_out_is_frozen():
+    """A record edited in place after it was handed across a layer, which nothing
+    downstream would notice and no other rule here can see.
+
+    `test_the_record_cannot_be_edited_after_it_is_handed_back` says "frozen, like
+    everything else a caller is handed here" and checks one of them. Measured on a
+    mutation run: unfreezing any of the other fifty-seven left the whole suite
+    green, so the claim in that docstring was true and unguarded.
+    """
+    mutable = []
+    for path in _every(_package_modules(), "the package"):
+        tree = ast.parse(path.read_text(encoding="utf-8"))
+        mutable += [
+            f"{path.relative_to(SRC).as_posix()}:{name}"
+            for name, frozen in _dataclasses(tree)
+            if not frozen and name not in MAY_BE_MUTABLE
+        ]
+
+    assert not mutable, (
+        f"{mutable} are dataclasses this package hands out and they can be edited "
+        "in place -- add `frozen=True`, or name them in MAY_BE_MUTABLE with the "
+        "reason a caller may rewrite one"
+    )
+
+
 # -- who caused it ---------------------------------------------------------
 #
 # A consumer that cannot name an error can only catch `ValueError`. Ten of the
