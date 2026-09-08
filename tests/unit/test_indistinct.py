@@ -7,7 +7,7 @@ from pathlib import Path
 
 from kingfisher.application.service import opening_events
 from kingfisher.config import Endpoint, ModelProfile
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_delegates
 from kingfisher.subagents import reading
@@ -97,6 +97,22 @@ def test_a_second_endpoint_pointing_at_the_same_host_is_reported(cfg, session_di
 
     assert "second-opinion" in found
     assert "same host" in found["second-opinion"]
+
+
+def test_granting_every_delegate_reports_what_naming_them_reports(cfg, session_dir):
+    """A request granting `*` has to be expanded against the catalogue first.
+
+    Unexpanded it is iterated as a string, so every delegate looked up is one
+    character, none of them is defined, and the widest request there is comes
+    back with nothing to report.
+    """
+    same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
+    _define(same, ASKED)
+
+    everything = _found(same, session_dir, ALL)
+
+    assert everything == _found(same, session_dir, ("second-opinion",))
+    assert "second-opinion" in everything
 
 
 def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
