@@ -683,6 +683,39 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
 
 
+def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path):
+    """A destination naming `middleware` gets the files, not just the directory.
+
+    Driven against the real tree rather than asserted over it, because what could
+    regress is the copying rather than the wording -- and the wording is what was
+    wrong. `call_cap.py` said "Nothing copies this file anywhere" and
+    `assets_examples/README.md` had a section headed "One folder here is not a
+    definition", both left behind by the change that made it one. Membership of
+    `DEFINITION_KINDS` was pinned; the copying that membership buys was not, so
+    nothing went red.
+    """
+    from kingfisher.infrastructure.workspace.seeding import seed
+
+    class Destination:
+        workspace = tmp_path
+        catalogue_roots = {
+            kind: tmp_path / kind
+            for kind in ("agents", "skills", "subagents", "tools", "middleware")
+        }
+        authored_files = {
+            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+        }
+
+    done = seed(Destination(), shipped)
+
+    assert "middleware/call_cap.py" in done.written
+    assert "middleware/tool_note.py" in done.written
+    assert (tmp_path / "middleware" / "call_cap.py").is_file()
+    # Left behind for naming middleware, which is a different rule and still
+    # holds: a workspace that can *offer* one has not thereby registered it.
+    assert "agents/researcher.yaml" not in done.written
+
+
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
     """The property the rule exists for, checked over the result rather than the inputs."""
     from kingfisher.infrastructure.documents import middleware_named

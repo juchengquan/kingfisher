@@ -5,22 +5,28 @@ registering, what a definition may configure, what a middleware sees and what
 refuses. It points here for the arguments rather than repeating them, so this
 file and `tool_note.py` are still where the reasoning lives.
 
-This is the only example here that a workspace does **not** load. Every other
-file under `assets_examples/` is a definition -- an agent, a skill, a subagent, a tool
--- copied into a workspace by `kingfisher seed` and found there by name.
-Middleware is not, and cannot be: `DEFINITION_KINDS` is the fields of
-`Definitions`, this is not one of them, and `seed` walks exactly those. Nothing
-copies this file anywhere.
+There are two ways this file reaches an agent, and the second is the newer half
+of the example. `MIDDLEWARE` at the foot declares the classes; `middleware` is
+one of `DEFINITION_KINDS`; `kingfisher seed` copies this file into a workspace
+like any other definition. So a deployment can offer a cap it never imported.
 
-That is the design rather than a gap. `Capabilities.including` puts it plainly
--- an upload may widen skills and subagents because "a skill or subagent an
-upload brings is the caller's own text; a middleware *name* is a selector for
-code the deployment wrote". A middleware read out of the workspace would be
-code the agent can edit, wrapped around the agent that edited it.
+It was the one kind a workspace could not hold, and the argument was that a
+middleware read out of the workspace would be code the agent can edit, wrapped
+around the agent that edited it. That was true while the shell could write into
+a definition root, and stopped being true when `protected` was widened to every
+one of them. The premise moved rather than the principle -- *Middleware is a
+definition kind* in `docs/decisions.md` records both.
 
-So the two halves of this example live on opposite sides of that line. The class
-below is yours, imported by whatever constructs `Kingfisher`. The name is the
-definition's, and naming is all a definition may do.
+What did not move is `Capabilities.including`, which widens skills and subagents
+from an upload and still refuses this one: "a skill or subagent an upload brings
+is the caller's own text; a middleware *name* is a selector for code the
+deployment wrote". A directory the deployment laid down is the deployment's; a
+file a request uploaded is not, and the distinction is which of the two a name
+may reach.
+
+The other way is the registry below, handed to `Kingfisher` by whatever
+constructs it. It is not the workspace route spelled differently: a registry
+entry may be a factory closing over a live object, which a file cannot be.
 
 ## Wiring it
 
