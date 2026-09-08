@@ -552,7 +552,12 @@ def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
 
 
 def test_the_wiring_block_and_the_registry_the_tests_paste_are_one_fact(shipped):
-    """`_documented_registry` says it is "the wiring block ..."""
+    """`_documented_registry` says it is "the wiring block ...
+
+    It was pasted by hand, so the two agreed only for as long as somebody kept them
+    agreeing; this makes an edit to either show up as a failure rather than as a test
+    that still passes while the documentation drifts.
+    """
     assert set(_documented_wiring(shipped)) == set(_documented_registry(shipped)), (
         "the block the examples print and the registry these tests build from it "
         "no longer register the same names"
@@ -724,6 +729,10 @@ def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped
 def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
     """It is code, so "does it parse" means "does it run" -- the same bar
     `test_every_preset_tool_loads` sets for `tools/`.
+
+    Driven rather than inspected: a scripted model asks for three tool calls against a
+    cap of two, and the third has to come back refused while the turn keeps going -- a
+    cap that ended the turn would be a worse thing wearing the same name.
     """
     cap = _call_cap(shipped)
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]

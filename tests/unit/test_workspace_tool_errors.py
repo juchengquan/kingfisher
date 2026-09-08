@@ -1,4 +1,9 @@
-"""A workspace tool's exception is a failed tool result, not a dead run."""
+"""A workspace tool's exception is a failed tool result, not a dead run.
+
+Tested against the middleware rather than through a run, deliberately. A run proves
+nothing here: re-running the smoke after the fix passed, and the transcript showed the
+model had not called the failing tool at all that time.
+"""
 
 from __future__ import annotations
 
