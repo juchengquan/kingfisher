@@ -571,19 +571,22 @@ REFUSALS = [
 ]
 
 
-@pytest.mark.parametrize("case", REFUSALS, ids=[row[0] for row in REFUSALS])
-def test_every_refusal_has_the_same_shape(client, case):
-    """One shape, whoever refused: kingfisher, fastapi's router, or validation."""
-    _, method, path, payload, expected_status, expected_code = case
+def test_every_refusal_has_the_same_shape(client):
+    """One shape, whoever refused: kingfisher, fastapi's router, or validation.
 
-    response = client.request(method, path, json=payload)
+    One client for all of them: every case is a refusal, so none of them changes
+    anything a later one reads.
+    """
+    assert REFUSALS, "no refusals listed -- this walks nothing and passes"
+    for name, method, path, payload, expected_status, expected_code in REFUSALS:
+        response = client.request(method, path, json=payload)
 
-    assert response.status_code == expected_status
-    body = response.json()
-    assert body["error"] == expected_code
-    assert isinstance(body["message"], str)
-    assert body["message"]
-    assert "detail" not in body or isinstance(body["detail"], list)
+        assert response.status_code == expected_status, name
+        body = response.json()
+        assert body["error"] == expected_code, name
+        assert isinstance(body["message"], str), name
+        assert body["message"], name
+        assert "detail" not in body or isinstance(body["detail"], list), name
 
 
 def test_a_busy_session_refuses_in_the_same_shape(client, cfg):

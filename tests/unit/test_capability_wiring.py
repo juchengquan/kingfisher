@@ -193,25 +193,22 @@ def test_requesting_no_subagents_is_distinct_from_not_asking(cfg, monkeypatch, s
     assert declared_subagents(captured) == []
 
 
-@pytest.mark.parametrize(
-    ("caps", "message"),
-    [
-        (Capabilities(skills=("ghost",)), "unknown skill"),
-        (Capabilities(subagents=("ghost",)), "unknown subagent"),
-    ],
-)
-def test_naming_something_the_workspace_lacks_fails_loudly(cfg, caps, message, session_dir):
+def test_naming_something_the_workspace_lacks_fails_loudly(cfg, session_dir):
     """Rather than running with quietly less than the caller asked for."""
     _write_skill(cfg.workspace, "tabular-qa")
     _write_subagent(cfg.workspace)
 
-    with pytest.raises(CapabilityError, match=message):
-        build_agent(
-            replace(cfg, skills_enabled=True),
-            session_dir=session_dir,
-            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
-            capabilities=caps,
-        )
+    for caps, message in (
+        (Capabilities(skills=("ghost",)), "unknown skill"),
+        (Capabilities(subagents=("ghost",)), "unknown subagent"),
+    ):
+        with pytest.raises(CapabilityError, match=message):
+            build_agent(
+                replace(cfg, skills_enabled=True),
+                session_dir=session_dir,
+                model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+                capabilities=caps,
+            )
 
 
 def test_an_unnamed_tool_survives_the_allowlist():

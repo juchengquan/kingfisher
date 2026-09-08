@@ -145,25 +145,27 @@ def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
         backend.write(f"{session_dir}/runs/t001/report.md", "content")
 
 
-@pytest.mark.parametrize(
-    "host_path",
-    ["/tmp/scratch.py", "/Users/someone/notes.md", "/etc/passwd", "/var/log/x"],
-)
-def test_other_host_roots_are_refused_too(cfg, host_path, session_dir):
-    """`/tmp/scratch.py` is the example system.md warns about by name."""
+def test_other_host_roots_are_refused_too(cfg, session_dir):
+    """`/tmp/scratch.py` is the example system.md warns about by name.
+
+    One backend for all four: every case refuses, so nothing is written and no
+    iteration can leave anything for the next.
+    """
     backend = build_backend(cfg, session_dir)
 
-    with pytest.raises(ValueError, match="is a host path"):
-        backend.write(host_path, "content")
+    for host_path in ("/tmp/scratch.py", "/Users/someone/notes.md", "/etc/passwd", "/var/log/x"):
+        with pytest.raises(ValueError, match="is a host path"):
+            backend.write(host_path, "content")
 
 
-@pytest.mark.parametrize("virtual_path", ["/runs/s1/t001/report.md", "/derived/x.csv"])
-def test_virtual_paths_still_work(cfg, virtual_path, session_dir):
+def test_virtual_paths_still_work(cfg, session_dir):
     """The guard must not cost the agent its ordinary vocabulary."""
     backend = build_backend(cfg, session_dir)
-    backend.write(virtual_path, "content")
 
-    assert backend.read(virtual_path)
+    for virtual_path in ("/runs/s1/t001/report.md", "/derived/x.csv"):
+        backend.write(virtual_path, "content")
+
+        assert backend.read(virtual_path), virtual_path
 
 
 def test_every_read_and_write_path_resolves_through_the_guarded_hook():
