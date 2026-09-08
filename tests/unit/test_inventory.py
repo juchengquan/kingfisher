@@ -47,6 +47,29 @@ def _populate(cfg) -> None:
     )
 
 
+def test_an_agent_taking_every_delegate_lists_every_delegate(cfg):
+    """`subagents: ['*']` has to be expanded before the closure is walked.
+
+    Left as the star, it is walked as a string: every name it yields is one
+    character, none of them is a definition, and the agent that reaches the most
+    is listed as reaching nothing.
+    """
+    from tests.conftest import an_agent
+
+    subagents_dir(cfg).mkdir(parents=True, exist_ok=True)
+    for name in ("alpha", "beta"):
+        (subagents_dir(cfg) / f"{name}.yaml").write_text(
+            f"name: {name}\ndescription: d\nsystem_prompt: |\n  Work.\n", encoding="utf-8"
+        )
+    an_agent(cfg, "everything", subagents="['*']")
+    an_agent(cfg, "one", subagents="[alpha]")
+
+    found = inventory(cfg)
+
+    assert found.agent_delegates["everything"] == ("alpha", "beta")
+    assert found.agent_delegates["one"] == ("alpha",)
+
+
 def test_the_names_a_subtraction_uses_are_the_names_the_listing_shows(cfg):
     """The guard this whole record exists for."""
     _populate(cfg)
