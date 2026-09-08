@@ -10,7 +10,10 @@ from kingfisher.domain import fields
 from kingfisher.domain.capabilities import ALL, Selection
 
 #: The selection fields that may be written as a mapping of name to audience.
-#: `builtin_tools` is absent on purpose -- see the module docstring.
+#: `builtin_tools` is absent because deepagents registers those itself: kingfisher
+#: can only filter them once a graph is built, never leave them out of one, so an
+#: audience here would promise a boundary nothing can hold. Control them through
+#: which *agents* a group may open instead.
 AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
 
 #: Sections the central format defined, and where each has gone. Refused rather

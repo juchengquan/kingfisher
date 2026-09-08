@@ -87,9 +87,6 @@ class SubagentSpec:
     #: nothing here and never will: the moment it did, this would be a field
     #: with rules, and the point of it is to be the one place a definition can
     #: say something this format has no opinion about.
-    #:
-    #: Read by whatever loads the catalogue, not by the run -- see the module
-    #: docstring for why the seam into a turn was left unbuilt.
     metadata: Mapping[str, object] = field(default_factory=dict)
     #: What assembles this delegate, when a workspace declared it in Python rather than
     #: YAML. Called with a model and the tools it was granted, and it returns a graph

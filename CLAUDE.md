@@ -69,6 +69,12 @@ Four kinds do not earn it, and are the ones to cut on sight:
 There is no density to match. A file of one-line comments is not under-explained,
 and the shortest version that still stops the mistake is the right one.
 
+Write the reason where the mistake is, and never send a reader to the module
+docstring for it. That puts the guard at the top of the file and the thing it
+guards halfway down, and a cut to either end leaves the other pointing at
+nothing. `test_no_prose_defers_to_the_module_docstring` exists because that had
+happened four times, once since before the prose was cut, with nothing red.
+
 **A test's docstring names the failure it would catch**, in one sentence. When it
 guards a specific past bug, name the bug -- that sentence is often the only
 record of it, and it stays however short the rest gets.

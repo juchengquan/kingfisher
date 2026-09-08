@@ -442,6 +442,84 @@ def test_no_prose_cites_a_line_number():
     )
 
 
+#: Prose sending a reader to the top of the file for the reason it is about. The
+#: guard and the thing it guards end up apart, so a cut to either end leaves a
+#: pointer at nothing and nothing goes red. All four in the library named a
+#: paragraph that had gone -- why `builtin_tools` carries no audience, why `tools`
+#: has no layer, why the service's error list is a copy.
+DEFERS_TO_MODULE_DOCSTRING = re.compile(r"\bthe module docstring\b", re.IGNORECASE)
+
+#: Exempt by area, the way the sandbox modules were exempted by name. An example
+#: is read top to bottom and its module docstring is the lesson rather than
+#: somewhere a reason was put away: `tool_note.py` points at the paragraph
+#: stating the test a settable key must pass, which is the file's subject.
+#:
+#: This file is exempt as well, and structurally rather than by choice: the
+#: pattern above *is* the phrase it searches for, so the rule matches its own
+#: source however the prose around it is worded. The hole that leaves is real and
+#: small -- a genuine deferral written into this file would not be caught -- and
+#: is the same one `PROSE_GONE` accepts for naming a module on purpose.
+DEFERRAL_ALLOWED = ("assets_examples",)
+
+
+def _prose_run_together(path: Path) -> str:
+    """A file's text with its comment markers and line breaks taken out.
+
+    The wrapping is the point. `spec.py` ended one `#:` line on "see the module"
+    and opened the next with "docstring for why", which no line-based search sees
+    -- and re-wrapping is exactly what a pass over the prose does.
+    """
+    text = path.read_text(encoding="utf-8")
+    return " ".join(re.sub(r"^\s*#:?", " ", text, flags=re.MULTILINE).split())
+
+
+def test_no_prose_defers_to_the_module_docstring():
+    """A pointer at the top of the file outlives the paragraph it points at.
+
+    Four were found at once, and one had been dangling long before the prose was
+    cut: `spec.py` sent a reader up for "why the seam into a turn was left
+    unbuilt", which no version of that docstring ever mentioned. Neither kind can
+    fail, because a reference resolves only in a reader's head.
+    """
+    deferring = []
+    here = Path(__file__).resolve()
+    for path in _everything_that_imports_kingfisher():
+        relative = path.relative_to(REPO).as_posix()
+        if relative.startswith(DEFERRAL_ALLOWED) or path.resolve() == here:
+            continue
+        if DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(path)):
+            deferring.append(relative)
+
+    assert not deferring, (
+        f"{deferring} send a reader to the module docstring for a reason — write "
+        "it where the mistake would be made instead, so that cutting either end "
+        "cannot leave the other pointing at nothing"
+    )
+
+
+def test_the_deferral_rule_reads_across_a_wrapped_line(tmp_path):
+    """Every one it caught was wrapped, so a line-based search would have missed them."""
+    wrapped = tmp_path / "wrapped.py"
+    wrapped.write_text(
+        '"""A file."""\n\n#: Carried and never read -- see the module\n'
+        "#: docstring for why the seam was left unbuilt.\nX = 1\n",
+        encoding="utf-8",
+    )
+    assert DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(wrapped))
+
+    plain = tmp_path / "plain.py"
+    plain.write_text('"""A file."""\n\n#: Carried and never read.\nX = 1\n', encoding="utf-8")
+    assert not DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(plain))
+
+    # A pointer at a class or a function is left alone: it sits beside its target
+    # and moves when the target moves, which is the pair this rule is not about.
+    beside = tmp_path / "beside.py"
+    beside.write_text('"""A file."""\n\n#: See the class docstring.\nX = 1\n', encoding="utf-8")
+    assert not DEFERS_TO_MODULE_DOCSTRING.search(_prose_run_together(beside))
+
+    assert len(_everything_that_imports_kingfisher()) > 100
+
+
 def test_the_driver_is_not_collected():
     """The one module here that spends money must never be run by `pytest`."""
     live = sorted(
