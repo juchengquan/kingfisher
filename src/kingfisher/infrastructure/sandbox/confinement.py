@@ -226,9 +226,41 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     is on by default. Denying the one directory where a person's credentials actually
     live closes the measured hole at a fraction of the breakage risk.
 
+    The re-allowed paths are not a convenience. A virtualenv's `python3` is
+    typically a symlink onto an interpreter installed under the home -- uv puts it
+    in `~/.local/share/uv/python/...` -- so denying the home without re-allowing
+    `sys.base_prefix` leaves the agent unable to run Python at all. Found by doing
+    it.
+
+    Writes take the opposite shape: an allow-list, denied from `/` down. `system.md`
+    already tells the agent to stay inside the workspace and to write scratch under
+    `$TMPDIR` rather than a literal `/tmp`, and both were ignored inside a single
+    observed run -- it wrote `/tmp/preview.pdf` and twice tried `pip install`, which
+    failed only because this venv has no `pip`. Prose the model overrides is not a
+    boundary; this is the same rules with the kernel behind them.
+
     The known cost, and it is now measured rather than guessed at: a program that
     writes to the operating system's own temp directory stops working, even when
     everything it was *told* to write is inside the workspace.
+
+    Headless Chrome is the proven case. Unsandboxed it renders a PDF in 2.0s; under
+    this profile it fails in 0.4s with `Failed to create a ProcessSingleton for your
+    profile directory`. The cause is this rule and no other -- the same profile with
+    writes unrestricted works, and adding socket permissions does not help. No flag
+    avoids it: `--user-data-dir` inside the workspace still fails, because Chrome
+    reaches `/private/var/folders/<user>` regardless.
+
+    Left broken deliberately. Nothing here needs a browser -- not this codebase, and
+    not the skills that ship as examples. Chrome appeared once, when an agent
+    improvised it to look at its own HTML output, and an agent spawning a
+    network-capable browser is nearer to what a boundary is for than to something
+    worth widening one to keep.
+
+    The fix, if a tool anyone actually depends on ever needs it, is one line: allow
+    writes to this user's own temp folder -- the parent of `tempfile.gettempdir()`,
+    not all of `/private/var/folders`. Verified to make Chrome work while `.env`,
+    the home and the repository stay refused. It is not here because it should be
+    added for a dependency, not for a guess.
 
     `itself` is the path this text will be written to, and it is required rather
     than defaulted because a caller who forgets it gets no boundary at all:

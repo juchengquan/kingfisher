@@ -1,4 +1,12 @@
-"""kingfisher — a personal, local, general-purpose agent built on deepagents."""
+"""kingfisher — a personal, local, general-purpose agent built on deepagents.
+
+Names resolve lazily, through `__getattr__` below. `import deepagents` costs about
+1.4s, most of it langchain-anthropic, langchain-openai and langchain-google-genai,
+which it imports at module level and which most deployments never call; this front
+door is about 1ms. Eager re-exports would put the 1.4s on every consumer --
+`kingfisher --help`, a config check, a test that only touches `Request`. *(Measured
+2026-09-08.)*
+"""
 
 from importlib import import_module
 from typing import TYPE_CHECKING, Any
