@@ -29,7 +29,13 @@ def named(spec: str):
 
 
 class Recording:
-    """A `SessionStore` that satisfies the port and remembers nothing else."""
+    """A `SessionStore` that satisfies the port and remembers nothing else.
+
+    `Mapping` rather than `dict` in both signatures, and that is the port's rule rather
+    than a preference: a protocol's parameters are contravariant, so an implementation
+    narrowing `files` to `dict` does not satisfy it, and a double that does not really
+    implement the port proves nothing about a deployment's store that does.
+    """
 
     def __init__(self) -> None:
         self.kept: dict[str, dict[str, bytes]] = {}

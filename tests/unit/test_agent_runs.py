@@ -224,7 +224,12 @@ def test_a_turn_that_names_nothing_still_gets_the_sessions_agent(cfg):
 
 
 def test_a_snapshot_is_written_once_and_not_overwritten(tmp_path):
-    """The property that makes it a snapshot rather than a cache."""
+    """The property that makes it a snapshot rather than a cache.
+
+    Its only caller checks first, so this holds it directly: a second writer added later
+    would reintroduce exactly what the file exists to prevent, and every test above
+    would still pass.
+    """
     from kingfisher.infrastructure.workspace.snapshots import agent_started_with, remember_agent
 
     remember_agent(tmp_path, "name: first\ndescription: One.\n")

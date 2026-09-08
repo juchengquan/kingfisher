@@ -161,6 +161,9 @@ def test_naming_a_model_on_the_default_endpoint_stays_there(cfg, session_dir, mo
 def test_a_delegates_own_params_reach_its_client(cfg, session_dir, monkeypatch):
     """**The guard this change exists for.**
 
+    `cheap-model` carries a ceiling and a timeout that differ from the default's, so
+    this cannot pass by accident on the deployment's numbers.
+
     `as_subagent` built a delegate by copying the `Config` with four fields swapped, so
     a fifth that nobody added to that copy was silently the deployment's value -- and a
     per-model `max_tokens` would have been exactly that fifth field.

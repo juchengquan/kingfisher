@@ -199,7 +199,12 @@ class RecordingRoot:
 
 
 def test_the_async_path_holds_and_releases_the_tree(cfg, tmp_path):
-    """The bracket is symmetric on an ordinary turn."""
+    """The bracket is symmetric on an ordinary turn.
+
+    Weaker than it looks, and named here rather than left as a trap: with nothing
+    releasing the tree at all this still passes, because the suspended generator is
+    collected the moment the last reference goes and its `finally` runs then.
+    """
     roots = RecordingRoot(tmp_path / "for-one-turn")
     service = Kingfisher(
         cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer(), session_root=roots

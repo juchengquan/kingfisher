@@ -616,7 +616,12 @@ def test_the_rest_of_the_workspace_is_still_writable(cfg, session_dir):
 
 
 def test_every_definition_root_is_protected(cfg):
-    """The property, not the four names, so a fifth kind arrives covered."""
+    """The property, not the four names, so a fifth kind arrives covered.
+
+    `DEFINITION_KINDS` is derived from the fields of `Definitions`, so adding a kind
+    adds a directory to `catalogue_roots` without anyone editing a list -- which the
+    parametrised tests above would not notice.
+    """
     protected = confinement.protected_roots(
         cfg.workspace, cfg.skills_dir, tuple(cfg.catalogue_roots.values())
     )

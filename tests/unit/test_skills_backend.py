@@ -141,6 +141,10 @@ def test_a_store_mount_is_read_only_by_construction(cfg, session_dir):
 def test_the_async_half_refuses_too(cfg, session_dir, operation):
     """The half that gets forgotten, and the reason this file exists at all.
 
+    `astream` is the async entry point, so an API deployment reaches `awrite` and never
+    `write`, and the four async overrides are four more chances to typo a refusal into a
+    no-op.
+
     The scar this file was written after: overriding both `execute` and `aexecute` on
     `LocalShellBackend` nested the sandbox twice and thirteen tests still passed,
     because none of them drove the async path.

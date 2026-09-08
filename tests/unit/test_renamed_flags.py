@@ -1,5 +1,9 @@
 """The capability flags under their new names, and their old ones.
 
+Renaming an environment variable is the one rename that fails in silence: a moved import
+stops the program and says which, while a variable nobody reads falls back to its
+default and the deployment comes up with skills off and no reason to look.
+
 `KINGFISHER_SKILLS` was both a deployment's yes/no and the variable `shell_env` exports
 holding the path to the skills catalogue, so a deployment writing the path set the flag
 to a value no parser recognises and got skills off, silently.

@@ -92,6 +92,9 @@ def _imported_names(path: Path) -> dict[str, frozenset[str]]:
 def _modules_in(layer: str, root: Path = SRC) -> list[Path]:
     """Every module in a layer, subpackages included.
 
+    `root` is a parameter so the behaviour can be tested against a tree built for the
+    purpose, rather than by waiting for a real subpackage to prove it.
+
     This was `glob`, one directory deep, and every rule here that walks a layer reads
     it: the first module to move into a subpackage would have dropped out of all of
     them at once, with all of them still passing.
@@ -115,7 +118,13 @@ def _inside_domain(module: str) -> bool:
 
 
 def test_a_layer_rule_reaches_into_a_subpackage(tmp_path):
-    """The collection every rule below is built on, tested for the case it missed."""
+    """The collection every rule below is built on, tested for the case it missed.
+
+    Built here rather than asserted against `src/`, so it keeps testing the collection
+    after the real tree changes shape. `import yaml` is the violation the domain rule
+    was written for -- the third-party parser that sat in `domain/fields.py` while three
+    rules looked straight past it.
+    """
     layer = tmp_path / "domain"
     (layer / "inner").mkdir(parents=True)
     (layer / "__init__.py").touch()
@@ -272,7 +281,12 @@ def test_the_second_distribution_is_in_scope():
 #: repository: the rooted form gives fifty references and finds thirteen that are wrong,
 #: while the unrestricted form gives 143 and calls 115 of them broken.
 def _prose_roots(root: Path = SRC) -> tuple[str, ...]:
-    """Every package and root module a prose reference may be rooted at."""
+    """Every package and root module a prose reference may be rooted at.
+
+    Derived rather than written down: this is a match pattern rather than a lookup, so
+    it has no fallback to fail closed onto the way `THIRD_PARTY` does, where `""` makes
+    the table total.
+    """
     return tuple(sorted(
         [d.name for d in root.iterdir() if d.is_dir() and (d / "__init__.py").is_file()]
         + [f.stem for f in root.glob("*.py") if f.stem != "__init__"]
@@ -622,7 +636,12 @@ def test_the_prose_roots_are_read_off_the_tree_and_not_written_down(tmp_path):
 
 
 def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
-    """`tools`, `skills` and `subagents` left the layers and left this rule's sight."""
+    """`tools`, `skills` and `subagents` left the layers and left this rule's sight.
+
+    The positive cases were already here and one was vacuous: `skills.spec.split` was
+    asserted to resolve while `skills` was not a root, so the pattern never matched it
+    and the assertion held for the wrong reason.
+    """
     for missing in ("skills.nowhere", "tools.nowhere", "subagents.nowhere",
                     "config.nowhere"):
         assert _prose_unresolved(f"`{missing}`") == [missing], (
@@ -672,7 +691,12 @@ def test_the_documents_are_read_by_the_prose_rule():
 
 
 def test_no_rule_here_is_parametrized_over_nothing():
-    """A directory that stops existing takes its rule down with it, silently."""
+    """A directory that stops existing takes its rule down with it, silently.
+
+    Found by mutation while renaming `server/` to `presentation/`: pointing the
+    collector at the old name left one rule covering fifteen modules one moment and zero
+    the next, with a green run either way.
+    """
     collections = {
         "domain": _modules_in("domain"),
         "application": _modules_in("application"),
@@ -879,6 +903,10 @@ def test_a_subpackage_is_judged_by_its_own_area():
 def test_a_module_imports_only_what_its_area_may_depend_on(path):
     """One table, replacing two rules that were allowlists by omission.
 
+    Both of the old rules had the same hole: `FOREIGN` named five packages where six of
+    the agent runtime's are imported here, and `langchain_quickjs`, `aiosqlite` and
+    `langchain_openai` were in neither list.
+
     The second of the two passed while *any one* file in `infrastructure/` imported from
     its tuple, so it had stopped being about the file it was written for.
     """
@@ -917,7 +945,13 @@ def test_the_harness_package_is_the_one_speaking_to_the_harness():
 #: below fails, so this table is what has to be edited to add one, and editing it is
 #: where someone asks whether the edge belongs.
 def _harness_consumers() -> list[Path]:
-    """Every module the harness table is about, in both layers that reach it."""
+    """Every module the harness table is about, in both layers that reach it.
+
+    One function rather than the same comprehension in three places, and not for
+    tidiness: a mutation narrowing it back to `infrastructure/` survived twice -- once
+    because a rule with no cases passes, and once because the test written to catch that
+    restated the walk instead of calling it, so it tested its own copy.
+    """
     return [
         path
         for path in [*_modules_in("infrastructure"), *_modules_in("application")]
@@ -1133,7 +1167,12 @@ def _stub_reexports(path: Path) -> tuple[dict[str, str], list[str]]:
     ("package", "path"), sorted(LAZY_TABLES.items()), ids=sorted(LAZY_TABLES)
 )
 def test_the_stub_block_and_the_export_table_name_the_same_things(package, path):
-    """The third table, and the one nothing had ever held to the other two."""
+    """The third table, and the one nothing had ever held to the other two.
+
+    `__getattr__` returns `Any`, so a name with no stub still imports and still passes
+    every test -- it is simply untyped, which is why this asks `ty` rather than the
+    suite.
+    """
     import importlib
 
     table = importlib.import_module(package)._EXPORTS
@@ -1611,6 +1650,10 @@ MUTATING_CALLS = frozenset({
 def test_the_application_layer_does_not_write_to_disk_itself():
     """Orchestration decides what happens; an adapter is what makes it happen.
 
+    This was not true when it was written -- `service.py` copied a request's input files
+    itself, a `mkdir` and a bare `shutil.copy`. Reading is not the target:
+    `application/config.py` reads the environment, which is its job.
+
     Measured against the real service before both went through `_checked`: two inputs
     sharing a basename were accepted and one silently lost, and a missing one left the
     earlier files behind in the turn.
@@ -1635,7 +1678,12 @@ def test_the_application_layer_does_not_write_to_disk_itself():
 
 
 def _mode_changes(path: Path) -> list[int]:
-    """The lines on which a module changes a file's mode."""
+    """The lines on which a module changes a file's mode.
+
+    A predicate rather than a loop inside the test, so it can be shown to bite against a
+    file built for the purpose: the rule below runs over a tree where the answer is
+    currently "none", and a rule with no cases passes whether or not it works.
+    """
     tree = ast.parse(path.read_text(encoding="utf-8"))
     return sorted(
         node.lineno
@@ -1649,6 +1697,10 @@ def _mode_changes(path: Path) -> list[int]:
 def test_only_one_workspace_module_changes_a_mode():
     """`permissions` owns the write bits on `/data`, and used to own them by being a
     file.
+
+    `harness/backend.py` chmods too and is deliberately out of scope: `prepare_scratch`
+    makes a scratch directory private inside a world-writable `/tmp`, the opposite
+    operation on a tree the agent's data never enters.
 
     Reaching for a mode change when a directory refused a copy is what once left
     root-owned files in a workspace and made a session permanently unusable.
@@ -2376,7 +2428,12 @@ def _defined_in_package(public: frozenset[str]) -> dict[str, Path]:
 
 
 def test_a_mixin_of_an_exported_class_is_published_through_it():
-    """The exemption above, asserted rather than left to the rule passing."""
+    """The exemption above, asserted rather than left to the rule passing.
+
+    A mixin whose methods stopped being recognised as published would not fail loudly --
+    it would ask for `delete_session` to be deleted, and the obvious reading of that
+    message is that the method is dead.
+    """
     import kingfisher
 
     mixed = _mixed_into(frozenset(kingfisher.__all__))
@@ -2724,6 +2781,10 @@ def _declared_distributions() -> set[str]:
 
 def _providers(module: str) -> set[str]:
     """Which installed distributions ship this exact module, not merely its root.
+
+    Falls back to `PROVIDED_BY` for what is not installed here and returns the empty set
+    for what is neither, which fails the rule -- as an import nobody can account for
+    should.
 
     Several distributions answer to `langgraph`, so a check on the root name declared
     `langgraph.errors` satisfied by `langgraph-checkpoint`, which does not ship it.
