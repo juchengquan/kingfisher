@@ -81,8 +81,7 @@ REFUSALS = [
 ]
 
 
-@pytest.mark.parametrize("case", REFUSALS, ids=[row[0] for row in REFUSALS])
-def test_the_audit_line_agrees_with_what_the_caller_was_told(audited, caplog, case):
+def test_the_audit_line_agrees_with_what_the_caller_was_told(audited, caplog):
     """The contract, and for more than one refusal.
 
     A live run caught the two drifting: the audit resolved status and code through
@@ -90,16 +89,28 @@ def test_the_audit_line_agrees_with_what_the_caller_was_told(audited, caplog, ca
     recorded as a 500 called "error" while the caller correctly got 422
     "invalid_request". A log that disagrees with the response is worse than no log,
     because it is believed. One function answers both now.
+
+    The clear moved inside the loop, which is what lets one `caplog` serve both: the
+    unpacking below takes exactly one record, so an iteration reading the previous
+    one's would fail there rather than quietly compare the wrong line.
     """
-    _, path, payload = case
-    http = audited()
-    caplog.clear()
+    assert REFUSALS, "no refusals listed -- this walks nothing and passes"
+    disagreed = []
+    for name, path, payload in REFUSALS:
+        http = audited()
+        caplog.clear()
 
-    response = http.post(path, json=payload)
+        response = http.post(path, json=payload)
 
-    (line,) = lines(caplog)
-    assert line["status"] == response.status_code
-    assert line["reason"] == response.json()["error"]
+        (line,) = lines(caplog)
+        answered = response.json()["error"]
+        if line["status"] != response.status_code or line["reason"] != answered:
+            disagreed.append(
+                f"{name}: logged {line['status']} {line['reason']!r}, "
+                f"answered {response.status_code} {answered!r}"
+            )
+
+    assert not disagreed, "\n".join(disagreed)
 
 
 def test_a_body_fastapi_rejects_outright_is_not_audited(audited, caplog):
