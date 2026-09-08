@@ -46,6 +46,16 @@ RULES = (
 )
 
 
+#: The tokens holding prose rather than code.
+#:
+#: `FSTRING_MIDDLE` is the one that is easy to leave out and expensive to: since
+#: 3.12 an f-string is never a `STRING` token, it is a start, its literal pieces
+#: and an end -- so a filter naming only `STRING` skips plain strings and lets
+#: every f-string through. This file's messages are nearly all f-strings, and so
+#: are the ones it walks.
+PROSE_TOKENS = (tokenize.STRING, tokenize.COMMENT, tokenize.FSTRING_MIDDLE)
+
+
 def _prose(path: pathlib.Path) -> dict[int, list[tuple[int, int]]]:
     """Columns holding a string literal or a comment, per line.
 
@@ -57,7 +67,7 @@ def _prose(path: pathlib.Path) -> dict[int, list[tuple[int, int]]]:
     spans: dict[int, list[tuple[int, int]]] = collections.defaultdict(list)
     text = path.read_text(encoding="utf-8")
     for token in tokenize.generate_tokens(io.StringIO(text).readline):
-        if token.type not in (tokenize.STRING, tokenize.COMMENT):
+        if token.type not in PROSE_TOKENS:
             continue
         (first, start), (last, end) = token.start, token.end
         for row in range(first, last + 1):
