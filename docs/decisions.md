@@ -1917,12 +1917,36 @@ declared in its own docstring: `kingfisher list` out of the file that also teste
 deleted. The gate for a move is `pytest --collect-only`, not a green suite -- a
 rule that loses its parametrize data collects nothing and still prints dots.
 
-**Two findings that point the other way.** 54 of the 300 mutants survived, and
-1,034 tests were killed by nothing at all -- 587 of those structural, leaving
-about 450 behavioural tests that 300 mutants never reached. Some of that is
-equivalent mutants and rules a boolean flip cannot express; the rest is holes,
-and closing them adds tests. Nobody has separated the two, and that is the open
-work here.
+**The survivors, separated.** Most of those survivors were the measurement's own
+fault, and finding that out took two corrections to it. It had been editing the
+word `and` inside error messages, which nothing asserts and which accounted for
+19 of them. And it read a timeout as "no test failed", which is backwards:
+breaking `create_exclusive` so it never reports success spins the turn-id loop
+forever, and the most lethal mutant in the corpus was filed as a gap in the
+suite. Corrected and re-run: **279 mutants, 260 killed, 19 survivors** -- 6.8%
+rather than 18%.
+
+**Twelve of the 19 are real gaps.** A caller naming `groups` where the
+deployment has no vocabulary, which raises rather than refusing. The run log's
+`ok` on the `max_steps` path, whose staying true is explained in a comment and
+checked by nothing. `top_p` never reaching the model params, with `temperature`
+beside it in the same shape. The *everything or only what was named* branch,
+twice. A stray entry in a session's `runs`. A file that is not YAML on the
+seeding path. `all_of` given a mapping. The nothing-here line for agents, whose
+siblings for skills and subagents are both covered. `ensure_ascii`. The
+`*`-loop suffix that its own comment says the message has to carry. And
+`subgraphs`, which no stub graph can exercise and which therefore stays open.
+
+**Five are not gaps**: one is `# pragma: no cover`, one is refused by a
+`ConfigError` above it, one is a branch its comment says no definition can
+reach, and two are defensive keywords that show only on a second call. **Two
+need Linux**, where the fence is reachable at all, and CI's fence job is where
+they get settled.
+
+Twelve gaps is about eleven tests, because two pairs share a shape. Writing them
+is not done. What is done is that the next person does not have to re-derive
+which twelve: `tests/unit/mutation_report.py` is the corrected harness, and it
+reproduces these on a sample of five.
 
 If deletions are ever proposed, the gate is a mutation corpus generated *after*
 the deletion list is frozen, for the reason those 89 preserved tests give. *(Measured
