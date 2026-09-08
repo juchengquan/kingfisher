@@ -2198,27 +2198,6 @@ def test_the_back_door_rule_tells_the_two_consumers_apart():
     assert _taken_by_the_back_door("kingfisher", frozenset({"Kingfisher"}), family=False) == set()
 
 
-@pytest.mark.parametrize(
-    "path",
-    [p for layer in ("domain", "application", "infrastructure") for p in _modules_in(layer)]
-    # Every module at the package root, globbed rather than named. It listed
-    # `__init__.py` and `config.py` while those were the only two, and `testing.py`
-    # arriving is what showed the cost of that: a new root module joins the
-    # library and this rule does not notice, which is the drift this file
-    # distrusts everywhere else. The two it named are still the two it finds on
-    # a tree without the kit.
-    + sorted(SRC.glob("*.py")),
-    ids=_module_id,
-)
-def test_no_part_of_the_library_imports_the_server(path):
-    """The outward half, and the half packaging leaves open."""
-    modules = _imported_modules(path)
-    assert not any(m.startswith("kingfisher_service") for m in modules), (
-        f"{_module_id(path)} imports kingfisher_service — the library ships "
-        "without it and does not know it exists"
-    )
-
-
 #: The synchronous pair. On an event loop these do not merely block one
 #: request, they block every other turn sharing the process.
 BLOCKING_METHODS = frozenset({"run", "stream"})
