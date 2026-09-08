@@ -92,7 +92,7 @@ def test_every_way_a_source_can_be_wrong_warns_and_says_something_different(
         assert expected in check.detail, (label, check.detail)
         assert check.remedy, label
 
-    # And the one that is fine, so the three above are not simply unreachable.
+    # And the one that is fine, so those warnings are not simply unreachable.
     fine = {c.name: c for c in examine(replace(cfg, assets=shipped))}["definitions to seed"]
     assert fine.verdict == "ok"
     assert str(shipped) in fine.detail, "an ok detail that does not say where it looked"

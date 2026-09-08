@@ -92,14 +92,14 @@ class WorkspacePaths:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
-    #: The two single files, relocated. Not beside the four above because they are not
-    #: directories and do not move together with them: one reviewed `models.yaml` shared
+    #: The two single files, relocated. Not beside the definition roots because they
+    #: are not directories and do not move together with them: one reviewed `models.yaml` shared
     #: across a fleet is the arrangement `compose.yaml` ships, and a group policy may
     #: sit somewhere else again.
     models_file: Path | None = None
     groups_file: Path | None = None
-    #: Where definitions are *copied from*, which is the opposite direction to
-    #: the four above — those say where a catalogue is read, this says what
+    #: Where definitions are *copied from*, which is the opposite direction to the
+    #: definition roots — those say where a catalogue is read, this says what
     #: seeding hands it. Deliberately not beside them for that reason.
     #:
     #: `None` when the deployment named none, which is a normal state and not an
@@ -253,17 +253,17 @@ class Config:
     # shell could read this deployment's own API keys, `~/.aws` and the GitHub
     # CLI's token, and `http_fetch` is one tool call away from sending them.
     shell_sandbox: str = "auto"
-    # Where the definitions live. Also `None` for "derive from the workspace",
-    # but for a different reason than the two above: these hold *content a
-    # person authored*, and pointing several deployments at one directory is
-    # how a reviewed catalogue serves all of them instead of each keeping a
-    # copy nobody can audit centrally.
+    # Where the definitions live. `None` derives them from the workspace, and
+    # what makes that worth overriding is that these hold *content a person
+    # authored*: pointing several deployments at one directory is how a
+    # reviewed catalogue serves all of them instead of each keeping a copy
+    # nobody can audit centrally.
     skills_root: Path | None = None
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
     # Where definitions are copied *from*, which is the opposite direction to
-    # the four above. Carried here as well as on `WorkspacePaths` because
+    # the definition roots. Carried here as well as on `WorkspacePaths` because
     # `doctor` is handed a whole `Config` and has to report on it -- an unset,
     # mistyped or emptied source is the likeliest thing standing between an
     # install and a run once the definitions stop arriving with the wheel.

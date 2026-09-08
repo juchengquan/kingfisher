@@ -79,7 +79,7 @@ class Inventory:
     #: Skills the agent *can* read, under a name their directory does not have,
     #: as `(directory, name)`. Neither missing nor broken: present under a name
     #: nobody typed, which is why it is its own field rather than folded into
-    #: the two above.
+    #: `skills_unloadable` or `skills_misplaced`.
     skills_misfiled: tuple[tuple[str, str], ...] = ()
 
     #: Subagent name -> its description.
