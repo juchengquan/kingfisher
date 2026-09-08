@@ -26,7 +26,7 @@ lines apart.
 | **What a request may do** | [Capabilities](#capabilities) · [Group access](#group-access) · [Models and endpoints](#models-and-endpoints) |
 | **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
 | **The surfaces** | [The command line](#the-command-line) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
-| **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) |
+| **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
 *Sessions* and *Wiring a store* sit together and are not one section: the first is
@@ -1853,6 +1853,70 @@ rule against prose naming a module that is not there* one section up. CI cannot
 see this change at all: deleting every line of prose in the repository passes
 `ruff`, `ty` and `pytest`. The floor is the keep-test applied while editing, not
 a check afterwards.
+
+## The size of the test suite
+
+**Rejected: cutting the suite substantially. There is nothing redundant in it to
+cut.** Every count below is of the tree on the date at the end, which held 2,431
+tests against 89 modules -- and 32,724 lines of test against 15,331 of source,
+which looks like padding twice over. Six ways of looking for the padding found
+none.
+
+*Structural duplication*, by pointing `audit_duplication.py` at the test tree
+instead of `src/`: 13 findings, every one a two-statement fixture helper.
+*Vacuous tests*: of the 282 with no `assert`, 252 are `pytest.raises`, 23 are
+call-it-and-do-not-raise, four are genuinely loose. *Mechanical merges*, where
+the 721 single-assert tests are the prize: only 108 of them, in 32 groups, share
+a byte-identical arrange. The rest is hand work with judgement in it.
+
+**Neither coverage nor kill-set can authorise a cut.** 96% line coverage is
+reproduced exactly by 353 of the 1,852 tests that execute library code -- a
+criterion that green-lights deleting four fifths of the suite is a rubber stamp,
+and it has no opinion at all on the 587 tests that execute no library code
+because they read the tree instead. Mutation kill-set is weaker: across a corpus
+of 300 mutants, **89 tests preserve the entire kill-set**. Any invariant used to
+choose deletions has to be held out from the choosing, or it is fitted to the
+answer it was meant to check.
+
+**What the kill-vector matrix said.** 300 mutants over covered lines, six
+worktrees, 246 killed and 54 survived. Grouping tests by which mutants kill them,
+with parametrize variants collapsed to the function they came from, gives 209
+groups of mutually indistinguishable tests and a surplus of 751 -- the number
+that looks like redundancy and is not. 632 of that surplus sits in groups
+separated by fewer than ten mutants, which is thin evidence rather than sameness.
+The 119 resting on wider vectors were read rather than counted: the five in
+`test_skills_read_only.py` drive four different tools at four different targets
+through one enforcement path. They die together because the path is shared, not
+because the assertions are.
+
+**And the evidence only gets weaker.** A finer corpus -- constants, off-by-one,
+message text -- splits those groups apart; it cannot merge them. 751 is a ceiling
+that falls as the measurement improves.
+
+**Amplification is dependency-shaped, and is a reporting problem.** The median
+caught break turns 9 tests red. The wide ones come from a few foundation lines:
+one wrong `and` in `layout.py` fails 385 tests, of which 345 are a single
+exception from a single line of the workspace backend, raised on each test's way
+to an assertion it never reached. A second mutant turned 265 tests red carrying
+four distinct signals. That is what `--tb=line` is for, and it took 35,495 lines
+of output down to 1,415 without deleting anything.
+
+**What was done instead** is two splits, along the seam each file already
+declared in its own docstring: `kingfisher list` out of the file that also tested
+`seed`, and what a turn may destroy out of what a caller can reach. No test was
+deleted. The gate for a move is `pytest --collect-only`, not a green suite -- a
+rule that loses its parametrize data collects nothing and still prints dots.
+
+**Two findings that point the other way.** 54 of the 300 mutants survived, and
+1,034 tests were killed by nothing at all -- 587 of those structural, leaving
+about 450 behavioural tests that 300 mutants never reached. Some of that is
+equivalent mutants and rules a boolean flip cannot express; the rest is holes,
+and closing them adds tests. Nobody has separated the two, and that is the open
+work here.
+
+If deletions are ever proposed, the gate is a mutation corpus generated *after*
+the deletion list is frozen, for the reason the 89 above gives. *(Measured
+2026-09-08.)*
 
 ## Proposals, and what became of them
 
