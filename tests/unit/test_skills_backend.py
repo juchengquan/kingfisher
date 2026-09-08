@@ -170,20 +170,19 @@ def test_the_async_half_refuses_too(cfg, session_dir, operation):
     assert "body of remote" in str(backend.read(path))
 
 
-@pytest.mark.parametrize("operation", ["edit", "delete"])
-def test_every_mutating_operation_is_refused(cfg, session_dir, operation):
-    """`delete` included: a route the agent can empty is a route it can silence."""
+def test_every_mutating_operation_is_refused(cfg, session_dir):
+    """`delete` included: a route the agent can empty is a route it can silence.
+
+    Both in one backend, which is safe here for the reason under test: neither
+    operation is allowed to change anything, so the second sees what the first did.
+    """
     catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
     backend = build_backend(cfg, session_dir, catalogue=catalogue)
     path = f"{SKILLS_ROUTE}remote/SKILL.md"
 
-    if operation == "edit":
-        refused = backend.edit(path, "body", "tampered")
-    else:
-        refused = backend.delete(path)
-
-    assert "read-only" in str(refused)
-    assert "body of remote" in str(backend.read(path))
+    for refused in (backend.edit(path, "body", "tampered"), backend.delete(path)):
+        assert "read-only" in str(refused)
+        assert "body of remote" in str(backend.read(path))
 
 
 # -- what a store cannot do ----------------------------------------------
