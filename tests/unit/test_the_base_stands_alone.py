@@ -5,8 +5,6 @@ from __future__ import annotations
 import ast
 from pathlib import Path
 
-import pytest
-
 from tests.conftest import repository_root
 
 SRC = repository_root() / "src" / "kingfisher"
@@ -14,10 +12,13 @@ SRC = repository_root() / "src" / "kingfisher"
 #: Every module the rule below walks, collected once so the collection itself can
 #: be checked.
 #:
-#: An empty parametrize does not fail -- pytest *skips* it, and a skip in a wall
-#: of dots is indistinguishable from a pass. That is not hypothetical: `SRC` was
+#: An empty collection does not fail. It used to be a parametrize, where pytest
+#: *skips* an empty one and a skip in a wall of dots is indistinguishable from a
+#: pass; walked in a loop it is quieter still, because the body runs zero times,
+#: gathers no complaints and passes outright. That is not hypothetical: `SRC` was
 #: counted as `parents[1]`, the tests moved one level down into `tests/unit/`, and
-#: this file went green with nothing walked at all.
+#: this file went green with nothing walked at all. The rule asserts it is
+#: non-empty before it walks anything.
 MODULES = sorted(SRC.rglob("*.py"))
 
 #: What this distribution must not need. `kingfisher_service` is a separate
@@ -87,10 +88,14 @@ def _needs_absent(path: Path, name: str) -> list[str]:
     return complaints
 
 
-@pytest.mark.parametrize("path", MODULES, ids=_relative)
-def test_no_module_needs_the_service_or_its_dependencies(path):
+def test_no_module_needs_the_service_or_its_dependencies():
     """Anywhere in the import graph, at module scope or inside a function."""
-    assert not _needs_absent(path, _relative(path))
+    assert MODULES, "no modules walked -- see the note on MODULES above"
+    complaints = [
+        complaint for path in MODULES for complaint in _needs_absent(path, _relative(path))
+    ]
+
+    assert not complaints, "\n".join(complaints)
 
 
 def test_the_exception_is_real_rather_than_defensive():
