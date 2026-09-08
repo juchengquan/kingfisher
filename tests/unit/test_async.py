@@ -31,6 +31,51 @@ class AsyncStubAgent(StubAgent):
             yield chunk
 
 
+class RecordingAgent(AsyncStubAgent):
+    """Keeps what each loop asked the graph for."""
+
+    def __init__(self, answer: str) -> None:
+        super().__init__(answer)
+        self.asked: list[bool] = []
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        self.asked.append(subgraphs)
+        yield from super().stream(state, config, stream_mode)
+
+    async def astream(self, state, config, stream_mode=None, subgraphs=False):
+        self.asked.append(subgraphs)
+        # `StubAgent.stream` rather than `self.stream`: the async stub answers by
+        # draining the sync one, and going through the override would record the
+        # inner call as a second ask with nobody's argument in it.
+        for chunk in StubAgent.stream(self, state, config, stream_mode):
+            await asyncio.sleep(0)
+            yield chunk
+
+
+@pytest.mark.parametrize("loop", ["stream", "astream"])
+def test_both_loops_ask_for_what_a_delegate_does(cfg, loop):
+    """A delegate runs in a subgraph, and a stream that does not ask for subgraph
+    events never sees one.
+
+    The symptom is not an error: the turn answers, and everything the delegate
+    did is missing from the run. Both loops pass this and neither was read, so
+    the flag could go false in one of them and only a live delegation would say.
+    """
+    agent = RecordingAgent("ok")
+    service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
+
+    if loop == "stream":
+        list(service.stream(Request("go")))
+    else:
+
+        async def drain():
+            return [event async for event in service.astream(Request("go"))]
+
+        asyncio.run(drain())
+
+    assert agent.asked == [True]
+
+
 def test_astream_yields_the_same_events_as_stream(cfg):
     """One `_prepare`, two loops. If they drift, this is what notices."""
     service = Kingfisher(cfg, graph=AsyncStubAgent("ok"), threads=StubCheckpointer())
