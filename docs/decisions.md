@@ -169,6 +169,16 @@ fields inherit everything available; `skills`, `subagents` and `middleware` omit
 to none. Tools are what an agent needs to *act*; the others are what it needs to
 know and to ask. *(2026-08-18, `agents-as-definitions.md`.)*
 
+**A delegate names its skills; `["*"]` is refused there and taken on an agent.**
+The star resolves to whatever the request granted, and a delegate is handed a
+skills index only where its skills are *named* -- so under the ordinary request,
+which grants every skill, `skills: ["*"]` read as all of them and arrived as
+none. It worked only when the caller happened to narrow skills, which is a
+meaning no author of the file can see and the opposite of the one they wrote.
+Refused at the read, beside the `subagents` star and for the same reason: the
+habit comes from a request, where the star is the ordinary way to say
+everything. The two tool axes still take it, where it means what it says.
+
 **Delegation is unbounded in depth and is a DAG, not a tree.** A definition may
 appear in several places, each is compiled once and its runnable shared, and
 cycles are refused for the whole catalogue at load. Compiling per *path* is
