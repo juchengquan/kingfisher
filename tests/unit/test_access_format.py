@@ -154,6 +154,31 @@ def test_a_group_cannot_both_grant_and_require():
         )
 
 
+@pytest.mark.parametrize("key", ["contains", "all_of"])
+@pytest.mark.parametrize("written", [{"finance": "senior"}, 3, True])
+def test_a_list_of_names_that_is_not_a_list_is_refused(key, written):
+    """A mapping is truthy and it iterates, so it was read as its keys alone.
+
+    `all_of: {finance: senior}` became the single name `finance` and threw away
+    what was written beside it, which is not a refusal and not what the author
+    asked for either. The rest raised `TypeError` out of the comprehension,
+    naming neither the file nor the group.
+
+    Both keys, because one loop reads them and only the string case was ever
+    handed anything but a list.
+    """
+    with pytest.raises(AccessError, match="list of group names"):
+        parse({"groups": {"A": {}, "x": {key: written}}}, source="groups.yaml")
+
+
+def test_a_name_written_as_a_string_still_says_it_wants_a_list():
+    """The case that already had a refusal, kept: `contains: A` reads as a list of
+    letters, so the message has to be about the shape rather than the name.
+    """
+    with pytest.raises(AccessError, match="list of group names"):
+        parse({"groups": {"A": {}, "x": {"contains": "A"}}}, source="groups.yaml")
+
+
 def test_an_empty_requirement_is_refused():
     """It would require nothing and so admit everyone, which is what a plain group
     already means -- so it is an unfinished edit, not a spelling.
