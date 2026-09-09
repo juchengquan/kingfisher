@@ -137,8 +137,7 @@ def test_a_store_mount_is_read_only_by_construction(cfg, session_dir):
     assert "body of remote" in str(backend.read(f"{SKILLS_ROUTE}remote/SKILL.md"))
 
 
-@pytest.mark.parametrize("operation", ["write", "edit", "delete", "upload"])
-def test_the_async_half_refuses_too(cfg, session_dir, operation):
+def test_the_async_half_refuses_too(cfg, session_dir):
     """The half that gets forgotten, and the reason this file exists at all.
 
     `astream` is the async entry point, so an API deployment reaches `awrite` and never
@@ -151,11 +150,9 @@ def test_the_async_half_refuses_too(cfg, session_dir, operation):
     """
     import asyncio
 
-    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
-    path = f"{SKILLS_ROUTE}remote/SKILL.md"
-
-    async def attempt():
+    async def attempt(backend, operation, path):
+        """Taken as arguments rather than closed over, so the four calls cannot end up
+        sharing the last iteration's bindings."""
         if operation == "write":
             return await backend.awrite(f"{SKILLS_ROUTE}remote/PWNED.md", "tampered")
         if operation == "edit":
@@ -164,10 +161,15 @@ def test_the_async_half_refuses_too(cfg, session_dir, operation):
             return await backend.adelete(path)
         return await backend.aupload_files([(f"{SKILLS_ROUTE}remote/up.md", b"y")])
 
-    refused = asyncio.run(attempt())
+    catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
+    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    path = f"{SKILLS_ROUTE}remote/SKILL.md"
 
-    assert "read-only" in str(refused)
-    assert "body of remote" in str(backend.read(path))
+    for operation in ["write", "edit", "delete", "upload"]:
+        refused = asyncio.run(attempt(backend, operation, path))
+
+        assert "read-only" in str(refused), operation
+        assert "body of remote" in str(backend.read(path)), operation
 
 
 def test_every_mutating_operation_is_refused(cfg, session_dir):

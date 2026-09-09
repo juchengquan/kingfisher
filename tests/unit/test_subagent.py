@@ -51,28 +51,25 @@ def test_optional_fields_and_quoting():
     assert spec.description == "Checks an analysis for arithmetic errors."  # unquoted
 
 
-@pytest.mark.parametrize(
-    ("text", "because"),
-    [
-        # A bare scalar is valid YAML and not a definition.
-        ("no fields at all", "expected a mapping of fields"),
-        ("description: x\nsystem_prompt: |\n  body\n", "missing required field 'name'"),
-        ("name: x\nsystem_prompt: |\n  body\n", "missing required field 'description'"),
-        ("name: x\ndescription: y\n", "missing required field 'system_prompt'"),
-        # Present but blank is a different mistake, and says so.
-        ("name: x\ndescription: y\nsystem_prompt: |\n", "'system_prompt' is present but empty"),
-        ("name: \ndescription: y\nsystem_prompt: |\n  body\n", "'name' is present but empty"),
-        # YAML says why; we say which file. Rejected either way.
-        ("name x\ndescription: y\nsystem_prompt: |\n  body\n", "cannot read definition"),
-        ("- not\n- a mapping\n", "expected a mapping of fields"),
-    ],
-)
-def test_malformed_definitions_are_rejected(text, because):
+def test_malformed_definitions_are_rejected():
     """Loudly, at build time — a subagent that silently loses its prompt would fail much
     later and much less legibly.
     """
-    with pytest.raises(SubagentError, match=because):
-        reading.read(text, Path("broken.yaml"))
+    for text, because in [
+            # A bare scalar is valid YAML and not a definition.
+            ("no fields at all", "expected a mapping of fields"),
+            ("description: x\nsystem_prompt: |\n  body\n", "missing required field 'name'"),
+            ("name: x\nsystem_prompt: |\n  body\n", "missing required field 'description'"),
+            ("name: x\ndescription: y\n", "missing required field 'system_prompt'"),
+            # Present but blank is a different mistake, and says so.
+            ("name: x\ndescription: y\nsystem_prompt: |\n", "'system_prompt' is present but empty"),
+            ("name: \ndescription: y\nsystem_prompt: |\n  body\n", "'name' is present but empty"),
+            # YAML says why; we say which file. Rejected either way.
+            ("name x\ndescription: y\nsystem_prompt: |\n  body\n", "cannot read definition"),
+            ("- not\n- a mapping\n", "expected a mapping of fields"),
+        ]:
+        with pytest.raises(SubagentError, match=because):
+            reading.read(text, Path("broken.yaml"))
 
 
 def test_specs_are_empty_when_the_directory_is_absent(tmp_path):
@@ -178,15 +175,15 @@ def test_every_unaccepted_field_is_reported_at_once(tmp_path):
     assert "did you mean 'tools'?" in message  # and each is explained in its own terms
 
 
-@pytest.mark.parametrize("field", sorted(REFUSED))
-def test_a_deliberately_unexposed_field_says_why(tmp_path, field):
+def test_a_deliberately_unexposed_field_says_why(tmp_path):
     """These are not "not yet"."""
-    with pytest.raises(SubagentError, match=field) as raised:
-        reading.read(_definition(f"{field}: something"), tmp_path / "reviewer.yaml")
+    for field in sorted(REFUSED):
+        with pytest.raises(SubagentError, match=field) as raised:
+            reading.read(_definition(f"{field}: something"), tmp_path / "reviewer.yaml")
 
-    message = str(raised.value)
-    assert "did you mean" not in message
-    assert REFUSED[field].split()[0] in message
+        message = str(raised.value)
+        assert "did you mean" not in message
+        assert REFUSED[field].split()[0] in message
 
 
 def test_permissions_explains_the_direction_it_gets_wrong(tmp_path):
@@ -324,25 +321,25 @@ HEAD = "name: reviewer\ndescription: d\n"
 STEPS = "  1. Recompute the figure.\n  2. Say which definition you applied.\n"
 
 
-@pytest.mark.parametrize("style", ["|", "|2", "|-", "|+"])
-def test_every_literal_block_is_accepted(tmp_path, style):
+def test_every_literal_block_is_accepted(tmp_path):
     """The indicator and the chomping marker are none of this check's business -- they
     are all the same style, and all of them keep the line breaks.
     """
-    spec = reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+    for style in ["|", "|2", "|-", "|+"]:
+        spec = reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
 
-    assert "Recompute the figure.\n2. Say" in spec.system_prompt
+        assert "Recompute the figure.\n2. Say" in spec.system_prompt
 
 
-@pytest.mark.parametrize("style", [">", ">-", ">2"])
-def test_a_folded_prompt_is_refused(tmp_path, style):
+def test_a_folded_prompt_is_refused(tmp_path):
     """`>` joins consecutive lines, so two numbered steps reach the delegate as one
     run-on line -- valid YAML, correct-looking file, odd-behaving agent.
     """
-    with pytest.raises(SubagentError, match="reflows it") as raised:
-        reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
+    for style in [">", ">-", ">2"]:
+        with pytest.raises(SubagentError, match="reflows it") as raised:
+            reading.read(HEAD + f"system_prompt: {style}\n" + STEPS, tmp_path / "reviewer.yaml")
 
-    assert "system_prompt: |" in str(raised.value)
+        assert "system_prompt: |" in str(raised.value)
 
 
 def test_a_plain_prompt_is_refused(tmp_path):
@@ -438,15 +435,15 @@ def test_metadata_defaults_to_empty(tmp_path):
     assert spec.metadata == {}
 
 
-@pytest.mark.parametrize("written", ["metadata: gold", "metadata: [a, b]", "metadata: 3"])
-def test_metadata_must_be_a_mapping(tmp_path, written):
+def test_metadata_must_be_a_mapping(tmp_path):
     """A bag with no shape cannot be looked up by key, which is the only thing anyone
     will do with it.
     """
-    definition = f"name: reviewer\ndescription: d\n{written}\nsystem_prompt: |\n  You review.\n"
+    for written in ["metadata: gold", "metadata: [a, b]", "metadata: 3"]:
+        definition = f"name: reviewer\ndescription: d\n{written}\nsystem_prompt: |\n  You review.\n"
 
-    with pytest.raises(SubagentError, match="metadata"):
-        reading.read(definition, tmp_path / "reviewer.yaml")
+        with pytest.raises(SubagentError, match="metadata"):
+            reading.read(definition, tmp_path / "reviewer.yaml")
 
 
 def test_empty_metadata_is_allowed(tmp_path):

@@ -52,8 +52,7 @@ class RecordingAgent(AsyncStubAgent):
             yield chunk
 
 
-@pytest.mark.parametrize("loop", ["stream", "astream"])
-def test_both_loops_ask_for_what_a_delegate_does(cfg, loop):
+def test_both_loops_ask_for_what_a_delegate_does(cfg):
     """A delegate runs in a subgraph, and a stream that does not ask for subgraph
     events never sees one.
 
@@ -61,19 +60,20 @@ def test_both_loops_ask_for_what_a_delegate_does(cfg, loop):
     did is missing from the run. Both loops pass this and neither was read, so
     the flag could go false in one of them and only a live delegation would say.
     """
-    agent = RecordingAgent("ok")
-    service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
 
-    if loop == "stream":
-        list(service.stream(Request("go")))
-    else:
+    async def drain(service):
+        return [event async for event in service.astream(Request("go"))]
 
-        async def drain():
-            return [event async for event in service.astream(Request("go"))]
+    for loop in ["stream", "astream"]:
+        agent = RecordingAgent("ok")
+        service = Kingfisher(cfg, graph=agent, threads=StubCheckpointer())
 
-        asyncio.run(drain())
+        if loop == "stream":
+            list(service.stream(Request("go")))
+        else:
+            asyncio.run(drain(service))
 
-    assert agent.asked == [True]
+        assert agent.asked == [True], loop
 
 
 def test_astream_yields_the_same_events_as_stream(cfg):

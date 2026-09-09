@@ -291,8 +291,7 @@ def test_a_hostile_key_is_refused_before_a_turn_exists(cfg):
     assert not runs.exists() or list(runs.iterdir()) == []
 
 
-@pytest.mark.parametrize("name", ["../escaped.txt", "/etc/passwd"])
-def test_the_writers_refuse_a_hostile_key_on_their_own(tmp_path, name):
+def test_the_writers_refuse_a_hostile_key_on_their_own(tmp_path):
     """The other half of the pair above, tested where nothing else can cover for it."""
     from kingfisher.infrastructure.workspace.placement import place_data, place_inputs
     from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
@@ -302,7 +301,8 @@ def test_the_writers_refuse_a_hostile_key_on_their_own(tmp_path, name):
     turn = tmp_path / "turn"
     turn.mkdir()
 
-    with pytest.raises(UnsafeReferenceError):
-        place_data((), session, contents={name: b"x"})
-    with pytest.raises(UnsafeReferenceError):
-        place_inputs((), turn / "input", contents={name: b"x"})
+    for name in ["../escaped.txt", "/etc/passwd"]:
+        with pytest.raises(UnsafeReferenceError):
+            place_data((), session, contents={name: b"x"})
+        with pytest.raises(UnsafeReferenceError):
+            place_inputs((), turn / "input", contents={name: b"x"})

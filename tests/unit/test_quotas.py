@@ -113,8 +113,7 @@ class AsyncRunawayAgent(RunawayAgent):
             yield chunk
 
 
-@pytest.mark.parametrize("graph", [RunawayAgent, AsyncRunawayAgent], ids=["sync", "async"])
-def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg, graph):
+def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg):
     """`ok` records that the turn ended in a way the caller was told about, not that
     every step it wanted happened.
 
@@ -125,21 +124,22 @@ def test_a_turn_cut_short_for_steps_is_logged_as_having_ended(cfg, graph):
     Both loops, because the flag is set twice -- the async copy is three lines
     from the sync one and was written by hand.
     """
-    import json
+    for graph in [RunawayAgent, AsyncRunawayAgent]:
+        import json
 
-    from kingfisher.infrastructure.harness.runlog import log_path
+        from kingfisher.infrastructure.harness.runlog import log_path
 
-    kf = Kingfisher(cfg, graph=graph(), threads=StubCheckpointer())
+        kf = Kingfisher(cfg, graph=graph(), threads=StubCheckpointer())
 
-    if graph is AsyncRunawayAgent:
-        result = asyncio.run(kf.arun(Request("go")))
-    else:
-        result = kf.run(Request("go"))
+        if graph is AsyncRunawayAgent:
+            result = asyncio.run(kf.arun(Request("go")))
+        else:
+            result = kf.run(Request("go"))
 
-    written = log_path(result.run_dir.parent.parent).read_text(encoding="utf-8")
-    ended = [json.loads(line) for line in written.splitlines() if line.strip()]
-    ends = [record for record in ended if record["event"] == "run_end"]
-    assert ends and ends[-1]["ok"] is True
+        written = log_path(result.run_dir.parent.parent).read_text(encoding="utf-8")
+        ended = [json.loads(line) for line in written.splitlines() if line.strip()]
+        ends = [record for record in ended if record["event"] == "run_end"]
+        assert ends and ends[-1]["ok"] is True
 
 
 def test_running_out_of_steps_says_which_bound_and_how_to_raise_it(cfg):

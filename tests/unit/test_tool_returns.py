@@ -4,7 +4,6 @@ behaviour.
 
 from __future__ import annotations
 
-import pytest
 from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.infrastructure.harness.agent import build_agent
@@ -96,16 +95,7 @@ def _results(cfg, session_dir, body: str) -> list[ToolMessage]:
     return [m for m in out["messages"] if isinstance(m, ToolMessage)]
 
 
-@pytest.mark.parametrize(
-    ("body", "shown"),
-    [
-        pytest.param(STRING, "three columns", id="str"),
-        pytest.param(MAPPING, '{"rows": 3, "cols": ["a", "b"]}', id="dict"),
-        pytest.param(NOTHING, "null", id="none"),
-        pytest.param(UNSERIALISABLE, "<Column>", id="object"),
-    ],
-)
-def test_what_the_model_is_shown(cfg, session_dir, body: str, shown: str) -> None:
+def test_what_the_model_is_shown(cfg, session_dir):
     """The four rows of the table the guide prints, asserted as the model sees them
     rather than as langchain computes them.
 
@@ -114,10 +104,16 @@ def test_what_the_model_is_shown(cfg, session_dir, body: str, shown: str) -> Non
     something unhelpful, and a row that started raising would still pass a content-only
     check on the other three.
     """
-    results = _results(cfg, session_dir, body)
+    for body, shown in [
+        (STRING, "three columns"),
+        (MAPPING, '{"rows": 3, "cols": ["a", "b"]}'),
+        (NOTHING, "null"),
+        (UNSERIALISABLE, "<Column>"),
+    ]:
+        results = _results(cfg, session_dir, body)
 
-    assert [m.content for m in results] == [shown]
-    assert [m.status for m in results] == ["success"]
+        assert [m.content for m in results] == [shown]
+        assert [m.status for m in results] == ["success"]
 
 
 def test_a_command_is_applied_rather_than_wrapped(cfg, session_dir) -> None:

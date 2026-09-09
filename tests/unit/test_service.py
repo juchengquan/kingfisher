@@ -259,17 +259,20 @@ def _refusal(how: str, tmp_path: Path) -> dict:
     return {field: (tmp_path / "a" / "same.csv", tmp_path / "b" / "same.csv")}
 
 
-@pytest.mark.parametrize("how", REFUSALS, ids=lambda s: s)
-def test_a_refused_request_leaves_no_turn_behind(cfg, tmp_path, how):
-    start(cfg, "s")
-    service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.run(Request("first", session_id="s"))  # t001 is real work
+def test_a_refused_request_leaves_no_turn_behind(cfg, tmp_path):
+    for n, how in enumerate(REFUSALS):
+        # A session each. Turn names are sequential within one, so a second refusal
+        # in the session the first used would be asserting about `t002`.
+        session = f"s{n}"
+        start(cfg, session)
+        service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
+        service.run(Request("first", session_id=session))  # t001 is real work
 
-    with pytest.raises(DataError):
-        service.run(Request("go", session_id="s", **_refusal(how, tmp_path)))
+        with pytest.raises(DataError):
+            service.run(Request("go", session_id=session, **_refusal(how, tmp_path)))
 
-    runs = cfg.workspace / "sessions" / "s" / "runs"
-    assert sorted(p.name for p in runs.iterdir()) == ["t001"]
+        runs = cfg.workspace / "sessions" / session / "runs"
+        assert sorted(p.name for p in runs.iterdir()) == ["t001"], how
 
 
 def test_the_admitted_request_is_what_opens_the_turn(cfg):

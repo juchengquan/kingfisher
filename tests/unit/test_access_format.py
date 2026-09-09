@@ -74,11 +74,11 @@ def test_an_unknown_top_level_key_is_refused():
         parse({"groups": ["A"], "grops": {}}, source="groups.yaml")
 
 
-@pytest.mark.parametrize("section", ["agents", "subagents", "tools"])
-def test_an_asset_section_says_where_audiences_went(section):
+def test_an_asset_section_says_where_audiences_went():
     """The central format's three sections, refused by name."""
-    with pytest.raises(AccessError, match="live in the definition"):
-        parse({"groups": ["A"], section: {"x": ["A"]}}, source="groups.yaml")
+    for section in ["agents", "subagents", "tools"]:
+        with pytest.raises(AccessError, match="live in the definition"):
+            parse({"groups": ["A"], section: {"x": ["A"]}}, source="groups.yaml")
 
 
 def test_the_source_is_named_in_every_refusal():
@@ -154,9 +154,7 @@ def test_a_group_cannot_both_grant_and_require():
         )
 
 
-@pytest.mark.parametrize("key", ["contains", "all_of"])
-@pytest.mark.parametrize("written", [{"finance": "senior"}, 3, True])
-def test_a_list_of_names_that_is_not_a_list_is_refused(key, written):
+def test_a_list_of_names_that_is_not_a_list_is_refused():
     """A mapping is truthy and it iterates, so it was read as its keys alone.
 
     `all_of: {finance: senior}` became the single name `finance` and threw away
@@ -167,8 +165,10 @@ def test_a_list_of_names_that_is_not_a_list_is_refused(key, written):
     Both keys, because one loop reads them and only the string case was ever
     handed anything but a list.
     """
-    with pytest.raises(AccessError, match="list of group names"):
-        parse({"groups": {"A": {}, "x": {key: written}}}, source="groups.yaml")
+    for written in [{"finance": "senior"}, 3, True]:
+        for key in ["contains", "all_of"]:
+            with pytest.raises(AccessError, match="list of group names"):
+                parse({"groups": {"A": {}, "x": {key: written}}}, source="groups.yaml")
 
 
 def test_a_name_written_as_a_string_still_says_it_wants_a_list():

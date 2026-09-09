@@ -371,32 +371,36 @@ INSIDE_THE_ROOT = {
 }
 
 
-@pytest.mark.parametrize(("route", "parts"), INSIDE_THE_ROOT.items(), ids=INSIDE_THE_ROOT)
-def test_a_routed_file_is_globbed_once(cfg, session_dir, route, parts):
+def test_a_routed_file_is_globbed_once(cfg, session_dir):
     """Measured before this: `--data orders.csv` reached the model as
     `['/data/orders.csv', '/data/orders.csv']`, on every pattern tried.
     """
     backend = build_backend(cfg, session_dir)
-    where = session_dir.joinpath(*parts)
-    where.mkdir(parents=True, exist_ok=True)
-    (where / "probe.txt").write_text("needle\n", encoding="utf-8")
+    for route, parts in INSIDE_THE_ROOT.items():
+        where = session_dir.joinpath(*parts)
+        where.mkdir(parents=True, exist_ok=True)
+        (where / "probe.txt").write_text("needle\n", encoding="utf-8")
 
-    found = [one["path"] for one in _rows(backend.glob(f"{route}/probe.txt"))]
+        found = [one["path"] for one in _rows(backend.glob(f"{route}/probe.txt"))]
 
-    assert found == [f"{route}/probe.txt"]
+        assert found == [f"{route}/probe.txt"], route
 
 
-@pytest.mark.parametrize(("route", "parts"), INSIDE_THE_ROOT.items(), ids=INSIDE_THE_ROOT)
-def test_a_routed_file_is_grepped_once(cfg, session_dir, route, parts):
+def test_a_routed_file_is_grepped_once(cfg, session_dir):
     """From the root, which is where the two answers meet."""
     backend = build_backend(cfg, session_dir)
-    where = session_dir.joinpath(*parts)
-    where.mkdir(parents=True, exist_ok=True)
-    (where / "probe.txt").write_text("needle\n", encoding="utf-8")
+    for route, parts in INSIDE_THE_ROOT.items():
+        where = session_dir.joinpath(*parts)
+        where.mkdir(parents=True, exist_ok=True)
+        (where / "probe.txt").write_text("needle\n", encoding="utf-8")
 
-    found = [one["path"] for one in _rows(backend.grep("needle", path="/"))]
+        found = [one["path"] for one in _rows(backend.grep("needle", path="/"))]
 
-    assert found == [f"{route}/probe.txt"]
+        # Taken away again before the next route: this greps from the root, so a probe
+        # left behind is a second match and the answer stops being about one route.
+        (where / "probe.txt").unlink()
+
+        assert found == [f"{route}/probe.txt"]
 
 
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):

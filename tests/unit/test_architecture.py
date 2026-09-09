@@ -1274,49 +1274,47 @@ def _stub_reexports(path: Path) -> tuple[dict[str, str], list[str]]:
     return found, bare
 
 
-@pytest.mark.parametrize(
-    ("package", "path"), sorted(LAZY_TABLES.items()), ids=sorted(LAZY_TABLES)
-)
-def test_the_stub_block_and_the_export_table_name_the_same_things(package, path):
+def test_the_stub_block_and_the_export_table_name_the_same_things():
     """The third table, and the one nothing had ever held to the other two.
 
     `__getattr__` returns `Any`, so a name with no stub still imports and still passes
     every test -- it is simply untyped, which is why this asks `ty` rather than the
     suite.
     """
-    import importlib
+    for package, path in sorted(LAZY_TABLES.items()):
+        import importlib
 
-    table = importlib.import_module(package)._EXPORTS
-    stubs, bare = _stub_reexports(path)
+        table = importlib.import_module(package)._EXPORTS
+        stubs, bare = _stub_reexports(path)
 
-    assert stubs, (
-        f"no `if TYPE_CHECKING:` re-exports found in {path.name} -- this rule is "
-        "about nothing, which is how the collector in this file has failed twice"
-    )
+        assert stubs, (
+            f"no `if TYPE_CHECKING:` re-exports found in {path.name} -- this rule is "
+            "about nothing, which is how the collector in this file has failed twice"
+        )
 
-    missing = sorted(set(table) - set(stubs))
-    assert not missing, (
-        f"{missing} are exported by {package} and have no stub, so a type checker "
-        f"sees `Any` for them. Add `from <module> import X as X` to the "
-        "`if TYPE_CHECKING:` block"
-    )
+        missing = sorted(set(table) - set(stubs))
+        assert not missing, (
+            f"{missing} are exported by {package} and have no stub, so a type checker "
+            f"sees `Any` for them. Add `from <module> import X as X` to the "
+            "`if TYPE_CHECKING:` block"
+        )
 
-    extra = sorted(set(stubs) - set(table))
-    assert not extra, (
-        f"{extra} have a stub in {package} and are not exported -- a type checker "
-        "believes they are importable and `__getattr__` raises AttributeError"
-    )
+        extra = sorted(set(stubs) - set(table))
+        assert not extra, (
+            f"{extra} have a stub in {package} and are not exported -- a type checker "
+            "believes they are importable and `__getattr__` raises AttributeError"
+        )
 
-    disagree = sorted(n for n in table if table[n] != stubs[n])
-    assert not disagree, (
-        f"{package} and its stub block disagree about where {disagree} come from: "
-        + ", ".join(f"{n}: {table[n]!r} against {stubs[n]!r}" for n in disagree)
-    )
+        disagree = sorted(n for n in table if table[n] != stubs[n])
+        assert not disagree, (
+            f"{package} and its stub block disagree about where {disagree} come from: "
+            + ", ".join(f"{n}: {table[n]!r} against {stubs[n]!r}" for n in disagree)
+        )
 
-    assert not bare, (
-        f"{sorted(bare)} are imported into {package}'s stub block without the "
-        "`as X` alias, which under PEP 484 means they are not re-exported at all"
-    )
+        assert not bare, (
+            f"{sorted(bare)} are imported into {package}'s stub block without the "
+            "`as X` alias, which under PEP 484 means they are not re-exported at all"
+        )
 
 
 #: Why each public name is public: who outside this wheel asked for it.
@@ -2213,20 +2211,18 @@ def _taken_by_the_back_door(
     return names & _public_names() if names else frozenset({module})
 
 
-@pytest.mark.parametrize(
-    ("module", "reaches"),
-    [
-        ("kingfisher", False),                      # the front door itself
-        ("kingfisher.domain.request", True),        # past it
-        ("kingfisher.application.service", True),   # past it, and the tempting one
-        ("kingfisher.presentation.cli.health", False),           # the CLI ships inside the package
-        ("kingfisher_service.app", False),          # a different top-level package
-        ("fastapi", False),                         # not ours to have an opinion on
-    ],
-)
-def test_the_reach_predicate_says_what_it_means(module, reaches):
+def test_the_reach_predicate_says_what_it_means():
     """The rule's own arithmetic, checked against named inputs."""
-    assert _reaches_past_the_public_api(module) is reaches
+    for module, reaches in [
+            ("kingfisher", False),                      # the front door itself
+            ("kingfisher.domain.request", True),        # past it
+            ("kingfisher.application.service", True),   # past it, and the tempting one
+            # the CLI ships inside the package
+            ("kingfisher.presentation.cli.health", False),
+            ("kingfisher_service.app", False),          # a different top-level package
+            ("fastapi", False),                         # not ours to have an opinion on
+        ]:
+        assert _reaches_past_the_public_api(module) is reaches
 
 
 def test_the_rule_above_still_finds_every_consumer():

@@ -58,15 +58,15 @@ def test_the_model_comes_from_the_profile_it_is_handed(cfg):
 OPTIONAL = ("temperature", "top_p")
 
 
-@pytest.mark.parametrize("field", OPTIONAL)
-def test_an_unset_param_is_not_passed_at_all(cfg, field):
+def test_an_unset_param_is_not_passed_at_all(cfg):
     """Omitted means absent, not "passed as a default we chose"."""
-    unset = cfg.models.models["fake-model"]
-    assert getattr(unset, field) is None
-    assert field not in unset.kwargs()
+    for field in OPTIONAL:
+        unset = cfg.models.models["fake-model"]
+        assert getattr(unset, field) is None
+        assert field not in unset.kwargs()
 
-    chosen = replace(unset, **{field: 0.5})
-    assert chosen.kwargs()[field] == 0.5
+        chosen = replace(unset, **{field: 0.5})
+        assert chosen.kwargs()[field] == 0.5
 
 
 def test_every_param_kwargs_omits_is_named_above():
@@ -103,19 +103,19 @@ LANDING_SITES = {
 }
 
 
-@pytest.mark.parametrize("api", sorted(ADAPTERS))
-def test_every_value_reaches_the_client(api):
+def test_every_value_reaches_the_client():
     """A dropped kwarg is invisible until the endpoint rejects the request."""
-    endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real")
-    profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
-    model = build_model(profile, endpoint)
-    sites = LANDING_SITES[api]
+    for api in sorted(ADAPTERS):
+        endpoint = Endpoint(api, "https://example.invalid/v1", "sk-not-real")
+        profile = ModelProfile("a-model", "somewhere", max_tokens=321, timeout_s=45)
+        model = build_model(profile, endpoint)
+        sites = LANDING_SITES[api]
 
-    assert getattr(model, sites["model"]) == profile.model
-    assert getattr(model, sites["base_url"]) == endpoint.base_url
-    assert getattr(model, sites["api_key"]).get_secret_value() == endpoint.api_key
-    assert getattr(model, sites["max_tokens"]) == 321
-    assert getattr(model, sites["timeout_s"]) == 45
+        assert getattr(model, sites["model"]) == profile.model
+        assert getattr(model, sites["base_url"]) == endpoint.base_url
+        assert getattr(model, sites["api_key"]).get_secret_value() == endpoint.api_key
+        assert getattr(model, sites["max_tokens"]) == 321
+        assert getattr(model, sites["timeout_s"]) == 45
 
 
 def test_every_adapter_has_landing_sites():

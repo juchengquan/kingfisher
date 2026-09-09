@@ -168,10 +168,7 @@ SUBAGENTS = [
 """
 
 
-@pytest.mark.parametrize(
-    "key", ["system_prompt", "skills", "middleware", "subagents", "builtin_tools"]
-)
-def test_a_key_deepagents_would_ignore_is_refused_with_its_reason(key):
+def test_a_key_deepagents_would_ignore_is_refused_with_its_reason():
     """Refused rather than dropped.
 
     The *reason* is what is asserted, not merely that something was refused. These
@@ -180,10 +177,11 @@ def test_a_key_deepagents_would_ignore_is_refused_with_its_reason(key):
     answer is that deepagents would ignore it. A looser assertion here passed exactly
     that mutation.
     """
-    with pytest.raises(SubagentError, match=key) as raised:
-        declared(_entry(**{key: "x"}), "researcher.py")
+    for key in ["system_prompt", "skills", "middleware", "subagents", "builtin_tools"]:
+        with pytest.raises(SubagentError, match=key) as raised:
+            declared(_entry(**{key: "x"}), "researcher.py")
 
-    assert NOT_COMPILED[key] in str(raised.value)
+        assert NOT_COMPILED[key] in str(raised.value)
 
 
 def test_an_unknown_key_lists_what_the_format_takes():
@@ -198,13 +196,13 @@ def test_build_has_to_be_callable():
         declared({"name": "r", "description": "d", "build": "nope"}, "researcher.py")
 
 
-@pytest.mark.parametrize("missing", ["name", "description", "build"])
-def test_the_three_required_keys_are_required(missing):
-    entry = _entry()
-    del entry[missing]
+def test_the_three_required_keys_are_required():
+    for missing in ["name", "description", "build"]:
+        entry = _entry()
+        del entry[missing]
 
-    with pytest.raises(SubagentError, match=missing):
-        declared(entry, "researcher.py")
+        with pytest.raises(SubagentError, match=missing):
+            declared(entry, "researcher.py")
 
 
 def test_the_model_fields_mean_what_they_mean_in_yaml():
