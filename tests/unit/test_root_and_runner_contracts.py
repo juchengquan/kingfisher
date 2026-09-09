@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import subprocess
 import sys
+from collections.abc import Callable
 from dataclasses import dataclass
 from pathlib import Path
 
 import pytest
 
-from kingfisher.domain.ports import CommandResult
+from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.infrastructure.workspace.sessions import LocalSessionRoot
 from kingfisher.testing import COMMAND_RUNNER_CONTRACT, SESSION_ROOT_CONTRACT
 
@@ -84,6 +85,28 @@ def test_a_reference_runner_keeps_the_port_contract(check):
     file has.
     """
     check(ReferenceRunner)
+
+
+def _built_by(make: Callable[[], CommandRunner]) -> CommandRunner:
+    """The argument position the kit uses, which is where conformance is decided."""
+    return make()
+
+
+def test_the_reference_runner_satisfies_the_port_it_was_written_from() -> None:
+    """Asked of the type checker, because the suite cannot ask it.
+
+    `COMMAND_RUNNER_CONTRACT` takes a factory, and every check here is handed
+    `ReferenceRunner` -- but through `pytest.mark.parametrize` the argument is
+    effectively `Any`, so nothing has ever asked whether the reference implementation
+    of this port implements it. It did not: `local` was declared `local: bool` on the
+    protocol, which demands a *settable* attribute, and the reference is a frozen
+    dataclass.
+
+    Written as a call rather than an annotation because the annotation does not fail:
+    `ty` accepts `x: Callable[[], CommandRunner] = ReferenceRunner` and refuses the
+    same class passed as an argument, which is the shape the kit actually uses.
+    """
+    assert _built_by(ReferenceRunner).local is True
 
 
 def test_the_contracts_are_not_quietly_empty():
