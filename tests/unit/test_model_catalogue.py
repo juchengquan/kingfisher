@@ -88,20 +88,17 @@ def test_an_unset_param_stays_unset(tmp_path):
 # -- keys that parse and would otherwise be dropped ------------------------
 
 
-@pytest.mark.parametrize(
-    ("body", "expected"),
-    [
-        (GOOD.replace("default:", "defualt:"), "defualt"),
-        (GOOD.replace("    max_tokens: 2048", "    max_token: 2048"), "max_token"),
-        (GOOD.replace("    key_env: GATEWAY_API_KEY", "    key: GATEWAY_API_KEY"), "key"),
-    ],
-)
-def test_a_key_this_format_does_not_define_is_refused(tmp_path, body, expected):
+def test_a_key_this_format_does_not_define_is_refused(tmp_path):
     """The rule `subagents.reading` states, for the same reason: ignoring a key is
     indistinguishable from honouring it.
     """
-    with pytest.raises(ConfigError, match=expected):
-        loaded(tmp_path, body)
+    for body, expected in [
+            (GOOD.replace("default:", "defualt:"), "defualt"),
+            (GOOD.replace("    max_tokens: 2048", "    max_token: 2048"), "max_token"),
+            (GOOD.replace("    key_env: GATEWAY_API_KEY", "    key: GATEWAY_API_KEY"), "key"),
+        ]:
+        with pytest.raises(ConfigError, match=expected):
+            loaded(tmp_path, body)
 
 
 def test_extra_cannot_overrule_a_param_the_format_defines(tmp_path):

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import pytest
 from deepagents import create_deep_agent
 from langchain_core.language_models.fake_chat_models import GenericFakeChatModel
 from langchain_core.messages import AIMessage
@@ -173,13 +172,13 @@ def test_a_turn_cut_short_after_a_delegate_reports_no_delegate_answer(cfg):
     assert "delegate" not in finished.result.answer.lower()
 
 
-@pytest.mark.parametrize("namespace", [(), ("tools:abc",)])
-def test_the_map_never_names_the_main_agent(namespace):
+def test_the_map_never_names_the_main_agent():
     """`()` is the caller's agent and has no name to learn, whatever metadata a chunk
     happens to carry.
     """
-    delegates = runtime.Delegates()
+    for namespace in [(), ("tools:abc",)]:
+        delegates = runtime.Delegates()
 
-    named = delegates.name(namespace, {"lc_agent_name": "reviewer"})
+        named = delegates.name(namespace, {"lc_agent_name": "reviewer"})
 
-    assert named == (None if namespace == () else "reviewer")
+        assert named == (None if namespace == () else "reviewer")

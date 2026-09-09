@@ -13,8 +13,6 @@ from __future__ import annotations
 import asyncio
 from typing import Any
 
-import pytest
-
 from kingfisher import Kingfisher
 from kingfisher.config import Config
 from kingfisher.domain.request import Request
@@ -223,16 +221,16 @@ def test_a_sweep_needs_no_thread_store_at_all(cfg):
     assert swept.failures == ()
 
 
-@pytest.mark.parametrize("injected", [None, "factory"])
-def test_the_default_and_a_factory_both_survive_two_turns(cfg, injected):
+def test_the_default_and_a_factory_both_survive_two_turns(cfg):
     """The two shapes this service opens for itself, driven rather than inspected."""
-    threads = None if injected is None else (lambda _dir: StubCheckpointer())
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
+    for injected in [None, "factory"]:
+        threads = None if injected is None else (lambda _dir: StubCheckpointer())
+        kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
 
-    first = kf.run(Request("one"))
-    second = kf.run(Request("two", session_id=first.session_id))
+        first = kf.run(Request("one"))
+        second = kf.run(Request("two", session_id=first.session_id))
 
-    assert second.answer == "ok"
+        assert second.answer == "ok"
 
 
 # -- or no conversation at all --------------------------------------------

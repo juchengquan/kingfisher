@@ -234,30 +234,30 @@ SHAPES = {
 }
 
 
-@pytest.mark.parametrize(("body", "kind", "shown"), NOT_TOOLS.values(), ids=NOT_TOOLS)
-def test_an_entry_that_is_not_a_tool_is_refused(cfg, body, kind, shown):
+def test_an_entry_that_is_not_a_tool_is_refused(cfg):
     """Measured before this: every one of them loaded."""
-    _install(cfg, "probe", body)
+    for body, kind, shown in NOT_TOOLS.values():
+        _install(cfg, "probe", body)
 
-    with pytest.raises(ToolError) as caught:
-        _ = LocalToolRepository(tools_dir(cfg)).found
+        with pytest.raises(ToolError) as caught:
+            _ = LocalToolRepository(tools_dir(cfg)).found
 
-    said = str(caught.value)
-    assert "probe.py" in said, "the refusal has to name the file to beat the crash it replaces"
-    assert kind in said, f"and say what it found rather than only that it was wrong: {said}"
-    assert shown in said, f"and show the entry, which is what makes it findable: {said}"
+        said = str(caught.value)
+        assert "probe.py" in said, "the refusal has to name the file to beat the crash it replaces"
+        assert kind in said, f"and say what it found rather than only that it was wrong: {said}"
+        assert shown in said, f"and show the entry, which is what makes it findable: {said}"
 
 
-@pytest.mark.parametrize("body", SHAPES.values(), ids=SHAPES)
-def test_the_three_documented_shapes_are_not_caught_by_that_refusal(cfg, body):
+def test_the_three_documented_shapes_are_not_caught_by_that_refusal(cfg):
     """The refusal asks `named`, not `callable`, and this is the half that pins the
     difference: a `BaseTool` is not callable at all -- measured, `@tool` returns a
     `StructuredTool` whose `callable()` is False -- so a callable-only check would
     refuse two of the three shapes this file exists to guarantee.
     """
-    _install(cfg, "probe", body)
+    for body in SHAPES.values():
+        _install(cfg, "probe", body)
 
-    assert [tool_name(f.tool) for f in LocalToolRepository(tools_dir(cfg)).found] == ["shout"]
+        assert [tool_name(f.tool) for f in LocalToolRepository(tools_dir(cfg)).found] == ["shout"]
 
 
 def test_the_rule_is_the_one_langchain_itself_applies():

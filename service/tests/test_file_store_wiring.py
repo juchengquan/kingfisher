@@ -37,10 +37,10 @@ def test_the_factory_is_read_from_the_environment():
     assert settings.file_store_factory == f"{HERE}:make_bucket"
 
 
-@pytest.mark.parametrize("value", ["", "   "])
-def test_a_variable_set_to_nothing_named_nothing(value):
+def test_a_variable_set_to_nothing_named_nothing():
     """`...FILE_STORE_FACTORY=` is a deployment that configured no factory."""
-    assert ServiceConfig.from_env({SETTING: value}).file_store_factory is None
+    for value in ["", "   "]:
+        assert ServiceConfig.from_env({SETTING: value}).file_store_factory is None
 
 
 def test_naming_the_file_store_twice_is_refused(tmp_path):

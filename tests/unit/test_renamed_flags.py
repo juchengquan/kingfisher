@@ -13,50 +13,48 @@ from __future__ import annotations
 
 import warnings
 
-import pytest
-
 from kingfisher.application.config import RENAMED, Environment
 
 PAIRS = sorted(RENAMED.items())
 
 
-@pytest.mark.parametrize(("new", "old"), PAIRS, ids=[old for _, old in PAIRS])
-def test_the_old_name_is_still_read_and_says_so(new: str, old: str) -> None:
+def test_the_old_name_is_still_read_and_says_so():
     """Honoured so nothing breaks on upgrade, reported so it does not quietly become a
     second name nobody knows is load-bearing.
     """
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        assert Environment({old: "true"}).flag(new) is True
+    for new, old in PAIRS:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            assert Environment({old: "true"}).flag(new) is True
 
-    assert len(caught) == 1, f"{old} was read without a word about it"
-    assert old in str(caught[0].message)
-    assert new in str(caught[0].message)
-    assert issubclass(caught[0].category, DeprecationWarning)
+        assert len(caught) == 1, f"{old} was read without a word about it"
+        assert old in str(caught[0].message)
+        assert new in str(caught[0].message)
+        assert issubclass(caught[0].category, DeprecationWarning)
 
 
-@pytest.mark.parametrize(("new", "old"), PAIRS, ids=[old for _, old in PAIRS])
-def test_the_new_name_wins_where_both_are_set(new: str, old: str) -> None:
+def test_the_new_name_wins_where_both_are_set():
     """A deployment mid-migration has the new one for a reason, and the old line is the
     one it has not got round to deleting.
     """
-    with warnings.catch_warnings():
-        warnings.simplefilter("ignore")
-        held = Environment({new: "false", old: "true"}).flag(new)
+    for new, old in PAIRS:
+        with warnings.catch_warnings():
+            warnings.simplefilter("ignore")
+            held = Environment({new: "false", old: "true"}).flag(new)
 
-    assert held is False
+        assert held is False
 
 
-@pytest.mark.parametrize(("new", "old"), PAIRS, ids=[old for _, old in PAIRS])
-def test_the_new_name_alone_warns_about_nothing(new: str, old: str) -> None:
+def test_the_new_name_alone_warns_about_nothing():
     """The common case, and the one that would be intolerable to make noisy: every start
     of every correctly configured deployment.
     """
-    with warnings.catch_warnings(record=True) as caught:
-        warnings.simplefilter("always")
-        Environment({new: "true"}).flag(new)
+    for new, _old in PAIRS:
+        with warnings.catch_warnings(record=True) as caught:
+            warnings.simplefilter("always")
+            Environment({new: "true"}).flag(new)
 
-    assert not caught, f"a deployment using {new} was warned at: {caught}"
+        assert not caught, f"a deployment using {new} was warned at: {caught}"
 
 
 def test_a_default_survives_the_old_name_being_absent() -> None:

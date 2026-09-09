@@ -570,38 +570,38 @@ def test_no_supplied_runner_says_nothing_new(cfg, session_dir):
 
 
 @macos
-@pytest.mark.parametrize("kind", ["agents", "skills", "subagents", "tools"])
-def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir, kind):
+def test_the_shell_cannot_write_into_a_definition_root(cfg, session_dir):
     """A definition the agent can rewrite says whatever the agent likes."""
-    root = cfg.catalogue_roots[kind]
-    # Created first, or the write fails for want of a directory and the test
-    # passes without the profile doing anything. `agents/` is not in the
-    # fixture's layout, and that vacuity was real: dropping the protection
-    # entirely left this parametrisation green for `agents`.
-    root.mkdir(parents=True, exist_ok=True)
-    backend = build_backend(cfg, session_dir)
-    target = root / "written-by-the-agent"
+    for kind in ["agents", "skills", "subagents", "tools"]:
+        root = cfg.catalogue_roots[kind]
+        # Created first, or the write fails for want of a directory and the test
+        # passes without the profile doing anything. `agents/` is not in the
+        # fixture's layout, and that vacuity was real: dropping the protection
+        # entirely left this parametrisation green for `agents`.
+        root.mkdir(parents=True, exist_ok=True)
+        backend = build_backend(cfg, session_dir)
+        target = root / "written-by-the-agent"
 
-    backend.execute(f'printf x > "{target}"')
+        backend.execute(f'printf x > "{target}"')
 
-    assert not target.exists(), (
-        f"the shell wrote into {kind}/, so a definition is still the agent's to edit"
-    )
+        assert not target.exists(), (
+            f"the shell wrote into {kind}/, so a definition is still the agent's to edit"
+        )
 
 
 @macos
-@pytest.mark.parametrize("kind", ["agents", "skills", "subagents", "tools"])
-def test_a_definition_root_stays_readable(cfg, session_dir, kind):
+def test_a_definition_root_stays_readable(cfg, session_dir):
     """Denied writes, not denied access."""
-    root = cfg.catalogue_roots[kind]
-    root.mkdir(parents=True, exist_ok=True)
-    (root / "readable.txt").write_text("from the catalogue\n", encoding="utf-8")
-    backend = build_backend(cfg, session_dir)
+    for kind in ["agents", "skills", "subagents", "tools"]:
+        root = cfg.catalogue_roots[kind]
+        root.mkdir(parents=True, exist_ok=True)
+        (root / "readable.txt").write_text("from the catalogue\n", encoding="utf-8")
+        backend = build_backend(cfg, session_dir)
 
-    result = backend.execute(f'cat "{root / "readable.txt"}"')
+        result = backend.execute(f'cat "{root / "readable.txt"}"')
 
-    assert result.exit_code == 0, f"the shell cannot read {kind}/: {result.output}"
-    assert "from the catalogue" in str(result.output)
+        assert result.exit_code == 0, f"the shell cannot read {kind}/: {result.output}"
+        assert "from the catalogue" in str(result.output)
 
 
 @macos
@@ -661,17 +661,7 @@ def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
 
 
 @macos
-@pytest.mark.parametrize(
-    "how",
-    [
-        'printf x > "{profile}"',
-        'printf x >> "{profile}"',
-        'rm -f "{profile}"',
-        'printf x > "{beside}"; mv "{beside}" "{profile}"',
-    ],
-    ids=["overwrite", "append", "unlink", "rename-over"],
-)
-def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir, how):
+def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir):
     """Two commands took the sandbox apart: write the rules, then run under them.
 
     `sandbox-exec -f` re-reads the profile for every command and `resolve` rewrites
@@ -684,16 +674,22 @@ def test_the_shell_cannot_rewrite_the_profile_it_runs_under(cfg, session_dir, ho
     Four ways rather than one, because refusing an overwrite while allowing
     `mv` over the same name is not a boundary.
     """
-    profile = confinement.profile_path(cfg.workspace)
-    backend = build_backend(cfg, session_dir)
-    before = profile.read_text(encoding="utf-8")
+    for how in [
+            'printf x > "{profile}"',
+            'printf x >> "{profile}"',
+            'rm -f "{profile}"',
+            'printf x > "{beside}"; mv "{beside}" "{profile}"',
+        ]:
+        profile = confinement.profile_path(cfg.workspace)
+        backend = build_backend(cfg, session_dir)
+        before = profile.read_text(encoding="utf-8")
 
-    backend.execute(how.format(profile=profile, beside=cfg.workspace / "beside.sb"))
+        backend.execute(how.format(profile=profile, beside=cfg.workspace / "beside.sb"))
 
-    assert profile.read_text(encoding="utf-8") == before, (
-        "the shell rewrote the profile that confines it, so the next command in "
-        "this turn would run under rules the agent chose"
-    )
+        assert profile.read_text(encoding="utf-8") == before, (
+            "the shell rewrote the profile that confines it, so the next command in "
+            "this turn would run under rules the agent chose"
+        )
 
 
 @macos

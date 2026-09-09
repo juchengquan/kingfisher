@@ -44,19 +44,16 @@ class StubAgent:
         return SimpleNamespace(values={"messages": [*sent, AIMessage(content=self.answer)]})
 
 
-@pytest.mark.parametrize(
-    ("raw", "expected"),
-    [
-        ("<think>reasoning</think>\n\n42", "42"),
-        ("<think>a</think>x<think>b</think>y", "xy"),
-        ("42", "42"),
-        ("", ""),
-        ("<THINK>upper</THINK> 7", "7"),
-    ],
-)
-def test_normalize_strips_inlined_reasoning(raw, expected):
+def test_normalize_strips_inlined_reasoning():
     """Applied on both API styles, not just the one that currently leaks."""
-    assert normalize_answer(raw) == expected
+    for raw, expected in [
+            ("<think>reasoning</think>\n\n42", "42"),
+            ("<think>a</think>x<think>b</think>y", "xy"),
+            ("42", "42"),
+            ("", ""),
+            ("<THINK>upper</THINK> 7", "7"),
+        ]:
+        assert normalize_answer(raw) == expected
 
 
 def test_run_creates_the_session_triple(cfg):

@@ -27,33 +27,31 @@ def test_a_name_on_the_wrong_axis_is_not_called_unknown():
     assert "builtin_tools" in message
 
 
-@pytest.mark.parametrize(
-    "subject", ["this request", "subagent 'reviewer'"], ids=["request", "subagent"]
-)
-def test_both_callers_get_the_same_two_refusals(subject):
+def test_both_callers_get_the_same_two_refusals():
     """One implementation, and the caller names itself -- the shape
     `refuse_ungranted_models` already uses a file away.
     """
-    with pytest.raises(CapabilityError, match="unknown tool"):
-        WORKSPACE.refuse_unknown(ALL, ("nope",), subject=subject)
+    for subject in ["this request", "subagent 'reviewer'"]:
+        with pytest.raises(CapabilityError, match="unknown tool"):
+            WORKSPACE.refuse_unknown(ALL, ("nope",), subject=subject)
 
-    with pytest.raises(CapabilityError, match="builtin_tools"):
-        WORKSPACE.refuse_unknown(ALL, ("execute",), subject=subject)
+        with pytest.raises(CapabilityError, match="builtin_tools"):
+            WORKSPACE.refuse_unknown(ALL, ("execute",), subject=subject)
 
 
-@pytest.mark.parametrize("asked", [("nope",), ("execute",)], ids=["unknown", "misplaced"])
-def test_the_refusal_names_the_subject_that_made_it(asked):
+def test_the_refusal_names_the_subject_that_made_it():
     """Two lines in one log, from one rule, and a reader can tell which is which.
 
     Both refusals, not one: the subject was dropped from the misplaced branch by a
     mutation and the unknown-branch test did not notice, which is what a single-path
     test buys you.
     """
-    with pytest.raises(CapabilityError, match="subagent 'reviewer'"):
-        WORKSPACE.refuse_unknown(ALL, asked, subject="subagent 'reviewer'")
+    for asked in [("nope",), ("execute",)]:
+        with pytest.raises(CapabilityError, match="subagent 'reviewer'"):
+            WORKSPACE.refuse_unknown(ALL, asked, subject="subagent 'reviewer'")
 
-    with pytest.raises(CapabilityError, match="this request"):
-        WORKSPACE.refuse_unknown(ALL, asked, subject="this request")
+        with pytest.raises(CapabilityError, match="this request"):
+            WORKSPACE.refuse_unknown(ALL, asked, subject="this request")
 
 
 def test_an_unknown_name_is_told_where_the_real_ones_live():

@@ -161,16 +161,16 @@ def test_two_folders_may_each_define_one_name(tmp_path):
     ]
 
 
-@pytest.mark.parametrize("debris", ["__pycache__", ".venv", ".hidden"])
-def test_the_walk_refuses_to_descend_into_debris(tmp_path, debris):
+def test_the_walk_refuses_to_descend_into_debris(tmp_path):
     """New guard, because the exposure is new."""
-    junk = tmp_path / debris
-    junk.mkdir(parents=True)
-    (junk / "boom.py").write_text("raise RuntimeError('this should never be imported')\n",
-                                  encoding="utf-8")
-    _tool(tmp_path, "safe")
+    for debris in ["__pycache__", ".venv", ".hidden"]:
+        junk = tmp_path / debris
+        junk.mkdir(parents=True)
+        (junk / "boom.py").write_text("raise RuntimeError('this should never be imported')\n",
+                                      encoding="utf-8")
+        _tool(tmp_path, "safe")
 
-    assert LocalToolRepository(tmp_path).names == ("safe",)
+        assert LocalToolRepository(tmp_path).names == ("safe",)
 
 
 def test_sources_say_where_a_nested_tool_lives(tmp_path):

@@ -70,22 +70,19 @@ def test_a_missing_required_field_is_refused_by_name():
             _read(written, "plain.yaml")
 
 
-@pytest.mark.parametrize(
-    ("field", "written"),
-    [
-        ("description", "name: plain\ndescription:\nsystem_prompt: |\n  Go.\n"),
-        # A literal block with nothing indented under it: the document is valid
-        # and the block is empty, which reads on screen as a prompt that is
-        # there.
-        ("system_prompt", "name: plain\ndescription: An agent.\nsystem_prompt: |\n"),
-    ],
-)
-def test_a_present_but_empty_field_says_so_rather_than_missing(field, written):
+def test_a_present_but_empty_field_says_so_rather_than_missing():
     """Absent and blank are different mistakes, and "missing" sends somebody looking for
     a line they can see they wrote.
     """
-    with pytest.raises(AgentError, match=f"'{field}' is present but empty"):
-        _read(written, "plain.yaml")
+    for field, written in [
+            ("description", "name: plain\ndescription:\nsystem_prompt: |\n  Go.\n"),
+            # A literal block with nothing indented under it: the document is valid
+            # and the block is empty, which reads on screen as a prompt that is
+            # there.
+            ("system_prompt", "name: plain\ndescription: An agent.\nsystem_prompt: |\n"),
+        ]:
+        with pytest.raises(AgentError, match=f"'{field}' is present but empty"):
+            _read(written, "plain.yaml")
 
 
 # -- omission, which is where the two formats agree -------------------------
@@ -128,17 +125,14 @@ def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
         reading.read(delegate, Path("d.yaml"))
 
 
-@pytest.mark.parametrize(
-    ("field", "expected"),
-    [
-        ("permissions: [x]", "replace"),
-        ("interrupt_on: [x]", "surfaces an interrupt"),
-        ("response_format: {}", "what a .run returns"),
-    ],
-)
-def test_each_declined_field_says_why_it_is_declined(field, expected):
-    with pytest.raises(AgentError, match=expected):
-        _read(MINIMAL.rstrip() + f"\n{field}\n", "plain.yaml")
+def test_each_declined_field_says_why_it_is_declined():
+    for field, expected in [
+            ("permissions: [x]", "replace"),
+            ("interrupt_on: [x]", "surfaces an interrupt"),
+            ("response_format: {}", "what a .run returns"),
+        ]:
+        with pytest.raises(AgentError, match=expected):
+            _read(MINIMAL.rstrip() + f"\n{field}\n", "plain.yaml")
 
 
 def test_an_unknown_field_is_refused_and_a_near_miss_is_named():
@@ -154,13 +148,13 @@ def test_memory_has_three_states_and_absent_is_not_off():
     assert _read(MINIMAL.rstrip() + "\nmemory: false\n", "plain.yaml").memory is False
 
 
-@pytest.mark.parametrize("written", ["'false'", '"no"', "0", "maybe"])
-def test_a_flag_that_is_not_a_bool_is_refused(written):
+def test_a_flag_that_is_not_a_bool_is_refused():
     """`memory: "false"` is a non-empty string, and every non-empty string is true -- so
     the reading Python would take says the opposite of what the file says.
     """
-    with pytest.raises(AgentError, match="write true or false"):
-        _read(MINIMAL.rstrip() + f"\nmemory: {written}\n", "plain.yaml")
+    for written in ["'false'", '"no"', "0", "maybe"]:
+        with pytest.raises(AgentError, match="write true or false"):
+            _read(MINIMAL.rstrip() + f"\nmemory: {written}\n", "plain.yaml")
 
 
 def test_yaml_spellings_of_true_are_accepted():
@@ -269,50 +263,44 @@ def test_an_agent_that_says_nothing_is_reachable_by_everyone():
     assert _read(MINIMAL, "plain.yaml").groups == ALL
 
 
-@pytest.mark.parametrize(
-    ("field_name", "written"),
-    [
-        ("tools", "tools:\n  - name: sql_query\n    groups: [A]\n"
-            "  - name: http_fetch\n    groups: [A, B]\n"),
-        ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
-            "  - name: review\n    groups: [A, B]\n"),
-        ("subagents", "subagents:\n  - name: checker\n    groups: [A]\n"
-            "  - name: reviewer\n    groups: [A, B]\n"),
-    ],
-)
-def test_every_audienced_field_takes_a_mapping(field_name, written):
+def test_every_audienced_field_takes_a_mapping():
     """All three, because a rule that covered one would be the one nobody noticed was a
     third of a rule.
     """
-    spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
+    for field_name, written in [
+            ("tools", "tools:\n  - name: sql_query\n    groups: [A]\n"
+                "  - name: http_fetch\n    groups: [A, B]\n"),
+            ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
+                "  - name: review\n    groups: [A, B]\n"),
+            ("subagents", "subagents:\n  - name: checker\n    groups: [A]\n"
+                "  - name: reviewer\n    groups: [A, B]\n"),
+        ]:
+        spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
 
-    first, second = (getattr(spec, field_name))[0], (getattr(spec, field_name))[1]
-    assert spec.audiences[field_name] == {first: ("A",), second: ("A", "B")}
+        first, second = (getattr(spec, field_name))[0], (getattr(spec, field_name))[1]
+        assert spec.audiences[field_name] == {first: ("A",), second: ("A", "B")}
 
 
-@pytest.mark.parametrize(
-    ("field_name", "written", "kept"),
-    [
-        (
-            "tools",
-            "tools:\n  - name: sql_query\n    groups: [A]\n"
-                "  - name: http_fetch\n    groups: [A, B]\n",
-            "http_fetch",
-        ),
-        ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
-            "  - name: review\n    groups: [A, B]\n", "review"),
-        (
-            "subagents",
-            "subagents:\n  - name: checker\n    groups: [A]\n"
-                "  - name: reviewer\n    groups: [A, B]\n",
-            "reviewer",
-        ),
-    ],
-)
-def test_every_audienced_field_narrows_for_a_caller(field_name, written, kept):
-    spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
+def test_every_audienced_field_narrows_for_a_caller():
+    for field_name, written, kept in [
+            (
+                "tools",
+                "tools:\n  - name: sql_query\n    groups: [A]\n"
+                    "  - name: http_fetch\n    groups: [A, B]\n",
+                "http_fetch",
+            ),
+            ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
+                "  - name: review\n    groups: [A, B]\n", "review"),
+            (
+                "subagents",
+                "subagents:\n  - name: checker\n    groups: [A]\n"
+                    "  - name: reviewer\n    groups: [A, B]\n",
+                "reviewer",
+            ),
+        ]:
+        spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
 
-    assert getattr(spec.declares(frozenset({"B"})), field_name) == (kept,)
+        assert getattr(spec.declares(frozenset({"B"})), field_name) == (kept,)
 
 
 def test_an_entry_with_no_audience_inherits_the_definitions():

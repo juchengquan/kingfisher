@@ -118,11 +118,11 @@ def test_the_factory_is_called_once_per_resolution():
 # -- the four ways of naming one wrongly -----------------------------------
 
 
-@pytest.mark.parametrize("spec", ["mystores", "", ":make_store", f"{HERE}:"])
-def test_a_spec_that_does_not_name_two_things_is_refused(spec):
+def test_a_spec_that_does_not_name_two_things_is_refused():
     """`module:name`, both halves present."""
-    with pytest.raises(ConfigError, match="does not name anything"):
-        named(spec)
+    for spec in ["mystores", "", ":make_store", f"{HERE}:"]:
+        with pytest.raises(ConfigError, match="does not name anything"):
+            named(spec)
 
 
 def test_a_module_that_will_not_import_is_refused():
@@ -234,9 +234,9 @@ def test_the_variable_reaches_the_config():
     assert read.optional_text("KINGFISHER_SESSION_STORE_FACTORY") == "mystores:build"
 
 
-@pytest.mark.parametrize("value", ["", "   "])
-def test_a_variable_set_to_nothing_named_nothing(value):
+def test_a_variable_set_to_nothing_named_nothing():
     """`KINGFISHER_SESSION_STORE_FACTORY=` is a deployment that configured no factory."""
-    read = Environment({"KINGFISHER_SESSION_STORE_FACTORY": value})
+    for value in ["", "   "]:
+        read = Environment({"KINGFISHER_SESSION_STORE_FACTORY": value})
 
-    assert read.optional_text("KINGFISHER_SESSION_STORE_FACTORY") is None
+        assert read.optional_text("KINGFISHER_SESSION_STORE_FACTORY") is None
