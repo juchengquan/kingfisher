@@ -198,8 +198,18 @@ class CommandRunner(Protocol):
     the model wrote it.
     """
 
-    #: Whether the command runs on this machine.
-    local: bool = True
+    @property
+    def local(self) -> bool:
+        """Whether the command runs on this machine. `True` unless a runner says not.
+
+        A read-only property rather than a plain attribute, and the difference is not
+        cosmetic: a protocol declaring `local: bool` demands a *settable* one, so an
+        adapter written as a frozen dataclass -- the obvious way to write one, and how
+        `ReferenceRunner` in the suite is written -- does not satisfy this port. Nothing
+        in kingfisher ever assigns to it, so demanding that was asking implementers for
+        a guarantee no caller uses.
+        """
+        return True
 
     def run(self, command: str, *, timeout: int | None = None) -> CommandResult:
         """Run `command`, giving up after `timeout` seconds if one is given.
