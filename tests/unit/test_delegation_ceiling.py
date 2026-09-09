@@ -315,39 +315,50 @@ NARROWING = [
     (("a",), (), ()),            # an empty cap permits nothing, and is not None
     (("b", "a"), ("a", "b"), ("b", "a")),  # the selection's order is kept
 ]
-CASES = pytest.mark.parametrize(("selection", "cap", "expected"), NARROWING)
+def test_the_rule_itself():
+    assert NARROWING, "no cases -- the three rules below would walk nothing and pass"
+    wrong = [
+        f"{selection!r} under {cap!r} gave {narrowed(selection, by=cap)!r}, wanted {expected!r}"
+        for selection, cap, expected in NARROWING
+        if narrowed(selection, by=cap) != expected
+    ]
+
+    assert not wrong, "\n".join(wrong)
 
 
-@CASES
-def test_the_rule_itself(selection, cap, expected):
-    assert narrowed(selection, by=cap) == expected
+def test_a_request_is_narrowed_by_it():
+    wrong = []
+    for selection, cap, expected in NARROWING:
+        got = Capabilities(tools=cap).intersect(Capabilities(tools=selection)).tools
+        if got != expected:
+            wrong.append(f"{selection!r} under {cap!r} gave {got!r}, wanted {expected!r}")
+
+    assert not wrong, "\n".join(wrong)
 
 
-@CASES
-def test_a_request_is_narrowed_by_it(selection, cap, expected):
-    granted = Capabilities(tools=cap)
+def test_a_delegate_is_narrowed_by_it(cfg):
+    """The level that carried the copy.
 
-    assert granted.intersect(Capabilities(tools=selection)).tools == expected
+    One `cfg` for every case, which nothing here writes to: a spec is built from a
+    string and `as_subagent` returns a graph description rather than touching the
+    workspace.
+    """
+    for selection, cap, expected in NARROWING:
+        spec = replace(
+            reading.read(HELPER, Path("helper.md")), tools=selection, builtin_tools=selection
+        )
 
+        built = as_subagent(spec, cfg, tools=cap, builtin_tools=cap)
 
-@CASES
-def test_a_delegate_is_narrowed_by_it(cfg, selection, cap, expected):
-    """The level that carried the copy."""
-    spec = replace(
-        reading.read(HELPER, Path("helper.md")), tools=selection, builtin_tools=selection
-    )
-
-    built = as_subagent(spec, cfg, tools=cap, builtin_tools=cap)
-
-    allowlists = [m for m in built.get("middleware", []) if isinstance(m, ToolAllowlist)]
-    if expected == ALL:
-        assert allowlists == []  # no allowlist at all, which is not an empty one
-    elif expected is None:
-        assert allowlists[0]._allowed == set()  # an empty one, which is not absent
-    else:
-        # It keeps a set, so order is not observable here; the rule test above
-        # is where that case is pinned.
-        assert allowlists[0]._allowed == set(expected)
+        allowlists = [m for m in built.get("middleware", []) if isinstance(m, ToolAllowlist)]
+        if expected == ALL:
+            assert allowlists == [], selection  # no allowlist, which is not an empty one
+        elif expected is None:
+            assert allowlists[0]._allowed == set(), selection  # empty, which is not absent
+        else:
+            # It keeps a set, so order is not observable here; the rule test above
+            # is where that case is pinned.
+            assert allowlists[0]._allowed == set(expected), selection
 
 
 # -- the two axes are resolved apart --------------------------------------

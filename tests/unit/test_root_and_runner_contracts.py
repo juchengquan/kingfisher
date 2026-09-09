@@ -69,22 +69,21 @@ class ReferenceRunner:
 
 
 @pytest.mark.skipif(sys.platform == "win32", reason="the checks run POSIX shell commands")
-@pytest.mark.parametrize("check", COMMAND_RUNNER_CONTRACT, ids=lambda c: c.__name__)
-def test_a_reference_runner_keeps_the_port_contract(check):
+def test_a_reference_runner_keeps_the_port_contract():
     """A kit with nothing to run against is a kit nobody has run.
 
-    The one contract fan-out here that is *not* collapsed, and the reason is a defect
-    rather than a hazard. Walked in a loop, `check` takes its type from the tuple and
-    `ty` refuses the argument: `ReferenceRunner` is a frozen dataclass and
-    `CommandRunner` declares `local` as a settable attribute, so the reference
-    implementation of this port does not satisfy it. Parametrised, `check` is
-    effectively `Any` and nothing asks.
+    Nothing to keep apart: each check is handed the class and builds its own runner.
 
-    Collapsing it means either unfreezing the reference or making `local` read-only on
-    the port, which is a decision about the port rather than about how many cases this
-    file has.
+    This was the last fan-out here to stay parametrised, and what kept it was a defect
+    rather than a hazard. Walked in a loop, `check` takes its type from the tuple, and
+    `ty` then refused the argument -- `CommandRunner` declared `local` as a settable
+    attribute and the reference is a frozen dataclass, so the reference implementation
+    of the port did not satisfy it. The port asks for a read-only `local` now, which is
+    what it always read, and `test_the_reference_runner_satisfies_the_port_it_was_written_from`
+    asks the question directly rather than leaving it to this loop.
     """
-    check(ReferenceRunner)
+    for check in COMMAND_RUNNER_CONTRACT:
+        check(ReferenceRunner)
 
 
 def _built_by(make: Callable[[], CommandRunner]) -> CommandRunner:
