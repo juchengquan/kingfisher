@@ -13,9 +13,13 @@ def store(tmp_path):
     return LocalSessionStore(tmp_path / "kept")
 
 
-@pytest.mark.parametrize("check", SESSION_STORE_CONTRACT, ids=lambda c: c.__name__)
-def test_the_local_store_keeps_the_port_contract(check, tmp_path):
-    """The kit, run against the store it was extracted from."""
+def test_the_local_store_keeps_the_port_contract(tmp_path):
+    """The kit, run against the store it was extracted from.
+
+    One counter across every check rather than one `tmp_path` each, and the counter is
+    what keeps them apart: `make` takes a directory of its own every time it is called,
+    so no check opens what the last one left behind.
+    """
     made = 0
 
     def make():
@@ -23,13 +27,13 @@ def test_the_local_store_keeps_the_port_contract(check, tmp_path):
         made += 1
         return LocalSessionStore(tmp_path / f"kept-{made}")
 
-    check(make)
+    for check in SESSION_STORE_CONTRACT:
+        check(make)
 
 
 def test_the_contract_is_not_quietly_empty():
     """The kit is a tuple somebody maintains by hand, so it can be emptied by an edit
-    that looks like tidying -- and every parametrised test above would then pass by
-    not existing.
+    that looks like tidying -- and the rule above would then walk nothing and pass.
     """
     assert len(SESSION_STORE_CONTRACT) >= 12
     assert all(callable(check) for check in SESSION_STORE_CONTRACT)

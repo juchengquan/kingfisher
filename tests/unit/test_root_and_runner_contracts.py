@@ -14,9 +14,12 @@ from kingfisher.infrastructure.workspace.sessions import LocalSessionRoot
 from kingfisher.testing import COMMAND_RUNNER_CONTRACT, SESSION_ROOT_CONTRACT
 
 
-@pytest.mark.parametrize("check", SESSION_ROOT_CONTRACT, ids=lambda c: c.__name__)
-def test_the_local_session_root_keeps_the_port_contract(check, tmp_path):
-    """The kit, against the implementation it was written from."""
+def test_the_local_session_root_keeps_the_port_contract(tmp_path):
+    """The kit, against the implementation it was written from.
+
+    One counter for every check, which is what lets them share a `tmp_path`: each call
+    to `make` takes a workspace of its own.
+    """
     made = 0
 
     def make():
@@ -24,7 +27,8 @@ def test_the_local_session_root_keeps_the_port_contract(check, tmp_path):
         made += 1
         return LocalSessionRoot(tmp_path / f"ws-{made}")
 
-    check(make)
+    for check in SESSION_ROOT_CONTRACT:
+        check(make)
 
 
 @dataclass(frozen=True)
@@ -66,13 +70,25 @@ class ReferenceRunner:
 @pytest.mark.skipif(sys.platform == "win32", reason="the checks run POSIX shell commands")
 @pytest.mark.parametrize("check", COMMAND_RUNNER_CONTRACT, ids=lambda c: c.__name__)
 def test_a_reference_runner_keeps_the_port_contract(check):
-    """A kit with nothing to run against is a kit nobody has run."""
+    """A kit with nothing to run against is a kit nobody has run.
+
+    The one contract fan-out here that is *not* collapsed, and the reason is a defect
+    rather than a hazard. Walked in a loop, `check` takes its type from the tuple and
+    `ty` refuses the argument: `ReferenceRunner` is a frozen dataclass and
+    `CommandRunner` declares `local` as a settable attribute, so the reference
+    implementation of this port does not satisfy it. Parametrised, `check` is
+    effectively `Any` and nothing asks.
+
+    Collapsing it means either unfreezing the reference or making `local` read-only on
+    the port, which is a decision about the port rather than about how many cases this
+    file has.
+    """
     check(ReferenceRunner)
 
 
 def test_the_contracts_are_not_quietly_empty():
-    """Both are hand-maintained tuples, and a parametrised test over an empty one passes
-    by not existing.
+    """Both are hand-maintained tuples, and a rule walking an empty one passes having
+    checked nothing.
     """
     assert len(SESSION_ROOT_CONTRACT) >= 6
     assert len(COMMAND_RUNNER_CONTRACT) >= 5

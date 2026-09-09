@@ -79,23 +79,26 @@ def test_the_rule_never_asks_the_filesystem(tmp_path):
 # -- the shipped adapter ---------------------------------------------------
 
 
-@pytest.mark.parametrize("check", FILE_STORE_CONTRACT, ids=lambda c: c.__name__)
-def test_the_local_store_keeps_the_port_contract(check, store):
+def test_the_local_store_keeps_the_port_contract(store):
     """The kit, run against the store it was extracted from -- which is the only thing
     that keeps the kit honest.
+
+    One store for all four, and nothing to keep apart: `FileStore` is a read port and
+    not one of these checks writes, so what the last one did to it is nothing.
     """
-    check(
-        Planted(
-            store=LocalFileStore(store),
-            ref="sales.csv",
-            contents={"sales.csv": b"a,b\n1,2\n"},
+    for check in FILE_STORE_CONTRACT:
+        check(
+            Planted(
+                store=LocalFileStore(store),
+                ref="sales.csv",
+                contents={"sales.csv": b"a,b\n1,2\n"},
+            )
         )
-    )
 
 
 def test_the_file_store_contract_is_not_quietly_empty():
     """A hand-maintained tuple can be emptied by an edit that looks like tidying, and
-    every parametrised test above would then pass by not existing.
+    the rule above would then walk nothing and pass.
     """
     assert len(FILE_STORE_CONTRACT) >= 4
     assert all(callable(check) for check in FILE_STORE_CONTRACT)
