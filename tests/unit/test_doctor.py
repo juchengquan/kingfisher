@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import platform
 import re
+from pathlib import Path
 
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
@@ -443,14 +444,118 @@ def test_the_description_names_its_own_limit():
 # -- a workspace that must keep nothing --------------------------------------
 
 
-def _backing(monkeypatch, **fields):
-    """Answer as a given machine would, without needing to be one."""
+def _backing(monkeypatch, sessions=None, **fields):
+    """Answer as a given machine would, without needing to be one.
+
+    `**fields` describe the workspace's device and, unless `sessions` says
+    otherwise, the sessions tree's as well -- which is every deployment that has
+    not mounted one. Answering per path rather than once is what lets a test
+    express a mount at all: a helper that returned one reading for both would
+    pass just as happily against a `_at_rest` that had stopped looking at the
+    sessions tree, which is the thing these tests are here to hold.
+    """
+    from kingfisher.domain.session import sessions_root
     from kingfisher.infrastructure.workspace.backing import MemoryBacking
+
+    on_the_workspace = MemoryBacking(**fields)
+    on_the_sessions = MemoryBacking(**sessions) if sessions is not None else on_the_workspace
+    # Taken from `sessions_root` rather than spelled, so a layout that renames
+    # the directory renames it here too.
+    marker = sessions_root(Path("/anywhere")).name
 
     monkeypatch.setattr(
         "kingfisher.presentation.cli.health.memory_backing",
-        lambda _workspace: MemoryBacking(**fields),
+        lambda path: on_the_sessions if Path(path).name == marker else on_the_workspace,
     )
+
+
+def test_a_tmpfs_mounted_under_sessions_is_what_gets_measured(cfg, monkeypatch):
+    """The arrangement `doctor` could not see: sessions on a memory filesystem the
+    workspace is not on. `_mounted_filesystem` answers for the longest mountpoint
+    containing the path it is handed, so a reading of the workspace reports the
+    workspace's disk and never the mount sessions are written to -- and every check
+    below it stayed silent on the one deployment they exist for.
+    """
+    _backing(
+        monkeypatch,
+        sessions={
+            "filesystem": "tmpfs", "size_bytes": 300 * 1024**2,
+            "limit_bytes": 400 * 1024**2, "swap_enabled": False,
+        },
+        filesystem="ext4", size_bytes=10**12,
+    )
+
+    checks = {c.name: c for c in examine(cfg)}
+
+    assert checks["nothing at rest"].verdict == "ok"
+    assert checks["sessions survive"].verdict == "fail"
+    assert checks["session quota"].verdict == "fail"
+
+
+def test_sessions_on_a_disk_under_a_memory_workspace_is_a_failure(cfg, monkeypatch):
+    """The inverse mount, and the reason gating on the sessions tree is not enough on
+    its own: every check here follows the sessions reading, so a workspace that
+    asserted it keeps nothing while its sessions land on a disk would produce no
+    output whatsoever.
+    """
+    _backing(
+        monkeypatch,
+        sessions={"filesystem": "ext4", "size_bytes": 10**12},
+        filesystem="tmpfs", size_bytes=300 * 1024**2,
+        limit_bytes=400 * 1024**2, swap_enabled=False,
+    )
+
+    check = {c.name: c for c in examine(cfg)}["nothing at rest"]
+
+    assert check.verdict == "fail"
+    assert "keeping every session" in check.detail
+    assert check.remedy
+
+
+def test_every_message_names_both_devices(cfg, monkeypatch):
+    """A reader deciding whether these numbers describe the disk they mounted should
+    not have to infer it from an absence -- so no message here reports one filesystem
+    while silently measuring another.
+    """
+    _backing(
+        monkeypatch,
+        sessions={
+            "filesystem": "tmpfs", "size_bytes": 300 * 1024**2,
+            "limit_bytes": 400 * 1024**2, "swap_enabled": False,
+        },
+        filesystem="ext4", size_bytes=10**12,
+    )
+
+    at_rest = [c for c in examine(cfg) if c.name in
+               {"nothing at rest", "sessions survive", "session quota"}]
+
+    assert at_rest
+    for check in at_rest:
+        assert "tmpfs" in check.detail and "ext4" in check.detail, check
+
+
+def test_a_workspace_nobody_has_seeded_still_reports_a_size(tmp_path):
+    """`_size_of` stats the path it is given, so measuring a sessions directory that
+    does not exist yet would answer `None` and turn every sized check into the
+    unknown-limit branch -- on the one run that matters most, `doctor` before
+    `kingfisher seed`, which is when a tmpfs is being sized.
+    """
+    from kingfisher.infrastructure.workspace.backing import memory_backing
+
+    bare = tmp_path / "unseeded"
+    bare.mkdir()
+
+    assert health._sessions_probe(bare) == bare
+    assert memory_backing(health._sessions_probe(bare)).size_bytes is not None
+
+
+def test_a_laid_out_workspace_is_measured_at_its_sessions(workspace):
+    """The control for the fallback above: where the directory exists, that is what
+    gets stat'd, or the mount would never be the thing measured.
+    """
+    from kingfisher.domain.session import sessions_root
+
+    assert health._sessions_probe(workspace) == sessions_root(workspace)
 
 
 def test_an_ordinary_disk_says_nothing_at_all(cfg, monkeypatch):

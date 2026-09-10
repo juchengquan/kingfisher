@@ -29,6 +29,17 @@ mentions.
 | `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
 | `KINGFISHER_SESSION_STORE` | A directory sessions are kept in, so they survive the machine that ran them. | none — the session directory is the only copy |
 | `KINGFISHER_SESSION_STORE_FACTORY` | `module:name` naming something callable with no arguments that returns a store of your own — a bucket, a database. A factory rather than a class, because kingfisher does not know whether yours wants a DSN or a mount point. | none |
+| *(none)* | Where session directories are, while a turn runs. No setting moves them; mount `<workspace>/sessions` on whatever device you want them on. | `<workspace>/sessions` |
+
+**The last row is in the table rather than left out of it.** A reader asking how
+to put sessions on another disk should find the answer here, not conclude from an
+absence that it cannot be done. A mount is the answer because the harness cannot
+tell a mounted directory from a plain one — it resolves the session root and
+checks containment per access, which a bind mount passes and a symlink does not.
+`KINGFISHER_SESSION_STORE` above is a different question: that is where a session
+is *copied* for safekeeping, not where it lives while it runs. A deployment whose
+session tree exists only for the length of a turn wants the `SessionRoot` port
+instead — see [`ports.md`](ports.md).
 
 The four `*_DIR` settings exist because definitions are authored and reviewed
 rather than produced by a run. Relocating them is safe for the reason relocating
@@ -46,9 +57,11 @@ shell has no business there.
 | `KINGFISHER_SESSION_TTL_S` | How long an idle session survives before it is swept. | `604800` (7 days) |
 
 **Unbounded is survivable on a disk and is not survivable in memory.** A
-deployment whose workspace is memory-backed shares one fixed size between every
+deployment whose sessions are memory-backed shares one fixed size between every
 session in the process, so one session can starve the rest. `kingfisher doctor`
-says so when it finds that arrangement without a cap.
+says so when it finds that arrangement without a cap — and it measures the
+sessions tree, so a tmpfs mounted at `<workspace>/sessions` counts whether or not
+the workspace around it is on a disk.
 
 ## What the agent is allowed
 
@@ -125,6 +138,6 @@ settings**, including the port. The file covers the library and stops there.
 ## Checking it
 
 `kingfisher doctor` reports what stands between an install and a run: a missing
-catalogue, a shell with no confinement, a memory-backed workspace whose
+catalogue, a shell with no confinement, a memory-backed sessions tree whose
 arithmetic does not work. It is the fastest way to find out whether the
 environment you have assembled is the one you meant.

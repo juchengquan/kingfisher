@@ -1,4 +1,4 @@
-"""Reading what a workspace is sitting on, as far as the platform will say."""
+"""Reading what a path is sitting on, as far as the platform will say."""
 
 from __future__ import annotations
 
@@ -10,7 +10,7 @@ from pathlib import Path
 
 @dataclass(frozen=True)
 class MemoryBacking:
-    """What is underneath a workspace, for a deployment that must keep nothing.
+    """What is underneath a path, for a deployment that must keep nothing.
 
     Measured, and the arrangement is not what the obvious reading predicts. A memory
     filesystem *larger* than the container's memory limit does not fail when it
@@ -21,7 +21,7 @@ class MemoryBacking:
     which is a thing kingfisher can refuse on.
     """
 
-    #: The filesystem type under the workspace, e.g. `tmpfs`, `ext4`, `apfs`.
+    #: The filesystem type under the path, e.g. `tmpfs`, `ext4`, `apfs`.
     filesystem: str | None = None
     #: Its total size in bytes.
     size_bytes: int | None = None
@@ -32,7 +32,7 @@ class MemoryBacking:
 
     @property
     def in_memory(self) -> bool:
-        """Whether the workspace is on a memory filesystem at all."""
+        """Whether the path is on a memory filesystem at all."""
         return self.filesystem in {"tmpfs", "ramfs"}
 
     @property
@@ -72,13 +72,19 @@ def _cgroup_number(name: str) -> int | None:
     return None
 
 
-def memory_backing(workspace: Path) -> MemoryBacking:
-    """Read what is underneath this workspace, as far as the platform will say."""
-    workspace = Path(workspace)
+def memory_backing(path: Path) -> MemoryBacking:
+    """Read what is underneath this path, as far as the platform will say.
+
+    A path rather than a workspace because `doctor` asks this twice: sessions
+    reach a different device than the workspace the moment one is mounted at
+    `<workspace>/sessions`, and a reading of the workspace answers about the
+    wrong disk.
+    """
+    path = Path(path)
     swap = _cgroup_number("memory.swap.max")
     return MemoryBacking(
-        filesystem=_mounted_filesystem(workspace),
-        size_bytes=_size_of(workspace),
+        filesystem=_mounted_filesystem(path),
+        size_bytes=_size_of(path),
         limit_bytes=_cgroup_number("memory.max"),
         # `memory.swap.max` of 0 is swapping disabled; any other number, or the
         # file being absent on a host that has swap, permits it.
