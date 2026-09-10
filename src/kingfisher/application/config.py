@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import warnings
 from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
@@ -15,15 +14,6 @@ from kingfisher.infrastructure import access_policy, model_catalogue
 # not re-exported. One blessed import path for the record — `kingfisher.config`
 # — is the whole point of it sitting where it does.
 __all__ = ["config_from_env", "enforce_local_only_tracing"]
-
-#: What each capability flag used to be called, new name to old. Read for the length of
-#: a deprecation, warned about once per read, and then removed.
-RENAMED = {
-    "KINGFISHER_SKILLS_ENABLED": "KINGFISHER_SKILLS",
-    "KINGFISHER_MEMORY_ENABLED": "KINGFISHER_MEMORY",
-    "KINGFISHER_INTERPRETER_ENABLED": "KINGFISHER_INTERPRETER",
-    "KINGFISHER_CONVERSATION_ENABLED": "KINGFISHER_CONVERSATION",
-}
 
 
 @dataclass(frozen=True)
@@ -46,25 +36,19 @@ class Environment:
         return value
 
     def flag(self, key: str, default: bool = False) -> bool:
-        raw = self._renamed(key).lower()
+        """One capability switch, under the only name that means it.
+
+        The bare names these four replaced were read here for a deprecation and
+        are not any more, so this reader has no second name to weigh and a stale
+        line has nothing to win or lose against. Which names those were is in
+        `health.RETIRED`, and deliberately not here: a rule reads this module's
+        text to decide which variables it reads, so spelling a dead one would
+        make it look alive.
+        """
+        raw = (self.values.get(key) or "").strip().lower()
         if not raw:
             return default
         return raw in {"1", "true", "yes", "on"}
-
-    def _renamed(self, key: str) -> str:
-        """This setting's value, under its name or the one it used to have."""
-        if value := (self.values.get(key) or "").strip():
-            return value
-        was = RENAMED.get(key)
-        if was and (value := (self.values.get(was) or "").strip()):
-            warnings.warn(
-                f"{was} is the old name for {key} and is still read; rename it, "
-                f"since the old one will stop being read.",
-                DeprecationWarning,
-                stacklevel=3,
-            )
-            return value
-        return ""
 
     def number(self, key: str, default: int) -> int:
         raw = (self.values.get(key) or "").strip()

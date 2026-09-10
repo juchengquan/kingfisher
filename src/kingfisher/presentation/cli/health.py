@@ -2,8 +2,9 @@
 
 from __future__ import annotations
 
+import os
 import platform
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
@@ -32,6 +33,40 @@ from kingfisher.infrastructure.workspace.seeding import destination_hint
 #: `fail` means this deployment will not run. `warn` means it will, and
 #: something about it is worth knowing -- an unconfined shell runs fine.
 Verdict = Literal["ok", "warn", "fail"]
+
+#: Settings nothing reads any more, and what to write instead. Renaming an
+#: environment variable is the one rename that fails in silence: a moved import
+#: stops the program and says which, while a variable nobody reads falls back to
+#: its default -- a server on port 8000, skills switched off -- with nothing
+#: anywhere to connect the behaviour to the line that used to cause it. Reading
+#: both names was how that was survivable; this list is what replaced it, and it
+#: is the only thing in the tree that will ever mention one of these to a
+#: deployment still carrying it.
+RETIRED: dict[str, str] = {
+    "KINGFISHER_SKILLS": "KINGFISHER_SKILLS_ENABLED",
+    "KINGFISHER_MEMORY": "KINGFISHER_MEMORY_ENABLED",
+    "KINGFISHER_INTERPRETER": "KINGFISHER_INTERPRETER_ENABLED",
+    "KINGFISHER_CONVERSATION": "KINGFISHER_CONVERSATION_ENABLED",
+    "KINGFISHER_TIMEOUT_S": "KINGFISHER_EXECUTION_TIMEOUT_S, and timeout_s per model",
+    "KINGFISHER_MODEL": "models.yaml, where a model names its endpoint",
+    "KINGFISHER_API_STYLE": "models.yaml, where an endpoint names its wire format",
+    "KINGFISHER_MAX_TOKENS": "models.yaml, beside the model it bounds",
+    "KINGFISHER_MODEL_SUBAGENT": "`model:` in the subagent's own .yaml",
+    "KINGFISHER_PROVIDER_SUBAGENT": "the endpoint that model names",
+    "KINGFISHER_STATE_DIR": "nothing -- run logs, claims and pinned agents are "
+                            "inside the session they belong to",
+    "KINGFISHER_SCRATCH_DIR": "nothing -- TMPDIR is a directory inside the session",
+}
+
+#: The prefix that went whole, matched rather than enumerated. Every service
+#: setting was renamed at once, so listing the suffixes here would put the
+#: service's own table in the base package for the second time -- and would
+#: quietly stop covering whichever one it gains next.
+RETIRED_PREFIX = "KINGFISHER_SERVER_"
+
+#: What that prefix became. Spelled rather than imported, because `doctor` runs
+#: in deployments where the service is not installed at all.
+SERVICE_PREFIX = "KINGFISHER_SERVICE_"
 
 
 @dataclass(frozen=True)
@@ -447,10 +482,46 @@ def _shell(cfg: Config) -> Iterator[Check]:
         )
 
 
+def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
+    """Settings this deployment still carries that nothing reads any more.
+
+    Nothing warns about an unknown `KINGFISHER_` variable, so a line surviving an
+    upgrade is silent by construction: it stops taking effect, and the first sign
+    is behaviour nobody chose. A warning rather than a failure because the
+    deployment does run -- on the defaults, which may well be what it wanted.
+    """
+    values = os.environ if environ is None else environ
+    stale = {
+        name: instead
+        for name, instead in RETIRED.items()
+        if (values.get(name) or "").strip()
+    }
+    # Matched on the prefix, so a suffix nobody thought to list is still caught.
+    stale.update(
+        {
+            name: SERVICE_PREFIX + name[len(RETIRED_PREFIX) :]
+            for name in values
+            if name.startswith(RETIRED_PREFIX) and (values.get(name) or "").strip()
+        }
+    )
+    if not stale:
+        return
+
+    yield Check(
+        "retired settings",
+        "warn",
+        f"{', '.join(sorted(stale))} — set here, and read by nothing",
+        "; ".join(f"{name} -> {instead}" for name, instead in sorted(stale.items())),
+    )
+
+
 def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
     """Every check, in the order somebody diagnosing would want them."""
     checks: list[Check] = []
     try:
+        # First, because it is the one check that explains another being wrong:
+        # a setting that stopped being read looks exactly like one nobody set.
+        checks += _retired()
         checks += _catalogue(cfg)
         checks += _packs(cfg)
         checks += _at_rest(cfg)

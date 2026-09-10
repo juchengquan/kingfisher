@@ -78,7 +78,9 @@ all off, with no error. That is worth knowing before you write one from memory.
 
 All four carry `_ENABLED` so that "whether" is visibly a different question from
 "where" — `KINGFISHER_SKILLS_ENABLED` beside `KINGFISHER_SKILLS_DIR`. The bare
-names are still read and warn once on startup; they will stop being read.
+names are read by nothing. `kingfisher doctor` reports one that is still set,
+which is the only thing that will: a name that stops being read takes its
+setting's effect with it and says nothing.
 
 These two are the only capabilities with a flag, and the reason is the prompt.
 Each splices a section into the base prompt, which is the cached prefix every
@@ -118,19 +120,21 @@ half of the split each setting belongs to. **These are not in `.env.example`.**
 | `KINGFISHER_SERVICE_FILE_STORE_DIR` | Where files named by id are fetched from. | none |
 | `KINGFISHER_SERVICE_AUDIT_CONTENT` | Whether the audit log records content rather than only events. | `false` |
 
-`KINGFISHER_SERVER_*` was the earlier prefix. It is still read, the new name
-wins where both are set, and using the old one says so once — because renaming
-an environment variable is the one rename that fails in silence, where a moved
-import stops the program and says which.
+`KINGFISHER_SERVER_*` was the earlier prefix and is read by nothing. Renaming an
+environment variable is the one rename that fails in silence — a moved import
+stops the program and says which, while a variable nobody reads falls back to its
+default and the server comes up on port 8000 with nothing to show for it — so
+`kingfisher doctor` reports the whole prefix, suffix by suffix, and is worth
+running after an upgrade.
 
 ## Two things that catch people
 
-**The bare `KINGFISHER_SKILLS` still means two things, until it stops being
-read.** The agent's shell gets it holding the *path* to the skills catalogue,
-which is how a skill's scripts reach their neighbours. A deployment that sets the
-old name to that path is setting a flag to a value no parser recognises, so
-skills go **off** with no error — the trap `_ENABLED` was introduced to end. Use
-the new name and the two never meet.
+**`KINGFISHER_SKILLS` means one thing now, and it is not a flag.** The agent's
+shell gets it holding the *path* to the skills catalogue, which is how a skill's
+scripts reach their neighbours; nothing reads it as a yes/no any more. That is
+what closed the trap `_ENABLED` was introduced for — a deployment writing the
+path was setting a flag to a value no parser recognises, and skills went **off**
+with no error. The two can no longer arrive at one reader.
 
 **A deployment configured by reading `.env.example` will miss the service
 settings**, including the port. The file covers the library and stops there.
@@ -139,5 +143,5 @@ settings**, including the port. The file covers the library and stops there.
 
 `kingfisher doctor` reports what stands between an install and a run: a missing
 catalogue, a shell with no confinement, a memory-backed sessions tree whose
-arithmetic does not work. It is the fastest way to find out whether the
+arithmetic does not work, a setting nothing reads any more. It is the fastest way to find out whether the
 environment you have assembled is the one you meant.

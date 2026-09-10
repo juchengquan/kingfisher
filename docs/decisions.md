@@ -1152,7 +1152,7 @@ removable as the three that went. *(2026-09-04, same document.)*
 ## Where a deployment reads from
 
 **The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read
-for a deprecation.** `KINGFISHER_SKILLS` answered two questions at once: whether
+by nothing.** `KINGFISHER_SKILLS` answered two questions at once: whether
 a deployment wired skills, and -- exported into the agent's shell by `shell_env`
 -- *where* the catalogue is, which is how a skill's own scripts reach their
 neighbours. A deployment writing the path, which is what the name means
@@ -1166,14 +1166,38 @@ identically should not need a reader to remember which one carries a suffix, and
 `_ENABLED` beside `KINGFISHER_SKILLS_DIR` says plainly that "whether" and
 "where" are different questions.
 
-Both names are read, the new one wins, and the old one warns once -- the
-arrangement `kingfisher_service` already made when its prefix changed, for the
-reason it gives: renaming an environment variable is the one rename that fails
-in silence, where a moved import stops the program and says which.
-`.env.example` lists them under an arrow rather than as assignments, so the file
-does not re-advertise the spelling being replaced, and
-`test_the_file_shows_exactly_the_knobs_that_exist` subtracts `RENAMED` for that
-reason rather than being loosened.
+Both names were read for a deprecation, the new one winning and the old one
+warning once -- the arrangement `kingfisher_service` had already made when its
+prefix changed. `.env.example` lists them under an arrow rather than as
+assignments, so the file does not re-advertise the spelling being replaced.
+
+**The deprecation is over, and what replaced it is `doctor` rather than a
+refusal.** Both shims are gone: `RENAMED` here and `KINGFISHER_SERVER_*` in the
+service, along with the two readers that weighed one name against another. A
+reader now looks up the name it wants and stops.
+
+That leaves the failure the shims existed to prevent, and it is real: renaming an
+environment variable is the one rename that fails in silence, where a moved
+import stops the program and says which. A deployment upgrading with
+`KINGFISHER_SERVER_PORT` still set gets port 8000 and no explanation. Refusing to
+start was the other candidate and was not taken -- a stale line somebody forgot
+to delete is untidy rather than broken, and stopping a deployment over it makes
+an upgrade look like a failure. `health.RETIRED` and `RETIRED_PREFIX` carry the
+dead names and `doctor` warns about any that are set, which is a place to find
+out rather than a thing that happens to you.
+
+Two rules keep that list honest, because a list of names nothing reads is exactly
+what nothing else can check: `test_no_message_names_a_variable_nothing_reads`
+allows a retired name in a message and then asserts the complement -- a name is
+retired or it is read, never both -- and `test_every_retired_name_is_one_the_file_lists`
+holds it against `.env.example`, which is the case a typo falls into. A misspelled
+key warns about a variable nobody has and stays quiet about the one they do, and
+nothing else in the tree would notice.
+
+The prefix is matched rather than enumerated. Listing the service's seven
+suffixes in the base package would be its table written down twice, and the copy
+would stop covering whichever setting the service gains next.
+*(2026-09-10.)*
 
 **Not solved by inferring the flag from the catalogue**, which was the obvious
 alternative and is worse in four ways: the skills section lives in the system

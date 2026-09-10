@@ -218,10 +218,6 @@ def test_the_file_shows_exactly_the_knobs_that_exist():
     # Quoted, so this is a name the module looks *up* rather than one it
     # mentions in a comment -- which is the half the old rule got wrong.
     read = set(re.findall(r'"(KINGFISHER_[A-Z_]+)"', source))
-    # Read, deliberately undocumented as something to set, and listed under an
-    # arrow instead. Subtracted from what the file must show rather than added
-    # to it: see the docstring.
-    read -= set(config_module.RENAMED.values())
     # `#?` because a knob with no sensible default is shown commented out, and
     # a line nobody uncommented still documents it.
     shown = set(
@@ -242,8 +238,14 @@ def test_no_message_names_a_variable_nothing_reads():
 
     import kingfisher
     from kingfisher.application import config as config_module
+    from kingfisher.presentation.cli import health
 
     read = set(re.findall(r"KINGFISHER_[A-Z_]+", _Path(config_module.__file__).read_text()))
+    # A name `doctor` reports as retired is the one kind of message that names a
+    # variable nothing reads *on purpose* -- saying so is the whole of what it is
+    # for. Allowed rather than exempted by file, so a message inventing a name
+    # anywhere, `health.py` included, still fails.
+    allowed = read | set(health.RETIRED) | {health.RETIRED_PREFIX, health.SERVICE_PREFIX}
     package = _Path(kingfisher.__file__).parent
 
     def messages(tree: ast.Module) -> list[str]:
@@ -270,13 +272,52 @@ def test_no_message_names_a_variable_nothing_reads():
         for path in package.rglob("*.py")
         for text in messages(ast.parse(path.read_text(encoding="utf-8")))
         for name in re.findall(r"KINGFISHER_[A-Z_]+", text)
-        if name not in read
+        if name not in allowed
     }
 
     assert not invented, (
         f"named in a runtime string but read nowhere: {sorted(invented)} -- a message "
         "pointing at a variable that does not exist sends its reader to set "
         "something with no effect, and nothing else would ever notice"
+    )
+
+    # The other half of the allowance above: a name is retired or it is read, and
+    # never both. Without this, moving a live setting into `RETIRED` would tell
+    # every deployment to stop setting something that still works.
+    assert not set(health.RETIRED) & read, (
+        f"{sorted(set(health.RETIRED) & read)} are reported as retired and still "
+        "read -- `doctor` would tell a deployment to drop a setting that works"
+    )
+
+
+def test_every_retired_name_is_one_the_file_lists():
+    """`RETIRED` is what `doctor` reports and `.env.example` is where a deployment
+    reads about it, so a name in one and not the other is a deployment told nothing
+    -- or told to stop setting something this list invented.
+
+    The typo case is the one worth catching: a misspelled key warns about a
+    variable nobody has, and stays silent about the one they do.
+    """
+    import re
+    from pathlib import Path as _Path
+
+    from kingfisher.presentation.cli import health
+
+    root = next(
+        p for p in _Path(__file__).resolve().parents if (p / ".env.example").is_file()
+    )
+    # The two lists in that file spell a retired name to the left of an arrow,
+    # which is how it shows one without re-advertising it as an assignment.
+    listed = set(
+        re.findall(
+            r"^#\s+(KINGFISHER_[A-Z_]+)\s+->", (root / ".env.example").read_text(), re.M
+        )
+    )
+
+    assert listed == set(health.RETIRED), (
+        f"reported by doctor but not listed in .env.example: "
+        f"{sorted(set(health.RETIRED) - listed)}; listed but reported by nothing: "
+        f"{sorted(listed - set(health.RETIRED))}"
     )
 
 
