@@ -42,6 +42,19 @@ services:
       # the barrier; do not add it pre-emptively.
       - /workspace:size=512m,mode=1777
     environment:
+      # One caller per container. `external` asserts a boundary between this
+      # process and the host, and there is one -- but every session in this
+      # deployment shares the container, and nothing here stands between them:
+      # the shell is unwrapped, and the file tools' route rules are not a fence
+      # it goes through. Measured before the fence existed, tenant B read tenant
+      # A's `derived/secret.txt` with `cat ../<A>/...`, exit 0.
+      #
+      # Serving several callers from one instance wants `auto` instead, which
+      # confines each turn to its own session directory. It needs a kernel with
+      # Landlock ABI 6 -- the image carries `sandlock` so `auto` has something to
+      # reach for, but the kernel is the host's. `kingfisher doctor` names the
+      # mechanism it settled on, and says why when it settled on nothing.
+      KINGFISHER_SHELL_SANDBOX: external
       # Required rather than optional here. Unset means unbounded, which is
       # survivable on a disk and is not survivable in memory shared by every
       # session in this container.
