@@ -1580,6 +1580,15 @@ LIGHT_EXPORTS = frozenset({
     # Reads `/proc/mounts` and two cgroup files. Nothing imported, and
     # all-`None` off Linux rather than an error.
     "memory_backing",
+    # What it answers with. `doctor` reads two of these -- the sessions tree and
+    # the workspace -- and names the type to hold them, which a module of frozen
+    # dataclasses over the standard library costs nothing to reach.
+    "MemoryBacking",
+    # Where a workspace keeps its sessions, which is what `doctor` measures: the
+    # workspace's own device is the wrong answer the moment one is mounted at
+    # `<workspace>/sessions`. A `Path` join in `domain.session`, which reaches
+    # `domain.ports` and the standard library.
+    "sessions_root",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",

@@ -5,9 +5,11 @@ from __future__ import annotations
 import platform
 from collections.abc import Iterator
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Literal
 
 from kingfisher import Config, ConfigError, Inventory, inventory, kinds_at
+from kingfisher.domain.session import sessions_root
 
 # Everything below is past the front door on purpose, and this is the file to read if
 # you want to know what that door is now for. These are `doctor`'s probes: what fences
@@ -24,7 +26,7 @@ from kingfisher.infrastructure.sandbox.confinement import (
     landlock_abi,
     shell_confinement,
 )
-from kingfisher.infrastructure.workspace.backing import memory_backing
+from kingfisher.infrastructure.workspace.backing import MemoryBacking, memory_backing
 from kingfisher.infrastructure.workspace.seeding import destination_hint
 
 #: `fail` means this deployment will not run. `warn` means it will, and
@@ -100,11 +102,40 @@ def _packs(cfg: Config) -> Iterator[Check]:
     yield Check("definitions to seed", "ok", f"{', '.join(kinds)} — from {cfg.assets}")
 
 
-def _at_rest(cfg: Config) -> Iterator[Check]:
-    """Whether a workspace kept in memory can actually keep nothing.
+def _sessions_probe(workspace: Path) -> Path:
+    """Where to measure a deployment's sessions, before it has any.
 
-    Where it *is* in memory, this is the one check here that can fail on something
-    which appears to work. Measured, and it is not what the obvious reading predicts:
+    `_size_of` stats the path, so a sessions directory that is not there yet
+    reports no size -- and `doctor` before `kingfisher seed` is exactly when
+    somebody is sizing a tmpfs. The workspace is the honest fallback: with
+    nothing mounted, that is the filesystem sessions will land on anyway.
+    """
+    root = sessions_root(workspace)
+    return root if root.is_dir() else Path(workspace)
+
+
+def _devices(sessions: MemoryBacking, workspace: MemoryBacking) -> str:
+    """Both readings, in every message this check yields.
+
+    Named unconditionally rather than only where they differ: a reader deciding
+    whether the numbers below are about the disk they mounted should not have to
+    infer it from an absence.
+    """
+    return f"sessions on {sessions.filesystem}, workspace on {workspace.filesystem}"
+
+
+def _at_rest(cfg: Config) -> Iterator[Check]:
+    """Whether sessions kept in memory can actually keep nothing.
+
+    Measured against the sessions tree rather than the workspace, and the two are
+    not the same question once `<workspace>/sessions` is a mount:
+    `_mounted_filesystem` answers for the longest mountpoint containing the path
+    it is handed, so asking about the workspace answers about the workspace's
+    device and never about the one sessions are actually written to.
+
+    Where sessions *are* in memory, this is the one check here that can fail on
+    something which appears to work. Measured, and it is not what the obvious
+    reading predicts:
 
     - A memory filesystem **larger** than the container's memory limit does not
       refuse when it fills. The kernel swaps its pages out — data at rest, the
@@ -115,71 +146,88 @@ def _at_rest(cfg: Config) -> Iterator[Check]:
     - Only a filesystem **smaller** than the limit gives a clean `ENOSPC` on a
       full one, which is a thing kingfisher can refuse on.
     """
-    backing = memory_backing(cfg.workspace)
-    if not backing.in_memory:
+    sessions = memory_backing(_sessions_probe(cfg.workspace))
+    workspace = memory_backing(cfg.workspace)
+    devices = _devices(sessions, workspace)
+    if not sessions.in_memory:
+        # The one thing worth saying about a sessions tree on a disk, and only
+        # because the workspace claims otherwise: every check below gates on
+        # sessions, so without this the arrangement that breaks the promise
+        # loudest is the one that says nothing at all.
+        if workspace.in_memory:
+            yield Check(
+                "nothing at rest",
+                "fail",
+                f"{devices} — a deployment that meant to keep nothing is keeping "
+                "every session",
+                "mount the sessions tree in memory too, or drop the tmpfs workspace",
+            )
         return
 
-    if backing.swap_enabled:
+    if sessions.swap_enabled:
         yield Check(
             "nothing at rest",
             "fail",
-            f"{cfg.workspace} is on {backing.filesystem} and this cgroup permits swapping",
+            f"{devices} — this cgroup permits swapping",
             "disable swap for the container (`--memory-swap` equal to `--memory`)",
         )
-    if backing.fits is False:
+    if sessions.fits is False:
         yield Check(
             "nothing at rest",
             "fail",
-            f"{backing.filesystem} holds {_mb(backing.size_bytes)} and the memory limit is "
-            f"{_mb(backing.limit_bytes)} — filling it swaps to disk, or kills the container",
+            f"{devices} — {_mb(sessions.size_bytes)} of sessions against a memory limit of "
+            f"{_mb(sessions.limit_bytes)}; filling it swaps to disk, or kills the container",
             "size the filesystem below the limit, leaving room for this process",
         )
-    elif backing.fits is None:
+    elif sessions.fits is None:
         yield Check(
             "nothing at rest",
             "warn",
-            f"{cfg.workspace} is on {backing.filesystem}, and this process has no memory limit",
+            f"{devices} — and this process has no memory limit",
             "set one, so a full filesystem fails rather than exhausting the host",
         )
-    elif not backing.swap_enabled:
+    elif not sessions.swap_enabled:
         yield Check(
             "nothing at rest",
             "ok",
-            f"{backing.filesystem} holds {_mb(backing.size_bytes)} under a "
-            f"{_mb(backing.limit_bytes)} limit, no swap",
+            f"{devices} — {_mb(sessions.size_bytes)} under a "
+            f"{_mb(sessions.limit_bytes)} limit, no swap",
         )
 
-    # Two things that only matter once the workspace is in memory, and both are
+    # Two things that only matter once sessions are in memory, and both are
     # silent until the moment they are expensive.
     if cfg.session_store is None:
         yield Check(
             "sessions survive",
             "fail",
-            f"{cfg.workspace} is on {backing.filesystem} and nothing is configured to keep "
-            "sessions — everything a session produced goes with the process",
+            f"{devices} — nothing is configured to keep sessions, so everything a "
+            "session produced goes with the process",
             "set KINGFISHER_SESSION_STORE, or wire a SessionStore",
         )
     else:
-        yield Check("sessions survive", "ok", f"kept at {cfg.session_store}")
+        yield Check("sessions survive", "ok", f"{devices} — kept at {cfg.session_store}")
 
     if cfg.session_max_bytes is None:
         yield Check(
             "session quota",
             "fail",
-            f"no KINGFISHER_SESSION_MAX_BYTES, and sessions share {_mb(backing.size_bytes)} "
-            "of memory — one can starve every other in this container",
+            f"{devices} — no KINGFISHER_SESSION_MAX_BYTES, and sessions share "
+            f"{_mb(sessions.size_bytes)} of memory; one can starve every other in "
+            "this container",
             "set it below the filesystem size divided by the sessions you expect",
         )
-    elif backing.size_bytes is not None and cfg.session_max_bytes > backing.size_bytes:
+    elif sessions.size_bytes is not None and cfg.session_max_bytes > sessions.size_bytes:
         yield Check(
             "session quota",
             "warn",
-            f"one session may reach {_mb(cfg.session_max_bytes)} and the filesystem holds "
-            f"{_mb(backing.size_bytes)} — the quota can never bind",
+            f"{devices} — one session may reach {_mb(cfg.session_max_bytes)} and the "
+            f"filesystem holds {_mb(sessions.size_bytes)}, so the quota can never bind",
             "lower it, or the limit is the filesystem and it arrives as a write failure",
         )
     else:
-        yield Check("session quota", "ok", f"{_mb(cfg.session_max_bytes)} per session")
+        yield Check(
+            "session quota", "ok", f"{devices} — {_mb(cfg.session_max_bytes)} per session"
+        )
 
 
 def _mb(value: int | None) -> str:
