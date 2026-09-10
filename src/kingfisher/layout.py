@@ -167,14 +167,16 @@ class Route:
     family: bool = False
 
 
-#: What the agent addresses, and what is true of each. Read by `harness.backend`
-#: for the mounts and by `harness.agent` for the deny rules, so the two cannot
-#: disagree about which paths exist.
+#: What the agent addresses, and what is true of each. Read by
+#: `infrastructure.harness.backend` for the mounts and by
+#: `infrastructure.harness.agent` for the deny rules, so the two cannot disagree
+#: about which paths exist.
 ROUTES: tuple[Route, ...] = (
     # A caller's inputs, and nothing else holds a copy: never re-derivable from
     # the workspace, and kingfisher versions nothing. The rule here binds the file
     # tools only -- the shell bypasses them entirely, which is why
-    # `workspace.permissions.protect_data` drops the write bits underneath it.
+    # `infrastructure.workspace.permissions.protect_data` drops the write bits
+    # underneath it.
     Route(DATA_ROUTE, deny_write_under=f"{DATA_ROUTE}**"),
     # Routed so a request that declines the memory a deployment wired has
     # somewhere to hang a deny rule, not because memory needs isolating.

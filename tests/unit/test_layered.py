@@ -130,8 +130,8 @@ def test_the_two_halves_need_not_be_the_same_kind_of_store(cfg, session_dir):
 
 
 def test_a_turns_view_is_itself_a_catalogue(cfg, session_dir):
-    """Which is what keeps every caller downstream unchanged: `build_agent` asks for
-    `catalogue.skills.names` whether or not a session is involved.
+    """Which is what keeps every caller downstream unchanged: `build_agent` asks the
+    catalogue for its skill names whether or not a session is involved.
     """
     turn = for_session(Definitions.from_config(cfg), session_dir)
 

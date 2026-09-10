@@ -268,10 +268,10 @@ def test_the_whole_job_is_reachable_through_the_front_door(cfg, shipped):
 def test_the_public_names_cost_no_provider_sdk_to_reach(cfg):
     """Reaching them must stay cheap; *calling* `inventory` is another matter.
 
-    Answering builds an agent, so `harness.agent` is imported inside the function
-    rather than at module scope. Measured at 21-50ms and 148-192 modules against
-    3,100 for a provider -- the split that keeps `--help` from paying for a model it
-    will never build.
+    Answering builds an agent, so `infrastructure.harness.agent` is imported inside
+    the function rather than at module scope. Measured at 21-50ms and 148-192
+    modules against 3,100 for a provider -- the split that keeps `--help` from
+    paying for a model it will never build.
     """
     import subprocess
     import sys

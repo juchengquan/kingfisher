@@ -1013,10 +1013,10 @@ to run anything over them. Object storage reaches a session as a mount
 
 **What the agent addresses is a table in `kingfisher.layout`.** One entry per path,
 saying whether the composite mounts it, which scope denies writes under it, and
-whether its members are generated per catalogue. `harness.backend` turns the
-entries into mounts and `harness.agent` turns the scopes into deny rules. Policy
-here, the runtime's objects there -- the division this module's first line
-already describes. *(2026-09-07.)*
+whether its members are generated per catalogue. `infrastructure.harness.backend`
+turns the entries into mounts and `infrastructure.harness.agent` turns the scopes
+into deny rules. Policy here, the runtime's objects there -- the division this
+module's first line already describes. *(2026-09-07.)*
 
 **It exists because one route was three facts in two modules.** The path was a
 constant in `harness/backend.py`, the mount was a dict literal inside
@@ -1416,10 +1416,11 @@ imports no framework does not belong in the package defined by importing one.
 shaped by deepagents -- `routed` exists because `CompositeBackend` has a default
 slot, `deny_write_under` is a glob because `FilesystemMiddleware` takes globs,
 the trailing slash exists because matching is by prefix -- and only
-`harness.backend` and `harness.activation` read it in code. That is a real
-argument, and the entry above is one day older than it: pulling the table apart
-would undo the joining that entry exists to record. The root belongs to no
-layer, so framework-shaped data there costs much less than in the innermost one.
+`infrastructure.harness.backend` and `infrastructure.harness.activation` read it
+in code. That is a real argument, and the entry above is one day older than it:
+pulling the table apart would undo the joining that entry exists to record. The
+root belongs to no layer, so framework-shaped data there costs much less than in
+the innermost one.
 
 **The move activated a comment that had been wrong for some time.**
 `domain/ports.py` attributed `within` to the layout module; it is in
@@ -1827,6 +1828,24 @@ and it catches all three. `at line N` matched twice in the entire repository, bo
 stale. A rule is fragile when it has to read intent, not because it reads prose.
 
 *(2026-09-07.)*
+
+**A prose root is any package, not only a top-level one.** `_prose_roots` read one
+directory deep, so a package that moved down a level took its references out of the
+pattern instead of into the failure list. Once `tools/` is not a top-level directory,
+`tools.spec` stops looking like a module path at all: the rule goes quiet rather than
+red, which is the one failure it cannot report about itself -- and it is the failure a
+move causes, which is when the rule is worth most.
+
+**The cost is that shorthand is refused**, and the entry above is what to read it
+against. Eight of the ten references this turned up are not rot: written *harness.agent*
+they resolve for any reader who knows which layer that is, and by that entry's
+accounting they are false positives rather than finds. The trade is taken deliberately.
+A name that resolves only by knowing which layer it sits in is the same name that goes
+quiet when the layer changes, so spelling it from the package root is what makes it
+checkable at all. Of the other two, one was genuine history -- *harness.skill_registry*,
+named in a `HARNESS_EDGES` note saying which edge a move closed, and excused in
+`PROSE_GONE` beside the deliberate mentions already there -- and one named an attribute
+path rather than a module, which no rooting could resolve. *(2026-09-10.)*
 
 ## How much a comment says
 

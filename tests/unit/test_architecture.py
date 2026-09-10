@@ -299,19 +299,26 @@ def test_the_second_distribution_is_in_scope():
 
 #: What a prose reference can be rooted at, and the only form of it that can be checked.
 #: `models.yaml`, `run.py` and `uploads.provision` are shaped exactly like module paths;
-#: `infrastructure.harness.backend` cannot be anything else. Measured across this
-#: repository: the rooted form gives fifty references and finds thirteen that are wrong,
-#: while the unrestricted form gives 143 and calls 115 of them broken.
+#: `infrastructure.harness.backend` cannot be anything else. Unrooted, the pattern reads
+#: every dotted phrase in the repository as a claim about a module and calls most of them
+#: broken -- `importlib.resources` and every filename among them. Rooting it at a package
+#: this tree actually has is what separates a claim from ordinary prose.
 def _prose_roots(root: Path = SRC) -> tuple[str, ...]:
     """Every package and root module a prose reference may be rooted at.
 
     Derived rather than written down: this is a match pattern rather than a lookup, so
     it has no fallback to fail closed onto the way `THIRD_PARTY` does, where `""` makes
     the table total.
+
+    Every package at any depth, not only the ones directly under `root`. A name that
+    stops being a top-level directory drops out of the pattern, and the references to
+    it stop reading as module paths at all -- so the rule goes quiet rather than red,
+    which is the one failure it cannot report about itself. Narrowed back to `iterdir`,
+    `test_a_nested_package_is_a_prose_root` is what goes red.
     """
     return tuple(sorted(
-        [d.name for d in root.iterdir() if d.is_dir() and (d / "__init__.py").is_file()]
-        + [f.stem for f in root.glob("*.py") if f.stem != "__init__"]
+        {d.name for d in root.rglob("*") if d.is_dir() and (d / "__init__.py").is_file()}
+        | {f.stem for f in root.glob("*.py") if f.stem != "__init__"}
     ))
 
 
@@ -339,9 +346,11 @@ NOT_A_MODULE = frozenset({
 #: a table keyed by name alone would have to excuse both.
 PROSE_GONE: dict[str, frozenset[str]] = {
     # The file that owns the rules is the one place a gone module is named on
-    # purpose -- in the docstring of the rule that renaming broke, and in the
-    # negatives below, which are asserted gone rather than merely absent.
+    # purpose -- in the docstring of the rule that renaming broke, in the
+    # negatives below, which are asserted gone rather than merely absent, and in
+    # the `HARNESS_EDGES` note saying which edge a move closed.
     "tests/unit/test_architecture.py": frozenset({
+        "harness.skill_registry",
         "infrastructure.agent",
         "infrastructure.backend",
         "infrastructure.backend.shell_env",
@@ -728,6 +737,37 @@ def test_the_prose_roots_are_read_off_the_tree_and_not_written_down(tmp_path):
     }
     assert packages <= set(PROSE_ROOTS)
     assert "templates" not in PROSE_ROOTS, "shipped data is not a package"
+
+
+def test_a_nested_package_is_a_prose_root(tmp_path):
+    """A package below the top level is still a name a reference may be rooted at.
+
+    Read one directory deep, the rule stops *matching* references to a package that
+    moved down a level rather than failing them -- so the move buries every comment
+    naming the old path and nothing goes red, which is the one failure this rule
+    cannot report about itself. `harness` and `workspace` are the two in this tree.
+    """
+    (tmp_path / "layer").mkdir()
+    (tmp_path / "layer" / "__init__.py").write_text("", encoding="utf-8")
+    (tmp_path / "layer" / "buried").mkdir()
+    (tmp_path / "layer" / "buried" / "__init__.py").write_text("", encoding="utf-8")
+    # No `__init__.py`, so shipped data at any depth is still not a root.
+    (tmp_path / "layer" / "templates").mkdir()
+
+    assert _prose_roots(tmp_path) == ("buried", "layer")
+
+    # And against the real tree, which is what the rule actually runs on. Backticks
+    # are added here rather than written, so the rule scanning this file does not
+    # read its own negatives as claims about the tree.
+    for missing in ("harness.nowhere", "workspace.nowhere", "catalogue.nowhere"):
+        assert _prose_unresolved(f"`{missing}`") == [missing], (
+            f"{missing} is rooted at a package that is not at the top level, and a "
+            "reference the pattern never matches is one the rule cannot fail"
+        )
+
+    # Rooted at the top, a real module still resolves: widening the roots must not
+    # turn the full path into a second way to be wrong.
+    assert _prose_unresolved("`infrastructure.harness.agent`") == []
 
 
 def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
