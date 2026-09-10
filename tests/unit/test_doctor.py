@@ -287,6 +287,60 @@ def test_a_missing_catalogue_is_reported_rather_than_raised(tmp_path, monkeypatc
     assert "configuration error" in capsys.readouterr().err
 
 
+def test_a_retired_setting_is_named_even_when_the_config_will_not_load(
+    tmp_path, monkeypatch, capsys
+):
+    """The run that most needs to hear it is the one that cannot reach `examine`.
+
+    A deployment from when `KINGFISHER_MODEL` and `KINGFISHER_API_STYLE` chose the
+    model has no `models.yaml` -- the catalogue is what replaced them -- so it is
+    told the file is missing and nothing connects that to the variables it is
+    still setting. Reported before the error is re-raised, so the message and the
+    exit code are the ones the case above asserts.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
+    monkeypatch.setenv("KINGFISHER_API_STYLE", "anthropic")
+
+    assert main(["doctor"]) == 2
+
+    err = capsys.readouterr().err
+    assert "KINGFISHER_API_STYLE" in err
+    assert "configuration error" in err
+
+
+def test_the_failing_run_says_nothing_when_nothing_is_retired(tmp_path, monkeypatch, capsys):
+    """The control, and the reason this is not simply printed unconditionally: a
+    deployment whose configuration is merely incomplete has no stale line, and a
+    heading about retired settings above its error would send it looking for one.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
+    monkeypatch.delenv("KINGFISHER_API_STYLE", raising=False)
+
+    assert main(["doctor"]) == 2
+
+    assert "retired settings" not in capsys.readouterr().err
+
+
+def test_the_json_form_stays_a_document_when_the_config_will_not_load(
+    tmp_path, monkeypatch, capsys
+):
+    """`--json` is read by a machine, so a warning on stdout would be a document
+    with a line of prose in front of it. Nothing is printed there at all, which is
+    what this command already does on that path.
+    """
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
+    monkeypatch.delenv("KINGFISHER_MODELS_FILE", raising=False)
+    monkeypatch.setenv("KINGFISHER_API_STYLE", "anthropic")
+
+    assert main(["doctor", "--json"]) == 2
+
+    captured = capsys.readouterr()
+    assert captured.out == ""
+    assert "KINGFISHER_API_STYLE" in captured.err
+
+
 def _catalogue(cfg):
     path = cfg.workspace / "models.yaml"
     path.write_text(
