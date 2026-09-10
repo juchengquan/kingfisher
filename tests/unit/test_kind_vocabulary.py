@@ -16,7 +16,7 @@ from dataclasses import fields
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.workspace.uploads import Brought
-from kingfisher.subagents.catalogue import ASSET_DIRECTORIES
+from kingfisher.kinds.subagents.catalogue import ASSET_DIRECTORIES
 from tests.integration import driver
 
 #: The vocabulary, derived here rather than imported. It was a constant on

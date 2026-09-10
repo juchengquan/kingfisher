@@ -38,8 +38,8 @@ _EXPORTS = {
     "CapabilityError": "kingfisher.domain.capabilities",
     "QuotaExceededError": "kingfisher.domain.session",
     "SessionBusyError": "kingfisher.domain.session",
-    "SkillError": "kingfisher.skills.spec",
-    "SubagentError": "kingfisher.subagents.spec",
+    "SkillError": "kingfisher.kinds.skills.spec",
+    "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalFileStore": "kingfisher.infrastructure.workspace.files",
@@ -86,7 +86,7 @@ _EXPORTS = {
     "Kingfisher": "kingfisher.application.service",
     "ConfigError": "kingfisher.config",
     "Request": "kingfisher.domain.request",
-    "RunOn": "kingfisher.subagents.spec",
+    "RunOn": "kingfisher.kinds.subagents.spec",
     "RunEvent": "kingfisher.domain.result",
     "RunResult": "kingfisher.domain.result",
     "SessionInfo": "kingfisher.domain.session",
@@ -204,9 +204,9 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace.seeding import seed as seed
     from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
-    from kingfisher.skills.spec import SkillError as SkillError
-    from kingfisher.subagents.spec import RunOn as RunOn
-    from kingfisher.subagents.spec import SubagentError as SubagentError
+    from kingfisher.kinds.skills.spec import SkillError as SkillError
+    from kingfisher.kinds.subagents.spec import RunOn as RunOn
+    from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
     from kingfisher.testing import COMMAND_RUNNER_CONTRACT as COMMAND_RUNNER_CONTRACT
     from kingfisher.testing import FILE_STORE_CONTRACT as FILE_STORE_CONTRACT
     from kingfisher.testing import SESSION_ROOT_CONTRACT as SESSION_ROOT_CONTRACT

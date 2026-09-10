@@ -13,9 +13,9 @@ from pathlib import PurePosixPath
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
+from kingfisher.kinds.skills import spec as skill
+from kingfisher.kinds.skills.catalogue import reachable
 from kingfisher.layout import UPLOADED_SKILL_DIR as UPLOADED
-from kingfisher.skills import spec as skill
-from kingfisher.skills.catalogue import reachable
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -26,7 +26,7 @@ if TYPE_CHECKING:
 # `SEPARATOR` and `UPLOADED` are imported above rather than defined here.
 # Both were written out again with a comment saying they matched something
 # else -- the separator tools already use, and the string the backend mounts
-# uploads at -- which is a claim a copied literal cannot keep. `tools.spec`
+# uploads at -- which is a claim a copied literal cannot keep. `kinds.tools.spec`
 # had already made this exact move for the separator and said why: one
 # separator both kinds import beats two that agree by coincidence. It named
 # skills as the other kind; this is skills. Re-exported by the import, so
@@ -225,7 +225,7 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
         _list_skills_with_errors,
     )
 
-    from kingfisher.skills.backend import skills_backend  # noqa: PLC0415
+    from kingfisher.kinds.skills.backend import skills_backend  # noqa: PLC0415
 
     backend = FilesystemBackend(root_dir=str(root)) if root else skills_backend(repository)
 

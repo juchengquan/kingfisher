@@ -12,12 +12,12 @@ from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.backend import bundled_skills_route
+from kingfisher.kinds.skills import registry as skill_registry
+from kingfisher.kinds.skills.registry import SkillRegistry
+from kingfisher.kinds.subagents.harness import indistinct, model_for
+from kingfisher.kinds.subagents.rules import refuse_cycles, refuse_two_of_a_name
+from kingfisher.kinds.subagents.spec import RunOn, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
-from kingfisher.skills import registry as skill_registry
-from kingfisher.skills.registry import SkillRegistry
-from kingfisher.subagents.harness import indistinct, model_for
-from kingfisher.subagents.rules import refuse_cycles, refuse_two_of_a_name
-from kingfisher.subagents.spec import RunOn, SubagentSpec
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -57,7 +57,7 @@ def unrunnable_delegates(
     cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each defined delegate this deployment cannot run."""
-    from kingfisher.subagents.harness import model_for  # noqa: PLC0415
+    from kingfisher.kinds.subagents.harness import model_for  # noqa: PLC0415
 
     found: list[tuple[str, str]] = []
     for name, spec in sorted(defined_subagents(cfg, None, catalogue=catalogue).items()):

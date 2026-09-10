@@ -6,12 +6,12 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher.agents.catalogue import LocalAgentRepository
-from kingfisher.agents.reading import read
-from kingfisher.agents.spec import AgentError
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.subagents import reading
-from kingfisher.subagents.spec import SubagentError
+from kingfisher.kinds.agents.catalogue import LocalAgentRepository
+from kingfisher.kinds.agents.reading import read
+from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.subagents import reading
+from kingfisher.kinds.subagents.spec import SubagentError
 
 WHOLE = """name: surveyor
 description: Reads and profiles data without changing anything.
@@ -410,8 +410,8 @@ def test_the_starter_agent_the_refusal_prints_actually_loads(cfg):
 
     import yaml
 
-    from kingfisher.agents.spec import parse
     from kingfisher.infrastructure.workspace.seeding import STARTER_AGENT
+    from kingfisher.kinds.agents.spec import parse
 
     block = STARTER_AGENT.split("A minimal one:\n\n", 1)[1].split("\n\nOmitting", 1)[0]
     document = yaml.safe_load(textwrap.dedent(block))

@@ -5,8 +5,8 @@ from __future__ import annotations
 from collections.abc import Mapping, Sequence
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.subagents.spec import RunOn, SubagentError, SubagentSpec
-from kingfisher.tools.spec import split_reference
+from kingfisher.kinds.subagents.spec import RunOn, SubagentError, SubagentSpec
+from kingfisher.kinds.tools.spec import split_reference
 
 
 def refuse_two_of_a_name(activated: Sequence[str], *, subject: str) -> None:

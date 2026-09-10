@@ -8,8 +8,8 @@ from kingfisher.infrastructure.prompting import (
     render_system_prompt,
     system_prompt,
 )
-from kingfisher.subagents import reading
-from kingfisher.subagents.harness import as_subagent
+from kingfisher.kinds.subagents import reading
+from kingfisher.kinds.subagents.harness import as_subagent
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():

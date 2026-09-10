@@ -12,10 +12,10 @@ from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.result import RunEvent, RunResult
 from kingfisher.infrastructure.harness import agent as main_agent_module
 from kingfisher.infrastructure.workspace import layout as workspace_layout
+from kingfisher.kinds.skills import spec as skill
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.presentation.cli.progress import show
-from kingfisher.skills import spec as skill
-from kingfisher.skills.catalogue import LocalSkillRepository
-from kingfisher.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import subagents_dir, tools_dir
 from tests.integration import driver as main
 

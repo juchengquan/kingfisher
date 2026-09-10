@@ -19,7 +19,7 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
-from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FakeToolCallingModel,
     capture_build,
@@ -301,7 +301,7 @@ def test_the_registered_tool_names_are_discoverable(cfg, session_dir):
 
 def test_unrecognised_graph_shapes_disable_the_check_rather_than_crashing(cfg):
     """Still no crash, and now it says which of the two answers it is giving."""
-    from kingfisher.tools.harness import registered_tools
+    from kingfisher.kinds.tools.harness import registered_tools
 
     assert registered_tools(object()) is None
 
@@ -524,13 +524,13 @@ def test_an_agent_with_no_tools_says_none_rather_than_unknown(fake_model):
     """
     from langchain.agents import create_agent
 
-    from kingfisher.tools.harness import registered_tools
+    from kingfisher.kinds.tools.harness import registered_tools
 
     assert registered_tools(create_agent(fake_model, tools=[])) == ()
 
 
 def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
-    from kingfisher.tools.harness import registered_tools
+    from kingfisher.kinds.tools.harness import registered_tools
 
     assert registered_tools(_hand_written_graph()) is None
 
@@ -538,7 +538,7 @@ def test_a_graph_we_did_not_build_says_it_could_not_tell(fake_model):
 def test_a_real_build_is_readable(cfg, session_dir):
     """The pin."""
     from kingfisher.infrastructure.harness.agent import build_agent
-    from kingfisher.tools.harness import registered_tools
+    from kingfisher.kinds.tools.harness import registered_tools
 
     names = registered_tools(build_agent(cfg, session_dir=session_dir, model=None))
 
@@ -549,7 +549,7 @@ def test_a_real_build_is_readable(cfg, session_dir):
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
     """The reason any of this changed."""
     from kingfisher.application import inventory as inventory_module
-    from kingfisher.tools import harness as surface_module
+    from kingfisher.kinds.tools import harness as surface_module
 
     monkeypatch.setattr(surface_module, "registered_tools", lambda _graph: None)
 

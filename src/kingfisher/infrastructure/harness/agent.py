@@ -4,7 +4,7 @@ Two jobs it used to do live elsewhere now, because at 657 lines it was doing fou
 `prompting` assembles the system prompt -- moved out because it needs nothing foreign,
 and sharing a file with `create_deep_agent` cost every consumer of `system_prompt` 764ms
 and three provider SDKs. Resolving what a delegate runs with was `delegation` beside
-this file and is `subagents.harness` now, a package of its own. Neither calls anything
+this file and is `kinds.subagents.harness` now, a package of its own. Neither calls anything
 here.
 """
 
@@ -17,7 +17,6 @@ from deepagents import FilesystemPermission, create_deep_agent
 from deepagents.middleware.subagents import GENERAL_PURPOSE_SUBAGENT
 from langchain.agents.middleware import TodoListMiddleware
 
-from kingfisher.agents.spec import AgentSpec
 from kingfisher.config import Config
 from kingfisher.domain.capabilities import (
     ALL,
@@ -55,19 +54,20 @@ from kingfisher.infrastructure.harness.narrowing import (
     ToolAllowlist,
 )
 from kingfisher.infrastructure.prompting import system_prompt
-from kingfisher.layout import denied_read_scopes, denied_scopes
-from kingfisher.subagents.harness import (
+from kingfisher.kinds.agents.spec import AgentSpec
+from kingfisher.kinds.subagents.harness import (
     as_subagent,
     model_object,
     subagent_helpers,
     subagent_skills,
 )
-from kingfisher.subagents.spec import RunOn
-from kingfisher.tools.harness import (
+from kingfisher.kinds.subagents.spec import RunOn
+from kingfisher.kinds.tools.harness import (
     _private_tools,
     _resolve_tools,
 )
-from kingfisher.tools.spec import Found
+from kingfisher.kinds.tools.spec import Found
+from kingfisher.layout import denied_read_scopes, denied_scopes
 
 if TYPE_CHECKING:
     from collections.abc import Mapping, Sequence

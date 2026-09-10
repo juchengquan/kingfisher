@@ -7,13 +7,13 @@ from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.infrastructure.importing import (
+from kingfisher.kinds.importing import (
     PACKAGE_MARKER,
     LoadError,
     load,
     modules_in,
 )
-from kingfisher.tools.spec import Found, named, tool_name
+from kingfisher.kinds.tools.spec import Found, named, tool_name
 
 if TYPE_CHECKING:
     pass

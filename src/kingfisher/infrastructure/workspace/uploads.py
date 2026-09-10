@@ -8,10 +8,10 @@ from typing import TYPE_CHECKING
 
 from kingfisher import layout
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.skills import spec as skill
-from kingfisher.skills.reading import name_from
-from kingfisher.subagents import reading
-from kingfisher.subagents.reading import SUFFIX
+from kingfisher.kinds.skills import spec as skill
+from kingfisher.kinds.skills.reading import name_from
+from kingfisher.kinds.subagents import reading
+from kingfisher.kinds.subagents.reading import SUFFIX
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -125,7 +125,7 @@ def materialise_skills(
     # *when* the caller hears about it: here, against the ref they sent, rather than at
     # activation against a name they may not have chosen. A skill with no `description`
     # is the easy case and the common one.
-    from kingfisher.skills.registry import (  # noqa: PLC0415
+    from kingfisher.kinds.skills.registry import (  # noqa: PLC0415
         read_uploaded,
         split_qualified,
     )

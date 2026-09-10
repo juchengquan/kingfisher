@@ -13,7 +13,7 @@ from kingfisher.infrastructure.catalogue.layered import (
     uploaded_skills,
     uploaded_subagents,
 )
-from kingfisher.subagents.spec import SubagentSpec
+from kingfisher.kinds.subagents.spec import SubagentSpec
 
 SKILL = "---\nname: {name}\ndescription: A skill.\n---\n\nDo the thing.\n"
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"

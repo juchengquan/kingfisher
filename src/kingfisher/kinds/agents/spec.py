@@ -21,7 +21,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 # parsing a tool reference -- the format referring to itself, which is why the
 # domain may name an asset kind's `spec` at all. See the exception stated and
 # measured in `test_domain_imports_only_the_standard_library_and_itself`.
-from kingfisher.tools.spec import claimed_sources
+from kingfisher.kinds.tools.spec import claimed_sources
 
 DIRECTORY = "agents"
 

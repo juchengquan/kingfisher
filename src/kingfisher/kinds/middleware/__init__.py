@@ -11,7 +11,7 @@ asked for from either source.
 
 from __future__ import annotations
 
-from kingfisher.middleware.catalogue import (
+from kingfisher.kinds.middleware.catalogue import (
     EXPORT,
     LocalMiddlewareRepository,
     MiddlewareError,

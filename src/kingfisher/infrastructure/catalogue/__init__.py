@@ -7,8 +7,6 @@ from dataclasses import dataclass, field, fields
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.agents.catalogue import LocalAgentRepository
-from kingfisher.agents.spec import DIRECTORY as AGENT_DIRECTORY
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import (
     AgentRepository,
@@ -17,13 +15,15 @@ from kingfisher.domain.ports import (
     SubagentRepository,
     ToolRepository,
 )
-from kingfisher.middleware.catalogue import LocalMiddlewareRepository, NoMiddleware
-from kingfisher.skills import registry as skill_registry
-from kingfisher.skills.catalogue import LocalSkillRepository
-from kingfisher.skills.registry import SkillRegistry
-from kingfisher.subagents.catalogue import LocalSubagentRepository
-from kingfisher.tools.catalogue import LocalToolRepository
-from kingfisher.tools.spec import Offering
+from kingfisher.kinds.agents.catalogue import LocalAgentRepository
+from kingfisher.kinds.agents.spec import DIRECTORY as AGENT_DIRECTORY
+from kingfisher.kinds.middleware.catalogue import LocalMiddlewareRepository, NoMiddleware
+from kingfisher.kinds.skills import registry as skill_registry
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.registry import SkillRegistry
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.tools.catalogue import LocalToolRepository
+from kingfisher.kinds.tools.spec import Offering
 
 
 @dataclass(frozen=True)

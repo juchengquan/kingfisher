@@ -18,6 +18,8 @@ from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.references import UnsafeReferenceError, within
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.sandbox import confinement
+from kingfisher.kinds.skills.backend import skills_backend
+from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     AGENT_HOME,
     AGENT_TMP,
@@ -36,8 +38,6 @@ from kingfisher.layout import (
     UPLOADED_SKILLS_ROUTE,
     routed_paths,
 )
-from kingfisher.skills.backend import skills_backend
-from kingfisher.subagents.spec import SubagentError
 
 if TYPE_CHECKING:
 
@@ -77,7 +77,7 @@ def shell_env(
         "TMPDIR": str(session_dir / AGENT_TMP),
     }
     # Only when there is a directory to name. A catalogue held in a store is
-    # readable by the file tools -- `skills.backend` mounts it -- but a skill's
+    # readable by the file tools -- `kinds.skills.backend` mounts it -- but a skill's
     # *scripts* are run by the shell, and a store has no path for the shell to
     # reach. Setting this to something that is not there would turn "this
     # deployment cannot run skill scripts" into `no such file or directory` on

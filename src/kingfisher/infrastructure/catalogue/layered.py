@@ -8,15 +8,15 @@ from typing import TYPE_CHECKING, Any
 
 from kingfisher import layout
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.skills.catalogue import LocalSkillRepository
-from kingfisher.subagents.catalogue import LocalSubagentRepository
-from kingfisher.subagents.reading import DIRECTORY as SUBAGENT_DIRECTORY
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.reading import DIRECTORY as SUBAGENT_DIRECTORY
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from kingfisher.domain.ports import SkillRepository, SubagentRepository
-    from kingfisher.subagents.spec import SubagentSpec
+    from kingfisher.kinds.subagents.spec import SubagentSpec
 
 
 def uploaded_skills(session_dir: Path) -> Path:

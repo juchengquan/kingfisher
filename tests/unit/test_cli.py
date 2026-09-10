@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.presentation.cli.__main__ import main
-from kingfisher.skills.catalogue import LocalSkillRepository
 from tests.conftest import verbs
 
 
@@ -495,7 +495,7 @@ def test_seeding_still_works_when_the_catalogue_is_the_workspace(cfg, shipped, m
 
 def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkeypatch):
     """The third catalogue, and the third chance to seed where nothing reads."""
-    from kingfisher.tools.catalogue import LocalToolRepository
+    from kingfisher.kinds.tools.catalogue import LocalToolRepository
 
     catalogue = tmp_path / "catalogue"
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))

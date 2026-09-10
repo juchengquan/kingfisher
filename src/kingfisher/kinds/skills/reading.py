@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from kingfisher.domain import fields
 from kingfisher.infrastructure import documents
-from kingfisher.skills.spec import FILENAME, SkillError, split
+from kingfisher.kinds.skills.spec import FILENAME, SkillError, split
 
 
 def name_from(text: str, source: str = FILENAME) -> str:
