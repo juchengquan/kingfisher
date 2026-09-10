@@ -23,11 +23,11 @@ and `LocalAgentRepository` behind `AgentRepository` -- which is why it is here
 and middleware is not.
 
 **It reaches no framework at all**, and is the only kind module that does not.
-`skills` needs deepagents, langchain-core and langgraph; `tools` and `subagents`
-need two apiece; this needs nothing, and `THIRD_PARTY` says so with an empty
-set. That is a consequence of leaving `harness/agent.py` where it was: the
-runtime half is what costs the other three their entries, and an agent's runtime
-half is not a kind's to hold.
+`skills` needs deepagents and langgraph, `subagents` deepagents and
+langchain-core, `tools` langgraph alone; this needs nothing, and `THIRD_PARTY`
+says so with an empty set. That is a consequence of leaving `harness/agent.py`
+where it was: the runtime half is what costs the other three their entries, and
+an agent's runtime half is not a kind's to hold.
 
 `spec` is the one file outside this directory's business to import. It is the
 format's vocabulary and has no adapter behind it, which is why `domain/` may
