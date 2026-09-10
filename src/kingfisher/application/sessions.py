@@ -18,7 +18,12 @@ from kingfisher.domain.session import (
     sessions_root,
 )
 from kingfisher.infrastructure.session_store import restore_into
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout, session_bytes
+from kingfisher.infrastructure.workspace.sessions import (
+    ensure_session_layout,
+    make_session_dirs,
+    scaffold_memory,
+    session_bytes,
+)
 from kingfisher.infrastructure.workspace.snapshots import agent_snapshot, agent_started_with
 
 if TYPE_CHECKING:
@@ -126,9 +131,12 @@ class Sessions:
 
     def _ready(self, session: Session) -> Session:
         """A session with its layout made and its files back, wherever it is."""
-        ensure_session_layout(session.directory)
+        make_session_dirs(session.directory)
         if self.sessions_store is not None:
             restore_into(self.sessions_store, session.id, session.directory)
+        # Last, so a session's own memory beats the scaffold rather than losing to
+        # it. `scaffold_memory` carries what the other order costs.
+        scaffold_memory(session.directory)
         return session
 
     @contextmanager
