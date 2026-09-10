@@ -65,7 +65,7 @@ async def main() -> int:
     from kingfisher import Kingfisher, config_from_env
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.domain.request import Request
-    from kingfisher.subagents.reading import SUFFIX
+    from kingfisher.kinds.subagents.reading import SUFFIX
 
     cfg = replace(config_from_env(), interpreter_enabled=True)
 

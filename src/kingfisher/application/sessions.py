@@ -6,7 +6,6 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
-from kingfisher.agents.reading import read
 from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
@@ -20,6 +19,7 @@ from kingfisher.domain.session import (
 from kingfisher.infrastructure.session_store import restore_into
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout, session_bytes
 from kingfisher.infrastructure.workspace.snapshots import agent_snapshot, agent_started_with
+from kingfisher.kinds.agents.reading import read
 
 if TYPE_CHECKING:
     from collections.abc import Iterator

@@ -5,7 +5,7 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.capabilities import ALL, CapabilityError, ceiling
-from kingfisher.tools.spec import Found, Offering
+from kingfisher.kinds.tools.spec import Found, Offering
 
 WORKSPACE = Offering(
     builtin=("read_file", "execute"),

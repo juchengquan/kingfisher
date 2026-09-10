@@ -4,10 +4,10 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.skills.catalogue import LocalSkillRepository
-from kingfisher.subagents.catalogue import LocalSubagentRepository
-from kingfisher.tools.catalogue import LocalToolRepository, ToolError, tool_name
-from kingfisher.tools.spec import Offering
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError, tool_name
+from kingfisher.kinds.tools.spec import Offering
 
 TOOL = """from langchain_core.tools import tool
 

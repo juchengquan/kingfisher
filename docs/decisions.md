@@ -1458,8 +1458,59 @@ when the file arrived at one -- and the rule caught it on the first run after.
 say, how they are found on disk, and how they reach the runtime. Kingfisher
 fetches from them; they do not answer to a layer. *(2026-09-04.)*
 
-**A kind reads its own documents.** `subagents.reading.read`,
-`skills.reading.name_from`, and `agents.reading.read`. Each was two functions in two packages: an envelope opener in
+**Reversed: "at the package root."** The five kinds are `kinds/agents`,
+`kinds/skills`, `kinds/subagents`, `kinds/tools` and `kinds/middleware`. Everything
+else in the entry above stands -- a kind still owns its format, its walk over the
+disk and its route to the runtime, and still answers to no layer. What changed is
+where the five sit relative to each other, which that entry never argued for.
+
+**The reason is a rule, and the tidier root listing is not it.** Read honestly, the
+case put first was presentation: nine packages at the top level, five of them a
+family, and no way to say so. Presentation is what *"a second subpackage would
+advertise a distinction no test could hold"* was written against, and the answer
+that entry settled on -- the modules have to share a subject -- is met here as
+squarely as `sandbox/` meets it. `DEFINITION_KINDS` already names the subject, and
+`test_kinds_holds_exactly_the_kinds` holds the directory to it in both directions.
+
+The second direction is the part that could not exist before.
+`test_the_catalogue_holds_one_module_per_kind` walks the constant and asks whether
+each name has a reader, so a sixth directory carrying a `spec` and a `catalogue`
+passed it by never being asked about. Flat at the root there was nothing to compare
+against: the top level legitimately holds four layers and three loose modules too.
+
+**Measured against the alternative, because the alternative is cheap.** The same
+check is writable today without moving anything -- the nine packages at the root are
+five kinds and four layers, so a four-name `LAYERS` constant and one assertion gets
+it. That is six lines against seventy files, and both versions keep a hand-written
+constant: this one keeps `KINDS_HELPERS`, two names. So the check is not what pays
+for the move, and saying otherwise would be reverse-engineering a reason. The move
+is taken on the presentation case with the rule as a consequence, and the numbers
+are here so the next reader is not told a better story than the one that happened.
+
+**`infrastructure/importing.py` came too, and `documents.py` did not.** Four kind
+catalogues are `kinds.importing`'s only readers and it imports nothing from
+kingfisher at all. `documents` serves two audiences -- `decode` and
+`require_literal_prompt` for the kind readers, `groups_named` and `middleware_named`
+for workspace seeding -- so it is not a kinds file, and *"Two modules came up a
+directory, and an import cycle is why"* is why moving it again would need its own
+argument. The cycle that entry records cannot recur here: `kinds/__init__` imports
+nothing, which is also what keeps `kinds.subagents` at 6ms rather than the 1,699ms
+a re-export reaching `kinds.subagents.harness` would cost every kind import.
+
+**`THIRD_PARTY` gained an entry rather than losing four.** Collapsing the five kinds
+into one `kinds` key would hand `kinds/agents` -- the only kind whose set is empty,
+and empty because its runtime half stayed in `harness/` -- the union of the other
+four. The five stay, re-keyed, and `kinds` itself is named with an empty set so a
+kind added without an entry inherits nothing rather than the package root's answer.
+
+**Found on the way past: `CLAUDE.md` had been wrong since 2026-09-04.** It said only
+`infrastructure/harness/` may import deepagents, langchain or langgraph, which
+stopped being true the day `tools` and `subagents` became packages. No test reads
+that file against `THIRD_PARTY`, and nothing else would have said so.
+*(2026-09-04, reversed in part 2026-09-10.)*
+
+**A kind reads its own documents.** `kinds.subagents.reading.read`,
+`kinds.skills.reading.name_from`, and `kinds.agents.reading.read`. Each was two functions in two packages: an envelope opener in
 `infrastructure` and the format's own parser, with the opener calling straight
 back into the module it was called from. *(2026-09-05.)*
 
@@ -1482,7 +1533,7 @@ one kingfisher import where it had five.
 **`skills` gained a `reading` beside its `spec`, and the reason is a rule.** A
 domain module may name a kind's `spec` and nothing else of it, on the stated
 grounds that a spec is format vocabulary with no adapter behind it. Reading a
-document needs `yaml`, so folding the reader into `skills.spec` would have made
+document needs `yaml`, so folding the reader into `kinds.skills.spec` would have made
 that sentence false while leaving it written down -- and the architecture test
 checks direct imports, so nothing would have said so.
 
@@ -1490,7 +1541,8 @@ checks direct imports, so nothing would have said so.
 `catalogue/__init__` imports three kind modules; `documents` and `importing`
 sat inside that package and were imported *by* those kinds. The loop resolved by
 luck of import ordering and stopped resolving when the readers moved -- a cold
-`import kingfisher.subagents.catalogue` failed outright. Both files are generic:
+`import kingfisher.kinds.subagents.catalogue` failed outright. Both files are
+generic:
 `importing` imports nothing from kingfisher whatsoever, and `documents` now
 imports one thing. `infrastructure/__init__` imports nothing, so moving them up
 removes the edge instead of reordering around it.
@@ -1514,8 +1566,8 @@ turned out to be exercised by no test at all: mutating either left the whole
 suite green. That gap is older than the move and is now covered.
 
 **They deliberately do not share.** All three resolve a `source::name` and all
-three do it their own way -- `tools.spec.split_reference` and
-`skills.registry.split_qualified` differ today by one call that strips a
+three do it their own way -- `kinds.tools.spec.split_reference` and
+`kinds.skills.registry.split_qualified` differ today by one call that strips a
 trailing slash. Written once and shared, a change for one kind would have to be
 argued past the other two. The duplication is the price of each kind changing on
 its own, and it is the point rather than an oversight. What stays shared is the
@@ -1530,7 +1582,7 @@ and the definition readers parse a tool reference because an agent definition
 referring to itself, not the domain reaching for a layer.
 
 The rule was refused as a wall first and then measured, which is the order that
-was wrong. Importing `domain.ports` and `agents.spec` with those edges takes
+was wrong. Importing `domain.ports` and `kinds.agents.spec` with those edges takes
 39ms and loads 101 modules with no part of the agent runtime among them -- the
 same 39ms recorded below as the good case against 888ms. The direction was
 protecting two operational properties and this costs neither, so what stopped
@@ -1553,7 +1605,7 @@ choose: `SKILLS` and `UPLOADED_SKILL_DIR` were declared by the skill format and
 used by `kingfisher.layout`, which *is* the layout; `ceiling` sat in the tool module
 and touches no registry, so it went to `domain.capabilities` with the rest of
 that arithmetic; and `wanted_model` was in the subagent format while
-`agents.spec` imported it to read its own `model:` line, so it went to
+`kinds.agents.spec` imported it to read its own `model:` line, so it went to
 `domain.fields`, which is the field readers. A helper two formats need belongs
 to neither of them.
 
@@ -1612,7 +1664,7 @@ The pieces are where they are for reasons that survive being asked again.
 because the rule is expressible in kingfisher's vocabulary -- both fields are
 name lists -- while turning a name into an object is not. `declared_middleware`
 is in `harness/` because it imports `langchain`, which is the same rule that
-keeps `skills.registry` and `subagents.harness` where they are. A
+keeps `kinds.skills.registry` and `kinds.subagents.harness` where they are. A
 `kingfisher/middleware/` package would be the fifth area in `THIRD_PARTY`
 reaching the agent runtime, and the last three entries there each carry a note
 apologising for widening a boundary that used to be one directory.
@@ -1856,9 +1908,13 @@ stale. A rule is fragile when it has to read intent, not because it reads prose.
 **A prose root is any package, not only a top-level one.** `_prose_roots` read one
 directory deep, so a package that moved down a level took its references out of the
 pattern instead of into the failure list. Once `tools/` is not a top-level directory,
-`tools.spec` stops looking like a module path at all: the rule goes quiet rather than
-red, which is the one failure it cannot report about itself -- and it is the failure a
-move causes, which is when the rule is worth most.
+a comment saying *tools.spec* stops looking like a module path at all: the rule goes
+quiet rather than red, which is the one failure it cannot report about itself -- and it
+is the failure a move causes, which is when the rule is worth most.
+
+Written the day before `kinds/` arrived, this paragraph used that example in backticks,
+where it resolved. The move falsified it and the widened rule caught it on the first run
+after -- the entry demonstrating itself, which is the only reason it is worth noting.
 
 **The cost is that shorthand is refused**, and the entry above is what to read it
 against. Eight of the ten references this turned up are not rot: written *harness.agent*

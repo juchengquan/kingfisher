@@ -21,9 +21,9 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.kinds.tools.harness import workspace_tool_names
 from kingfisher.layout import SKILLS_ROUTE
-from kingfisher.subagents.spec import SubagentError, SubagentSpec
-from kingfisher.tools.harness import workspace_tool_names
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
 
 SUBAGENT = """name: reviewer
@@ -268,7 +268,7 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
 
     from kingfisher.infrastructure import catalogue as catalogue_module
     from kingfisher.infrastructure.catalogue import layered as layered_module
-    from kingfisher.subagents.catalogue import LocalSubagentRepository
+    from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
     from tests.unit.test_run import StubAgent
 
     for kind in ("skills", "subagents", "tools"):

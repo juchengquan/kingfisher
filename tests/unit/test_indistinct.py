@@ -10,9 +10,9 @@ from kingfisher.config import Endpoint, ModelProfile
 from kingfisher.domain.capabilities import ALL, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.activation import indistinct_delegates
-from kingfisher.subagents import reading
-from kingfisher.subagents.harness import model_for
-from kingfisher.subagents.spec import RunOn
+from kingfisher.kinds.subagents import reading
+from kingfisher.kinds.subagents.harness import model_for
+from kingfisher.kinds.subagents.spec import RunOn
 from tests.conftest import an_agent, subagents_dir
 
 ASKED = """name: second-opinion

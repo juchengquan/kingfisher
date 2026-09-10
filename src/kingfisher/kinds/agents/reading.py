@@ -1,16 +1,16 @@
 """Turning an agent document into a spec.
 
 `spec` says what a definition means; this says how a file becomes one. Named
-`read` because the module says which kind, as `subagents.reading.read` does.
+`read` because the module says which kind, as `kinds.subagents.reading.read` does.
 """
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.agents import spec as agent
-from kingfisher.agents.spec import AgentError, AgentSpec
 from kingfisher.infrastructure import documents
+from kingfisher.kinds.agents import spec as agent
+from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 
 if TYPE_CHECKING:
     from pathlib import Path

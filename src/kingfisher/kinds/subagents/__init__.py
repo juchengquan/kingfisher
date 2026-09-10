@@ -13,6 +13,6 @@ neither is free, and the domain may not import either.
 #: them, and that was half a reason: it said why the name is not beside the assembly,
 #: never why it belonged in the most expensive module here. `harness` imports
 #: deepagents, so four characters cost `interpreter` 1,569ms and 3,160 modules -- in a
-#: file whose every other import is stdlib -- and cost `tools.harness` 1,205ms. From
+#: file whose every other import is stdlib -- and cost `kinds.tools.harness` 1,205ms. From
 #: here they are 17ms and 56ms, no SDK loaded.
 TASK_TOOL = "task"

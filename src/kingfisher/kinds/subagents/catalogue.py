@@ -6,16 +6,16 @@ from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
 
-from kingfisher.infrastructure.importing import (
+from kingfisher.kinds.importing import (
     PACKAGE_MARKER,
     load,
     modules_in,
     skipped,
 )
-from kingfisher.subagents import reading
-from kingfisher.subagents.reading import EXPORT, NEAR_MISS, SUFFIX, declared
-from kingfisher.subagents.spec import SubagentError, SubagentSpec
-from kingfisher.tools.spec import reference
+from kingfisher.kinds.subagents import reading
+from kingfisher.kinds.subagents.reading import EXPORT, NEAR_MISS, SUFFIX, declared
+from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
+from kingfisher.kinds.tools.spec import reference
 
 #: What a bundle's own assets are kept in, and therefore the two directory names that
 #: are not organisation here. A folder under `subagents/` is normally free -- it groups

@@ -10,7 +10,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
-from kingfisher.skills.spec import FILENAME
+from kingfisher.kinds.skills.spec import FILENAME
 
 #: Where a skill has to be for anything to find it, said once so callers can
 #: quote it without knowing the filename themselves. Two shapes, because a

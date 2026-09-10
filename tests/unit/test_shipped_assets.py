@@ -9,17 +9,17 @@ import pytest
 import yaml
 from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
-from kingfisher.agents.catalogue import LocalAgentRepository
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
-from kingfisher.infrastructure.importing import load
-from kingfisher.skills import spec as skill
-from kingfisher.skills.catalogue import LocalSkillRepository
-from kingfisher.skills.reading import name_from
-from kingfisher.subagents.catalogue import LocalSubagentRepository
-from kingfisher.tools.catalogue import LocalToolRepository, tool_name
-from kingfisher.tools.spec import Offering
+from kingfisher.kinds.agents.catalogue import LocalAgentRepository
+from kingfisher.kinds.importing import load
+from kingfisher.kinds.skills import spec as skill
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
+from kingfisher.kinds.skills.reading import name_from
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
+from kingfisher.kinds.tools.spec import Offering
 from tests.conftest import FakeToolCallingModel, capture_build, repository_root
 
 
@@ -172,7 +172,7 @@ def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     """Seeding a catalogue that refuses to load would be the worst kind of example:
     copied, broken on the first run, and the format blamed.
     """
-    from kingfisher.subagents.rules import refuse_cycles
+    from kingfisher.kinds.subagents.rules import refuse_cycles
 
     refuse_cycles(LocalSubagentRepository(shipped / "subagents").specs)
 
@@ -584,7 +584,7 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
     every one of them.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-    from kingfisher.middleware import LocalMiddlewareRepository
+    from kingfisher.kinds.middleware import LocalMiddlewareRepository
 
     assert (shipped / "middleware").is_dir()
     assert "middleware" in DEFINITION_KINDS

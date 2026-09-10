@@ -9,7 +9,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.infrastructure.importing import (
+from kingfisher.kinds.importing import (
     PACKAGE_MARKER,
     LoadError,
     load,

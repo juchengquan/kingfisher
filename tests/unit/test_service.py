@@ -15,7 +15,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace.placement import DataError
-from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import StubCheckpointer, an_agent, start, subagents_dir
 from tests.unit.test_run import StubAgent
 

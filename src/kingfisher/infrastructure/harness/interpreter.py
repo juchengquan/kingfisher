@@ -6,7 +6,7 @@ import logging
 from contextlib import suppress
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.subagents import TASK_TOOL
+from kingfisher.kinds.subagents import TASK_TOOL
 
 if TYPE_CHECKING:
     from kingfisher.config import Config

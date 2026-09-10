@@ -13,8 +13,8 @@ from kingfisher.domain.capabilities import (
     narrowed,
 )
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.subagents import TASK_TOOL
-from kingfisher.tools.spec import Found, Offering
+from kingfisher.kinds.subagents import TASK_TOOL
+from kingfisher.kinds.tools.spec import Found, Offering
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping, Sequence

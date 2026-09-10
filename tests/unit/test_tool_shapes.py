@@ -9,9 +9,9 @@ from langchain_core.messages import AIMessage, ToolMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.tools.catalogue import LocalToolRepository, ToolError
-from kingfisher.tools.harness import registered_tools
-from kingfisher.tools.spec import named, tool_name
+from kingfisher.kinds.tools.catalogue import LocalToolRepository, ToolError
+from kingfisher.kinds.tools.harness import registered_tools
+from kingfisher.kinds.tools.spec import named, tool_name
 from tests.conftest import FakeToolCallingModel, tools_dir
 
 BARE = '''

@@ -16,8 +16,8 @@ from kingfisher import Inventory, Origins
 from kingfisher.domain.access import AUDIENCED, Audience, spell
 from kingfisher.domain.capabilities import ALL
 from kingfisher.infrastructure.workspace.seeding import SEED_HINT
-from kingfisher.skills.catalogue import SKILL_LAYOUT
-from kingfisher.tools.spec import offered, split_reference
+from kingfisher.kinds.skills.catalogue import SKILL_LAYOUT
+from kingfisher.kinds.tools.spec import offered, split_reference
 
 
 def _from(source: str | None, expected: str) -> str:

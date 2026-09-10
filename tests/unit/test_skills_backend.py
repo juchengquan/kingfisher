@@ -9,9 +9,9 @@ import pytest
 from kingfisher.domain.ports import SkillRepository
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
 from kingfisher.infrastructure.harness.backend import build_backend, shell_env
+from kingfisher.kinds.skills.backend import skills_backend
+from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.layout import SKILLS_ROUTE
-from kingfisher.skills.backend import skills_backend
-from kingfisher.skills.catalogue import LocalSkillRepository
 
 SKILL = "---\nname: {name}\ndescription: A skill.\n---\n\nbody of {name}\n"
 
@@ -208,7 +208,7 @@ def test_the_shell_is_told_nothing_rather_than_told_a_lie(cfg, session_dir):
 
 
 def test_a_skill_reaches_the_store_with_every_file_it_ships(tmp_path):
-    """Straight through `skills.backend`, so the mount is checked apart from the wiring
+    """Straight through `kinds.skills.backend`, so the mount is checked apart from the wiring
     that chooses it.
     """
     repo = _on_disk(tmp_path, "demo")

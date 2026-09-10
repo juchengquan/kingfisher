@@ -33,8 +33,6 @@ from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
 
-from kingfisher.agents.reading import read
-from kingfisher.agents.spec import AgentSpec
 from kingfisher.application import access
 from kingfisher.application import config as config_module
 from kingfisher.application.disposal import Disposal
@@ -118,6 +116,8 @@ from kingfisher.infrastructure.workspace.snapshots import (
     remember_agent,
 )
 from kingfisher.infrastructure.workspace.uploads import provision
+from kingfisher.kinds.agents.reading import read
+from kingfisher.kinds.agents.spec import AgentSpec
 
 if TYPE_CHECKING:
     from collections.abc import Callable, Mapping

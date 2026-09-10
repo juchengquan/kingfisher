@@ -13,12 +13,12 @@ from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.spec import SubagentError
+from kingfisher.kinds.tools.catalogue import ToolError
+from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
 from kingfisher.presentation.cli.listing import _catalogue, failed
-from kingfisher.subagents.catalogue import LocalSubagentRepository
-from kingfisher.subagents.spec import SubagentError
-from kingfisher.tools.catalogue import ToolError
-from kingfisher.tools.spec import Offering, tool_name
 from tests.conftest import FakeToolCallingModel, capture_build
 
 DEFINITION = "name: {name}\ndescription: A subagent.\nsystem_prompt: |\n  x\n"
@@ -646,7 +646,7 @@ def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):
     """An example is judged by whether an agent can run it, not by this package's
     layering -- so it is imported and called.
     """
-    from kingfisher.tools.catalogue import LocalToolRepository
+    from kingfisher.kinds.tools.catalogue import LocalToolRepository
 
     found = LocalToolRepository(shipped / "subagents" / "redactor" / "tools").found
 

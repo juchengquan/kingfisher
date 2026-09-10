@@ -6,7 +6,7 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 
 SPEC = """

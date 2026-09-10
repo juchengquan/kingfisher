@@ -7,9 +7,9 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.subagents.catalogue import LocalSubagentRepository
-from kingfisher.subagents.reading import EXPORT, NOT_COMPILED, declared
-from kingfisher.subagents.spec import SubagentError
+from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.reading import EXPORT, NOT_COMPILED, declared
+from kingfisher.kinds.subagents.spec import SubagentError
 from tests.conftest import FakeToolCallingModel, capture_build, declared_subagents
 
 COMPILED = '''"""A delegate the workspace assembled."""
@@ -150,7 +150,7 @@ def _entry(**extra):
 #: test that used one would be asserting against a shape deepagents rejects.
 RECORDING = """from langchain_core.runnables import RunnableLambda
 
-import kingfisher.subagents.catalogue as store
+import kingfisher.kinds.subagents.catalogue as store
 
 
 def _record(model, tools):
@@ -215,7 +215,7 @@ def test_a_spec_cannot_carry_both_a_prompt_and_a_builder():
     """Checked on the record rather than promised by two parsers, so a spec built in
     code cannot be the one shape neither parser can produce.
     """
-    from kingfisher.subagents.spec import SubagentSpec
+    from kingfisher.kinds.subagents.spec import SubagentSpec
 
     with pytest.raises(ValueError, match="one or the other"):
         SubagentSpec(name="r", description="d", system_prompt="Go.", build=lambda: None)
@@ -344,8 +344,8 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     the cases that matter -- a compiled graph, this stub, whatever a class constructs
     to, and `None` -- `Runnable` is what separates the first from the rest.
     """
-    from kingfisher.subagents.harness import compiled
-    from kingfisher.subagents.spec import SubagentSpec
+    from kingfisher.kinds.subagents.harness import compiled
+    from kingfisher.kinds.subagents.spec import SubagentSpec
 
     class OnlyInvoke:
         def invoke(self, *a, **k):
@@ -366,8 +366,8 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
     """
     from langchain_core.runnables import RunnableLambda
 
-    from kingfisher.subagents.harness import compiled
-    from kingfisher.subagents.spec import SubagentSpec
+    from kingfisher.kinds.subagents.harness import compiled
+    from kingfisher.kinds.subagents.spec import SubagentSpec
 
     not_a_graph = RunnableLambda(lambda state: state)
     spec = SubagentSpec(
@@ -409,7 +409,7 @@ def _tools_seen(cfg, session_dir, monkeypatch, capabilities):
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
         capabilities=capabilities,
     )
-    import kingfisher.subagents.catalogue as store
+    import kingfisher.kinds.subagents.catalogue as store
 
     _model, tools = store.SEEN
     del store.SEEN
@@ -458,9 +458,9 @@ def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
     from langchain_core.runnables import RunnableLambda
     from langchain_core.tools import tool
 
-    from kingfisher.subagents.harness import compiled
-    from kingfisher.subagents.spec import SubagentSpec
-    from kingfisher.tools.spec import Found, tool_name
+    from kingfisher.kinds.subagents.harness import compiled
+    from kingfisher.kinds.subagents.spec import SubagentSpec
+    from kingfisher.kinds.tools.spec import Found, tool_name
 
     @tool
     def probe(x: str) -> str:

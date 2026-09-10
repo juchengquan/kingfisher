@@ -4,9 +4,9 @@ from __future__ import annotations
 
 import pytest
 
-from kingfisher.agents.spec import AgentError
 from kingfisher.domain.capabilities import ALL
 from kingfisher.domain.fields import Reader
+from kingfisher.kinds.agents.spec import AgentError
 
 read = Reader(source="x.yaml", error=AgentError)
 

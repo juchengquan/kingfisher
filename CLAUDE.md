@@ -91,9 +91,14 @@ guards a specific past bug, name the bug -- that sentence is often the only
 record of it, and it stays however short the rest gets.
 
 **Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
-imports: `domain/` imports nothing foreign, and only `infrastructure/harness/`
-may import deepagents, langchain or langgraph. Adding a foreign dependency means
-updating those rules, not working around them.
+imports against `THIRD_PARTY`, one entry per area, deny by default: `domain/`
+takes the standard library, itself and an asset kind's `spec`, and the agent
+runtime is reachable from `infrastructure/harness/` and from the kinds that must
+name its types -- `kinds/skills`, `kinds/subagents`, `kinds/tools` and
+`kinds/middleware`, each entry saying which package and why. `kinds/agents` is
+the one kind whose set is empty. Adding a foreign dependency means editing that
+table, not working around it. No test reads this paragraph against that table, so
+this is the one place the two can drift apart -- re-read it when the table moves.
 
 **Measure before building on a premise.** Several decisions in `docs/decisions.md`
 exist because a stated premise turned out to be false when someone checked. If a

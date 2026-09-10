@@ -8,12 +8,12 @@ import pytest
 import yaml
 from langchain.agents.middleware import AgentMiddleware
 
-from kingfisher.agents import spec as agent_format
-from kingfisher.agents.spec import AgentError
 from kingfisher.domain.capabilities import ALL, CapabilityError
 from kingfisher.infrastructure.harness.middleware import declared_middleware
-from kingfisher.subagents import reading as subagent_format
-from kingfisher.subagents.spec import SubagentError
+from kingfisher.kinds.agents import spec as agent_format
+from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.subagents import reading as subagent_format
+from kingfisher.kinds.subagents.spec import SubagentError
 
 
 class Audit(AgentMiddleware):

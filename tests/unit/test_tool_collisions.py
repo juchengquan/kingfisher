@@ -10,7 +10,7 @@ from langgraph.prebuilt.tool_node import ToolNode
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError, all_but
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.tools.catalogue import LocalToolRepository
+from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from tests.conftest import FakeToolCallingModel, subagents_dir, tools_dir
 from tests.unit.test_delegation_ceiling import _subagent_graphs
 
@@ -310,7 +310,7 @@ def test_one_file_defining_a_name_twice_is_still_refused(cfg):
     """Where the refusal still belongs: no second file, so no reference could pick
     between them and nothing downstream could offer a way to say which.
     """
-    from kingfisher.tools.catalogue import ToolError
+    from kingfisher.kinds.tools.catalogue import ToolError
 
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "twice.py").write_text(
