@@ -10,6 +10,7 @@ from kingfisher import layout
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.kinds.skills import spec as skill
 from kingfisher.kinds.skills.reading import name_from
+from kingfisher.kinds.skills.registry import read_uploaded, split_qualified
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.reading import SUFFIX
 
@@ -125,11 +126,6 @@ def materialise_skills(
     # *when* the caller hears about it: here, against the ref they sent, rather than at
     # activation against a name they may not have chosen. A skill with no `description`
     # is the easy case and the common one.
-    from kingfisher.kinds.skills.registry import (  # noqa: PLC0415
-        read_uploaded,
-        split_qualified,
-    )
-
     loads = read_uploaded(root)
     if dropped := tuple(sorted(set(wrote) - {split_qualified(k)[1] for k in loads.offered})):
         refs_named = ", ".join(f"{wrote[name]} ({name})" for name in dropped)

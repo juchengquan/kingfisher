@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain.access import AUDIENCED
 from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import (
     available_skills,
     defined_subagents,
@@ -15,12 +16,12 @@ from kingfisher.kinds.tools.harness import (
     registered_tools,
     workspace_tool_names,
 )
+from kingfisher.kinds.tools.spec import Offering
 
 if TYPE_CHECKING:
     from pathlib import Path
 
     from kingfisher.config import Config
-    from kingfisher.infrastructure.catalogue import Definitions
     from kingfisher.kinds.agents.spec import AgentSpec
 
 
@@ -124,9 +125,6 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
 
 def delegate_only(allowed: Capabilities, cfg: Config, *, catalogue: Any) -> tuple[str, ...]:
     """Names this run was granted that only a delegate can actually ask for."""
-    from kingfisher.infrastructure.catalogue import Definitions  # noqa: PLC0415
-    from kingfisher.kinds.tools.spec import Offering  # noqa: PLC0415
-
     found = (catalogue or Definitions.from_config(cfg)).tools.found
     return Offering.of(found).ambiguous(allowed.tools, found)
 
