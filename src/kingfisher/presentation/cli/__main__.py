@@ -39,7 +39,7 @@ from kingfisher import (
 # reach in the file, which is the shape to keep. Everything above is public and
 # comes through the front door because it is.
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-from kingfisher.presentation.cli.health import examine, worst
+from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show
 
@@ -412,7 +412,22 @@ def _serve() -> int:
 
 def _doctor(*, as_document: bool = False) -> int:
     """Say what would stop a run, and what would merely surprise."""
-    cfg = config_from_env()
+    try:
+        cfg = config_from_env()
+    except ConfigError:
+        # Said before the error rather than instead of it. `examine` reports a
+        # retired setting, and a `Config` has to exist before it can -- so the
+        # run that most needs to hear it is the one that cannot: a deployment
+        # from when `KINGFISHER_MODEL` and `KINGFISHER_API_STYLE` chose the model
+        # has no `models.yaml`, because the catalogue is what replaced them. It
+        # gets told the file is missing, and without this, nothing connects that
+        # to the three variables it is still setting.
+        #
+        # `stderr`, so `--json` still emits a document or nothing at all.
+        for check in _retired():
+            print(f"{check.verdict}  {check.name}  {check.detail}", file=sys.stderr)
+            print(f"      -> {check.remedy}", file=sys.stderr)
+        raise
     # Built here and handed on, rather than each of the two asking for its own.
     # The header and the checks are then reading one object -- and `examine`
     # building its own is what made "your configuration is being ignored"
