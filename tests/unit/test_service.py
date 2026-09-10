@@ -494,6 +494,23 @@ def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
     assert "report.md" in at_the_end[1], "and had the work back before it ended"
 
 
+def test_a_sessions_memory_is_not_replaced_by_its_own_scaffold(cfg, tmp_path):
+    """The layout was created before the store was read, so on a tree that starts
+    empty every turn the scaffold got there first, `restore_into` skipped the name
+    as already present, and the save at the end wrote the scaffold over what had
+    been kept -- a session's memory destroyed one turn after it was written, with
+    nothing reporting it. `/derived` never caught this because no scaffold competes
+    for those names.
+    """
+    service, kept, _ = _wired_to_a_root(cfg, tmp_path)
+    first = service.run(Request(task="anything"))
+    kept.save(first.session_id, {"memory/AGENTS.md": b"# Project memory\n\n- metric units\n"})
+
+    service.run(Request(task="again", session_id=first.session_id))
+
+    assert b"metric units" in kept.fetch(first.session_id)["memory/AGENTS.md"]
+
+
 def test_the_tree_is_released_when_a_turn_fails(cfg, tmp_path):
     """A mount left behind after every failed turn is an accumulating pile of other
     tenants' session directories, in the box this design exists to make safe.

@@ -14,6 +14,7 @@ from kingfisher.layout import (
     ARTIFACT_DIRS,
     CLAIM,
     HARNESS,
+    MEMORY,
     SESSION_DIRS,
     SESSION_PLUMBING,
 )
@@ -59,7 +60,18 @@ class LocalSessionDirs:
 
 
 def ensure_session_layout(session_dir: Path) -> Path:
-    """Create one session's layout. Idempotent."""
+    """Create one session's layout. Idempotent.
+
+    For a caller with no store to read. Where there is one, the two halves go
+    either side of it -- see `scaffold_memory` for what the order is protecting.
+    """
+    session_dir = make_session_dirs(session_dir)
+    scaffold_memory(session_dir)
+    return session_dir
+
+
+def make_session_dirs(session_dir: Path) -> Path:
+    """Every directory a session holds. Idempotent."""
     session_dir = Path(session_dir).expanduser().resolve()
     for name in (*SESSION_DIRS, *SESSION_PLUMBING):
         (session_dir / name).mkdir(parents=True, exist_ok=True)
@@ -68,14 +80,27 @@ def ensure_session_layout(session_dir: Path) -> Path:
     # package that changes a mode, and it says why this one is set at all.
     keep_tmp_private(session_dir)
 
-    # Scaffolded rather than empty: the memory prompt directs the agent to save
-    # knowledge with `edit_file`, which replaces existing text — an empty file
-    # offers nothing to anchor against.
-    agents_md = session_dir / "memory" / "AGENTS.md"
+    return session_dir
+
+
+def scaffold_memory(session_dir: Path) -> None:
+    """Give `/memory/AGENTS.md` something for an edit to anchor against.
+
+    Scaffolded rather than empty: the memory prompt directs the agent to save
+    knowledge with `edit_file`, which replaces existing text.
+
+    **After a store has been read, never before it.** A scaffold written first is
+    a file `restore_into` then skips as already present, so the agent opens the
+    turn with an empty memory and `keep_from` saves that scaffold over what the
+    store had kept -- the session's own memory, destroyed on the turn after it
+    was written. A directory that survives between turns hides this, because the
+    scaffold is written once when the session is created and the branch below is
+    false forever after; it is a `SessionRoot` handing back a fresh tree that
+    reaches it every turn.
+    """
+    agents_md = Path(session_dir) / MEMORY / "AGENTS.md"
     if not agents_md.exists() or not agents_md.read_text(encoding="utf-8").strip():
         agents_md.write_text(AGENTS_SCAFFOLD, encoding="utf-8")
-
-    return session_dir
 
 
 class LocalSessionRoot:
