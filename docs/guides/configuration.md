@@ -103,6 +103,20 @@ container that mounts only the workspace has already provided one and should say
 so with `external`; a developer's machine has provided nothing, which is why
 `auto` is the default rather than `off`.
 
+**`external` is a boundary against the host, not between callers.** One container
+serves every session, so "the runtime already confines this process" says nothing
+about session A reading session B — the file tools give each session a root of
+its own, and the shell does not go through the file tools. A single instance
+serving several callers wants `auto` inside the container as well, which fences
+each turn to its own session directory. `tests/linux/test_fence_escapes.py` is
+the list of ways out that fence is held to, each one paired with a control that
+runs unfenced and proves the escape works without it.
+
+On Linux `auto` reaches Landlock only where `sandlock` is installed and the
+kernel offers ABI 6; `pip install 'kingfisher[fence]'` supplies the first, and
+the shipped image does. `kingfisher doctor` names the mechanism it settled on and
+says why when it settled on nothing.
+
 Whatever you add to `PATH` is granted to the fence as readable, so a directory
 named here is one the agent can run from.
 

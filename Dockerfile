@@ -1,10 +1,12 @@
 # Kingfisher, for a deployment that must keep nothing on the machine it runs on.
 #
 # The container is not a sandbox wrapped around each turn -- it is how the
-# service is deployed, and one of them serves every session. What it supplies is
-# the boundary `KINGFISHER_SHELL_SANDBOX=external` names: "the runtime already
-# confines this process", which is why `confinement.py` is switched off by
-# configuration here rather than deleted.
+# service is deployed, and one of them serves every session. That second half is
+# why no `KINGFISHER_SHELL_SANDBOX` is set here. `external` claims the runtime
+# already confines this process, which is true of the host and says nothing
+# about one session reading another's files inside the same container -- and
+# whether that matters is a fact about the deployment. So the deployment names
+# the mode; see `compose.yaml`.
 #
 # There is no tmpfs in this file, deliberately. A memory filesystem has to be
 # sized against the container's *memory limit*, and an image cannot know one --
@@ -33,7 +35,12 @@ WORKDIR /app
 # Dependencies before source, so editing code does not re-resolve them.
 COPY pyproject.toml uv.lock README.md ./
 COPY src/ ./src/
-RUN uv sync --frozen --no-dev
+# `--extra fence` installs `sandlock`, which is what `auto` reaches for on a
+# kernel offering Landlock. Installed rather than left to the operator because
+# the alternative is a deployment that sets `auto`, gets the unconfined
+# fallback, and has to rebuild the image to fix it. It carries a
+# `sys_platform == 'linux'` marker, so it is a no-op on any other base.
+RUN uv sync --frozen --no-dev --extra fence
 
 # The worked definitions. Not in the wheel -- `KINGFISHER_ASSETS` names a
 # directory and this image ships one so `kingfisher seed` has somewhere to point.
@@ -41,10 +48,7 @@ COPY assets_examples/ ./assets_examples/
 
 ENV PATH="/app/.venv/bin:${PATH}" \
     KINGFISHER_WORKSPACE=/workspace \
-    KINGFISHER_ASSETS=/app/assets_examples \
-    # The container is the boundary. Wrapping the shell again inside it would
-    # pay twice for one guarantee.
-    KINGFISHER_SHELL_SANDBOX=external
+    KINGFISHER_ASSETS=/app/assets_examples
 
 # Nothing here creates /workspace. It is a mount, and a directory baked into the
 # image would be a silent fallback when the mount is missing -- exactly the
