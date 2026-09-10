@@ -30,7 +30,11 @@ from langchain_core.messages import AIMessage
 
 load_dotenv()
 
-MODEL_ID = os.environ.get("KINGFISHER_MODEL", "MiniMax-M3")
+# `SPIKE_` and not `KINGFISHER_`: these two are this script's own knobs, and
+# the deployment settings by those names were removed. A probe answering to a
+# name the rest of the tree tells people is dead is a probe that teaches the
+# opposite of `kingfisher doctor`.
+MODEL_ID = os.environ.get("SPIKE_MODEL", "MiniMax-M3")
 TIMEOUT_S = 120
 MAX_TOKENS = 4096
 
@@ -151,7 +155,7 @@ def run_style(style: str, workspace: Path) -> Result:
 
 
 def main() -> int:
-    styles = tuple(os.environ.get("KINGFISHER_STYLES", "anthropic,openai").split(","))
+    styles = tuple(os.environ.get("SPIKE_STYLES", "anthropic,openai").split(","))
     print(f"model={MODEL_ID} styles={styles}\n")
     results: list[Result] = []
     for style in styles:

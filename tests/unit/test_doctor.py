@@ -441,6 +441,67 @@ def test_the_description_names_its_own_limit():
     assert "kingfisher.run" in description  # and here is what would prove it
 
 
+# -- settings nothing reads any more -----------------------------------------
+
+
+def test_a_retired_setting_is_reported(cfg, monkeypatch):
+    """The whole of what replaced reading both names. A variable that stops being
+    read is silent by construction -- nothing warns about an unknown `KINGFISHER_`
+    one -- so without this a deployment carrying `KINGFISHER_SKILLS=true` runs with
+    skills off and has nowhere to find out why.
+    """
+    monkeypatch.setenv("KINGFISHER_SKILLS", "true")
+
+    check = {c.name: c for c in examine(cfg)}["retired settings"]
+
+    assert check.verdict == "warn"
+    assert "KINGFISHER_SKILLS" in check.detail
+    assert "KINGFISHER_SKILLS_ENABLED" in check.remedy
+
+
+def test_the_old_service_prefix_is_reported_by_its_prefix(cfg, monkeypatch):
+    """Matched rather than enumerated, so a suffix nobody listed is still caught --
+    and the base package does not carry a second copy of the service's own table,
+    which would quietly stop covering whichever setting it gains next.
+    """
+    monkeypatch.setenv("KINGFISHER_SERVER_INVENTED_LATER", "1")
+
+    check = {c.name: c for c in examine(cfg)}["retired settings"]
+
+    assert "KINGFISHER_SERVER_INVENTED_LATER" in check.detail
+    assert "KINGFISHER_SERVICE_INVENTED_LATER" in check.remedy
+
+
+def test_a_retired_name_left_empty_is_not_reported(cfg, monkeypatch):
+    """`FOO=` in an env file is a deployment that has already stopped using it, and
+    a warning there is one people learn to scroll past.
+    """
+    monkeypatch.setenv("KINGFISHER_SCRATCH_DIR", "   ")
+
+    assert "retired settings" not in {c.name for c in examine(cfg)}
+
+
+def test_a_deployment_on_current_names_hears_nothing(cfg, monkeypatch):
+    """The path every deployment ends on, and the one that would be intolerable to
+    make noisy: a current name must never look retired.
+    """
+    monkeypatch.delenv("KINGFISHER_SKILLS", raising=False)
+    monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "true")
+    monkeypatch.setenv("KINGFISHER_SERVICE_PORT", "9001")
+
+    assert "retired settings" not in {c.name for c in examine(cfg)}
+
+
+def test_a_retired_setting_does_not_stop_the_deployment(cfg, monkeypatch):
+    """A warning and not a failure: it runs, on the defaults, which may well be what
+    the deployment wanted. `doctor` exiting non-zero over a line somebody forgot to
+    delete would make an upgrade look broken when it is merely untidy.
+    """
+    monkeypatch.setenv("KINGFISHER_MODEL", "something-retired")
+
+    assert worst(examine(cfg)) != "fail"
+
+
 # -- a workspace that must keep nothing --------------------------------------
 
 

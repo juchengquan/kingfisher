@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 import os
-import warnings
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
@@ -15,30 +14,20 @@ if TYPE_CHECKING:
 
 PREFIX = "KINGFISHER_SERVICE_"
 
-#: What these were called while this package was `kingfisher.presentation`, and
-#: still read. Renaming an environment variable is the one rename that fails in
-#: silence: an import that moved stops the program and says so, while a variable
-#: nobody reads falls back to its default and the server comes up on the wrong
-#: port with nothing to show for it. So both are read, the new one wins, and
-#: using the old one says so once.
-WAS = "KINGFISHER_SERVER_"
-
-
 def _reader(source: Mapping[str, str]) -> Callable[[str, Any], Any]:
-    """One setting, under the current name or the one it used to have."""
+    """One setting, under the only prefix that names it.
+
+    `KINGFISHER_SERVER_` was read here alongside the current prefix for a
+    deprecation and is not any more, so a suffix has one spelling and this looks
+    it up. `kingfisher doctor` reports a deployment still carrying the old one --
+    which is the whole of what is left of the fallback, because a variable that
+    stops being read is otherwise silent: the server simply comes up on the
+    default port with nothing to show for it.
+    """
 
     def read(suffix: str, fallback: Any) -> Any:
-        if (value := source.get(f"{PREFIX}{suffix}")) is not None:
-            return value
-        if (value := source.get(f"{WAS}{suffix}")) is not None:
-            warnings.warn(
-                f"{WAS}{suffix} is the old name for {PREFIX}{suffix} and is still "
-                f"read; rename it, since the old one will stop being read.",
-                DeprecationWarning,
-                stacklevel=2,
-            )
-            return value
-        return fallback
+        value = source.get(f"{PREFIX}{suffix}")
+        return fallback if value is None else value
 
     return read
 
