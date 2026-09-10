@@ -159,6 +159,34 @@ files as its own), and **an exception inside the block must propagate** — a
 context manager whose `__exit__` returns true reports a failed turn as a
 successful one, with whatever you mounted still mounted.
 
+### What a root that really is per-turn has to answer
+
+`LocalSessionRoot` yields a directory that survives between turns, and parts of
+the turn path lean on that without saying so. A root that genuinely releases what
+it held — a mount made and dropped around each turn — meets the following, and
+none of it fails loudly.
+
+**`/data` does not come back.** What the store is handed after a turn is
+`/derived`, `/memory`, the transcript and the pinned agent. `/data` is left out
+because it came from the caller and, on a directory that persists, it is still
+sitting there; on a fresh one, turn two opens with an empty `/data` and the
+caller's inputs gone. Carry `data/**` yourself, or require that callers re-supply
+it every turn.
+
+**A deletion does not stick.** `save` merges rather than mirrors, so a name the
+store once held it holds still, and what it holds is written back into a tree
+that starts empty — an agent that deletes `derived/draft.md` finds it there again
+on the next turn. A store behind a per-turn root has to mirror instead: diff what
+it holds against what it was handed, and drop the difference. Do not reach for
+the merge rule to fix it. That is what lets a caller send only what changed, and
+`SESSION_STORE_CONTRACT` holds you to it.
+
+**`sessions()` and `reap` see nothing.** Both walk `<workspace>/sessions/`, which
+a custom root need never use. An id the disk has never seen still resolves,
+because the store's `knows` answers for it, but listing and sweeping do not — so
+retention moves to the store along with the files, and `session_ttl_s` stops
+deciding anything.
+
 ## `CommandRunner` — what runs a shell command
 
 `run(command, timeout=None)` returning a `CommandResult`. For a deployment that
