@@ -381,7 +381,7 @@ def test_the_description_may_still_be_folded(tmp_path):
 
 # -- where a delegate runs ------------------------------------------------
 #
-# The rule used to sit in `kinds.subagents.harness` and take a whole
+# The rule used to sit in `infrastructure.harness.subagents` and take a whole
 # `Config` to read two values out of. It takes the two values now, so it is reachable
 # without a deployment -- which is the same "a domain rule that needs a value
 # takes the value" that `test_domain_imports_only_the_standard_library_and_itself`

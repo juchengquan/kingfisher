@@ -712,8 +712,7 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
 
 def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_path):
     """The property the rule exists for, checked over the result rather than the inputs."""
-    from kingfisher.infrastructure.documents import middleware_named
-    from kingfisher.infrastructure.workspace.seeding import seed
+    from kingfisher.infrastructure.workspace.seeding import middleware_named, seed
 
     class Destination:
         workspace = tmp_path
@@ -1013,7 +1012,7 @@ def test_the_containing_group_reaches_what_it_contains(shipped):
 
 def test_every_group_the_presets_name_is_declared(shipped):
     """The assertion that keeps this set honest."""
-    from kingfisher.infrastructure.documents import groups_named
+    from kingfisher.infrastructure.workspace.seeding import groups_named
 
     declared = set(_vocabulary(shipped).names)
     named = {

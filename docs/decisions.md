@@ -1408,6 +1408,56 @@ in `test_inventory.py`, which is the written form of the claim and names it as
 part of the job. Whether it belongs there is an argument about the proof, not
 about the door.
 
+**Reversed: "a kind owns its route to the runtime."** A kind owns its format and
+its walk over the disk, and nothing below either. `kinds/subagents/harness.py` is
+`infrastructure/harness/subagents.py`, `kinds/tools/harness.py` is
+`infrastructure/harness/tools.py`, and `test_no_kind_names_a_layer` is what keeps it
+that way. *(2026-09-10.)*
+
+**The entry it reverses was right about ownership and wrong about direction.** *An
+asset kind owns its own registration* said the kinds "do not answer to a layer", and
+five imports said otherwise: the subagent runtime half named three modules under
+`infrastructure/harness/` and `infrastructure.prompting`, and the tool surface named
+`infrastructure.catalogue`. Nothing was checking. `THIRD_PARTY` watches foreign
+packages, `HARNESS_EDGES` watches the layers reaching *in*, and the direction between
+`kinds/` and the layers was written in prose and enforced nowhere -- which is how a
+sentence in `CLAUDE.md` about `infrastructure/harness/` had already been false for
+six days before anyone read it against the table.
+
+**Three more edges were found by writing the rule, not by planning it.** All three
+`reading.py` imported the YAML step, which was a flat module under `infrastructure/`,
+and the graph the plan was built on had missed them: it recorded
+`from kingfisher.infrastructure import documents` as an import of the package root
+rather than of the layer. Worth writing down because the
+lesson is not about `documents` -- a measurement that collapses a path loses exactly
+the edges a layering argument is about, and it does it silently.
+
+**`documents.py` split along the two audiences it already had.** *Not moved:
+`documents.py`* argued it was not a kinds file because `decode` and
+`require_literal_prompt` serve the kind readers while `groups_named` and
+`middleware_named` serve workspace seeding. That is still the reading; what changed is
+that the file could not stay whole once a kind may not name a layer. So the first half
+is `kinds/documents.py`, beside `kinds/importing.py` in `KINDS_HELPERS`, and the second
+is in `infrastructure/workspace/seeding.py`, which was its only reader. Neither half
+has two audiences any more, and there is no module called `documents` in two places.
+
+**The cost is one grant and one edge, both named.** `THIRD_PARTY["kinds"]` gains
+`yaml`, so a sixth kind arriving without an entry of its own would inherit a parser
+where it used to inherit nothing -- guarded upstream, since
+`test_kinds_holds_exactly_the_kinds` refuses a directory `DEFINITION_KINDS` does not
+name. And `HARNESS_EDGES` gains `tools` for `inventory` and for `reporting`, which is
+the edge the *previous* move recorded closing. Nothing about that coupling changed
+either time: `reporting` has always read the roster off a compiled graph. What changed
+is whether the table could see it, and a table that cannot see an edge is worse than
+one that lists it.
+
+**What it buys, stated so it can be checked.** The swap boundary is two areas rather
+than four: `infrastructure/harness/` and `kinds/skills`, plus `kinds/middleware` for
+one `isinstance`. `kinds.subagents` and `kinds.tools` grant nothing at all now, and
+every kind import is 5-6ms and 65 modules. `kinds.skills.backend` is the one kind
+module that still reaches the runtime, and *the swap boundary* entry above is where
+the argument for leaving it there lives.
+
 ## Layering
 
 
@@ -1494,8 +1544,8 @@ kingfisher at all. `documents` serves two audiences -- `decode` and
 for workspace seeding -- so it is not a kinds file, and *"Two modules came up a
 directory, and an import cycle is why"* is why moving it again would need its own
 argument. The cycle that entry records cannot recur here: `kinds/__init__` imports
-nothing, which is also what keeps `kinds.subagents` at 6ms rather than the 1,699ms
-a re-export reaching `kinds.subagents.harness` would cost every kind import.
+nothing, which is also what keeps `kinds.skills` at 6ms rather than the 1,033ms
+a re-export reaching `kinds.skills.backend` would cost every kind import.
 
 **`THIRD_PARTY` gained an entry rather than losing four.** Collapsing the five kinds
 into one `kinds` key would hand `kinds/agents` -- the only kind whose set is empty,
@@ -1664,7 +1714,7 @@ The pieces are where they are for reasons that survive being asked again.
 because the rule is expressible in kingfisher's vocabulary -- both fields are
 name lists -- while turning a name into an object is not. `declared_middleware`
 is in `harness/` because it imports `langchain`, which is the same rule that
-keeps `kinds.skills.registry` and `kinds.subagents.harness` where they are. A
+keeps `kinds.skills.registry` where it is. A
 `kingfisher/middleware/` package would be the fifth area in `THIRD_PARTY`
 reaching the agent runtime, and the last three entries there each carry a note
 apologising for widening a boundary that used to be one directory.

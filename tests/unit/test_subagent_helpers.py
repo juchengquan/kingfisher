@@ -328,7 +328,7 @@ def test_a_definition_is_compiled_once_for_each_position(cfg, session_dir, monke
     right = REVIEWER.replace("reviewer", "right").replace("second-opinion", "shared")
     _define(cfg, left, right, shared)
 
-    from kingfisher.kinds.subagents import harness as delegation
+    from kingfisher.infrastructure.harness import subagents as delegation
 
     built: list[str] = []
     real = delegation.as_subagent

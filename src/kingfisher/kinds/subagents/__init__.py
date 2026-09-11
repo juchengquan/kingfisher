@@ -9,10 +9,11 @@ neither is free, and the domain may not import either.
 
 #: The name deepagents gives the tool that dispatches a delegate.
 #:
-#: It sat in `harness` because neither of those may import the module that assembles
-#: them, and that was half a reason: it said why the name is not beside the assembly,
-#: never why it belonged in the most expensive module here. `harness` imports
-#: deepagents, so four characters cost `interpreter` 1,569ms and 3,160 modules -- in a
-#: file whose every other import is stdlib -- and cost `kinds.tools.harness` 1,205ms. From
-#: here they are 17ms and 56ms, no SDK loaded.
+#: **No kind reads it.** Both readers are `infrastructure.harness.tools` and
+#: `infrastructure.harness.interpreter`, so by subject it belongs beside them, and the
+#: reason it is here instead is that the obvious home is an expensive one:
+#: `infrastructure.harness.subagents` is 1,588ms and 3,164 modules, and four characters
+#: there would cost `interpreter` all of it -- a file that is 12ms and 82 modules with
+#: every other import stdlib. Moving it means finding a home under `harness/` that
+#: stays cheap.
 TASK_TOOL = "task"

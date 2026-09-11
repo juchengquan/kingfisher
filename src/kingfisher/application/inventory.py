@@ -267,11 +267,10 @@ def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[Found] | None
 ) -> tuple[str, ...] | None:
     """The built-in set, which is only knowable from an assembled graph."""
-    from kingfisher.infrastructure.harness import agent  # noqa: PLC0415
-    from kingfisher.kinds.tools import harness as surface  # noqa: PLC0415
+    from kingfisher.infrastructure.harness import agent, tools  # noqa: PLC0415
 
     with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-        return surface.registered_tools(
+        return tools.registered_tools(
             agent.build_agent(
                 cfg,
                 session_dir=ensure_session_layout(Path(scratch)),

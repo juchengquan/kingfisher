@@ -12,10 +12,10 @@ from langchain_core.messages import AIMessage
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, ceiling, narrowed
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.infrastructure.harness.subagents import as_subagent, subagent_skills
 from kingfisher.kinds.agents.spec import AgentSpec
 from kingfisher.kinds.skills.registry import SkillRegistry
 from kingfisher.kinds.subagents import reading
-from kingfisher.kinds.subagents.harness import as_subagent, subagent_skills
 from kingfisher.kinds.subagents.spec import SubagentError
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
 

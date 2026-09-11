@@ -3,13 +3,13 @@ from __future__ import annotations
 from dataclasses import replace
 from pathlib import Path
 
+from kingfisher.infrastructure.harness.subagents import as_subagent
 from kingfisher.infrastructure.prompting import (
     USER_PROMPT_FILE,
     render_system_prompt,
     system_prompt,
 )
 from kingfisher.kinds.subagents import reading
-from kingfisher.kinds.subagents.harness import as_subagent
 
 
 def test_base_prompt_names_no_dataset_and_no_domain():

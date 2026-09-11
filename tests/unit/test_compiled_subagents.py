@@ -344,7 +344,7 @@ def test_something_that_merely_looks_like_a_graph_is_refused(cfg):
     the cases that matter -- a compiled graph, this stub, whatever a class constructs
     to, and `None` -- `Runnable` is what separates the first from the rest.
     """
-    from kingfisher.kinds.subagents.harness import compiled
+    from kingfisher.infrastructure.harness.subagents import compiled
     from kingfisher.kinds.subagents.spec import SubagentSpec
 
     class OnlyInvoke:
@@ -366,7 +366,7 @@ def test_the_check_is_the_interface_not_a_particular_graph_class(cfg):
     """
     from langchain_core.runnables import RunnableLambda
 
-    from kingfisher.kinds.subagents.harness import compiled
+    from kingfisher.infrastructure.harness.subagents import compiled
     from kingfisher.kinds.subagents.spec import SubagentSpec
 
     not_a_graph = RunnableLambda(lambda state: state)
@@ -458,7 +458,7 @@ def test_a_compiled_delegate_is_handed_the_tool_it_named_either_way(cfg):
     from langchain_core.runnables import RunnableLambda
     from langchain_core.tools import tool
 
-    from kingfisher.kinds.subagents.harness import compiled
+    from kingfisher.infrastructure.harness.subagents import compiled
     from kingfisher.kinds.subagents.spec import SubagentSpec
     from kingfisher.kinds.tools.spec import Found, tool_name
 

@@ -181,7 +181,7 @@ def dispatched(graph) -> tuple[str, ...]:
     how a rename upstream would empty the built-in set with every assertion still
     passing.
     """
-    from kingfisher.kinds.tools.harness import registered_tools
+    from kingfisher.infrastructure.harness.tools import registered_tools
 
     names = registered_tools(graph)
     assert names is not None, "a graph built here must be readable"

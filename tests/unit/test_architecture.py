@@ -790,7 +790,7 @@ def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
 
     # And the live ones still resolve, now that they are actually being read.
     assert _prose_unresolved("`kinds.skills.spec.split`") == []
-    assert _prose_unresolved("`kinds.tools.spec`, `kinds.subagents.harness`, `config`") == []
+    assert _prose_unresolved("`kinds.tools.spec`, `kinds.subagents.rules`, `config`") == []
 
 
 def test_a_filename_is_not_read_as_a_module_and_a_segment():
@@ -914,7 +914,7 @@ def test_the_domain_may_name_a_spec_but_not_a_catalogue():
     assert _is_asset_spec("kingfisher.kinds.tools.spec")
     assert _is_asset_spec("kingfisher.kinds.skills.spec")
     assert not _is_asset_spec("kingfisher.kinds.tools.catalogue"), "the disk is not free"
-    assert not _is_asset_spec("kingfisher.kinds.tools.harness"), "the runtime is not free"
+    assert not _is_asset_spec("kingfisher.kinds.skills.backend"), "the runtime is not free"
     assert not _is_asset_spec("kingfisher.application.service")
     assert not _is_asset_spec("kingfisher.kinds.tools.spec.inner")
     assert not _is_asset_spec("kingfisher.application.spec"), "only a kind has a spec"
@@ -957,28 +957,30 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # directory it reads them from. Neither can be done from outside, and inverting them
     # behind a port would put one implementation behind an interface derived from it.
     "kinds/skills": frozenset({"deepagents", "langgraph"}),
-    # `kinds.tools.harness` reads the tool roster off a compiled graph, which is a
-    # langgraph object, and resolves what a request may call against it. The
-    # same trade `skills` made one entry up, and the third directory the swap
-    # boundary now spans.
-    "kinds/tools": frozenset({"langgraph"}),
-    # `kinds.subagents.harness` turns a spec into the `SubAgent` deepagents expects,
-    # which cannot be done without naming the type. The third and last kind to
-    # reach the runtime, and the reason the swap boundary is now stated as a
-    # list of areas rather than one directory.
-    "kinds/subagents": frozenset({"deepagents", "langchain_core"}),
-    # The fourth kind, and the only one whose set is empty: an agent's runtime
-    # half is `harness/agent.py`, which is not this package's.
+    # Nothing, since the route to the runtime moved out: reading a tool roster off a
+    # compiled langgraph object is `infrastructure.harness.tools` now.
+    "kinds/tools": frozenset(),
+    # Nothing, for the same move: turning a spec into the `SubAgent` deepagents
+    # expects cannot be done without naming the type, and it is done in
+    # `infrastructure.harness.subagents` now.
+    "kinds/subagents": frozenset(),
+    # Nothing, and this one never had anything: an agent's runtime half is
+    # `harness/agent.py`, which is not this package's.
     "kinds/agents": frozenset(),
     # The fifth, and back on the boundary: `kinds.middleware.catalogue` refuses a class
     # that is not an `AgentMiddleware` as the directory is read rather than at the
     # first turn, which cannot be done without naming the type.
     "kinds/middleware": frozenset({"langchain"}),
-    # The folder itself, which holds no kind: `kinds.importing` loads a
-    # workspace's own Python and takes nothing but the standard library to do
-    # it. Named rather than left to fall through to the package root, because a
-    # kind added without an entry should inherit nothing, not the root's answer.
-    "kinds": frozenset(),
+    # The folder itself, which holds no kind. `kinds.importing` loads a workspace's
+    # own Python and takes nothing but the standard library; `kinds.documents` reads
+    # the YAML header all three document formats share, which takes the parser.
+    #
+    # The cost of that entry, stated rather than discovered: a sixth kind added
+    # without one of its own falls through to here and inherits `yaml`, where it
+    # used to inherit nothing. It cannot arrive quietly --
+    # `test_kinds_holds_exactly_the_kinds` refuses a directory that is not in
+    # `DEFINITION_KINDS` -- so the hole needs a deliberate edit before it opens.
+    "kinds": frozenset({"yaml"}),
     # The one consumer still in this distribution. `presentation` was the other and is
     # now `kingfisher-service`, a package of its own with its own rules -- so fastapi
     # and uvicorn are no longer anything this table has an opinion about, and an area
@@ -1053,9 +1055,9 @@ def test_a_subpackage_is_judged_by_its_own_area():
 
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
     assert _area_of(SRC / "domain" / "capabilities.py") == "domain"
-    # A kind's module is its own area, which is what lets `kinds/tools/harness.py`
+    # A kind's module is its own area, which is what lets `kinds/skills/backend.py`
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
-    assert _area_of(SRC / "kinds" / "tools" / "harness.py") == "kinds/tools"
+    assert _area_of(SRC / "kinds" / "skills" / "backend.py") == "kinds/skills"
     # And the folder over them is an area of its own, so a kind that arrives
     # without an entry is judged by `kinds` -- which grants nothing -- rather than
     # by the longest prefix happening to be the package root.
@@ -1135,6 +1137,90 @@ def test_an_unspent_grant_is_what_that_rule_reads():
     assert _unspent("infrastructure", {"sandlock", "yaml", "json"}) == set()
     assert _unspent("infrastructure", {"yaml"}) == {"sandlock"}
     assert _unspent("domain", set()) == set()
+#: The layers, which a kind may not name. `domain` is not among them and `kinds` is not
+#: a layer: a spec is typed with `Capabilities` and a repository satisfies a port, so
+#: naming the innermost layer is a kind describing itself rather than reaching for an
+#: adapter. Read off the tree rather than written out, so a layer added later is covered
+#: by arriving rather than by being remembered.
+LAYERS_A_KIND_MAY_NOT_NAME = frozenset(
+    p.name for p in SRC.iterdir() if p.is_dir() and (p / "__init__.py").is_file()
+) - {"domain", "kinds"}
+
+
+def _kind_modules() -> list[Path]:
+    """Every module under `kinds/`, in one place.
+
+    One function rather than the same walk in the rule and in the test that the rule
+    walks everything -- `_harness_consumers` gives the reason two tables down, where a
+    mutation narrowing the walk survived twice, the second time because the test written
+    to catch it restated the walk instead of calling it.
+    """
+    return _modules_in("kinds")
+
+
+def test_no_kind_names_a_layer():
+    """A kind reaching down into what fetches it.
+
+    Kingfisher fetches from the kinds and they answer to no layer -- which was written
+    down long before it was true. The subagent runtime half named four `infrastructure`
+    modules, the tool surface named the catalogue, and all three `reading.py` named
+    the YAML step. Nothing said so: `THIRD_PARTY` watches foreign packages, and
+    `HARNESS_EDGES` watches the layers reaching the other way.
+
+    The direction is what makes the rest checkable. With the imports running one way a
+    cycle cannot form across that seam at all, and the swap boundary stays a list of
+    files rather than a search.
+    """
+    reaching = []
+    for path in _every(_kind_modules(), "the kinds"):
+        for module in sorted(_imported_modules(path)):
+            parts = module.split(".")
+            if parts[0] == "kingfisher" and parts[1:2] and parts[1] in LAYERS_A_KIND_MAY_NOT_NAME:
+                reaching.append(f"{_module_id(path)} -> {module}")
+
+    assert not reaching, (
+        f"{reaching} — a kind owns its format, its walk over the disk, and nothing "
+        "below either. What it needs from a layer is passed in or moved out"
+    )
+
+
+def test_the_layer_rule_walks_every_kind():
+    """A rule that walks less than it claims still passes over a tree with nothing wrong.
+
+    `_harness_consumers` carries the same note one table down, and for the same reason:
+    a mutation narrowing that walk survived twice, once because the test written to
+    catch it restated the walk instead of calling it. This asks `DEFINITION_KINDS` and
+    `KINDS_HELPERS` what has to be in the answer, so narrowing the walk to one kind
+    fails here rather than passing quietly.
+    """
+    from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+
+    walked = {_module_id(path) for path in _kind_modules()}
+
+    for kind in DEFINITION_KINDS:
+        assert any(module.startswith(f"kinds/{kind}/") for module in walked), (
+            f"the walk reaches no module of `{kind}`, so the rule below says nothing "
+            "about that kind"
+        )
+    for helper in KINDS_HELPERS - {"__init__"}:
+        assert f"kinds/{helper}.py" in walked, f"the walk misses `kinds/{helper}.py`"
+
+
+def test_the_layer_rule_tells_a_layer_from_the_domain():
+    """The half a clean tree cannot show.
+
+    Every kind names `domain` and none names the other three, so a rule refusing all
+    four, or none, passes today either way and the set above is where that is decided.
+    """
+    assert "domain" not in LAYERS_A_KIND_MAY_NOT_NAME, (
+        "a kind's spec is typed with domain vocabulary; refusing it refuses the kinds"
+    )
+    assert "kinds" not in LAYERS_A_KIND_MAY_NOT_NAME, "a kind may name another kind"
+    assert sorted(LAYERS_A_KIND_MAY_NOT_NAME) == [
+        "application",
+        "infrastructure",
+        "presentation",
+    ]
 
 
 def test_the_harness_package_is_the_one_speaking_to_the_harness():
@@ -1184,8 +1270,9 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # same question `catalogue` asks and the same answer.
     "workspace.uploads": frozenset(),
     # Builds an agent to enumerate what it registered -- the only way to know
-    # the built-in tool set is to assemble one and look.
-    "inventory": frozenset({"agent"}),
+    # the built-in tool set is to assemble one and look -- and reads the roster off
+    # it, which is what `tools` is for.
+    "inventory": frozenset({"agent", "tools"}),
     # Reads `ADAPTERS` to refuse an `api` kingfisher cannot build, as the
     # catalogue loads rather than when a turn starts. The same argument as
     # `catalogue` above: the alternative is a second list of the wire formats
@@ -1228,9 +1315,10 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # measures against what was actually wired rather than against a list kept
     # somewhere -- so the edge is the point of it, not an accident of where it
     # used to live.
-    # `surface` became `kinds.tools.harness`, which is not the harness package, so
-    # what is left of this edge is the activation half.
-    "reporting": frozenset({"activation"}),
+    # `surface` lived under `kinds/` for a while and is `infrastructure.harness.tools`,
+    # so the edge this note once recorded closing is back. Nothing about the coupling
+    # changed either time -- only whether this table could see it.
+    "reporting": frozenset({"activation", "tools"}),
     # One stream chunk, read the same way by the sync and async loops. The
     # reading is deepagents' shape rather than ours -- which namespace a chunk
     # came from, which mode carries the answer -- so it is an edge wherever it
@@ -2316,7 +2404,7 @@ def test_the_catalogue_holds_one_module_per_kind():
 #: purpose. A third name here is where the kinds start sharing an implementation,
 #: which they duplicate in order to avoid -- so it is an edit somebody argues for,
 #: not a file that turns up.
-KINDS_HELPERS = frozenset({"__init__", "importing"})
+KINDS_HELPERS = frozenset({"__init__", "documents", "importing"})
 
 
 def _kinds_directory_contents(root: Path) -> tuple[frozenset[str], frozenset[str]]:

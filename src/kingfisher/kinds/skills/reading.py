@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from kingfisher.domain import fields
-from kingfisher.infrastructure import documents
+from kingfisher.kinds import documents
 from kingfisher.kinds.skills.spec import FILENAME, SkillError, split
 
 

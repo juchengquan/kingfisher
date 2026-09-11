@@ -12,7 +12,7 @@ from kingfisher.infrastructure.harness.activation import (
     available_skills,
     defined_subagents,
 )
-from kingfisher.kinds.tools.harness import (
+from kingfisher.infrastructure.harness.tools import (
     registered_tools,
     workspace_tool_names,
 )
