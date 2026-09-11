@@ -1,10 +1,8 @@
 """Turning a `SubagentSpec` into the `SubAgent` deepagents expects.
 
-Split out of `agent.py`, which was 657 lines doing four jobs. This was the largest of
-them and the most self-contained: nothing in here calls anything in `agent.py`. It has
-since grown other callers -- `activation` reports with `model_for` and `indistinct` --
-so the one-caller claim that used to sit here is gone rather than corrected, being the
-kind that goes stale in another file.
+Nothing here calls anything in `agent.py`, and that rather than size is what keeps the
+two apart: `agent.py` assembles a graph, this answers what one delegate runs with, and
+a call back the other way makes them one job again.
 """
 
 from __future__ import annotations

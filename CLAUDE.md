@@ -93,12 +93,21 @@ record of it, and it stays however short the rest gets.
 **Layering is enforced, not remembered.** `tests/unit/test_architecture.py` parses
 imports against `THIRD_PARTY`, one entry per area, deny by default: `domain/`
 takes the standard library, itself and an asset kind's `spec`, and the agent
-runtime is reachable from `infrastructure/harness/` and from the kinds that must
-name its types -- `kinds/skills`, `kinds/subagents`, `kinds/tools` and
-`kinds/middleware`, each entry saying which package and why. `kinds/agents` is
-the one kind whose set is empty. Adding a foreign dependency means editing that
-table, not working around it. No test reads this paragraph against that table, so
-this is the one place the two can drift apart -- re-read it when the table moves.
+runtime is reachable from `infrastructure/harness/` and from the two kinds that
+must name its types -- `kinds/skills`, which hands a repository to the lister that
+reads it, and `kinds/middleware`, which refuses a class that is not an
+`AgentMiddleware`. The other three kinds grant nothing. Adding a foreign
+dependency means editing that table, not working around it. No test reads this
+paragraph against that table, so this is the one place the two can drift apart --
+re-read it when the table moves.
+
+**Imports run one way across `kinds/`.** A layer may name a kind; a kind may not
+name a layer, and `test_no_kind_names_a_layer` is what holds it. `domain/` is not
+a layer for this purpose -- a spec is typed with `Capabilities` and a repository
+satisfies a port. What a kind needs from `application/`, `infrastructure/` or
+`presentation/` is passed in or moved out, which is where
+`infrastructure/harness/subagents.py` and `infrastructure/harness/tools.py` came
+from.
 
 **Measure before building on a premise.** Several decisions in `docs/decisions.md`
 exist because a stated premise turned out to be false when someone checked. If a

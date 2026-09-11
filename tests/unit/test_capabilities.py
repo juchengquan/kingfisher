@@ -103,7 +103,7 @@ def test_a_refusal_of_memory_wins_from_either_side():
 
 # -- middleware a definition may have -------------------------------------
 #
-# The rule used to live in `kinds.subagents.harness`, mixed in with
+# The rule used to live in `infrastructure.harness.subagents`, mixed in with
 # the code that instantiates the objects. Only the instantiation needed to be there:
 # `Capabilities.middleware` and `SubagentSpec.middleware` are both name lists,
 # so deciding *which names* is expressible here, and these tests reach it

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.infrastructure import documents
+from kingfisher.kinds import documents
 from kingfisher.kinds.agents import spec as agent
 from kingfisher.kinds.agents.spec import AgentError, AgentSpec
 

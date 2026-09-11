@@ -12,9 +12,9 @@ from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.backend import bundled_skills_route
+from kingfisher.infrastructure.harness.subagents import indistinct, model_for
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.registry import SkillRegistry
-from kingfisher.kinds.subagents.harness import indistinct, model_for
 from kingfisher.kinds.subagents.rules import refuse_cycles, refuse_two_of_a_name
 from kingfisher.kinds.subagents.spec import RunOn, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE

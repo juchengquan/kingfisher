@@ -21,8 +21,8 @@ from kingfisher.infrastructure.harness.activation import (
 )
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.harness.tools import workspace_tool_names
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
-from kingfisher.kinds.tools.harness import workspace_tool_names
 from kingfisher.layout import SKILLS_ROUTE
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
 

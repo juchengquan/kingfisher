@@ -10,11 +10,11 @@ from langchain_core.tools import tool
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
+from kingfisher.infrastructure.harness.subagents import as_subagent
+from kingfisher.infrastructure.harness.tools import _ToolSurface
 from kingfisher.infrastructure.workspace import seeding
 from kingfisher.kinds.subagents import reading
-from kingfisher.kinds.subagents.harness import as_subagent
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
-from kingfisher.kinds.tools.harness import _ToolSurface
 from kingfisher.kinds.tools.spec import Found, Offering, reference, split_reference, tool_name
 from tests.conftest import tools_dir
 
