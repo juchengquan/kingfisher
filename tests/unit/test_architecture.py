@@ -1721,12 +1721,18 @@ def _on_type_checking(test: ast.expr) -> bool:
     )
 
 
+@cache
 def _imports_by_scope(path: Path) -> tuple[frozenset[str], tuple[tuple[str, int], ...]]:
     """What a module imports when it loads, and what it imports only when called.
 
     `if TYPE_CHECKING:` is neither. It does not run, so it puts nothing in `sys.modules`
     and makes no deferral below it pointless -- and only its `body` is guarded, since an
     `else` on that test is code that does run.
+
+    Cached because the rules below ask for the same ninety files repeatedly and the
+    answer is a parse: uncached, the SDK rule alone took five seconds. Safe only while
+    nothing rewrites a path within one run -- a rule that builds a tree should build it
+    under `tmp_path`, which is a fresh key every time.
     """
     package = _package_of(path)
     at_import: set[str] = set()
@@ -1790,6 +1796,31 @@ def _loaded_by(dotted: str) -> str | None:
     return candidate or None
 
 
+@cache
+def _loads_directly(module: str) -> frozenset[str]:
+    """The modules `import <module>` loads before running a line of its own body.
+
+    Its own module-scope imports and the packages above it. One hop, so the closure
+    below and the cycle rule further down read the same graph rather than two walks
+    that can come to disagree.
+    """
+    parts = module.split(".")
+    above = {".".join(parts[:index]) for index in range(1, len(parts))}
+    at_import, _ = _imports_by_scope(_module_paths()[module])
+    reached = {
+        found
+        for dotted in at_import
+        if dotted.split(".")[0] == "kingfisher" and (found := _loaded_by(dotted))
+    }
+    return frozenset(name for name in above | reached if name in _module_paths())
+
+
+def _package_graph() -> dict[str, frozenset[str]]:
+    """The whole package as a graph, one entry per module."""
+    return {module: _loads_directly(module) for module in _module_paths()}
+
+
+@cache
 def _module_closure(module: str) -> frozenset[str]:
     """Every module of this package that `import <module>` puts in `sys.modules`.
 
@@ -1804,14 +1835,7 @@ def _module_closure(module: str) -> frozenset[str]:
         if current in seen or current not in _module_paths():
             continue
         seen.add(current)
-        parts = current.split(".")
-        pending.extend(".".join(parts[:index]) for index in range(1, len(parts)))
-        at_import, _ = _imports_by_scope(_module_paths()[current])
-        pending.extend(
-            found
-            for dotted in at_import
-            if dotted.split(".")[0] == "kingfisher" and (found := _loaded_by(dotted))
-        )
+        pending.extend(_loads_directly(current))
     return frozenset(seen)
 
 
@@ -1890,6 +1914,202 @@ def test_the_closure_is_what_an_import_actually_loads():
         assert real == computed, (
             f"importing {module} really loads {sorted(real - computed)} that the closure "
             f"misses, and does not load {sorted(computed - real)} that it claims"
+        )
+
+
+def _cycles(graph: dict[str, frozenset[str]]) -> list[tuple[str, ...]]:
+    """Every group of modules that can reach each other, and any module reaching itself.
+
+    Tarjan, so one pass answers for the whole graph rather than a walk per module. A
+    group of one is a cycle only when it holds an edge to itself; every other group of
+    one is just a module.
+    """
+    order: dict[str, int] = {}
+    low: dict[str, int] = {}
+    stack: list[str] = []
+    on_stack: set[str] = set()
+    found: list[tuple[str, ...]] = []
+
+    def walk(node: str) -> None:
+        order[node] = low[node] = len(order)
+        stack.append(node)
+        on_stack.add(node)
+        for onward in sorted(graph.get(node, frozenset())):
+            if onward not in order:
+                walk(onward)
+                low[node] = min(low[node], low[onward])
+            elif onward in on_stack:
+                low[node] = min(low[node], order[onward])
+        if low[node] != order[node]:
+            return
+        group = []
+        while True:
+            one = stack.pop()
+            on_stack.discard(one)
+            group.append(one)
+            if one == node:
+                break
+        if len(group) > 1 or node in graph.get(node, frozenset()):
+            found.append(tuple(sorted(group)))
+
+    for node in sorted(graph):
+        if node not in order:
+            walk(node)
+    return sorted(found)
+
+
+def test_no_module_in_the_package_can_reach_itself():
+    """Two modules that import each other at module scope.
+
+    Python resolves one by luck of ordering and the other by raising, and which is which
+    depends on who imports first -- so the suite passes while a cold
+    `import kingfisher.kinds.subagents.catalogue` fails outright, which is what happened
+    once and is recorded in *Two modules came up a directory, and an import cycle is
+    why*. The layering rules forbid most shapes this could take; this forbids the shape
+    itself, which is the one that does not need a layer to be crossed.
+    """
+    found = _cycles(_package_graph())
+
+    assert not found, (
+        f"{found} import each other at module scope — whether that raises depends on "
+        "which is imported first, so it can pass here and fail a cold import of either"
+    )
+
+
+def test_the_cycle_finder_finds_one_in_this_tree():
+    """Driven, because the rule above passes over a finder that returns nothing at all.
+
+    On the real graph with one edge added rather than on a graph built for the purpose:
+    a graph built for the purpose agrees with whatever built it, and says nothing about
+    the ninety modules the rule is actually asked about. The edge is a real one in the
+    wrong direction -- the innermost layer reaching the outermost -- so what it proves
+    is that the finder sees a loop this package could actually grow.
+    """
+    graph = _package_graph()
+    assert "kingfisher.domain.capabilities" in graph, "the edge below is about nothing"
+
+    closed = dict(graph)
+    closed["kingfisher.domain.capabilities"] = frozenset({"kingfisher.application.service"})
+    found = _cycles(closed)
+
+    assert found, "the finder reports nothing on a graph with a cycle in it"
+    assert any("kingfisher.domain.capabilities" in group for group in found), (
+        f"the finder found {found}, none of it the loop that was added"
+    )
+
+
+#: Every module that loads a provider SDK when imported. Deny by default, like the
+#: tables above: a module that starts loading one and is not named here fails, and so
+#: does a name here that stops.
+#:
+#: `THIRD_PARTY` structurally cannot see this. It reads the imports one file writes, and
+#: this is what those imports drag in behind them. `application/reporting.py` is the case
+#: that makes it worth having: it names no foreign package at all, passes that table
+#: cleanly, and loads three provider SDKs through one import two hops away.
+SDK_LOADING: frozenset[str] = frozenset({
+    # The harness, where speaking to deepagents is the job. `models`, `interpreter` and
+    # `tools` are the three in that package that are not here: two name their foreign
+    # classes as strings and resolve them on demand, and the third reads a graph it is
+    # handed.
+    "kingfisher.infrastructure.harness.activation",
+    "kingfisher.infrastructure.harness.agent",
+    "kingfisher.infrastructure.harness.backend",
+    "kingfisher.infrastructure.harness.checkpointing",
+    "kingfisher.infrastructure.harness.middleware",
+    "kingfisher.infrastructure.harness.narrowing",
+    "kingfisher.infrastructure.harness.runlog",
+    "kingfisher.infrastructure.harness.runtime",
+    "kingfisher.infrastructure.harness.subagents",
+    # The application layer's half: what a turn needs on the way to running one. Each
+    # is imported by `service` and by nothing else, so being heavy costs no caller that
+    # was not already paying -- which is why these are a fact recorded rather than a
+    # list to work down.
+    "kingfisher.application.disposal",
+    "kingfisher.application.reporting",
+    "kingfisher.application.run",
+    "kingfisher.application.service",
+    "kingfisher.application.turn",
+    # The one outside both, and the whole of why the swap boundary is two areas rather
+    # than one: registering skills means handing them to the runtime that reads them.
+    "kingfisher.kinds.skills.backend",
+})
+
+
+def _runtime_loaded_by(module: str) -> frozenset[str]:
+    """Which of the agent runtime's packages `import <module>` pulls in.
+
+    The runtime is `THIRD_PARTY["infrastructure/harness"]` rather than a list of its
+    own, so a package added to the swap boundary is watched here by arriving there.
+    """
+    runtime = THIRD_PARTY["infrastructure/harness"]
+    found: set[str] = set()
+    for name in _module_closure(module):
+        at_import, _ = _imports_by_scope(_module_paths()[name])
+        found |= {dotted.split(".")[0] for dotted in at_import} & runtime
+    return frozenset(found)
+
+
+def test_only_the_named_modules_load_a_provider_sdk():
+    """A module that quietly starts costing a second and three SDKs to import.
+
+    The light and heavy export rules watch the front door, which is every name a
+    consumer reaches; this watches the other eighty-odd modules, where the same
+    regression is a module-scope import somebody added two files away.
+    """
+    loading = {module for module in _module_paths() if _runtime_loaded_by(module)}
+
+    started = sorted(loading - SDK_LOADING)
+    stopped = sorted(SDK_LOADING - loading)
+
+    assert not started, (
+        f"{started} load a provider SDK and are not in SDK_LOADING — either the import "
+        "that did it belongs inside a function, or add the name here and say why"
+    )
+    assert not stopped, (
+        f"{stopped} are in SDK_LOADING and load nothing — take them out; a table with a "
+        "dead name in it stops describing the tree"
+    )
+
+
+#: One module from each side of that rule, imported for real below. `kinds.skills.backend`
+#: is the only entry outside `harness/` and `application/`, and the uploads module is
+#: the module nearest it that has to stay clear -- it reads the skills registry, which
+#: is the half of skills that does not touch deepagents until it is called.
+SDK_WITNESSES = {
+    "kingfisher.kinds.skills.backend": True,
+    "kingfisher.infrastructure.workspace.uploads": False,
+}
+
+
+def test_what_the_sdk_rule_computes_is_what_an_import_does():
+    """Driven, because the rule above reads a graph and the claim is about a process.
+
+    Both directions, and the negative is the one that matters: a computation that
+    answered "yes" for everything would pass a rule checking only that the heavy ones
+    are heavy.
+    """
+    import json
+    import subprocess
+
+    runtime = sorted(THIRD_PARTY["infrastructure/harness"])
+    for module, expected in sorted(SDK_WITNESSES.items()):
+        assert module in _module_paths(), f"{module} is not a module, so this proves nothing"
+        probe = (
+            f"import json, sys, importlib; importlib.import_module({module!r}); "
+            f"print(json.dumps(sorted(set({runtime!r}) & {{m.split('.')[0] "
+            "for m in sys.modules})))"
+        )
+        out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+            [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+        )
+        real = bool(json.loads(out.stdout))
+
+        assert real == expected, (
+            f"importing {module} {'loads' if real else 'loads none of'} the agent "
+            f"runtime, and the rule above computes the opposite"
+        )
+        assert bool(_runtime_loaded_by(module)) == real, (
+            f"{module}: the graph and the interpreter disagree"
         )
 
 
