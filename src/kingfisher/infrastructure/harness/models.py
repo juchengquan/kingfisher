@@ -39,6 +39,12 @@ class Adapter:
 #: name through an endpoint's `api`; `build_model` constructs through
 #: `chat_class`. Adding a row is a kingfisher release, and needs a matching
 #: `LANDING_SITES` entry in `test_models.py`.
+#:
+#: A row names its package as a string and `resolve` imports it by name, so neither
+#: provider is an import anywhere in `src/` and neither belongs in `THIRD_PARTY` --
+#: which reads imports, and now refuses a grant nothing spends. Adding one back to
+#: that table on the strength of a row here fails
+#: `test_no_area_is_granted_a_dependency_it_does_not_import`.
 ADAPTERS: Mapping[str, Adapter] = {
     # The gateway path. MiniMax and anything else imitating Anthropic's wire
     # format lives here — see models.yaml.example, which recommends this style.

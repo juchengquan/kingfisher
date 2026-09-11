@@ -938,12 +938,9 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # weaker in degree -- an upgrade is still a list of files rather than a
     # search, and the list now spans two directories instead of one.
     "infrastructure/harness": frozenset({
-        "aiosqlite",
         "deepagents",
         "langchain",
-        "langchain_anthropic",
         "langchain_core",
-        "langchain_openai",
         "langchain_quickjs",
         "langgraph",
     }),
@@ -958,12 +955,12 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # asks deepagents which skills an agent will actually have, and `backend` mounts the
     # directory it reads them from. Neither can be done from outside, and inverting them
     # behind a port would put one implementation behind an interface derived from it.
-    "kinds/skills": frozenset({"deepagents", "langchain_core", "langgraph"}),
+    "kinds/skills": frozenset({"deepagents", "langgraph"}),
     # `kinds.tools.harness` reads the tool roster off a compiled graph, which is a
     # langgraph object, and resolves what a request may call against it. The
     # same trade `skills` made one entry up, and the third directory the swap
     # boundary now spans.
-    "kinds/tools": frozenset({"langchain_core", "langgraph"}),
+    "kinds/tools": frozenset({"langgraph"}),
     # `kinds.subagents.harness` turns a spec into the `SubAgent` deepagents expects,
     # which cannot be done without naming the type. The third and last kind to
     # reach the runtime, and the reason the swap boundary is now stated as a
@@ -1020,6 +1017,16 @@ def _undeclared(used: set[str], area: str) -> set[str]:
     return used - THIRD_PARTY[area]
 
 
+def _unspent(area: str, imported: set[str]) -> frozenset[str]:
+    """Grants the area never uses.
+
+    The direction the table cannot fail in on its own: `_undeclared` fires on an import
+    with no grant, and nothing at all fires on a grant with no import, so a permission
+    outlives the code it was written for without anything going red.
+    """
+    return THIRD_PARTY[area] - imported
+
+
 def test_an_area_is_refused_another_areas_dependencies():
     """The table has to partition, not merely enumerate."""
     assert _undeclared({"deepagents"}, "domain") == {"deepagents"}
@@ -1065,8 +1072,7 @@ def test_a_module_imports_only_what_its_area_may_depend_on():
     """One table, replacing two rules that were allowlists by omission.
 
     Both of the old rules had the same hole: `FOREIGN` named five packages where six of
-    the agent runtime's are imported here, and `langchain_quickjs`, `aiosqlite` and
-    `langchain_openai` were in neither list.
+    the agent runtime's are imported here, and `langchain_quickjs` was in neither list.
 
     The second of the two passed while *any one* file in `infrastructure/` imported from
     its tuple, so it had stopped being about the file it was written for.
@@ -1091,6 +1097,43 @@ def test_a_module_imports_only_what_its_area_may_depend_on():
         "\n".join(stray) + "\n— have an adapter in an area that may do that, and hand "
         "this one the result"
     )
+
+
+def test_no_area_is_granted_a_dependency_it_does_not_import():
+    """A grant outliving the import it was written for.
+
+    `aiosqlite` is the worked case: the savers that imported it left in *Drop the sqlite
+    savers, and the two dependencies that carried them*, the grant stayed, and
+    `infrastructure/harness/` has been permitted a package this repository does not
+    depend on and does not name anywhere in `src/`.
+    """
+    imported: dict[str, set[str]] = {area: set() for area in THIRD_PARTY}
+    for path in _every(_package_modules(), "the package"):
+        imported[_area_of(path)].update(m.split(".")[0] for m in _imported_modules(path))
+
+    unspent = {
+        area or "the package root": sorted(dead)
+        for area in THIRD_PARTY
+        if (dead := _unspent(area, imported[area]))
+    }
+
+    assert not unspent, (
+        f"{unspent} — permitted and imported by nothing. A package named only in a "
+        "string, the way `ADAPTERS` names its chat classes, is not an import and is "
+        "not what this table is about"
+    )
+
+
+def test_an_unspent_grant_is_what_that_rule_reads():
+    """Driven rather than trusted.
+
+    The rule above passes over any tree where the two sets happen to agree, so it says
+    nothing about whether the predicate can tell them apart. Read against the table
+    rather than a copy of it, for the reason the rule beside `_undeclared` is.
+    """
+    assert _unspent("infrastructure", {"sandlock", "yaml", "json"}) == set()
+    assert _unspent("infrastructure", {"yaml"}) == {"sandlock"}
+    assert _unspent("domain", set()) == set()
 
 
 def test_the_harness_package_is_the_one_speaking_to_the_harness():
