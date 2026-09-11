@@ -584,7 +584,7 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
     every one of them.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-    from kingfisher.kinds.middleware import LocalMiddlewareRepository
+    from kingfisher.kinds.middleware.catalogue import LocalMiddlewareRepository
 
     assert (shipped / "middleware").is_dir()
     assert "middleware" in DEFINITION_KINDS
