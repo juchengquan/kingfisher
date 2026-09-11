@@ -132,6 +132,7 @@ half of the split each setting belongs to. **These are not in `.env.example`.**
 | `KINGFISHER_SERVICE_MAX_BODY_BYTES` | Largest request body accepted. | `1048576` (1 MiB) |
 | `KINGFISHER_SERVICE_HEARTBEAT_S` | How often a streaming response sends a keep-alive. | `15.0` |
 | `KINGFISHER_SERVICE_FILE_STORE_DIR` | Where files named by id are fetched from. | none |
+| `KINGFISHER_SERVICE_FILE_STORE_FACTORY` | `module:name` naming something callable with no arguments that returns a store of your own, for files that are not a directory on this host. Set this or the directory above and never both — a deployment that names two is refused. | none |
 | `KINGFISHER_SERVICE_AUDIT_CONTENT` | Whether the audit log records content rather than only events. | `false` |
 
 `KINGFISHER_SERVER_*` was the earlier prefix and is read by nothing. Renaming an
