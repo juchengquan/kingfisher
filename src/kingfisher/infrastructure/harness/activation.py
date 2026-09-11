@@ -57,8 +57,6 @@ def unrunnable_delegates(
     cfg: Config, *, catalogue: Definitions | None = None
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each defined delegate this deployment cannot run."""
-    from kingfisher.kinds.subagents.harness import model_for  # noqa: PLC0415
-
     found: list[tuple[str, str]] = []
     for name, spec in sorted(defined_subagents(cfg, None, catalogue=catalogue).items()):
         try:

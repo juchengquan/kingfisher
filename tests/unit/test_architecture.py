@@ -6,6 +6,7 @@ import ast
 import inspect
 import re
 import sys
+from functools import cache
 from pathlib import Path
 
 import pytest
@@ -1605,6 +1606,203 @@ def test_naming_the_layer_does_not_pull_in_deepagents():
     subprocess.run(  # noqa: S603 -- this interpreter, and a literal above
         [sys.executable, "-c", probe], check=True
     )
+
+
+def _dotted(node: ast.Import | ast.ImportFrom, package: tuple[str, ...]) -> list[str]:
+    """What one import statement names, one dotted string per name it takes.
+
+    `from x import y` is `x.y` rather than `x`, because whether that loads a module is
+    the question every rule below it asks. Relative imports are resolved the way
+    `_imported_modules` resolves them; there are none in `src/` today and a scanner that
+    quietly returned nothing for the first one would be the wrong kind of ready.
+    """
+    if isinstance(node, ast.Import):
+        return [alias.name for alias in node.names]
+    if not node.level:
+        return [f"{node.module}.{alias.name}" for alias in node.names] if node.module else []
+    base = package[: max(len(package) - (node.level - 1), 0)]
+    stem = (*base, node.module) if node.module else base
+    return [".".join((*stem, alias.name)) for alias in node.names]
+
+
+def _on_type_checking(test: ast.expr) -> bool:
+    return any(
+        getattr(node, "id", None) == "TYPE_CHECKING"
+        or getattr(node, "attr", None) == "TYPE_CHECKING"
+        for node in ast.walk(test)
+    )
+
+
+def _imports_by_scope(path: Path) -> tuple[frozenset[str], tuple[tuple[str, int], ...]]:
+    """What a module imports when it loads, and what it imports only when called.
+
+    `if TYPE_CHECKING:` is neither. It does not run, so it puts nothing in `sys.modules`
+    and makes no deferral below it pointless -- and only its `body` is guarded, since an
+    `else` on that test is code that does run.
+    """
+    package = _package_of(path)
+    at_import: set[str] = set()
+    deferred: list[tuple[str, int]] = []
+
+    def visit(node: ast.AST, *, called: bool, typing: bool) -> None:
+        if isinstance(node, ast.Import | ast.ImportFrom):
+            if typing:
+                return
+            if called:
+                deferred.extend((name, node.lineno) for name in _dotted(node, package))
+            else:
+                at_import.update(_dotted(node, package))
+            return
+        inside = called or isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef)
+        guard = isinstance(node, ast.If) and _on_type_checking(node.test)
+        for field, value in ast.iter_fields(node):
+            for child in value if isinstance(value, list) else [value]:
+                if isinstance(child, ast.AST):
+                    visit(child, called=inside, typing=typing or (guard and field == "body"))
+
+    visit(ast.parse(path.read_text(encoding="utf-8")), called=False, typing=False)
+    return frozenset(at_import), tuple(deferred)
+
+
+@cache
+def _module_paths() -> dict[str, Path]:
+    """`kingfisher.domain.ports` -> the file, for every module in the package."""
+    found: dict[str, Path] = {}
+    for path in _every(_package_modules(), "the package"):
+        parts = list(path.relative_to(SRC.parent).with_suffix("").parts)
+        if parts[-1] == "__init__":
+            parts.pop()
+        found[".".join(parts)] = path
+    return found
+
+
+@cache
+def _lazy_tables() -> dict[str, dict[str, str]]:
+    """Each `__getattr__` package's table, read off the package rather than the file."""
+    import importlib
+
+    return {package: importlib.import_module(package)._EXPORTS for package in LAZY_TABLES}
+
+
+def _loaded_by(dotted: str) -> str | None:
+    """The module an import statement actually puts in `sys.modules`.
+
+    `from kingfisher import Kingfisher` loads `application.service`, not `kingfisher`:
+    the name resolves through `__getattr__`. That is the one place walking the prefix
+    gives the wrong answer, and it is the answer the three `presentation/cli` modules
+    turn on -- each reaches a dozen names through the front door and would otherwise
+    look like it loads nothing but `kingfisher` itself.
+    """
+    package, _, name = dotted.rpartition(".")
+    if name in _lazy_tables().get(package, {}):
+        return _lazy_tables()[package][name]
+    candidate = dotted
+    while candidate and candidate not in _module_paths():
+        candidate = candidate.rpartition(".")[0]
+    return candidate or None
+
+
+def _module_closure(module: str) -> frozenset[str]:
+    """Every module of this package that `import <module>` puts in `sys.modules`.
+
+    A worklist rather than recursion, so a cycle is a set that stops growing rather than
+    a `RecursionError` -- this has to keep answering while the tree is wrong, since what
+    reads it is the rules that say the tree is wrong.
+    """
+    seen: set[str] = set()
+    pending = [module]
+    while pending:
+        current = pending.pop()
+        if current in seen or current not in _module_paths():
+            continue
+        seen.add(current)
+        parts = current.split(".")
+        pending.extend(".".join(parts[:index]) for index in range(1, len(parts)))
+        at_import, _ = _imports_by_scope(_module_paths()[current])
+        pending.extend(
+            found
+            for dotted in at_import
+            if dotted.split(".")[0] == "kingfisher" and (found := _loaded_by(dotted))
+        )
+    return frozenset(seen)
+
+
+def test_no_deferred_import_defers_nothing():
+    """A function-scope import of a module the file has already loaded.
+
+    It costs a `noqa`, reads as a decision somebody weighed, and buys nothing at all.
+    Four were like that. `activation` re-imported `model_for` forty lines below the
+    module-scope import of the same name. `reporting` deferred `Definitions` and
+    `Offering` in a file whose first imports are 3,166 modules, so both ran long after
+    the bill they were avoiding had been paid.
+
+    Kingfisher's own modules only, which is where the closure is exact. A deferral of
+    deepagents is what the light and heavy export rules already watch, and none of those
+    is dead.
+    """
+    pointless = []
+    for module, path in sorted(_module_paths().items()):
+        loaded = _module_closure(module)
+        _, deferred = _imports_by_scope(path)
+        for dotted, line in deferred:
+            if dotted.split(".")[0] != "kingfisher":
+                continue
+            target = _loaded_by(dotted)
+            if target in loaded:
+                pointless.append(
+                    f"{_module_id(path)}:{line} defers `{dotted}`, and importing "
+                    f"{module} already loads {target}"
+                )
+
+    assert not pointless, (
+        "\n".join(pointless) + "\n— the deferral saves nothing, so move the import to "
+        "module scope and drop the `noqa`, or move whatever loads it early out of the "
+        "way first"
+    )
+
+
+#: The two modules the closure is driven against below. One of each shape that can go
+#: wrong: `listing` reaches its names through the lazy front door, which is where a
+#: prefix walk under-reports, and `reporting` sits at the bottom of a graph three
+#: thousand modules deep.
+CLOSURE_WITNESSES = (
+    "kingfisher.presentation.cli.listing",
+    "kingfisher.application.reporting",
+)
+
+
+def test_the_closure_is_what_an_import_actually_loads():
+    """Driven, because every rule that reads the closure is only as good as it.
+
+    A closure that under-reports makes a dead deferral look live: the rule above goes
+    quiet rather than red, which is the one failure it cannot report about itself. It
+    did under-report, until `_loaded_by` learned to follow the lazy tables. Read against
+    a real interpreter and the real tree rather than a graph built for the purpose,
+    since a graph built for the purpose agrees with the code that built it.
+    """
+    import json
+    import subprocess
+
+    # Through `_module_paths` rather than as bare strings, so a witness naming a module
+    # that has moved fails here rather than passing over an empty list.
+    _every([_module_paths()[name] for name in CLOSURE_WITNESSES], "the closure witnesses")
+
+    for module in CLOSURE_WITNESSES:
+        probe = (
+            f"import json, sys, importlib; importlib.import_module({module!r}); "
+            "print(json.dumps(sorted(m for m in sys.modules "
+            "if m == 'kingfisher' or m.startswith('kingfisher.'))))"
+        )
+        out = subprocess.run(  # noqa: S603 -- our own interpreter, our own literal
+            [sys.executable, "-c", probe], capture_output=True, text=True, check=True
+        )
+        real = set(json.loads(out.stdout))
+        computed = _module_closure(module)
+
+        assert real == computed, (
+            f"importing {module} really loads {sorted(real - computed)} that the closure "
+            f"misses, and does not load {sorted(computed - real)} that it claims"
+        )
 
 
 def test_importing_kingfisher_does_not_pull_in_deepagents():
