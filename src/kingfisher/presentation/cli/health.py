@@ -277,6 +277,11 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     fourth the whole while: `agents_error` and `bundles_error` are computed on every
     walk and were read by `kingfisher list` and by nothing here. A broken agent file
     passed `doctor` and stopped `Kingfisher(...)` dead.
+
+    The fifth was worse: `middleware` was computed nowhere at all, because nothing
+    read that directory until a definition named one. A module that would not import
+    was invisible to every check a deployment has, and surfaced on the first request
+    activating an agent that named it.
     """
     if found.agents_error is not None:
         yield Check("agents", "fail", found.agents_error, "fix or remove the file it names")
@@ -297,6 +302,20 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     else:
         yield Check("subagents", "ok", f"{len(found.subagents)} defined")
 
+    if found.middleware_error is not None:
+        yield Check(
+            "middleware", "fail", found.middleware_error, "fix or remove the module it names"
+        )
+    else:
+        yield Check("middleware", "ok", f"{len(found.middleware)} defined")
+
+def _delegate_tools(found: Inventory) -> Iterator[Check]:
+    """What a delegate brings itself, which is not a definition directory.
+
+    Split from `_catalogues` when the fifth kind arrived and took it past its branch
+    budget. The seam was already there: above is one check per directory a deployment
+    authors, and this is what one delegate carries inside its own folder.
+    """
     # A delegate's private tools are Python like any other, and a bundle that will
     # not import stops the request that activates that delegate rather than the
     # deployment. Its own check rather than folded into `tools`, for the reason
@@ -564,6 +583,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
         if found is None:
             found = inventory(cfg)
         checks += _catalogues(found)
+        checks += _delegate_tools(found)
         # After the counts, because it explains one: a zero that is ordinary and
         # a zero that means the path is wrong print the same number.
         checks += _where(cfg, found)

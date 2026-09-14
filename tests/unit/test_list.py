@@ -384,6 +384,30 @@ def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys)
     assert json.loads(capsys.readouterr().out)["agents_error"]
 
 
+def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsys):
+    """The fifth kind, and the one `failed` named last.
+
+    `middleware/*.py` is Python that has to import, exactly like `tools/*.py`, and a
+    deployment that starts and fails on the first request activating an agent that
+    names one is the shape this predicate already exists to stop.
+    """
+    import json
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    middleware = cfg.catalogue_roots["middleware"]
+    middleware.mkdir(parents=True, exist_ok=True)
+    (middleware / "wrong.py").write_text(
+        "class NotMiddleware:\n    name = 'nope'\n\n\nMIDDLEWARE = [NotMiddleware]\n",
+        encoding="utf-8",
+    )
+
+    assert main(["list", "--json"]) == 1
+
+    assert json.loads(capsys.readouterr().out)["middleware_error"]
+
+
 def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatch, capsys):
     """One unloadable catalogue must not take the others down with it, which is this
     record's own rule and was not true of tools.

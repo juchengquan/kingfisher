@@ -75,6 +75,13 @@ class Definitions:
     def warm(self) -> Definitions:
         """Read all three now, so a broken definition fails here."""
         _ = self.agents.specs, self.skills.names, self.subagents.specs, self.tools.found
+        # The fifth kind, which this read for none of the time it has existed.
+        # `middleware/*.py` is Python that has to import, exactly like `tools/*.py`,
+        # and the refusal for a class that is not an `AgentMiddleware` was written
+        # to fire "as the directory is read rather than at the first turn" -- true
+        # of the refusal and not of anything that read the directory, because
+        # nothing did until a definition named one.
+        _ = self.middleware.classes
         _ = self.registry
         # A bundle's tools are imported here for the reason every other kind is,
         # and the reason survives the fact that only one delegate can call them:

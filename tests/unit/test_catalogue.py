@@ -22,9 +22,16 @@ from kingfisher.infrastructure.harness.activation import (
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend
 from kingfisher.infrastructure.harness.tools import workspace_tool_names
+from kingfisher.kinds.middleware.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
-from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir, tools_dir
+from tests.conftest import (
+    FakeToolCallingModel,
+    capture_build,
+    middleware_dir,
+    subagents_dir,
+    tools_dir,
+)
 
 SUBAGENT = """name: reviewer
 description: Checks an analysis for arithmetic errors.
@@ -180,6 +187,37 @@ def test_a_broken_catalogue_fails_at_startup(tmp_path, cfg):
     with pytest.raises(ConfigError):
         Kingfisher(cfg, catalogue={"skills": missing, "subagents": missing,
                                          "tools": missing})
+
+
+NOT_MIDDLEWARE = """
+class NotMiddleware:
+    name = "nope"
+
+
+MIDDLEWARE = [NotMiddleware]
+"""
+
+
+def test_a_broken_middleware_module_fails_at_startup_too(cfg):
+    """The fifth kind, which `warm()` read for none of the time it existed.
+
+    The refusal was written to fire "as the directory is read rather than at the
+    first turn" -- true of the refusal and false of everything else, because nothing
+    read the directory until a definition named one. So a deployment started, said it
+    was fine, and died on the first request activating an agent that names it.
+    """
+    middleware_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (middleware_dir(cfg) / "wrong.py").write_text(NOT_MIDDLEWARE, encoding="utf-8")
+
+    with pytest.raises(MiddlewareError, match="AgentMiddleware"):
+        Definitions.from_config(cfg).warm()
+
+
+def test_a_workspace_with_no_middleware_still_warms(cfg):
+    """The control beside it: `NoMiddleware` answers an empty mapping rather than
+    raising, so the read above must not turn "none offered" into a failure.
+    """
+    Definitions.from_config(cfg).warm()
 
 
 def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, monkeypatch,

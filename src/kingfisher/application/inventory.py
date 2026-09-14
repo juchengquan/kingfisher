@@ -16,6 +16,7 @@ from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, S
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError
+from kingfisher.kinds.middleware.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.kinds.tools.catalogue import ToolError
@@ -87,6 +88,13 @@ class Inventory:
     #: Subagent name -> the file it came from, where a store can say.
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
+
+    #: Middleware class name -> the module that defined it.
+    middleware: Mapping[str, str] = _NOTHING
+    #: A middleware module that will not import, or offering something that is
+    #: not an `AgentMiddleware`. Carried like the others, for the same reason:
+    #: a listing is where somebody goes *because* something is broken.
+    middleware_error: str | None = None
 
     #: What each subagent brings itself, by name: the tools and skills in the
     #: folder named after it. Reported because they are the one capability a
@@ -206,6 +214,21 @@ def _bundled(
     return tools, skills, shadowed, error
 
 
+def _middleware(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
+    """What the workspace registers, and why it could not be read.
+
+    Carried rather than raised, for the reason `_bundled` gives one function up: a
+    listing is where somebody goes *because* something is broken, so the error is
+    printed over the rest of the output rather than through it.
+    """
+    try:
+        return MappingProxyType(
+            {name: cls.__module__ for name, cls in resolved.middleware.classes.items()}
+        ), None
+    except MiddlewareError as exc:
+        return _NOTHING, str(exc)
+
+
 def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
     """What each definition of one kind says about who reaches what."""
     found: dict[str, Stated] = {}
@@ -286,12 +309,15 @@ def _builtin_tools(
         )
 
 
-def inventory(
-    cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
-) -> Inventory:
-    """Ask the workspace what it offers, through the catalogue a run would use."""
-    resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
+def _tools(
+    cfg: Config, resolved: Definitions
+) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None]:
+    """The built-in set, what the workspace adds, where each one lives, and why not.
 
+    Lifted out of `inventory` for the reason `_bundled` and `_middleware` are: one
+    kind read, its failure carried rather than raised, and the answers handed back
+    together.
+    """
     builtin: tuple[str, ...] = ()
     workspace_tools: tuple[str, ...] = ()
     sources: Mapping[str, str] = _NOTHING
@@ -333,6 +359,26 @@ def inventory(
         # deployment that starts perfectly well, since nothing refuses the clash
         # until the first request that touches tools.
         tools_error = str(exc)
+    except MiddlewareError:
+        # Assembling the probe reads the middleware directory too, so a module that
+        # will not import arrives here rather than at the read above. Deliberately
+        # not `tools_error`: the tool catalogue walked fine, and `middleware_error`
+        # already carries this one with the file to go and open. What is lost is the
+        # built-in set, which no longer has a graph to be read off -- and saying
+        # "tools failed" about that would send a reader to the wrong directory.
+        pass
+    return builtin, workspace_tools, sources, tools_error
+
+
+def inventory(
+    cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
+) -> Inventory:
+    """Ask the workspace what it offers, through the catalogue a run would use."""
+    resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
+
+    middleware, middleware_error = _middleware(resolved)
+
+    builtin, workspace_tools, sources, tools_error = _tools(cfg, resolved)
 
     registry = resolved.registry
     subagents: Mapping[str, str] = _NOTHING
@@ -422,6 +468,8 @@ def inventory(
         subagents=MappingProxyType(dict(reaching("subagents", subagents))),
         subagent_sources=subagent_sources,
         subagents_error=subagents_error or broken.get("subagents"),
+        middleware=middleware,
+        middleware_error=middleware_error,
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,
         shadowed=shadowed,

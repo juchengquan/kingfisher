@@ -10,7 +10,7 @@ from pathlib import Path
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
-from tests.conftest import subagents_dir, tools_dir, verbs
+from tests.conftest import middleware_dir, subagents_dir, tools_dir, verbs
 
 BROKEN_TOOL = '''
 from langchain_core.tools import tool
@@ -107,6 +107,23 @@ def test_a_tool_shadowing_a_builtin_is_a_failure_and_not_a_traceback(cfg):
     assert checks["tools"].verdict == "fail"
     assert "read_file" in checks["tools"].detail
     assert checks["subagents"].verdict == "ok"
+def test_a_broken_middleware_module_is_a_failure(cfg):
+    """The fifth kind, which neither command mentioned at all.
+
+    `doctor` reported three directories, `list` reported four, and middleware was in
+    neither -- so the one kind a deployment could break with nothing said about it.
+    """
+    middleware_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (middleware_dir(cfg) / "wrong.py").write_text(
+        "class NotMiddleware:\n    name = 'nope'\n\n\nMIDDLEWARE = [NotMiddleware]\n",
+        encoding="utf-8",
+    )
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["middleware"].verdict == "fail"
+    assert "wrong.py" in checks["middleware"].detail
+    assert checks["tools"].verdict == "ok", "one catalogue must not take the others down"
 
 
 def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):
