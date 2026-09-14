@@ -109,6 +109,7 @@ def test_every_preset_tool_loads(shipped):
         "line_count",
         # And a class, which is the third. See below.
         "sql_explain",
+        "web_search",
     }
 
 
@@ -144,6 +145,20 @@ def test_the_class_shaped_preset_exports_an_instance(shipped):
     assert list(found.args) == ["statement", "verbose"]
     # The reason the class earns its place: each argument carries a sentence.
     assert found.args["statement"]["description"].strip()
+
+
+def test_the_placeholder_search_says_so_in_its_own_results(shipped):
+    """A placeholder that reads as real is how an invented fact reaches a user with a
+    citation attached. The description is read once, when the model decides to call;
+    the result is what gets quoted into an answer, so the result has to say it too.
+    """
+    tools = LocalToolRepository(shipped / "tools").tools
+    search = next(t for t in tools if tool_name(t) == "web_search")
+
+    answer = search.invoke({"query": "kingfisher"})
+
+    assert "PLACEHOLDER" in answer
+    assert "not a real search" in answer
 
 
 def test_every_preset_tool_describes_itself_to_the_model(shipped):
@@ -221,7 +236,7 @@ def test_every_preset_agent_parses(shipped):
     # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
     # is not unread: they are definitions of this kind, in this kind's folder,
     # and they parse like the rest.
-    assert set(specs) == {"analyst", "assistant", "researcher", "surveyor"}
+    assert set(specs) == {"analyst", "assistant", "general", "researcher", "surveyor"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -1146,6 +1161,7 @@ def test_the_other_presets_still_restrict_nobody(shipped):
 
     assert {name for name, spec in agents.items() if spec.groups == ALL} == {
         "assistant",
+        "general",
         "researcher",
         "surveyor",
     }

@@ -1,0 +1,68 @@
+name: general
+description: Works in the workspace and looks things up outside it.
+# The agent the search seam exists for. `assistant.yaml` is the general-purpose
+# agent for work that stays inside a workspace -- it delegates the reading to
+# named subagents and checks its own figures. This one holds the whole built-in
+# set and two tools that reach outward, which is the difference worth shipping
+# two files over.
+#
+# **The whole built-in set, written out rather than left off.** Omitting the
+# field grants all of them too -- `surveyor.yaml` says so, and says it because
+# the absence is easy to read as "none". The two spellings stop agreeing the day
+# deepagents registers an eleventh built-in: an absent field takes it sight
+# unseen, and this list does not. That is the trade -- a surface a reviewer can
+# read against a line to add when a new built-in is one you want.
+#
+# A name here that is not a built-in is refused at startup, naming it --
+# `unknown builtin_tool(s)` -- so a typo narrows the agent rather than being
+# quietly dropped.
+#
+# `task` is in the list and earns its place with no `subagents:` below, because
+# deepagents adds a general-purpose delegate of its own unless told not to. The
+# delegation is to a copy of this agent's own surface rather than to a named
+# specialist.
+builtin_tools:
+  [ls, read_file, write_file, edit_file, delete, glob, grep, execute, task, write_todos]
+# **`web_search` is a placeholder, and naming it anyway is the point.** It
+# answers with fixed text and never reaches the network. This file does not
+# change when a deployment puts a real search behind that name: an agent is
+# written against the name and its arguments, which are settled long before
+# anyone has chosen a vendor.
+#
+# `http_fetch` beside it because a search result is a URL and a URL is not an
+# answer. Searching finds the page and fetching reads it; an agent holding one
+# without the other can only ever report links it has not opened.
+#
+# Both stay declared even though `execute` above could shell out to `curl`. A
+# request that names these two reaches a URL through a tool that does one thing,
+# and what a narrow tool buys is a call the deployment can see in a transcript
+# rather than a shell line it has to read for intent.
+tools: [web_search, http_fetch]
+# No `skills:` and no `subagents:`, so it has neither. The skills index is a
+# cost paid into every prompt whether or not a procedure is wanted, and this
+# agent's job is not a procedure.
+#
+# Off rather than "no opinion". What this agent looks up belongs in the answer
+# it was asked for; carrying a previous caller's lookups into the next session
+# is how a stale figure outlives the question that produced it.
+memory: true
+system_prompt: |
+  You work in this workspace and you can look things up outside it.
+
+  `web_search` may be a placeholder. Its results say so when it is, and when
+  they do, no search happened: report that you could not look the thing up,
+  rather than passing sample text off as a finding. That is the honest answer,
+  and it is also what tells whoever wired this deployment that the real search
+  is still missing.
+
+  When the search is real, treat a result as a lead and not as a fact. Fetch
+  the page before relying on what a summary said about it, and cite the URL you
+  actually read rather than the one you meant to.
+
+  You can write, delete and run commands here. Prefer the tool that does the
+  one thing you mean -- `read_file` over `execute cat`, `web_search` over a
+  shell that reaches the network -- because a narrow call says what it was for
+  and a shell line has to be read for intent.
+
+  Say what you could not check. A lookup that could not be completed is worth
+  reporting; a gap hidden inside a confident answer is not.
