@@ -112,8 +112,9 @@ class Inventory:
     #: gets its own and the shared one never reaches it, and nothing else in
     #: this output would say so.
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
-    #: A bundle whose tools will not import. Its own field rather than
-    #: `tools_error`, so a listing says which delegate to go and look at.
+    #: A bundle this deployment cannot read: tools that will not import, or a
+    #: folder that is one subagent's and holds two definitions. Its own field
+    #: rather than `tools_error`, so a listing says which delegate to go and open.
     bundles_error: str | None = None
 
     #: Which of them are graphs the workspace built rather than definitions kingfisher
@@ -187,6 +188,7 @@ def _bundled(
 ]:
     """What each subagent brings itself, for a listing: tools, skills, shadowed."""
     tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
     error: str | None = None
     try:
@@ -207,8 +209,17 @@ def _bundled(
                 if (found := tuple(sorted(catalogue.intersection(names))))
             }
         )
-    except ToolError as exc:
+    except (ToolError, SubagentError) as exc:
+        # `SubagentError` because reaching a bundle's tools reads the bundles first,
+        # and a folder that is one subagent's and holds two definitions is refused
+        # there. Uncaught it escaped `inventory` and took `doctor` down with it --
+        # the same shape as a workspace tool wearing a built-in's name, found the
+        # same way, by a rule that drove the refusal rather than reading about it.
         error = str(exc)
+        return tools, skills, shadowed, error
+
+    # Inside no `try` of its own, and that is the point: it reads the same bundles,
+    # so the only way it raises is a way the block above has already returned on.
     skills = MappingProxyType(
         {
             name: tuple(sorted(registry.names))

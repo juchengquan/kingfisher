@@ -25,7 +25,7 @@ lines apart.
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
 | **What a request may do** | [Capabilities](#capabilities) · [Group access](#group-access) · [Models and endpoints](#models-and-endpoints) |
 | **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
-| **The surfaces** | [The command line](#the-command-line) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
+| **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
 | | [Proposals, and what became of them](#proposals-and-what-became-of-them) |
 
@@ -1148,6 +1148,66 @@ is the only way to reach the driver's `main` and have it return without calling
 a model, which six tests covering workspace creation and first-run seeding are
 built on. Written into the flag, because from outside it looks exactly as
 removable as the three that went. *(2026-09-04, same document.)*
+
+## What doctor promises
+
+**`kingfisher doctor` exiting zero means nothing in the catalogue will break** --
+at startup or on some later request, whether or not anybody ran it. It did not
+mean that, and the gap was not one thing: five refusals escaped it at once, each
+differently. An agent file it never looked at. A middleware directory nothing
+read at all. A workspace tool wearing a built-in's name, which made the command
+itself exit with a traceback over a deployment that starts perfectly well. And
+two definitions naming a tool by a path it had moved from, of which the agent
+half was refused *nowhere* -- it started, ran, and quietly did not have the tool
+its author granted. *(2026-09-14.)*
+
+**Checking was already separate; it was the separation that leaked.** The first
+proposal was to split validation out of the runtime and lazy-load at `run`.
+Measured, that premise did not hold twice over. `warm()` is not doing validation
+and running -- every `_ = ...` in it forces a read a run needs anyway, and a
+broken file happens to raise while being read, so there is nothing to split.
+And the reading costs 17.5ms for a real workspace's seven tools once deepagents
+is loaded, against ~1,000ms for the runtime itself. The checking step already
+existed and already ran without starting a deployment: it was `doctor`, and what
+it lacked was coverage, not a home.
+
+**Lazy tool loading was rejected on a structural blocker, not the cost.** A
+tool's name lives inside the module, so which file defines `sql_tables` is
+unknowable without importing it -- three of eight shipped names are not derivable
+from their filename. "Import only what is granted" needs a name-to-module map
+that can only be built by importing everything. A tool whose work needs a heavy
+library should import it inside the function, which gets 98% of the saving with
+no manifest to go stale: 89 modules and 65ms become 1 and 1ms.
+
+**Startup got stricter where the failure had nowhere else to surface.** A broken
+middleware module and a shadowed built-in now stop `Kingfisher(...)`, because
+otherwise they waited for a request. Together that is about 11ms once -- and the
+shadow probe only runs when the workspace defines tools, since nothing else can
+shadow one, which is what keeps it off the 179 tests that build a service with an
+empty catalogue.
+
+**An agent naming a moved tool fails `doctor` and does not stop startup.**
+Deliberately asymmetric with the subagent case, which does stop it. Refusing the
+agent at startup would stop a deployment that runs today over a file nobody has
+touched, and the promise being made here is that `doctor` tells you -- not that
+every mistake becomes fatal. `test_doctor_sees_an_agents_moved_tool_that_nothing_else_would`
+asserts both halves so neither can drift.
+
+**`REFUSALS` is what stops the next one.** One entry per function in the
+catalogue-reading code that can refuse a definition -- 43 refusals in 21
+functions -- each naming a broken catalogue that reaches it, or saying why no
+file on disk can. Deny by default in both directions, with the raise count
+checked so a refusal added to a function already listed cannot inherit an entry
+written about a different one.
+
+Two things it found that reading would not have. The first version scanned for
+`raise <Kind>Error` and missed `importing.load` and `documents.require_literal_prompt`,
+which raise the error class they were *handed* -- so the rule counts a raise of a
+name the function was given as well as one it names. The second: driving the
+table turned up a sixth escape nobody had looked for, a bundle folder holding two
+definitions, which took `doctor` down the same way the shadowed built-in had. The
+filing is checked rather than trusted -- each defect is run and the frame that
+actually raised is compared against the key it is filed under.
 
 ## Where a deployment reads from
 
