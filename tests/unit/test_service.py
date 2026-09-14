@@ -4,19 +4,30 @@ from __future__ import annotations
 
 import shutil
 from contextlib import contextmanager
+from dataclasses import replace
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from kingfisher import Kingfisher
 from kingfisher.application.reporting import opening_events
+from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
+from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace.placement import DataError
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
-from tests.conftest import StubCheckpointer, an_agent, start, subagents_dir
+from tests.conftest import (
+    FAKE_ENDPOINT,
+    OTHER_ENDPOINT,
+    StubCheckpointer,
+    an_agent,
+    start,
+    subagents_dir,
+)
 from tests.unit.test_run import StubAgent
 
 
@@ -763,3 +774,80 @@ def test_no_runner_leaves_the_platform_to_decide(cfg):
     service = Kingfisher(cfg, threads=StubCheckpointer())
 
     assert service._runner is None
+
+
+# -- a provider that will not take the key ----------------------------------
+
+
+class _RejectedKeyError(Exception):
+    """Shaped like a provider's 401 without importing one.
+
+    `status_code` and `response.request.url` are what `anthropic` and `openai` both
+    carry, and matching on those rather than on a class is what lets one branch cover
+    every adapter.
+    """
+
+    def __init__(self, url: str, status: int = 401) -> None:
+        said = f"Error code: {status}"
+        super().__init__(said)
+        self.status_code = status
+        self.response = SimpleNamespace(request=SimpleNamespace(url=url))
+
+
+def test_a_rejected_key_names_the_variable_it_came_from(cfg):
+    """A 401 reached the terminal as a provider traceback that named no variable, so a
+    reader went to `models.yaml`, where the `key_env` line is correct and the value it
+    points at is not.
+    """
+    models = replace(
+        cfg.models, endpoints={"fake": replace(FAKE_ENDPOINT, key_env="FAKE_API_KEY")}
+    )
+    refused = refused_credentials(
+        _RejectedKeyError(f"{FAKE_ENDPOINT.base_url}/v1/messages"), replace(cfg, models=models)
+    )
+
+    assert refused is not None
+    assert "endpoint 'fake'" in str(refused)
+    assert "FAKE_API_KEY" in str(refused)
+    # The half that explains why a correct-looking file was not what was sent.
+    assert ".env" in str(refused)
+
+
+def test_the_endpoint_named_is_the_one_that_refused(cfg):
+    """Not the default. A delegate may run somewhere its parent does not, so resolving
+    the default model for the name would be confidently wrong on the one 401 that
+    needed a different answer.
+    """
+    refused = refused_credentials(_RejectedKeyError(f"{OTHER_ENDPOINT.base_url}/v1/messages"), cfg)
+
+    assert refused is not None and "'elsewhere'" in str(refused)
+    assert "'fake'" not in str(refused), "named the default rather than the one that failed"
+
+
+def test_anything_but_a_401_keeps_its_traceback(cfg):
+    """The control beside the escape. A translation that caught one status too many
+    would turn a bug in the graph into a configuration error nobody can act on.
+    """
+    assert refused_credentials(RuntimeError("the model went away"), cfg) is None
+    assert refused_credentials(_RejectedKeyError(FAKE_ENDPOINT.base_url, status=500), cfg) is None
+
+
+def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_error(cfg):
+    """Driven rather than inspected: the translation lives in the turn's own `except`,
+    and a test that only called `refused_credentials` would still pass with that branch
+    deleted.
+    """
+
+    class Rejects:
+        def stream(self, state, config, stream_mode=None, subgraphs=False):
+            yield ((), "values", {"messages": []})
+            where = f"{FAKE_ENDPOINT.base_url}/v1/messages"
+            raise _RejectedKeyError(where)
+
+        def get_state(self, config):
+            return None
+
+    service = Kingfisher(cfg, graph=Rejects(), threads=StubCheckpointer())
+
+    with pytest.raises(ConfigError, match="rejected the key"):
+        service.run(Request(task="anything"))

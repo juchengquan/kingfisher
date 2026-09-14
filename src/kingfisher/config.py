@@ -26,6 +26,12 @@ class Endpoint:
     api: str
     base_url: str
     api_key: str
+    #: The variable the key above was read from. Kept rather than discarded at
+    #: load time because it is the only actionable thing in a 401: the YAML is
+    #: correct, the key it points at is not, and a message that cannot name the
+    #: variable sends someone to the file where everything already looks right.
+    #: Defaulted, so an endpoint built in a test need not carry one.
+    key_env: str = ""
 
 
 @dataclass(frozen=True)

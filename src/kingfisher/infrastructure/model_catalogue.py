@@ -114,6 +114,7 @@ def _endpoints(
             api=api,
             base_url=str(entry["base_url"]),
             api_key=key,
+            key_env=str(entry["key_env"]),
         )
     return resolved, dropped
 
