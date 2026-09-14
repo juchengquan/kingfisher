@@ -3107,6 +3107,49 @@ def test_the_stop_reasons_are_what_the_package_assigns():
     )
 
 
+def _decides_from_a_stop_reason(node: ast.Compare) -> bool:
+    """One comparison that reads a decision out of a stop reason's spelling."""
+    operands = [node.left, *node.comparators]
+    reads = any(
+        (isinstance(operand, ast.Attribute) and operand.attr == "stop_reason")
+        or (isinstance(operand, ast.Name) and operand.id == "stop_reason")
+        for operand in operands
+    )
+    literal = any(
+        isinstance(operand, ast.Constant) and isinstance(operand.value, str)
+        for operand in operands
+    )
+    return reads and literal
+
+
+def test_no_surface_decides_for_itself_what_a_finished_turn_is():
+    """The other half of the pin above: that rule says which reasons exist, this one
+    says where a decision may be read out of one.
+
+    Two surfaces ask whether a turn finished -- `Kingfisher.run(delete_session=True)`
+    and `kingfisher run --delete-session` -- and they share no code path, because one
+    drains `stream` and the other is the drain. Two copies of `stop_reason ==
+    "end_turn"` pass every behaviour test in this tree and still come apart over a
+    fourth reason added later, with nothing going red: both would still be asserting
+    about `end_turn` and `max_steps`, which still work. So the comparison lives in
+    `RunResult.completed`, and the only place a new one can be written is the place
+    that already has it.
+    """
+    decided = []
+    trees = [path for path in SRC.rglob("*.py") if path != SRC / "domain" / "result.py"]
+    trees += list(CONSUMERS["kingfisher_service"].rglob("*.py"))
+    for path in sorted(trees):
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if isinstance(node, ast.Compare) and _decides_from_a_stop_reason(node):
+                decided.append(f"{path.relative_to(REPO)}:{node.lineno}")
+
+    assert not decided, (
+        f"a stop reason compared against a literal outside domain/result.py: {decided} "
+        "— ask `RunResult.completed` instead, or the surfaces that ask will disagree "
+        "about a reason added later and nothing will go red"
+    )
+
+
 def _kinds_branched_on(source: str) -> set[str]:
     """Every literal a `self.kind == ...` comparison tests for."""
     found: set[str] = set()

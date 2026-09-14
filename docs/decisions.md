@@ -1161,6 +1161,28 @@ and prints nothing is one whose next user deletes the directory by hand --
 leaving the conversation, the claim and the store's copy exactly where they
 were. *(2026-09-14.)*
 
+**A run can be told to take its session with it, and only a finished turn is.**
+`kingfisher run --delete-session` and `Kingfisher.run(delete_session=True)`
+dispose of the session once the turn ends. A turn stopped at a bound keeps all
+of it and says how to pick it up or remove it: that ending is the one whose
+leftovers are worth something -- the partial work is real, the conversation is
+what a retry on the same session is rebuilt from, and the line printed beside it
+already promises both. The files a deletion takes are named on the way out,
+which is the only place this command prints `artifacts` at all, and a deletion
+that fails does not change the exit code -- those three say how the *turn*
+ended, and `1` already means the answer above was cut short.
+
+**Offered on `run` and not on `stream`,** which is not the asymmetry it looks
+like: a generator has no *after the turn* that this library controls. Past the
+final yield never runs for a caller who stops reading at the answer, and a
+`finally` fires on `GeneratorExit` too -- so a session would go because somebody
+closed a loop early, which is the shape `_stream_turn` already carries a comment
+about. The command drains `stream` itself and so disposes after `show` returns,
+which leaves the two surfaces sharing no code path: the rule they both need
+lives in `RunResult.completed`, and
+`test_no_surface_decides_for_itself_what_a_finished_turn_is` is what keeps a
+second copy of it from being written. *(2026-09-14.)*
+
 The half that survives: a bare invocation of the driver spends real money on the
 smoke, which is a fine default for a driver and a wrong one for a stranger's
 first command. A verb with a required task argument cannot be reached by

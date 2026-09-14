@@ -370,3 +370,47 @@ def test_the_staleness_rule_needs_no_filesystem():
     ordered = still_held((("fresh", 100.0), ("old", 10.0)), stale_after=50.0, now=120.0)
 
     assert ordered == ("fresh",)
+
+
+# -- a run that disposes of its own session -------------------------------
+
+
+def test_run_disposes_of_the_session_when_it_is_told_to(cfg):
+    """The library's half of `--delete-session`, so a caller in Python need not write
+    the same two lines the command writes.
+    """
+    kf = service(cfg)
+
+    result = kf.run(Request("go"), delete_session=True)
+
+    assert result.completed
+    assert not (cfg.workspace / "sessions" / result.session_id).exists()
+
+
+def test_run_keeps_the_session_unless_it_is_told_otherwise(cfg):
+    """The default, and the behaviour every existing caller has."""
+    kf = service(cfg)
+
+    result = kf.run(Request("go"))
+
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
+
+
+def test_a_turn_stopped_at_a_bound_keeps_its_session(cfg):
+    """Driven through a real bound rather than asserted about a `RunResult` built here:
+    a turn cut short still holds the work it did and the conversation a retry is
+    rebuilt from, and a test that made its own result would pass against a rule of its
+    own invention.
+    """
+    from dataclasses import replace
+
+    from tests.unit.test_quotas import SlowAgent
+
+    kf = Kingfisher(
+        replace(cfg, turn_timeout_s=0), graph=SlowAgent(steps=5), threads=StubCheckpointer()
+    )
+
+    result = kf.run(Request("go"), delete_session=True)
+
+    assert result.stop_reason == "max_duration"
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()

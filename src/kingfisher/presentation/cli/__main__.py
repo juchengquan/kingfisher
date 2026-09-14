@@ -49,7 +49,7 @@ from kingfisher.presentation.cli.listing import as_json, failed, origins_documen
 from kingfisher.presentation.cli.progress import show
 
 if TYPE_CHECKING:
-    from kingfisher import Kingfisher, Seeded
+    from kingfisher import Kingfisher, RunResult, Seeded
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
@@ -203,6 +203,18 @@ def build_parser() -> argparse.ArgumentParser:
     # read-only and whoever runs it is on the host with the policy in front of
     # them; a turn acts, so this is left to the library to refuse -- which it
     # does, naming this flag.
+    # Off by default, because the default has to be right for somebody who does
+    # not know sessions exist yet: a run whose files are gone before they knew
+    # to look for them is worse than a directory they can delete later.
+    doing.add_argument(
+        "--delete-session",
+        action="store_true",
+        help=(
+            "delete the session once the turn finishes, so a one-off run leaves "
+            "nothing behind. A turn stopped at a bound keeps its session, and "
+            "says so"
+        ),
+    )
     doing.add_argument(
         "--as",
         dest="held",
@@ -430,14 +442,51 @@ def _run(args: argparse.Namespace) -> int:
         return 2
 
     print(f"\nsession {result.session_id}  turn {result.turn_id}", file=sys.stderr)
-    if result.stop_reason != "end_turn":
+    if not result.completed:
         print(
             f"stopped: {result.stop_reason} -- the answer above is what was "
             f"reached, and what it wrote is in {result.virtual_dir}",
             file=sys.stderr,
         )
+        if args.delete_session:
+            # Said rather than done quietly, because the flag was asked for and
+            # this is the one ending that declines it. Both ways out are named:
+            # the work is still there to pick up, and still there to remove.
+            print(
+                f"session kept: continue it with --session {result.session_id}, "
+                f"or remove it with kingfisher reap --session {result.session_id}",
+                file=sys.stderr,
+            )
         return 1
+    if args.delete_session:
+        _discard(kf, result)
     return 0
+
+
+def _discard(kf: Kingfisher, result: RunResult) -> None:
+    """Delete the session this run used, having named what goes with it.
+
+    The files are listed before the deletion and not after, because this is the
+    moment they stop being recoverable -- and nothing else in this command ever
+    prints them, so without this a run that wrote a file and a run that wrote
+    nothing end identically.
+
+    A deletion that fails does not change the exit code. Those three codes say
+    how the *turn* ended, which is what a script reading them is asking, and 1
+    already means the answer above was cut short -- which would be a lie told
+    about a turn that finished and a directory that stayed.
+    """
+    if result.artifacts:
+        many = "" if len(result.artifacts) == 1 else "s"
+        print(
+            f"the session goes, and {len(result.artifacts)} file{many} with it:",
+            file=sys.stderr,
+        )
+        for name in result.artifacts:
+            print(f"  {name}", file=sys.stderr)
+    failure = kf.delete_session(result.session_id)
+    if failure:
+        print(f"session not deleted -- {failure}", file=sys.stderr)
 
 
 def _held(raw: str) -> Held:

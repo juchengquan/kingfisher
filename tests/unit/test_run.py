@@ -8,6 +8,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.application.run import Request, RunResult, normalize_answer, run
 from kingfisher.application.service import Kingfisher
+from kingfisher.domain.result import END_TURN, STOP_REASONS
 from tests.conftest import StubCheckpointer, start
 
 
@@ -393,3 +394,22 @@ def test_the_virtual_directory_and_the_artifacts_share_a_root(cfg):
     assert result.virtual_dir.startswith("/")
     assert all(not a.startswith("/") for a in result.artifacts)
     assert result.virtual_dir.lstrip("/").startswith("runs/")
+
+
+# -- what counts as having finished ---------------------------------------
+
+
+@pytest.mark.parametrize("reason", STOP_REASONS)
+def test_completed_is_true_for_the_one_reason_that_means_the_agent_finished(reason):
+    """Parametrized over the tuple rather than over a list written out here, so a
+    fourth stop reason arrives in this test on the day it is added rather than the day
+    somebody remembers to come back for it.
+    """
+    result = RunResult(session_id="s", turn_id="t001", answer="", stop_reason=reason)
+
+    assert result.completed == (reason == END_TURN)
+
+
+def test_a_result_that_says_nothing_about_stopping_has_finished():
+    """The default, which every caller building a result by hand relies on."""
+    assert RunResult(session_id="s", turn_id="t001", answer="").completed

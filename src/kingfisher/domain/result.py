@@ -20,10 +20,14 @@ def normalize_answer(text: str) -> str:
     return _THINK.sub("", text or "").strip()
 
 
+#: The turn finished because the agent was done. Named apart from the tuple
+#: because it is the one reason anything asks *about* rather than reports, and
+#: `RunResult.completed` is where that question is allowed to be asked.
+END_TURN = "end_turn"
+
 #: Why a turn stopped, and the whole of it.
 STOP_REASONS: tuple[str, ...] = (
-    # The turn finished because the agent was done.
-    "end_turn",
+    END_TURN,
     # `KINGFISHER_TURN_TIMEOUT_S`, checked between stream chunks.
     "max_duration",
     # `KINGFISHER_RECURSION_LIMIT`, enforced inside langgraph's own loop.
@@ -56,7 +60,21 @@ class RunResult:
     #: Why this turn stopped. `end_turn` is the ordinary case; anything else means the
     #: answer is what had been reached when a bound was hit, and `artifacts` still lists
     #: what was written -- discarding either would hide work rather than undo it.
-    stop_reason: str = "end_turn"
+    stop_reason: str = END_TURN
+
+    @property
+    def completed(self) -> bool:
+        """Whether the agent finished, as against a bound cutting the turn off.
+
+        Here rather than at each place that asks, because two surfaces ask and
+        share no code path: `Kingfisher.run(delete_session=True)` and `kingfisher
+        run --delete-session`, one of which drains `stream` while the other is
+        the drain. Two copies of the comparison pass every behaviour test in
+        this tree and still come apart over a fourth stop reason added later,
+        with nothing going red -- which is what
+        `test_no_surface_decides_for_itself_what_a_finished_turn_is` holds.
+        """
+        return self.stop_reason == END_TURN
 
 
 #: How much of one tool argument to show. `write_file` takes an entire file as an
