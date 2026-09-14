@@ -15,10 +15,12 @@ from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
 from kingfisher.config import ConfigError
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace.placement import DataError
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.infrastructure.workspace.snapshots import agent_snapshot
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FAKE_ENDPOINT,
@@ -851,3 +853,33 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
 
     with pytest.raises(ConfigError, match="rejected the key"):
         service.run(Request(task="anything"))
+
+
+def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
+    """The pin was written to `<workspace>/sessions/<id>` whatever `session_root` said.
+
+    That is where the session is only under the default root. Anywhere else the turn
+    ran in one directory and the pin was written to another, so `agent_started_with`
+    found none on the next turn, `_keep` collected none for the store, and the
+    guarantee `_agent_for` raises for -- a session is fixed to the agent it opened
+    with -- held on the default root and silently failed on every other.
+
+    Driven through `_graph_for` rather than `run`, because a supplied graph is
+    returned before an agent is resolved and would pin nothing at all.
+    """
+    an_agent(cfg, "only")
+    an_agent(cfg, "other")
+    # What any `SessionRoot` but the default yields: a directory that is not under
+    # the workspace at all.
+    elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
+    service = Kingfisher(cfg)
+
+    service._graph_for(Request("go", agent="only"), elsewhere)
+
+    assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
+    assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
+        "the pin was written under the workspace, which is not this session"
+    )
+
+    with pytest.raises(CapabilityError, match="cannot be changed"):
+        service._graph_for(Request("again", agent="other"), elsewhere)

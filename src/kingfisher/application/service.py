@@ -460,16 +460,34 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def remember_agent(self, session_id: str, name: str | None) -> None:
-        """Have this session keep the agent it opened with.
+        """Have this session keep the agent it opened with, before it has run.
 
-        Takes an id rather than a directory because the service calls it with
-        one, knowing a session by its name and not by where it sits.
+        Takes an id rather than a directory because its caller has one and no
+        directory: `POST /sessions` opens a session without running a turn, so
+        `session_root` has nothing held and the workspace is the only place to
+        write. `_pin_agent_in` is what a turn uses, and it knows where it is.
+        """
+        self._pin_agent_in(sessions_root(self.workspace) / session_id, name)
+
+    def _pin_agent_in(self, session_dir: Path, name: str | None) -> None:
+        """Keep the agent, in the directory this is about.
+
+        **The directory, never an id re-derived from one.** This took an id and
+        rebuilt the path as `<workspace>/sessions/<id>`, which is where the session
+        is only when `session_root` is the default. Under any other one the turn
+        runs elsewhere, so the pin was written where `agent_started_with` does not
+        read and where `_keep` does not collect it: every turn re-resolved the agent
+        from the catalogue, a deploy mid-conversation changed the prompt under a
+        history that had already happened, and a request naming a different agent was
+        served instead of refused. `ports.md` promises the store is handed the pinned
+        agent, and that promise was false for exactly the deployments the port exists
+        for.
         """
         if name is None:
             return
         documents = getattr(self.catalogue.agents, "documents", {})
         if (text := documents.get(name)) is not None:
-            remember_agent(sessions_root(self.workspace) / session_id, text)
+            remember_agent(session_dir, text)
 
     def _agent_for(
         self, request: Request, session_dir: Path, *, groups: Held | None = None
@@ -478,7 +496,7 @@ class Kingfisher(Sessions, Disposal):
         kept = agent_started_with(session_dir)
         if kept is None:
             spec = self.agent_named(request.agent, groups=groups)
-            self.remember_agent(session_dir.name, request.agent)
+            self._pin_agent_in(session_dir, request.agent)
             return spec
 
         started = read(kept, agent_snapshot(session_dir))
