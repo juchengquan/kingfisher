@@ -1058,9 +1058,11 @@ finding them in a dict literal. An absence is not a record.
 storage through `SessionRoot`, both of which exist and neither of which this
 touches. What changed is that "routes only, never the default slot" is now a
 thing someone could implement without first untangling three files.
+*(Opened on 2026-09-14; see below.)*
 
-**Considered and rejected with it:** a backend factory on `Kingfisher` (deferred,
-and if ever opened then routes only, never the default slot); kingfisher shipping
+**Considered and rejected with it:** a backend factory on `Kingfisher` -- deferred
+then, opened on 2026-09-14 for a reason this had not considered, and not on the
+terms reserved here; kingfisher shipping
 an S3 store behind a closed table like `ADAPTERS`, which would put this package in
 the business of owning every backing store anyone asks for; and a builder
 parameter on `create_app`, designed and dropped once the resolution point moved
@@ -1070,6 +1072,54 @@ slices. Its one correction is worth keeping: an argument about `create_app`
 needing a checkpointer held open for the process was true when written and false
 a day later, `48cd457` having made the default `InMemorySaver`. The conclusion
 did not rest on it.)*
+
+**The seam is open, and the reason is tenancy rather than capability.** What kept
+it shut was that a remote runtime is already served by two ports: `CommandRunner`
+ships the command elsewhere, `SessionRoot` says where the session's files are.
+Both hold. What neither survives is a deployment that forbids one caller's session
+from reaching another's. `SessionRoot` yields a *path*, so a remote filesystem
+reaches it as a mount -- and a mount is established once, outside the process,
+before any session exists. A session created at runtime cannot be given one of its
+own: making mounts needs privileges, and granting them was measured to cost more
+than it buys, since a container holding `CAP_SYS_ADMIN` is one command from the
+agent's own shell remounting its workspace executable and nothing in the process
+can take that back. So every session sits on one mount, separated by a path prefix
+and nothing else. That is exactly the shared storage a per-caller route was
+already declined on, for want of a tenancy argument. A deployment that forbids the
+sharing *is* the argument, and it comes out the other way: `backend_from` is
+called per turn with the session it is for, so each caller can be handed its own
+filesystem, and the separation is in the wiring rather than in a naming
+convention.
+
+**Past "routes only, never the default slot", and that condition was the thing
+wrong with the deferral.** The default slot is the shell and the filesystem for
+every unrouted path, so reserving it ruled out the only deployment that needed the
+seam at all. What stands in its place is the shape rather than a boundary:
+`backend_from` is handed the backend kingfisher built, so a deployment wanting one
+thing different returns what it was given with one thing different, and keeps
+refusing host paths, keeps the route table that makes a read-only rule legal, and
+keeps the confinement, by doing the least work available. Losing any of them takes
+a deliberate return of something else.
+
+**A callable, and the reason is sharper here than for a runner.** A backend is
+rooted at a session directory, so one instance handed in at construction is one
+filesystem for every caller -- which is the leak a deployment replacing the
+backend is usually replacing it to avoid, written at a call site where nothing
+looks wrong. The parameter is named for where a backend comes from rather than for
+the backend so that passing an instance is not the obvious thing to try, and
+refused with a type error when it is tried anyway.
+
+**Both a pre-built graph and a function is refused at construction.** They are two
+answers to what filesystem a turn runs against, and a pre-built graph already
+carries one, so either would be silently discarded. Refused where the wiring is
+written, which is the last moment it is cheap to say so.
+
+**Not opened with it: a setting.** A deployment needing this builds `Kingfisher`
+itself, and `create_app` already takes one ready-made, so the service reaches the
+seam without a name to resolve. The command line does not, and would need one --
+left until something wants it, because a setting is permanent and nothing has
+asked yet.
+*(2026-09-14.)*
 
 ## The command line
 

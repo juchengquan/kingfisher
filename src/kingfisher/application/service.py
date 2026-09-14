@@ -78,7 +78,11 @@ from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
     indistinct_delegates,
 )
-from kingfisher.infrastructure.harness.agent import build_agent, builtin_tool_names
+from kingfisher.infrastructure.harness.agent import (
+    BackendFrom,
+    build_agent,
+    builtin_tool_names,
+)
 from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
@@ -215,6 +219,7 @@ class Kingfisher(Sessions, Disposal):
         sessions: SessionStore | None = None,
         session_root: SessionRoot | None = None,
         runner: Callable[[Path], CommandRunner] | None = None,
+        backend_from: BackendFrom | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middleware: Mapping[str, MiddlewareFactory] | None = None,
@@ -281,6 +286,22 @@ class Kingfisher(Sessions, Disposal):
             )
             raise TypeError(msg)
         self._runner = runner
+        # A callable for the reasons above, and one more that is this parameter's
+        # own: a backend is rooted at a session directory, so a single instance
+        # shared by every session would be one filesystem for every caller. A
+        # deployment separating its callers by *where their files are* -- which is
+        # what replacing the backend is usually for -- would have written the leak
+        # it was replacing the backend to avoid, and nothing about the call site
+        # would look wrong.
+        if backend_from is not None and not callable(backend_from):
+            msg = (
+                "backend_from is called per turn with the backend kingfisher built, "
+                "so it takes a callable: pass `lambda default, session_dir: "
+                "your_backend` if you have one to share -- but a backend is rooted "
+                "at a session, so sharing one is sharing a filesystem between callers"
+            )
+            raise TypeError(msg)
+        self._backend_from = backend_from
         # Three shapes, and the difference is who owns the connection. An instance is a
         # shared store the deployment made and manages; a callable is a factory this
         # service calls per session and closes after the turn; `None` means the default,
@@ -313,6 +334,18 @@ class Kingfisher(Sessions, Disposal):
         # caller unlucky enough to reach the wrong name. `_instantiate` keeps
         # its own guard for `build_agent`, which takes a registry directly.
         refuse_unbuildable_middleware(self.middleware)
+        # Refused here rather than resolved, because either answer is somebody's
+        # wiring silently discarded: a pre-built graph already holds a backend, and
+        # `_graph_for` returns it without building anything for `backend_from` to be
+        # handed. Said at construction for the reason the catalogue is read there --
+        # it is a wiring mistake, and this is the last moment it is cheap to say so.
+        if graph is not None and backend_from is not None:
+            msg = (
+                "graph= and backend_from= are two answers to what filesystem a turn "
+                "runs against, and a pre-built graph already carries one: pass the "
+                "graph, or pass backend_from and let kingfisher build the graph"
+            )
+            raise ValueError(msg)
         self._graph = graph
         # There is nothing to reconcile, and that is the shape of the design rather than
         # an omission. Audiences live in the definitions, so a definition *is* the asset
@@ -418,6 +451,7 @@ class Kingfisher(Sessions, Disposal):
             # make one.
             runner=self._runner(session_dir) if self._runner is not None else None,
             capabilities=capabilities if capabilities is not None else request.capabilities,
+            backend_from=self._backend_from,
             session_dir=session_dir,
             run_on=request.run_on,
             middleware_registry=self.middleware,
