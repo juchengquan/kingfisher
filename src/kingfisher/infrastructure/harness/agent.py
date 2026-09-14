@@ -9,6 +9,7 @@ and three provider SDKs. Resolving what a delegate runs with is
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
@@ -75,6 +76,18 @@ if TYPE_CHECKING:
     from langgraph.graph.state import CompiledStateGraph
 
 
+#: Handed the backend kingfisher built and the session it is rooted at; returns the
+#: one to use.
+#:
+#: `Any` at both ends because a kingfisher-owned protocol would describe the
+#: requirement wrongly. deepagents decides what a backend is with `isinstance` against
+#: its own abstract base class, not by the methods present, so an object satisfying
+#: such a protocol exactly would still be handed no shell -- and it would buy no
+#: independence either, since every method returns a deepagents dataclass and an
+#: implementer imports the package to build one.
+BackendFrom = Callable[[Any, Path], Any]
+
+
 #: For a request that declined memory a deployment did wire. Reads are denied
 #: rather than the prompt rewritten: the prompt is the cached prefix.
 MEMORY_IS_DENIED = FilesystemPermission(
@@ -108,20 +121,40 @@ def read_only_permissions() -> list[FilesystemPermission]:
     ]
 
 
-def _backend_for(
+def _backend_for(  # noqa: PLR0913 -- four of these are what building a backend
+    # takes, and two are the ways a deployment supplies one instead
     cfg: Config,
     session_dir: Path | None,
     backend: Any | None,
     catalogue: Definitions,
     runner: CommandRunner | None = None,
+    *,
+    backend_from: BackendFrom | None = None,
 ) -> Any:
-    """The filesystem an agent sees: rooted at a session, or supplied ready-made."""
+    """The filesystem an agent sees: rooted at a session, supplied ready-made, or
+    whatever a deployment's own function returns when handed one of those."""
     if backend is not None:
-        return backend
-    if session_dir is not None:
-        return build_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
-    msg = "build_agent needs either a session_dir to root a backend at, or a backend"
-    raise ValueError(msg)
+        built = backend
+    elif session_dir is not None:
+        built = build_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
+    else:
+        msg = "build_agent needs either a session_dir to root a backend at, or a backend"
+        raise ValueError(msg)
+
+    if backend_from is None:
+        return built
+    if session_dir is None:
+        msg = (
+            "backend_from is called with the session its backend is rooted at, so "
+            "build_agent needs a session_dir to pass it"
+        )
+        raise ValueError(msg)
+    # Built first and handed over, rather than the deployment being asked for one from
+    # nothing. Everything the default carries -- refusing host paths, the routes that
+    # make a read-only rule legal at all, the confinement around the shell -- is kept
+    # by a deployment that adjusts what it was given, and lost only by one that
+    # deliberately returns something else.
+    return backend_from(built, session_dir)
 
 
 def _wanted_endpoints(
@@ -208,6 +241,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     middleware_registry: Mapping[str, MiddlewareFactory] | None = None,
     model: Any | None = None,
     backend: Any | None = None,
+    backend_from: BackendFrom | None = None,
     runner: CommandRunner | None = None,
     checkpointer: Any | None = None,
     catalogue: Definitions | None = None,
@@ -223,7 +257,9 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     asked = capabilities or Capabilities()
     capabilities = agent.declares(held).intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
-    resolved_backend = _backend_for(cfg, session_dir, backend, roots, runner)
+    resolved_backend = _backend_for(
+        cfg, session_dir, backend, roots, runner, backend_from=backend_from
+    )
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]
