@@ -8,7 +8,7 @@ import pytest
 
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.presentation.cli.__main__ import main
-from tests.conftest import verbs
+from tests.conftest import start, verbs
 
 
 def test_bare_invocation_prints_help_and_does_nothing(capsys):
@@ -508,3 +508,190 @@ def test_seeding_puts_tools_in_the_tool_catalogue(cfg, tmp_path, shipped, monkey
     # `ensure_layout` still makes the workspace directory, so the place to put
     # one is obvious. What must not happen is a preset landing in it.
     assert LocalToolRepository(cfg.workspace / "tools").names == ()
+
+
+# -- `sessions` and `reap`, the workspace's own housekeeping -----------------
+
+
+def _looking_at(monkeypatch, cfg):
+    """Point the verbs at this workspace, so none of them reads the real environment."""
+    from kingfisher.presentation.cli import __main__ as entry
+
+    monkeypatch.setattr(entry, "config_from_env", lambda: cfg)
+
+
+def test_the_sessions_are_listed_most_recently_used_first(cfg, monkeypatch, capsys):
+    """A listing in the filesystem's order says nothing about which one to reap."""
+    import os
+
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "older")
+    start(cfg, "newer")
+    os.utime(cfg.workspace / "sessions" / "older", (1_000, 1_000))
+
+    assert main(["sessions"]) == 0
+
+    # Read off the rows rather than searched for in the whole block: the
+    # header names the workspace, and a tmp path under `/var/folders` contains
+    # the word this asserts on.
+    printed = capsys.readouterr().out.splitlines()
+    rows = [line.split()[0] for line in printed if line.startswith("  ")]
+    assert rows == ["newer", "older"]
+
+
+def test_the_listing_says_what_a_session_is_costing(cfg, monkeypatch, capsys):
+    """Without the size this repeats what `ls` already says, and what a cleanup command
+    is actually asked is what the thing is costing.
+    """
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "fat")
+    (cfg.workspace / "sessions" / "fat" / "derived" / "big.bin").write_bytes(b"x" * (1 << 20))
+
+    assert main(["sessions"]) == 0
+
+    assert "1.0 MB" in capsys.readouterr().out
+
+
+def test_a_workspace_holding_no_sessions_says_so(cfg, monkeypatch, capsys):
+    """A command that prints nothing at all reads as one that failed."""
+    _looking_at(monkeypatch, cfg)
+
+    assert main(["sessions"]) == 0
+    assert "no sessions" in capsys.readouterr().out
+
+
+def test_both_forms_of_the_listing_name_where_they_read(cfg, monkeypatch, capsys):
+    """The rule `doctor` puts its origins in both forms for: a JSON form that omits
+    where everything was read from is the disagreement between surfaces that record
+    exists to end.
+    """
+    import json
+
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "s1")
+
+    main(["sessions"])
+    block = capsys.readouterr().out
+    main(["sessions", "--json"])
+    document = json.loads(capsys.readouterr().out)
+
+    assert str(cfg.workspace / "sessions") in block
+    assert document["root"] == str(cfg.workspace / "sessions")
+    assert [held["id"] for held in document["sessions"]] == ["s1"]
+
+
+def test_a_bare_number_is_refused_rather_than_read_as_seconds(cfg, monkeypatch, capsys):
+    """Somebody who means a week types `--older-than 7`, and seven *seconds* sweeps
+    every session no turn is running in. The plausible misreading is the destructive
+    one, so there is no reading at all.
+    """
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "s1")
+
+    with pytest.raises(SystemExit) as exit_code:
+        main(["reap", "--older-than", "7"])
+
+    assert exit_code.value.code == 2
+    assert "30m, 12h, 7d" in capsys.readouterr().err
+    # The half that bites. A refusal that still swept would be no refusal.
+    assert (cfg.workspace / "sessions" / "s1").is_dir()
+
+
+def test_zero_is_the_one_age_that_needs_no_unit(cfg, monkeypatch):
+    """Zero is the same number in every unit, and "all of them" is what a person
+    clearing a workspace by hand actually types.
+    """
+    import os
+
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "s1")
+    os.utime(cfg.workspace / "sessions" / "s1", (1_000, 1_000))
+
+    assert main(["reap", "--older-than", "0"]) == 0
+    assert not (cfg.workspace / "sessions" / "s1").exists()
+
+
+def test_a_sweep_that_removes_nothing_names_what_decided(cfg, monkeypatch, capsys):
+    """The ordinary case on a workspace in daily use is that nothing has expired. A
+    command that deletes nothing and says nothing there is one whose next user deletes
+    the directory by hand, which leaves the conversation, the claim and whatever a
+    store kept exactly where they were.
+    """
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "s1")
+
+    assert main(["reap"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "KINGFISHER_SESSION_TTL_S" in printed
+    assert "--older-than" in printed
+    assert (cfg.workspace / "sessions" / "s1").is_dir()
+
+
+def test_an_age_you_asked_for_is_not_blamed_on_the_setting(cfg, monkeypatch, capsys):
+    """The message names where the number came from, and naming an environment variable
+    the caller never set sends them to edit the wrong thing.
+    """
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "s1")
+
+    assert main(["reap", "--older-than", "7d"]) == 0
+
+    printed = capsys.readouterr().out
+    assert "7d" in printed
+    assert "KINGFISHER_SESSION_TTL_S" not in printed
+
+
+def test_reaping_one_by_name_takes_it_whatever_its_age(cfg, monkeypatch, capsys):
+    """The id you are holding is the session you want gone, and the TTL has nothing to
+    say about it.
+    """
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "keep")
+    start(cfg, "go")
+
+    assert main(["reap", "--session", "go"]) == 0
+
+    assert not (cfg.workspace / "sessions" / "go").exists()
+    assert (cfg.workspace / "sessions" / "keep").is_dir()
+
+
+def test_an_id_that_names_nothing_is_refused_rather_than_called_done(cfg, monkeypatch, capsys):
+    """`delete_session` answers `None` both for "removed it" and for "there was no such
+    session", so without the check here a mistyped id reports success for work that
+    nothing did.
+    """
+    _looking_at(monkeypatch, cfg)
+
+    assert main(["reap", "--session", "nosuch"]) == 2
+    assert "nosuch" in capsys.readouterr().err
+
+
+def test_an_age_and_a_name_are_not_both_askable(cfg, monkeypatch):
+    """Two different questions. A command handed both would have to decide which one of
+    them it had been asked.
+    """
+    _looking_at(monkeypatch, cfg)
+
+    with pytest.raises(SystemExit) as exit_code:
+        main(["reap", "--older-than", "1d", "--session", "s1"])
+
+    assert exit_code.value.code == 2
+
+
+def test_a_session_that_will_not_go_exits_non_zero(cfg, monkeypatch, capsys):
+    """A sweep that could not remove what it named is "did something, but not all",
+    which is what 1 already means for `list` and for a turn stopped at a bound.
+    """
+    import os
+
+    _looking_at(monkeypatch, cfg)
+    start(cfg, "stuck")
+    os.utime(cfg.workspace / "sessions" / "stuck", (1_000, 1_000))
+    monkeypatch.setattr(
+        "kingfisher.infrastructure.workspace.sessions.LocalSessionDirs.remove_tree",
+        lambda self, path: "directory not removed (Permission denied)",
+    )
+
+    assert main(["reap", "--older-than", "1d"]) == 1
+    assert "not reaped" in capsys.readouterr().err

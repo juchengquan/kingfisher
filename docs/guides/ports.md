@@ -185,7 +185,9 @@ the merge rule to fix it. That is what lets a caller send only what changed, and
 a custom root need never use. An id the disk has never seen still resolves,
 because the store's `knows` answers for it, but listing and sweeping do not — so
 retention moves to the store along with the files, and `session_ttl_s` stops
-deciding anything.
+deciding anything. `kingfisher sessions` and `kingfisher reap` are those two
+calls with a terminal in front of them, so both report an empty workspace here
+however much it is holding.
 
 ## `CommandRunner` — what runs a shell command
 

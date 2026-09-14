@@ -2206,6 +2206,11 @@ LIGHT_EXPORTS = frozenset({
     # `<workspace>/sessions`. A `Path` join in `domain.session`, which reaches
     # `domain.ports` and the standard library.
     "sessions_root",
+    # What one session holds, which `sessions` puts in a column beside it. A
+    # tree walk in `infrastructure.workspace.sessions`, which reaches `shutil`,
+    # `domain.session` and `layout` -- no provider SDK anywhere near it, and the
+    # alternative was the command counting bytes its own way.
+    "session_bytes",
     # A renderer and a sentence. Both are what a consumer needed and neither
     # imports anything -- the cheapest names on this list.
     "offered", "SKILL_LAYOUT", "DEFINITION_KINDS", "SEED_HINT", "split_reference",

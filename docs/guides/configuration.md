@@ -54,7 +54,7 @@ shell has no business there.
 | `KINGFISHER_TURN_TIMEOUT_S` | How long one turn may run. | `3600` |
 | `KINGFISHER_RECURSION_LIMIT` | How many steps a turn may take before it stops. | `150` |
 | `KINGFISHER_SESSION_MAX_BYTES` | Cap on what one session may hold. Checked between turns, never during one. | none — unbounded |
-| `KINGFISHER_SESSION_TTL_S` | How long an idle session survives before it is swept. | `604800` (7 days) |
+| `KINGFISHER_SESSION_TTL_S` | How long an idle session survives a sweep — `kingfisher reap`, or a deployment's own call to `reap()`. Nothing sweeps on a schedule. | `604800` (7 days) |
 
 **Unbounded is survivable on a disk and is not survivable in memory.** A
 deployment whose sessions are memory-backed shares one fixed size between every
