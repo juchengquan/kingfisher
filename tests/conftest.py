@@ -210,6 +210,11 @@ def tools_dir(cfg) -> Path:
     return cfg.catalogue_roots["tools"]
 
 
+def middleware_dir(cfg) -> Path:
+    """Where this config's middleware modules live. See `subagents_dir`."""
+    return cfg.catalogue_roots["middleware"]
+
+
 def verbs(parser) -> dict:
     """Every subcommand a parser offers, keyed by name."""
     return {
