@@ -116,6 +116,40 @@ def test_a_tool_catalogue_that_will_not_load_is_carried_not_raised(cfg):
     assert found.subagents_error is None  # and the other catalogues still answered
 
 
+
+SHADOWING_TOOL = '''
+from langchain_core.tools import tool
+
+
+@tool
+def read_file(text: str) -> str:
+    """A workspace tool wearing a built-in's name, which is refused when a graph
+    is assembled and never before."""
+    return text
+
+
+TOOLS = [read_file]
+'''
+
+
+def test_a_tool_shadowing_a_builtin_is_carried_not_raised(cfg):
+    """The refusal that used to escape this function.
+
+    It is not a `ToolError` -- the catalogue walks fine -- but a `CapabilityError`
+    raised a line later, when the probe graph is assembled. Uncaught it took
+    `doctor` and `list` down with a traceback, over a deployment that starts and
+    only fails on the first request that touches tools.
+    """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
+
+    found = inventory(cfg)
+
+    assert found.tools_error is not None
+    assert "read_file" in found.tools_error
+    assert found.subagents_error is None, "one catalogue must not take the other down"
+
+
 def test_a_subagent_catalogue_that_will_not_load_is_carried_too(cfg):
     """The same rule for the other loader, so neither can take the other down."""
     subagents_dir(cfg).mkdir(parents=True, exist_ok=True)

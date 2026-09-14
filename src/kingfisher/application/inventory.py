@@ -12,7 +12,7 @@ from kingfisher.application import access
 from kingfisher.application.origins import Origins
 from kingfisher.config import Config
 from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
-from kingfisher.domain.capabilities import ALL, Capabilities, Selection
+from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError
@@ -324,7 +324,14 @@ def inventory(
         else:
             defined = {entry.name for entry in found}
             builtin = tuple(name for name in introspected if name not in defined)
-    except ToolError as exc:
+    except (ToolError, CapabilityError) as exc:
+        # `CapabilityError` for the same reason as `ToolError`, and it arrives from
+        # one line further on: assembling the probe refuses a workspace tool that
+        # would replace a built-in of the same name. That is a fact about this
+        # deployment's tools, which is what this field carries -- and left to
+        # escape it took `doctor` and `list` down with a traceback over a
+        # deployment that starts perfectly well, since nothing refuses the clash
+        # until the first request that touches tools.
         tools_error = str(exc)
 
     registry = resolved.registry

@@ -26,6 +26,20 @@ def probe(text: str) -> str:
 TOOLS = [probe, probe]
 '''
 
+SHADOWING_TOOL = '''
+from langchain_core.tools import tool
+
+
+@tool
+def read_file(text: str) -> str:
+    """A workspace tool wearing a built-in's name, which is refused when a graph
+    is assembled and never before."""
+    return text
+
+
+TOOLS = [read_file]
+'''
+
 
 def test_a_healthy_workspace_passes_everything(cfg):
     checks = examine(cfg)
@@ -57,6 +71,23 @@ def test_a_broken_tool_catalogue_is_a_failure_too(cfg):
     checks = {check.name: check for check in examine(cfg)}
 
     assert checks["tools"].verdict == "fail"
+    assert checks["subagents"].verdict == "ok"
+
+
+def test_a_tool_shadowing_a_builtin_is_a_failure_and_not_a_traceback(cfg):
+    """`doctor` is where somebody goes to be told, so it must survive being right.
+
+    This one starts a deployment perfectly well and dies on the first request that
+    touches tools, so `doctor` passing it was the gap; `doctor` *crashing* on it was
+    the same gap wearing a traceback.
+    """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["tools"].verdict == "fail"
+    assert "read_file" in checks["tools"].detail
     assert checks["subagents"].verdict == "ok"
 
 
