@@ -2,19 +2,16 @@
 
 from __future__ import annotations
 
-import tempfile
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from dataclasses import dataclass, field
-from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.application import access
 from kingfisher.application.origins import Origins
 from kingfisher.config import Config
 from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
-from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError, Selection
+from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
-from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.middleware.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import refuse_cycles
@@ -289,24 +286,10 @@ def _reaching(
 def _builtin_tools(
     cfg: Config, resolved: Definitions, found: Sequence[Found] | None
 ) -> tuple[str, ...] | None:
-    """The built-in set, which is only knowable from an assembled graph."""
-    from kingfisher.infrastructure.harness import agent, tools  # noqa: PLC0415
+    """The built-in set, asked of the harness that knows how to assemble one."""
+    from kingfisher.infrastructure.harness.agent import builtin_tool_names  # noqa: PLC0415
 
-    with tempfile.TemporaryDirectory(prefix="kingfisher-inventory-") as scratch:
-        return tools.registered_tools(
-            agent.build_agent(
-                cfg,
-                session_dir=ensure_session_layout(Path(scratch)),
-                catalogue=resolved,
-                workspace_tools=found,
-                # No delegates. What a workspace *offers* is answered from the
-                # catalogue by the caller; this build exists solely to read the
-                # built-in tool set off a compiled graph, and wiring a roster to
-                # do it would make a listing refuse the very things it is meant
-                # to report -- two definitions of a name are printed, not raised.
-                capabilities=Capabilities(subagents=None),
-            )
-        )
+    return builtin_tool_names(cfg, resolved, found)
 
 
 def _tools(

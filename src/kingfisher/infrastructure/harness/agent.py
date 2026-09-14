@@ -61,6 +61,7 @@ from kingfisher.infrastructure.harness.subagents import (
 from kingfisher.infrastructure.harness.tools import (
     _private_tools,
     _resolve_tools,
+    registered_tools,
 )
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
@@ -154,6 +155,45 @@ def _running(
         return injected or build_model(*cfg.models.resolve())
     mine = model_object(agent, cfg, endpoints=endpoints)
     return injected or mine or build_model(*cfg.models.resolve())
+
+
+def builtin_tool_names(
+    cfg: Config, catalogue: Definitions, workspace_tools: Sequence[Found] | None = None
+) -> tuple[str, ...] | None:
+    """The built-in set, which is only knowable from an assembled graph.
+
+    Here rather than in `harness/tools.py`, where the rest of the tool surface lives:
+    this has to call `build_agent`, and that module is imported *by* this one, so the
+    edge would close a cycle -- which `test_no_module_in_the_package_can_reach_itself`
+    now refuses outright.
+
+    It is a *check* as well as a question, whoever calls it: assembling the graph
+    refuses a workspace tool wearing a built-in's name. `workspace_tools` does not
+    decide that -- `build_agent` falls back to the catalogue's own when it is `None`
+    -- it is there for a caller that has already walked them and would rather not
+    hand the decision to somebody else.
+    """
+    import tempfile  # noqa: PLC0415 -- one caller, and only on the branch that probes
+
+    from kingfisher.infrastructure.workspace.sessions import (  # noqa: PLC0415
+        ensure_session_layout,
+    )
+
+    with tempfile.TemporaryDirectory(prefix="kingfisher-builtin-") as scratch:
+        return registered_tools(
+            build_agent(
+                cfg,
+                session_dir=ensure_session_layout(Path(scratch)),
+                catalogue=catalogue,
+                workspace_tools=workspace_tools,
+                # No delegates. What a workspace *offers* is answered from the
+                # catalogue by the caller; this build exists solely to read the
+                # built-in tool set off a compiled graph, and wiring a roster to
+                # do it would make a listing refuse the very things it is meant
+                # to report -- two definitions of a name are printed, not raised.
+                capabilities=Capabilities(subagents=None),
+            )
+        )
 
 
 def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; each
