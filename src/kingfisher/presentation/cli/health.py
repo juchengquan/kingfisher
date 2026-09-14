@@ -271,7 +271,18 @@ def _mb(value: int | None) -> str:
 
 
 def _catalogues(found: Inventory) -> Iterator[Check]:
-    """The three definition directories, each of which can fail on its own."""
+    """Each definition directory, every one of which can fail on its own.
+
+    It read three of the five for some time, and `Inventory` had the answer for a
+    fourth the whole while: `agents_error` and `bundles_error` are computed on every
+    walk and were read by `kingfisher list` and by nothing here. A broken agent file
+    passed `doctor` and stopped `Kingfisher(...)` dead.
+    """
+    if found.agents_error is not None:
+        yield Check("agents", "fail", found.agents_error, "fix or remove the file it names")
+    else:
+        yield Check("agents", "ok", f"{len(found.agents)} defined")
+
     if found.tools_error is not None:
         yield Check("tools", "fail", found.tools_error, "fix or remove the module it names")
     else:
@@ -285,6 +296,31 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
         yield Check("subagents", "fail", found.subagents_error, "fix or remove the file it names")
     else:
         yield Check("subagents", "ok", f"{len(found.subagents)} defined")
+
+    # A delegate's private tools are Python like any other, and a bundle that will
+    # not import stops the request that activates that delegate rather than the
+    # deployment. Its own check rather than folded into `tools`, for the reason
+    # `bundles_error` is its own field: a reader has to be told which delegate to
+    # go and open.
+    if found.bundles_error is not None:
+        yield Check(
+            "delegate tools", "fail", found.bundles_error, "fix or remove the module it names"
+        )
+
+    # A warning and never a failure, because nothing is broken: the delegate
+    # answers with its own and the catalogue's never reaches it. That is a
+    # decision somebody made, and it is only acceptable while it is visible --
+    # which is the same reason `kingfisher list` prints it.
+    if found.shadowed:
+        answering = ", ".join(
+            f"{name} ({', '.join(names)})" for name, names in sorted(found.shadowed.items())
+        )
+        yield Check(
+            "delegate tools",
+            "warn",
+            f"answered by a delegate's own instead of the catalogue's: {answering}",
+            "rename one side if the delegate was meant to get the catalogue's",
+        )
 
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
