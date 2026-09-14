@@ -65,7 +65,9 @@ deepagents actually does underneath it.
 
 `kingfisher list` shows what a workspace offers a request — tools, skills,
 subagents — and where each one came from. `kingfisher seed` writes a starting
-workspace.
+workspace. `kingfisher sessions` shows what that workspace is holding — one line
+per session, how long it has been idle and what it costs — and `kingfisher reap`
+deletes the ones it is finished with.
 
 ## What ships separately
 

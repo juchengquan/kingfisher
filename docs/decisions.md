@@ -1139,6 +1139,28 @@ refused because a request must name an agent. Replaced by *what does a person at
 a terminal need to do*, under which `run` is the first verb and the others exist
 to get somebody to it.
 
+**Housekeeping is a verb, and it goes in through the front of the library.**
+`kingfisher sessions` lists what a workspace holds -- id, how long idle, what it
+costs -- and `kingfisher reap` deletes what it is finished with: the TTL by
+default, `--older-than` for one run, `--session` for one by name whatever its
+age. Both build a whole `Kingfisher`, at 1.3s and a refusal on a workspace with
+no `models.yaml`. A lighter path needing only the directory was the obvious
+alternative and is the wrong one: a session is four things in four places, one
+of them whichever `SessionStore` a setting names, and a second reader of those
+settings buys a fast cleanup that silently leaves the store's copy behind --
+the shape of the 132 orphaned threads *Sessions* already records.
+
+**Both defaults are about which mistake is cheap.** `--older-than` refuses a
+bare number and takes `30m`, `12h`, `7d` -- or `0`, the one age that means the
+same in every unit. Seconds would have matched the setting beside it and would
+have made `--older-than 7`, from somebody who meant a week, sweep every session
+no turn is running in. And bare `reap` sweeps at the TTL rather than sweeping
+everything, so the least-typed invocation is not the most destructive one; when
+it removes nothing it names what decided, because a sweep that deletes nothing
+and prints nothing is one whose next user deletes the directory by hand --
+leaving the conversation, the claim and the store's copy exactly where they
+were. *(2026-09-14.)*
+
 The half that survives: a bare invocation of the driver spends real money on the
 smoke, which is a fine default for a driver and a wrong one for a stranger's
 first command. A verb with a required task argument cannot be reached by

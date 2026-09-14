@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import time
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -33,18 +34,22 @@ from kingfisher import (
     seed,
 )
 
-# The one name here the door does not carry: the four kinds a catalogue holds,
-# used to say what a directory has none of. It went private with `doctor`'s
-# probes -- see *The front door* in `docs/decisions.md` -- and this is the only
-# reach in the file, which is the shape to keep. Everything above is public and
-# comes through the front door because it is.
+# The names here the door does not carry. The command ships in the same
+# distribution as the library, so it may take one at the module defining it --
+# see *The front door* in `docs/decisions.md` -- and each of these is something
+# no caller outside the wheel has asked for: the four kinds a catalogue holds,
+# used to say what a directory has none of; where a workspace keeps its
+# sessions; and what one of them costs. Everything above is public and comes
+# through the front door because it is.
+from kingfisher.domain.session import sessions_root
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.infrastructure.workspace.sessions import session_bytes
 from kingfisher.presentation.cli.health import _retired, examine, worst
 from kingfisher.presentation.cli.listing import as_json, failed, origins_document, render
 from kingfisher.presentation.cli.progress import show
 
 if TYPE_CHECKING:
-    from kingfisher import Seeded
+    from kingfisher import Kingfisher, Seeded
 
 #: Read from the working directory and nowhere else. A bare `load_dotenv()`
 #: walks up looking for one, which is the behaviour this deliberately does not
@@ -275,6 +280,69 @@ def build_parser() -> argparse.ArgumentParser:
             "for the operator's view of everything"
         ),
     )
+    holding = sub.add_parser(
+        "sessions",
+        help="show the sessions this workspace is holding",
+        # Wrapped by hand, like `run` and `doctor`: the raw formatter keeps the
+        # blank lines and does no wrapping of its own.
+        description=(
+            "Every session in the workspace, most recently used first, with how\n"
+            "long it has been idle and what it holds on disk.\n"
+            "\n"
+            "The idle column is in the units `reap --older-than` takes, so a\n"
+            "listing reads straight into a sweep.\n"
+            "\n"
+            "The size is a walk per session -- about a millisecond each -- which\n"
+            "a workspace holding thousands will feel.\n"
+            "\n"
+            "A deployment that moved its sessions with the SessionRoot port sees\n"
+            "nothing here: this reads <workspace>/sessions, which such a\n"
+            "deployment never uses."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    holding.add_argument(
+        "--json",
+        action="store_true",
+        help="emit the same answer as JSON, for a script rather than a person",
+    )
+    sweeping = sub.add_parser(
+        "reap",
+        help="delete sessions this workspace is finished with",
+        description=(
+            "Deletes a session's directory, its conversation, the lock a turn\n"
+            "holds, and whatever a wired store kept. All four, because removing\n"
+            "three of them leaves the fourth to accumulate.\n"
+            "\n"
+            "With nothing else said it sweeps whatever KINGFISHER_SESSION_TTL_S\n"
+            "calls expired -- seven days by default -- and spares any session\n"
+            "with a turn running in it.\n"
+            "\n"
+            "There is no --dry-run. `kingfisher sessions` is the preview: it\n"
+            "lists every session with the age this sweeps on."
+        ),
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    # One or the other. An age and a name are two different questions, and a
+    # command handed both would have to decide which one it had been asked.
+    chosen = sweeping.add_mutually_exclusive_group()
+    chosen.add_argument(
+        "--older-than",
+        type=_older_than,
+        metavar="AGE",
+        help=(
+            "sweep what has been idle this long instead: 30m, 12h, 7d -- or 0 "
+            "for every session no turn is running in"
+        ),
+    )
+    chosen.add_argument(
+        "--session",
+        metavar="ID",
+        help=(
+            "reap this one by name, whatever its age -- and whether or not a "
+            "turn is running in it, which that turn will not survive"
+        ),
+    )
     return parser
 
 
@@ -379,6 +447,30 @@ def _held(raw: str) -> Held:
     return tuple(part.strip() for part in raw.split(",") if part.strip())
 
 
+#: What a span may be written in, and the whole of it.
+AGES: dict[str, int] = {"m": 60, "h": 3600, "d": 24 * 3600}
+
+
+def _older_than(raw: str) -> float:
+    """`30m`, `12h`, `7d` as seconds. A bare number is refused.
+
+    Refused rather than read as seconds, which is what `KINGFISHER_SESSION_TTL_S`
+    holds and would have been the obvious reading. Somebody who means a week
+    types `--older-than 7`, and seven *seconds* sweeps every session no turn is
+    running in: the plausible misreading is the destructive one, so there is no
+    reading at all. `0` is exempt because zero is the same number in every unit.
+    """
+    text = raw.strip()
+    if text == "0":
+        return 0.0
+    unit = AGES.get(text[-1:])
+    number = text[:-1]
+    if unit is None or not number.replace(".", "", 1).isdigit():
+        msg = f"{raw!r} needs a unit: 30m, 12h, 7d -- or 0 for all of them"
+        raise argparse.ArgumentTypeError(msg)
+    return float(number) * unit
+
+
 def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     """Print what the workspace offers."""
     cfg = config_from_env()
@@ -395,6 +487,137 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
         for line in render(found):
             print(line)
     return 1 if failed(found) else 0
+
+
+def _age(seconds: float) -> str:
+    """A span in the units `--older-than` takes, so a listing reads into a flag."""
+    for suffix, size in (("d", 24 * 3600), ("h", 3600), ("m", 60)):
+        if seconds >= size:
+            return f"{seconds / size:.0f}{suffix}"
+    return "<1m"
+
+
+def _size(count: int) -> str:
+    """A number of bytes as a person reads it."""
+    for suffix, size in (("GB", 1 << 30), ("MB", 1 << 20), ("KB", 1 << 10)):
+        if count >= size:
+            return f"{count / size:.1f} {suffix}"
+    return f"{count} B"
+
+
+def _count(sessions: int) -> str:
+    """`N sessions`, and `1 session` when that is what it is."""
+    return "1 session" if sessions == 1 else f"{sessions} sessions"
+
+
+def _sessions(*, as_document: bool = False) -> int:
+    """What this workspace is holding, and what each session costs it."""
+    from kingfisher import Kingfisher  # noqa: PLC0415
+
+    kf = Kingfisher(config_from_env())
+    root = sessions_root(kf.workspace)
+    now = time.time()
+    # A walk per session, at ~0.8ms each. The same trade `sessions()` already
+    # makes for the listing: cheap where it is read, and a workspace large
+    # enough to mind wants an index rather than a cheaper column.
+    held = [(info, session_bytes(root / info.id)) for info in kf.sessions()]
+
+    if as_document:
+        print(
+            json.dumps(
+                {
+                    # Named here as well as in the block below, because the two
+                    # forms have to say the same thing -- the rule `doctor` puts
+                    # its origins in both for.
+                    "root": str(root),
+                    "sessions": [
+                        {
+                            "id": info.id,
+                            "last_used": info.last_used,
+                            "idle_seconds": now - info.last_used,
+                            "bytes": size,
+                        }
+                        for info, size in held
+                    ],
+                },
+                indent=2,
+            )
+        )
+        return 0
+
+    if not held:
+        print(f"no sessions in {root}")
+        return 0
+
+    print(f"{_count(len(held))}, {_size(sum(size for _, size in held))}, in {root}")
+    print()
+    width = max(len(info.id) for info, _ in held)
+    for info, size in held:
+        idle = _age(now - info.last_used)
+        print(f"  {info.id.ljust(width)}  {idle.rjust(5)} idle  {_size(size).rjust(9)}")
+    return 0
+
+
+def _reap(args: argparse.Namespace) -> int:
+    """Delete sessions: one by name, or every one that has been idle too long."""
+    from kingfisher import Kingfisher  # noqa: PLC0415
+
+    kf = Kingfisher(config_from_env())
+    if args.session is not None:
+        return _reap_one(kf, args.session)
+
+    # Read once and used twice -- to sweep, and to report what swept -- so the
+    # number that decided cannot differ from the number printed.
+    age = kf.cfg.session_ttl_s if args.older_than is None else args.older_than
+    result = kf.reap(older_than_seconds=age, now=time.time())
+
+    for gone in result.removed:
+        print(f"reaped {gone}")
+    if result.orphans:
+        # Not sessions this sweep ended: conversations left behind by sessions
+        # that went some other way, which nothing but a sweep ever looks for.
+        print(f"and {len(result.orphans)} conversations no session owned any more")
+    for failure in result.failures:
+        print(f"not reaped -- {failure}", file=sys.stderr)
+
+    if not result.removed and not result.failures:
+        _nothing_reaped(result.kept, age, from_config=args.older_than is None)
+    return 1 if result.failures else 0
+
+
+def _nothing_reaped(kept: int, age: float, *, from_config: bool) -> None:
+    """Say what decided, because a sweep that removes nothing reads as a broken one.
+
+    The ordinary case on a workspace in daily use is that nothing has expired,
+    and a command that prints nothing at all there is one whose next user
+    deletes the directory by hand -- which leaves the conversation, the claim
+    and whatever a store kept exactly where they were.
+    """
+    if kept == 0:
+        print("nothing to reap -- this workspace holds no sessions")
+        return
+    why = f"none of the {_count(kept)} here has been idle longer than {_age(age)}"
+    if not from_config:
+        print(f"nothing to reap -- {why}")
+        return
+    print(f"nothing to reap -- {why}, which is KINGFISHER_SESSION_TTL_S")
+    print("--older-than sweeps on a shorter age: kingfisher reap --older-than 1d")
+
+
+def _reap_one(kf: Kingfisher, session_id: str) -> int:
+    """Reap one session by name, whatever its age and whatever is running in it."""
+    if kf.session(session_id) is None:
+        # Asked before deleting, because `delete_session` answers `None` both
+        # for "removed it" and for "there was no such session" -- so without
+        # this a mistyped id reports success for work nothing did.
+        msg = f"no session {session_id!r}"
+        raise UnknownSessionError(msg)
+    failure = kf.delete_session(session_id)
+    if failure:
+        print(f"not reaped -- {failure}", file=sys.stderr)
+        return 1
+    print(f"reaped {session_id}")
+    return 0
 
 
 def _serve() -> int:
@@ -493,6 +716,8 @@ HANDLERS = {
     "serve": lambda args: _serve(),  # noqa: ARG005
     "doctor": lambda args: _doctor(as_document=args.json),
     "list": lambda args: _list(as_document=args.json, held=args.held),
+    "sessions": lambda args: _sessions(as_document=args.json),
+    "reap": _reap,
 }
 
 
