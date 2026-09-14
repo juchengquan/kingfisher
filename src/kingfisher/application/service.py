@@ -466,8 +466,25 @@ class Kingfisher(Sessions, Disposal):
         directory: `POST /sessions` opens a session without running a turn, so
         `session_root` has nothing held and the workspace is the only place to
         write. `_pin_agent_in` is what a turn uses, and it knows where it is.
+
+        **And handed to the store, which is what reaches a turn running elsewhere.**
+        Writing to the workspace binds the first turn only under the default root.
+        Under any other, the turn holds a different directory, reads no pin there and
+        pins itself from whatever the *request* named -- so a session opened as one
+        agent ran as another, and the refusal that makes a session fixed to its agent
+        never fired. The store is the one thing both ends can see: `_ready` restores
+        it into the held directory before `_agent_for` looks. Without a store a
+        custom root has nothing that survives a turn boundary at all, which is the
+        limit `ports.md` already states.
         """
-        self._pin_agent_in(sessions_root(self.workspace) / session_id, name)
+        directory = sessions_root(self.workspace) / session_id
+        self._pin_agent_in(directory, name)
+        # Asked rather than assumed, because `_pin_agent_in` writes nothing for a
+        # name the catalogue has no document for, or for a repository that keeps
+        # none. Without it, opening a session against an unknown agent spends a
+        # write on a store to hand it an empty mapping.
+        if self.sessions_store is not None and agent_snapshot(directory).is_file():
+            keep_from(self.sessions_store, session_id, directory, (AGENT_SNAPSHOT,))
 
     def _pin_agent_in(self, session_dir: Path, name: str | None) -> None:
         """Keep the agent, in the directory this is about.

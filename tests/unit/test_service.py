@@ -883,3 +883,31 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
 
     with pytest.raises(CapabilityError, match="cannot be changed"):
         service._graph_for(Request("again", agent="other"), elsewhere)
+
+
+def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
+    """The other half of the same hole, through the other door.
+
+    `POST /sessions` pins before any turn exists, so it has an id and no directory
+    and the workspace is the only place it can write. Under a custom root that is not
+    where the first turn looks -- so a session opened as one agent ran as another and
+    the refusal never fired, while the identical calls against the default root were
+    refused. The store is the one thing both ends see: `_ready` restores the pin into
+    the held directory before `_agent_for` reads it.
+    """
+    from kingfisher import LocalSessionStore
+
+    an_agent(cfg, "only")
+    an_agent(cfg, "other")
+    service = Kingfisher(
+        cfg,
+        sessions=LocalSessionStore(tmp_path / "kept-elsewhere"),
+        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
+    )
+    session_id = service.start_session()
+    service.remember_agent(session_id, "only")
+
+    asked = Request("go", agent="other", session_id=session_id)
+    with pytest.raises(CapabilityError, match="cannot be changed"), \
+            service._held_session(asked) as session:
+        service._graph_for(asked, session.directory)
