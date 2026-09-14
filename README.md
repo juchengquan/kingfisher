@@ -67,7 +67,9 @@ deepagents actually does underneath it.
 subagents — and where each one came from. `kingfisher seed` writes a starting
 workspace. `kingfisher sessions` shows what that workspace is holding — one line
 per session, how long it has been idle and what it costs — and `kingfisher reap`
-deletes the ones it is finished with.
+deletes the ones it is finished with. A run that should leave nothing behind can
+say so at the time: `kingfisher run --delete-session`, or
+`Kingfisher.run(..., delete_session=True)` from Python.
 
 ## What ships separately
 

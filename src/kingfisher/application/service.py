@@ -1065,8 +1065,27 @@ class Kingfisher(Sessions, Disposal):
             raise RuntimeError(msg)
         return result
 
-    def run(self, request: str | Request, *, groups: Held | None = None) -> RunResult:
-        """Run one task to completion. A drain of `stream`."""
+    def run(
+        self,
+        request: str | Request,
+        *,
+        groups: Held | None = None,
+        delete_session: bool = False,
+    ) -> RunResult:
+        """Run one task to completion. A drain of `stream`.
+
+        `delete_session=True` disposes of the session the turn used -- directory,
+        conversation, claim and the store's copy -- once the turn has finished,
+        and only then. A turn stopped at a bound keeps all of it: the partial
+        work is real, and its conversation is what a retry on the same session
+        is rebuilt from.
+
+        Offered here and not on `stream`, which is not the asymmetry it looks
+        like. A generator has no "after the turn" this library controls: past
+        the final yield never runs for a caller who stops reading at the answer,
+        and a `finally` fires on `GeneratorExit` too -- so a session would be
+        deleted because somebody closed a loop early. A drain has an after.
+        """
         result: RunResult | None = None
         for event in self.stream(request, groups=groups):
             if event.kind == "finished":
@@ -1075,4 +1094,6 @@ class Kingfisher(Sessions, Disposal):
         if result is None:  # pragma: no cover -- stream always ends with `finished`
             msg = "stream() ended without a finished event"
             raise RuntimeError(msg)
+        if delete_session and result.completed:
+            self.delete_session(result.session_id)
         return result

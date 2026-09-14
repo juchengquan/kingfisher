@@ -363,10 +363,18 @@ def _ran(monkeypatch, events, cfg):
     class Stub:
         def __init__(self, *a, **k) -> None:
             self.seen: list = []
+            self.deleted: list = []
+            # What `delete_session` answers: a failure string, as the library's
+            # own does, or None for a removal that worked.
+            self.failure: str | None = None
 
         def stream(self, request, *, groups=None):
             self.seen.append((request, groups))
             yield from events
+
+        def delete_session(self, session_id):
+            self.deleted.append(session_id)
+            return self.failure
 
     stub = Stub()
     monkeypatch.setattr("kingfisher.Kingfisher", lambda *a, **k: stub)
@@ -374,14 +382,14 @@ def _ran(monkeypatch, events, cfg):
     return stub
 
 
-def _finished(stop_reason="end_turn"):
+def _finished(stop_reason="end_turn", artifacts=()):
     from kingfisher import RunEvent, RunResult
 
     return RunEvent(
         kind="finished",
         result=RunResult(
             session_id="s1", turn_id="t001", answer="42",
-            virtual_dir="/runs/t001", stop_reason=stop_reason,
+            virtual_dir="/runs/t001", stop_reason=stop_reason, artifacts=artifacts,
         ),
     )
 
@@ -695,3 +703,79 @@ def test_a_session_that_will_not_go_exits_non_zero(cfg, monkeypatch, capsys):
 
     assert main(["reap", "--older-than", "1d"]) == 1
     assert "not reaped" in capsys.readouterr().err
+
+
+# -- `--delete-session`, for a run that should leave nothing behind ----------
+
+
+def test_a_run_told_to_delete_its_session_does(cfg, monkeypatch):
+    """The whole of the flag: a one-off run that leaves no directory behind."""
+    stub = _ran(monkeypatch, [_finished()], cfg)
+
+    assert main(["run", "t", "--agent", "assistant", "--delete-session"]) == 0
+    assert stub.deleted == ["s1"]
+
+
+def test_a_run_not_told_to_keeps_its_session(cfg, monkeypatch):
+    """The default, which has to stay right for somebody who does not know sessions
+    exist yet: files gone before they knew to look for them is worse than a directory
+    they can delete later.
+    """
+    stub = _ran(monkeypatch, [_finished()], cfg)
+
+    assert main(["run", "t", "--agent", "assistant"]) == 0
+    assert stub.deleted == []
+
+
+def test_a_turn_stopped_at_a_bound_keeps_its_session_and_says_so(cfg, monkeypatch, capsys):
+    """The one ending whose leftovers are worth something: the partial work is real and
+    the conversation is what a retry on the same session is rebuilt from. Deleting here
+    would also make the line printed just above it -- what it wrote is in /runs/t001 --
+    a lie about a directory that had already gone.
+    """
+    stub = _ran(monkeypatch, [_finished(stop_reason="max_steps")], cfg)
+
+    assert main(["run", "t", "--agent", "assistant", "--delete-session"]) == 1
+
+    assert stub.deleted == []
+    printed = capsys.readouterr().err
+    assert "--session s1" in printed
+    assert "reap --session s1" in printed
+
+
+def test_what_the_session_takes_with_it_is_named_before_it_goes(cfg, monkeypatch, capsys):
+    """This is the moment those files stop being recoverable, and the command prints
+    `artifacts` nowhere else -- so without it a run that wrote a file and a run that
+    wrote nothing end identically.
+    """
+    written = ("derived/report.md", "memory/AGENTS.md")
+    stub = _ran(monkeypatch, [_finished(artifacts=written)], cfg)
+
+    assert main(["run", "t", "--agent", "assistant", "--delete-session"]) == 0
+
+    printed = capsys.readouterr().err
+    assert "derived/report.md" in printed
+    assert "memory/AGENTS.md" in printed
+    assert stub.deleted == ["s1"]
+
+
+def test_the_flag_takes_a_session_you_named_just_as_readily(cfg, monkeypatch):
+    """One rule -- delete the session this run used -- rather than one that turns on
+    where the id came from, which is a flag nobody can predict the effect of.
+    """
+    stub = _ran(monkeypatch, [_finished()], cfg)
+
+    argv = ["run", "t", "--agent", "assistant", "--session", "s1", "--delete-session"]
+    assert main(argv) == 0
+    assert stub.deleted == ["s1"]
+
+
+def test_a_session_that_will_not_delete_does_not_fail_the_turn(cfg, monkeypatch, capsys):
+    """Those three exit codes say how the *turn* ended, and 1 already means the answer
+    above was cut short -- which would be a lie told about a turn that finished.
+    """
+    stub = _ran(monkeypatch, [_finished()], cfg)
+    stub.failure = "s1: directory not removed (Permission denied)"
+
+    assert main(["run", "t", "--agent", "assistant", "--delete-session"]) == 0
+    assert "not deleted" in capsys.readouterr().err
