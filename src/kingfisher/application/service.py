@@ -70,7 +70,6 @@ from kingfisher.domain.request import Request
 from kingfisher.domain.result import RunEvent, RunResult, normalize_answer
 from kingfisher.domain.session import (
     Session,
-    sessions_root,
 )
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.infrastructure.harness import runtime
@@ -460,16 +459,48 @@ class Kingfisher(Sessions, Disposal):
         )
 
     def remember_agent(self, session_id: str, name: str | None) -> None:
-        """Have this session keep the agent it opened with.
+        """Have this session keep the agent it opened with, before it has run.
 
-        Takes an id rather than a directory because the service calls it with
-        one, knowing a session by its name and not by where it sits.
+        Takes an id because its caller has one and no directory: `POST /sessions`
+        opens a session without running a turn. Where that session *is* is
+        `session_root`'s answer and nobody else's, so this holds it to find out
+        rather than assuming `<workspace>/sessions/<id>` -- which is the session
+        only under the default root.
+
+        **And handed to the store, which is what reaches a turn running elsewhere.**
+        A held directory may not outlive the hold. The store is the one thing both
+        ends see: `_ready` restores it into whatever the first turn holds, before
+        `_agent_for` looks there. Without a store a custom root has nothing that
+        survives a turn boundary at all, which is the limit `ports.md` states.
+        """
+        with self.session_root.hold(session_id) as directory:
+            self._pin_agent_in(directory, name)
+            # Asked rather than assumed, because `_pin_agent_in` writes nothing for
+            # a name the catalogue has no document for, or for a repository that
+            # keeps none. Without it, opening a session against an unknown agent
+            # spends a write on a store to hand it an empty mapping.
+            if self.sessions_store is not None and agent_snapshot(directory).is_file():
+                keep_from(self.sessions_store, session_id, directory, (AGENT_SNAPSHOT,))
+
+    def _pin_agent_in(self, session_dir: Path, name: str | None) -> None:
+        """Keep the agent, in the directory this is about.
+
+        **The directory, never an id re-derived from one.** This took an id and
+        rebuilt the path as `<workspace>/sessions/<id>`, which is where the session
+        is only when `session_root` is the default. Under any other one the turn
+        runs elsewhere, so the pin was written where `agent_started_with` does not
+        read and where `_keep` does not collect it: every turn re-resolved the agent
+        from the catalogue, a deploy mid-conversation changed the prompt under a
+        history that had already happened, and a request naming a different agent was
+        served instead of refused. `ports.md` promises the store is handed the pinned
+        agent, and that promise was false for exactly the deployments the port exists
+        for.
         """
         if name is None:
             return
         documents = getattr(self.catalogue.agents, "documents", {})
         if (text := documents.get(name)) is not None:
-            remember_agent(sessions_root(self.workspace) / session_id, text)
+            remember_agent(session_dir, text)
 
     def _agent_for(
         self, request: Request, session_dir: Path, *, groups: Held | None = None
@@ -478,7 +509,7 @@ class Kingfisher(Sessions, Disposal):
         kept = agent_started_with(session_dir)
         if kept is None:
             spec = self.agent_named(request.agent, groups=groups)
-            self.remember_agent(session_dir.name, request.agent)
+            self._pin_agent_in(session_dir, request.agent)
             return spec
 
         started = read(kept, agent_snapshot(session_dir))

@@ -6,6 +6,7 @@ import shutil
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from time import time
 from types import SimpleNamespace
 
 import pytest
@@ -15,10 +16,12 @@ from kingfisher.application.reporting import opening_events
 from kingfisher.application.service import refused_credentials
 from kingfisher.application.turn import turn_message
 from kingfisher.config import ConfigError
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import CommandResult
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.workspace.placement import DataError
+from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
+from kingfisher.infrastructure.workspace.snapshots import agent_snapshot
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
     FAKE_ENDPOINT,
@@ -851,3 +854,105 @@ def test_a_turn_translates_a_rejected_key_rather_than_raising_the_providers_erro
 
     with pytest.raises(ConfigError, match="rejected the key"):
         service.run(Request(task="anything"))
+
+
+def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
+    """The pin was written to `<workspace>/sessions/<id>` whatever `session_root` said.
+
+    That is where the session is only under the default root. Anywhere else the turn
+    ran in one directory and the pin was written to another, so `agent_started_with`
+    found none on the next turn, `_keep` collected none for the store, and the
+    guarantee `_agent_for` raises for -- a session is fixed to the agent it opened
+    with -- held on the default root and silently failed on every other.
+
+    Driven through `_graph_for` rather than `run`, because a supplied graph is
+    returned before an agent is resolved and would pin nothing at all.
+    """
+    an_agent(cfg, "only")
+    an_agent(cfg, "other")
+    # What any `SessionRoot` but the default yields: a directory that is not under
+    # the workspace at all.
+    elsewhere = ensure_session_layout(tmp_path / "for-one-turn" / "a-session")
+    service = Kingfisher(cfg)
+
+    service._graph_for(Request("go", agent="only"), elsewhere)
+
+    assert agent_snapshot(elsewhere).is_file(), "the pin is not where the turn ran"
+    assert not (cfg.workspace / "sessions" / elsewhere.name).exists(), (
+        "the pin was written under the workspace, which is not this session"
+    )
+
+    with pytest.raises(CapabilityError, match="cannot be changed"):
+        service._graph_for(Request("again", agent="other"), elsewhere)
+
+
+def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
+    """The other half of the same hole, through the other door.
+
+    `POST /sessions` pins before any turn exists, so it has an id and no directory
+    and the workspace is the only place it can write. Under a custom root that is not
+    where the first turn looks -- so a session opened as one agent ran as another and
+    the refusal never fired, while the identical calls against the default root were
+    refused. The store is the one thing both ends see: `_ready` restores the pin into
+    the held directory before `_agent_for` reads it.
+    """
+    from kingfisher import LocalSessionStore
+
+    an_agent(cfg, "only")
+    an_agent(cfg, "other")
+    service = Kingfisher(
+        cfg,
+        sessions=LocalSessionStore(tmp_path / "kept-elsewhere"),
+        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
+    )
+    session_id = service.start_session()
+    service.remember_agent(session_id, "only")
+
+    asked = Request("go", agent="other", session_id=session_id)
+    with pytest.raises(CapabilityError, match="cannot be changed"), \
+            service._held_session(asked) as session:
+        service._graph_for(asked, session.directory)
+
+
+def test_a_session_opened_away_from_home_is_not_swept_out_of_its_own_store(cfg, tmp_path):
+    """The one that lost data. `start_session` laid the session out under the
+    workspace whatever `session_root` answered, and under any other root that
+    directory is a stub the session never runs in: `mark_used` touches the directory
+    a turn *holds*, and `claim` is written inside that one too. So the stub was idle
+    from the moment it was made and carried nothing to spare it -- `reap` swept it and
+    called `forget` on the store, deleting the only durable copy of a session in
+    daily use. Opened the way `POST /sessions` opens one, which is the only way this
+    arises: a session minted by a turn leaves no stub.
+    """
+    from kingfisher import LocalSessionStore
+
+    an_agent(cfg, "only")
+    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
+    service = Kingfisher(
+        cfg, sessions=kept, session_root=FreshEachTurn(tmp_path / "for-one-turn")
+    )
+    session_id = service.start_session()
+    service.remember_agent(session_id, "only")
+    assert kept.knows(session_id), "the store never got the session to begin with"
+
+    # Long enough after that anything the sweep can see is expired.
+    swept = service.reap(older_than_seconds=1, now=time() + 3600)
+
+    assert session_id not in swept.removed
+    assert kept.knows(session_id), "a live session was swept out of its own store"
+
+
+def test_opening_a_session_writes_nothing_the_root_did_not_ask_for(cfg, tmp_path):
+    """What `ports.md` promises about a custom root -- that `sessions()` and `reap`
+    see nothing -- was false while this left a directory behind for each one.
+    """
+    service = Kingfisher(
+        cfg,
+        threads=StubCheckpointer(),
+        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
+    )
+
+    session_id = service.start_session()
+
+    assert not (cfg.workspace / "sessions" / session_id).exists()
+    assert service.sessions() == ()
