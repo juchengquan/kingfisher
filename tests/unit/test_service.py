@@ -6,6 +6,7 @@ import shutil
 from contextlib import contextmanager
 from dataclasses import replace
 from pathlib import Path
+from time import time
 from types import SimpleNamespace
 
 import pytest
@@ -911,3 +912,47 @@ def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg,
     with pytest.raises(CapabilityError, match="cannot be changed"), \
             service._held_session(asked) as session:
         service._graph_for(asked, session.directory)
+
+
+def test_a_session_opened_away_from_home_is_not_swept_out_of_its_own_store(cfg, tmp_path):
+    """The one that lost data. `start_session` laid the session out under the
+    workspace whatever `session_root` answered, and under any other root that
+    directory is a stub the session never runs in: `mark_used` touches the directory
+    a turn *holds*, and `claim` is written inside that one too. So the stub was idle
+    from the moment it was made and carried nothing to spare it -- `reap` swept it and
+    called `forget` on the store, deleting the only durable copy of a session in
+    daily use. Opened the way `POST /sessions` opens one, which is the only way this
+    arises: a session minted by a turn leaves no stub.
+    """
+    from kingfisher import LocalSessionStore
+
+    an_agent(cfg, "only")
+    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
+    service = Kingfisher(
+        cfg, sessions=kept, session_root=FreshEachTurn(tmp_path / "for-one-turn")
+    )
+    session_id = service.start_session()
+    service.remember_agent(session_id, "only")
+    assert kept.knows(session_id), "the store never got the session to begin with"
+
+    # Long enough after that anything the sweep can see is expired.
+    swept = service.reap(older_than_seconds=1, now=time() + 3600)
+
+    assert session_id not in swept.removed
+    assert kept.knows(session_id), "a live session was swept out of its own store"
+
+
+def test_opening_a_session_writes_nothing_the_root_did_not_ask_for(cfg, tmp_path):
+    """What `ports.md` promises about a custom root -- that `sessions()` and `reap`
+    see nothing -- was false while this left a directory behind for each one.
+    """
+    service = Kingfisher(
+        cfg,
+        threads=StubCheckpointer(),
+        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
+    )
+
+    session_id = service.start_session()
+
+    assert not (cfg.workspace / "sessions" / session_id).exists()
+    assert service.sessions() == ()

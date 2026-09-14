@@ -111,10 +111,24 @@ class Sessions:
         return found if reaches(pinned.groups, self.access.expand(groups)) else None
 
     def start_session(self, session_id: str | None = None) -> str:
-        """Open a new session and return its id."""
+        """Open a new session and return its id.
+
+        **Held, rather than laid out under the workspace.** This wrote
+        `<workspace>/sessions/<id>` whatever `session_root` answered, and under any
+        other root that directory is not the session -- it is a stub the session
+        never runs in. Nothing updates its timestamp, because `mark_used` touches
+        the directory a turn holds; nothing claims it, because `claim` is written
+        inside that one too. So `reap` read a stub that had been idle since the
+        moment it was made, swept it, and called `forget` on the store -- deleting
+        the only durable copy of a session in daily use. Measured against a session
+        opened the way `POST /sessions` opens one.
+
+        It is also what made `sessions()` and `reap` see anything at all under a
+        custom root, which `ports.md` says they do not.
+        """
         session_id = session_id or uuid4().hex
-        session = Session.open(self.workspace, session_id, self.dirs)
-        ensure_session_layout(session.directory)
+        with self.session_root.hold(session_id) as directory:
+            ensure_session_layout(Session.at(session_id, directory, self.dirs).directory)
         return session_id
 
     def open_session_for(self, request: Request) -> Session:
