@@ -549,9 +549,11 @@ def test_a_real_build_is_readable(cfg, session_dir):
 def test_a_listing_says_unknown_rather_than_none_when_it_cannot_read(monkeypatch, cfg):
     """The reason any of this changed."""
     from kingfisher.application import inventory as inventory_module
-    from kingfisher.infrastructure.harness import tools as tools_module
+    from kingfisher.infrastructure.harness import agent as agent_module
 
-    monkeypatch.setattr(tools_module, "registered_tools", lambda _graph: None)
+    # Patched where it is *called* rather than where it is defined: the probe is
+    # `agent.builtin_tool_names` now, and it took the name into its own namespace.
+    monkeypatch.setattr(agent_module, "registered_tools", lambda _graph: None)
 
     found = inventory_module.inventory(cfg)
 

@@ -9,9 +9,10 @@ from pathlib import Path
 
 import pytest
 
+from kingfisher.application import service as service_module
 from kingfisher.application.service import Kingfisher
 from kingfisher.config import ConfigError
-from kingfisher.domain.capabilities import Capabilities
+from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.domain.ports import SubagentRepository
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
@@ -218,6 +219,66 @@ def test_a_workspace_with_no_middleware_still_warms(cfg):
     raising, so the read above must not turn "none offered" into a failure.
     """
     Definitions.from_config(cfg).warm()
+
+
+SHADOWING_TOOL = """
+from langchain_core.tools import tool
+
+
+@tool
+def read_file(text: str) -> str:
+    '''A workspace tool wearing a built-in's name.'''
+    return text
+
+
+TOOLS = [read_file]
+"""
+
+ITS_OWN_NAME = SHADOWING_TOOL.replace("read_file", "probe_shadow")
+
+
+def test_a_tool_wearing_a_builtin_name_fails_at_startup(cfg):
+    """The refusal `warm` cannot make for itself.
+
+    Whether a workspace tool shadows a built-in is only answerable from an assembled
+    graph, and `warm` has no `Config` to assemble one with -- so this waited for the
+    first request that touched tools, and refused a turn somebody was already
+    waiting on rather than a deployment nobody was.
+    """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "shadow.py").write_text(SHADOWING_TOOL, encoding="utf-8")
+
+    with pytest.raises(CapabilityError, match="read_file"):
+        Kingfisher(cfg)
+
+
+def test_a_workspace_whose_tools_clash_with_nothing_still_starts(cfg):
+    """The control beside it: the probe has to tell a clash from a tool.
+
+    Without this the refusal above passes just as well if startup refused every
+    workspace that defines a tool at all.
+    """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "fine.py").write_text(ITS_OWN_NAME, encoding="utf-8")
+
+    Kingfisher(cfg)
+
+
+def test_a_workspace_with_no_tools_never_assembles_the_probe(cfg, monkeypatch):
+    """What keeps the cost where it belongs.
+
+    Nothing can shadow a built-in when the workspace defines no tools, so the graph
+    is not worth compiling -- and this is the assertion that keeps that true, since
+    a probe on every construction is about 10ms that most of this suite would pay
+    for nothing.
+    """
+
+    def refuse(*_args, **_kwargs):
+        pytest.fail("the probe was assembled for a workspace with no tools")
+
+    monkeypatch.setattr(service_module, "builtin_tool_names", refuse)
+
+    Kingfisher(cfg)
 
 
 def test_a_delegate_is_activated_from_the_supplied_catalogue(tmp_path, cfg, monkeypatch,

@@ -78,7 +78,7 @@ from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
     indistinct_delegates,
 )
-from kingfisher.infrastructure.harness.agent import build_agent
+from kingfisher.infrastructure.harness.agent import build_agent, builtin_tool_names
 from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
@@ -242,6 +242,18 @@ class Kingfisher(Sessions, Disposal):
         # parse is a wiring mistake, and this is the last moment it is cheap
         # to say so. `--list` deliberately does not do this -- see `warm`.
         self.catalogue: Definitions = resolve_definitions(self.cfg, catalogue).warm()
+        # The one refusal `warm` cannot make for itself: whether a workspace tool
+        # wears a built-in's name is only answerable from an assembled graph, and
+        # `warm` has no `Config` to assemble one with. Left to the first request
+        # that touched tools until now -- so a deployment started, said it was
+        # fine, and refused the turn somebody was already waiting on.
+        #
+        # Only when the workspace defines tools, because nothing else can shadow.
+        # That is what keeps it off every build with an empty catalogue, and the
+        # cost where it lands is one compiled graph: about 10ms, once, against a
+        # turn of 1.5-1.9s.
+        if self.catalogue.tools.found:
+            builtin_tool_names(self.cfg, self.catalogue)
 
         # Injected, or derived from configuration, or nothing -- the same order
         # `catalogue` follows and for the same reason: derive from `cfg`, never invent.

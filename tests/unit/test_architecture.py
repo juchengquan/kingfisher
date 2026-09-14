@@ -1269,10 +1269,11 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # Asks the registry what names are taken before accepting an upload, which is the
     # same question `catalogue` asks and the same answer.
     "workspace.uploads": frozenset(),
-    # Builds an agent to enumerate what it registered -- the only way to know
-    # the built-in tool set is to assemble one and look -- and reads the roster off
-    # it, which is what `tools` is for.
-    "inventory": frozenset({"agent", "tools"}),
+    # Builds an agent to enumerate what it registered -- the only way to know the
+    # built-in tool set is to assemble one and look. It used to read the roster off
+    # the graph itself; `agent.builtin_tool_names` does both halves now, because
+    # startup needs the same probe and a second copy of it would be a second answer.
+    "inventory": frozenset({"agent"}),
     # Reads `ADAPTERS` to refuse an `api` kingfisher cannot build, as the
     # catalogue loads rather than when a turn starts. The same argument as
     # `catalogue` above: the alternative is a second list of the wire formats
