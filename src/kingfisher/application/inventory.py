@@ -86,6 +86,13 @@ class Inventory:
     subagent_sources: Mapping[str, str] = _NOTHING
     subagents_error: str | None = None
 
+    #: Definition -> the tools it names by a path they have moved from, keyed
+    #: `"agent 'analyst'"` the way the refusal words its subject. Both kinds, and
+    #: they differ in what happens next rather than in being wrong: a subagent's
+    #: stops the deployment at startup, an agent's stops nothing at all and the
+    #: agent simply runs without the tool it was granted.
+    moved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+
     #: Middleware class name -> the module that defined it.
     middleware: Mapping[str, str] = _NOTHING
     #: A middleware module that will not import, or offering something that is
@@ -209,6 +216,29 @@ def _bundled(
         }
     )
     return tools, skills, shadowed, error
+
+
+def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
+    """Definitions naming a tool by a path it no longer lives at.
+
+    Both kinds, through the same `Offering` the refusal uses. A catalogue that will
+    not walk answers nothing rather than raising: whichever of `tools`, `agents` or
+    `subagents` failed is already reported on its own line, and a second copy of
+    that error here would say nothing new.
+    """
+    try:
+        offers = Offering.of(resolved.tools.found)
+        return MappingProxyType({
+            f"{kind} {name!r}": tuple(one for one, _claimed, _actual in moved)
+            for kind, specs in (
+                ("agent", resolved.agents.specs),
+                ("subagent", resolved.subagents.specs),
+            )
+            for name, spec in specs.items()
+            if (moved := offers.moved(spec.tool_sources))
+        })
+    except (ToolError, AgentError, SubagentError):
+        return _NO_NAMES
 
 
 def _middleware(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
@@ -360,6 +390,7 @@ def inventory(
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
 
     middleware, middleware_error = _middleware(resolved)
+    moved_tools = _moved_tools(resolved)
 
     builtin, workspace_tools, sources, tools_error = _tools(cfg, resolved)
 
@@ -453,6 +484,7 @@ def inventory(
         subagents_error=subagents_error or broken.get("subagents"),
         middleware=middleware,
         middleware_error=middleware_error,
+        moved_tools=moved_tools,
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,
         shadowed=shadowed,

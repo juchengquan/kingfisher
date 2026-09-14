@@ -260,6 +260,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "subagents_error": found.subagents_error,
         "middleware": dict(found.middleware),
         "middleware_error": found.middleware_error,
+        "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
@@ -300,7 +301,15 @@ def as_json(found: Inventory) -> dict[str, object]:
 
 
 def failed(found: Inventory) -> bool:
-    """Whether the listing described a workspace that will not load."""
+    """Whether the listing described a workspace that does not mean what it says.
+
+    It was "will not load" until a definition could name a tool by a path it had
+    moved from. A subagent doing that will not load; an agent doing it loads and
+    runs without the tool, which is not the same fault and is worse to find out
+    about later -- so the predicate covers both and is named for what they share.
+    """
+    if found.moved_tools:
+        return True
     return any(
         error is not None
         for error in (

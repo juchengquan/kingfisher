@@ -7,6 +7,8 @@ import platform
 import re
 from pathlib import Path
 
+from kingfisher import seed
+from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
@@ -124,6 +126,75 @@ def test_a_broken_middleware_module_is_a_failure(cfg):
     assert checks["middleware"].verdict == "fail"
     assert "wrong.py" in checks["middleware"].detail
     assert checks["tools"].verdict == "ok", "one catalogue must not take the others down"
+
+
+AGENT_NAMING_A_MOVED_TOOL = """
+name: surveyor
+description: An agent that says where its tool lives, about one that has moved.
+system_prompt: |
+  Survey things.
+tools: [moved/elsewhere.py::probe_one]
+"""
+
+A_TOOL = """
+from langchain_core.tools import tool
+
+
+@tool
+def probe_one(text: str) -> str:
+    '''A tool that exists so a reference can be wrong about where it is.'''
+    return text
+
+
+TOOLS = [probe_one]
+"""
+
+
+def test_doctor_names_every_definition_whose_tool_moved(cfg, shipped):
+    """One rename, both kinds, because the shipped presets name it from each."""
+    seed(cfg, shipped)
+    (tools_dir(cfg) / "csv_profile").rename(tools_dir(cfg) / "analysis")
+
+    checks = [c for c in examine(cfg) if c.name == "tool references"]
+
+    assert checks and all(c.verdict == "fail" for c in checks)
+    said = " | ".join(c.detail for c in checks)
+    assert "agent 'surveyor'" in said
+    assert "subagent 'profiler'" in said
+
+
+def test_doctor_sees_an_agents_moved_tool_that_nothing_else_would(cfg):
+    """The half with no other symptom at all.
+
+    A subagent naming a moved tool stops the deployment, so this only says early
+    what startup would say late. An agent naming one is refused nowhere: it starts,
+    runs, and quietly does not have the tool its author granted. Both halves are
+    asserted here, because the second is the reason this check is a failure and the
+    first is the reason it must not also stop startup.
+    """
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "probe.py").write_text(A_TOOL, encoding="utf-8")
+    agents = cfg.catalogue_roots["agents"]
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "surveyor.yaml").write_text(AGENT_NAMING_A_MOVED_TOOL, encoding="utf-8")
+
+    checks = {c.name: c for c in examine(cfg)}
+    assert checks["tool references"].verdict == "fail"
+    assert "probe_one" in checks["tool references"].detail
+
+    # And startup is deliberately unchanged: the agent runs, without the tool.
+    Kingfisher(cfg)
+
+
+def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):
+    """The control: the shipped presets use the long form, so this would fail if the
+    check were wrong about the layout it ships with.
+    """
+    seed(cfg, shipped)
+
+    checks = {c.name: c for c in examine(cfg)}
+
+    assert checks["tool references"].verdict == "ok"
 
 
 def test_an_unconfined_shell_warns_and_does_not_fail(cfg, capsys, monkeypatch):

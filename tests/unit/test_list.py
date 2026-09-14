@@ -408,6 +408,28 @@ def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsy
     assert json.loads(capsys.readouterr().out)["middleware_error"]
 
 
+def test_a_definition_naming_a_moved_tool_is_non_zero_too(cfg, monkeypatch, capsys, shipped):
+    """`failed` stopped meaning "will not load" here, and this is the case that
+    changed it: a subagent naming a moved tool will not load, an agent naming one
+    loads and runs without it. Both are a workspace that does not mean what it says.
+    """
+    import json
+
+    from kingfisher import seed
+
+    monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
+    monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
+    monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
+    seed(cfg, shipped)
+    (cfg.catalogue_roots["tools"] / "csv_profile").rename(
+        cfg.catalogue_roots["tools"] / "analysis"
+    )
+
+    assert main(["list", "--json"]) == 1
+
+    assert json.loads(capsys.readouterr().out)["moved_tools"]
+
+
 def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatch, capsys):
     """One unloadable catalogue must not take the others down with it, which is this
     record's own rule and was not true of tools.

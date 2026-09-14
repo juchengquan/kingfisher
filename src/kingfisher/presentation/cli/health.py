@@ -309,6 +309,27 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     else:
         yield Check("middleware", "ok", f"{len(found.middleware)} defined")
 
+def _tool_references(found: Inventory) -> Iterator[Check]:
+    """A definition naming a tool by a path it no longer lives at.
+
+    A failure for both kinds, and they arrive here by different roads. A subagent's
+    is refused at startup, so this only ever says early what the deployment would say
+    late. An agent's is refused nowhere at all: it starts, runs, and quietly does not
+    have the tool its author granted it -- no error, no warning, and no other symptom.
+    That second one is why this is a failure rather than a warning.
+    """
+    if not found.moved_tools:
+        yield Check("tool references", "ok", "every definition names tools where they are")
+        return
+    for subject, names in sorted(found.moved_tools.items()):
+        yield Check(
+            "tool references",
+            "fail",
+            f"{subject} names {', '.join(names)} by a path they have moved from",
+            "update the definition, or drop the path and write the name alone",
+        )
+
+
 def _delegate_tools(found: Inventory) -> Iterator[Check]:
     """What a delegate brings itself, which is not a definition directory.
 
@@ -583,6 +604,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
         if found is None:
             found = inventory(cfg)
         checks += _catalogues(found)
+        checks += _tool_references(found)
         checks += _delegate_tools(found)
         # After the counts, because it explains one: a zero that is ordinary and
         # a zero that means the path is wrong print the same number.

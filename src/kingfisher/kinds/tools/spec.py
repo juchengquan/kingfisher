@@ -195,18 +195,28 @@ class Offering:
                 listing=f"\n{offered(self.sources, own)}",
             )
 
+    def moved(self, claims: Mapping[str, str]) -> tuple[tuple[str, str, str], ...]:
+        """Each `(name, where the definition says it is, where it is)` that disagrees.
+
+        Asked as well as refused, because `doctor` reports what startup refuses and a
+        second walk over the same claims is a second chance to answer differently.
+        """
+        return tuple(
+            sorted(
+                (name, claimed, self.sources[name].rstrip("/"))
+                for name, claimed in claims.items()
+                if name in self.sources and self.sources[name].rstrip("/") != claimed
+            )
+        )
+
     def refuse_moved(self, claims: Mapping[str, str], *, subject: str) -> None:
         """A definition that said where a tool lives, about one that has moved."""
-        moved = [
-            (name, claimed, self.sources[name].rstrip("/"))
-            for name, claimed in claims.items()
-            if name in self.sources and self.sources[name].rstrip("/") != claimed
-        ]
+        moved = self.moved(claims)
         if not moved:
             return
         lines = "\n".join(
             f"  {reference(claimed, name)}  ->  {reference(actual, name)}"
-            for name, claimed, actual in sorted(moved)
+            for name, claimed, actual in moved
         )
         msg = (
             f"{subject} says where its tools live, and "
