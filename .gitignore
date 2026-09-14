@@ -239,6 +239,18 @@ assets/*
 # is the tracked template, and is what a reader should be reading.
 /models.yaml
 
+# And the whole workspace, when `KINGFISHER_WORKSPACE` points inside the
+# checkout rather than at the root: sessions, memory, pinned agents and run
+# logs, none of which this project versions. `ensure_layout` writes no
+# `.gitignore` and runs no git on purpose -- its docstring argues that an
+# operator who wants version control is better served writing the rules they
+# actually want, and for a workspace kept here that rule is this line.
+#
+# Root-anchored, for the reason `/*.pdf` below is: a bare `.kingfisher/` also
+# matches one at any depth, and a fixture or a worktree's own workspace is not
+# this checkout's runtime state.
+/.kingfisher/
+
 # And so does everything a run is handed or leaves behind. Two annual reports,
 # their extracted text and a comparison page -- 51MB of somebody's documents --
 # sat untracked at the root for three days, one `git add -A` away from a commit
