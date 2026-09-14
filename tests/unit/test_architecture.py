@@ -1593,6 +1593,11 @@ WITNESSES: dict[str, str] = {
     # deployment cannot write the port without it and had no public spelling.
     "SESSION_ROOT_CONTRACT": "document",
     "COMMAND_RUNNER_CONTRACT": "document",
+    # The same page writes `from kingfisher import BACKEND_CONTRACT`, beside the
+    # seam it is the way to check. Nothing in this repository runs it against a
+    # deployment's backend, which is the point: it exists for the one this
+    # repository cannot see.
+    "BACKEND_CONTRACT": "document",
     "CommandResult": "document",
     # The type of `Kingfisher.run`'s `groups=`. `UNSCOPED` is one of its two
     # members and is documented; the type that admits it cannot be private.
@@ -2015,6 +2020,11 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.infrastructure.harness.activation",
     "kingfisher.infrastructure.harness.agent",
     "kingfisher.infrastructure.harness.backend",
+    # And the kit for one a deployment supplied, which asks deepagents whether it
+    # will recognise the thing as running commands. That question has no light
+    # spelling: `SandboxBackendProtocol` is an abstract base class and the answer
+    # is `isinstance` against it.
+    "kingfisher.infrastructure.harness.backend_contract",
     "kingfisher.infrastructure.harness.checkpointing",
     "kingfisher.infrastructure.harness.middleware",
     "kingfisher.infrastructure.harness.narrowing",
@@ -2231,6 +2241,10 @@ HEAVY_EXPORTS = frozenset({
     # rather than at the top of `health`, where every other verb would pay it.
     "unrunnable_delegates",
     "Kingfisher", "run", "stream",
+    # The one kit that is heavy, and unavoidably: the other four describe ports a
+    # deployment satisfies without knowing deepagents exists, and this one checks
+    # an object deepagents has to accept.
+    "BACKEND_CONTRACT",
 })
 
 PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")
