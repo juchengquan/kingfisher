@@ -51,7 +51,7 @@ from kingfisher.application.turn import (
     overrun,
     turn_message,
 )
-from kingfisher.config import Config
+from kingfisher.config import Config, ConfigError
 from kingfisher.domain.access import (
     AccessError,
     AccessReport,
@@ -153,6 +153,43 @@ def _session_store(supplied: SessionStore | None, cfg: Config) -> SessionStore |
     if cfg.session_store is not None:
         return LocalSessionStore(cfg.session_store)
     return None
+
+
+#: What a provider answers with when it will not accept the credentials. Matched
+#: on the exception's own `status_code` rather than its class, so one branch
+#: covers every adapter: `anthropic` and `openai` both raise their own
+#: `AuthenticationError`, and the presentation layer may import neither.
+UNAUTHORIZED = 401
+
+
+def refused_credentials(exc: BaseException, cfg: Config) -> ConfigError | None:
+    """A provider's 401 as the configuration error it is, or `None` for anything else.
+
+    Named rather than hinted at, and the variable is the whole point: on a 401 the
+    YAML is right and the key it points at is not, so a message that can only say
+    "authentication failed" sends the reader to the file where everything already
+    looks correct. The sentence about the shell is there because `load_dotenv` runs
+    with `override=False` -- an exported value beats `.env`, which is how a key three
+    lines from the reader's eye is not the one that was sent.
+
+    The endpoint is found by matching the failed request's URL rather than by asking
+    for the default: a delegate may run somewhere its parent does not, and naming the
+    default endpoint for a 401 raised by another one would be confidently wrong.
+    """
+    if getattr(exc, "status_code", None) != UNAUTHORIZED:
+        return None
+    url = str(getattr(getattr(getattr(exc, "response", None), "request", None), "url", ""))
+    named = [
+        (name, endpoint)
+        for name, endpoint in cfg.models.endpoints.items()
+        if url.startswith(endpoint.base_url)
+    ]
+    where = f"endpoint {named[0][0]!r}" if named else "the model endpoint"
+    supplied = f" from {named[0][1].key_env}" if named and named[0][1].key_env else ""
+    return ConfigError(
+        f"{where} rejected the key{supplied} (401). A value exported in the shell "
+        f"overrides the one in .env, so check the environment before the file"
+    )
 
 
 class Kingfisher(Sessions, Disposal):
@@ -809,6 +846,15 @@ class Kingfisher(Sessions, Disposal):
             stop_reason = "max_steps"
             ok = True
             yield out_of_steps(self.cfg)
+        except Exception as exc:
+            # Translated, not handled: a 401 is the one model-call failure the
+            # person at the terminal caused and can fix, so it joins the errors
+            # reported as a line instead of a traceback. Everything else is
+            # re-raised untouched and keeps its traceback, which is what makes a
+            # bug here still look like a bug.
+            if (refused := refused_credentials(exc, self.cfg)) is None:
+                raise
+            raise refused from exc
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # Before the slot goes back, and inside its own `finally` so that a
@@ -902,6 +948,11 @@ class Kingfisher(Sessions, Disposal):
             stop_reason = "max_steps"
             ok = True
             yield out_of_steps(self.cfg)
+        except Exception as exc:
+            # See the same branch in `_stream_turn`.
+            if (refused := refused_credentials(exc, self.cfg)) is None:
+                raise
+            raise refused from exc
         finally:
             prepared.logger.run_end(ok=ok, answer_chars=len(answer))
             # As in `stream`, and on a worker thread for the same reason

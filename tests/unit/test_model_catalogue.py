@@ -347,3 +347,14 @@ def test_a_removed_key_says_what_replaces_it_rather_than_looking_like_a_typo(tmp
     assert "no longer a table this format defines" in message
     assert "model:" in message  # what to write instead
     assert "did you mean" not in message  # and not offered as a typo
+
+
+def test_an_endpoint_remembers_which_variable_its_key_came_from(tmp_path):
+    """`key_env` was read, used to look the key up, and dropped -- so the one thing a
+    401 could usefully say was gone by the time anything could say it.
+    """
+    models = load(written(tmp_path), KEYS)
+
+    assert models.endpoints["gateway"].key_env == "GATEWAY_API_KEY"
+    # And the key itself is still the value, not the name of the variable.
+    assert models.endpoints["gateway"].api_key == "sk-gateway"
