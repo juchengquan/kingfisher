@@ -18,6 +18,7 @@ from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.kinds.tools.catalogue import ToolError
 from kingfisher.kinds.tools.spec import Offering, tool_name
 from kingfisher.layout import BUNDLED_SKILLS_ROUTE, SKILLS_ROUTE, denied_scopes
+from kingfisher.presentation.cli.health import examine, worst
 from kingfisher.presentation.cli.listing import _catalogue, failed
 from tests.conftest import FakeToolCallingModel, capture_build
 
@@ -542,6 +543,35 @@ def test_a_listing_says_when_a_bundle_shadows_the_catalogue(cfg):
 
     assert found.shadowed["surveyor"] == ("shared",)
     assert "shadowing the catalogue's" in "\n".join(_catalogue(found))
+
+
+def test_doctor_names_the_delegate_whose_private_tools_will_not_load(cfg):
+    """Its own check rather than folded into `tools`, for the reason the field is
+    its own: a reader has to be told which delegate to go and open.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    bundle = cfg.workspace / "subagents" / "surveyor" / "tools"
+    (bundle / "probe.py").write_text(BROKEN, encoding="utf-8")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["delegate tools"].verdict == "fail"
+    assert checks["tools"].verdict == "ok", "the catalogue's own tools still loaded"
+
+
+def test_doctor_warns_about_shadowing_and_does_not_fail_on_it(cfg):
+    """Nothing is broken: the delegate answers with its own and the catalogue's
+    never reaches it. That is a decision somebody made, and it is only acceptable
+    while it is visible -- so `doctor` says it and still exits zero.
+    """
+    workspace_with_bundle(cfg, private="shared")
+
+    checks = examine(cfg)
+    named = {check.name: check for check in checks}
+
+    assert named["delegate tools"].verdict == "warn"
+    assert "surveyor" in named["delegate tools"].detail
+    assert worst(checks) != "fail", "shadowing stops nothing, so it must not gate"
 
 
 def test_a_broken_private_tool_makes_the_listing_non_zero(cfg):

@@ -64,6 +64,24 @@ def test_a_catalogue_that_will_not_load_is_a_failure(cfg):
     assert checks["tools"].verdict == "ok"
 
 
+def test_a_broken_agent_catalogue_is_a_failure_too(cfg):
+    """The kind `doctor` did not look at.
+
+    `Inventory` computed `agents_error` on every walk and `kingfisher list` read it;
+    this command, whose whole job is saying what would stop a run, did not. A broken
+    agent file passed `doctor` and then stopped `Kingfisher(...)` dead.
+    """
+    agents = cfg.workspace / "agents"
+    agents.mkdir(parents=True, exist_ok=True)
+    (agents / "broken.yaml").write_text("name: [unclosed\n", encoding="utf-8")
+
+    checks = {check.name: check for check in examine(cfg)}
+
+    assert checks["agents"].verdict == "fail"
+    assert "broken.yaml" in checks["agents"].detail
+    assert checks["tools"].verdict == "ok", "one catalogue must not take the others down"
+
+
 def test_a_broken_tool_catalogue_is_a_failure_too(cfg):
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "twice.py").write_text(BROKEN_TOOL, encoding="utf-8")
