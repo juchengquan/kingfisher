@@ -71,6 +71,12 @@ _EXPORTS = {
     # things without running things.
     "SESSION_ROOT_CONTRACT": "kingfisher.testing",
     "COMMAND_RUNNER_CONTRACT": "kingfisher.testing",
+    # The fifth kit, and the one not in `testing`. Its sharpest check asks whether
+    # deepagents will recognise a backend as running commands, which needs the
+    # package -- and `testing` is permitted nothing foreign, an entry covering
+    # `config` and `layout` too. So it lives where the backend it describes is
+    # built, and comes through the front door from there.
+    "BACKEND_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
@@ -110,6 +116,7 @@ _EXPORTS = {
 }
 
 __all__ = [
+    "BACKEND_CONTRACT",
     "COMMAND_RUNNER_CONTRACT",
     "FILE_STORE_CONTRACT",
     "SESSION_ROOT_CONTRACT",
@@ -189,6 +196,9 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
+    from kingfisher.infrastructure.harness.backend_contract import (
+        BACKEND_CONTRACT as BACKEND_CONTRACT,
+    )
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )

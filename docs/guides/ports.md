@@ -51,8 +51,8 @@ setting reached it.
 
 ## Checking what you wrote
 
-Every port on this page ships its contract as runnable checks. Import them and
-point them at your adapter:
+Every port on this page ships its contract as runnable checks, and so does
+`backend_from`. Import them and point them at your adapter:
 
 ```python
 from kingfisher import SESSION_STORE_CONTRACT
@@ -65,7 +65,7 @@ def test_my_store_keeps_the_contract(check):
 No test framework comes with them — the checks are plain functions that raise
 `AssertionError` — so unittest or a loop works as well as pytest.
 
-Two of the four do more than read, and that is the ports rather than the kits:
+Two of them do more than read, and that is the ports rather than the kits:
 `SESSION_ROOT_CONTRACT` creates directories inside what your provider yields,
 because that is what kingfisher does with it, and `COMMAND_RUNNER_CONTRACT` runs
 commands — one of them waits a second for a timeout. Run those where you would
@@ -240,17 +240,87 @@ the shell backend is also the filesystem for every unrouted path, so handing ove
 `SessionDirs` and `SessionRoot` are the two easiest to confuse. That one is the
 rules about session directories; this one is where the directory is.
 
-## What you cannot replace
+## `backend_from` — the filesystem the agent runs against
 
-**The backend.** It is not "where files live": it wraps every shell command in
-`sandbox-exec` or Landlock, it is what refuses a host path, and its route table
-is what makes `/data` read-only legal at all — deepagents refuses read-only rules
-outright on a backend that executes unless every rule is route-scoped. A
-deployment-supplied backend would take all three on while the system prompt still
-promises them.
+Not a port. It is a function, and it is the last thing on this page to reach for:
+three of the ports above already move a session's files somewhere else, and none
+of them asks you to take on what the backend is doing.
 
-Object storage reaches a session as a mount (`SessionRoot`), or by being copied
-in and out (`FileStore` in, `SessionStore` out). Both work today. Routing `/data`
-to a store-backed backend would break a promise the prompt makes to the model in
-a table — *"nothing in the workspace is out of the shell's reach"* — leaving the
-agent able to read its inputs and unable to run anything over them.
+**What the backend is doing**, so you can weigh it. It wraps every shell command
+in `sandbox-exec` or Landlock. It refuses a host path handed to a file tool. Its
+route table is what makes `/data` read-only legal at all — deepagents refuses
+read-only rules outright on a backend that executes unless every rule sits under
+a route. And it is the filesystem for every unrouted path, which is why the model
+can be told, in a table it reads every turn, that *nothing in the workspace is out
+of the shell's reach*.
+
+**Try a mount first.** Object storage reaches a session as a mount
+(`SessionRoot`), or by being copied in and out (`FileStore` in, `SessionStore`
+out). Both work today and cost you none of the above.
+
+**Replace the backend when your callers may not share storage.** That is the
+case a mount does not cover, and the reason this is open. A mount is established
+once, outside the process, before any session exists — so a session created at
+runtime cannot be given one of its own, and every session ends up on one mount
+separated by a path prefix and nothing else. A deployment that forbids one
+caller's session from reaching another's needs the separation in the wiring
+instead.
+
+```python
+def my_filesystem(default, session_dir):
+    return CompositeBackend(
+        default=MySandbox(session=session_dir.name),
+        routes=default.routes,
+    )
+
+kingfisher = Kingfisher(cfg, backend_from=my_filesystem)
+```
+
+**A callable, and only a callable.** A backend is rooted at a session, so one
+instance shared between sessions is one filesystem for every caller — which is
+usually the thing you are replacing the backend to avoid. It is called per turn
+with the backend kingfisher built and the session that backend is rooted at, and
+whatever you return is what the agent runs against. Passing an instance is a
+`TypeError`; write `lambda default, session_dir: shared` if you really have one
+to share.
+
+**Return what you were given, changed.** That is the cheap way to keep all four
+jobs above: a deployment that adds a route or wraps an operation keeps host-path
+refusal, the route table and the confinement without thinking about them. Ignore
+the argument and return something else and they are yours — which is a thing to
+do deliberately, not a thing to discover.
+
+There is no setting for this one. Build `Kingfisher` yourself and hand it to
+`create_app` if you are behind the service; `kingfisher run` cannot reach it.
+
+### Checking what you returned
+
+```python
+from kingfisher import BACKEND_CONTRACT
+
+@pytest.mark.parametrize("check", BACKEND_CONTRACT, ids=lambda c: c.__name__)
+def test_my_backend_keeps_the_contract(check):
+    check(lambda: my_filesystem(kingfishers_backend, session_dir))
+```
+
+Run it. Two of its four checks catch failures that report nothing on their own:
+
+**deepagents decides what a backend is with `isinstance` against its own abstract
+base class**, not by the methods present. Implement every method of
+`SandboxBackendProtocol` correctly while inheriting nothing and the shell tool is
+dropped from the agent's roster — the model is told execution is unavailable if
+it reaches for it, and you are told nothing at all. Inherit `BaseSandbox`, which
+implements the file operations in terms of `execute`, or register with the ABC.
+
+**The shell and the file tools have to be two views of one filesystem.** A
+virtual path becomes a shell path by dropping its leading slash; the prompt says
+so in a table. Route a path somewhere the shell cannot follow and the agent can
+read its inputs and run nothing over them, with a confused model as the only
+symptom.
+
+The other two are ordinary: the paths kingfisher denies writes under must sit
+under something you route, or the graph will not build; and if you refuse host
+paths, refuse them with `HostPathError`, because that is the type `HostPathGuard`
+turns into a correction the model can act on. Refusing them at all is optional —
+inside a sandbox of your own, `/etc/passwd` is a file, and refusing it would be
+refusing your own filesystem.
