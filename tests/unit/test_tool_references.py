@@ -163,6 +163,22 @@ def test_a_name_nothing_offers_is_left_to_the_other_refusal():
 # -- where it fires --------------------------------------------------------
 
 
+def test_the_query_answers_nothing_when_nothing_moved():
+    """The half the refusal cannot show.
+
+    `refuse_moved` returning quietly and `moved` returning nothing look the same from
+    outside, so the predicate is read here directly -- a `moved` that always answered
+    empty would leave every refusal test passing and every report blank.
+    """
+    offering = _offering({"csv_columns": "csv_profile/"})
+
+    assert offering.moved({"csv_columns": "csv_profile"}) == ()
+    assert offering.moved({"csv_columns": "moved/elsewhere.py"}) == (
+        ("csv_columns", "moved/elsewhere.py", "csv_profile"),
+    )
+    assert offering.moved({"not_a_tool": "anywhere"}) == (), "a name nothing offers is not moved"
+
+
 def test_a_moved_tool_fails_at_construction_not_on_the_first_turn(cfg, shipped):
     """`warm()` reads all three so a broken definition fails at startup."""
     seeding.seed(cfg, shipped)
