@@ -17,7 +17,12 @@ from kingfisher.infrastructure.harness.middleware import (
 )
 from kingfisher.infrastructure.prompting import system_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
-from tests.conftest import FakeToolCallingModel, capture_build, repository_root
+from tests.conftest import (
+    FakeToolCallingModel,
+    capture_build,
+    declared_subagents,
+    repository_root,
+)
 from tests.unit.test_confinement import needs_a_real_toolchain
 
 
@@ -433,3 +438,125 @@ def test_a_registered_class_is_built_again_for_every_graph(cfg, monkeypatch, ses
         "two graphs shared one middleware object, so a counter in it would carry "
         "across them -- which is the thing the instance refusal promises cannot happen"
     )
+
+
+#: A delegate pinned to a model that is not the deployment's default, which is the
+#: only shape that can tell the two apart: `cheap-model` carries `max_tokens=321`
+#: where the default carries 4096, so a middleware handed the wrong one says so.
+_DELEGATE = """name: reviewer
+description: Checks an analysis for arithmetic errors.
+model: cheap-model
+middlewares: [wants]
+system_prompt: |
+  You review analyses.
+"""
+
+
+class _WantsEverything(AgentMiddleware):
+    """A deployment's own, needing every object this build provides."""
+
+    name = "_WantsEverything"
+    wants = frozenset({"model", "backend", "definition"})
+
+    def __init__(self, model: object, backend: object, definition: object) -> None:
+        self.model = model
+        self.backend = backend
+        self.definition = definition
+        super().__init__()
+
+
+def _with_a_delegate(cfg, monkeypatch, session_dir, injected):
+    """One build in which an agent and its delegate both name the same middleware."""
+    (cfg.workspace / "subagents").mkdir(exist_ok=True)
+    (cfg.workspace / "subagents" / "reviewer.yaml").write_text(_DELEGATE, encoding="utf-8")
+    captured = capture_build(monkeypatch)
+
+    build_agent(
+        cfg,
+        agent=_named(("wants",), subagents=("reviewer",)),
+        session_dir=session_dir,
+        model=injected,
+        middleware_registry={"wants": _WantsEverything},
+    )
+
+    delegate = next(s for s in declared_subagents(captured) if s["name"] == "reviewer")
+    return (
+        next(m for m in captured["middleware"] if type(m) is _WantsEverything),
+        next(m for m in delegate["middleware"] if type(m) is _WantsEverything),
+    )
+
+
+def test_a_delegate_is_handed_its_own_model_rather_than_the_agents(
+    cfg, monkeypatch, session_dir
+):
+    """The bug this would have shipped with: a delegate's middleware running the
+    agent's model.
+
+    The delegate's model is not built until `as_subagent`'s last line, so the only
+    thing in scope where its middleware is made is the *agent's* -- and handing that
+    over is wrong in the one direction that costs money, since a delegate pinned to
+    a cheap model would be compacted by the expensive one. The same mistake was made
+    once already for a helper's inherited model and is recorded beside `_with_helpers`.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    mine, theirs = _with_a_delegate(cfg, monkeypatch, session_dir, injected)
+
+    assert mine.model is injected, "the agent's own middleware runs the agent's model"
+    assert theirs.model is not injected
+    assert theirs.model.max_tokens == 321, "`cheap-model`'s ceiling, not the default's"
+
+
+def test_both_kinds_are_handed_the_same_things_to_want(cfg, monkeypatch, session_dir):
+    """A key provisioned where the agent is assembled and not where a delegate is.
+
+    Both sites go through one builder, so they cannot differ by accident today; this
+    is what would catch a second mapping written inline at one of them. What it would
+    look like is a `middlewares:` line that builds in an agent file and refuses in a
+    subagent file -- the same name meaning two things one level apart, which is the
+    thing `offered_middleware` already exists to prevent for the registry.
+    """
+    injected = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+
+    mine, theirs = _with_a_delegate(cfg, monkeypatch, session_dir, injected)
+
+    # Every want filled on both sides, or one of these would have raised rather
+    # than arrived: an unprovided want is refused when the agent is built.
+    assert mine.definition.name == "probed"
+    assert theirs.definition.name == "reviewer"
+    assert mine.backend is theirs.backend, "one session, one filesystem"
+
+
+class _WantsOnlyAModel(AgentMiddleware):
+    """A want a definition may name, opened so the refusal below can be reached."""
+
+    name = "_WantsOnlyAModel"
+    wants = frozenset({"model"})
+    yaml_settable = frozenset({"model"})
+
+    def __init__(self, model: object) -> None:
+        self.model = model
+        super().__init__()
+
+
+def test_a_middleware_naming_a_model_this_request_withheld_is_refused(cfg, session_dir):
+    """The ceiling a definition cannot write its way around.
+
+    A middleware's `model:` is a name in a definition file like a delegate's, so it
+    goes through the same endpoint check -- `refuse_ungranted_endpoint`, once, in
+    `model_named`. Without it a definition could route every compaction of every run
+    to an endpoint the caller explicitly refused, and nothing would say so.
+    """
+    spec = _named(
+        ("wants",), middleware_settings={"wants": {"model": "elsewhere-model"}}
+    )
+
+    with pytest.raises(CapabilityError, match="may not reach"):
+        build_agent(
+            cfg,
+            agent=spec,
+            capabilities=Capabilities(endpoints=("fake",)),
+            session_dir=session_dir,
+            model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+            middleware_registry={"wants": _WantsOnlyAModel},
+        )

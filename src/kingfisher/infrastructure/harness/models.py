@@ -8,13 +8,14 @@ from types import MappingProxyType
 from typing import TYPE_CHECKING, Any
 
 from kingfisher.config import NO_EXTRA, ConfigError
+from kingfisher.domain.capabilities import ALL, Selection, refuse_ungranted_endpoint
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
     from langchain_core.language_models import BaseChatModel
 
-    from kingfisher.config import Endpoint, ModelProfile
+    from kingfisher.config import Config, Endpoint, ModelProfile
 
 
 @dataclass(frozen=True)
@@ -80,3 +81,28 @@ def build_model(profile: ModelProfile, endpoint: Endpoint) -> BaseChatModel:
         **profile.extra,
         **adapter.extra,
     )
+
+
+def model_named(
+    written: str, cfg: Config, *, endpoints: Selection = ALL, subject: str
+) -> BaseChatModel:
+    """The model a written name means, on an endpoint this request may reach.
+
+    Shared with `model_object`, which is this with a definition in front of it rather
+    than a name. A second copy of these three steps that forgot the middle one would
+    send a run to an endpoint the caller refused and say nothing.
+    """
+    # A lookup, rather than a `replace` of four `Config` fields built from the copy.
+    # A param nobody remembered to add to that copy was silently the deployment's
+    # own, so a per-model `max_tokens` was dropped without a word; a profile carries
+    # every param and there is nothing here to forget.
+    try:
+        profile, endpoint = cfg.models.resolve(written)
+    except ConfigError as exc:
+        # `resolve` knows the model and the catalogue; only the caller knows *who
+        # asked*. Without that, the reader is told `gpt-5` cannot be run and left to
+        # grep the catalogue for whoever wanted it.
+        msg = f"{subject}: {exc}"
+        raise ConfigError(msg) from exc
+    refuse_ungranted_endpoint(profile.endpoint, granted=endpoints, subject=subject)
+    return build_model(profile, endpoint)

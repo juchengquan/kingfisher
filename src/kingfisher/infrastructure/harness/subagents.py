@@ -14,13 +14,11 @@ from urllib.parse import urlsplit
 from deepagents.middleware import SubAgentMiddleware
 from langchain_core.runnables import Runnable
 
-from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import (
     ALL,
     Selection,
     ceiling,
     narrowed,
-    refuse_ungranted_endpoint,
     refuse_unoffered,
 )
 from kingfisher.infrastructure.harness.backend import (
@@ -28,7 +26,7 @@ from kingfisher.infrastructure.harness.backend import (
     WorkspaceToolErrors,
     WorkspaceToolPaths,
 )
-from kingfisher.infrastructure.harness.models import build_model
+from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.infrastructure.prompting import with_user_prompt
 from kingfisher.kinds.agents.spec import AgentSpec
@@ -131,22 +129,7 @@ def model_object(  # five things decide which model a delegate
     model_id = model_for(spec, override=run_on)
     if model_id is None:
         return inherited
-    # A lookup, where this used to `replace` four fields of the `Config` and
-    # build from the copy. That copy is why the change happened: a param
-    # nobody remembered to add to it was silently the deployment's own, so
-    # a per-model `max_tokens` would have been dropped without a word. A
-    # profile carries every param, and there is nothing here to forget.
-    try:
-        profile, endpoint = cfg.models.resolve(model_id)
-    except ConfigError as exc:
-        # `resolve` knows the model and the catalogue; only here knows
-        # *who asked*. Without the name the reader is told `gpt-5` cannot be
-        # run and left to grep the catalogue for whoever wanted it -- and
-        # this is the one refusal that fires on a file they may not own.
-        msg = f"{_subject(spec)}: {exc}"
-        raise ConfigError(msg) from exc
-    refuse_ungranted_endpoint(profile.endpoint, granted=endpoints, subject=_subject(spec))
-    return build_model(profile, endpoint)
+    return model_named(model_id, cfg, endpoints=endpoints, subject=_subject(spec))
 
 
 def indistinct(
