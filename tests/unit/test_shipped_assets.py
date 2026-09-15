@@ -25,6 +25,7 @@ from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
 from tests.conftest import FakeToolCallingModel, capture_build, repository_root
+from tests.unit.test_subagent_helpers import _delegate, _tools_of
 
 
 def test_every_preset_subagent_parses(shipped):
@@ -389,6 +390,42 @@ def test_the_preset_that_grants_a_skill_is_told_about_it(
     # Both the spellings `reviewer.yaml` writes, which is why it writes two.
     assert "postmortem" in rendered
     assert "tabular-qa" in rendered
+
+
+def test_the_shipped_delegate_consults_its_helper_under_the_agent_that_ships_it(
+    workspace_with_presets, session_dir, fake_model, shipped
+):
+    """`reviewer` names `profiler`, and `assistant` grants both, so the agent a reader
+    runs first has a delegate with a helper.
+
+    Read off `assistant.yaml` rather than written out: what could regress is the file
+    that ships the pairing dropping half of it.
+    """
+    declared = LocalAgentRepository(shipped / "agents").specs["assistant"].subagents
+    graph = build_agent(
+        replace(workspace_with_presets, skills_enabled=True),
+        session_dir=session_dir,
+        model=fake_model,
+        capabilities=Capabilities(subagents=declared),
+    )
+
+    assert "task" in _tools_of(_delegate(graph, "reviewer")), "reviewer lost its helper"
+
+
+def test_a_caller_naming_the_delegate_alone_gets_it_without_its_helper(
+    workspace_with_presets, session_dir, fake_model
+):
+    """Dropped rather than refused, which is why `reviewer.yaml`'s prompt copes either
+    way -- a refusal would make the helper a requirement of every caller.
+    """
+    graph = build_agent(
+        replace(workspace_with_presets, skills_enabled=True),
+        session_dir=session_dir,
+        model=fake_model,
+        capabilities=Capabilities(subagents=("reviewer",)),
+    )
+
+    assert "task" not in _tools_of(_delegate(graph, "reviewer"))
 
 
 # -- the compiled preset ----------------------------------------------------
