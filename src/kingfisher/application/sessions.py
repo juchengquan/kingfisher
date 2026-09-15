@@ -6,6 +6,7 @@ from contextlib import contextmanager
 from typing import TYPE_CHECKING, Any
 from uuid import uuid4
 
+from kingfisher.application.access import held_by
 from kingfisher.domain.access import reaches
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
@@ -121,11 +122,12 @@ class Sessions:
         that is not there. The reason is not lost; it is what that caller's audit
         line says.
         """
+        held = held_by(self.access, source_ids)
         found = next((s for s in self.sessions() if s.id == session_id), None)
-        if found is None or self.access is None or not isinstance(source_ids, tuple):
-            return found
+        if found is None:
+            return None
         directory = sessions_root(self.workspace) / session_id
-        return found if self._reaches_session(directory, self.access.expand(source_ids)) else None
+        return found if self._reaches_session(directory, held) else None
 
     def start_session(self, session_id: str | None = None) -> str:
         """Open a new session and return its id.

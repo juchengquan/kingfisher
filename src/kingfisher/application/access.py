@@ -1,14 +1,16 @@
-"""Ask the definitions who reaches what, in the one walk both askers share."""
+"""Who reaches what, asked the same way by both askers: what the definitions say, and
+what a caller holds.
+"""
 
 from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.access import AccessError, AccessReport, Stated
+from kingfisher.domain.access import AccessError, AccessReport, Stated, _Unscoped
 from kingfisher.domain.capabilities import ALL
 
 if TYPE_CHECKING:
-    from collections.abc import Mapping
+    from collections.abc import Iterable, Mapping
 
     from kingfisher.domain.access import SourceIds
 
@@ -16,6 +18,24 @@ if TYPE_CHECKING:
 #: hold it: `("agent", {name: spec})`. A pair rather than two arguments because
 #: every function here walks both and neither ever wants one alone.
 Kind = tuple[str, "Mapping[str, object]"]
+
+
+def held_by(
+    vocabulary: SourceIds | None, source_ids: Iterable[str] | _Unscoped | None
+) -> frozenset[str] | None:
+    """What a caller holds, expanded -- or `None` where nothing narrows: no vocabulary,
+    nobody named, or `UNSCOPED`.
+
+    The one place the shape of `source_ids` is read. Any sequence of names means what
+    it looks like, because a list is the obvious thing to write; a bare string is a
+    sequence too, and is refused rather than read a letter at a time.
+    """
+    if vocabulary is None or source_ids is None or isinstance(source_ids, _Unscoped):
+        return None
+    if isinstance(source_ids, str):
+        msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
+        raise AccessError(msg)
+    return vocabulary.expand(tuple(source_ids))
 
 
 def stated(spec: object) -> Stated:

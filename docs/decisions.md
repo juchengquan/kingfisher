@@ -473,6 +473,15 @@ word the one an id nobody issued gets, so holding a real id teaches nothing: not
 whose the session is, not which agent it runs, not whether a turn is running in
 it. *(2026-09-15.)*
 
+**One reader of what a caller says.** `held_for` was where a list stopped being
+read as nobody in particular, and two readers never asked it: naming an agent and
+reading a session each tested for a tuple, so `["B"]` opened an agent restricted
+to `A` and was shown a session pinned to it, and `"B"` got through both.
+`held_by` in `application/access.py` is now the only place the shape of
+`source_ids` is read -- `held_for`, the turn, naming an agent, reading a session
+and the listing all ask it -- and a rule holds `application/` to that, because a
+second reader is how this happened. *(2026-09-15.)*
+
 **`errors.STATUS` stays exactly the caller-facing set.** A deployment error that
 still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
 as such -- the first table's value is that it is checkable in both directions,
