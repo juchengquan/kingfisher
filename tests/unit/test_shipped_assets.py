@@ -1086,7 +1086,7 @@ def test_an_entry_that_states_nothing_inherits(shipped):
 
 
 def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):
-    """The `all_of` case, asserted against the files rather than described."""
+    """The set case, asserted against the files rather than described."""
     specs = LocalAgentRepository(shipped / "agents").specs
     source_ids = _vocabulary(shipped)
     analyst = specs["analyst"]
@@ -1104,6 +1104,23 @@ def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):
     )
     # Senior alone is not a role here, so it reaches the agent through nothing.
     assert not analyst.declares(source_ids.expand(["pii"])).tools
+    # The claim the example file makes about `warehouse` in prose, driven rather
+    # than read: covering `sales_db` is not being classified for it, but
+    # expansion runs first, so a `warehouse` holding `pii` derives the compound
+    # without ever holding `sales_db` by name -- and alone derives nothing,
+    # because nothing here hands out `pii`. The file said the opposite of this
+    # for as long as the prose existed, with every test still green.
+    assert analyst.declares(source_ids.expand(["warehouse", "pii"])).tools == (
+        "sql_query",
+        "http_fetch",
+        "csv_profile::csv_profile",
+        "line_count",
+    )
+    assert analyst.declares(source_ids.expand(["warehouse"])).tools == (
+        "sql_query",
+        "csv_profile::csv_profile",
+        "line_count",
+    )
 
 
 def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):

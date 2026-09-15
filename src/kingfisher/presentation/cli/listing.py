@@ -114,7 +114,7 @@ def _access(found: Inventory) -> Iterator[str]:
         # line it appears on, and every line it appears on needs it.
         yield "\naccess — source ids that require others"
         for name, parts in sorted(compounds.items()):
-            yield f"  {name} = {'+'.join(sorted(parts))}"
+            yield f"  {name} = {{{', '.join(sorted(parts))}}}"
     yield "\naccess — by definition"
     said = False
     for kind, definitions in found.audiences.items():

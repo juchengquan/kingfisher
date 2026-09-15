@@ -907,10 +907,10 @@ policy at all.
 ```yaml
 # source_ids.yaml  — the whole file
 source_ids:
-  A: {}
-  B: {}
-  C: {}
-  warehouse: {contains: [A, B, C]}
+  A:
+  B:
+  C:
+  warehouse: [A, B, C]
 ```
 
 ```yaml
@@ -1181,7 +1181,7 @@ The operator's view is the whole of it:
 ```
 $ kingfisher list                 # every definition, its audience, and a roll-up
 $ kingfisher list --as B,C        # exactly what that caller sees
-$ kingfisher list --as warehouse  # check `contains` before trusting it
+$ kingfisher list --as warehouse  # check what it covers before trusting it
 ```
 
 `list` is exempt from the refusal above, and only `list`: it is read-only, and
@@ -1214,11 +1214,11 @@ declare is **refused**. Both directions matter and they fail differently:
   only symptom would be a tool quietly reachable by no one — found weeks later
   by whoever needed it.
 
-`contains` expands one name into others, once, when the file is read:
+A list body expands one name into others, once, when the file is read:
 
 ```yaml
 source_ids:
-  warehouse: {contains: [A, B, C]}
+  warehouse: [A, B, C]
 ```
 
 A caller holding `warehouse` reaches anything listing `A`, `B` or `C`, without
@@ -1229,10 +1229,10 @@ cut.
 ### Requiring several source ids at once
 
 An audience list is an **or**: any one of the names is enough. An entry of that
-list may be an **and**, written `all_of`, which is satisfied only in full:
+list may be an **and**, written as a **set**, which is satisfied only in full:
 
 ```yaml
-source_ids: [warehouse, {all_of: [finance_db, pii]}]
+source_ids: [warehouse, {finance_db, pii}]
 ```
 
 Either a `warehouse` holder, or a caller holding *both* `finance_db` *and*
@@ -1241,14 +1241,14 @@ or-of-ands, which is the shape access rules actually take, and it stays one
 field with no rule about how two fields combine.
 
 Where the same requirement appears more than once, name it in the vocabulary
-instead — the same word, so the named form is simply a name for the inline one:
+instead — the same shape, so the named form is simply a name for the inline one:
 
 ```yaml
 # source_ids.yaml
 source_ids:
-  finance_db: {}
-  pii: {}
-  finance_db_pii: {all_of: [finance_db, pii]}
+  finance_db:
+  pii:
+  finance_db_pii: {finance_db, pii}
 ```
 
 ```yaml
@@ -1260,26 +1260,32 @@ Use the inline form for a one-off and the named form for anything reused; a name
 that appears on two definitions and means the same thing on both belongs in the
 vocabulary, where changing it changes both.
 
+The brackets are the whole difference, and they are told apart by shape rather
+than by a keyword: `[a, b]` is what a name covers, `{a, b}` is what it requires.
+A name is one or the other and cannot be both, so the question of what a name
+that grants and costs at once would mean never comes up.
+
 Consequences worth knowing:
 
-- **`contains` satisfies `all_of`.** Expansion runs first and requirements are
-  checked against whatever is held afterwards, so a `warehouse` that contains
-  both parts satisfies a compound of them.
+- **Covering satisfies a requirement.** Expansion runs first and requirements are
+  checked against whatever is held afterwards, so a `warehouse` that covers both
+  parts satisfies a compound of them.
 - **A caller may not present a compound name.** It is what holding its parts adds
   up to, not something to claim. The refusal names the parts to send instead.
-- **`contains` and `all_of` cannot both appear on one source id.** One says what a
-  name grants and the other what a caller must bring; a name that is both is a
-  question with no answer. Requirement loops are refused like `contains` loops.
-- **`contains` may not hand out a compound.**
-  `warehouse: {contains: [finance_db_pii]}` is refused — it would hand a
-  `warehouse` holder the compound while they hold neither part. Name the parts
-  instead.
+- **A covers list may not hand out a compound**, named or inline.
+  `warehouse: [finance_db_pii]` and `warehouse: [{finance_db, pii}, A]` are both
+  refused — either would hand a `warehouse` holder the compound while they hold
+  neither part. Cover the parts instead. Requirement loops are refused the way
+  covering loops are.
+- **A set is a set of names, not a mapping.** `{finance_db: pii}` is refused:
+  read as a set it would take `finance_db` and throw away what was written
+  beside it.
 
-`kingfisher list` writes a conjunction `finance_db+pii`, and prints what each
-named compound requires above the audiences, since a name alone tells a reader
-nothing on the line it appears on. The `--json` form nests it instead —
-`[["finance_db", "pii"]]` — so a script never has to parse a separator out of a
-name.
+`kingfisher list` writes a requirement the way the file does, `{finance_db, pii}`,
+and prints what each named compound requires above the audiences, since a name
+alone tells a reader nothing on the line it appears on. The `--json` form nests
+it instead — `[["finance_db", "pii"]]` — so a script never has to parse a set out
+of a string.
 
 ### Uploads are unchanged
 

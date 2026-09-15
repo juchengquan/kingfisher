@@ -365,12 +365,13 @@ def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
     assert spec.audiences["tools"]["sql_query"] == ("C",)
 
 
-def test_a_conjunction_is_read_as_one_entry_of_the_list():
-    """`all_of` in a definition, which is the inline half of the same word the
-    vocabulary uses for a named one.
+def test_a_requirement_is_read_as_one_entry_of_the_list():
+    """A set in a definition, which is the inline half of the same shape the vocabulary
+    uses for a named one -- and it is read here from YAML rather than a dict, since
+    `{a, b}` being a mapping of null values is what makes the spelling work at all.
     """
     spec = _read(
-        MINIMAL.rstrip() + "\nsource_ids: [admin, {all_of: [finance, senior]}]\n",
+        MINIMAL.rstrip() + "\nsource_ids: [admin, {finance, senior}]\n",
         "plain.yaml",
     )
 

@@ -542,7 +542,7 @@ def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, monkeypatch, capsys):
 
 BOTH = """name: both
 description: An agent.
-source_ids: [{all_of: [A, B]}]
+source_ids: [{A, B}]
 tools:
   - name: line_count
     source_ids: [A, B]
@@ -559,13 +559,16 @@ system_prompt: |
 """
 
 
-def test_an_inline_conjunction_reads_as_a_plus_b(cfg, monkeypatch, capsys):
-    """`+` for "and", so the audience column stays a column."""
+def test_an_inline_requirement_reads_as_the_set_it_is_written_as(cfg, monkeypatch, capsys):
+    """The listing prints what a reader would write in the file. It printed `A+B` when
+    the file said `all_of`, which was a third spelling of the same idea and ambiguous
+    besides -- a source id may legally contain a `+`.
+    """
     _workspace(cfg, monkeypatch, BOTH)
 
     assert main(["list"]) == 0
 
-    assert "agent both  [A+B]" in capsys.readouterr().out
+    assert "agent both  [{A, B}]" in capsys.readouterr().out
 
 
 def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypatch, capsys):
@@ -576,7 +579,7 @@ def test_a_conjunction_is_spelled_the_same_way_wherever_it_appears(cfg, monkeypa
 
     shown = capsys.readouterr().out if main(["list"]) == 0 else ""
     before, after = shown.split("by tool", 1)
-    assert "[A+B]" in before
+    assert "[{A, B}]" in before
     assert "both  [A, B]" in after
 
 
@@ -588,14 +591,14 @@ def test_a_named_compound_says_what_it_requires(cfg, monkeypatch, capsys):
         cfg,
         monkeypatch,
         NAMED,
-        vocabulary="source_ids:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n",
+        vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
     )
 
     assert main(["list"]) == 0
 
     shown = capsys.readouterr().out
     assert "source ids that require others" in shown
-    assert "ab = A+B" in shown
+    assert "ab = {A, B}" in shown
     assert "agent named  [ab]" in shown
 
 
@@ -617,15 +620,15 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
 
     _workspace(
         cfg, monkeypatch, BOTH, NAMED,
-        vocabulary="source_ids:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n",
+        vocabulary="source_ids:\n  A:\n  B:\n  ab: {A, B}\n",
     )
 
     # From the environment, not the fixture: the vocabulary is a file the
     # helper just wrote, and the fixture config predates it.
     document = json.loads(json.dumps(as_json(inventory(config_from_env()))))
 
-    # Nested, not "A+B": a script should not have to parse a separator out of a
-    # name, and a source id may legally contain one.
+    # Nested, not the braces the file writes: a script should not have to parse a
+    # set out of a string.
     assert document["audiences"]["agents"]["both"]["source_ids"] == [["A", "B"]]
     assert document["access"]["requires"]["ab"] == ["A", "B"]
     assert document["access"]["names"]["A"] == ["A"]

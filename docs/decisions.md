@@ -346,37 +346,75 @@ coercion inside `for_groups` was the only reason `["A"]` ever narrowed. That
 moved into `held_for`, which now takes any sequence and refuses a bare string.
 *(2026-09-03.)*
 
-**An audience list is an `or`, and an entry of it may be an `and`.** `all_of`
-requires a caller to hold several source ids at once, and is written two ways
-deliberately: named in `source_ids.yaml` for anything reused, inline as one entry of
-a list for a one-off. The same word both places, so the named form is literally a
-*name for* the inline one rather than a second mechanism -- the argument against
-two spellings was drift, and using one word with one evaluation is what answers
-it. The result is or-of-ands, which is the shape access rules take, out of one
-field with no rule about how two fields combine. *(2026-09-01.)*
+**An audience list is an `or`, and an entry of it may be an `and`.** A
+requirement is satisfied only by holding several source ids at once, and is
+written two ways deliberately: named in `source_ids.yaml` for anything reused,
+inline as one entry of a list for a one-off. The same shape both places, so the
+named form is literally a *name for* the inline one rather than a second
+mechanism -- the argument against two spellings was drift, and using one form
+with one evaluation is what answers it. The result is or-of-ands, which is the
+shape access rules take, out of one field with no rule about how two fields
+combine. *(2026-09-01.)*
 
-`expand` does the work, which is what kept `reaches` nearly unchanged: `contains`
+`expand` does the work, which is what kept `reaches` nearly unchanged: covering
 closes first, then a compound joins the held set once its parts are held, so a
 named compound is an ordinary held name by the time any audience is asked. Two
-consequences follow rather than being chosen. **`contains` satisfies `all_of`**,
-because expansion runs first -- the alternative is an `admin` who contains both
-parts yet is weaker than the sum of what they reach. And **nesting works for
-free**, since a compound whose parts are held is held.
+consequences follow rather than being chosen. **Covering satisfies a
+requirement**, because expansion runs first -- the alternative is an `admin` who
+covers both parts yet is weaker than the sum of what they reach. And **nesting
+works for free**, since a compound whose parts are held is held.
 
 **A compound is derived, and nothing may hand it over directly.** A caller may
 not present one: it is what holding the parts adds up to, not something to
-claim, and accepting it would let one assertion stand in for the two that
-`all_of` exists to require. The refusal names the parts. Over HTTP this surfaces
-as the `misconfigured` 500 a drifted vocabulary already gets, which is exactly
-what a gateway emitting a derived name is.
+claim, and accepting it would let one assertion stand in for the two that the
+requirement exists to demand. The refusal names the parts. Over HTTP this
+surfaces as the `misconfigured` 500 a drifted vocabulary already gets, which is
+exactly what a gateway emitting a derived name is.
 
-`contains` may not hand one over either, and that is the same rule rather than a
-second one. `admin: {contains: [finance-senior]}` was legal for one commit and
-gave an admin the compound while they held neither part -- the requirement
-defeated by the file declaring it, which is the caller's move made one level up.
-Refusing it in only one of the two places was the inconsistency. Naming the
-parts reaches the same people and is visible, since the listing prints what a
-compound requires and never prints `contains`.
+A covers list may not hand one over either, and that is the same rule rather
+than a second one. `admin: [finance-senior]` was legal for one commit and gave
+an admin the compound while they held neither part -- the requirement defeated
+by the file declaring it, which is the caller's move made one level up. Refusing
+it in only one of the two places was the inconsistency. Naming the parts reaches
+the same people and is visible, since the listing prints what a compound
+requires and never prints a covers list.
+
+**The two operations are told apart by shape, not by a keyword.** `contains` and
+`all_of` were the spelling until the format was asked why a YAML file needed
+English words for two things YAML already has brackets for. A list body is what
+a name covers and a set body is what it requires:
+
+```yaml
+source_ids:
+  sales_db:
+  warehouse: [sales_db, audit_log]      # covers
+  sales_db_pii: {sales_db, pii}         # requires
+```
+
+`{a, b}` is a mapping of null values, which is what makes it available as a set
+at all. Four things fell out, and only the first was the goal:
+
+  - The rule that a name may not write both operations stopped needing to exist.
+    A body is a list or it is a mapping, so a name that grants and costs at once
+    is not a thing the format can express and not a refusal anybody maintains.
+  - The listing stopped inventing a third spelling. It printed `finance_db+pii`
+    for something no file could write that way, and `+` is legal inside a source
+    id, so the display was ambiguous as well as unique to itself. It prints
+    `{finance_db, pii}` now, and `--json` still nests -- a script should not have
+    to parse a set out of a string.
+  - The inline and named forms became the same characters rather than the same
+    word, which is a stronger version of what the 2026-09-01 entry above wanted.
+  - One new refusal was needed, and it is the cost of the change rather than a
+    bonus. A set inside a covers list -- `warehouse: [{sales_db, pii}, audit_log]`
+    -- reads as perfectly legal and is the bypass above with no name to look up,
+    so it is refused structurally where it is written. The named half was a
+    lookup; this half cannot be.
+
+Both retired words are refused by name rather than ignored, on the same
+reasoning the retired sections get: a deployment upgrading has a file full of
+policy that would otherwise be read and dropped in silence. `A: {}` is refused
+too, since an empty set requires nothing and admits everyone -- it means the
+plain name it used to spell, and `A:` is how that is written now. *(2026-09-15.)*
 
 **Reversed: `refuse_dead`, the rule that an entry audience must overlap its
 definition's.** It moved off `parse` onto `SourceIds` first, which was a real fix

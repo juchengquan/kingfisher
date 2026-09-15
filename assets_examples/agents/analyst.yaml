@@ -60,15 +60,16 @@ tools:
   # requirement is on `subagents/auditor.yaml` too. One-off, it would be spelled
   # inline and read the same way:
   #
-  #     source_ids: [{all_of: [sales_db, pii]}]
+  #     source_ids: [{sales_db, pii}]
   #
-  # Same word, same meaning; the named form is just a name for it. Reuse is what
+  # Same shape, same meaning; the named form is just a name for it. Reuse is what
   # decides between them -- a requirement on two definitions should change in
   # one place.
   #
   # The list around it is still an `or`. `[sales_db_pii, audit_log]` would
   # mean "both of those, or else `audit_log`", which is how an exception is
-  # written next to a requirement.
+  # written next to a requirement -- and `[{sales_db, pii}, audit_log]` says the
+  # same thing without the name.
   - name: http_fetch
     source_ids: [sales_db_pii]
   # Bare names, so `[sales_db, audit_log]` -- this definition's own. Say
