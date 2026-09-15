@@ -154,7 +154,7 @@ def host_path_refusal(make: Callable[[], Any]) -> None:
         raise AssertionError(msg) from refused
 
 
-#: Every check a backend returned from `backend_from` must pass, in the order a
+#: Every check a backend a deployment's factory returned must pass, in the order a
 #: deployment wants to read them: the silent failure first, then the one that stops
 #: the graph building, then the promise the prompt makes, then the refusal.
 BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (

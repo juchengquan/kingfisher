@@ -51,8 +51,8 @@ setting reached it.
 
 ## Checking what you wrote
 
-Every port on this page ships its contract as runnable checks, and so does
-`backend_from`. Import them and point them at your adapter:
+Every port on this page ships its contract as runnable checks, and so does the
+backend. Import them and point them at your adapter:
 
 ```python
 from kingfisher import SESSION_STORE_CONTRACT
@@ -242,58 +242,86 @@ the shell backend is also the filesystem for every unrouted path, so handing ove
 `SessionDirs` and `SessionRoot` are the two easiest to confuse. That one is the
 rules about session directories; this one is where the directory is.
 
-## `backend_from` — the filesystem the agent runs against
+## `backend` — the filesystem the agent runs against
 
-Not a port. It is a function, and it is the last thing on this page to reach for:
-three of the ports above already move a session's files somewhere else, and none
-of them asks you to take on what the backend is doing.
-
-**What the backend is doing**, so you can weigh it. It wraps every shell command
-in `sandbox-exec` or Landlock. It refuses a host path handed to a file tool. Its
-route table is what makes `/data` read-only legal at all — deepagents refuses
-read-only rules outright on a backend that executes unless every rule sits under
-a route. And it is the filesystem for every unrouted path, which is why the model
-can be told, in a table it reads every turn, that *nothing in the workspace is out
-of the shell's reach*.
-
-**Try a mount first.** Object storage reaches a session as a mount
-(`SessionRoot`), or by being copied in and out (`FileStore` in, `SessionStore`
-out). Both work today and cost you none of the above.
-
-**Replace the backend when your callers may not share storage.** That is the
-case a mount does not cover, and the reason this is open. A mount is established
-once, outside the process, before any session exists — so a session created at
-runtime cannot be given one of its own, and every session ends up on one mount
-separated by a path prefix and nothing else. A deployment that forbids one
-caller's session from reaching another's needs the separation in the wiring
-instead.
+Not a port, and not optional. Every `Kingfisher` names one:
 
 ```python
-def my_filesystem(default, session_dir):
-    return CompositeBackend(
-        default=MySandbox(session=session_dir.name),
-        routes=default.routes,
-    )
+from kingfisher import Kingfisher, default_backend
 
-kingfisher = Kingfisher(cfg, backend_from=my_filesystem)
+kingfisher = Kingfisher(cfg, backend=default_backend)
 ```
 
-**A callable, and only a callable.** A backend is rooted at a session, so one
-instance shared between sessions is one filesystem for every caller — which is
-usually the thing you are replacing the backend to avoid. It is called per turn
-with the backend kingfisher built and the session that backend is rooted at, and
-whatever you return is what the agent runs against. Passing an instance is a
-`TypeError`; write `lambda default, session_dir: shared` if you really have one
-to share.
+Most deployments write exactly that and read no further. `default_backend` is the
+backend kingfisher used to build for you without asking, unchanged — naming it
+costs you nothing and buys the rest of this section a reader.
 
-**Return what you were given, changed.** That is the cheap way to keep all four
-jobs above: a deployment that adds a route or wraps an operation keeps host-path
-refusal, the route table and the confinement without thinking about them. Ignore
-the argument and return something else and they are yours — which is a thing to
-do deliberately, not a thing to discover.
+**Why it is the one thing on this page you cannot leave out.** The backend is the
+sandbox. It wraps every shell command in `sandbox-exec` or Landlock. It refuses a
+host path handed to a file tool. Its route table is what makes `/data` read-only
+legal at all — deepagents refuses read-only rules outright on a backend that
+executes unless every rule sits under a route. And it is the filesystem for every
+unrouted path, which is why the model can be told, in a table it reads every turn,
+that *nothing in the workspace is out of the shell's reach*.
+
+None of which makes the old silence unsafe: the default was always the strict
+option and still is, and requiring the parameter makes no deployment safer on its
+own. What it does is make sure nobody wires kingfisher without finding out there
+is a boundary here at all.
+
+**Try a mount before replacing it.** Object storage reaches a session as a mount
+(`SessionRoot`), or by being copied in and out (`FileStore` in, `SessionStore`
+out). Both work today and cost you none of the four jobs above.
+
+**Replace it when your callers may not share storage.** That is the case a mount
+does not cover, and the reason this seam is open. A mount is established once,
+outside the process, before any session exists — so a session created at runtime
+cannot be given one of its own, and every session ends up on one mount separated
+by a path prefix and nothing else. A deployment that forbids one caller's session
+from reaching another's needs the separation in the wiring instead.
+
+**Build on the default rather than from nothing.** Call it and change the one
+thing you came to change, and host-path refusal, the route table and the
+confinement all survive without your thinking about them:
+
+```python
+def my_filesystem(cfg, session_dir, *, catalogue=None, runner=None):
+    mine = default_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
+    return CompositeBackend(
+        default=MySandbox(session=session_dir.name),
+        routes=mine.routes,
+    )
+
+kingfisher = Kingfisher(cfg, backend=my_filesystem)
+```
+
+Starting from nothing instead is allowed and is yours to get right — which is a
+thing to do deliberately, not to discover. Two of the four contract checks below
+run on every backend kingfisher resolves and will tell you about the two failures
+that otherwise report nothing.
+
+**Take both keyword arguments even if you ignore one.** `catalogue` is what lets a
+session see the skills your bundles ship; `runner` is the `CommandRunner` you
+wired, and a factory that quietly drops it gets a backend that is perfectly
+well-formed and runs its commands somewhere you did not choose. Nothing at runtime
+can see that mistake, which is why `BackendFactory` is a typed protocol rather than
+a line of prose — write the signature out and your type checker catches it.
+
+**A factory, and only a factory.** A backend is rooted at a session, so one
+instance shared between sessions is one filesystem for every caller — usually the
+thing you are replacing the backend to avoid. It is called per turn with the
+session it is for, and whatever you return is what that turn's agent runs against.
+Passing an instance is a `TypeError`.
+
+**A pre-built graph counts as an answer.** `Kingfisher(cfg, graph=...)` already
+carries the backend it was compiled on, so it takes no `backend` and refuses one
+passed beside it. `run()` and `stream()` keep `backend=default_backend` in their
+signatures, because they are conveniences over a *default* `Kingfisher` and that
+is what makes the one-liner a one-liner.
 
 There is no setting for this one. Build `Kingfisher` yourself and hand it to
-`create_app` if you are behind the service; `kingfisher run` cannot reach it.
+`create_app` if you are behind the service; `kingfisher run` builds its own with
+the default.
 
 ### Checking what you returned
 

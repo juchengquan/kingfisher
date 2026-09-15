@@ -424,9 +424,9 @@ def _run(args: argparse.Namespace) -> int:
     # three provider SDKs -- about a second -- and
     # `test_reaching_the_cli_stays_free_of_provider_sdks` holds every other verb
     # to not paying it. `seed`, `list` and `doctor` do not build one.
-    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env())
+    kf = Kingfisher(config_from_env(), backend=default_backend)
     request = Request(
         task=args.task,
         agent=args.agent,
@@ -561,9 +561,9 @@ def _count(sessions: int) -> str:
 
 def _sessions(*, as_document: bool = False) -> int:
     """What this workspace is holding, and what each session costs it."""
-    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env())
+    kf = Kingfisher(config_from_env(), backend=default_backend)
     root = sessions_root(kf.workspace)
     now = time.time()
     # A walk per session, at ~0.8ms each. The same trade `sessions()` already
@@ -609,9 +609,9 @@ def _sessions(*, as_document: bool = False) -> int:
 
 def _reap(args: argparse.Namespace) -> int:
     """Delete sessions: one by name, or every one that has been idle too long."""
-    from kingfisher import Kingfisher  # noqa: PLC0415
+    from kingfisher import Kingfisher, default_backend  # noqa: PLC0415
 
-    kf = Kingfisher(config_from_env())
+    kf = Kingfisher(config_from_env(), backend=default_backend)
     if args.session is not None:
         return _reap_one(kf, args.session)
 

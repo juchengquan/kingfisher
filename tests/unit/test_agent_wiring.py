@@ -6,7 +6,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import skills_sources
@@ -395,13 +395,13 @@ def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
 def test_an_entry_no_definition_names_is_still_refused_when_it_is_registered(cfg):
     """The half `_instantiate` cannot reach, and the reason the sweep exists."""
     with pytest.raises(CapabilityError, match="audit"):
-        Kingfisher(cfg, middlewares={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, backend=default_backend, middlewares={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
 
 
 def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
     """The gate is `callable`, which is what `MiddlewareFactory` promises."""
     with pytest.raises(CapabilityError, match="which cannot be called") as raised:
-        Kingfisher(cfg, middlewares={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, backend=default_backend, middlewares={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
 
     assert "a dict" in str(raised.value)
 

@@ -6,7 +6,7 @@ from pathlib import Path
 
 import pytest
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.capabilities import ALL, UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
@@ -82,7 +82,10 @@ def test_the_service_may_name_a_session_even_though_a_request_may_not(cfg):
 def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_dir):
     """`intersect` was implemented, tested and called by nothing. Now it runs."""
     kf = Kingfisher(
-        cfg, threads=StubCheckpointer(), grants=Capabilities(builtin_tools=("read_file",))
+        cfg,
+        backend=default_backend,
+        threads=StubCheckpointer(),
+        grants=Capabilities(builtin_tools=("read_file",)),
     )
 
     allowed = kf.grants.intersect(Capabilities(builtin_tools=("read_file", "execute")))
@@ -92,7 +95,8 @@ def test_a_request_cannot_widen_past_what_the_deployment_granted(cfg, session_di
 
 def test_grants_are_unrestricted_by_default(cfg):
     """A deployment serving one caller is unaffected by any of this."""
-    assert Kingfisher(cfg, threads=StubCheckpointer()).grants == UNRESTRICTED
+    kf = Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer())
+    assert kf.grants == UNRESTRICTED
 
 
 def test_an_uploaded_definition_is_added_back_after_clamping(cfg):

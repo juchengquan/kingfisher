@@ -6,7 +6,7 @@ import sys
 from collections.abc import Awaitable, Callable, Mapping
 from dataclasses import replace
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import Any, Protocol
 
 from deepagents.backends import CompositeBackend, FilesystemBackend, LocalShellBackend
 from deepagents.backends.protocol import ExecuteResponse
@@ -38,10 +38,6 @@ from kingfisher.layout import (
     UPLOADED_SKILLS_ROUTE,
     routed_paths,
 )
-
-if TYPE_CHECKING:
-
-    from deepagents.backends import BackendProtocol
 
 _BASE_PATH: tuple[str, ...] = ("/usr/bin", "/bin", "/usr/sbin", "/sbin")
 
@@ -362,14 +358,51 @@ def _require_layout(session_dir: Path) -> None:
         raise ValueError(msg)
 
 
+class BackendFactory(Protocol):
+    """How a deployment says what filesystem its agents run on.
+
+    Typed against the call and not the return, which is the asymmetry worth
+    knowing. deepagents decides what a backend *is* with `isinstance` against its
+    own abstract base class, so a protocol describing the return would describe the
+    requirement wrongly -- an object satisfying it exactly would still be handed no
+    shell. `refuse_unusable_backend` asks that question at the only time it can be
+    answered, which is once there is an object to ask about.
+
+    What a type can settle is the call, and there is one mistake here it is the only
+    thing that can catch. A factory written without `runner` drops the
+    `CommandRunner` the deployment wired, and nothing downstream can tell: the
+    backend that comes back is well-formed and passes every check, and merely runs
+    its commands somewhere the deployment did not choose.
+    """
+
+    def __call__(
+        self,
+        cfg: Config,
+        session_dir: Path,
+        # Positional-only, or this would be dictating parameter *names*: a protocol
+        # matches those, so without the slash a deployment whose factory reads
+        # `(config, where)` fails to satisfy it for no reason anybody could act on.
+        # Both are passed positionally, so nothing is given up.
+        /,
+        *,
+        catalogue: Definitions | None = None,
+        runner: CommandRunner | None = None,
+    ) -> Any: ...
+
+
 def default_backend(
     cfg: Config,
     session_dir: Path,
     *,
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
-) -> BackendProtocol:
-    """Kingfisher's own backend, rooted at one session."""
+) -> WorkspaceScopedBackend:
+    """Kingfisher's own backend, rooted at one session.
+
+    Typed to the class rather than to deepagents' protocol because a deployment
+    adjusting what this built reads `default` and `routes` off it, and the protocol
+    carries neither.
+    """
     skills = (catalogue or Definitions.from_config(cfg)).skills
     # A directory on this host stays a directory: cheaper than copying every
     # skill into a store, and the only shape whose skills can also be *run*,

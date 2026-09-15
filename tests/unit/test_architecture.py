@@ -1285,6 +1285,11 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # 1.2ms and two modules on top of `model_catalogue`, and pulls in no
     # provider SDK at all.
     "model_catalogue": frozenset({"models"}),
+    # The one-liner names the default in its own signature, which is the whole point
+    # of it being there: `Kingfisher` refuses to pick a filesystem, and `run` is what
+    # spares a caller from saying so. A caller can see the name and replace it, and
+    # neither is possible if the default hides in the body.
+    "run": frozenset({"backend"}),
     # The service is the harness's largest consumer, and was never in this table
     # because the rule only walked `infrastructure/`. Running a turn *is* driving
     # the harness: an agent to run, a checkpointer to resume it, a run log to
@@ -1299,6 +1304,13 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
         {
             "activation",
             "agent",
+            # `BackendFactory`, for the parameter a deployment now has to fill. The
+            # type belongs beside the default that satisfies it rather than beside
+            # the builder that consumes it, so naming the shape costs this edge --
+            # which is the honest price. Re-exporting it through `agent` to keep the
+            # list at five would be a second spelling of one name to make a table
+            # read smaller.
+            "backend",
             "checkpointing",
             "interpreter",
             "middleware",
@@ -1562,6 +1574,12 @@ WITNESSES: dict[str, str] = {
     "UnsafeReferenceError": "service",
     "UploadError": "service",
     "config_from_env": "service",
+    # The service names the filesystem its agents run on, because every deployment
+    # now has to: `Kingfisher` refuses to be built with neither a backend nor a
+    # pre-built graph. Witnessed by `service` rather than `document` even though
+    # `ports.md` writes it too -- this half is read off the service's own imports
+    # and cannot go stale.
+    "default_backend": "service",
     # Was `embedder` on this branch -- "raised by `config_from_env`, so a caller
     # that builds a `Config` must be able to catch it" -- and the service picked
     # it up before the branch landed. The rule read the service rather than the
@@ -2250,6 +2268,10 @@ HEAVY_EXPORTS = frozenset({
     # deployment satisfies without knowing deepagents exists, and this one checks
     # an object deepagents has to accept.
     "BACKEND_CONTRACT",
+    # It builds a `CompositeBackend` over a confined shell, so it is deepagents by
+    # definition. Every consumer that names it was already paying for `Kingfisher`
+    # on the same line, so nothing new arrives with it.
+    "default_backend",
 })
 
 PROVIDER_SDKS = ("deepagents", "langchain", "langchain_openai", "langchain_anthropic")
