@@ -70,8 +70,10 @@ def sql_query(statement: str) -> str:
             headers = [column[0] for column in cursor.description or ()]
             rows = cursor.fetchmany(MAX_ROWS)
     except sqlite3.Error as exc:
-        # A bad query is something the model can fix on the next step; a
-        # traceback is something that ends the turn.
+        # A bad query is something the model can fix on the next step, and it
+        # reads this the same whether returned or raised: the failure guard turns
+        # a workspace tool's exception into a failed result. Returning costs the
+        # status, which reports the call as a success.
         return f"sql error: {exc}"
 
     lines = [",".join(headers)]

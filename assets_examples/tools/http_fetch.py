@@ -39,9 +39,11 @@ def http_fetch(url: str) -> str:
         with urllib.request.urlopen(url, timeout=TIMEOUT_S) as response:  # noqa: S310
             body = response.read(MAX_CHARS * 4).decode("utf-8", errors="replace")
     except (urllib.error.URLError, TimeoutError, ValueError) as exc:
-        # Returned, not raised: a failed fetch is a result the model can react
-        # to -- by trying another URL, or by saying it could not reach one --
-        # whereas an exception ends the turn.
+        # Returned rather than raised, so the message names the URL -- a
+        # `URLError` alone does not say which fetch failed. Raising would not
+        # have ended the turn: the failure guard turns a workspace tool's
+        # exception into a failed result. What returning costs is that status,
+        # so a record such as `show-your-work`'s counts this call as succeeded.
         return f"could not fetch {url}: {type(exc).__name__}: {exc}"
 
     return body[:MAX_CHARS]
