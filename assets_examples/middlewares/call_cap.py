@@ -197,9 +197,8 @@ class CallCap(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        # Both paths, because neither delegates to the other here. `stream` and
-        # `astream` are two loops over one turn and a cap that held on only one
-        # of them would depend on which the caller reached for.
+        # Kept although kingfisher runs only the sync half: a graph run on an
+        # event loop calls this instead, and raises without it.
         refusal = self._refuse(request)
         return refusal if refusal is not None else await handler(request)
 

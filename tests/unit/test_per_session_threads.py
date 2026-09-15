@@ -10,7 +10,6 @@ threads behind, and a directory deleted any other way orphaned its thread foreve
 
 from __future__ import annotations
 
-import asyncio
 from typing import Any
 
 from kingfisher import Kingfisher
@@ -19,7 +18,6 @@ from kingfisher.domain.request import Request
 from kingfisher.infrastructure.session_store import TRANSCRIPT
 from kingfisher.infrastructure.workspace.sessions import session_bytes
 from tests.conftest import StubCheckpointer
-from tests.unit.test_async import AsyncStubAgent
 from tests.unit.test_run import StubAgent
 
 
@@ -114,47 +112,6 @@ def test_deleting_a_session_takes_its_conversation_with_it(cfg):
     assert kf.delete_session(result.session_id) is None
 
     assert not directory.exists()
-
-
-# -- the async path, which is the reason this reaches an API --------------
-
-
-def test_astream_works_with_nothing_injected(cfg):
-    """It did not before."""
-    kf = Kingfisher(cfg, graph=AsyncStubAgent("ok"))
-
-    async def go() -> str | None:
-        session_id = None
-        async for event in kf.astream(Request("go")):
-            if event.kind == "finished":
-                session_id = event.result.session_id
-        return session_id
-
-    session_id = asyncio.run(go())
-
-    assert session_id is not None
-    assert (_session_dir(cfg, session_id) / TRANSCRIPT).is_file()
-
-
-def test_the_async_saver_actually_supports_async(cfg, session_dir):
-    """The test above drives `AsyncStubAgent`, which replaces the graph -- so it never
-    touches the saver, and it passed even with the async resolver swapped for the
-    sync one.
-    """
-    from contextlib import AsyncExitStack
-
-    service = Kingfisher(cfg, graph=StubAgent("ok"))
-
-    async def resolve_and_use() -> object:
-        async with AsyncExitStack() as stack:
-            saver = await service._async_checkpointer_for(stack, session_dir)
-            return await saver.aget_tuple(
-                {"configurable": {"thread_id": session_dir.name, "checkpoint_ns": ""}}
-            )
-        return None
-
-    # No exception is the assertion: a sync saver refuses this outright.
-    assert asyncio.run(resolve_and_use()) is None
 
 
 # -- who owns the connection ---------------------------------------------
@@ -282,22 +239,6 @@ def test_the_flag_wins_over_an_injected_store(cfg):
 
     assert saver is None
     assert release is None
-
-
-def test_the_async_path_honours_it_too(cfg, session_dir):
-    """Otherwise a deployment would be stateless on one entry point and not the other,
-    which is the kind of gap that only shows up in the path nobody tested.
-    """
-    from contextlib import AsyncExitStack
-    from dataclasses import replace as replace_cfg
-
-    service = Kingfisher(replace_cfg(cfg, conversation_enabled=False), graph=StubAgent("ok"))
-
-    async def resolve() -> object:
-        async with AsyncExitStack() as stack:
-            return await service._async_checkpointer_for(stack, session_dir)
-
-    assert asyncio.run(resolve()) is None
 
 
 def test_conversation_is_on_unless_a_deployment_says_otherwise(cfg):

@@ -156,7 +156,7 @@ def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
     """`before_agent` and `abefore_agent` each build their own dictionary -- neither
     calls the other -- so overriding one leaves the other collapsing.
 
-    It fails *open* -- a synchronous run offers both skills and an `astream` run
+    It fails *open* -- a synchronous run offers both skills and a run on an event loop
     silently offers one -- and "it delegates" is the assumption that let the shell
     sandbox nest itself twice while thirteen tests passed.
     """

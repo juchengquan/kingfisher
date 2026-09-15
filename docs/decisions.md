@@ -1765,6 +1765,15 @@ be taken one at a time after counting what still uses it. `file_store_named`
 could not wait: it turned the service's own setting into a store, and with the
 setting gone it had no caller and no honest witness. *(2026-09-15.)*
 
+**Taken: the async turn path goes.** `astream` and `arun` existed so turns could
+overlap on one event loop, which a server needs and nothing left here is; with the
+service gone their only callers were their own tests and one spike. They were also
+the second copy of the turn -- `_astream_turn` repeated `_stream_turn` down to its
+cleanup, and mutation testing had already found a flag the copy set by hand. A
+caller wanting turns to overlap runs `run` on threads, which should overlap as
+well since a turn is almost all waiting on the model -- reasoned, not measured.
+*(2026-09-15.)*
+
 **Transport only -- the server never interprets identity**, and lives in its own
 wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
 web service on disk. One request per turn, streamed, with no result persistence;

@@ -96,7 +96,7 @@ class NarrowedSkills(SkillsMiddleware):
         return found
 
     async def _aqualified(self) -> list[Any]:
-        """The same, on the path `astream` takes. See the class docstring."""
+        """The same, for a graph run on an event loop."""
         found = []
         for label, path in zip(self.source_labels, self.sources, strict=True):
             skills, _error = await _alist_skills_with_errors(self._backend, path)

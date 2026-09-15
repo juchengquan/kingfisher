@@ -213,11 +213,11 @@ class Compact(SummarizationMiddleware):
         return summarised
 
     async def abefore_model(self, state: Any, runtime: Any) -> dict[str, Any] | None:
-        # Both paths, because neither delegates to the other. `stream` and
-        # `astream` are two loops over one turn, and a record written on only one
-        # of them is absent for every caller who reached for the other -- the
-        # failure `guides/middleware.md` says to guard hardest against, on the
-        # one hook whose whole purpose is leaving evidence behind.
+        # Both halves, because the parent implements both and neither delegates
+        # to the other: drop either override and that half still summarises,
+        # without the note and without an error -- the failure
+        # `guides/middleware.md` says to guard hardest against, on the one hook
+        # whose whole purpose is leaving evidence behind.
         before = list(state["messages"])
         summarised = await super().abefore_model(state, runtime)
         if summarised is None:

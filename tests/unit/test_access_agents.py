@@ -170,24 +170,6 @@ def test_a_later_turn_in_a_session_in_reach_goes_ahead(two_agents):
     assert _first_event(kf, Request(task="again", session_id=session_id), ("A",))
 
 
-def test_the_async_turn_is_refused_the_same_way(two_agents):
-    """`astream` sets its turn up through the same admission, on a worker thread."""
-    import asyncio
-
-    kf = Kingfisher(two_agents, backend=default_backend)
-    session_id = _pinned_by_a(kf)
-
-    async def first():
-        events = kf.astream(Request(task="again", session_id=session_id), source_ids=("B",))
-        try:
-            return await anext(events)
-        finally:
-            await events.aclose()
-
-    with pytest.raises(UnknownSessionError):
-        asyncio.run(first())
-
-
 def test_a_refused_turn_leaves_nothing_in_the_session(two_agents, tmp_path):
     """Refused at the agent, which is the obvious place, the caller's file was already in
     the session's `/data` and the session marked as used -- measured, before the check

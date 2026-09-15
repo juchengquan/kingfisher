@@ -1325,11 +1325,9 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # so the edge this note once recorded closing is back. Nothing about the coupling
     # changed either time -- only whether this table could see it.
     "reporting": frozenset({"activation", "tools"}),
-    # One stream chunk, read the same way by the sync and async loops. The
-    # reading is deepagents' shape rather than ours -- which namespace a chunk
-    # came from, which mode carries the answer -- so it is an edge wherever it
-    # is written, and writing it once is the whole reason the two loops cannot
-    # drift about what a chunk means.
+    # One stream chunk, read. The reading is deepagents' shape rather than ours
+    # -- which namespace a chunk came from, which mode carries the answer -- so
+    # it is an edge wherever it is written.
     "turn": frozenset({"runtime"}),
 }
 
@@ -1628,8 +1626,7 @@ WITNESSES: dict[str, str] = {
     # recent and deliberate enough to leave alone.
     "Origins": "embedder",
     "Origin": "embedder",
-    # The async half of `run`, which is documented. A server-shaped caller
-    # streams, and the two are one decision.
+    # The streaming half of `run`, which is documented; the two are one decision.
     "stream": "embedder",
     # A directory of sessions, and the port it satisfies. The subject of a
     # standing proposal about deployments naming their own store, which is a
