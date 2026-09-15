@@ -413,3 +413,26 @@ def test_completed_is_true_for_the_one_reason_that_means_the_agent_finished(reas
 def test_a_result_that_says_nothing_about_stopping_has_finished():
     """The default, which every caller building a result by hand relies on."""
     assert RunResult(session_id="s", turn_id="t001", answer="").completed
+
+
+class RecordingAgent(StubAgent):
+    """Keeps what the loop asked the graph for."""
+
+    def __init__(self, answer: str) -> None:
+        super().__init__(answer)
+        self.asked: list[bool] = []
+
+    def stream(self, state, config, stream_mode=None, subgraphs=False):
+        self.asked.append(subgraphs)
+        yield from super().stream(state, config, stream_mode)
+
+
+def test_the_loop_asks_for_what_a_delegate_does(cfg):
+    """A delegate runs in a subgraph, and a stream that does not ask for subgraph
+    events never sees one. The symptom is not an error: the turn answers, and
+    everything the delegate did is missing from the run.
+    """
+    agent = RecordingAgent("ok")
+    list(Kingfisher(cfg, graph=agent, threads=StubCheckpointer()).stream(Request("go")))
+
+    assert agent.asked == [True]

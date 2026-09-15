@@ -302,12 +302,14 @@ error-on-warning = true
 
 # `spikes/` are throwaway probes kept as a record of what was verified against
 # the live gateway. They are not maintained, and holding them to the same bar
-# as shipped code would mean editing history to satisfy a checker.
+# as shipped code would mean editing history to satisfy a checker -- which
+# includes calling methods that have since gone, as a record of what ran then.
 [[tool.ty.overrides]]
 include = ["spikes/**"]
 
 [tool.ty.overrides.rules]
 invalid-argument-type = "ignore"
+unresolved-attribute = "ignore"
 
 # `sandlock` is the Linux shell fence, installed by the `fence` extra under a
 # `sys_platform == 'linux'` marker -- so whether this import resolves depends on

@@ -2,15 +2,13 @@
 
 from __future__ import annotations
 
-from contextlib import asynccontextmanager, suppress
+from contextlib import suppress
 from pathlib import Path
 from typing import TYPE_CHECKING, Any
 
 from langgraph.checkpoint.memory import InMemorySaver
 
 if TYPE_CHECKING:
-    from collections.abc import AsyncIterator
-
     from langgraph.checkpoint.base import BaseCheckpointSaver
 
 
@@ -35,13 +33,6 @@ def thread_ids(store: Any) -> tuple[str, ...] | None:
     if lister is None:
         return None
     return tuple({item.config["configurable"]["thread_id"] for item in lister(None)})
-
-
-@asynccontextmanager
-async def async_session_checkpointer(session_dir: Path) -> AsyncIterator[BaseCheckpointSaver]:
-    """The async twin, and there is now nothing asynchronous about it."""
-    del session_dir
-    yield InMemorySaver()
 
 
 def release_checkpointer(saver: Any) -> None:

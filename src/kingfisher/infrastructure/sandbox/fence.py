@@ -142,7 +142,7 @@ class LandlockRunner:
     another tenant's `Permission denied`.
 
     **`preexec_fn` is documented as unsafe in a threaded program**, and this one is
-    threaded: `astream` runs turns on worker threads. The hazard is a child that
+    threaded wherever a deployment runs turns on threads. The hazard is a child that
     deadlocks because another thread held an allocator lock at `fork`. It is accepted
     here rather than hidden, because the alternative -- a launcher process that
     confines itself and then `exec`s -- costs an interpreter start per command and a

@@ -235,17 +235,20 @@ them, which is why no shipped definition writes one. A star also resolves quietl
 smaller when a request narrows the axis, where a *named* entry refuses — so a
 definition that must have its audit hook should name it.
 
-## Write both paths
+## Write the sync hook
 
-A hook implemented on one path only applies on one path only. `stream` and
-`astream` are two loops over one turn, so a cap or a note or an audit record
-written as `wrap_tool_call` and not `awrap_tool_call` is silently absent for
-every caller who reached for the other entry point. Both examples implement both
-and say so at the second one.
+kingfisher runs a turn with `graph.stream`, so the hook that runs is the sync one
+— `wrap_tool_call`, `wrap_model_call`, `before_model` — and never its `a`-prefixed
+twin. A middleware written only as `awrap_tool_call` fails loudly: the turn raises
+the first time it reaches that hook, rather than skipping it.
 
-This is kingfisher's requirement rather than LangChain's, and it is the failure
-worth guarding hardest against here, because what it produces is not an error —
-it is a hook that appears to be installed and is not running.
+A subclass fails quietly. A LangChain middleware that implements both halves —
+`SummarizationMiddleware` is one — keeps its own sync hook when a subclass
+overrides only `abefore_model`: the subclass is installed, the turn runs, and none
+of the subclass's code does. That is the failure worth guarding hardest against
+here, because what it produces is not an error. Override the sync hook whatever
+else you override. The examples override both halves, which also keeps them right
+in a graph somebody runs on an event loop.
 
 ## Names deepagents already uses
 

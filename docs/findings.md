@@ -57,6 +57,13 @@ wrong.*
 - **A subagent inherits none of its parent's middleware.** Each definition's is
   built separately, so a cap on an agent bounds nothing its delegate does.
   `delegation.py` says this in four places. *(2026-08-30.)*
+- **A sync run does not skip an async-only hook; it raises.** Under `stream`, a
+  middleware implementing only `awrap_tool_call` or `awrap_model_call` raises the
+  base class's `NotImplementedError` the first time the hook is reached, and one
+  implementing only `abefore_model` raises langgraph's `No synchronous function
+  provided`. The quiet case is a subclass: override only `abefore_model` of a
+  parent implementing both, and the parent's `before_model` runs with no error.
+  `guides/middleware.md` draws the consequence. *(2026-09-15.)*
 
 ## Skills and subagents
 

@@ -24,12 +24,9 @@ uploads change what a session offers between turns.
 
 from __future__ import annotations
 
-import asyncio
 import logging
-from collections.abc import AsyncIterator, Iterator
-from contextlib import AsyncExitStack
+from collections.abc import Iterator
 from dataclasses import replace
-from functools import partial
 from pathlib import Path
 from time import monotonic, time
 from typing import TYPE_CHECKING, Any
@@ -83,7 +80,6 @@ from kingfisher.infrastructure.harness.agent import (
 )
 from kingfisher.infrastructure.harness.backend import BackendFactory
 from kingfisher.infrastructure.harness.checkpointing import (
-    async_session_checkpointer,
     build_session_checkpointer,
     release_checkpointer,
 )
@@ -574,17 +570,15 @@ class Kingfisher(Sessions, Disposal):
         self,
         request: str | Request,
         session: Session | None = None,
-        checkpointer: Any = _UNSET,
         *,
         source_ids: Held | None = None,
     ) -> Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
-        Blocking, and deliberately so: filesystem work plus building the agent,
-        measured at 15-46ms end to end -- of which 9.2ms is the agent. `astream` runs
-        it on a worker thread rather than pretending otherwise.
+        Filesystem work plus building the agent, measured at 15-46ms end to end --
+        of which 9.2ms is the agent.
         """
-        return self._open_turn(self._admit(request, session, checkpointer, source_ids=source_ids))
+        return self._open_turn(self._admit(request, session, source_ids=source_ids))
 
     def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
         """The saver this turn runs on, and how to release it when the turn ends."""
@@ -598,24 +592,10 @@ class Kingfisher(Sessions, Disposal):
             return saver, saver
         return self.threads, None
 
-    async def _async_checkpointer_for(self, stack: AsyncExitStack, session_dir: Path) -> Any:
-        """The saver an async turn runs on, entered into the turn's exit stack."""
-        if not self.cfg.conversation_enabled:
-            return None
-        if self.threads is None:
-            return await stack.enter_async_context(async_session_checkpointer(session_dir))
-        if callable(self.threads):
-            made = self.threads(session_dir)
-            if hasattr(made, "__aenter__"):
-                return await stack.enter_async_context(made)
-            return made
-        return self.threads
-
     def _admit(
         self,
         request: str | Request,
         session: Session | None = None,
-        checkpointer: Any = _UNSET,
         *,
         source_ids: Held | None = None,
     ) -> Admitted:
@@ -642,7 +622,7 @@ class Kingfisher(Sessions, Disposal):
             dirs, claim_path(session.directory), stale_after=cfg.claim_stale_after, now=time()
         )
         try:
-            return self._admitted(request, session, cfg, checkpointer, source_ids=source_ids)
+            return self._admitted(request, session, cfg, source_ids=source_ids)
         except BaseException:
             session.release(dirs, claim_path(session.directory))
             raise
@@ -652,7 +632,6 @@ class Kingfisher(Sessions, Disposal):
         request: Request,
         session: Session,
         cfg: Config,
-        checkpointer: Any = _UNSET,
         *,
         source_ids: Held | None = None,
     ) -> Admitted:
@@ -696,13 +675,9 @@ class Kingfisher(Sessions, Disposal):
         # `UNSCOPED` one: both see the whole workspace, so there is nothing to
         # filter the report against.
         held = self.held_for(source_ids)
-        # Resolved here rather than in `__init__`, because the default is a
-        # database inside this session and there is no session until now. The
-        # async path opens its own on the event loop and hands it down, which is
-        # what `checkpointer` carries.
-        release: Any = None
-        if checkpointer is _UNSET:
-            checkpointer, release = self._checkpointer_for(session.directory)
+        # Resolved here rather than in `__init__`, because a saver is built per
+        # session and there is no session until now.
+        checkpointer, release = self._checkpointer_for(session.directory)
         graph = self._graph_for(
             request,
             session.directory,
@@ -970,117 +945,6 @@ class Kingfisher(Sessions, Disposal):
             release_interpreter(self.cfg, prepared.graph)
 
         yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
-
-    async def astream(
-        self, request: str | Request, *, source_ids: Held | None = None
-    ) -> AsyncIterator[RunEvent]:
-        """`stream`, on an event loop.
-
-        The same turn and the same ordering -- `_prepare` is shared, so there is one
-        copy of the sequence that matters. What this buys is not a faster turn: a
-        turn is the model's time, and measurement puts our own code at 15-46ms of
-        1.5-1.9s. It is concurrency. Four turns measured against the live gateway
-        cost 0.4-1.2 turns of wall clock instead of four.
-        """
-        request = Request.coerce(request)
-        async with AsyncExitStack() as stack:
-            # On the worker thread and into the stack that already wraps this
-            # turn, so the root is released the same way the saver is -- and so
-            # that holding it, which for a mount is real work, does not block
-            # every other turn sharing this loop.
-            holding = self._held_session(Request.coerce(request))
-            session = await asyncio.to_thread(holding.__enter__)
-            # Pushed rather than entered through the stack, for two reasons.
-            # `enter_context` loses the session's type through `to_thread`, and
-            # `push` leaves the turn's exception reaching a provider's
-            # `__exit__` -- a callback would swallow which way the turn ended.
-            # After entering, so a hold that failed is not then released.
-            stack.push(holding)
-            saver = await self._async_checkpointer_for(stack, session.directory)
-            async for event in self._astream_turn(request, session, saver, source_ids=source_ids):
-                yield event
-
-    async def _astream_turn(
-        self, request: Request, session: Session, saver: Any, *, source_ids: Held | None = None
-    ) -> AsyncIterator[RunEvent]:
-        """One async turn, with its session and saver already resolved."""
-        prepared = await asyncio.to_thread(
-            partial(self._prepare, request, session, saver, source_ids=source_ids)
-        )
-        answer = ""
-        ok = False
-        stop_reason = "end_turn"
-        kept: tuple[str, ...] = ()
-        delegates = runtime.Delegates()
-        try:
-            # Inside the `try`, not before it. A caller that stops reading
-            # during these -- `run_start` is the first -- used to leave the turn
-            # with no end at all: the claim stayed taken, the checkpointer
-            # stayed open, and nothing was persisted.
-            for event in prepared.events:
-                yield event
-            async for namespace, mode, chunk in prepared.graph.astream(
-                runtime.user_payload(prepared.message, prepared.history),
-                config=prepared.config,
-                stream_mode=runtime.STREAM_MODES,
-                subgraphs=True,
-            ):
-                answer, events = consume(namespace, mode, chunk, answer, delegates)
-                for event in events:
-                    yield event
-                if (stop := overrun(prepared)) is not None:
-                    stop_reason = "max_duration"
-                    yield stop
-                    break
-            answer = normalize_answer(answer)
-            ok = True
-        except runtime.OutOfSteps:
-            # See the same branch in `stream`. Written twice rather than shared,
-            # like the loop above it: the two differ only in `async for`, and
-            # factoring three lines out of a generator costs more than it saves.
-            answer = normalize_answer(answer)
-            stop_reason = "max_steps"
-            ok = True
-            yield out_of_steps(self.cfg)
-        except Exception as exc:
-            # See the same branch in `_stream_turn`.
-            if (refused := refused_credentials(exc, self.cfg)) is None:
-                raise
-            raise refused from exc
-        finally:
-            prepared.logger.run_end(ok=ok, answer_chars=len(answer))
-            # As in `stream`, and on a worker thread for the same reason
-            # `_prepare` is: a directory walk and a store write would otherwise
-            # block every other turn sharing this loop.
-            try:
-                kept = await asyncio.to_thread(self._keep, prepared)
-            finally:
-                # The slot goes back however the turn ended -- answered, refused
-                # mid-stream, or cut short by its deadline.
-                prepared.session.release(self.dirs, claim_path(prepared.session.directory))
-            # And so does the connection, when this service opened one. A
-            # per-session database is a file descriptor per session, so a
-            # process serving many would otherwise hold every one it touched.
-            release_checkpointer(prepared.release)
-            # And the QuickJS runtime, which is the one of the three that hangs
-            # the process rather than leaking a handle. See `release_interpreter`.
-            release_interpreter(self.cfg, prepared.graph)
-
-        yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
-
-    async def arun(
-        self, request: str | Request, *, source_ids: Held | None = None
-    ) -> RunResult:
-        """Run one task to completion on an event loop. A drain of `astream`."""
-        result: RunResult | None = None
-        async for event in self.astream(request, source_ids=source_ids):
-            if event.kind == "finished":
-                result = event.result
-
-        if result is None:  # pragma: no cover -- astream always ends with `finished`
-            msg = "astream() ended without a finished event"
-            raise RuntimeError(msg)
-        return result
 
     def run(
         self,

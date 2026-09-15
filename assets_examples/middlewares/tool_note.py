@@ -160,9 +160,8 @@ class ToolNote(AgentMiddleware):
     async def awrap_tool_call(
         self, request: Any, handler: Callable[[Any], Awaitable[Any]]
     ) -> Any:
-        # Both paths, for the reason `CallCap` gives: `stream` and `astream`
-        # are two loops over one turn, and a note that appeared on only one of
-        # them would depend on which the caller reached for.
+        # Kept although kingfisher runs only the sync half: a graph run on an
+        # event loop calls this instead, and raises without it.
         return self._annotate(await handler(request))
 
 

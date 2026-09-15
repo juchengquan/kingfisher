@@ -1500,9 +1500,9 @@ def test_the_compaction_example_keeps_what_it_threw_away(shipped, cfg, session_d
     It is the only shipped middleware that needs an object rather than a scalar, so
     it is the only one whose `wants` can be wrong in a way no import catches: built
     with the model and the backend this build holds, it has to summarise *and* leave
-    the discarded messages somewhere readable. `stream` and `astream` are two loops
-    over one turn, and a note written on only one of them is absent for whoever
-    reached for the other.
+    the discarded messages somewhere readable. It overrides both halves of a parent
+    that implements both, so a half it missed would still summarise, without the
+    note and without an error.
     """
     import asyncio
 
