@@ -280,6 +280,8 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
         )
         raise AccessError(msg)
 
+    _refuse_retired_spelling(raw, source)
+
     declared: dict[str, tuple[str, ...]] = {}
     compounds: dict[str, tuple[str, ...]] = {}
     for name, body in raw.items():
@@ -329,21 +331,6 @@ def _covers(body: Sequence[object], *, name: str, source: str) -> tuple[str, ...
 
 def _requires(body: Mapping[object, object], *, name: str, source: str) -> tuple[str, ...]:
     """The source ids a caller must hold together, from the set form."""
-    if moved := tuple(key for key in ("contains", "all_of") if body.get(key) is not None):
-        said = "[a, b]" if moved[0] == "contains" else "{a, b}"
-        msg = (
-            f"{source}: source id {name!r} writes {moved[0]!r}, which the format no "
-            f"longer takes -- write {said} as the body itself. A list is what this "
-            f"name covers and a set is what it requires, so the shape says which "
-            f"and there is no word to get wrong"
-        )
-        raise AccessError(msg)
-    if not body:
-        msg = (
-            f"{source}: source id {name!r} requires nothing, which is reached by "
-            f"everyone -- leave the body out to declare a plain source id"
-        )
-        raise AccessError(msg)
     # The shape that was silently wrong before it was refused: `{finance: senior}`
     # is a mapping with a value, not a set of two names, and reading it as a set
     # would take `finance` and throw away what was written beside it.
@@ -355,6 +342,55 @@ def _requires(body: Mapping[object, object], *, name: str, source: str) -> tuple
         )
         raise AccessError(msg)
     return tuple(str(key) for key in body)
+
+
+#: The bodies the vocabulary took before shapes replaced keywords, and what each is
+#: written as now. `A: {}` is here because it was the short form for a plain name;
+#: read as a set it requires nothing, which is everyone.
+_RETIRED: Final[tuple[str, ...]] = ("contains", "all_of")
+
+
+def _refuse_retired_spelling(raw: Mapping[object, object], source: str) -> None:
+    """Refuse a whole vocabulary written the old way, naming every line to change.
+
+    One refusal for the file rather than one per name. A deployment upgrading has a
+    file full of policy and fixes it once: a message per source id makes them restart
+    for the next one, and the first refusal a realistic old file earns is a `{}` line
+    that says nothing about the `contains` further down.
+    """
+    changes: list[tuple[str, str]] = []
+    for name, body in raw.items():
+        if not isinstance(body, Mapping):
+            continue
+        # `{contains, all_of}` is two names in a set, not a keyword with a value,
+        # so the value is what separates a retired spelling from a legal one.
+        written = tuple(key for key in _RETIRED if body.get(key) is not None)
+        if not (written or body == {}):
+            continue
+        if not written:
+            changes.append((f"{name}: {{}}", f"{name}:"))
+            continue
+        listed = body[written[0]]
+        parts = (
+            ", ".join(str(one) for one in listed)
+            if isinstance(listed, (list, tuple))
+            else "..."
+        )
+        was = f"{name}: {{{written[0]}: [{parts}]}}"
+        now = f"{name}: [{parts}]" if written[0] == "contains" else f"{name}: {{{parts}}}"
+        changes.append((was, now))
+    if not changes:
+        return
+
+    width = max(len(was) for was, _ in changes)
+    lines = "\n".join(f"  {was.ljust(width)}  ->  {now}" for was, now in changes)
+    msg = (
+        f"{source}: this vocabulary is written in the retired spelling. A list is "
+        f"what a name covers and a set is what it requires, so the shape says which "
+        f"and there is no word to get wrong. {len(changes)} source id(s) to "
+        f"change:\n\n{lines}"
+    )
+    raise AccessError(msg)
 
 
 def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, tuple[str, ...]]:
