@@ -245,17 +245,17 @@ class Reader:
         return self.audience_list(value, where=f"{self.source}: {key}", lone_name=True)
 
     def audience_list(self, listed: object, *, where: str, lone_name: bool) -> Audience:
-        """A list of source ids, any entry of which may be `{all_of: [...]}`."""
+        """A list of source ids, any entry of which may be a set `{a, b}`."""
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
             return (listed.strip(),)
         if isinstance(listed, Mapping):
             inner = listed.get("all_of")
-            parts = ", ".join(str(one) for one in inner) if isinstance(inner, list) else "..."
-            said = f"[{{all_of: [{parts}]}}]"
+            named = inner if isinstance(inner, list) else tuple(listed)
+            parts = ", ".join(str(one) for one in named) or "..."
             msg = (
-                f"{where}: an audience is a list, so a conjunction is one entry "
-                f"of it -- write {said}. On its own it reads as the whole "
-                f"audience being a mapping, which has no `or` to put it in"
+                f"{where}: an audience is a list, so a requirement is one entry "
+                f"of it -- write [{{{parts}}}]. On its own it reads as the whole "
+                f"audience being a set, which has no `or` to put it in"
             )
             raise self.error(msg)
         if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
@@ -282,18 +282,29 @@ class Reader:
 
     def _conjunction(self, raw: Mapping[str, object], *, where: str) -> frozenset[str]:
         """One audience entry that is satisfied only by holding every name in it."""
-        if complaint := unrecognised(raw, known={"all_of"}, noun="key"):
-            msg = f"{where}: {complaint}"
+        if raw.get("all_of") is not None:
+            inner = raw["all_of"]
+            listed = inner if isinstance(inner, (list, tuple)) else ()
+            parts = ", ".join(str(one) for one in listed) or "..."
+            msg = (
+                f"{where}: 'all_of' is not a key the format takes -- write the "
+                f"requirement as the set it is, {{{parts}}}"
+            )
             raise self.error(msg)
-        parts = raw.get("all_of")
-        if isinstance(parts, str) or not isinstance(parts, (list, tuple)):
-            msg = f"{where}: 'all_of' is a list of source ids -- got {parts!r}"
+        # `{finance: senior}` is a mapping with a value rather than a set of two
+        # names, and reading it as one would take `finance` and throw away what
+        # was written beside it. That is how it behaved before it was refused.
+        if valued := sorted(str(key) for key, value in raw.items() if value is not None):
+            msg = (
+                f"{where}: {{{', '.join(valued)}}} has something written after it. "
+                f"A requirement is a set of names -- write {{a, b}}, not {{a: b}}"
+            )
             raise self.error(msg)
-        named = frozenset(name for one in parts if (name := text(one)))
+        named = frozenset(name for one in raw if (name := text(one)))
         if not named:
             msg = (
-                f"{where}: 'all_of' is empty, which would require nothing and so "
-                f"admit everyone. Name the source ids a caller must hold together"
+                f"{where}: {{}} requires nothing and so admits everyone. Name the "
+                f"source ids a caller must hold together"
             )
             raise self.error(msg)
         if ALL in named:

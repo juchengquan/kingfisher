@@ -141,65 +141,77 @@ def test_the_source_is_named_in_every_refusal():
 # -- requiring several source ids at once ---------------------------------------
 
 
-def test_a_conjunction_is_one_entry_of_an_entry_audience():
+def test_a_requirement_is_one_entry_of_an_entry_audience():
     assert read.audienced(
-        [{"name": "sql_query", "source_ids": ["admin", {"all_of": ["finance", "senior"]}]}],
+        [{"name": "sql_query", "source_ids": ["admin", {"finance": None, "senior": None}]}],
         absent=ALL,
         key="tools",
     ) == (("sql_query",), {"sql_query": ("admin", frozenset({"finance", "senior"}))})
 
 
-def test_a_requirement_that_is_not_a_list_is_refused():
-    """`{all_of: {finance: ...}}` fell through the guard and was iterated for its
-    keys, which reads as a requirement the author never wrote.
-
-    The string form has a refusal of its own because it looks like a list of
-    letters; everything else shares this one, and nothing named it.
+def test_a_requirement_with_a_value_after_a_name_is_refused():
+    """`{finance: senior}` is a mapping with a value, not a set of two names, and
+    iterating it for its keys reads as a requirement the author never wrote -- it takes
+    `finance` and throws away what was written beside it. That is how the old
+    `all_of: {finance: senior}` behaved before it was refused.
     """
-    for written in [{"finance": True}, 3, True]:
-        with pytest.raises(AgentError, match="list of source ids"):
-            read.audienced(
-                [{"name": "sql_query", "source_ids": [{"all_of": written}]}],
-                absent=ALL,
-                key="tools",
-            )
-
-
-def test_a_conjunction_of_one_is_that_one_name():
-    """Not special-cased: a set of one is satisfied by holding one, which is what the
-    bare name means.
-    """
-    _, audiences = read.audienced(
-        [{"name": "sql_query", "source_ids": [{"all_of": ["finance"]}]}], absent=ALL, key="tools"
-    )
-
-    assert audiences["sql_query"] == (frozenset({"finance"}),)
-
-
-def test_an_empty_conjunction_is_refused():
-    """It would require nothing and so admit everyone, which is not what somebody
-    writing `all_of` was reaching for.
-    """
-    with pytest.raises(AgentError, match="empty"):
+    with pytest.raises(AgentError, match=r"\{a, b\}, not \{a: b\}"):
         read.audienced(
-            [{"name": "sql_query", "source_ids": [{"all_of": []}]}], absent=ALL, key="tools"
-        )
-
-
-def test_a_mistyped_key_inside_a_conjunction_is_refused_with_a_suggestion():
-    with pytest.raises(AgentError, match="did you mean 'all_of'"):
-        read.audienced(
-            [{"name": "sql_query", "source_ids": [{"all_off": ["A", "B"]}]}],
+            [{"name": "sql_query", "source_ids": [{"finance": True}]}],
             absent=ALL,
             key="tools",
         )
 
 
-def test_a_conjunction_written_as_the_whole_audience_is_refused():
-    """`source_ids: {all_of: [...]}` has no list to be one entry of, so it reads as the
-    whole audience being a mapping -- and the refusal shows the brackets.
+def test_a_requirement_of_one_is_that_one_name():
+    """Not special-cased: a set of one is satisfied by holding one, which is what the
+    bare name means.
     """
-    with pytest.raises(AgentError, match=r"\[\{all_of: \[A, B\]\}\]"):
+    _, audiences = read.audienced(
+        [{"name": "sql_query", "source_ids": [{"finance": None}]}], absent=ALL, key="tools"
+    )
+
+    assert audiences["sql_query"] == (frozenset({"finance"}),)
+
+
+def test_an_empty_requirement_is_refused():
+    """It would require nothing and so admit everyone, which is not what somebody
+    writing a set of names was reaching for.
+    """
+    with pytest.raises(AgentError, match="requires nothing"):
+        read.audienced(
+            [{"name": "sql_query", "source_ids": [{}]}], absent=ALL, key="tools"
+        )
+
+
+def test_the_retired_keyword_is_refused_by_name():
+    """A definition written before the set spelling names `all_of` and means it. Read as
+    a set it would require the single name `all_of`, which nobody holds -- an audience
+    quietly narrowed to nobody, so it is refused pointing at the shape that replaced it.
+    """
+    with pytest.raises(AgentError, match=r"write the requirement as the set it is"):
+        read.audienced(
+            [{"name": "sql_query", "source_ids": [{"all_of": ["A", "B"]}]}],
+            absent=ALL,
+            key="tools",
+        )
+
+
+def test_a_requirement_written_as_the_whole_audience_is_refused():
+    """`source_ids: {A, B}` has no list to be one entry of, so it reads as the whole
+    audience being a set -- and the refusal shows the brackets.
+    """
+    with pytest.raises(AgentError, match=r"\[\{A, B\}\]"):
+        read.audienced(
+            [{"name": "sql_query", "source_ids": {"A": None, "B": None}}], absent=ALL, key="tools"
+        )
+
+
+def test_the_retired_keyword_is_named_when_it_is_the_whole_audience_too():
+    """The two refusals sit on either side of one guard, and the old spelling reaches
+    both -- `source_ids: {all_of: [A, B]}` is a mapping before it is anything else.
+    """
+    with pytest.raises(AgentError, match=r"\[\{A, B\}\]"):
         read.audienced(
             [{"name": "sql_query", "source_ids": {"all_of": ["A", "B"]}}], absent=ALL, key="tools"
         )
@@ -211,15 +223,17 @@ def test_everyone_cannot_be_part_of_a_requirement():
     """
     with pytest.raises(AgentError, match="everyone"):
         read.audienced(
-            [{"name": "sql_query", "source_ids": [{"all_of": ["*", "A"]}]}], absent=ALL, key="tools"
+            [{"name": "sql_query", "source_ids": [{"*": None, "A": None}]}],
+            absent=ALL,
+            key="tools",
         )
 
 
-def test_a_definitions_own_line_reads_a_conjunction_the_same_way():
+def test_a_definitions_own_line_reads_a_requirement_the_same_way():
     """One reader for both sites, so the two cannot drift about what the same list
     means.
     """
-    assert read.source_ids(["admin", {"all_of": ["finance", "senior"]}]) == (
+    assert read.source_ids(["admin", {"finance": None, "senior": None}]) == (
         "admin",
         frozenset({"finance", "senior"}),
     )

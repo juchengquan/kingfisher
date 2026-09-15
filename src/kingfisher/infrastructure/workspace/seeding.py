@@ -147,7 +147,8 @@ def _collect(written: object, *, into: list[str]) -> None:
         return
     for one in written:
         if isinstance(one, dict):
-            _collect(one.get("all_of"), into=into)
+            # A requirement entry is a set, so its names are the keys.
+            _collect(list(one), into=into)
         elif isinstance(one, str) and one.strip() and one.strip() != "*":
             into.append(one.strip())
 

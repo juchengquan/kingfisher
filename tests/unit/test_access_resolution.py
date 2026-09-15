@@ -15,19 +15,19 @@ from kingfisher.domain.access import (
 from kingfisher.domain.capabilities import ALL
 
 
-def vocabulary(**contains: tuple[str, ...]) -> SourceIds:
-    """A flat A/B/C vocabulary, plus any containing source ids the test names."""
+def vocabulary(**covers: tuple[str, ...]) -> SourceIds:
+    """A flat A/B/C vocabulary, plus any covering source ids the test names."""
     names = {one: (one,) for one in ("A", "B", "C")}
-    for name, holds in contains.items():
+    for name, holds in covers.items():
         names[name] = (name, *holds)
     return SourceIds(names=names)
 
 
-def requiring(**all_of: tuple[str, ...]) -> SourceIds:
+def requiring(**requires: tuple[str, ...]) -> SourceIds:
     """The same vocabulary, plus compounds a caller must hold the parts of."""
     names = {one: (one,) for one in ("A", "B", "C")}
-    names.update({name: (name,) for name in all_of})
-    return SourceIds(names=names, compounds=dict(all_of))
+    names.update({name: (name,) for name in requires})
+    return SourceIds(names=names, compounds=dict(requires))
 
 
 # -- who reaches what -------------------------------------------------------
@@ -238,7 +238,7 @@ def test_a_compound_a_source_id_contains_comes_with_it():
 
 def test_a_caller_may_not_present_a_compound():
     """It is what holding the parts adds up to, not something to claim -- otherwise one
-    assertion stands in for the two `all_of` exists to require.
+    assertion stands in for the two the requirement exists to demand.
     """
     with pytest.raises(AccessError, match="derived"):
         requiring(both=("A", "B")).expand(["both"])
@@ -262,4 +262,4 @@ def test_an_undeclared_name_inside_a_conjunction_is_refused():
 def test_an_audience_is_written_the_way_the_listing_writes_it():
     assert spell(ALL) == ALL
     assert spell(("A", "B")) == "A, B"
-    assert spell(("admin", frozenset({"B", "A"}))) == "admin, A+B"
+    assert spell(("admin", frozenset({"B", "A"}))) == "admin, {A, B}"

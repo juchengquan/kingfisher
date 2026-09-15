@@ -121,7 +121,8 @@ def spell(audience: Audience) -> str:
     if audience == ALL:
         return ALL
     return ", ".join(
-        "+".join(sorted(one)) if isinstance(one, frozenset) else one for one in audience
+        "{" + ", ".join(sorted(one)) + "}" if isinstance(one, frozenset) else one
+        for one in audience
     )
 
 
@@ -158,16 +159,16 @@ class AccessReport:
 
 @dataclass(frozen=True)
 class SourceIds:
-    """One deployment's source-id vocabulary: the names, and what each contains."""
+    """One deployment's source-id vocabulary: the names, and what each covers."""
 
-    #: Declared name -> that name plus everything it contains, transitively.
+    #: Declared name -> that name plus everything it covers, transitively.
     names: Mapping[str, tuple[str, ...]]
     #: Declared name -> the source ids a caller must hold for it to apply, for the
-    #: names written with `all_of`. Absent for every ordinary source id.
+    #: names written as a set. Absent for every ordinary source id.
     compounds: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     def mentions(self, audience: Audience) -> frozenset[str]:
-        """Every source id an audience touches, following `contains` and `all_of`."""
+        """Every source id an audience touches, following what names cover and require."""
         if audience == ALL:
             return frozenset()
         seen: set[str] = set()
@@ -182,7 +183,7 @@ class SourceIds:
         return frozenset(seen)
 
     def expand(self, held: Iterable[str]) -> frozenset[str]:
-        """Every source id a caller effectively holds, following `contains` then `all_of`."""
+        """Every source id a caller effectively holds: what they cover, then what derives."""
         wanted = tuple(held)
         if derived := sorted({name for name in wanted if name in self.compounds}):
             listed = "; ".join(
@@ -190,8 +191,8 @@ class SourceIds:
                 for name in derived
             )
             msg = (
-                f"derived source id(s) cannot be held: {listed}. A name written with "
-                f"`all_of` is what holding its parts adds up to, not something to "
+                f"derived source id(s) cannot be held: {listed}. A name written as a "
+                f"set is what holding its parts adds up to, not something to "
                 f"present -- name the parts instead"
             )
             raise AccessError(msg)
@@ -209,9 +210,9 @@ class SourceIds:
             for name, parts in self.compounds.items()
             if name not in reached and all(part in reached for part in parts)
         }:
-            # `names[name]`, not `name`: a compound may itself be contained in
+            # `names[name]`, not `name`: a compound may itself be covered by
             # something, and a caller who has just earned it earns that too.
-            # Adding only the bare name would make one written into a `contains`
+            # Adding only the bare name would make one written into a covers
             # chain reach less than the same name written by hand.
             for name in gained:
                 reached.update(self.names[name])
@@ -258,12 +259,12 @@ class SourceIds:
         )
 
 
-#: The declared source ids and what each contains, beside the ones written `all_of`.
+#: The declared source ids and what each covers, beside the ones written as a set.
 _Vocabulary = tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]
 
 
 def _vocabulary(raw: object, source: str) -> _Vocabulary:
-    """The declared source ids, what each contains, and what each requires."""
+    """The declared source ids, what each covers, and what each requires."""
     if raw is None:
         msg = (
             f"{source}: missing required section 'source_ids'; it is the closed "
@@ -275,72 +276,94 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
     if not isinstance(raw, Mapping):
         msg = (
             f"{source}: 'source_ids' is a list of names, or a mapping of name to "
-            f"{{contains: [...]}} or {{all_of: [...]}}"
+            f"[a, b] for what it covers or {{a, b}} for what it requires"
         )
         raise AccessError(msg)
 
     declared: dict[str, tuple[str, ...]] = {}
     compounds: dict[str, tuple[str, ...]] = {}
     for name, body in raw.items():
-        if body is None or body == {}:
+        if body is None:
             declared[str(name)] = ()
-            continue
-        if not isinstance(body, Mapping):
+        elif isinstance(body, (list, tuple)):
+            declared[str(name)] = _covers(body, name=str(name), source=source)
+        elif isinstance(body, Mapping):
+            compounds[str(name)] = _requires(body, name=str(name), source=source)
+        else:
             msg = (
-                f"{source}: source id {name!r} is {{contains: [...]}} or "
-                f"{{all_of: [...]}}, or empty"
+                f"{source}: source id {name!r} is [a, b] for what it covers, "
+                f"{{a, b}} for what it requires, or nothing at all -- got {body!r}"
             )
             raise AccessError(msg)
-        if complaint := fields.unrecognised(body, known={"contains", "all_of"}, noun="key"):
-            msg = f"{source}: source id {name!r}: {complaint}"
-            raise AccessError(msg)
-        if "contains" in body and "all_of" in body:
-            msg = (
-                f"{source}: source id {name!r} has both 'contains' and 'all_of'. "
-                f"'contains' says what this name grants and 'all_of' says what a "
-                f"caller must hold for it to apply -- a source id that is both is a "
-                f"question with no answer"
-            )
-            raise AccessError(msg)
-        for key, into in (("contains", declared), ("all_of", compounds)):
-            if key not in body:
-                continue
-            listed = body[key] or ()
-            # A string is called out because it reads as a list of letters. A
-            # mapping is the one that was silently wrong: it is truthy and it
-            # iterates, so `all_of: {finance: senior}` became the single name
-            # `finance` and threw away what was written beside it. Everything else
-            # raised `TypeError` out of the comprehension below, which names
-            # neither the file nor the source id.
-            if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
-                msg = (
-                    f"{source}: source id {name!r}: {key!r} is a list of source ids "
-                    f"-- got {listed!r}"
-                )
-                raise AccessError(msg)
-            if not listed:
-                said = (
-                    "a source id requiring nothing is reached by everyone, which is "
-                    "what a plain source id already means"
-                    if key == "all_of"
-                    else "leave it out to declare a plain source id"
-                )
-                msg = f"{source}: source id {name!r}: {key!r} is empty -- {said}"
-                raise AccessError(msg)
-            into[str(name)] = tuple(str(one) for one in listed)
         # Declared either way: a compound is a name in the vocabulary like any
         # other, and `names` is what says a name exists at all.
         declared.setdefault(str(name), ())
     return declared, compounds
 
 
+def _covers(body: Sequence[object], *, name: str, source: str) -> tuple[str, ...]:
+    """The source ids a name hands out, from the list form."""
+    if not body:
+        msg = (
+            f"{source}: source id {name!r} covers nothing -- leave the body out "
+            f"to declare a plain source id"
+        )
+        raise AccessError(msg)
+    # The inline half of the rule `_refuse_granted_compounds` holds for a name.
+    # Refused here rather than there because an inline requirement has no name
+    # to look up, and a covers list is the one place it reads as legal: a
+    # requirement that can be handed over is the requirement defeated by the
+    # file imposing it.
+    for one in body:
+        if isinstance(one, Mapping):
+            parts = ", ".join(str(part) for part in one) or "..."
+            msg = (
+                f"{source}: source id {name!r} covers {{{parts}}}, which is a "
+                f"requirement rather than a source id anyone holds. Handing one "
+                f"over is the requirement defeated by the file that writes it; "
+                f"cover [{parts}] instead, which reaches the same callers"
+            )
+            raise AccessError(msg)
+    return tuple(str(one) for one in body)
+
+
+def _requires(body: Mapping[object, object], *, name: str, source: str) -> tuple[str, ...]:
+    """The source ids a caller must hold together, from the set form."""
+    if moved := tuple(key for key in ("contains", "all_of") if body.get(key) is not None):
+        said = "[a, b]" if moved[0] == "contains" else "{a, b}"
+        msg = (
+            f"{source}: source id {name!r} writes {moved[0]!r}, which the format no "
+            f"longer takes -- write {said} as the body itself. A list is what this "
+            f"name covers and a set is what it requires, so the shape says which "
+            f"and there is no word to get wrong"
+        )
+        raise AccessError(msg)
+    if not body:
+        msg = (
+            f"{source}: source id {name!r} requires nothing, which is reached by "
+            f"everyone -- leave the body out to declare a plain source id"
+        )
+        raise AccessError(msg)
+    # The shape that was silently wrong before it was refused: `{finance: senior}`
+    # is a mapping with a value, not a set of two names, and reading it as a set
+    # would take `finance` and throw away what was written beside it.
+    if valued := sorted(str(key) for key, value in body.items() if value is not None):
+        msg = (
+            f"{source}: source id {name!r} requires {{{', '.join(valued)}}} with "
+            f"something written after it. A requirement is a set of names -- "
+            f"write {{a, b}}, not {{a: b}}"
+        )
+        raise AccessError(msg)
+    return tuple(str(key) for key in body)
+
+
 def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, tuple[str, ...]]:
     """Each source id's transitive closure, itself included, with cycles refused."""
-    for name, contains in declared.items():
-        for one in contains:
+    for name, covers in declared.items():
+        for one in covers:
             if one not in declared:
                 msg = (
-                    f"{source}: source id {name!r} contains {one!r}, which is not "
+                    f"{source}: source id {name!r} covers {one!r}, which is not "
                     f"declared; this file defines {', '.join(sorted(declared))}"
                 )
                 raise AccessError(msg)
@@ -351,9 +374,9 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
         if name in path:
             loop = " -> ".join((*path[path.index(name) :], name))
             msg = (
-                f"{source}: source ids contain themselves: {loop}. Expansion "
+                f"{source}: source ids cover themselves: {loop}. Expansion "
                 f"follows every link, so a loop would never finish -- one of "
-                f"these has to stop containing the next"
+                f"these has to stop covering the next"
             )
             raise AccessError(msg)
         if name in closure:
@@ -385,17 +408,17 @@ def parse(document: Mapping[str, object], source: str) -> SourceIds:
 def _refuse_granted_compounds(
     declared: Mapping[str, tuple[str, ...]], compounds: Mapping[str, tuple[str, ...]], source: str
 ) -> None:
-    """Refuse a `contains` that hands out a compound rather than its parts."""
+    """Refuse a covers list that hands out a compound rather than its parts."""
     for name, holds in declared.items():
         for one in holds:
             if one in compounds:
                 parts = ", ".join(compounds[one])
                 msg = (
-                    f"{source}: source id {name!r} contains {one!r}, which is derived "
-                    f"rather than held -- it means all of [{parts}]. Handing it "
+                    f"{source}: source id {name!r} covers {one!r}, which is derived "
+                    f"rather than held -- it means all of {{{parts}}}. Handing it "
                     f"over directly is the requirement defeated by the file that "
-                    f"declares it; write `contains: [{parts}]` instead, which "
-                    f"reaches the same callers and says why"
+                    f"declares it; cover [{parts}] instead, which reaches the same "
+                    f"callers and says why"
                 )
                 raise AccessError(msg)
 
