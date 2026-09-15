@@ -2156,11 +2156,12 @@ LIGHT_EXPORTS = frozenset({
     "ensure_layout", "config_from_env",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",
-    # Asking the kernel what it can fence with. `ctypes` and a syscall, no
-    # dependency at all -- and it has to stay that way, because it runs on
-    # hosts where the fence is not installed to say whether installing one
-    # would help.
-    "landlock_abi",
+    # The fence's own module, which `doctor` asks what the kernel can fence with
+    # rather than asking the kernel itself. `ctypes`, a syscall and the standard
+    # library, no dependency at all -- and it has to stay that way, because it
+    # runs on hosts where the fence is not installed to say whether installing
+    # one would help.
+    "confinement",
     # The directory half of a configuration, and the record it returns. Light
     # because seeding a fresh workspace runs on them before anything is loaded
     # -- paying for three provider SDKs to find out where `skills/` goes would

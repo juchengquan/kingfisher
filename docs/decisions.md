@@ -1488,6 +1488,15 @@ definitions, which took `doctor` down the same way the shadowed built-in had. Th
 filing is checked rather than trusted -- each defect is run and the frame that
 actually raised is compared against the key it is filed under.
 
+**`doctor` asks the fence the questions a run asks.** Its advice for an unconfined
+shell kept its own copy of the ABI a full ruleset needs and its own reading of the
+kernel, and told a kernel that could already be fenced to wait "until that is
+wired" -- beside a warning, from the fence, naming the one package that was
+missing. The advice now reads `landlock_abi`, `landlock_ready` and
+`REQUIRED_LANDLOCK_ABI` through the confinement module, the way the fence does, so
+the two cannot disagree and a test fakes the kernel once for both.
+*(2026-09-15.)*
+
 ## Where a deployment reads from
 
 **The capability flags are `KINGFISHER_*_ENABLED`, and the old names are read
