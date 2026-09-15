@@ -155,7 +155,7 @@ true of every agent in the workspace.
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none**; write `["*"]` for every skill the workspace offers |
 | `subagents` | optional | Delegates it may consult. Unset grants **none**; `["*"]` is every subagent the workspace offers |
-| `middleware` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
+| `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
@@ -455,7 +455,7 @@ on the spot, so every entry after the first would be unreachable.
 | `builtin_tools` | optional | deepagents' own set, listed in the tools table above. Unset means all of them; `[]` means none |
 | `tools` | optional | The tools *your* workspace defines. Unset means all of them; `[]` means none |
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it |
-| `middleware` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
+| `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
@@ -622,7 +622,7 @@ add one to later; a changed constructor is not easy to take back.
 
 ### Lists, and fields that are not here
 
-`tools`, `skills` and `middleware` take either form:
+`tools`, `skills` and `middlewares` take either form:
 
 ```yaml
 tools: [read_file, grep]
@@ -720,7 +720,7 @@ this format has to refuse below.
 | `system_prompt` | the graph brings its own; write the prompt where the graph is built |
 | `builtin_tools` | deepagents' own tools do not exist as objects when a delegate is assembled |
 | `skills` | deepagents mounts skills for a delegate *it* builds, never for a compiled one |
-| `middleware` | middleware wraps a graph deepagents builds; this one is already built |
+| `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
 
 `name`, `description`, `build`, `tools`, `model` and `metadata` are what
@@ -989,7 +989,7 @@ tools:                     # the long form — per entry
 ```
 
 **An entry is a name, or a mapping of `name` and `groups`** — the same shape
-`middleware:` takes for its `settings`, so there is one long form to learn rather
+`middlewares:` takes for its `settings`, so there is one long form to learn rather
 than one per field.
 
 The field itself stays a list. Writing the whole field as a mapping keyed by name
@@ -1286,5 +1286,5 @@ name.
 
 A request may still bring its own subagent or skill. Those cannot escalate: an
 uploaded definition is text the caller wrote, and it holds only the tools their
-groups already reach — `middleware`, `endpoints` and `models` are never widened
+groups already reach — `middlewares`, `endpoints` and `models` are never widened
 by an upload. What it buys someone is new instructions, never new powers.

@@ -43,7 +43,7 @@ def middleware_of(captured, name: str) -> list:
 
 
 NAMES_AUDIT = (
-    "name: reviewer\ndescription: d\nmiddleware: [audit]\n"
+    "name: reviewer\ndescription: d\nmiddlewares: [audit]\n"
     "system_prompt: |\n  You review.\n"
 )
 
@@ -69,7 +69,7 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir, monkeypatch
 
 def test_the_registry_is_empty_until_a_deployment_wires_one(cfg):
     """Kingfisher cannot define these; only a deployment knows what its middleware is."""
-    assert Kingfisher(cfg, threads=StubCheckpointer()).middleware == {}
+    assert Kingfisher(cfg, threads=StubCheckpointer()).middlewares == {}
 
 
 def test_an_unregistered_name_fails_loudly(cfg, session_dir, monkeypatch):
@@ -85,7 +85,7 @@ def test_an_unregistered_name_fails_loudly(cfg, session_dir, monkeypatch):
 def test_kingfisher_hands_its_registry_to_the_agent(cfg):
     registry = {"audit": Audited}
 
-    assert Kingfisher(cfg, threads=StubCheckpointer(), middleware=registry).middleware is registry
+    assert Kingfisher(cfg, threads=StubCheckpointer(), middlewares=registry).middlewares is registry
 
 
 # -- the clamp ------------------------------------------------------------
@@ -101,7 +101,7 @@ def test_registering_is_not_permitting(cfg, session_dir, monkeypatch):
             monkeypatch,
             registry={"audit": Audited},
             subagents=("reviewer",),
-            middleware=(),
+            middlewares=(),
         )
 
 
@@ -113,7 +113,7 @@ def test_a_granted_name_goes_through(cfg, session_dir, monkeypatch):
         monkeypatch,
         registry={"audit": Audited},
         subagents=("reviewer",),
-        middleware=("audit",),
+        middlewares=("audit",),
     )
 
     # The deployment's own, which is what this file is about. A delegate also
@@ -128,11 +128,11 @@ def test_a_granted_name_goes_through(cfg, session_dir, monkeypatch):
 
 
 def test_grants_clamp_middleware_like_everything_else():
-    granted = Capabilities(middleware=("audit",))
+    granted = Capabilities(middlewares=("audit",))
 
-    narrowed = granted.intersect(Capabilities(middleware=("audit", "rate_limit")))
+    narrowed = granted.intersect(Capabilities(middlewares=("audit", "rate_limit")))
 
-    assert narrowed.middleware == ("audit",)
+    assert narrowed.middlewares == ("audit",)
 
 
 # -- the rule that inverts for uploads ------------------------------------
@@ -142,12 +142,12 @@ def test_an_upload_widens_its_own_text_and_nothing_else():
     """Skills and subagents an upload brings are the caller's own text, so permitting
     them grants nothing new.
     """
-    granted = Capabilities(skills=("vetted",), middleware=("audit",))
+    granted = Capabilities(skills=("vetted",), middlewares=("audit",))
 
     widened = granted.including(skills=("theirs",), subagents=("mine",))
 
     assert set(widened.skills or ()) == {"vetted", "theirs"}
-    assert widened.middleware == ("audit",)
+    assert widened.middlewares == ("audit",)
 
 
 def test_including_cannot_be_asked_to_widen_middleware():
@@ -158,7 +158,7 @@ def test_including_cannot_be_asked_to_widen_middleware():
 
     accepted = set(inspect.signature(Capabilities.including).parameters)
 
-    assert "middleware" not in accepted
+    assert "middlewares" not in accepted
     assert {"skills", "subagents"} <= accepted
 
 
@@ -167,26 +167,26 @@ def test_including_cannot_be_asked_to_widen_middleware():
 
 def test_the_field_parses_in_both_yaml_forms(tmp_path):
     inline = reading.read(
-        "name: r\ndescription: d\nmiddleware: [a, b]\n"
+        "name: r\ndescription: d\nmiddlewares: [a, b]\n"
         "system_prompt: |\n  Body.\n", tmp_path / "r.md"
     )
     block = reading.read(
-        "name: r\ndescription: d\nmiddleware:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n",
+        "name: r\ndescription: d\nmiddlewares:\n  - a\n  - b\nsystem_prompt: |\n  Body.\n",
         tmp_path / "r.md",
     )
 
-    assert inline.middleware == block.middleware == ("a", "b")
+    assert inline.middlewares == block.middlewares == ("a", "b")
 
 
 def test_omitting_it_means_none(tmp_path):
     spec = reading.read("name: r\ndescription: d\nsystem_prompt: |\n  Body.\n", tmp_path / "r.md")
 
-    assert spec.middleware is None
+    assert spec.middlewares is None
 
 
 def test_a_request_with_no_opinion_is_still_unrestricted():
     assert Capabilities().is_unrestricted
-    assert not Capabilities(middleware=()).is_unrestricted
+    assert not Capabilities(middlewares=()).is_unrestricted
 
 
 # -- the whole stack, pinned once -----------------------------------------
@@ -195,7 +195,7 @@ def test_a_request_with_no_opinion_is_still_unrestricted():
 EVERYTHING = (
     "name: reviewer\ndescription: d\n"
     "builtin_tools: [read_file]\ntools: [always_fails]\nskills: [tabular-qa]\n"
-    "subagents: [helper]\nmiddleware: [audit]\n"
+    "subagents: [helper]\nmiddlewares: [audit]\n"
     "system_prompt: |\n  You review.\n"
 )
 

@@ -59,7 +59,7 @@ ENV_FILE = ".env"
 
 #: What `seed` did *not* look at before leaving a definition behind, per kind.
 UNCONSULTED = {
-    "middleware": "what this deployment registered",
+    "middlewares": "what this deployment registered",
     "groups": "your groups.yaml",
 }
 
@@ -67,7 +67,7 @@ UNCONSULTED = {
 #: be wrong if one sentence served both: middleware is registered in code, a
 #: group is declared in a file.
 REMEDY = {
-    "middleware": "Register the names",
+    "middlewares": "Register the names",
     # No file named here any more. It used to say `groups.yaml.example is
     # beside it`, and that example could not be the one you wanted: it shipped
     # one vocabulary and a workspace needs whichever names its own definitions

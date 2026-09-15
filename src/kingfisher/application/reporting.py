@@ -47,7 +47,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
 ) -> tuple[tuple[str, tuple[str, ...]], ...]:
     """What this request left out, per kind, skipping the kinds it left nothing.
 
-    **`middleware` is deliberately not among them**, and the reason is about this
+    **`middlewares` is deliberately not among them**, and the reason is about this
     report rather than about that axis. What goes here is what a caller could have
     asked for differently -- a tool, a skill, a delegate they may grant next time. A
     caller cannot register a middleware: the names come from whatever constructed

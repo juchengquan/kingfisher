@@ -6,7 +6,7 @@ refuses. It points here for the arguments rather than repeating them, so this
 file and `tool_note.py` are still where the reasoning lives.
 
 There are two ways this file reaches an agent, and the second is the newer half
-of the example. `MIDDLEWARE` at the foot declares the classes; `middleware` is
+of the example. `MIDDLEWARES` at the foot declares the classes; `middlewares` is
 one of `DEFINITION_KINDS`; `kingfisher seed` copies this file into a workspace
 like any other definition. So a deployment can offer a cap it never imported.
 
@@ -30,11 +30,11 @@ entry may be a factory closing over a live object, which a file cannot be.
 
 ## Wiring it
 
-    from assets_examples.middleware.call_cap import CallCap, CallCapGenerous
+    from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
 
     kingfisher = Kingfisher(
         cfg,
-        middleware={
+        middlewares={
             # The factory is the class itself. `declared_middleware` reads
             # `defaults` for the kwarg base and `yaml_settable` for what an
             # agent file is permitted to override; everything else stays
@@ -46,7 +46,7 @@ entry may be a factory closing over a live object, which a file cannot be.
 
 and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
 
-    middleware: [call-cap-strict]
+    middlewares: [call-cap-strict]
 
 Both halves of that are written out: `assets_examples/agents/researcher.yaml` and
 `assets_examples/subagents/sweeper.yaml` are an agent and its delegate, naming the
@@ -54,14 +54,14 @@ registry entries above -- the only definitions in this repository that name
 middleware at all.
 
 They live under their own kinds, and `seed` is what keeps them out of a
-workspace that cannot build them: it reads the `middleware:` field, leaves such
+workspace that cannot build them: it reads the `middlewares:` field, leaves such
 a definition behind, and says which names it would have needed. `seed --all`
 takes them once the factories are registered. That rule used to be the folder's
 -- both files sat beside this one, where nothing copies anything -- which kept a
 fresh workspace working at the cost of filing an agent somewhere no agent
 repository could read it.
 
-An agent that names nothing gets nothing: `middleware` omits to none, like
+An agent that names nothing gets nothing: `middlewares` omits to none, like
 `skills` and `subagents` and unlike the two tool axes. A name this deployment
 did not register is refused when the agent is built, not discovered mid-run.
 
@@ -82,7 +82,7 @@ prose that describes it.)
 
 The obvious alternative is one entry and a number in the yaml:
 
-    middleware: [call-cap]
+    middlewares: [call-cap]
     metadata:
       call-cap: {limit: 20}
 
@@ -99,7 +99,7 @@ that overrides `defaults`. The decision stays where the code is, and a definitio
 chooses among what the deployment registered and can invent nothing.
 
 A request that withholds `call-cap-generous` leaves `call-cap-strict` in reach,
-which is what the narrowing story for `middleware` has always been: a *name*
+which is what the narrowing story for `middlewares` has always been: a *name*
 narrows, and the name is a selector for code the deployment wrote. A number in
 a mapping could not express that.
 
@@ -236,4 +236,4 @@ class CallCapGenerous(CallCap):
 #: to build a variant would otherwise be offered as a second entry nobody meant
 #: to expose. Both, because the pair *is* the lesson: two selectors over one behaviour,
 # varying in code rather than in a definition's `settings:`.
-MIDDLEWARE = [CallCap, CallCapGenerous]
+MIDDLEWARES = [CallCap, CallCapGenerous]

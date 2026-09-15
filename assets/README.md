@@ -20,13 +20,13 @@ both. That was the whole argument for the name: this pair is the one part of the
 arrangement a reader has to meet as a pair.
 
 One folder under `assets_examples/` is not a definition and is not copied by
-`seed`: `middleware/`. `DEFINITION_KINDS` is the fields of `Definitions` —
+`seed`: `middlewares/`. `DEFINITION_KINDS` is the fields of `Definitions` —
 agents, skills, subagents, tools — and `seed` walks exactly those. Middleware
 is deliberately not among them: a middleware name selects code the
 *deployment* wrote, and one read out of the workspace would be code the agent
 can edit, wrapped around the agent that edited it. So the class is imported by
 whatever constructs `Kingfisher` and the name is all a definition ever says. See
-`assets_examples/middleware/call_cap.py`.
+`assets_examples/middlewares/call_cap.py`.
 
 **`assets/`** — here — is theirs. A skill fetched from another project arrives
 with its own `LICENSE.txt` and its own idea of what it is for. Everything under

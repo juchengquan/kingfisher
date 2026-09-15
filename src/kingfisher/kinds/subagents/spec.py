@@ -66,8 +66,8 @@ class SubagentSpec:
     #: Middleware this delegate runs with, by name, from a registry the
     #: deployment supplies. A name here selects *code*, which is why it is the
     #: one field never widened for an uploaded definition.
-    middleware: Selection = None
-    #: What each `middleware:` entry wrote under `settings:`, for the entries that wrote
+    middlewares: Selection = None
+    #: What each `middlewares:` entry wrote under `settings:`, for the entries that wrote
     #: one. Keyed by name and kept beside them, the way `tool_sources` sits beside
     #: `tools`: a name is what gets granted and narrowed, and a value passed to the code
     #: behind it is neither.
@@ -108,7 +108,7 @@ class SubagentSpec:
                 tools=self.tools,
                 skills=self.skills,
                 subagents=self.subagents,
-                middleware=self.middleware,
+                middlewares=self.middlewares,
             )
         return Capabilities(
             builtin_tools=self.builtin_tools,
@@ -130,7 +130,7 @@ class SubagentSpec:
                 default=self.groups,
                 held=held,
             ),
-            middleware=self.middleware,
+            middlewares=self.middlewares,
         )
 
     def __post_init__(self) -> None:

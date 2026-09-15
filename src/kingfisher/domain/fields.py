@@ -348,7 +348,7 @@ class Reader:
                 f"{self.source}: {key} is a mapping; this field takes a list. An "
                 f"entry that says who it is for is written long -- "
                 f"- {{name: {first}, groups: [...]}} -- beside the plain names, "
-                f"which is the same shape 'middleware' takes for its settings"
+                f"which is the same shape 'middlewares' takes for its settings"
             )
             raise self.error(msg)
         if not isinstance(value, (list, tuple)):

@@ -49,7 +49,7 @@ class Origins:
     workspace: Path
 
     agents: Origin
-    middleware: Origin
+    middlewares: Origin
     skills: Origin
     subagents: Origin
     tools: Origin

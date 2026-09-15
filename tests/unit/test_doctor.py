@@ -12,7 +12,7 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
 from kingfisher.presentation.cli.health import examine, worst
-from tests.conftest import middleware_dir, subagents_dir, tools_dir, verbs
+from tests.conftest import middlewares_dir, subagents_dir, tools_dir, verbs
 
 BROKEN_TOOL = '''
 from langchain_core.tools import tool
@@ -115,16 +115,16 @@ def test_a_broken_middleware_module_is_a_failure(cfg):
     `doctor` reported three directories, `list` reported four, and middleware was in
     neither -- so the one kind a deployment could break with nothing said about it.
     """
-    middleware_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (middleware_dir(cfg) / "wrong.py").write_text(
-        "class NotMiddleware:\n    name = 'nope'\n\n\nMIDDLEWARE = [NotMiddleware]\n",
+    middlewares_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (middlewares_dir(cfg) / "wrong.py").write_text(
+        "class NotMiddleware:\n    name = 'nope'\n\n\nMIDDLEWARES = [NotMiddleware]\n",
         encoding="utf-8",
     )
 
     checks = {check.name: check for check in examine(cfg)}
 
-    assert checks["middleware"].verdict == "fail"
-    assert "wrong.py" in checks["middleware"].detail
+    assert checks["middlewares"].verdict == "fail"
+    assert "wrong.py" in checks["middlewares"].detail
     assert checks["tools"].verdict == "ok", "one catalogue must not take the others down"
 
 
@@ -353,7 +353,7 @@ def test_both_forms_of_doctor_say_where_it_read_from(cfg, monkeypatch, capsys):
     # workspace" and had no way to say which workspace.
     #
     # Matched without its padding, which is not laziness. The column is as wide
-    # as the longest key, so this read `tools     :` until `middleware` arrived
+    # as the longest key, so this read `tools     :` until `middlewares` arrived
     # and widened every row by one -- a test that failed because the alignment
     # improved, asserting a fact about spacing while claiming one about naming.
     assert re.search(r"^tools +:", printed, re.M)

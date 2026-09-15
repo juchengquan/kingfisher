@@ -168,7 +168,7 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
     header = list(render(inventory(cfg)))[:10]
 
     assert [line.split(" :")[0].strip() for line in header] == [
-        "workspace", "agents", "middleware", "skills", "subagents", "tools",
+        "workspace", "agents", "middlewares", "skills", "subagents", "tools",
         "models", "groups", "seed", "sessions",
     ]
 
@@ -387,7 +387,7 @@ def test_an_unloadable_agent_catalogue_is_non_zero_too(cfg, monkeypatch, capsys)
 def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsys):
     """The fifth kind, and the one `failed` named last.
 
-    `middleware/*.py` is Python that has to import, exactly like `tools/*.py`, and a
+    `middlewares/*.py` is Python that has to import, exactly like `tools/*.py`, and a
     deployment that starts and fails on the first request activating an agent that
     names one is the shape this predicate already exists to stop.
     """
@@ -396,16 +396,16 @@ def test_an_unloadable_middleware_module_is_non_zero_too(cfg, monkeypatch, capsy
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
-    middleware = cfg.catalogue_roots["middleware"]
-    middleware.mkdir(parents=True, exist_ok=True)
-    (middleware / "wrong.py").write_text(
-        "class NotMiddleware:\n    name = 'nope'\n\n\nMIDDLEWARE = [NotMiddleware]\n",
+    middlewares = cfg.catalogue_roots["middlewares"]
+    middlewares.mkdir(parents=True, exist_ok=True)
+    (middlewares / "wrong.py").write_text(
+        "class NotMiddleware:\n    name = 'nope'\n\n\nMIDDLEWARES = [NotMiddleware]\n",
         encoding="utf-8",
     )
 
     assert main(["list", "--json"]) == 1
 
-    assert json.loads(capsys.readouterr().out)["middleware_error"]
+    assert json.loads(capsys.readouterr().out)["middlewares_error"]
 
 
 def test_a_definition_naming_a_moved_tool_is_non_zero_too(cfg, monkeypatch, capsys, shipped):

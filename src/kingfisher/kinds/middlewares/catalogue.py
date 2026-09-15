@@ -1,4 +1,4 @@
-"""Reading a `middleware/` directory into the classes it contributes."""
+"""Reading a `middlewares/` directory into the classes it contributes."""
 
 from __future__ import annotations
 
@@ -18,11 +18,11 @@ from kingfisher.kinds.importing import (
 
 #: Declared rather than inferred, like `TOOLS`: searching for subclasses would
 #: offer an imported one -- `from .base import CallCap` -- as a second entry.
-EXPORT = "MIDDLEWARE"
+EXPORT = "MIDDLEWARES"
 
 
 class MiddlewareError(LoadError):
-    """A `middleware/` file that cannot be read, or does not declare itself."""
+    """A `middlewares/` file that cannot be read, or does not declare itself."""
 
 
 def name_of(entry: type) -> str:
@@ -62,7 +62,7 @@ class LocalMiddlewareRepository:
     def found(self) -> tuple[Registered, ...]:
         """Every middleware this directory defines, with its origin.
 
-        A duplicate name is refused rather than qualified: `middleware:` is a
+        A duplicate name is refused rather than qualified: `middlewares:` is a
         flat selector, so there is nowhere to put a `where::what` and nothing to
         fall back on.
         """

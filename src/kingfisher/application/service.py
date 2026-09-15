@@ -6,7 +6,7 @@ median and 9.2ms p95 to build an unrestricted agent, of which 7.2ms is
 
   subagent      +5-6ms   each compiles its own graph; the range is the delegate
   custom tool   +0.47ms  linear to at least 50, measured in August
-  middleware    +0.03ms
+  middlewares   +0.03ms
   skill          0.0ms   sixteen measure the same as none
   deny rule      0.0ms   a hundred measure the same as none
 
@@ -221,7 +221,7 @@ class Kingfisher(Sessions, Disposal):
         backend_from: BackendFrom | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
-        middleware: Mapping[str, MiddlewareFactory] | None = None,
+        middlewares: Mapping[str, MiddlewareFactory] | None = None,
         graph: Any | None = None,
     ) -> None:
         self.cfg = cfg or config_module.config_from_env()
@@ -320,19 +320,19 @@ class Kingfisher(Sessions, Disposal):
         # a service in front of many callers sets it, and `intersect` can only
         # subtract, so no request can widen past it.
         self.grants: Capabilities = grants if grants is not None else UNRESTRICTED
-        # What a definition may name in its `middleware:` field. Empty by
+        # What a definition may name in its `middlewares:` field. Empty by
         # default, so any such line fails loudly until a deployment wires one --
         # kingfisher cannot define these, only a deployment knows what its
         # middleware is. Registering is not the same as permitting: `grants`
         # still clamps which registered names a request may reach.
-        self.middleware: Mapping[str, MiddlewareFactory] = middleware or {}
+        self.middlewares: Mapping[str, MiddlewareFactory] = middlewares or {}
         # Walked here rather than when a definition names one. An entry nothing
         # can build is a fact about this deployment's own code, true before any
         # request arrives and true of entries no definition names yet -- so the
         # deployment hears it where it wired the registry, not from the first
         # caller unlucky enough to reach the wrong name. `_instantiate` keeps
         # its own guard for `build_agent`, which takes a registry directly.
-        refuse_unbuildable_middleware(self.middleware)
+        refuse_unbuildable_middleware(self.middlewares)
         # Refused here rather than resolved, because either answer is somebody's
         # wiring silently discarded: a pre-built graph already holds a backend, and
         # `_graph_for` returns it without building anything for `backend_from` to be
@@ -453,7 +453,7 @@ class Kingfisher(Sessions, Disposal):
             backend_from=self._backend_from,
             session_dir=session_dir,
             run_on=request.run_on,
-            middleware_registry=self.middleware,
+            middleware_registry=self.middlewares,
             checkpointer=self.threads if checkpointer is _UNSET else checkpointer,
             catalogue=self.catalogue,
         )

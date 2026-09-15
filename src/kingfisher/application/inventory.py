@@ -13,7 +13,7 @@ from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
-from kingfisher.kinds.middleware.catalogue import MiddlewareError
+from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.rules import refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.kinds.tools.catalogue import ToolError
@@ -94,11 +94,11 @@ class Inventory:
     moved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
 
     #: Middleware class name -> the module that defined it.
-    middleware: Mapping[str, str] = _NOTHING
+    middlewares: Mapping[str, str] = _NOTHING
     #: A middleware module that will not import, or offering something that is
     #: not an `AgentMiddleware`. Carried like the others, for the same reason:
     #: a listing is where somebody goes *because* something is broken.
-    middleware_error: str | None = None
+    middlewares_error: str | None = None
 
     #: What each subagent brings itself, by name: the tools and skills in the
     #: folder named after it. Reported because they are the one capability a
@@ -252,7 +252,7 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
         return _NO_NAMES
 
 
-def _middleware(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
+def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
     """What the workspace registers, and why it could not be read.
 
     Carried rather than raised, for the reason `_bundled` gives one function up: a
@@ -261,7 +261,7 @@ def _middleware(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
     """
     try:
         return MappingProxyType(
-            {name: cls.__module__ for name, cls in resolved.middleware.classes.items()}
+            {name: cls.__module__ for name, cls in resolved.middlewares.classes.items()}
         ), None
     except MiddlewareError as exc:
         return _NOTHING, str(exc)
@@ -338,7 +338,7 @@ def _tools(
 ) -> tuple[tuple[str, ...], tuple[str, ...], Mapping[str, str], str | None]:
     """The built-in set, what the workspace adds, where each one lives, and why not.
 
-    Lifted out of `inventory` for the reason `_bundled` and `_middleware` are: one
+    Lifted out of `inventory` for the reason `_bundled` and `_middlewares` are: one
     kind read, its failure carried rather than raised, and the answers handed back
     together.
     """
@@ -386,7 +386,7 @@ def _tools(
     except MiddlewareError:
         # Assembling the probe reads the middleware directory too, so a module that
         # will not import arrives here rather than at the read above. Deliberately
-        # not `tools_error`: the tool catalogue walked fine, and `middleware_error`
+        # not `tools_error`: the tool catalogue walked fine, and `middlewares_error`
         # already carries this one with the file to go and open. What is lost is the
         # built-in set, which no longer has a graph to be read off -- and saying
         # "tools failed" about that would send a reader to the wrong directory.
@@ -400,7 +400,7 @@ def inventory(
     """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
 
-    middleware, middleware_error = _middleware(resolved)
+    middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved)
 
     builtin, workspace_tools, sources, tools_error = _tools(cfg, resolved)
@@ -493,8 +493,8 @@ def inventory(
         subagents=MappingProxyType(dict(reaching("subagents", subagents))),
         subagent_sources=subagent_sources,
         subagents_error=subagents_error or broken.get("subagents"),
-        middleware=middleware,
-        middleware_error=middleware_error,
+        middlewares=middlewares,
+        middlewares_error=middlewares_error,
         moved_tools=moved_tools,
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,

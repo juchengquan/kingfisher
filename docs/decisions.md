@@ -40,7 +40,7 @@ that one covers `FileStore` as well, which is why it is no longer called
 
 **An entry is a name, or a mapping of `name` and the one thing that field lets a
 name carry.** `groups` for `tools`, `skills` and `subagents`; `settings` for
-`middleware`. One long form, whichever field it belongs to, read through one
+`middlewares`. One long form, whichever field it belongs to, read through one
 loop -- so a reader who has met one has met the other.
 
 It replaced a field-level mapping keyed by name, and not for tidiness. **That
@@ -100,7 +100,7 @@ a caller could activate a skill the agent was never told about. A directory the
 agent will not load is reported, not refused.
 *(2026-08-17, `skill-registry.md`.)*
 
-**Middleware is a definition kind.** `middleware/*.py` declaring `MIDDLEWARE`,
+**Middleware is a definition kind.** `middlewares/*.py` declaring `MIDDLEWARES`,
 read like `tools/`, seeded like everything else, and named from a definition in
 the long form that already existed. It was the one kind a workspace could not
 offer, on the argument that a middleware read out of the workspace would be code
@@ -117,7 +117,7 @@ and its two siblings, which is what keeps every existing definition valid and
 makes the wiring block's keys the strings the classes answer to.
 
 **Classes only in a file, where a registry may also hold a zero-argument
-factory.** A file is imported once, so an object in `MIDDLEWARE` would be built
+factory.** A file is imported once, so an object in `MIDDLEWARES` would be built
 once and shared by every graph in the process -- the state leak that makes a cap
 stop capping. A class in a file does everything a factory does and takes
 settings besides, so the second shape would be a spelling with no capability
@@ -131,10 +131,10 @@ disagree. A clash is refused rather than resolved because both sources belong to
 the same deployment and renaming is available -- unlike a tool clash between two
 vendors, which is why that one is qualified instead.
 
-**`middleware` is outside `STAGED_KINDS`, like `agents`**, and it was the test of
+**`middlewares` is outside `STAGED_KINDS`, like `agents`**, and it was the test of
 whether that rule held. Added to `Definitions` and left in, every supplied
 catalogue in the tree stopped loading at once -- *"catalogue is missing
-middleware"* -- which is the breakage the `agents` exclusion was written to
+middlewares"* -- which is the breakage the `agents` exclusion was written to
 prevent, arriving on the first kind added after it. `seeding.definition_roots`
 now skips a kind the destination does not name, for the same reason: a
 `Destination` is satisfied by shape, so one written when there were four kinds
@@ -147,7 +147,7 @@ by naming its chat classes as strings.
 
 **The shipped pairing had never been built, and did not work.** `researcher`
 granted `call-cap-strict` and `tool-note` while its delegate `sweeper` named
-`call-cap-generous` -- and an agent's `middleware:` is the ceiling its delegates
+`call-cap-generous` -- and an agent's `middlewares:` is the ceiling its delegates
 are clamped by, so the parent refused it. Invisible for as long as the example
 existed: with nothing registered anywhere it failed earlier for want of a
 registry, and every test that touched the pair either replaced the spec or
@@ -155,6 +155,31 @@ supplied its own registry. `researcher` grants all three now, and runs under bot
 caps with the stricter deciding, which the file says out loud.
 `test_the_middleware_pairing_builds_from_the_workspace_alone` builds it with no
 registry at all. *(2026-09-07.)*
+
+**The kind is `middlewares`, in the plural its four siblings were already in.**
+`agents/`, `skills/`, `subagents/` and `tools/` are named for what they hold and
+this one was not. The folder name was never free to differ: `seeding` walks
+`DEFINITION_KINDS` on both sides, so the directory has to spell the field on
+`Definitions`, which `test_what_the_catalogue_loads_is_accounted_for` holds equal
+to the axis on `Capabilities` -- which is the line a definition writes and the
+field a request sends. One name across five surfaces, and renaming any one of
+them alone leaves a folder nothing looks in.
+
+So this was taken as the breaking change it is, not as tidying: `middlewares:` in
+an agent or subagent file, `middlewares` in a `CapabilitiesBody` that forbids
+unknown fields, `Kingfisher(middlewares=...)`, `MIDDLEWARES` in a workspace file,
+`middlewares/` in a workspace. The last one is the quiet one -- the definition
+roots are outside `LAYOUT_DIRS`, so the marker's `LAYOUT_VERSION` cannot refuse
+an old layout here the way it refuses one inside a session. A workspace that
+keeps a populated `middleware/` gets an empty `middlewares/` made beside it and
+offers nothing, with nothing said.
+
+**The mass noun stays wherever it is still a mass noun.** `middlewares` names the
+kind -- a directory, a field, a key, a table row. `MiddlewareRepository`,
+`approved_middleware`, `harness/middleware.py` and every sentence about *a
+middleware* keep the singular, because `ToolRepository` already sits behind a
+kind called `tools`: naming the type for one of the things is what the other four
+kinds do. *(2026-09-15.)*
 
 ## Agents and delegation
 
@@ -165,7 +190,7 @@ replaces it; naming an agent is required; the agent is fixed when the session
 starts and snapshotted into it. *(2026-08-18, `agents-as-definitions.md`.)*
 
 **Omission means different things on different axes, deliberately.** The tool
-fields inherit everything available; `skills`, `subagents` and `middleware` omit
+fields inherit everything available; `skills`, `subagents` and `middlewares` omit
 to none. Tools are what an agent needs to *act*; the others are what it needs to
 know and to ask. *(2026-08-18, `agents-as-definitions.md`.)*
 
@@ -1606,7 +1631,7 @@ is whether the table could see it, and a table that cannot see an edge is worse 
 one that lists it.
 
 **What it buys, stated so it can be checked.** The swap boundary is two areas rather
-than four: `infrastructure/harness/` and `kinds/skills`, plus `kinds/middleware` for
+than four: `infrastructure/harness/` and `kinds/skills`, plus `kinds/middlewares` for
 one `isinstance`. `kinds.subagents` and `kinds.tools` grant nothing at all now, and
 every kind import is 5-6ms and 65 modules. `kinds.skills.backend` is the one kind
 module that still reaches the runtime, and *the swap boundary* entry above is where
@@ -1663,7 +1688,7 @@ say, how they are found on disk, and how they reach the runtime. Kingfisher
 fetches from them; they do not answer to a layer. *(2026-09-04.)*
 
 **Reversed: "at the package root."** The five kinds are `kinds/agents`,
-`kinds/skills`, `kinds/subagents`, `kinds/tools` and `kinds/middleware`. Everything
+`kinds/skills`, `kinds/subagents`, `kinds/tools` and `kinds/middlewares`. Everything
 else in the entry above stands -- a kind still owns its format, its walk over the
 disk and its route to the runtime, and still answers to no layer. What changed is
 where the five sit relative to each other, which that entry never argued for.

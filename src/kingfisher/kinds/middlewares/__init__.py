@@ -9,7 +9,7 @@ hand middleware a live object. `harness/middleware.py` builds what a definition
 asked for from either source.
 
 No re-exports, as next door: each module is imported by name. This file used to
-carry five, which made `kinds.middleware` and `kinds.middleware.catalogue` import
+carry five, which made `kinds.middlewares` and `kinds.middlewares.catalogue` import
 each other -- benign, since a package importing its own submodule resolves the
 same way every time, and the only cycle in the package all the same.
 """

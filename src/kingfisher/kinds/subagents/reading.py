@@ -42,7 +42,7 @@ KNOWN: frozenset[str] = frozenset(
         "builtin_tools",
         "tools",
         "skills",
-        "middleware",
+        "middlewares",
         "subagents",
         "model",
         "metadata",
@@ -126,7 +126,7 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "compiled graph as given and never adds a skills middleware to it. "
             "Read what the delegate needs inside the graph instead"
         ),
-        "middleware": (
+        "middlewares": (
             "middleware is wrapped around a graph deepagents builds. A compiled "
             "one is already built, so naming middleware here would be a line "
             "that does nothing"
@@ -250,7 +250,7 @@ def read(text: str, source: Path) -> SubagentSpec:
     # Same two-in-one read as the agent format, and the same field: a
     # definition writing settings has to mean the same thing in either file.
     written_middleware, middleware_settings = reader.selection_with_settings(
-        document.get("middleware"), absent=None, key="middleware"
+        document.get("middlewares"), absent=None, key="middlewares"
     )
     written_skills, skill_audiences = reader.audienced(
         document.get("skills"),
@@ -296,7 +296,7 @@ def read(text: str, source: Path) -> SubagentSpec:
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
         skills=written_skills,
-        middleware=written_middleware,
+        middlewares=written_middleware,
         middleware_settings=middleware_settings,
         subagents=written_delegates,
         wanted=wanted,

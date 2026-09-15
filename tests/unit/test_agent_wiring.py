@@ -157,13 +157,13 @@ def _named(spec_middleware, **kwargs) -> AgentSpec:
         name="probed",
         description="an agent whose file names middleware",
         system_prompt="You work.",
-        middleware=spec_middleware,
+        middlewares=spec_middleware,
         **kwargs,
     )
 
 
 def test_an_agents_own_middleware_is_wrapped_around_the_agent(cfg, monkeypatch, session_dir):
-    """`middleware:` in an agent file did nothing to the agent.
+    """`middlewares:` in an agent file did nothing to the agent.
 
     Measured before it was fixed, one build, same registry, same name: the delegate's
     graph had an `Audit.before_agent` node and the agent's did not. An audit hook
@@ -232,7 +232,7 @@ def test_a_request_may_not_quietly_drop_the_agents_middleware(cfg, session_dir):
             session_dir=session_dir,
             model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
             middleware_registry={"audit": _Audit},
-            capabilities=Capabilities(middleware=()),
+            capabilities=Capabilities(middlewares=()),
         )
 
 
@@ -395,13 +395,13 @@ def test_a_registered_instance_is_refused_rather_than_called(cfg, session_dir):
 def test_an_entry_no_definition_names_is_still_refused_when_it_is_registered(cfg):
     """The half `_instantiate` cannot reach, and the reason the sweep exists."""
     with pytest.raises(CapabilityError, match="audit"):
-        Kingfisher(cfg, middleware={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, middlewares={"audit": _Audit()})  # ty: ignore[invalid-argument-type]
 
 
 def test_the_sweep_refuses_anything_uncallable_not_only_a_middleware(cfg):
     """The gate is `callable`, which is what `MiddlewareFactory` promises."""
     with pytest.raises(CapabilityError, match="which cannot be called") as raised:
-        Kingfisher(cfg, middleware={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
+        Kingfisher(cfg, middlewares={"audit": {"limit": 20}})  # ty: ignore[invalid-argument-type]
 
     assert "a dict" in str(raised.value)
 

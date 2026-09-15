@@ -464,13 +464,13 @@ def _call_cap(shipped):
 
 def _call_cap_module(shipped):
     """The whole example module, for the tests that want more than one name."""
-    return load(shipped / "middleware" / "call_cap.py", declares="CallCap")
+    return load(shipped / "middlewares" / "call_cap.py", declares="CallCap")
 
 
 def _documented_registry(shipped):
     """The wiring block the examples tell you to paste, pasted."""
     cap = _call_cap_module(shipped)
-    note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
+    note = load(shipped / "middlewares" / "tool_note.py", declares="ToolNote")
     return {
         "call-cap-strict": cap.CallCap,
         "call-cap-generous": cap.CallCapGenerous,
@@ -496,7 +496,9 @@ def _wiring_per_example(shipped) -> dict[str, dict[str, str]]:
     """
     return {
         filename: dict(
-            WIRING.findall(load(shipped / "middleware" / filename, declares=declares).__doc__ or "")
+            WIRING.findall(
+                load(shipped / "middlewares" / filename, declares=declares).__doc__ or ""
+            )
         )
         for filename, declares in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
     }
@@ -532,7 +534,7 @@ def test_the_two_wiring_blocks_do_not_contradict_each_other(shipped):
 def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
     """The block a deployment pastes has to name code that is there."""
     modules = {
-        name: load(shipped / "middleware" / filename, declares=name)
+        name: load(shipped / "middlewares" / filename, declares=name)
         for filename, name in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
     }
     defined = {
@@ -579,7 +581,7 @@ def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(ship
     named: set[str] = set()
     for definition in ("agents/researcher.yaml", "subagents/sweeper.yaml"):
         document = yaml.safe_load((shipped / definition).read_text(encoding="utf-8"))
-        for entry in document.get("middleware") or ():
+        for entry in document.get("middlewares") or ():
             named.add(entry if isinstance(entry, str) else entry["name"])
 
     assert named, "neither definition named middleware, so this asserts nothing"
@@ -599,12 +601,12 @@ def test_the_middleware_example_is_a_definition_kind_the_workspace_can_load(ship
     every one of them.
     """
     from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
-    from kingfisher.kinds.middleware.catalogue import LocalMiddlewareRepository
+    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 
-    assert (shipped / "middleware").is_dir()
-    assert "middleware" in DEFINITION_KINDS
+    assert (shipped / "middlewares").is_dir()
+    assert "middlewares" in DEFINITION_KINDS
 
-    offered = LocalMiddlewareRepository(shipped / "middleware")
+    offered = LocalMiddlewareRepository(shipped / "middlewares")
 
     assert set(offered.names) == set(_documented_registry(shipped)), (
         "the directory offers different names from the wiring block beside it, so "
@@ -650,10 +652,10 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     # its readers to the wrong place.
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
         "agents/researcher.yaml": (
-            "middleware",
+            "middlewares",
             ("call-cap-strict", "call-cap-generous", "tool-note"),
         ),
-        "subagents/sweeper.yaml": ("middleware", ("call-cap-generous", "tool-note")),
+        "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note")),
         "agents/analyst.yaml": ("groups", ("analysts", "auditors", "senior-analysts")),
         "subagents/auditor.yaml": (
             "groups",
@@ -693,7 +695,7 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
 
 
 def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path):
-    """A destination naming `middleware` gets the files, not just the directory.
+    """A destination naming `middlewares` gets the files, not just the directory.
 
     Driven against the real tree rather than asserted over it, because what could
     regress is the copying rather than the wording -- and the wording is what was
@@ -709,7 +711,7 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
         workspace = tmp_path
         catalogue_roots = {
             kind: tmp_path / kind
-            for kind in ("agents", "skills", "subagents", "tools", "middleware")
+            for kind in ("agents", "skills", "subagents", "tools", "middlewares")
         }
         authored_files = {
             name: tmp_path / name for name in ("models.yaml", "groups.yaml")
@@ -717,9 +719,9 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
 
     done = seed(Destination(), shipped)
 
-    assert "middleware/call_cap.py" in done.written
-    assert "middleware/tool_note.py" in done.written
-    assert (tmp_path / "middleware" / "call_cap.py").is_file()
+    assert "middlewares/call_cap.py" in done.written
+    assert "middlewares/tool_note.py" in done.written
+    assert (tmp_path / "middlewares" / "call_cap.py").is_file()
     # Left behind for naming middleware, which is a different rule and still
     # holds: a workspace that can *offer* one has not thereby registered it.
     assert "agents/researcher.yaml" not in done.written
@@ -763,7 +765,7 @@ def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped
 
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
 
-    assert spec.middleware == ALL, "the file this rests on stopped carrying the star"
+    assert spec.middlewares == ALL, "the file this rests on stopped carrying the star"
     assert declared_middleware(spec, {}, ALL, kind="agent") == []
 
 
@@ -787,7 +789,7 @@ def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
 
     graph = build_agent(
         cfg,
-        agent=replace(spec, middleware=("call-cap-strict",), subagents=None, skills=None),
+        agent=replace(spec, middlewares=("call-cap-strict",), subagents=None, skills=None),
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=responses),
         middleware_registry={"call-cap-strict": lambda: cap(2)},
@@ -806,7 +808,7 @@ def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
     """It is code, so "does it parse" means "does it run" -- the same bar
     `test_the_middleware_example_caps_a_turn` sets for the cap two tests up.
     """
-    note = load(shipped / "middleware" / "tool_note.py", declares="ToolNote")
+    note = load(shipped / "middlewares" / "tool_note.py", declares="ToolNote")
     spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
     responses = [
         AIMessage(content="", tool_calls=[{"name": "ls", "args": {"path": "/"}, "id": "c1"}]),
@@ -817,7 +819,7 @@ def test_the_note_example_reaches_a_real_tool_result(shipped, cfg, session_dir):
         cfg,
         agent=replace(
             spec,
-            middleware=("tool-note",),
+            middlewares=("tool-note",),
             middleware_settings={"tool-note": {"text": "Mind the source."}},
             subagents=None,
             skills=None,
@@ -860,11 +862,11 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
 
     assert agent.name == "researcher"
     # Three, not two: `call-cap-generous` is granted here so `sweeper` may name
-    # it, since an agent's `middleware:` is the ceiling its delegates are
+    # it, since an agent's `middlewares:` is the ceiling its delegates are
     # clamped by. The agent runs under both caps and the stricter one decides.
-    assert agent.middleware == ("call-cap-strict", "call-cap-generous", "tool-note")
+    assert agent.middlewares == ("call-cap-strict", "call-cap-generous", "tool-note")
     assert delegate.name == "sweeper"
-    assert delegate.middleware == ("call-cap-generous", "tool-note")
+    assert delegate.middlewares == ("call-cap-generous", "tool-note")
     assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
 
     # Both spellings in one list, which is what these two files are now for.
@@ -960,7 +962,7 @@ def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
 
 
 def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
-    """`middleware: [tool-note]` with no settings is a working line, not a no-op.
+    """`middlewares: [tool-note]` with no settings is a working line, not a no-op.
 
     An empty default would make the bare form silently do nothing, which is the shape of
     a feature nobody notices is broken.
@@ -969,7 +971,7 @@ def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
 
     registry = _documented_registry(shipped)
     agent, _ = _example_definitions(shipped)
-    quiet = replace(agent, middleware=("tool-note",), middleware_settings={})
+    quiet = replace(agent, middlewares=("tool-note",), middleware_settings={})
 
     (built,) = declared_middleware(quiet, registry, ALL, kind="agent")
 
@@ -1179,11 +1181,11 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
 
     It was real: `researcher` granted `call-cap-strict` and `tool-note`, and
     `sweeper` named `call-cap-generous`, which its parent therefore refused. An
-    agent's `middleware:` is the ceiling its delegates are clamped by, so a
+    agent's `middlewares:` is the ceiling its delegates are clamped by, so a
     delegate can only name what the agent granted.
 
     Built from the workspace with no `middleware_registry=` at all, which is the
-    thing that could not be done before `middleware/` was a kind: the whole
+    thing that could not be done before `middlewares/` was a kind: the whole
     example now runs from a `kingfisher seed`.
     """
     from dataclasses import replace
@@ -1191,7 +1193,7 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     from kingfisher.infrastructure.catalogue import Definitions
 
     roots = Definitions.from_roots(
-        {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middleware")}
+        {kind: shipped / kind for kind in ("agents", "skills", "subagents", "tools", "middlewares")}
     )
     spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
 

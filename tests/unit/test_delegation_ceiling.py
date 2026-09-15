@@ -702,7 +702,7 @@ def _audited_build(cfg, monkeypatch, session_dir, **caps):
             name="probed",
             description="names the deployment's middleware",
             system_prompt="You work.",
-            middleware=("audit",),
+            middlewares=("audit",),
             subagents=("helper",),
         ),
         session_dir=session_dir,

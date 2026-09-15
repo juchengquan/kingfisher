@@ -23,13 +23,13 @@ from kingfisher.infrastructure.harness.activation import (
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.backend import build_backend
 from kingfisher.infrastructure.harness.tools import workspace_tool_names
-from kingfisher.kinds.middleware.catalogue import MiddlewareError
+from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.layout import SKILLS_ROUTE
 from tests.conftest import (
     FakeToolCallingModel,
     capture_build,
-    middleware_dir,
+    middlewares_dir,
     subagents_dir,
     tools_dir,
 )
@@ -195,7 +195,7 @@ class NotMiddleware:
     name = "nope"
 
 
-MIDDLEWARE = [NotMiddleware]
+MIDDLEWARES = [NotMiddleware]
 """
 
 
@@ -207,8 +207,8 @@ def test_a_broken_middleware_module_fails_at_startup_too(cfg):
     read the directory until a definition named one. So a deployment started, said it
     was fine, and died on the first request activating an agent that names it.
     """
-    middleware_dir(cfg).mkdir(parents=True, exist_ok=True)
-    (middleware_dir(cfg) / "wrong.py").write_text(NOT_MIDDLEWARE, encoding="utf-8")
+    middlewares_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (middlewares_dir(cfg) / "wrong.py").write_text(NOT_MIDDLEWARE, encoding="utf-8")
 
     with pytest.raises(MiddlewareError, match="AgentMiddleware"):
         Definitions.from_config(cfg).warm()

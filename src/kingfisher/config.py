@@ -63,12 +63,12 @@ def definition_roots_for(  # noqa: PLR0913, PLR0917 -- one per root, each
     subagents_root: Path | None = None,
     tools_root: Path | None = None,
     agents_root: Path | None = None,
-    middleware_root: Path | None = None,
+    middlewares_root: Path | None = None,
 ) -> dict[str, Path]:
     """Each definition directory: an override, or a name in the workspace."""
     return {
         "agents": agents_root or workspace / "agents",
-        "middleware": middleware_root or workspace / "middleware",
+        "middlewares": middlewares_root or workspace / "middlewares",
         "skills": skills_root or workspace / "skills",
         "subagents": subagents_root or workspace / "subagents",
         "tools": tools_root or workspace / "tools",

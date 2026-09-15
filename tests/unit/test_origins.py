@@ -152,7 +152,7 @@ def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
     names = [name for name, _ in found.entries()]
 
     assert names == [
-        "agents", "middleware", "skills", "subagents", "tools",
+        "agents", "middlewares", "skills", "subagents", "tools",
         "models", "groups", "seed", "sessions",
     ]
 

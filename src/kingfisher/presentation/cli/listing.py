@@ -258,8 +258,8 @@ def as_json(found: Inventory) -> dict[str, object]:
         "subagent_sources": dict(found.subagent_sources),
         "compiled_subagents": list(found.compiled_subagents),
         "subagents_error": found.subagents_error,
-        "middleware": dict(found.middleware),
-        "middleware_error": found.middleware_error,
+        "middlewares": dict(found.middlewares),
+        "middlewares_error": found.middlewares_error,
         "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
@@ -322,6 +322,6 @@ def failed(found: Inventory) -> bool:
             found.bundles_error,
             # The fifth kind, which nothing here read until it was the last one
             # a deployment could break without being told.
-            found.middleware_error,
+            found.middlewares_error,
         )
     )
