@@ -24,6 +24,18 @@ skills:
   # reads as tidying and retires the only place the other is exercised.
   - tabular-qa
   - incident::postmortem
+# A delegate may consult another. Checking a figure is this one's job; whether
+# the column it came from is really numeric is a question of a different kind,
+# and `profiler`'s.
+#
+# The caller decides whether it is in reach, so the prompt below works both
+# ways. A request naming `reviewer` alone gets a reviewer without it -- dropped,
+# not refused. `assistant.yaml` names both, so it runs with the pair.
+#
+# That reaches `profiler` twice, once from the agent and once from here, and is
+# not a loop: delegation is a graph, and only a path back to where it started is
+# refused.
+subagents: [profiler]
 # Neither `provider:` nor `model:`. Checking a number is where being wrong costs
 # most, so this one wants the deployment's own model -- which is what omitting
 # them means. Pinning the default would read as a decision and behave as a
@@ -44,6 +56,11 @@ system_prompt: |
      match.
 
   If they disagree, say which is right and why.
+
+  If a figure rests on a column you are not sure of — text that looks numeric,
+  blanks that may or may not count — ask `profiler` about the file before you
+  recompute. If `profiler` is not among your delegates, read the header and a
+  few rows yourself, and say that you did.
 
   If you cannot tell — the file is ambiguous, the claim is underspecified — say
   so plainly, and say what would settle it. That is the honest result and not a
