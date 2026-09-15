@@ -21,26 +21,20 @@ skills: ["*"]
 # A delegate that names helpers of its own brings them with it: grant the
 # delegate and its helpers arrive, without the agent listing them here.
 subagents: [extractor, reviewer, profiler]
-# Every middleware this deployment registered and this request still grants --
-# the same idiom as `skills: ["*"]` above, on the one axis where a definition
-# cannot name anything portable. A registry entry is code the *deployment*
-# wrote, so no name written in a file that ships inside a wheel could resolve
-# anywhere but the machine it was written for.
+# No `middlewares:`, so this agent runs under none -- the field omits to
+# nothing, like `skills` and `subagents` above.
 #
-# The star is the only form of this field a shipped file may carry, and the
-# difference is what happens when the deployment has registered nothing -- which
-# is every fresh checkout. A name is refused when the agent is built (`names
-# unregistered middleware`) and the first run dies to demonstrate a feature. A
-# star resolves to nothing and raises nothing. It degrades where a name refuses.
+# Not `["*"]`, though it reads as the portable choice. A star takes every
+# middleware the workspace offers, and `kingfisher seed` copies `middlewares/`
+# in, so on a seeded workspace it would wrap this agent in every example there:
+# a 20-call cap, a note on every tool result, a summariser -- each written for
+# the one definition that names it. Nor a name: `seed` leaves behind a
+# definition naming middleware, and this is the agent a reader runs first.
 #
-# So an audit hook or a rate limit you register reaches this agent without
-# editing this file, which is the case the axis exists for. The cost is the
-# other side of the same sentence: it takes whatever is there, so a middleware
-# registered for one narrow purpose arrives here too. When that is wrong, narrow
-# the axis on the request -- a star resolves smaller when the caller withheld
-# something, and raises nothing then either -- or delete this line and name what
-# you want, which is what `assets_examples/middlewares/` shows.
-middlewares: ["*"]
+# To give this agent one, name it in your workspace's copy. The same line is
+# what its delegates are clamped by, so a delegate here that names a middleware
+# needs it listed here too.
+#
 # No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships
 # inside a wheel, since no vendor's model id is portable anywhere else.

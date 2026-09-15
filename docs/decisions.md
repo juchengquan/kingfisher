@@ -241,6 +241,25 @@ assumed: an unset `trigger` normalises to no clauses and never fires, and a
 backend reports a failed write by returning one rather than raising.
 *(2026-09-15.)*
 
+**The shipped `assistant` names no middleware, and does not write the star.**
+`middlewares: ["*"]` was argued as the one form a shipped file could carry: a name
+is refused on a deployment that registered nothing, and a star resolves to nothing
+there. *Middleware is a definition kind* is what made that false, and nobody read
+the two together -- a file in the workspace's `middlewares/` counts as registered,
+and `seed` copies the examples in. So a seeded workspace wrapped the agent a reader
+runs first in every one of them: both caps, `ToolNote` on every tool result, and
+`Compact` summarising at sixty messages, on the agent and on its general-purpose
+delegate. Measured by building it. The test for the star checked it against an
+empty registry, which is the one registry a seeded workspace never has.
+
+Two other fixes were weighed. Seeding `middlewares/` only under `--all` would
+undo half of *Middleware is a definition kind* for one line of one file; a star
+that skipped workspace files would make the two sources of one registry mean
+different things to one field. Omitting the line costs what the star was for --
+a deployment's audit hook no longer reaches this agent unnamed, and its delegates
+may name only what it lists -- and a deployment pays that in its own copy, where a
+name is its own to resolve. *(2026-09-16.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that

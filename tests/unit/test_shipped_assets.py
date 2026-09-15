@@ -929,23 +929,41 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
             named = middleware_named(path.read_text(encoding="utf-8"))
             assert not named, (
                 f"{path.relative_to(tmp_path)} was seeded naming {named}, which is "
-                'refused on any deployment that did not register it; `["*"]` is the '
-                "form that resolves to nothing instead"
+                "refused on any deployment that did not register it; a shipped "
+                "definition writes no `middlewares:` line instead"
             )
 
 
-def test_the_shipped_star_costs_nothing_on_a_deployment_with_no_registry(shipped):
-    """The property the rule above now rests on, driven rather than argued.
+def test_a_seeded_assistant_runs_under_no_example_middleware(
+    cfg, session_dir, shipped, monkeypatch
+):
+    """`assistant` wrote `middlewares: ["*"]`, and a seeded workspace offers every
+    example in `middlewares/` -- so the agent a reader runs first was capped at twenty
+    tool calls, noted on every result and summarised, by examples written for others.
 
-    Read off the shipped file rather than a spec built here: delete the star and this
-    still passes if it asserts on a spec of its own making.
+    Built from a real seed: the test this replaced checked the star against an empty
+    registry, which is the one registry a seeded workspace never has.
     """
-    from kingfisher.infrastructure.harness.agent import declared_middleware
+    from kingfisher.infrastructure.workspace.seeding import seed
+    from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 
-    spec = LocalAgentRepository(shipped / "agents").specs["assistant"]
+    seed(cfg, shipped)
+    offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).names)
+    captured = capture_build(monkeypatch)
+    build_agent(
+        replace(cfg, skills_enabled=True),
+        agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"],
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+    )
 
-    assert spec.middlewares == ALL, "the file this rests on stopped carrying the star"
-    assert declared_middleware(spec, {}, ALL, kind="agent") == []
+    # By name, not by class: a `middlewares/` file is imported afresh each time the
+    # catalogue is read, so the classes loaded here are not the ones built there.
+    worn = {m.name for m in captured["middleware"]} & offered
+    handed = {m.name for s in captured["subagents"] for m in s.get("middleware", [])} & offered
+    assert offered, "the seed carried no middleware, so this asserts nothing"
+    assert not worn, f"assistant runs under {sorted(worn)}"
+    assert not handed, f"its delegates run under {sorted(handed)}"
 
 
 def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
