@@ -66,7 +66,7 @@ def test_minted_ids_are_not_guessable(cfg):
 
 
 def test_the_service_may_name_a_session_even_though_a_request_may_not(cfg):
-    """T2 is about who is asking, not about names. The service knows."""
+    """T2 is about who is asking, not about names; the caller of `start_session` knows."""
     kf = service(cfg)
 
     kf.start_session("chosen-by-the-service")

@@ -21,9 +21,7 @@ __version__ = "0.1.0"
 #: Every one is live, and every one of their callers already imports it from the module
 #: that defines it, so nothing had ever come through the front door for them. The
 #: command ships in this distribution and is family: it reaches such a name directly,
-#: and still comes through the front door for every name that *is* here. The service is
-#: a distribution of its own and keeps the strict rule, because a promise is what it has
-#: instead of a shared wheel.
+#: and still comes through the front door for every name that *is* here.
 #:
 #: Narrowed rather than deleted. `from kingfisher.infrastructure.harness.agent import
 #: build_agent` still works and is what the package itself does. An outside caller on
@@ -43,14 +41,6 @@ _EXPORTS = {
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalFileStore": "kingfisher.infrastructure.workspace.files",
-    # The sixth name a consumer has forced public. The service owns
-    # `KINGFISHER_SERVICE_FILE_STORE_FACTORY` -- a `FileStore` resolves refs,
-    # which is the vocabulary of a caller with no host paths, and the library's
-    # own command has no use for one -- so the service is what turns that
-    # setting into a store, and it takes `kingfisher` and nothing deeper. A
-    # wrapper rather than the generic `wiring.store_named`, which would need
-    # `FileStore` exported too for the caller to pass as `port=`.
-    "file_store_named": "kingfisher.infrastructure.workspace.files",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     # The port's contract, for a deployment checking its own adapter against it.
     # Public because it is the one thing in `testing` anybody outside this
@@ -162,7 +152,6 @@ __all__ = [
     "default_backend",
     "definitions_source",
     "ensure_layout",
-    "file_store_named",
     "inventory",
     "kinds_at",
     "paths_from_env",
@@ -214,9 +203,6 @@ if TYPE_CHECKING:
         LocalSessionStore as LocalSessionStore,
     )
     from kingfisher.infrastructure.workspace.files import LocalFileStore as LocalFileStore
-    from kingfisher.infrastructure.workspace.files import (
-        file_store_named as file_store_named,
-    )
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
     from kingfisher.infrastructure.workspace.seeding import (

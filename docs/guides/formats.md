@@ -115,15 +115,6 @@ opens and stored beside it, so editing the file mid-conversation does not change
 the instructions under a history that already happened. A later turn may name the
 same agent again; naming a different one is refused.
 
-Over HTTP that lands where the choice is made:
-
-```
-POST /sessions   {"agent": "surveyor"}
-```
-
-which answers with the session id *and* what it resolved to — the one moment you
-can see what you got without running a turn.
-
 ### The prompt is added to, not replaced
 
 `system_prompt` is the same word a subagent file uses, doing a different job. A
@@ -187,10 +178,10 @@ generic one reads as *not supported yet* and sends you looking for a workaround:
 
 - **`permissions`** — deepagents' permissions *replace* the parent's rather than
   narrowing them, so writing this here would drop `/data` being read-only.
-- **`interrupt_on`** — what is missing is anything in the service that surfaces
-  an interrupt to a caller.
-- **`response_format`** — it changes what a run *returns*, so the result, the
-  service's response body and streaming all have a stake in it.
+- **`interrupt_on`** — what is missing is anything that surfaces an interrupt to
+  a caller.
+- **`response_format`** — it changes what a run *returns*, so the result and
+  streaming both have a stake in it.
 
 ---
 

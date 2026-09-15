@@ -121,7 +121,7 @@ class Sessions:
         inside that one too. So `reap` read a stub that had been idle since the
         moment it was made, swept it, and called `forget` on the store -- deleting
         the only durable copy of a session in daily use. Measured against a session
-        opened the way `POST /sessions` opens one.
+        opened by `start_session` and pinned before its first turn.
 
         It is also what made `sessions()` and `reap` see anything at all under a
         custom root, which `ports.md` says they do not.

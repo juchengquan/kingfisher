@@ -226,17 +226,6 @@ def build_parser() -> argparse.ArgumentParser:
             "with no caller. Required where the workspace declares source ids"
         ),
     )
-    sub.add_parser(
-        "serve",
-        help="run the HTTP surface (ships separately)",
-        description=(
-            "The same thing `kingfisher-service` starts, reading the same "
-            "environment, with one implementation behind both names. The "
-            "service is its own distribution: `pip install "
-            "'kingfisher[service]'`. This verb says so when it is missing "
-            "rather than being absent from this list."
-        ),
-    )
     checkup = sub.add_parser(
         "doctor",
         help="check everything that stands between this install and a run",
@@ -669,19 +658,6 @@ def _reap_one(kf: Kingfisher, session_id: str) -> int:
     return 0
 
 
-def _serve() -> int:
-    """Hand off to the server's own entry point, which decides everything."""
-    try:
-        from kingfisher_service.__main__ import main as serve_forever  # noqa: PLC0415
-    except ImportError:
-        print(
-            "kingfisher serve needs the service: pip install 'kingfisher[service]'",
-            file=sys.stderr,
-        )
-        return 1
-    return serve_forever()
-
-
 def _doctor(*, as_document: bool = False) -> int:
     """Say what would stop a run, and what would merely surprise."""
     try:
@@ -753,16 +729,15 @@ REFUSALS = (
     UploadError,
 )
 
-#: Verb -> what runs it. A table rather than a chain of `if`s, which four verbs
-#: made worth it twice over. The chain needed one branch per verb *in the right
-#: order*, because only two of them take `--json` and the fallthrough read
-#: `args.json` -- so `serve` reaching that line was an `AttributeError` waiting
-#: on somebody reordering two blocks that looked interchangeable. Here each verb
-#: names the arguments it has, and the order of this table means nothing.
+#: Verb -> what runs it. A table rather than a chain of `if`s. The chain needed
+#: one branch per verb *in the right order*, because not every verb takes
+#: `--json` and the fallthrough read `args.json` -- so a verb without it reaching
+#: that line was an `AttributeError` waiting on somebody reordering two blocks
+#: that looked interchangeable. Here each verb names the arguments it has, and
+#: the order of this table means nothing.
 HANDLERS = {
     "run": _run,
     "seed": lambda args: _seed(args.source, everything=args.everything),
-    "serve": lambda args: _serve(),  # noqa: ARG005
     "doctor": lambda args: _doctor(as_document=args.json),
     "list": lambda args: _list(as_document=args.json, held=args.held),
     "sessions": lambda args: _sessions(as_document=args.json),

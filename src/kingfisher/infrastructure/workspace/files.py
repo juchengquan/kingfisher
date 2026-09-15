@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import TYPE_CHECKING, Any
+from typing import TYPE_CHECKING
 
 from kingfisher.domain.references import (
     UnknownReferenceError,
@@ -86,11 +86,3 @@ class LocalFileStore:
             msg = f"no such reference: {file_id!r}"
             raise UnknownReferenceError(msg)
         return {path.name: path.read_bytes()}
-
-
-def file_store_named(spec: str, *, setting: str) -> Any:
-    """The `FileStore` a deployment named, imported and built."""
-    from kingfisher.domain.ports import FileStore  # noqa: PLC0415
-    from kingfisher.infrastructure.wiring import store_named  # noqa: PLC0415
-
-    return store_named(spec, setting=setting, port=FileStore)

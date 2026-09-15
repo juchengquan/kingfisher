@@ -52,12 +52,11 @@ def _raises(call: Callable[[], object], expected: type[Exception], *, doing: str
     """Run `call` and require exactly `expected`.
 
     The *type* is part of the contract rather than a detail of the shipped
-    adapters, and `kingfisher_service/errors.py` is where that becomes true: it
-    maps each of these to its own status and anything unrecognised to 500. So a
-    store raising a plain `ValueError` for a hostile ref, or a `FileNotFoundError`
-    for a missing one, turns a caller's bad request into an operator's page.
-    Both are exported from `kingfisher` precisely so an adapter outside this
-    package can raise the same ones.
+    adapters: it is how a caller tells its own mistake from a broken deployment.
+    So a store raising a plain `ValueError` for a hostile ref, or a
+    `FileNotFoundError` for a missing one, turns a caller's bad request into an
+    operator's page. Both are exported from `kingfisher` precisely so an adapter
+    outside this package can raise the same ones.
     """
     try:
         call()
@@ -313,9 +312,8 @@ def a_ref_the_store_does_not_hold_is_refused(planted: Planted) -> None:
 
     The port says so outright -- *"a bare `FileNotFoundError` cannot be told
     from the deployment's own disk being wrong, and would answer 500 to a
-    caller's typo"*. `kingfisher_service/errors.py` is where that becomes true:
-    it maps this type to 404 and anything unrecognised to 500, so the difference
-    between a mistyped ref and a page for the on-call is this exception's class.
+    caller's typo"* -- so the difference between a mistyped ref and a page for
+    the on-call is this exception's class.
     """
     _raises(
         lambda: planted.store.fetch(planted.missing),

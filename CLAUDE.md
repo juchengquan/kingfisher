@@ -4,7 +4,7 @@
 
 Exactly what CI runs, and all three must pass before a commit:
 
-    uv run ruff check src/ tests/ service/ assets_examples/
+    uv run ruff check src/ tests/ assets_examples/
     uv run ty check
     uv run pytest -q
 
@@ -21,9 +21,6 @@ small lie with a date on it. `ruff format --check` will tell you today's.
 `ruff` prints a trailing note about fixable problems that reads like a summary --
 it is not one. Look for `All checks passed!` or `Found N errors`, not the last
 line.
-
-Run bare `pytest`, not `pytest tests/`: the latter skips the `service/`
-distribution, which has its own suite and its own CI job.
 
 ## Where to look
 

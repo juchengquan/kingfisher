@@ -487,8 +487,8 @@ class Kingfisher(Sessions, Disposal):
     def remember_agent(self, session_id: str, name: str | None) -> None:
         """Have this session keep the agent it opened with, before it has run.
 
-        Takes an id because its caller has one and no directory: `POST /sessions`
-        opens a session without running a turn. Where that session *is* is
+        Takes an id because its caller has one and no directory: a session from
+        `start_session` has not run a turn yet. Where that session *is* is
         `session_root`'s answer and nobody else's, so this holds it to find out
         rather than assuming `<workspace>/sessions/<id>` -- which is the session
         only under the default root.

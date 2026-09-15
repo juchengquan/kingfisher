@@ -650,17 +650,19 @@ def test_a_retired_setting_is_reported(cfg, monkeypatch):
     assert "KINGFISHER_SKILLS_ENABLED" in check.remedy
 
 
-def test_the_old_service_prefix_is_reported_by_its_prefix(cfg, monkeypatch):
+def test_the_service_settings_are_reported_by_their_prefixes(cfg, monkeypatch):
     """Matched rather than enumerated, so a suffix nobody listed is still caught --
-    and the base package does not carry a second copy of the service's own table,
-    which would quietly stop covering whichever setting it gains next.
+    under both names the HTTP service's settings had, because a deployment still
+    carrying either is setting something that no longer does anything.
     """
     monkeypatch.setenv("KINGFISHER_SERVER_INVENTED_LATER", "1")
+    monkeypatch.setenv("KINGFISHER_SERVICE_PORT", "9001")
 
     check = {c.name: c for c in examine(cfg)}["retired settings"]
 
     assert "KINGFISHER_SERVER_INVENTED_LATER" in check.detail
-    assert "KINGFISHER_SERVICE_INVENTED_LATER" in check.remedy
+    assert "KINGFISHER_SERVICE_PORT" in check.detail
+    assert "removed" in check.remedy
 
 
 def test_a_retired_name_left_empty_is_not_reported(cfg, monkeypatch):
@@ -678,7 +680,8 @@ def test_a_deployment_on_current_names_hears_nothing(cfg, monkeypatch):
     """
     monkeypatch.delenv("KINGFISHER_SKILLS", raising=False)
     monkeypatch.setenv("KINGFISHER_SKILLS_ENABLED", "true")
-    monkeypatch.setenv("KINGFISHER_SERVICE_PORT", "9001")
+    # Shares its stem with both retired prefixes, and is read.
+    monkeypatch.setenv("KINGFISHER_SESSION_TTL_S", "3600")
 
     assert "retired settings" not in {c.name for c in examine(cfg)}
 

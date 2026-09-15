@@ -73,10 +73,6 @@ say so at the time: `kingfisher run --delete-session`, or
 
 ## What ships separately
 
-**`kingfisher[service]`** — an HTTP surface over the library. Its own
-distribution, so `pip install kingfisher` puts no web framework on disk, which
-is checked against the built wheel rather than asserted.
-
 **The definitions ship nowhere.** They were their own distribution once, found
 through an entry point so anyone could publish a pack, and then a set inside
 this wheel. Both are gone: where a deployment gets its definitions is a setting,
