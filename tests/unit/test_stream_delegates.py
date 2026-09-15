@@ -8,7 +8,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.application.run import Request, stream
 from kingfisher.infrastructure.harness import runtime
-from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.harness.backend import default_backend
 from tests.conftest import FakeToolCallingModel, StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
@@ -38,7 +38,7 @@ def _two_level(cfg, session_dir):
                 AIMessage(content="THE ANSWER"),
             ]
         ),
-        backend=build_backend(cfg, session_dir),
+        backend=default_backend(cfg, session_dir),
         subagents=[
             {
                 "name": "reviewer",

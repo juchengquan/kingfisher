@@ -9,7 +9,7 @@ import pytest
 
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
+from kingfisher.infrastructure.harness.backend import default_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
@@ -161,7 +161,7 @@ def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
     sandbox nest itself twice while thirteen tests passed.
     """
     _two_parties(cfg)
-    backend = build_backend(replace(cfg, skills_enabled=True), session_dir)
+    backend = default_backend(replace(cfg, skills_enabled=True), session_dir)
     middleware = NarrowedSkills(
         allowed=("research::lookup",),
         backend=backend,
@@ -181,7 +181,7 @@ def test_the_async_loader_agrees_with_the_sync_one(cfg, session_dir):
 def test_only_the_activated_one_reaches_the_model(cfg, session_dir):
     """Both load; one is shown."""
     _two_parties(cfg)
-    backend = build_backend(replace(cfg, skills_enabled=True), session_dir)
+    backend = default_backend(replace(cfg, skills_enabled=True), session_dir)
     middleware = NarrowedSkills(
         allowed=("research::lookup",),
         backend=backend,

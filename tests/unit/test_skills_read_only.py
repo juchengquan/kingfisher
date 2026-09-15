@@ -13,7 +13,7 @@ from langchain_core.messages import AIMessage
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.harness.backend import default_backend
 from kingfisher.infrastructure.sandbox import confinement
 from tests.conftest import FakeToolCallingModel
 
@@ -136,7 +136,7 @@ def test_reading_a_skill_still_works(cfg, session_dir):
 def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
     """The half the tool rule cannot reach."""
     directory = _catalogue(cfg)
-    shell = build_backend(cfg, session_dir)
+    shell = default_backend(cfg, session_dir)
 
     assert shell.execute(f"echo pwned > {directory}/PWNED.md").exit_code != 0
     assert shell.execute(f"echo pwned > {directory}/SKILL.md").exit_code != 0
@@ -148,7 +148,7 @@ def test_the_shell_cannot_write_into_the_catalogue(cfg, session_dir):
 def test_the_shell_can_still_read_a_skill_and_write_elsewhere(cfg, session_dir):
     """The carve-out is a carve-out."""
     directory = _catalogue(cfg)
-    shell = build_backend(cfg, session_dir)
+    shell = default_backend(cfg, session_dir)
 
     assert shell.execute(f"cat {directory}/SKILL.md").exit_code == 0
     assert shell.execute(f"echo fine > {session_dir}/derived/allowed.txt").exit_code == 0

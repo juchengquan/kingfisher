@@ -21,7 +21,7 @@ from kingfisher.infrastructure.harness.activation import (
     defined_subagents,
 )
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.harness.backend import default_backend
 from kingfisher.infrastructure.harness.tools import workspace_tool_names
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
@@ -142,7 +142,7 @@ def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, 
 def test_the_skills_route_follows_the_catalogue(tmp_path, cfg, session_dir):
     """The file tools have to reach what the listing advertised."""
     roots = _staged(tmp_path / "staged", skill="staged-only")
-    backend = build_backend(cfg, session_dir, catalogue=roots)
+    backend = default_backend(cfg, session_dir, catalogue=roots)
 
     routed = backend.routes[SKILLS_ROUTE]
 
@@ -163,7 +163,7 @@ def test_the_shell_reaches_a_supplied_catalogue(cfg, session_dir):
     (roots.skills.root / "demo").mkdir()
     (roots.skills.root / "demo" / "run.sh").write_text("echo from-the-supplied-catalogue\n")
     try:
-        backend = build_backend(cfg, session_dir, catalogue=roots)
+        backend = default_backend(cfg, session_dir, catalogue=roots)
 
         result = backend.execute('sh "$KINGFISHER_SKILLS/demo/run.sh"')
 
@@ -506,7 +506,7 @@ def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, ses
 
     catalogue = replace(Definitions.from_config(cfg), skills=Nowhere())
 
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
 
     assert "body" in str(backend.read(f"{SKILLS_ROUTE}imaginary/SKILL.md"))
 
@@ -520,7 +520,7 @@ def test_the_other_two_kinds_need_no_directory_at_all(cfg, session_dir):
         Definitions.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})
     )
 
-    assert build_backend(cfg, session_dir, catalogue=catalogue) is not None
+    assert default_backend(cfg, session_dir, catalogue=catalogue) is not None
 
 
 def test_a_definition_that_will_not_parse_fails_at_startup_too(cfg):

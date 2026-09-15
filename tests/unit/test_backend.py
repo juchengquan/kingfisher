@@ -8,7 +8,7 @@ from deepagents.backends import CompositeBackend
 from kingfisher.infrastructure.harness.agent import read_only_permissions
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
-    build_backend,
+    default_backend,
     shell_env,
 )
 from kingfisher.infrastructure.harness.runlog import log_path
@@ -50,7 +50,7 @@ def test_a_session_that_was_never_made_is_refused(cfg, tmp_path):
     bare.mkdir()
 
     with pytest.raises(ValueError, match="ensure_session_layout"):
-        build_backend(cfg, bare)
+        default_backend(cfg, bare)
 
 
 def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
@@ -63,14 +63,14 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
 
     wanted = r"missing derived, memory, runs, \.home, \.tmp, \.harness, skills/uploaded"
     with pytest.raises(ValueError, match=wanted):
-        build_backend(cfg, bare)
+        default_backend(cfg, bare)
 
 
 def test_backend_is_rooted_at_the_session(cfg, session_dir):
     """One session is one root: virtual paths anchor there, so /data means this
     session's data and no path leads to another session's.
     """
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     assert str(session_dir.resolve()) == str(backend.default.cwd)
 
 
@@ -78,7 +78,7 @@ def test_data_is_routed_so_the_deny_rule_is_legal(cfg, session_dir):
     """deepagents refuses permissions on an execution backend unless every rule path is
     scoped to a route -- routing /data/ is what makes Q21 possible.
     """
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     assert "/data/" in backend.routes
     assert str((session_dir / "data").resolve()) == str(backend.routes["/data/"].cwd)
 
@@ -87,14 +87,14 @@ def test_skills_is_routed_for_the_same_reason(cfg, session_dir):
     """A request that activates a subset of the skills needs deny rules for the rest,
     and those rules are rejected unless /skills/ is a route too.
     """
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     assert "/skills/" in backend.routes
     assert str((cfg.workspace / "skills").resolve()) == str(backend.routes["/skills/"].cwd)
 
 
 def test_every_route_the_layout_declares_is_one_the_backend_mounts(cfg, session_dir):
     """The table and what backs it are in two modules, so something has to tie them."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     declared = set(routed_paths())
     generated = {r for r in backend.routes if r.startswith(BUNDLED_SKILLS_ROUTE)}
 
@@ -118,7 +118,7 @@ def test_the_deny_rules_are_the_two_the_layout_declares(cfg, session_dir):
 
 def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
     """The absence used to be the only record of it."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     unrouted = {r.path for r in ROUTES if not r.routed}
 
     assert unrouted == {"/derived/", "/runs/"}
@@ -127,7 +127,7 @@ def test_derived_is_unrouted_and_the_table_says_so(cfg, session_dir):
 
 def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
     """The observed bug: it succeeded, and the file was not where it looked."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     host_path = f"{cfg.workspace}/runs/s1/t001/report.md"
 
     with pytest.raises(ValueError, match="is a host path"):
@@ -139,7 +139,7 @@ def test_a_host_path_to_a_file_tool_is_refused_not_mirrored(cfg, session_dir):
 
 def test_the_refusal_names_the_path_that_was_meant(cfg, session_dir):
     """An error the model can act on beats one it can only apologise for."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
 
     with pytest.raises(ValueError, match=r"Use '/runs/t001/report\.md' instead"):
         backend.write(f"{session_dir}/runs/t001/report.md", "content")
@@ -151,7 +151,7 @@ def test_other_host_roots_are_refused_too(cfg, session_dir):
     One backend for all four: every case refuses, so nothing is written and no
     iteration can leave anything for the next.
     """
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
 
     for host_path in ("/tmp/scratch.py", "/Users/someone/notes.md", "/etc/passwd", "/var/log/x"):
         with pytest.raises(ValueError, match="is a host path"):
@@ -160,7 +160,7 @@ def test_other_host_roots_are_refused_too(cfg, session_dir):
 
 def test_virtual_paths_still_work(cfg, session_dir):
     """The guard must not cost the agent its ordinary vocabulary."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
 
     for virtual_path in ("/runs/s1/t001/report.md", "/derived/x.csv"):
         backend.write(virtual_path, "content")
@@ -341,9 +341,9 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
     """A `HOME` that does not exist is worse than none: tools fall back to somewhere
     unpredictable rather than failing.
     """
-    from kingfisher.infrastructure.harness.backend import agent_home, build_backend
+    from kingfisher.infrastructure.harness.backend import agent_home, default_backend
 
-    build_backend(cfg, session_dir)
+    default_backend(cfg, session_dir)
 
     assert agent_home(session_dir).is_dir()
 
@@ -375,7 +375,7 @@ def test_a_routed_file_is_globbed_once(cfg, session_dir):
     """Measured before this: `--data orders.csv` reached the model as
     `['/data/orders.csv', '/data/orders.csv']`, on every pattern tried.
     """
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     for route, parts in INSIDE_THE_ROOT.items():
         where = session_dir.joinpath(*parts)
         where.mkdir(parents=True, exist_ok=True)
@@ -388,7 +388,7 @@ def test_a_routed_file_is_globbed_once(cfg, session_dir):
 
 def test_a_routed_file_is_grepped_once(cfg, session_dir):
     """From the root, which is where the two answers meet."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     for route, parts in INSIDE_THE_ROOT.items():
         where = session_dir.joinpath(*parts)
         where.mkdir(parents=True, exist_ok=True)
@@ -405,7 +405,7 @@ def test_a_routed_file_is_grepped_once(cfg, session_dir):
 
 def test_a_file_matching_twice_still_reports_both(cfg, session_dir):
     """The half that says this is deduplication and not collapsing."""
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     data = session_dir / "data"
     data.mkdir(parents=True, exist_ok=True)
     (data / "probe.txt").write_text("needle one\nquiet\nneedle two\n", encoding="utf-8")
@@ -420,7 +420,7 @@ def test_two_different_files_are_both_still_listed(cfg, session_dir):
     """The other half: nothing is dropped for being similar, only for being the same
     thing twice.
     """
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     data = session_dir / "data"
     data.mkdir(parents=True, exist_ok=True)
     for name in ("one.txt", "two.txt"):

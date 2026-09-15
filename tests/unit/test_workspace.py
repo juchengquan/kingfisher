@@ -216,7 +216,7 @@ def test_the_layout_names_no_genre_of_output():
 
 
 def test_one_pass_makes_a_whole_session(tmp_path):
-    """What `build_backend` used to finish off, and the reason this exists."""
+    """What `default_backend` used to finish off, and the reason this exists."""
     session = ensure_session_layout(tmp_path / "s")
 
     for name in (*SESSION_DIRS, *SESSION_PLUMBING):

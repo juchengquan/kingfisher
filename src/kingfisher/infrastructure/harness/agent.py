@@ -38,7 +38,7 @@ from kingfisher.infrastructure.harness.backend import (
     HostPathGuard,
     WorkspaceToolErrors,
     WorkspaceToolPaths,
-    build_backend,
+    default_backend,
     skills_sources,
 )
 from kingfisher.infrastructure.harness.interpreter import _interpreter
@@ -136,7 +136,7 @@ def _backend_for(  # noqa: PLR0913 -- four of these are what building a backend
     if backend is not None:
         built = backend
     elif session_dir is not None:
-        built = build_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
+        built = default_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
     else:
         msg = "build_agent needs either a session_dir to root a backend at, or a backend"
         raise ValueError(msg)

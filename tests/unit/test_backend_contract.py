@@ -10,7 +10,7 @@ from deepagents.backends.protocol import ReadResult
 
 from kingfisher.infrastructure.harness.backend import (
     WorkspaceScopedBackend,
-    build_backend,
+    default_backend,
 )
 from kingfisher.infrastructure.harness.backend_contract import (
     BACKEND_CONTRACT,
@@ -29,7 +29,7 @@ def test_kingfishers_own_backend_keeps_the_contract(cfg, session_dir):
     would pass with every route wrong.
     """
     for check in BACKEND_CONTRACT:
-        check(lambda: build_backend(cfg, session_dir))
+        check(lambda: default_backend(cfg, session_dir))
 
 
 def test_the_contract_is_not_quietly_empty():
@@ -55,7 +55,7 @@ class NotRecognised:
 
 def test_a_backend_that_inherits_nothing_is_caught(cfg, session_dir):
     """The silent one: deepagents would drop `execute` and tell only the model."""
-    real = build_backend(cfg, session_dir)
+    real = default_backend(cfg, session_dir)
 
     with pytest.raises(AssertionError, match="not recognised by deepagents"):
         execution_support(lambda: NotRecognised(real))
@@ -65,7 +65,7 @@ def test_a_backend_missing_a_route_a_deny_rule_names_is_caught(cfg, session_dir)
     """Without a route under it, `/data/**` is not a rule deepagents will accept, and
     the graph does not build at all.
     """
-    real = build_backend(cfg, session_dir)
+    real = default_backend(cfg, session_dir)
     thinned = WorkspaceScopedBackend(
         default=real.default,
         routes={path: at for path, at in real.routes.items() if path != "/data/"},
@@ -86,7 +86,7 @@ def test_a_shell_that_cannot_see_what_the_tools_wrote_is_caught(cfg, session_dir
             outcome = super().execute(command, **kwargs)
             return replace(outcome, output="")
 
-    real = build_backend(cfg, session_dir)
+    real = default_backend(cfg, session_dir)
     blind = Blind(default=real.default, routes=dict(real.routes), workspace=session_dir)
 
     with pytest.raises(AssertionError, match="one filesystem"):
@@ -104,7 +104,7 @@ def test_a_host_path_refused_with_the_wrong_type_is_caught(cfg, session_dir):
                 raise ValueError(file_path)
             return super().read(file_path, offset, limit)
 
-    real = build_backend(cfg, session_dir)
+    real = default_backend(cfg, session_dir)
     wrong = WrongRefusal(
         default=real.default, routes=dict(real.routes), workspace=session_dir
     )
@@ -125,18 +125,18 @@ def test_a_backend_that_allows_host_paths_is_not_asked_to_refuse_them(cfg, sessi
                 return ReadResult(file_data={"content": "root:x:0:0", "encoding": "utf-8"})
             return super().read(file_path, offset, limit)
 
-    real = build_backend(cfg, session_dir)
+    real = default_backend(cfg, session_dir)
     allows = Allows(default=real.default, routes=dict(real.routes), workspace=session_dir)
 
     host_path_refusal(lambda: allows)
 
 
 def test_the_kit_is_run_against_the_real_tree_not_a_composite_of_its_own(cfg, session_dir):
-    """The control above builds with `build_backend`, and deleting that would leave a
+    """The control above builds with `default_backend`, and deleting that would leave a
     kit asserting on routes it had assembled itself -- green against any mistake the
     real builder makes.
     """
-    real = build_backend(cfg, session_dir)
+    real = default_backend(cfg, session_dir)
 
     assert isinstance(real, WorkspaceScopedBackend)
     assert "/data/" in real.routes

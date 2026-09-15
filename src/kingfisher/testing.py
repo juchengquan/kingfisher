@@ -149,7 +149,7 @@ def bytes_are_returned_unchanged(make: Factory) -> None:
 
 
 def one_session_cannot_read_another(make: Factory) -> None:
-    """The isolation `build_backend` gets from rooting a backend at a session,
+    """The isolation `default_backend` gets from rooting a backend at a session,
     which a store has to provide for itself: there are no directories here to be
     unable to route across, only whatever the implementation does with an id."""
     store = make()

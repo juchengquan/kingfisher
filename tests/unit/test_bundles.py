@@ -11,7 +11,7 @@ from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
+from kingfisher.infrastructure.harness.backend import default_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.spec import SubagentError
@@ -466,7 +466,7 @@ def test_a_bundles_skill_is_mounted_read_only(cfg, session_dir):
     workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
     with_private_skill(cfg)
 
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
 
     mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
     assert mounted == ["/skills/subagents/surveyor/"]
@@ -478,7 +478,7 @@ def test_a_bundles_skills_add_a_mount_and_no_rule(cfg, session_dir):
     workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
     with_private_skill(cfg)
 
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
     mounted = [route for route in backend.routes if route.startswith(BUNDLED_SKILLS_ROUTE)]
 
     assert mounted, "no bundle mounted, so this asserts nothing about bundles"

@@ -1045,7 +1045,7 @@ module's first line already describes. *(2026-09-07.)*
 
 **It exists because one route was three facts in two modules.** The path was a
 constant in `harness/backend.py`, the mount was a dict literal inside
-`build_backend`, and whether it was writable was a `FilesystemPermission` in
+`default_backend`, and whether it was writable was a `FilesystemPermission` in
 `harness/agent.py` whose `paths=["/data/**"]` was a string typed a second time
 with nothing tying it to `DATA_ROUTE = "/data/"`. They have to agree --
 `FilesystemMiddleware` refuses `permissions=` outright unless every rule is
@@ -1069,7 +1069,7 @@ made it safe to land.
 **Agreed as "a test ties them" and built one step stronger, because a rule
 refused the agreed form.** `routed_paths` would have been read by nothing but a
 test, which `test_nothing_is_defined_for_tests_alone` catches -- and that would
-have left `routed=False` on `/derived` as pure documentation. So `build_backend`
+have left `routed=False` on `/derived` as pure documentation. So `default_backend`
 keys its dict off the table: a route declared with nothing to back it now raises
 where it is declared. The harness still decides *what* backs each path; only the
 keys moved.
@@ -2020,7 +2020,7 @@ commands into files would make those commits open *more* files. `backend.py`
 reads like a hub plus three independent `AgentMiddleware` classes, and those
 three do not appear in its history at all: they have never been edited since
 they landed. Moving them relocates 250 lines nobody touches and leaves
-`build_backend`, at 25 commits, exactly where it was.
+`default_backend`, at 25 commits, exactly where it was.
 
 **A cluster that size means two different things and this one is the harmless
 one.** Everything joined to everything is what a cohesive unit and a rippling

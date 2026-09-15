@@ -48,7 +48,7 @@ def sandlock(monkeypatch):
 
 
 def a_policy(tmp_path, **kwargs: Any) -> StubSandbox:
-    """A policy for a session that exists, laid out as `build_backend` requires.
+    """A policy for a session that exists, laid out as `default_backend` requires.
 
     Through `ensure_session_layout` rather than a bare `mkdir`: the writable rules
     are one per directory in a session, so a session with none of them produces an
