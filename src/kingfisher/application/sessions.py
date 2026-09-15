@@ -55,9 +55,30 @@ class Sessions:
         if request.session_id is None:
             return uuid4().hex
         if not self._exists(request.session_id, root):
-            msg = f"no session {request.session_id!r}; omit session_id to start one"
-            raise UnknownSessionError(msg)
+            raise self._unknown_session(request.session_id)
         return request.session_id
+
+    def _unknown_session(self, session_id: str) -> UnknownSessionError:
+        """The refusal for an id nobody issued, and for a session this caller may not
+        touch. One wording for both, so that holding a real id teaches nothing.
+        """
+        return UnknownSessionError(f"no session {session_id!r}; omit session_id to start one")
+
+    def _reaches_session(self, directory: Path, held: frozenset[str] | None) -> bool:
+        """Whether a caller holding `held` may touch the session in `directory`.
+
+        The one rule reading a session and running a turn in it share: a caller who
+        cannot reach the session's pinned agent cannot touch the session. `None` is a
+        deployment with no vocabulary or an `UNSCOPED` call and reaches everything, and
+        so does a session with nothing pinned yet, which has no agent to be out of reach
+        of.
+        """
+        if held is None:
+            return True
+        kept = agent_started_with(directory)
+        if kept is None:
+            return True
+        return reaches(read(kept, agent_snapshot(directory)).source_ids, held)
 
     def _exists(self, session_id: str, root: Path) -> bool:
         """Whether this id names a session, by directory or by store."""
@@ -104,11 +125,7 @@ class Sessions:
         if found is None or self.access is None or not isinstance(source_ids, tuple):
             return found
         directory = sessions_root(self.workspace) / session_id
-        kept = agent_started_with(directory)
-        if kept is None:
-            return found
-        pinned = read(kept, agent_snapshot(directory))
-        return found if reaches(pinned.source_ids, self.access.expand(source_ids)) else None
+        return found if self._reaches_session(directory, self.access.expand(source_ids)) else None
 
     def start_session(self, session_id: str | None = None) -> str:
         """Open a new session and return its id.

@@ -12,6 +12,7 @@ from kingfisher.application.service import Kingfisher
 from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.request import Request
+from kingfisher.domain.session import UnknownSessionError
 from tests.conftest import an_agent
 
 VOCABULARY = "source_ids: [A, B]\n"
@@ -108,29 +109,118 @@ def test_the_session_route_refuses_an_unreachable_agent(two_agents):
         kf.agent_named("assistant", source_ids=("B",))
 
 
-def test_a_turn_on_a_pinned_agent_out_of_reach_is_refused(two_agents):
-    """A session id is a bearer credential, and a session pins its agent for life."""
+# -- a turn, first and later ------------------------------------------------
+
+
+def _pinned_by_a(kf) -> str:
+    """A session opened for caller A and fixed to the agent only A may run."""
+    kf.agent_named("assistant", source_ids=("A",))
+    session_id = kf.start_session()
+    kf.remember_agent(session_id, "assistant")
+    return session_id
+
+
+def _first_event(kf, request, source_ids):
+    """Setting a turn up is everything before its first event, so a refusal is here."""
+    events = kf.stream(request, source_ids=source_ids)
+    try:
+        return next(events)
+    finally:
+        events.close()
+
+
+def test_a_first_turn_naming_an_agent_out_of_reach_is_refused(two_agents):
+    """A session with no agent yet is checked on the agent the turn names."""
     kf = Kingfisher(two_agents, backend=default_backend)
-    opened = kf.open_session_for(Request(task="t", agent="assistant"))
 
-    with pytest.raises(CapabilityError):
-        kf._agent_for(
-            Request(task="again", agent="assistant", session_id=opened.id),
-            opened.directory,
-            source_ids=("B",),
-        )
+    with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
+        _first_event(kf, Request(task="t", agent="assistant"), ("B",))
 
 
-def test_a_turn_on_a_pinned_agent_still_in_reach_resolves(two_agents):
-    """So the refusal above is not passing because every turn refuses."""
+def test_a_later_turn_in_a_session_out_of_reach_is_refused(two_agents):
+    """The hole: a pinned agent was returned without asking who was calling, so a caller
+    holding another's session id ran in it with everything that agent grants.
+    """
     kf = Kingfisher(two_agents, backend=default_backend)
-    opened = kf.open_session_for(Request(task="t", agent="assistant"))
+    session_id = _pinned_by_a(kf)
 
-    assert kf._agent_for(
-        Request(task="again", agent="assistant", session_id=opened.id),
-        opened.directory,
-        source_ids=("A",),
-    )
+    with pytest.raises(UnknownSessionError):
+        _first_event(kf, Request(task="again", session_id=session_id), ("B",))
+
+
+def test_that_refusal_is_word_for_word_an_id_nobody_issued(two_agents):
+    """Anything more specific confirms the id is real, which is what a leaked one is worth."""
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+    invented = "0" * 32
+
+    with pytest.raises(UnknownSessionError) as refused:
+        _first_event(kf, Request(task="again", session_id=session_id), ("B",))
+    with pytest.raises(UnknownSessionError) as unissued:
+        _first_event(kf, Request(task="again", session_id=invented), ("B",))
+
+    assert str(refused.value) == str(unissued.value).replace(invented, session_id)
+
+
+def test_a_later_turn_in_a_session_in_reach_goes_ahead(two_agents):
+    """So the refusals above are not passing because every later turn refuses."""
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+
+    assert _first_event(kf, Request(task="again", session_id=session_id), ("A",))
+
+
+def test_the_async_turn_is_refused_the_same_way(two_agents):
+    """`astream` sets its turn up through the same admission, on a worker thread."""
+    import asyncio
+
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+
+    async def first():
+        events = kf.astream(Request(task="again", session_id=session_id), source_ids=("B",))
+        try:
+            return await anext(events)
+        finally:
+            await events.aclose()
+
+    with pytest.raises(UnknownSessionError):
+        asyncio.run(first())
+
+
+def test_a_refused_turn_leaves_nothing_in_the_session(two_agents, tmp_path):
+    """Refused at the agent, which is the obvious place, the caller's file was already in
+    the session's `/data` and the session marked as used -- measured, before the check
+    moved to the top of the turn.
+    """
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+    directory = two_agents.workspace / "sessions" / session_id
+    # A turn of A's own first, so everything a turn lays out already exists and
+    # anything that moves the timestamp now is the refused caller's doing.
+    _first_event(kf, Request(task="first", session_id=session_id), ("A",))
+    touched = directory.stat().st_mtime_ns
+    planted = tmp_path / "planted.csv"
+    planted.write_text("somebody else's\n", encoding="utf-8")
+
+    with pytest.raises(UnknownSessionError):
+        _first_event(kf, Request(task="again", session_id=session_id, data=(planted,)), ("B",))
+
+    assert not (directory / "data" / "planted.csv").exists()
+    assert directory.stat().st_mtime_ns == touched
+
+
+def test_a_turn_naming_nobody_is_refused_before_it_writes(two_agents, tmp_path):
+    """The refusal of a call that does not say who is calling sat just as late."""
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+    planted = tmp_path / "planted.csv"
+    planted.write_text("somebody else's\n", encoding="utf-8")
+
+    with pytest.raises(AccessError, match="source_ids="):
+        _first_event(kf, Request(task="again", session_id=session_id, data=(planted,)), None)
+
+    assert not (two_agents.workspace / "sessions" / session_id / "data" / "planted.csv").exists()
 
 
 # -- a session out of reach reads as one that is not there ------------------
