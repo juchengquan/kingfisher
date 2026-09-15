@@ -460,11 +460,26 @@ at all. Four things fell out, and only the first was the goal:
     so it is refused structurally where it is written. The named half was a
     lookup; this half cannot be.
 
-Both retired words are refused by name rather than ignored, on the same
-reasoning the retired sections get: a deployment upgrading has a file full of
-policy that would otherwise be read and dropped in silence. `A: {}` is refused
-too, since an empty set requires nothing and admits everyone -- it means the
-plain name it used to spell, and `A:` is how that is written now. *(2026-09-15.)*
+Both retired words are refused rather than ignored, on the same reasoning the
+retired sections get: a deployment upgrading has a file full of policy that would
+otherwise be read and dropped in silence. `A: {}` is refused with them, since an
+empty set requires nothing and admits everyone -- it means the plain name it used
+to spell, and `A:` is how that is written now.
+
+**The refusal is for the file, not the name**, and the difference is what makes
+it a migration rather than a wall. It began as one message per source id, which
+is how every other refusal in this format works and is wrong here: a realistic
+old vocabulary earns its first refusal on a `{}` line, says nothing about the
+`contains` further down, and costs a restart per line. The scan runs over the
+whole document before any name is read and prints each line beside the line that
+replaces it, built from what the file actually says -- so the remedy is the
+message rather than something to work out from it. Same argument as the seeding
+message under *Reversed: `groups.yaml.example`* below, reached the same way: by
+reading what an upgrade actually looks like instead of what one refusal does.
+
+A set whose names happen to be `contains` and `all_of` is legal and stays legal.
+The value is what marks a keyword, which is the same test the parser uses one
+line down. *(2026-09-15.)*
 
 **Reversed: `refuse_dead`, the rule that an entry audience must overlap its
 definition's.** It moved off `parse` onto `SourceIds` first, which was a real fix
@@ -589,8 +604,8 @@ So the remedy travels in the message instead, where it can be built from the
 names actually missing -- one line, after the list, holding the union across
 every skipped definition, because a copy per definition prints overlapping
 partial lists and whoever pastes the first is skipped again on the second. The
-flat form only: `contains` and `all_of` are a deployment's choices about its own
-organisation, and nothing can infer which a name wants.
+flat form only: what a name covers and what it requires are a deployment's
+choices about its own organisation, and nothing can infer which a name wants.
 
 `assets_examples/source_ids.yaml` is now the only source ids example, and it is named
 the thing the message points at rather than a `.example` beside it.

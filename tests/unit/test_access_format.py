@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
 from kingfisher.domain.access import AccessError, SourceIds, parse
@@ -189,22 +191,72 @@ def test_a_requirement_with_a_value_after_a_name_is_refused():
         parse({"source_ids": {"A": None, "x": {"finance": "senior"}}}, source="source_ids.yaml")
 
 
-def test_the_retired_keywords_are_refused_by_name():
+def test_the_retired_keywords_are_refused_with_the_line_to_write():
     """A deployment upgrading has a file full of policy written the old way. Read and
     dropped in silence is the failure this whole area exists to prevent, so each word is
-    refused where it is written, pointing at the shape that replaced it.
+    refused carrying the line that replaces it rather than only the objection.
     """
-    for key, said in [("contains", r"\[a, b\]"), ("all_of", r"\{a, b\}")]:
+    for key, said in [("contains", r"x: \[A, B\]"), ("all_of", r"x: \{A, B\}")]:
         with pytest.raises(AccessError, match=said):
-            parse({"source_ids": {"A": None, "x": {key: ["A"]}}}, source="source_ids.yaml")
+            parse(
+                {"source_ids": {"A": None, "B": None, "x": {key: ["A", "B"]}}},
+                source="source_ids.yaml",
+            )
 
 
-def test_an_empty_requirement_is_refused():
-    """It would require nothing and so admit everyone, which is what a plain source id
-    already means -- so it is an unfinished edit, not a spelling.
+def test_a_whole_retired_vocabulary_is_refused_at_once():
+    """One refusal for the file, not one per name. A message per source id makes a
+    deployment restart for the next one, and the first refusal a realistic old file
+    earns is a `{}` line that says nothing about the `contains` further down -- so the
+    parse that reports it has to see the whole document before any name is read.
     """
-    with pytest.raises(AccessError, match="requires nothing"):
-        parse({"source_ids": {"A": None, "x": {}}}, source="source_ids.yaml")
+    with pytest.raises(AccessError) as raised:
+        parse(
+            {
+                "source_ids": {
+                    "A": {},
+                    "B": {},
+                    "w": {"contains": ["A", "B"]},
+                    "p": {"all_of": ["A", "B"]},
+                }
+            },
+            source="source_ids.yaml",
+        )
+
+    said = str(raised.value)
+    assert "4 source id(s)" in said
+    # Each line pairs what the file says with what to write in its place, so the
+    # remedy is the message rather than something to work out from it.
+    for was, now in [
+        (r"A: \{\}", "A:"),
+        (r"B: \{\}", "B:"),
+        (r"w: \{contains: \[A, B\]\}", r"w: \[A, B\]"),
+        (r"p: \{all_of: \[A, B\]\}", r"p: \{A, B\}"),
+    ]:
+        assert re.search(rf"{was}\s+->\s+{now}$", said, re.MULTILINE), (
+            f"{was} -> {now} missing from:\n{said}"
+        )
+
+
+def test_a_legal_set_of_names_that_look_like_keywords_is_not_a_retired_spelling():
+    """`{contains, all_of}` is two source ids in a set, and the value is what separates
+    it from the keyword form -- a scan keying off the key alone refuses a legal file.
+    """
+    source_ids = parse(
+        {"source_ids": {"contains": None, "all_of": None, "x": {"contains": None, "all_of": None}}},
+        source="source_ids.yaml",
+    )
+
+    assert source_ids.compounds["x"] == ("contains", "all_of")
+
+
+def test_the_old_short_form_for_a_plain_name_is_refused():
+    """`A: {}` was how a plain name was written before a body meant something. Read as a
+    set it requires nothing, which admits everyone -- so it is refused rather than read
+    as the widest thing the file could have said.
+    """
+    with pytest.raises(AccessError, match=r"A: \{\}\s+->\s+A:"):
+        parse({"source_ids": {"A": {}}}, source="source_ids.yaml")
 
 
 def test_an_empty_covers_list_is_refused():
