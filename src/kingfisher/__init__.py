@@ -40,7 +40,6 @@ _EXPORTS = {
     "SubagentError": "kingfisher.kinds.subagents.spec",
     "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
-    "LocalFileStore": "kingfisher.infrastructure.workspace.files",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     # The port's contract, for a deployment checking its own adapter against it.
     # Public because it is the one thing in `testing` anybody outside this
@@ -49,19 +48,13 @@ _EXPORTS = {
     # package publishes belongs in `__all__` and reaching for that table instead
     # is how something gets published without saying so.
     "SESSION_STORE_CONTRACT": "kingfisher.testing",
-    # The same, for the other port a deployment can now name. `Planted` comes
-    # with it and is not optional: `FileStore` has no verb for writing, so a
-    # check cannot put the file it then reads there, and the deployment has to
-    # hand over what it planted.
-    "FILE_STORE_CONTRACT": "kingfisher.testing",
-    "Planted": "kingfisher.testing",
     # The other two ports a deployment replaces. Both kits do more than read --
     # one creates directories, one runs commands -- which is a property of the
     # ports rather than of the kits: there is no way to check that a runner runs
     # things without running things.
     "SESSION_ROOT_CONTRACT": "kingfisher.testing",
     "COMMAND_RUNNER_CONTRACT": "kingfisher.testing",
-    # The fifth kit, and the one not in `testing`. Its sharpest check asks whether
+    # The fourth kit, and the one not in `testing`. Its sharpest check asks whether
     # deepagents will recognise a backend as running commands, which needs the
     # package -- and `testing` is permitted nothing foreign, an entry covering
     # `config` and `layout` too. So it lives where the backend it describes is
@@ -115,7 +108,6 @@ _EXPORTS = {
 __all__ = [
     "BACKEND_CONTRACT",
     "COMMAND_RUNNER_CONTRACT",
-    "FILE_STORE_CONTRACT",
     "SESSION_ROOT_CONTRACT",
     "SESSION_STORE_CONTRACT",
     "UNSCOPED",
@@ -128,11 +120,9 @@ __all__ = [
     "Held",
     "Inventory",
     "Kingfisher",
-    "LocalFileStore",
     "LocalSessionStore",
     "Origin",
     "Origins",
-    "Planted",
     "QuotaExceededError",
     "Request",
     "RunEvent",
@@ -202,7 +192,6 @@ if TYPE_CHECKING:
     from kingfisher.infrastructure.session_store import (
         LocalSessionStore as LocalSessionStore,
     )
-    from kingfisher.infrastructure.workspace.files import LocalFileStore as LocalFileStore
     from kingfisher.infrastructure.workspace.layout import ensure_layout as ensure_layout
     from kingfisher.infrastructure.workspace.seeding import Seeded as Seeded
     from kingfisher.infrastructure.workspace.seeding import (
@@ -215,10 +204,8 @@ if TYPE_CHECKING:
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError
     from kingfisher.testing import COMMAND_RUNNER_CONTRACT as COMMAND_RUNNER_CONTRACT
-    from kingfisher.testing import FILE_STORE_CONTRACT as FILE_STORE_CONTRACT
     from kingfisher.testing import SESSION_ROOT_CONTRACT as SESSION_ROOT_CONTRACT
     from kingfisher.testing import SESSION_STORE_CONTRACT as SESSION_STORE_CONTRACT
-    from kingfisher.testing import Planted as Planted
 
 
 def __getattr__(name: str) -> Any:

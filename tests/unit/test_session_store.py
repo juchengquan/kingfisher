@@ -39,6 +39,26 @@ def test_the_contract_is_not_quietly_empty():
     assert all(callable(check) for check in SESSION_STORE_CONTRACT)
 
 
+def test_the_kit_fails_a_store_that_refuses_with_the_wrong_type(tmp_path):
+    """A store refusing a hostile id with a plain `ValueError` fails the kit, where a check
+    taking any exception would pass exactly the store that gets the type wrong.
+    """
+    from kingfisher.domain.references import UnsafeReferenceError
+    from kingfisher.testing import a_session_id_that_names_somewhere_else_is_refused
+
+    class Plain(LocalSessionStore):
+        """The local store, refusing the same ids as a plain `ValueError`."""
+
+        def _held(self, session_id):
+            try:
+                return super()._held(session_id)
+            except UnsafeReferenceError as refused:
+                raise ValueError(str(refused)) from None
+
+    with pytest.raises(AssertionError, match="expected UnsafeReferenceError, got ValueError"):
+        a_session_id_that_names_somewhere_else_is_refused(lambda: Plain(tmp_path / "kept"))
+
+
 # -- kingfisher's own functions over a store --------------------------------
 #
 # Not part of the contract, and the distinction took a moment to see: these

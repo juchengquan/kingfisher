@@ -97,30 +97,6 @@ Three things the kit will hold you to that the signatures do not say:
 
 Verified with `SESSION_STORE_CONTRACT` — twelve checks.
 
-## `FileStore` — where a caller's files are fetched from
-
-One method, `fetch(file_id)`, returning `{path: bytes}`. A mapping and not bare
-bytes even for a single file, because one ref may name a bundle.
-
-The port has no verb for writing. Kingfisher never puts anything into a file
-store; it resolves what a caller already put there. That is why the kit is handed
-a `Planted` rather than a factory — you plant, by whatever means your store has,
-and tell the checks what you planted:
-
-```python
-from kingfisher import FILE_STORE_CONTRACT, Planted
-
-check(Planted(store=S3FileStore(...), ref="sales.csv",
-              contents={"sales.csv": b"a,b\n1,2\n"}))
-```
-
-**Half of what a file store must get right is which exception it raises.** A ref
-that does not resolve is `UnknownReferenceError`; one that names somewhere it may
-not is `UnsafeReferenceError`. A bare `FileNotFoundError` cannot be told from
-your disk being wrong, so a caller's typo looks like your outage.
-
-Verified with `FILE_STORE_CONTRACT` — four checks.
-
 ## `SessionRoot` — where a session's directory is, for one turn
 
 `hold(session_id)` returns a context manager giving a `Path`. This is the port
@@ -282,8 +258,8 @@ own. What it does is make sure nobody wires kingfisher without finding out there
 is a boundary here at all.
 
 **Try a mount before replacing it.** Object storage reaches a session as a mount
-(`SessionRoot`), or by being copied in and out (`FileStore` in, `SessionStore`
-out). Both work today and cost you none of the four jobs above.
+(`SessionRoot`), or by being copied in and out (`SessionStore`). Both work today
+and cost you none of the four jobs above.
 
 **Replace it when your callers may not share storage.** That is the case a mount
 does not cover, and the reason this seam is open. A mount is established once,

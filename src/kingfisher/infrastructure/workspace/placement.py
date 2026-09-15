@@ -3,11 +3,9 @@
 from __future__ import annotations
 
 import shutil
-from collections.abc import Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from kingfisher.domain.references import within
 from kingfisher.infrastructure.workspace.permissions import writable_data
 
 
@@ -39,26 +37,16 @@ def check_placeable(sources: tuple[Path, ...]) -> None:
     _checked(sources)
 
 
-def place_inputs(
-    sources: tuple[Path, ...],
-    input_dir: Path,
-    *,
-    contents: Mapping[str, bytes] | None = None,
-) -> tuple[str, ...]:
+def place_inputs(sources: tuple[Path, ...], input_dir: Path) -> tuple[str, ...]:
     """Copy a turn's supplied files into its `input/`, and name what landed."""
     checked = _checked(sources)
-    if not checked and not contents:
+    if not checked:
         return ()
 
     input_dir.mkdir(exist_ok=True)
     for name, source in checked.items():
         shutil.copy(source, input_dir / name)
-    # Fetched by id rather than read from a path, and written here for the same
-    # reason the copies are: a turn's input directory is ours and was made
-    # moments ago. `within` is what makes a store-supplied key safe to join.
-    for name, content in (contents or {}).items():
-        within(input_dir, name).write_bytes(content)
-    return tuple(checked) + tuple(contents or ())
+    return tuple(checked)
 
 
 @dataclass(frozen=True)
@@ -69,29 +57,18 @@ class DataPlacement:
     replaced: tuple[str, ...] = ()
 
 
-def place_data(
-    sources: tuple[Path, ...],
-    session_dir: Path,
-    *,
-    contents: Mapping[str, bytes] | None = None,
-) -> DataPlacement:
+def place_data(sources: tuple[Path, ...], session_dir: Path) -> DataPlacement:
     """Copy caller-supplied files into a session's `/data`, and re-harden it."""
-    if not sources and not contents:
+    if not sources:
         return DataPlacement()
 
     seen = _checked(sources)
-    arriving = tuple(seen) + tuple(contents or ())
     existing = {p.name for p in (Path(session_dir) / "data").glob("*")}
-    # One `writable_data` block for both, not two. Its `finally` drops the write
-    # bits again, and taking them twice would mean a window between the two
-    # where `/data` is writable for no reason.
     with writable_data(session_dir) as data:
         for name, source in seen.items():
             shutil.copy(source, data / name)
-        for name, content in (contents or {}).items():
-            within(data, name).write_bytes(content)
 
     return DataPlacement(
-        placed=arriving,
-        replaced=tuple(name for name in arriving if name in existing),
+        placed=tuple(seen),
+        replaced=tuple(name for name in seen if name in existing),
     )

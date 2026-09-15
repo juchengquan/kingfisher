@@ -2,24 +2,20 @@
 
 from __future__ import annotations
 
-from collections.abc import Mapping
-from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.references import UnknownReferenceError, UnsafeReferenceError
+from kingfisher.domain.references import UnsafeReferenceError
 
-# `Mapping` and `Path` at runtime rather than under `TYPE_CHECKING`: both are
-# `isinstance` arguments rather than only annotations. The mistakes they catch --
-# a file store handing back bare bytes, a session root yielding a `str` -- are
-# invisible to an annotation nobody runs.
+# `Path` at runtime rather than under `TYPE_CHECKING`: it is an `isinstance`
+# argument rather than only an annotation. The mistake it catches -- a session
+# root yielding a `str` -- is invisible to an annotation nobody runs.
 
 if TYPE_CHECKING:
-    from collections.abc import Callable
+    from collections.abc import Callable, Mapping
 
     from kingfisher.domain.ports import (
         CommandRunner,
-        FileStore,
         SessionRoot,
         SessionStore,
     )
@@ -48,34 +44,28 @@ def _false(got: object, *, doing: str) -> None:
         raise AssertionError(msg)
 
 
-def _raises(call: Callable[[], object], expected: type[Exception], *, doing: str) -> None:
-    """Run `call` and require exactly `expected`.
+def _refused(call: Callable[[], object], *, doing: str) -> None:
+    """Run `call` and require exactly `UnsafeReferenceError`.
 
     The *type* is part of the contract rather than a detail of the shipped
     adapters: it is how a caller tells its own mistake from a broken deployment.
-    So a store raising a plain `ValueError` for a hostile ref, or a
-    `FileNotFoundError` for a missing one, turns a caller's bad request into an
-    operator's page. Both are exported from `kingfisher` precisely so an adapter
-    outside this package can raise the same ones.
+    So a store raising a plain `ValueError` for a hostile id turns a caller's bad
+    request into an operator's page. It is exported from `kingfisher` precisely so
+    an adapter outside this package can raise the same one.
     """
     try:
         call()
-    except expected:
+    except UnsafeReferenceError:
         return
     except Exception as wrong:
         msg = (
-            f"{doing}: expected {expected.__name__}, got "
-            f"{type(wrong).__name__}: {wrong}. Import it from `kingfisher` -- the "
-            f"service maps that type to a status of its own and anything else to 500"
+            f"{doing}: expected UnsafeReferenceError, got {type(wrong).__name__}: "
+            f"{wrong}. Import it from `kingfisher` -- its type is how a caller tells "
+            f"a bad id from a broken store"
         )
         raise AssertionError(msg) from wrong
-    msg = f"{doing}: expected {expected.__name__}, nothing was raised"
+    msg = f"{doing}: expected UnsafeReferenceError, nothing was raised"
     raise AssertionError(msg)
-
-
-def _refused(call: Callable[[], object], *, doing: str) -> None:
-    """`_raises` for the one type the session store deals in."""
-    _raises(call, UnsafeReferenceError, doing=doing)
 
 
 def _must_be(value: object, kind: type, *, doing: str, why: str) -> None:
@@ -246,103 +236,6 @@ SESSION_STORE_CONTRACT: tuple[Check, ...] = (
     a_store_does_not_know_what_it_never_kept,
     forgetting_removes_everything_and_says_nothing_twice,
     forgetting_one_session_leaves_the_others,
-)
-
-
-# -- the file store ---------------------------------------------------------
-#
-# A different argument, and the difference is the port rather than a
-# preference. `SessionStore` writes, so each check above builds an empty one and
-# fills it. `FileStore` is one method and that method reads: there is no way for
-# a check to put a file where a store will find it, because the port deliberately
-# has no verb for doing so -- kingfisher never writes to a file store, it only
-# resolves what a caller already put there.
-#
-# So the deployment plants, by whatever means its own store has, and hands over
-# what it planted.
-
-
-@dataclass(frozen=True)
-class Planted:
-    """One ref a store resolves, and what it resolves to."""
-
-    store: FileStore
-    #: A ref this store resolves.
-    ref: str
-    #: Exactly what `fetch(ref)` must return.
-    contents: Mapping[str, bytes]
-    #: A ref this store does not hold.
-    missing: str = "kingfisher-contract-no-such-ref"
-
-
-def what_the_ref_names_comes_back(planted: Planted) -> None:
-    """The whole point. A mapping, keyed by path relative to the ref, because
-    one ref may name a small bundle rather than a single file."""
-    got = planted.store.fetch(planted.ref)
-
-    _equal(dict(got), dict(planted.contents), doing=f"fetch({planted.ref!r})")
-
-
-def the_result_is_bytes_under_string_keys(planted: Planted) -> None:
-    """The shape, checked apart from the value, because the likely wrong guess returns
-    the right *content* in the wrong container.
-    """
-    doing = f"fetch({planted.ref!r})"
-    got = planted.store.fetch(planted.ref)
-    _must_be(
-        got,
-        Mapping,
-        doing=doing,
-        why="one ref may name a bundle, so the answer is always {path: bytes} -- "
-        "even for a single file",
-    )
-    for key, value in got.items():
-        _must_be(key, str, doing=doing, why="files are keyed by their path, as a string")
-        _must_be(
-            value,
-            bytes,
-            doing=f"{doing}[{key!r}]",
-            why="values are bytes -- a store that decodes corrupts the first file "
-            "that is not text",
-        )
-
-
-def a_ref_the_store_does_not_hold_is_refused(planted: Planted) -> None:
-    """`UnknownReferenceError`, and the type is the contract.
-
-    The port says so outright -- *"a bare `FileNotFoundError` cannot be told
-    from the deployment's own disk being wrong, and would answer 500 to a
-    caller's typo"* -- so the difference between a mistyped ref and a page for
-    the on-call is this exception's class.
-    """
-    _raises(
-        lambda: planted.store.fetch(planted.missing),
-        UnknownReferenceError,
-        doing=f"fetch({planted.missing!r}), a ref the store does not hold",
-    )
-
-
-def a_ref_that_names_somewhere_else_is_refused(planted: Planted) -> None:
-    """`UnsafeReferenceError`, for a ref that climbs out or names an absolute path."""
-    for bad in ESCAPING_REFS:
-        _raises(
-            lambda: planted.store.fetch(bad),  # noqa: B023
-            UnsafeReferenceError,
-            doing=f"fetch({bad!r})",
-        )
-
-
-#: Refs that name somewhere other than the store's own contents.
-ESCAPING_REFS = ("../outside.csv", "/etc/passwd", "..")
-
-#: Every check a `FileStore` must pass. Shorter than the session store's because
-#: the port is: one method, and half of what it must get right is which
-#: exception it raises.
-FILE_STORE_CONTRACT: tuple[Callable[[Planted], None], ...] = (
-    what_the_ref_names_comes_back,
-    the_result_is_bytes_under_string_keys,
-    a_ref_the_store_does_not_hold_is_refused,
-    a_ref_that_names_somewhere_else_is_refused,
 )
 
 

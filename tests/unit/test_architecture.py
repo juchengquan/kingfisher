@@ -1572,9 +1572,6 @@ WITNESSES: dict[str, str] = {
     "SubagentError": "embedder",
     "UnknownSessionError": "embedder",
     "UploadError": "embedder",
-    # The one `FileStore` this package ships. `files=` has no default, so a caller
-    # resolving refs out of a directory needs this or an adapter of its own.
-    "LocalFileStore": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
@@ -1588,12 +1585,10 @@ WITNESSES: dict[str, str] = {
     # that page was edited.
     "UNSCOPED": "document",
     "RunOn": "document",
-    # `guides/ports.md` writes `from kingfisher import SESSION_STORE_CONTRACT`
-    # and `from kingfisher import FILE_STORE_CONTRACT, Planted` -- a deployment
-    # runs them against a store of its own, so they exist for nobody else.
+    # `guides/ports.md` writes `from kingfisher import SESSION_STORE_CONTRACT` --
+    # a deployment runs it against a store of its own, so it exists for nobody
+    # else.
     "SESSION_STORE_CONTRACT": "document",
-    "FILE_STORE_CONTRACT": "document",
-    "Planted": "document",
     # The other two kits, and the type a runner returns. The same page writes
     # all three; `CommandResult` is the one that would have been missed, because
     # nothing *imports* it in a snippet -- a runner's `run` returns one, so a
@@ -2134,7 +2129,7 @@ LIGHT_EXPORTS = frozenset({
     # catch them by name -- the server being the first such consumer.
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
-    "UnknownReferenceError", "LocalFileStore",
+    "UnknownReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
@@ -2142,10 +2137,6 @@ LIGHT_EXPORTS = frozenset({
     # imports `domain.references` and the standard library, and no test
     # framework either -- see its docstring for why that one is deliberate.
     "SESSION_STORE_CONTRACT",
-    # The other port's contract, and the record a check is handed. Light for the
-    # same reason and by the same route -- `testing` imports the two reference
-    # errors and the standard library.
-    "FILE_STORE_CONTRACT", "Planted",
     # The remaining two kits and the result type a runner builds. Light by the
     # same route: `testing` reaches `domain.references` and the standard
     # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
@@ -2803,16 +2794,12 @@ CALLER_FACING_ERRORS = frozenset({
 #: private -- `ConfigError` was public long before this rule existed -- it
 #: means a consumer is not expected to branch on it.
 DEPLOYMENT_ERRORS = frozenset({
-    # `MissingStoreError` is here rather than above on purpose: a request naming files
-    # by id with no `FileStore` wired is a deployment that forgot one, and nothing the
-    # caller sends can fix it.
-    #
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
     # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
     "AccessError", "AgentError", "ConfigError", "DataError", "HostPathError",
-    "LoadError", "MiddlewareError", "MissingStoreError", "ToolError",
+    "LoadError", "MiddlewareError", "ToolError",
 })
 
 
