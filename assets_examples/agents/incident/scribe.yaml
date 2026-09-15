@@ -1,0 +1,64 @@
+name: scribe
+description: Writes up a resolved incident from its logs, quoting only masked lines and citing a record for every figure.
+# In a folder, which reaches nothing: `name:` is the identity, so this file is
+# requested as `scribe`. A subagent's folder can tell two of one name apart; an
+# agent's cannot -- a second `scribe` anywhere under `agents/` is refused,
+# because a request names one agent and has nowhere to put a qualifier.
+#
+# Keys of your own. Nothing in a run reads them; they are for whatever loads the
+# catalogue -- an install script that keeps `sensitivity: internal` definitions
+# off a customer-facing host, or a report of who owns what.
+metadata:
+  owner: platform-team
+  sensitivity: internal
+# Every built-in, said on purpose. Omitting the field means the same set, and
+# `assistant.yaml` does; `general.yaml` lists all ten by name, which is the only
+# spelling that does not take an eleventh the day deepagents adds one. The star
+# is how a file says "all" was decided rather than never considered.
+#
+# All, because the `timeline` skill's script runs in the shell, so this agent
+# holds `execute` -- and leaving file tools out of an agent with a shell narrows
+# nothing, since the shell reaches every file they do.
+builtin_tools: ["*"]
+# Bare names, though two of these sit in folders: `tools/logs/log_levels.py` and
+# `tools/logs/access/status_codes.py`. A folder without `__init__.py` reaches no
+# name, so moving either file changes nothing here.
+#
+# The list is also exactly what `show-your-work` is handed: a compiled delegate
+# that writes no `tools:` takes what its caller was granted. Three tools that
+# read a log are enough to recompute a figure, and none of them reaches the
+# network.
+tools: [log_levels, status_codes, line_count]
+# Two skills from one source. `incident/` is a folder of skills rather than a
+# wrapper around one, and both are written qualified for the reason
+# `reviewer.yaml` gives.
+skills:
+  - incident::postmortem
+  - incident::timeline
+# The two delegates no other shipped agent names, and a delegate no agent names
+# is one nothing can call. `redactor` brings the tool and skill in its own
+# folder whatever this file grants; `show-your-work` is a compiled graph.
+subagents: [redactor, show-your-work]
+system_prompt: |
+  You write up incidents that are already resolved.
+
+  Follow the `postmortem` skill for the shape of the writeup and the `timeline`
+  skill for its first section. The timeline skill runs a script over the logs;
+  use it rather than reading them by eye, because it reads every line and you
+  would not.
+
+  Quote a log line only through `redactor`. Logs carry tokens, addresses and
+  customer emails, and a writeup is read by people who should see none of them.
+  If `redactor` is not among your delegates, cite the file and line number and
+  leave the text out.
+
+  Put every figure you report -- time to detect, error counts, how many
+  requests failed -- to `show-your-work`, and keep its record of what it ran
+  beside the figure. A number in a postmortem gets argued about, and the record
+  is what settles it. If `show-your-work` is not available, say how you
+  computed the figure yourself.
+
+  The writeup is your answer. Write it to a file only when the caller names one.
+
+  Say where the record is thin. A window with no log lines is a finding about
+  the logging, not a gap to smooth over.
