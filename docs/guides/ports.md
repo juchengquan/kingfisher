@@ -297,6 +297,25 @@ There is no setting for this one. Build `Kingfisher` yourself and hand it to
 
 ### Checking what you returned
 
+**Two of the four run on their own**, against every backend kingfisher resolves,
+and raise `ConfigError` rather than letting a turn find out. Both of them only
+look — an `isinstance` and a scan of your routes, no I/O — so they cost nothing
+and there is nothing to switch on:
+
+**deepagents decides what a backend is with `isinstance` against its own abstract
+base class**, not by the methods present. Implement every method of
+`SandboxBackendProtocol` correctly while inheriting nothing and the shell tool is
+dropped from the agent's roster — the model is told execution is unavailable if
+it reaches for it, and nothing would have told you. Inherit `BaseSandbox`, which
+implements the file operations in terms of `execute`, or register with the ABC.
+
+**The paths kingfisher denies writes under must sit under something you route**,
+or the graph will not build: deepagents refuses `permissions=` outright on a
+backend that executes unless every rule is scoped to a route.
+
+**The other two stay yours**, because they write files and run shell commands, and
+a library should not do either at a build:
+
 ```python
 from kingfisher import BACKEND_CONTRACT
 
@@ -305,24 +324,16 @@ def test_my_backend_keeps_the_contract(check):
     check(lambda: my_filesystem(kingfishers_backend, session_dir))
 ```
 
-Run it. Two of its four checks catch failures that report nothing on their own:
+Run all four. The automatic pair costs nothing twice, and your own suite is a
+better place to read a failure than a turn is.
 
-**deepagents decides what a backend is with `isinstance` against its own abstract
-base class**, not by the methods present. Implement every method of
-`SandboxBackendProtocol` correctly while inheriting nothing and the shell tool is
-dropped from the agent's roster — the model is told execution is unavailable if
-it reaches for it, and you are told nothing at all. Inherit `BaseSandbox`, which
-implements the file operations in terms of `execute`, or register with the ABC.
+**The shell and the file tools have to be two views of one filesystem**, and this
+is the one left that reports nothing on its own. A virtual path becomes a shell
+path by dropping its leading slash; the prompt says so in a table the model reads
+every turn. Route a path somewhere the shell cannot follow and the agent can read
+its inputs and run nothing over them, with a confused model as the only symptom.
 
-**The shell and the file tools have to be two views of one filesystem.** A
-virtual path becomes a shell path by dropping its leading slash; the prompt says
-so in a table. Route a path somewhere the shell cannot follow and the agent can
-read its inputs and run nothing over them, with a confused model as the only
-symptom.
-
-The other two are ordinary: the paths kingfisher denies writes under must sit
-under something you route, or the graph will not build; and if you refuse host
-paths, refuse them with `HostPathError`, because that is the type `HostPathGuard`
-turns into a correction the model can act on. Refusing them at all is optional —
-inside a sandbox of your own, `/etc/passwd` is a file, and refusing it would be
-refusing your own filesystem.
+The last is ordinary: if you refuse host paths, refuse them with `HostPathError`,
+because that is the type `HostPathGuard` turns into a correction the model can act
+on. Refusing them at all is optional — inside a sandbox of your own, `/etc/passwd`
+is a file, and refusing it would be refusing your own filesystem.
