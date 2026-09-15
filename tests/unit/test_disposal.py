@@ -12,6 +12,7 @@ from kingfisher.domain.session import (
     SessionBusyError,
     still_held,
 )
+from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
 from tests.conftest import StubCheckpointer
 from tests.unit.test_run import StubAgent
 
@@ -20,6 +21,13 @@ from tests.unit.test_run import StubAgent
 # `test_run`. `_claim` reads a session's turn slot, which is a question both
 # "may this caller take a turn" and "may this session be swept" have to ask.
 from tests.unit.test_tenancy import _claim, service
+
+
+class StuckDirs(LocalSessionDirs):
+    """A filesystem where no session directory will go."""
+
+    def remove_tree(self, path):
+        return "directory not removed (Permission denied)"
 
 # -- lifecycle: disposal is asked for -------------------------------------
 
@@ -49,6 +57,44 @@ def test_delete_session_removes_the_directory_and_the_thread(cfg):
 def test_deleting_an_unknown_session_is_not_an_error(cfg):
     """A caller that retries a delete should not have to care."""
     assert service(cfg).delete_session("never-existed") is None
+
+
+def test_a_session_the_store_alone_keeps_is_forgotten_when_deleted(cfg, tmp_path):
+    """Under a root of the deployment's own there is no directory in the workspace, and
+    `delete_session` stopped there -- so the store kept the session, `knows` still
+    answered for it, and a session reported deleted could be resumed.
+    """
+    from kingfisher import LocalSessionStore
+    from kingfisher.domain.session import UnknownSessionError
+    from tests.unit.test_service import FreshEachTurn
+
+    kept = LocalSessionStore(tmp_path / "kept")
+    kf = service(cfg, sessions=kept, session_root=FreshEachTurn(tmp_path / "for-one-turn"))
+    session_id = kf.run(Request("go")).session_id
+    assert kept.knows(session_id), "the store never held it, so this would prove nothing"
+
+    assert kf.delete_session(session_id) is None
+
+    assert not kept.knows(session_id)
+    with pytest.raises(UnknownSessionError):
+        kf.run(Request("again", session_id=session_id))
+
+
+def test_a_directory_that_would_not_go_keeps_the_store_copy_behind_it(cfg, tmp_path):
+    """What `reap` already did and `delete_session` did not: forgetting the store's copy
+    of a session whose directory stayed leaves a directory with no history behind it.
+    """
+    from kingfisher import LocalSessionStore
+
+    kept = LocalSessionStore(tmp_path / "kept")
+    kf = service(cfg, sessions=kept, dirs=StuckDirs())
+    session_id = kf.run(Request("go")).session_id
+
+    failure = kf.delete_session(session_id)
+
+    assert failure is not None
+    assert "not removed" in failure
+    assert kept.knows(session_id)
 
 
 def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
@@ -385,6 +431,7 @@ def test_run_disposes_of_the_session_when_it_is_told_to(cfg):
 
     assert result.completed
     assert not (cfg.workspace / "sessions" / result.session_id).exists()
+    assert result.deletion_failure is None
 
 
 def test_run_keeps_the_session_unless_it_is_told_otherwise(cfg):
@@ -413,4 +460,19 @@ def test_a_turn_stopped_at_a_bound_keeps_its_session(cfg):
     result = kf.run(Request("go"), delete_session=True)
 
     assert result.stop_reason == "max_duration"
+    assert (cfg.workspace / "sessions" / result.session_id).is_dir()
+    assert result.deletion_failure is None, "a session kept on purpose is not a failure"
+
+
+def test_a_deletion_that_fails_is_on_the_result_beside_the_answer(cfg):
+    """`run` threw away what `delete_session` answered, so a caller got the answer and no
+    sign the session was still there.
+    """
+    kf = service(cfg, dirs=StuckDirs())
+
+    result = kf.run(Request("go"), delete_session=True)
+
+    assert result.answer == "ok"
+    assert result.deletion_failure is not None
+    assert "not removed" in result.deletion_failure
     assert (cfg.workspace / "sessions" / result.session_id).is_dir()

@@ -61,6 +61,10 @@ class RunResult:
     #: answer is what had been reached when a bound was hit, and `artifacts` still lists
     #: what was written -- discarding either would hide work rather than undo it.
     stop_reason: str = END_TURN
+    #: Why the session `run(delete_session=True)` was told to delete is still there,
+    #: or `None`. A turn stopped at a bound keeps its session on purpose, which is not
+    #: a failure and leaves this empty -- `stop_reason` already says so.
+    deletion_failure: str | None = None
 
     @property
     def completed(self) -> bool:

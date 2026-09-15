@@ -1112,6 +1112,25 @@ is a far smaller change than replacing the filesystem.
 root on 2026-08-26, `A session that survives the machine it ran on`. All from
 `nothing-at-rest-on-this-machine.md`, removed 2026-09-04.)*
 
+**Deleting a session reaches the store whether or not this workspace holds a
+directory for it.** `delete_session` returned as soon as it found no directory
+under `<workspace>/sessions/`, which under a root of the deployment's own is every
+session -- so the store kept its copy, `knows` still answered for the id, and a
+session reported deleted could be resumed. It now forgets the store's copy either
+way, and, like `reap`, not after a directory that refused to go: that directory
+still needs the history behind it. An id that names nothing is still not an
+error, so a retried delete need not care whether the first one landed.
+*(2026-09-15.)*
+
+**`run(delete_session=True)` reports a deletion that failed, on the result.** It
+called `delete_session` and threw away what came back, so a caller got the answer
+and no sign the session was still there. `RunResult.deletion_failure` carries the
+reason: on the result rather than logged, because the caller asked for the
+deletion in the same call and the result is where it already looks for how the
+turn went; and rather than raised, because the turn finished and its answer is
+worth keeping. A turn stopped at a bound keeps its session on purpose and leaves
+the field empty -- `stop_reason` says why. *(2026-09-15.)*
+
 ## Wiring a store
 
 **The session directory is the backend root**, `/data` is materialised once at

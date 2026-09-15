@@ -28,6 +28,7 @@ import asyncio
 import logging
 from collections.abc import AsyncIterator, Iterator
 from contextlib import AsyncExitStack
+from dataclasses import replace
 from functools import partial
 from pathlib import Path
 from time import monotonic, time
@@ -1094,7 +1095,9 @@ class Kingfisher(Sessions, Disposal):
         conversation, claim and the store's copy -- once the turn has finished,
         and only then. A turn stopped at a bound keeps all of it: the partial
         work is real, and its conversation is what a retry on the same session
-        is rebuilt from.
+        is rebuilt from. A deletion that fails is on the result as
+        `deletion_failure`, rather than the caller getting an answer and no sign
+        the session stayed.
 
         Offered here and not on `stream`, which is not the asymmetry it looks
         like. A generator has no "after the turn" this library controls: past
@@ -1111,5 +1114,7 @@ class Kingfisher(Sessions, Disposal):
             msg = "stream() ended without a finished event"
             raise RuntimeError(msg)
         if delete_session and result.completed:
-            self.delete_session(result.session_id)
+            failure = self.delete_session(result.session_id)
+            if failure:
+                result = replace(result, deletion_failure=failure)
         return result
