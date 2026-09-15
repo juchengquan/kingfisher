@@ -188,6 +188,11 @@ deciding anything. `kingfisher sessions` and `kingfisher reap` are those two
 calls with a terminal in front of them, so both report an empty workspace here
 however much it is holding.
 
+Deleting one by id is the exception, because it is handed the id rather than
+looking for it: `delete_session` forgets the store's copy whether or not the
+workspace holds a directory, so an id you delete stops resolving. Whatever your
+root keeps between turns of its own accord is yours to remove.
+
 ## `CommandRunner` — what runs a shell command
 
 `run(command, timeout=None)` returning a `CommandResult`. For a deployment that

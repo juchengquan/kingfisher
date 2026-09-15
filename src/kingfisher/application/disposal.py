@@ -42,17 +42,21 @@ class Disposal:
     _shared: Any
 
     def delete_session(self, session_id: str) -> str | None:
-        """Dispose of one session and its thread. Returns a failure, or None."""
+        """Dispose of one session: its directory and thread where this workspace keeps
+        them, and the store's copy wherever it is. Returns a failure, or None.
+        """
         root = sessions_root(self.workspace)
-        if session_id not in self.dirs.children(root):
-            return None
-        session = Session(id=session_id, directory=root / session_id)
-        failure = session.discard(self.dirs, self._shared)
-        # And what the store kept, or a deleted session outlives its deletion
-        # everywhere that matters. The directory going is the visible half; on a
-        # host that may not hold data, the store is the only half that was ever
-        # durable.
-        self._forget(session_id)
+        failure = None
+        if session_id in self.dirs.children(root):
+            session = Session(id=session_id, directory=root / session_id)
+            failure = session.discard(self.dirs, self._shared)
+        # The store whether or not a directory was here: under a root of the
+        # deployment's own the store is the only place a session is kept, and
+        # stopping at the missing directory left a deleted session resumable. Not
+        # after a failure, for the reason `reap` gives -- a directory that stayed
+        # needs the history behind it.
+        if failure is None:
+            self._forget(session_id)
         return failure
 
     def reap(self, older_than_seconds: float | None = None, *, now: float) -> SweepResult:
