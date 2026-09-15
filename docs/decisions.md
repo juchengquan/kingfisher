@@ -1164,6 +1164,9 @@ thing different returns what it was given with one thing different, and keeps
 refusing host paths, keeps the route table that makes a read-only rule legal, and
 keeps the confinement, by doing the least work available. Losing any of them takes
 a deliberate return of something else.
+*(This paragraph alone is superseded on 2026-09-15; see below. The rest of this
+entry stands -- the tenancy argument, the callable, the graph refusal and the
+setting left unopened are all unchanged by it.)*
 
 **A callable, and the reason is sharper here than for a runner.** A backend is
 rooted at a session directory, so one instance handed in at construction is one
@@ -1184,6 +1187,67 @@ seam without a name to resolve. The command line does not, and would need one --
 left until something wants it, because a setting is permanent and nothing has
 asked yet.
 *(2026-09-14.)*
+
+**A deployment names the filesystem its agents run on, and kingfisher no longer
+picks one.** `backend_from` was optional and was handed the backend kingfisher had
+already built. It is now `backend`, required, and handed the ingredients instead: a
+`BackendFactory` called per turn with the config, the session, the catalogue and the
+runner, which is exactly what `default_backend` takes. A deployment keeping what it
+always had writes `Kingfisher(cfg, backend=default_backend)`.
+
+**The reason is that the backend is the security boundary, and the honest version of
+that is narrower than it sounds.** The default was never the lax option -- it is
+`sandbox-exec` or Landlock around every command, host-path refusal, and the route
+table a read-only rule is only legal against -- so requiring the parameter makes no
+deployment safer by itself, and there was no way to weaken it by accident. What it
+buys is that nobody can wire the whole service without learning the boundary is
+there. The cost is named rather than glossed: a parameter you must type is a
+parameter you notice you can change, which cuts the other way, and that was judged
+worth it. Written down because the argument is tempting to overstate and a later
+reader checking it against the code would find the default strict and wonder what
+this entry meant.
+
+**What the old shape was protecting, and what replaces it.** Being handed the
+default meant a deployment kept the route table and the confinement by doing the
+least work available. A factory starts from nothing, so the cheap path stops being
+the safe one -- and the answer is not prose but `refuse_unusable_backend`, which
+runs `execution_support` and `route_coverage` on every backend the harness resolves.
+Both only look, so they cost a turn nothing; the other two write files and run
+commands and stay a deployment's to call. *(Landed a day earlier, on its own merits:
+it improves the old seam too.)* The typed `BackendFactory` covers the one failure a
+runtime check cannot see -- a factory written without `runner` drops the
+`CommandRunner` the deployment wired, and the backend that comes back is well-formed
+and merely runs its commands in the wrong place.
+
+**Required, except that a pre-built graph is an answer too.** `graph=` carries its
+own backend and `_graph_for` returns it before the factory is reached, so demanding
+one beside it would force 72 call sites to name something provably discarded --
+making the mistake the old `graph=`/`backend_from=` refusal existed to catch into the
+mandatory spelling. So the rule is exactly one of the two, both refusals at
+construction. That is why `backend` keeps a `None` default in the signature: the
+requirement is a pairing, not a parameter.
+
+**`run` and `stream` keep a default, and `Kingfisher` does not.** They are
+documented as conveniences over a *default* `Kingfisher`, and `formats.md` teaches
+`run(Request(...))` as the first thing a reader writes. The default is in their
+signature rather than their body so it can be seen and replaced without dropping to
+the constructor.
+
+**`default_backend` is one of the eleven names, back through the front door.** The
+rule they left under -- a caller means a caller outside this wheel -- is unchanged;
+what changed is that every such caller now has to name this one. Its witness is
+`service` rather than `document`, because the service imports it and that half of
+the table is read off the real imports and cannot rot.
+
+**Considered and rejected:** requiring `backend_from` unchanged, which would have
+been ceremony with the default still built inside; a narrower `(session_dir) ->
+backend` factory, which makes the deployment build the closure and worsens the
+dropped-runner problem; keeping both a required base factory and the optional
+adjuster, two parameters answering one question; and a service setting naming a
+factory, which stays unopened for the reason the entry above gives -- the service
+reaches the seam without a name to resolve, and the parameter becoming required is
+not the same as something asking for one.
+*(2026-09-15, in three slices: the rename, the check, then the parameter.)*
 
 ## The command line
 

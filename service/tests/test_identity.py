@@ -11,7 +11,7 @@ from kingfisher_service.app import create_app
 from kingfisher_service.identity import MissingSourceIdsError, from_header
 from starlette.datastructures import Headers
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.access import parse
 from tests.conftest import an_agent
 
@@ -98,7 +98,7 @@ def test_a_vocabulary_with_no_source_refuses_to_start(policied):
     deployment up and serving nothing.
     """
     with pytest.raises(RuntimeError, match="source_ids_from"):
-        create_app(kingfisher=Kingfisher(policied))
+        create_app(kingfisher=Kingfisher(policied, backend=default_backend))
 
 
 def test_a_source_with_no_vocabulary_refuses_to_start(cfg):
@@ -106,16 +106,22 @@ def test_a_source_with_no_vocabulary_refuses_to_start(cfg):
     locked down and is not.
     """
     with pytest.raises(RuntimeError, match="no access policy"):
-        create_app(kingfisher=Kingfisher(cfg), source_ids_from=from_header(HEADER))
+        create_app(
+            kingfisher=Kingfisher(cfg, backend=default_backend),
+            source_ids_from=from_header(HEADER),
+        )
 
 
 def test_a_vocabulary_with_a_source_starts(policied):
-    assert create_app(kingfisher=Kingfisher(policied), source_ids_from=from_header(HEADER))
+    assert create_app(
+        kingfisher=Kingfisher(policied, backend=default_backend),
+        source_ids_from=from_header(HEADER),
+    )
 
 
 def test_neither_starts_exactly_as_it_did(cfg):
     """Every deployment that predates this must be untouched."""
-    with TestClient(create_app(kingfisher=Kingfisher(cfg))) as client:
+    with TestClient(create_app(kingfisher=Kingfisher(cfg, backend=default_backend))) as client:
         assert client.get("/sessions/nope").status_code == 404
 
 
@@ -124,7 +130,7 @@ def test_the_refusal_names_both_halves(policied):
     of the two files to open.
     """
     with pytest.raises(RuntimeError) as raised:
-        create_app(kingfisher=Kingfisher(policied))
+        create_app(kingfisher=Kingfisher(policied, backend=default_backend))
 
     said = str(raised.value)
     assert "source_ids_from" in said

@@ -78,10 +78,10 @@ from kingfisher.infrastructure.harness.activation import (
     indistinct_delegates,
 )
 from kingfisher.infrastructure.harness.agent import (
-    BackendFrom,
     build_agent,
     builtin_tool_names,
 )
+from kingfisher.infrastructure.harness.backend import BackendFactory
 from kingfisher.infrastructure.harness.checkpointing import (
     async_session_checkpointer,
     build_session_checkpointer,
@@ -218,7 +218,7 @@ class Kingfisher(Sessions, Disposal):
         sessions: SessionStore | None = None,
         session_root: SessionRoot | None = None,
         runner: Callable[[Path], CommandRunner] | None = None,
-        backend_from: BackendFrom | None = None,
+        backend: BackendFactory | None = None,
         catalogue: Definitions | Mapping[str, Path] | None = None,
         grants: Capabilities | None = None,
         middlewares: Mapping[str, MiddlewareFactory] | None = None,
@@ -292,15 +292,16 @@ class Kingfisher(Sessions, Disposal):
         # what replacing the backend is usually for -- would have written the leak
         # it was replacing the backend to avoid, and nothing about the call site
         # would look wrong.
-        if backend_from is not None and not callable(backend_from):
+        if backend is not None and not callable(backend):
             msg = (
-                "backend_from is called per turn with the backend kingfisher built, "
-                "so it takes a callable: pass `lambda default, session_dir: "
-                "your_backend` if you have one to share -- but a backend is rooted "
-                "at a session, so sharing one is sharing a filesystem between callers"
+                "backend is called per turn with the session it is for, so it takes a "
+                "factory rather than a backend: pass `default_backend`, or "
+                "`lambda *a, **kw: your_backend` if you really have one to share -- "
+                "but a backend is rooted at a session, so sharing one is sharing a "
+                "filesystem between callers"
             )
             raise TypeError(msg)
-        self._backend_from = backend_from
+        self._backend = backend
         # Three shapes, and the difference is who owns the connection. An instance is a
         # shared store the deployment made and manages; a callable is a factory this
         # service calls per session and closes after the turn; `None` means the default,
@@ -333,16 +334,32 @@ class Kingfisher(Sessions, Disposal):
         # caller unlucky enough to reach the wrong name. `_instantiate` keeps
         # its own guard for `build_agent`, which takes a registry directly.
         refuse_unbuildable_middleware(self.middlewares)
-        # Refused here rather than resolved, because either answer is somebody's
-        # wiring silently discarded: a pre-built graph already holds a backend, and
-        # `_graph_for` returns it without building anything for `backend_from` to be
-        # handed. Said at construction for the reason the catalogue is read there --
-        # it is a wiring mistake, and this is the last moment it is cheap to say so.
-        if graph is not None and backend_from is not None:
+        # Exactly one answer to what filesystem a turn runs against, said at
+        # construction for the reason the catalogue is read there: it is a wiring
+        # mistake, and this is the last moment it is cheap to say so.
+        #
+        # Two of them is somebody's wiring silently discarded -- a pre-built graph
+        # already holds a backend, and `_graph_for` returns it without ever calling
+        # the factory. None of them used to mean kingfisher picked one, and the
+        # reason it no longer does is that the backend is the sandbox: it wraps every
+        # command in `sandbox-exec` or Landlock, refuses host paths, and carries the
+        # route table a read-only rule is only legal against. Inheriting that in
+        # silence was never unsafe -- the default is the strict option, and still is
+        # -- but it meant a deployment could wire the whole service without learning
+        # there was a boundary at all.
+        if graph is not None and backend is not None:
             msg = (
-                "graph= and backend_from= are two answers to what filesystem a turn "
-                "runs against, and a pre-built graph already carries one: pass the "
-                "graph, or pass backend_from and let kingfisher build the graph"
+                "graph= and backend= are two answers to what filesystem a turn runs "
+                "against, and a pre-built graph already carries one: pass the graph, "
+                "or pass backend and let kingfisher build the graph"
+            )
+            raise ValueError(msg)
+        if graph is None and backend is None:
+            msg = (
+                "kingfisher does not pick the filesystem its agents run on: pass "
+                "backend=default_backend for the one it used to build for you, a "
+                "factory of your own for something else, or a pre-built graph that "
+                "already carries one"
             )
             raise ValueError(msg)
         self._graph = graph
@@ -439,18 +456,27 @@ class Kingfisher(Sessions, Disposal):
                 raise ValueError(msg)
             return self._graph
 
+        make = self._backend
+        if make is None:  # pragma: no cover -- the constructor refuses the pairing
+            msg = "a Kingfisher built with neither a backend nor a graph reached a turn"
+            raise ValueError(msg)
+
         return build_agent(
             self.cfg,
             agent=self._agent_for(request, session_dir, source_ids=source_ids),
             held=self.held_for(source_ids),
-            # Called here rather than passed down. This is where a turn first
-            # has a session directory, and `build_agent` is where one is already
-            # known -- so the harness keeps taking a runner, and only the
-            # service, which does not know the session until now, takes a way to
-            # make one.
-            runner=self._runner(session_dir) if self._runner is not None else None,
+            # Both called here rather than passed down, because this is where a turn
+            # first has a session directory and neither can be built without one. The
+            # runner goes into the factory rather than alongside it: a deployment that
+            # replaced the backend owns what runs its commands, and handing the same
+            # runner to `build_agent` as well would leave two answers to that.
+            backend=make(
+                self.cfg,
+                session_dir,
+                catalogue=self.catalogue,
+                runner=self._runner(session_dir) if self._runner is not None else None,
+            ),
             capabilities=capabilities if capabilities is not None else request.capabilities,
-            backend_from=self._backend_from,
             session_dir=session_dir,
             run_on=request.run_on,
             middleware_registry=self.middlewares,

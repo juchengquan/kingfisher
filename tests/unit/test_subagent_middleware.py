@@ -6,7 +6,7 @@ import pytest
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.messages import AIMessage
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.capabilities import Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.workspace.sessions import ensure_session_layout
@@ -69,7 +69,7 @@ def test_a_definition_gets_the_middleware_it_names(cfg, session_dir, monkeypatch
 
 def test_the_registry_is_empty_until_a_deployment_wires_one(cfg):
     """Kingfisher cannot define these; only a deployment knows what its middleware is."""
-    assert Kingfisher(cfg, threads=StubCheckpointer()).middlewares == {}
+    assert Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer()).middlewares == {}
 
 
 def test_an_unregistered_name_fails_loudly(cfg, session_dir, monkeypatch):
@@ -85,7 +85,10 @@ def test_an_unregistered_name_fails_loudly(cfg, session_dir, monkeypatch):
 def test_kingfisher_hands_its_registry_to_the_agent(cfg):
     registry = {"audit": Audited}
 
-    assert Kingfisher(cfg, threads=StubCheckpointer(), middlewares=registry).middlewares is registry
+    kf = Kingfisher(
+        cfg, backend=default_backend, threads=StubCheckpointer(), middlewares=registry
+    )
+    assert kf.middlewares is registry
 
 
 # -- the clamp ------------------------------------------------------------

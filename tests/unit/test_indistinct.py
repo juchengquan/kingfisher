@@ -194,12 +194,12 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
     """Through the same channel as a withheld capability, and for the same reason: it is
     a fact about the run rather than a refusal.
     """
-    from kingfisher import Kingfisher
+    from kingfisher import Kingfisher, default_backend
 
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
     an_agent(same, subagents="[second-opinion]")
-    service = Kingfisher(same)
+    service = Kingfisher(same, backend=default_backend)
     service.start_session("s")
 
     admitted = service._admit(
@@ -223,11 +223,11 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
 
 def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     """The negative control for the event itself: no line on an ordinary run."""
-    from kingfisher import Kingfisher
+    from kingfisher import Kingfisher, default_backend
 
     _define(cfg, ASKED_FOR_NOTHING)
     an_agent(cfg, subagents="[reviewer]")
-    service = Kingfisher(cfg)
+    service = Kingfisher(cfg, backend=default_backend)
     service.start_session("quiet")
 
     admitted = service._admit(

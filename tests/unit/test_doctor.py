@@ -7,7 +7,7 @@ import platform
 import re
 from pathlib import Path
 
-from kingfisher import seed
+from kingfisher import default_backend, seed
 from kingfisher.application.service import Kingfisher
 from kingfisher.presentation.cli import health
 from kingfisher.presentation.cli.__main__ import main
@@ -183,7 +183,7 @@ def test_doctor_sees_an_agents_moved_tool_that_nothing_else_would(cfg):
     assert "probe_one" in checks["tool references"].detail
 
     # And startup is deliberately unchanged: the agent runs, without the tool.
-    Kingfisher(cfg)
+    Kingfisher(cfg, backend=default_backend)
 
 
 def test_a_clean_catalogue_says_its_tool_references_are_fine(cfg, shipped):

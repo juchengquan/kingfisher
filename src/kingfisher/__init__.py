@@ -77,6 +77,13 @@ _EXPORTS = {
     # `config` and `layout` too. So it lives where the backend it describes is
     # built, and comes through the front door from there.
     "BACKEND_CONTRACT": "kingfisher.infrastructure.harness.backend_contract",
+    # One of the eleven, back. The rule those left under still holds -- a caller
+    # means a caller outside this wheel -- and what changed is that every such
+    # caller now has to name this one: `Kingfisher` no longer picks the filesystem
+    # its agents run on, so a deployment keeping the one it always had writes
+    # `backend=default_backend` and has to be able to say it without reaching past
+    # the door for an infrastructure path.
+    "default_backend": "kingfisher.infrastructure.harness.backend",
     # The seventh name a consumer has forced public, and the plainest: a
     # `CommandRunner` returns one of these, so a deployment writing a runner
     # cannot write one without it. `docs/guides/ports.md` documents the port and
@@ -152,6 +159,7 @@ __all__ = [
     "UploadError",
     "WorkspacePaths",
     "config_from_env",
+    "default_backend",
     "definitions_source",
     "ensure_layout",
     "file_store_named",
@@ -196,6 +204,9 @@ if TYPE_CHECKING:
     from kingfisher.domain.session import SessionBusyError as SessionBusyError
     from kingfisher.domain.session import SessionInfo as SessionInfo
     from kingfisher.domain.session import UnknownSessionError as UnknownSessionError
+    from kingfisher.infrastructure.harness.backend import (
+        default_backend as default_backend,
+    )
     from kingfisher.infrastructure.harness.backend_contract import (
         BACKEND_CONTRACT as BACKEND_CONTRACT,
     )

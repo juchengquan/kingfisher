@@ -10,7 +10,7 @@ from fastapi.testclient import TestClient
 from kingfisher_service.app import create_app
 from kingfisher_service.identity import from_header
 
-from kingfisher import Kingfisher
+from kingfisher import Kingfisher, default_backend
 from kingfisher.domain.access import parse
 
 HEADER = "X-Kf-Source-Ids"
@@ -60,7 +60,10 @@ def policied(cfg):
 
 @pytest.fixture
 def client(policied):
-    app = create_app(kingfisher=Kingfisher(policied), source_ids_from=from_header(HEADER))
+    app = create_app(
+        kingfisher=Kingfisher(policied, backend=default_backend),
+        source_ids_from=from_header(HEADER),
+    )
     return TestClient(app, raise_server_exceptions=False)
 
 

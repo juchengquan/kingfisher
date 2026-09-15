@@ -62,7 +62,7 @@ You reply with exactly one colour word and nothing else.
 async def main() -> int:
     load_dotenv()
 
-    from kingfisher import Kingfisher, config_from_env
+    from kingfisher import Kingfisher, config_from_env, default_backend
     from kingfisher.domain.capabilities import Capabilities
     from kingfisher.domain.request import Request
     from kingfisher.kinds.subagents.reading import SUFFIX
@@ -79,7 +79,7 @@ async def main() -> int:
         definition.write_text(NAMER, encoding="utf-8")
 
     try:
-        service = Kingfisher(cfg)
+        service = Kingfisher(cfg, backend=default_backend)
         session = service.start_session()
         print(f"session   : {session}")
         print(f"catalogue : {cfg.catalogue_roots["subagents"]}")

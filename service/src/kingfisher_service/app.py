@@ -12,6 +12,7 @@ from kingfisher import (
     Kingfisher,
     LocalFileStore,
     config_from_env,
+    default_backend,
     file_store_named,
 )
 from kingfisher_service import access, errors, sessions
@@ -77,7 +78,7 @@ def create_app(
             yield
             return
         cfg: Config = config_from_env()
-        built = Kingfisher(cfg, files=_file_store(settings))
+        built = Kingfisher(cfg, backend=default_backend, files=_file_store(settings))
         # The same check, at the only other moment it can be made. Given an
         # instance it runs at construction; building one from the environment,
         # there is nothing to check until here -- and here is still before the

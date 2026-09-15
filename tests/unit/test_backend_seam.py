@@ -1,4 +1,4 @@
-"""The seam a deployment puts its own filesystem under the agent through."""
+"""The filesystem a deployment names, and what happens when it names none."""
 
 from __future__ import annotations
 
@@ -8,7 +8,8 @@ import pytest
 from deepagents.backends import CompositeBackend
 
 from kingfisher import Kingfisher
-from kingfisher.config import ConfigError
+from kingfisher.config import Config, ConfigError
+from kingfisher.domain.ports import CommandResult, CommandRunner
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.agent import _backend_for
@@ -17,17 +18,17 @@ from kingfisher.infrastructure.harness.backend import (
     default_backend,
 )
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
-from tests.conftest import StubCheckpointer, an_agent
+from tests.conftest import StubCheckpointer, an_agent, capture_build
 from tests.unit.test_run import StubAgent
 
 
 class Substitute(WorkspaceScopedBackend):
-    """What a deployment returns when it adjusts what it was handed: its own type,
-    over the shell and the routes kingfisher built.
+    """What a deployment returns when it adjusts what it built: its own type, over the
+    shell and the routes `default_backend` made.
 
-    A plain object will no longer do, and that is the seam's shape rather than this
-    file's convenience -- `refuse_unusable_backend` runs on whatever comes back, so a
-    test returning something arbitrary would be testing a path no deployment has.
+    A plain object will not do, and that is the seam's shape rather than this file's
+    convenience -- `refuse_unusable_backend` runs on whatever a factory returns, so a
+    test returning something arbitrary would exercise a path no deployment has.
     """
 
     def __init__(self, given: WorkspaceScopedBackend) -> None:
@@ -40,139 +41,154 @@ class NotABackend:
     wrote, and none of the inheritance deepagents decides by.
     """
 
-    def __init__(self, wrapping: object = None) -> None:
-        self.wrapping = wrapping
 
-
-def test_a_deployment_function_decides_what_the_agent_runs_against(cfg, session_dir):
-    """Without this the seam does nothing: the returned backend has to be the one used,
-    not merely a value kingfisher computed and dropped.
+class Elsewhere(CommandRunner):
+    """A runner that ships its commands off this machine, which is the case where
+    losing it matters: the confinement names paths on *this* host.
     """
-    made: list[Substitute] = []
 
-    def mine(default: WorkspaceScopedBackend, where: Path) -> Substitute:
-        made.append(Substitute(default))
-        return made[-1]
+    @property
+    def local(self) -> bool:
+        return False
 
-    built = _backend_for(
-        cfg, session_dir, None, Definitions.from_config(cfg), backend_from=mine
-    )
-
-    assert built is made[0]
+    def run(
+        self, command: str, *, timeout: int | None = None
+    ) -> CommandResult:  # pragma: no cover -- wired, never driven: no turn is run here
+        raise NotImplementedError
 
 
-def test_the_function_is_handed_the_backend_kingfisher_built(cfg, session_dir):
-    """The whole reason this takes the default rather than only a session: a
-    deployment that keeps host-path refusal and the route table keeps them by
-    returning what it was given, and cannot do that if it was given nothing.
+def test_a_service_with_no_filesystem_named_is_refused(cfg):
+    """The whole change, in one line. Silence used to mean kingfisher picked, so a
+    deployment could wire the entire service without learning there was a sandbox in
+    it at all.
     """
-    seen: list[tuple[object, Path]] = []
-
-    def remember(default: object, where: Path) -> object:
-        seen.append((default, where))
-        return default
-
-    built = _backend_for(
-        cfg, session_dir, None, Definitions.from_config(cfg), backend_from=remember
-    )
-
-    assert len(seen) == 1
-    handed, where = seen[0]
-    assert isinstance(handed, WorkspaceScopedBackend)
-    assert handed is built
-    assert where == session_dir
+    with pytest.raises(ValueError, match="does not pick the filesystem"):
+        Kingfisher(cfg, threads=StubCheckpointer())
 
 
-def test_a_supplied_backend_is_what_the_function_receives(cfg, session_dir):
-    """`backend=` and `backend_from=` compose rather than contradict: the one handed in
-    is the one the function is handed, not a second one built behind its back.
+def test_a_pre_built_graph_is_a_filesystem_named(cfg):
+    """The exemption, and not a loophole: a finished graph already carries the backend
+    it was built on, so there is nothing left for a factory to decide and anything
+    passed beside it would be discarded.
     """
-    supplied = default_backend(cfg, session_dir)
-
-    result = _backend_for(
-        cfg,
-        session_dir,
-        supplied,
-        Definitions.from_config(cfg),
-        backend_from=lambda default, where: Substitute(default),
-    )
-
-    assert isinstance(result, Substitute)
-    assert result.wrapping is supplied
+    assert Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer()) is not None
 
 
-def test_a_function_with_no_session_to_root_it_at_is_refused(cfg):
-    """It is called *with* the session, so there is nothing to pass and no honest
-    value to invent -- `None` would reach a deployment as a path it would join names
-    onto.
-    """
-    with pytest.raises(ValueError, match="session_dir to pass it"):
-        _backend_for(
-            cfg,
-            None,
-            NotABackend(),
-            Definitions.from_config(cfg),
-            backend_from=lambda default, where: default,
-        )
-
-
-def test_a_backend_instance_is_refused_where_a_callable_belongs(cfg):
-    """The mistake this parameter's name exists to discourage, refused anyway: one
-    backend is rooted at one session, so sharing an instance shares a filesystem
-    between every caller -- which is what a deployment replacing the backend is
-    usually separating.
-    """
-    with pytest.raises(TypeError, match="rooted at a session"):
-        Kingfisher(cfg, backend_from=NotABackend(), threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
-
-
-def test_a_pre_built_graph_and_a_backend_function_are_refused_together(cfg):
-    """Either answer discards the other silently: `_graph_for` returns a pre-built
-    graph before anything is built for the function to be handed.
+def test_a_pre_built_graph_and_a_backend_are_refused_together(cfg):
+    """Either answer discards the other silently: `_graph_for` returns the graph before
+    it ever calls the factory.
     """
     with pytest.raises(ValueError, match="two answers"):
         Kingfisher(
             cfg,
             graph=StubAgent("ok"),
-            backend_from=lambda default, where: default,
+            backend=default_backend,
             threads=StubCheckpointer(),
         )
 
 
-def test_every_turn_is_built_on_what_the_deployment_returned(cfg, session_dir):
-    """The service is where a session directory is first known, so a seam that works
-    in `build_agent` and is never passed down would pass every test above and do
-    nothing in a deployment.
+def test_a_backend_instance_is_refused_where_a_factory_belongs(cfg):
+    """The mistake this parameter's shape exists to discourage, refused anyway: one
+    backend is rooted at one session, so sharing an instance shares a filesystem
+    between every caller -- which is what a deployment replacing the backend is
+    usually separating.
+    """
+    with pytest.raises(TypeError, match="rooted at a session"):
+        Kingfisher(cfg, backend=NotABackend(), threads=StubCheckpointer())  # ty: ignore[invalid-argument-type]
+
+
+def test_the_factory_is_called_per_turn_with_the_session_it_is_for(cfg, session_dir):
+    """A backend is rooted at a session, so calling the factory once at construction
+    would be one filesystem for every caller -- the leak a deployment replaces the
+    backend to avoid, written where nothing at the call site looks wrong.
     """
     an_agent(cfg)
     seen: list[Path] = []
 
-    def remember(default: object, where: Path) -> object:
+    def mine(
+        cfg_: Config,
+        where: Path,
+        *,
+        catalogue: Definitions | None = None,
+        runner: CommandRunner | None = None,
+    ) -> WorkspaceScopedBackend:
         seen.append(where)
-        return default
+        return default_backend(cfg_, where, catalogue=catalogue, runner=runner)
 
-    service = Kingfisher(cfg, backend_from=remember)
-    service._graph_for(Request("go", agent="only"), session_dir)
+    Kingfisher(cfg, backend=mine)._graph_for(Request("go", agent="only"), session_dir)
 
     assert seen == [session_dir]
 
 
+def test_the_factory_is_handed_the_catalogue_and_the_runner_this_deployment_wired(
+    cfg, session_dir
+):
+    """Either one missing costs a deployment something with no symptom: without the
+    catalogue a session sees none of the bundles' skills, and without the runner its
+    commands run under kingfisher's own fence rather than wherever the deployment
+    sends them. The backend that comes back is well-formed either way, which is why
+    the factory's signature is typed rather than merely documented.
+    """
+    an_agent(cfg)
+    seen: list[dict[str, object]] = []
+    runner = Elsewhere()
+
+    def mine(
+        cfg_: Config,
+        where: Path,
+        *,
+        catalogue: Definitions | None = None,
+        runner: CommandRunner | None = None,
+    ) -> WorkspaceScopedBackend:
+        seen.append({"catalogue": catalogue, "runner": runner})
+        return default_backend(cfg_, where, catalogue=catalogue)
+
+    service = Kingfisher(cfg, backend=mine, runner=lambda _where: runner)
+    service._graph_for(Request("go", agent="only"), session_dir)
+
+    assert seen[0]["catalogue"] is service.catalogue
+    assert seen[0]["runner"] is runner
+
+
+def test_what_the_factory_returns_is_what_the_agent_is_built_on(
+    cfg, session_dir, monkeypatch
+):
+    """Without this the seam does nothing. Read off the arguments `create_deep_agent`
+    was actually called with rather than from anything kingfisher reports about
+    itself: a service that computed the backend and then dropped it would satisfy
+    every other test in this file.
+    """
+    an_agent(cfg)
+    captured = capture_build(monkeypatch)
+    made: list[Substitute] = []
+
+    def mine(
+        cfg_: Config,
+        where: Path,
+        *,
+        catalogue: Definitions | None = None,
+        runner: CommandRunner | None = None,
+    ) -> Substitute:
+        made.append(
+            Substitute(default_backend(cfg_, where, catalogue=catalogue, runner=runner))
+        )
+        return made[-1]
+
+    Kingfisher(cfg, backend=mine)._graph_for(Request("go", agent="only"), session_dir)
+
+    assert captured["backend"] is made[0]
+
+
 def test_a_backend_deepagents_will_not_give_a_shell_is_refused(cfg, session_dir):
-    """The failure with no symptom, which is the reason any of this runs at a build.
+    """The failure with no symptom, and the reason a check runs at every build.
 
     deepagents decides what a backend is with `isinstance` against its own abstract
     base class, so one implementing `execute` correctly and inheriting nothing is
-    handed no shell at all: `FilesystemMiddleware` drops the tool, the model is told
-    execution is unavailable if it reaches for it, and the deployment hears nothing.
+    handed no shell at all: the tool leaves the roster, the model is told execution is
+    unavailable if it reaches for it, and the deployment hears nothing.
     """
     with pytest.raises(ConfigError, match="not recognised by deepagents"):
-        _backend_for(
-            cfg,
-            session_dir,
-            None,
-            Definitions.from_config(cfg),
-            backend_from=lambda default, where: NotABackend(),
-        )
+        _backend_for(cfg, session_dir, NotABackend(), Definitions.from_config(cfg))
 
 
 def test_a_backend_routing_nothing_a_deny_rule_needs_is_refused(cfg, session_dir):
@@ -182,36 +198,58 @@ def test_a_backend_routing_nothing_a_deny_rule_needs_is_refused(cfg, session_dir
     unless every rule sits under one of its routes, and kingfisher passes a deny rule
     for every scope the layout refuses writes under.
     """
+    routeless = CompositeBackend(
+        default=default_backend(cfg, session_dir).default, routes={}
+    )
+
     with pytest.raises(ConfigError, match="routes nothing covering"):
-        _backend_for(
-            cfg,
-            session_dir,
-            None,
-            Definitions.from_config(cfg),
-            backend_from=lambda default, where: CompositeBackend(
-                default=default.default, routes={}
-            ),
-        )
-
-
-def test_a_backend_handed_straight_to_the_harness_is_checked_too(cfg, session_dir):
-    """The check sits where a backend is *resolved*, not where a deployment's function
-    is called -- `backend=` reaches the same slot through a different door, and a check
-    on one door only leaves the other open.
-    """
-    with pytest.raises(ConfigError, match="not recognised by deepagents"):
-        _backend_for(cfg, session_dir, NotABackend(), Definitions.from_config(cfg))
+        _backend_for(cfg, session_dir, routeless, Definitions.from_config(cfg))
 
 
 def test_the_backend_kingfisher_builds_satisfies_what_it_refuses_others_for(
     cfg, session_dir
 ):
-    """The control on the three refusals above: these checks run on *every* build, so
-    one the default cannot pass takes every agent in this repository with it, and one
-    no backend could fail passes whatever it is pointed at.
+    """The control on the two refusals above: these checks run on *every* build, so one
+    the default cannot pass takes every agent in this repository with it, and one no
+    backend could fail passes whatever it is pointed at.
 
     Driven through `refuse_unusable_backend` against the real default rather than
     asserting on a backend of this test's own making, which would go on passing
     whatever the checks became.
     """
     refuse_unusable_backend(default_backend(cfg, session_dir))
+
+
+def test_the_harness_still_builds_its_own_for_a_caller_with_only_a_session(
+    cfg, session_dir
+):
+    """`kingfisher --list` reaches `build_agent` with a session and no backend, and has
+    no deployment behind it to have named one. Requiring one at `Kingfisher` is not
+    the same as requiring one here, and this is what holds the two apart.
+    """
+    assert isinstance(
+        _backend_for(cfg, session_dir, None, Definitions.from_config(cfg)),
+        WorkspaceScopedBackend,
+    )
+
+
+def test_a_harness_build_with_neither_is_still_refused(cfg):
+    """The one case with no answer available: nothing to root a backend at, and nothing
+    supplied to use instead.
+    """
+    with pytest.raises(ValueError, match="session_dir to root a backend at"):
+        _backend_for(cfg, None, None, Definitions.from_config(cfg))
+
+
+def test_the_one_liner_keeps_a_default_where_the_constructor_refuses_one(cfg):
+    """`run` and `stream` are conveniences over a *default* `Kingfisher`, and that is
+    the difference worth keeping: the constructor is where a deployment says what its
+    agents run on, and these two are what spares a caller from saying it. In the
+    signature rather than the body, so it can be seen and replaced.
+    """
+    import inspect
+
+    from kingfisher.application.run import run, stream
+
+    for helper in (run, stream):
+        assert inspect.signature(helper).parameters["backend"].default is default_backend
