@@ -43,7 +43,10 @@ def main(argv: list[str] | None = None) -> int:
         "--all",
         dest="everything",
         action="store_true",
-        help="also copy definitions naming middleware or groups this deployment has not registered",
+        help=(
+            "also copy definitions naming middleware or source ids this "
+            "deployment has not registered"
+        ),
     )
     args = parser.parse_args(argv)
 
@@ -62,7 +65,7 @@ def main(argv: list[str] | None = None) -> int:
         print(f"seeded {name}")
 
     # The half a caller forgets, and the reason this script exists rather than
-    # the README snippet alone. A definition naming middleware or groups this
+    # the README snippet alone. A definition naming middleware or source ids this
     # deployment has not registered is refused when it is built, so `seed`
     # leaves it -- and a workspace quietly missing an agent you can see in the
     # source directory is worse than one that says why.

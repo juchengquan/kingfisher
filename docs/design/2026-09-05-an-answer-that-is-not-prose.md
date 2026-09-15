@@ -300,7 +300,7 @@ the workspace"*. There is no less of a schema. Removing one does not restrict an
 agent, it substitutes a different agent that answers in prose. `middlewares` is
 on the axis because it selects code that runs; a schema is data that shapes a
 return value. Access is already answered one level up by the agent's own
-`groups:`.
+`source_ids:`.
 
 **`kingfisher list` says which schema an agent declares.** `list` exists to show
 what a workspace offers a request, and an agent that answers with a document

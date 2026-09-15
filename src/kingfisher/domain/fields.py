@@ -125,7 +125,7 @@ class Reader:
             raise self.error(msg)
         if isinstance(value, Mapping):
             # `names` would fall through to `(text(value),)` and read the whole mapping
-            # as one name -- `builtin_tools: {execute: {groups: [A]}}` became a built-in
+            # as one name -- `builtin_tools: {execute: {source_ids: [A]}}` became a built-in
             # called "{'execute': ...}", offered to nobody and reported nowhere.
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. A "
@@ -238,14 +238,14 @@ class Reader:
             raise self.error(msg)
         return name
 
-    def groups(self, value: object, *, key: str = "groups") -> Audience:
+    def source_ids(self, value: object, *, key: str = "source_ids") -> Audience:
         """A definition's own audience: who may reach it at all."""
         if value is None:
             return ALL
         return self.audience_list(value, where=f"{self.source}: {key}", lone_name=True)
 
     def audience_list(self, listed: object, *, where: str, lone_name: bool) -> Audience:
-        """A list of group names, any entry of which may be `{all_of: [...]}`."""
+        """A list of source ids, any entry of which may be `{all_of: [...]}`."""
         if isinstance(listed, str) and lone_name and listed.strip() and listed.strip() != ALL:
             return (listed.strip(),)
         if isinstance(listed, Mapping):
@@ -271,7 +271,7 @@ class Reader:
         if not written:
             msg = (
                 f"{where} is empty, which would mean nobody. Leave the line out "
-                f"to inherit the audience around it, or name the groups it is for"
+                f"to inherit the audience around it, or name the source ids it is for"
             )
             raise self.error(msg)
         if ALL in written and len(written) > 1:
@@ -287,13 +287,13 @@ class Reader:
             raise self.error(msg)
         parts = raw.get("all_of")
         if isinstance(parts, str) or not isinstance(parts, (list, tuple)):
-            msg = f"{where}: 'all_of' is a list of group names -- got {parts!r}"
+            msg = f"{where}: 'all_of' is a list of source ids -- got {parts!r}"
             raise self.error(msg)
         named = frozenset(name for one in parts if (name := text(one)))
         if not named:
             msg = (
                 f"{where}: 'all_of' is empty, which would require nothing and so "
-                f"admit everyone. Name the groups a caller must hold together"
+                f"admit everyone. Name the source ids a caller must hold together"
             )
             raise self.error(msg)
         if ALL in named:
@@ -302,31 +302,31 @@ class Reader:
         return named
 
     def _audience(self, raw: object, *, key: str, entry: str) -> Audience | None:
-        """One entry's audience, written `{groups: [...]}`, or `None` for none."""
+        """One entry's audience, written `{source_ids: [...]}`, or `None` for none."""
         where = f"{self.source}: {key} entry {entry!r}"
         if raw is None:
             return None
         if isinstance(raw, (list, tuple)):
             written = ", ".join(str(one) for one in raw) or "..."
             msg = (
-                f"{where}: an audience is written `groups: [{written}]`, not as a "
+                f"{where}: an audience is written `source_ids: [{written}]`, not as a "
                 f"bare list -- the same word the definition's own line uses, so an "
                 f"entry says which fact it is stating and has room for another"
             )
             raise self.error(msg)
         if not isinstance(raw, Mapping):
-            msg = f"{where}: write `groups: [...]`, or nothing at all -- got {raw!r}"
+            msg = f"{where}: write `source_ids: [...]`, or nothing at all -- got {raw!r}"
             raise self.error(msg)
         # `name` is the entry's own, checked and consumed by `_entry_name`
         # before this sees it. Named here rather than stripped there, because
         # stripping would hand this a mapping the file does not contain and put
         # the two readers one edit apart from disagreeing about which keys exist.
-        if complaint := unrecognised(raw, known=set(entry_fields("groups")), noun="key"):
+        if complaint := unrecognised(raw, known=set(entry_fields("source_ids")), noun="key"):
             msg = f"{where}: {complaint}"
             raise self.error(msg)
-        if "groups" not in raw:
+        if "source_ids" not in raw:
             return None
-        return self.audience_list(raw["groups"], where=f"{where}: groups", lone_name=False)
+        return self.audience_list(raw["source_ids"], where=f"{where}: source_ids", lone_name=False)
 
     def audienced(
         self,
@@ -347,7 +347,7 @@ class Reader:
             msg = (
                 f"{self.source}: {key} is a mapping; this field takes a list. An "
                 f"entry that says who it is for is written long -- "
-                f"- {{name: {first}, groups: [...]}} -- beside the plain names, "
+                f"- {{name: {first}, source_ids: [...]}} -- beside the plain names, "
                 f"which is the same shape 'middlewares' takes for its settings"
             )
             raise self.error(msg)
@@ -356,7 +356,7 @@ class Reader:
             # audience, and `selection` already has the answer or the refusal.
             return self.selection(value, absent=absent, key=key, refuse_all=refuse_all), {}
 
-        written, carried = self._entries(value, key=key, extra="groups")
+        written, carried = self._entries(value, key=key, extra="source_ids")
         stated = {
             name: self._audience(entry, key=key, entry=name) for name, entry in carried.items()
         }
@@ -364,7 +364,7 @@ class Reader:
         # meaning of an absent field are all decided in exactly one place.
         chosen = self.selection(written, absent=absent, key=key, refuse_all=refuse_all)
         # Every name is selected; only the ones that stated an audience carry
-        # one. An entry that wrote the long form and left `groups` out falls
+        # one. An entry that wrote the long form and left `source_ids` out falls
         # back to the definition's own in `access.reaching`, which is the same
         # fallback a plain name gets -- so the two spellings agree about an
         # unrestricted name.

@@ -231,7 +231,7 @@ def test_every_preset_agent_parses(shipped):
     """
     specs = LocalAgentRepository(shipped / "agents").specs
 
-    # `researcher` names middleware and `analyst` names groups, so `seed`
+    # `researcher` names middleware and `analyst` names source ids, so `seed`
     # leaves both behind -- see
     # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
     # is not unread: they are definitions of this kind, in this kind's folder,
@@ -631,7 +631,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
         # rather than borrowed from `authored_files_for`, because the point of a
         # destination written here is that the protocol is satisfied by shape.
         authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
         }
 
     done = seed(Destination(), shipped)
@@ -648,7 +648,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
     # The names are the actionable half of the message, and `wants` is what
     # makes them actionable: "names middleware" sends a reader to a registry
-    # and "names groups" to a file, so one sentence for both would send half
+    # and "names source ids" to a file, so one sentence for both would send half
     # its readers to the wrong place.
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
         "agents/researcher.yaml": (
@@ -656,10 +656,10 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
             ("call-cap-strict", "call-cap-generous", "tool-note"),
         ),
         "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note")),
-        "agents/analyst.yaml": ("groups", ("analysts", "auditors", "senior-analysts")),
+        "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log", "sales_db_pii")),
         "subagents/auditor.yaml": (
-            "groups",
-            ("analysts", "auditors", "reviewers", "senior-analysts"),
+            "source_ids",
+            ("sales_db", "audit_log", "warehouse", "sales_db_pii"),
         ),
     }
 
@@ -682,7 +682,7 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
         # rather than borrowed from `authored_files_for`, because the point of a
         # destination written here is that the protocol is satisfied by shape.
         authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
         }
 
     done = seed(Destination(), shipped, everything=True)
@@ -714,7 +714,7 @@ def test_seed_copies_the_middleware_examples_into_a_workspace(shipped, tmp_path)
             for kind in ("agents", "skills", "subagents", "tools", "middlewares")
         }
         authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
         }
 
     done = seed(Destination(), shipped)
@@ -740,7 +740,7 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
         # rather than borrowed from `authored_files_for`, because the point of a
         # destination written here is that the protocol is satisfied by shape.
         authored_files = {
-            name: tmp_path / name for name in ("models.yaml", "groups.yaml")
+            name: tmp_path / name for name in ("models.yaml", "source_ids.yaml")
         }
 
     seed(Destination(), shipped)
@@ -991,76 +991,76 @@ def test_the_generous_variant_is_a_subclass_rather_than_a_setting(shipped):
     assert module.CallCapGenerous.defaults["limit"] == 100
 
 
-# -- the worked set for group access ----------------------------------------
+# -- the worked set for source-id access ----------------------------------------
 
 
 def _vocabulary(shipped):
-    """The shipped `groups.yaml`, read the way a deployment would."""
+    """The shipped `source_ids.yaml`, read the way a deployment would."""
     from kingfisher.infrastructure import access_policy
 
-    return access_policy.load(shipped / "groups.yaml")
+    return access_policy.load(shipped / "source_ids.yaml")
 
 
 def test_the_vocabulary_ships_and_reads(shipped):
     """It is not seeded -- `seed` copies definitions and this is not one -- so nothing
     else here would notice if it stopped parsing.
     """
-    groups = _vocabulary(shipped)
+    source_ids = _vocabulary(shipped)
 
-    assert groups is not None
-    assert set(groups.names) == {
-        "analysts",
-        "auditors",
-        "reviewers",
-        "senior",
-        "senior-analysts",
+    assert source_ids is not None
+    assert set(source_ids.names) == {
+        "sales_db",
+        "audit_log",
+        "warehouse",
+        "pii",
+        "sales_db_pii",
     }
-    assert groups.compounds == {"senior-analysts": ("analysts", "senior")}
+    assert source_ids.compounds == {"sales_db_pii": ("sales_db", "pii")}
 
 
-def test_the_containing_group_reaches_what_it_contains(shipped):
-    """`reviewers` appears on no definition in this set, which is the point of shipping
-    it: a group that reaches things without being written on them.
+def test_the_containing_source_id_reaches_what_it_contains(shipped):
+    """`warehouse` appears on no definition in this set, which is the point of shipping
+    it: a source id that reaches things without being written on them.
     """
-    groups = _vocabulary(shipped)
+    source_ids = _vocabulary(shipped)
 
-    assert groups.expand(["reviewers"]) == frozenset({"reviewers", "analysts", "auditors"})
+    assert source_ids.expand(["warehouse"]) == frozenset({"warehouse", "sales_db", "audit_log"})
 
 
-def test_every_group_the_presets_name_is_declared(shipped):
+def test_every_source_id_the_presets_name_is_declared(shipped):
     """The assertion that keeps this set honest."""
-    from kingfisher.infrastructure.workspace.seeding import groups_named
+    from kingfisher.infrastructure.workspace.seeding import source_ids_named
 
     declared = set(_vocabulary(shipped).names)
     named = {
         name
         for kind in ("agents", "subagents")
         for path in sorted((shipped / kind).rglob("*.yaml"))
-        for name in groups_named(path.read_text(encoding="utf-8"))
+        for name in source_ids_named(path.read_text(encoding="utf-8"))
     }
 
-    assert named, "no preset names a group, so this rule is checking nothing"
+    assert named, "no preset names a source id, so this rule is checking nothing"
     assert named <= declared, f"{sorted(named - declared)} are named but not declared"
 
 
-def test_the_group_presets_narrow_for_a_narrower_caller(shipped):
+def test_the_source_id_presets_narrow_for_a_narrower_caller(shipped):
     """The compounding case, asserted against the files rather than described: one
     delegate, and an auditor holds fewer tools than an analyst.
     """
     specs = LocalSubagentRepository(shipped / "subagents").specs
-    groups = _vocabulary(shipped)
+    source_ids = _vocabulary(shipped)
     auditor = specs["auditor"]
 
-    assert auditor.declares(groups.expand(["analysts"])).tools == (
+    assert auditor.declares(source_ids.expand(["sales_db"])).tools == (
         "sql_query",
         "line_count",
     )
     # Degraded, not empty: it still verifies what it can, and its prompt says so.
-    assert auditor.declares(groups.expand(["auditors"])).tools == ("line_count",)
+    assert auditor.declares(source_ids.expand(["audit_log"])).tools == ("line_count",)
     # And `contains` reaches an *entry* audience, not only the definition's own
-    # line: `reviewers` is written on nothing here, contains `analysts`, and so
-    # gets the tool that entry restricts to analysts.
-    assert auditor.declares(groups.expand(["reviewers"])).tools == (
+    # line: `warehouse` is written on nothing here, contains `sales_db`, and so
+    # gets the tool that entry restricts to sales_db.
+    assert auditor.declares(source_ids.expand(["warehouse"])).tools == (
         "sql_query",
         "line_count",
     )
@@ -1071,47 +1071,47 @@ def test_an_entry_that_states_nothing_inherits(shipped):
     likely to be got wrong, so it is asserted rather than only commented.
     """
     specs = LocalAgentRepository(shipped / "agents").specs
-    groups = _vocabulary(shipped)
+    source_ids = _vocabulary(shipped)
     analyst = specs["analyst"]
 
     # Two entries carry an audience; the other two say nothing and inherit.
     assert analyst.audiences["tools"] == {
-        "sql_query": ("analysts",),
-        "http_fetch": ("senior-analysts",),
+        "sql_query": ("sales_db",),
+        "http_fetch": ("sales_db_pii",),
     }
-    assert analyst.declares(groups.expand(["auditors"])).tools == (
+    assert analyst.declares(source_ids.expand(["audit_log"])).tools == (
         "csv_profile::csv_profile",
         "line_count",
     )
 
 
-def test_a_shipped_requirement_takes_both_groups_at_once(shipped):
+def test_a_shipped_requirement_takes_both_source_ids_at_once(shipped):
     """The `all_of` case, asserted against the files rather than described."""
     specs = LocalAgentRepository(shipped / "agents").specs
-    groups = _vocabulary(shipped)
+    source_ids = _vocabulary(shipped)
     analyst = specs["analyst"]
 
-    assert analyst.declares(groups.expand(["analysts"])).tools == (
+    assert analyst.declares(source_ids.expand(["sales_db"])).tools == (
         "sql_query",
         "csv_profile::csv_profile",
         "line_count",
     )
-    assert analyst.declares(groups.expand(["analysts", "senior"])).tools == (
+    assert analyst.declares(source_ids.expand(["sales_db", "pii"])).tools == (
         "sql_query",
         "http_fetch",
         "csv_profile::csv_profile",
         "line_count",
     )
     # Senior alone is not a role here, so it reaches the agent through nothing.
-    assert not analyst.declares(groups.expand(["senior"])).tools
+    assert not analyst.declares(source_ids.expand(["pii"])).tools
 
 
 def test_a_shipped_compound_cannot_be_presented_by_a_caller(shipped):
     """It is derived, so claiming it would be claiming the conclusion."""
     from kingfisher.domain.access import AccessError
 
-    with pytest.raises(AccessError, match=r"all of \[analysts, senior\]"):
-        _vocabulary(shipped).expand(["senior-analysts"])
+    with pytest.raises(AccessError, match=r"all of \[pii, sales_db\]"):
+        _vocabulary(shipped).expand(["sales_db_pii"])
 
 
 def test_the_long_entry_form_is_shown_on_every_field_that_takes_one(shipped):
@@ -1161,7 +1161,7 @@ def test_the_other_presets_still_restrict_nobody(shipped):
 
     agents = LocalAgentRepository(shipped / "agents").specs
 
-    assert {name for name, spec in agents.items() if spec.groups == ALL} == {
+    assert {name for name, spec in agents.items() if spec.source_ids == ALL} == {
         "assistant",
         "general",
         "researcher",

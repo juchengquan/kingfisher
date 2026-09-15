@@ -276,7 +276,7 @@ def main(argv: list[str]) -> int:
             print(f"seeded {name}")
         for left in result.skipped:
             # The reason `--agent researcher` would otherwise fail with nothing
-            # to go on. A definition naming middleware or groups this deployment
+            # to go on. A definition naming middleware or source ids this deployment
             # has not registered is refused when it is built, so `seed` leaves it
             # behind -- and a driver that printed only what it wrote would send
             # you looking for a file it decided not to copy.

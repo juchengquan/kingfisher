@@ -61,7 +61,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
 
     # What this agent would have held for *someone*, less what it holds for
-    # this caller: exactly the names group narrowing took away, per field.
+    # this caller: exactly the names source-id narrowing took away, per field.
     #
     # Computed rather than asked of the policy, because there is no policy to
     # ask any more -- an audience is a property of the definition, so the only
@@ -75,12 +75,12 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
         }
 
     def visible(kind: str | None, names: tuple[str, ...]) -> tuple[str, ...]:
-        """`names`, less what this caller's groups took away.
+        """`names`, less what this caller's source ids took away.
 
         Applied to what the workspace *offers*, before the comparison, and the
         ordering is the whole of it. This function names every offered thing a grant
         left out -- so measured against the unfiltered catalogue it would hand a
-        caller the exact list of what their groups denied them, which is precisely
+        caller the exact list of what their source ids denied them, which is precisely
         what filtering them out of listings and refusals exists to avoid. An asset
         out of reach is not withheld from this caller; as far as they are concerned
         it was never offered.

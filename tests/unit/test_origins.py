@@ -82,20 +82,20 @@ def test_a_repository_with_no_directory_has_no_path(cfg):
     assert found.subagents == Origin("supplied", None)
 
 
-def test_an_absent_groups_file_still_says_where_it_looked(cfg, tmp_path):
+def test_an_absent_source_ids_file_still_says_where_it_looked(cfg, tmp_path):
     """The line this whole record was worth building for."""
-    looked = tmp_path / "ws" / "groups.yaml"
+    looked = tmp_path / "ws" / "source_ids.yaml"
 
     found = Origins.of(replace(cfg, access=None, access_source=looked))
 
-    assert found.groups == Origin("unset", looked)
+    assert found.source_ids == Origin("unset", looked)
 
 
-def test_a_config_assembled_in_code_reports_no_groups_file(cfg):
+def test_a_config_assembled_in_code_reports_no_source_ids_file(cfg):
     """Distinct from the above, and the distinction is actionable: one means "go and
     look at that path", the other means "there was never a file".
     """
-    assert Origins.of(cfg).groups == Origin("unset", None)
+    assert Origins.of(cfg).source_ids == Origin("unset", None)
 
 
 def test_the_models_file_is_named(cfg, tmp_path):
@@ -153,7 +153,7 @@ def test_entries_are_derived_from_the_record_not_listed_beside_it(cfg):
 
     assert names == [
         "agents", "middlewares", "skills", "subagents", "tools",
-        "models", "groups", "seed", "sessions",
+        "models", "source_ids", "seed", "sessions",
     ]
 
 
@@ -222,14 +222,14 @@ def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
         subagents=Rootless(),  # type: ignore[arg-type]
         tools=Definitions.from_roots({**cfg.catalogue_roots, "tools": tmp_path}).tools,
     )
-    line = Origins.of(replace(cfg, access=None, access_source=tmp_path / "groups.yaml"),
+    line = Origins.of(replace(cfg, access=None, access_source=tmp_path / "source_ids.yaml"),
                       catalogue=catalogue).line()
 
     pairs = line.split(" ")
     assert all("=" in pair for pair in pairs), line
     assert "subagents=<supplied>" in pairs
     assert f"tools={tmp_path}(overridden)" in pairs
-    assert f"groups=unset({tmp_path / 'groups.yaml'})" in pairs
+    assert f"source_ids=unset({tmp_path / 'source_ids.yaml'})" in pairs
 
 
 def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):

@@ -9,7 +9,7 @@ from types import MappingProxyType
 from kingfisher.application import access
 from kingfisher.application.origins import Origins
 from kingfisher.config import Config
-from kingfisher.domain.access import AccessReport, Groups, Stated, reaches
+from kingfisher.domain.access import AccessReport, SourceIds, Stated, reaches
 from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
@@ -133,10 +133,10 @@ class Inventory:
     #: above are: a listing is assembled once and formatted by whoever asked,
     #: and a renderer that had to reach for `Config` would be a second place
     #: deciding what a workspace offers.
-    access: Groups | None = None
+    access: SourceIds | None = None
     #: What the policy and the catalogue disagree about. Empty when they agree.
     access_report: AccessReport = field(default_factory=AccessReport)
-    #: Definition kind -> name -> {"groups": ..., "tools": {...}, ...}, for
+    #: Definition kind -> name -> {"source_ids": ..., "tools": {...}, ...}, for
     #: every definition that says anything about who reaches what.
     #:
     #: Carried rather than looked up by the printer: a renderer that reached for
@@ -272,7 +272,7 @@ def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
     found: dict[str, Stated] = {}
     for name, spec in sorted(specs.items()):
         stated = Stated(
-            groups=getattr(spec, "groups", ALL),
+            source_ids=getattr(spec, "source_ids", ALL),
             entries={k: dict(v) for k, v in getattr(spec, "audiences", {}).items()},
         )
         if not stated.says_nothing:
@@ -282,7 +282,7 @@ def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
 
 def _access(
     cfg: Config,
-    groups: Iterable[str] | None,
+    source_ids: Iterable[str] | None,
     *,
     agents: Mapping[str, object],
     subagents: Mapping[str, object],
@@ -303,7 +303,8 @@ def _access(
         if (complaint := access.undeclared_in(specs, kind=kind, vocabulary=cfg.access))
         is not None
     }
-    return stated, report, (cfg.access.expand(groups) if groups is not None else None), broken
+    held = cfg.access.expand(source_ids) if source_ids is not None else None
+    return stated, report, held, broken
 
 
 def _reaching(
@@ -318,7 +319,7 @@ def _reaching(
         return {
             name: value
             for name, value in names.items()
-            if held is None or reaches(stated.get(name, Stated()).groups, held)
+            if held is None or reaches(stated.get(name, Stated()).source_ids, held)
         }
 
     return keep
@@ -395,7 +396,7 @@ def _tools(
 
 
 def inventory(
-    cfg: Config, *, catalogue: Definitions | None = None, groups: Iterable[str] | None = None
+    cfg: Config, *, catalogue: Definitions | None = None, source_ids: Iterable[str] | None = None
 ) -> Inventory:
     """Ask the workspace what it offers, through the catalogue a run would use."""
     resolved = catalogue if catalogue is not None else resolve_definitions(cfg)
@@ -466,7 +467,7 @@ def inventory(
         agents_error = str(exc)
 
     stated, report, held, broken = _access(
-        cfg, groups, agents=defined_agents, subagents=specs
+        cfg, source_ids, agents=defined_agents, subagents=specs
     )
     reaching = _reaching(held, stated)
 
@@ -480,7 +481,7 @@ def inventory(
         agent_delegates=agent_delegates,
         # `or`, not replace: a kind that already failed to load has the more
         # fundamental problem, and saying the second one instead would send a
-        # reader to a group name in a file that does not parse.
+        # reader to a source id in a file that does not parse.
         agents_error=agents_error or broken.get("agents"),
         builtin_tools=builtin,
         tools=tuple(reaching("tools", dict.fromkeys(workspace_tools, ""))),

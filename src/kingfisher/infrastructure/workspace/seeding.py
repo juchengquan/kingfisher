@@ -98,10 +98,10 @@ class Skipped:
 
     label: str
     names: tuple[str, ...]
-    #: What those names *are* -- `middlewares` or `groups`. The remedy differs by
+    #: What those names *are* -- `middlewares` or `source_ids`. The remedy differs by
     #: kind, so a message built from the names alone could only be right for one
-    #: of them: middleware is registered in code, a group is declared in
-    #: `groups.yaml`, and sending a reader to the wrong file is worse than
+    #: of them: middleware is registered in code, a source id is declared in
+    #: `source_ids.yaml`, and sending a reader to the wrong file is worse than
     #: saying less.
     wants: str = "middlewares"
 
@@ -115,8 +115,8 @@ class Seeded:
     skipped: tuple[Skipped, ...] = ()
 
 
-def groups_named(text: str) -> tuple[str, ...]:
-    """Every group a definition names, for a document that may not parse."""
+def source_ids_named(text: str) -> tuple[str, ...]:
+    """Every source id a definition names, for a document that may not parse."""
     try:
         parsed = yaml.safe_load(text)
     except yaml.YAMLError:
@@ -125,17 +125,17 @@ def groups_named(text: str) -> tuple[str, ...]:
         return ()
 
     found: list[str] = []
-    _collect(parsed.get("groups"), into=found)
+    _collect(parsed.get("source_ids"), into=found)
     for field_name in AUDIENCED:
         entries = parsed.get(field_name)
-        # A list whose entries are names, or mappings of `name` and `groups`. A
+        # A list whose entries are names, or mappings of `name` and `source_ids`. A
         # reader that walks the wrong shape finds nothing and reports nothing:
-        # a definition naming no group is exactly what a definition this cannot
+        # a definition naming no source id is exactly what a definition this cannot
         # read looks like from here.
         if isinstance(entries, (list, tuple)):
             for entry in entries:
                 if isinstance(entry, dict):
-                    _collect(entry.get("groups"), into=found)
+                    _collect(entry.get("source_ids"), into=found)
     return tuple(dict.fromkeys(found))
 
 
@@ -195,8 +195,8 @@ def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
         return None
     if named := middleware_named(text):
         return "middlewares", named
-    if grouped := groups_named(text):
-        return "groups", grouped
+    if declared := source_ids_named(text):
+        return "source_ids", declared
     return None
 
 

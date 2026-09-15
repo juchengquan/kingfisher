@@ -63,7 +63,7 @@ def test_the_catalogue_example_is_beside_models_yaml_whatever_the_source(cfg, tm
     assert EXAMPLE not in seeding.seed(cfg, mine).written
 
 
-def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
+def test_seeding_writes_no_source_ids_file_at_all(cfg, tmp_path):
     """Neither a policy nor an example, and the second half is the newer half."""
     from kingfisher.infrastructure.workspace.layout import ensure_layout
 
@@ -71,8 +71,8 @@ def test_seeding_writes_no_groups_file_at_all(cfg, tmp_path):
     ensure_layout(cfg.workspace)
     seeding.seed(cfg, mine)
 
-    assert not list(cfg.workspace.glob("groups.yaml*")), (
-        "seeding produced a groups file -- neither the policy nor an example "
+    assert not list(cfg.workspace.glob("source_ids.yaml*")), (
+        "seeding produced a source ids file -- neither the policy nor an example "
         "belongs here"
     )
 

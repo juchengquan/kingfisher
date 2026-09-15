@@ -60,28 +60,28 @@ ENV_FILE = ".env"
 #: What `seed` did *not* look at before leaving a definition behind, per kind.
 UNCONSULTED = {
     "middlewares": "what this deployment registered",
-    "groups": "your groups.yaml",
+    "source_ids": "your source_ids.yaml",
 }
 
 #: And what to do about it. The half a reader acts on, and the half that would
 #: be wrong if one sentence served both: middleware is registered in code, a
-#: group is declared in a file.
+#: source id is declared in a file.
 REMEDY = {
     "middlewares": "Register the names",
     # No file named here any more. It used to say `groups.yaml.example is
     # beside it`, and that example could not be the one you wanted: it shipped
     # one vocabulary and a workspace needs whichever names its own definitions
-    # ask for. Seeding this repository's own set named three groups and pointed
+    # ask for. Seeding this repository's own set named three source ids and pointed
     # at a file declaring five others, none of them the same. `_declare` below
     # prints what to write instead, using the names that are actually missing.
-    "groups": "Declare the groups in groups.yaml",
+    "source_ids": "Declare the source ids in source_ids.yaml",
 }
 
 
 def _declare(written: Seeded) -> tuple[str, ...]:
-    """The `groups.yaml` to write, or nothing when no group was missing."""
+    """The `source_ids.yaml` to write, or nothing when no source id was missing."""
     wanted = sorted(
-        {name for left in written.skipped if left.wants == "groups" for name in left.names}
+        {name for left in written.skipped if left.wants == "source_ids" for name in left.names}
     )
     if not wanted:
         return ()
@@ -91,9 +91,9 @@ def _declare(written: Seeded) -> tuple[str, ...]:
         # says to declare them and to seed again; a third copy of that sentence
         # would be the noise, and what none of those lines can give is the one
         # list that covers all of them.
-        "the groups.yaml that unblocks every one of them:",
+        "the source_ids.yaml that unblocks every one of them:",
         "",
-        f"    groups: [{', '.join(wanted)}]",
+        f"    source_ids: [{', '.join(wanted)}]",
     )
 
 
@@ -220,10 +220,10 @@ def build_parser() -> argparse.ArgumentParser:
         dest="held",
         type=_held,
         default=None,
-        metavar="GROUPS",
+        metavar="SOURCE_IDS",
         help=(
-            "who is calling: comma-separated group names, or UNSCOPED to run "
-            "with no caller. Required where the workspace declares groups"
+            "who is calling: comma-separated source ids, or UNSCOPED to run "
+            "with no caller. Required where the workspace declares source ids"
         ),
     )
     sub.add_parser(
@@ -279,16 +279,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="emit the same answer as JSON, for a script rather than a person",
     )
     # Unscoped is the operator's view: everything, plus who reaches it. Naming
-    # groups simulates a caller, which is how a policy gets checked before
+    # source ids simulates a caller, which is how a policy gets checked before
     # somebody trusts it.
     listing.add_argument(
         "--as",
         dest="held",
         type=_held,
         default=None,
-        metavar="GROUPS",
+        metavar="SOURCE_IDS",
         help=(
-            "show what these groups reach: comma-separated names, or UNSCOPED "
+            "show what these source ids reach: comma-separated names, or UNSCOPED "
             "for the operator's view of everything"
         ),
     )
@@ -373,7 +373,7 @@ def _seed(source: str | None = None, *, everything: bool = False) -> int:
         # Named with what to do about it, because "skipped" on its own reads as
         # a failure and this is a choice. The names are the actionable half, and
         # `wants` is what makes them actionable: middleware is registered in
-        # code and a group is declared in `groups.yaml`, so one sentence for
+        # code and a source id is declared in `source_ids.yaml`, so one sentence for
         # both would send half its readers to the wrong file.
         print(
             f"skipped {left.label} — names {left.wants} "
@@ -434,7 +434,7 @@ def _run(args: argparse.Namespace) -> int:
         inputs=tuple(Path(p).expanduser() for p in args.input),
         data=tuple(Path(p).expanduser() for p in args.data),
     )
-    result = show(kf.stream(request, groups=args.held), sys.stdout, sys.stderr)
+    result = show(kf.stream(request, source_ids=args.held), sys.stdout, sys.stderr)
     if result is None:
         # The stream ended without a terminal event, which is not a shape the
         # library produces -- said out loud rather than reported as success.
@@ -490,7 +490,7 @@ def _discard(kf: Kingfisher, result: RunResult) -> None:
 
 
 def _held(raw: str) -> Held:
-    """`--as A,B` as the groups it names, or the explicit absence of any."""
+    """`--as A,B` as the source ids it names, or the explicit absence of any."""
     if raw.strip() == "UNSCOPED":
         return UNSCOPED
     return tuple(part.strip() for part in raw.split(",") if part.strip())
@@ -528,8 +528,8 @@ def _list(*, as_document: bool = False, held: Held | None = None) -> int:
     # it is on the host with the policy file in front of them, so it is exempt
     # from the refusal that covers a *turn*: there is nothing to protect by
     # making an operator name themselves to read their own workspace.
-    groups = held if isinstance(held, tuple) else None
-    found = inventory(cfg, groups=groups)
+    source_ids = held if isinstance(held, tuple) else None
+    found = inventory(cfg, source_ids=source_ids)
     if as_document:
         print(json.dumps(as_json(found), indent=2, sort_keys=True))
     else:
@@ -805,7 +805,7 @@ def main(argv: list[str] | None = None) -> int:
         # Beside `ConfigError` because it is the same kind of thing: something
         # the person at the terminal wrote and can fix, in a file or on the
         # command line. A traceback for `--as Q` would bury the one line that
-        # says which groups this deployment actually defines.
+        # says which source ids this deployment actually defines.
         print(f"access error: {exc}", file=sys.stderr)
         return 2
     except ConfigError as exc:

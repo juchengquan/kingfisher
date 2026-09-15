@@ -159,7 +159,7 @@ true of every agent in the workspace.
 | `model` | optional | An entry in your `models.yaml`. Unset runs the `default:` there. May be a list, tried in order |
 | `memory` | optional | `false` to run without the memory file on a deployment that wired one |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `groups` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--groups-in-the-definitions-groupsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may open a session on this agent. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 
 One rule covers all four, and a subagent file follows it too: **leave a tool
 field out and you get everything available to you; leave `skills` or `subagents`
@@ -459,7 +459,7 @@ on the spot, so every entry after the first would be unreachable.
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
-| `groups` | optional | Who may reach this delegate, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--groups-in-the-definitions-groupsyaml-for-the-vocabulary) |
+| `source_ids` | optional | Who may reach this delegate, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
 
 ### A delegate that consults another
 
@@ -893,15 +893,19 @@ it, not loading it is the mechanism working.
 
 ---
 
-## Access — `groups:` in the definitions, `groups.yaml` for the vocabulary
+## Access — `source_ids:` in the definitions, `source_ids.yaml` for the vocabulary
 
-Which user groups may reach which agents, delegates, tools and skills. Optional:
-with no `groups.yaml`, kingfisher controls nothing by group.
+Which source ids may reach which agents, delegates, tools and skills. Optional:
+with no `source_ids.yaml`, kingfisher controls nothing by source id.
 
-A worked set to read alongside this section: `assets_examples/groups.yaml`,
+A source id is a name in this deployment's vocabulary and nothing else — not a
+path a definition was read from, and not a data file a run is handed. Nothing
+resolves it to either.
+
+A worked set to read alongside this section: `assets_examples/source_ids.yaml`,
 `agents/analyst.yaml` and `subagents/auditor.yaml`. `seed` leaves them behind by
-default, because a workspace that has not declared `analysts` cannot read a
-definition that names it — copy `groups.yaml` first, then
+default, because a workspace that has not declared `sales_db` cannot read a
+definition that names it — copy `source_ids.yaml` first, then
 `kingfisher seed --all`.
 
 **Audiences live in the definitions.** An agent or a subagent says who may reach
@@ -910,33 +914,33 @@ vocabulary — which names exist, and which contain which — and that file hold
 policy at all.
 
 ```yaml
-# groups.yaml  — the whole file
-groups:
+# source_ids.yaml  — the whole file
+source_ids:
   A: {}
   B: {}
   C: {}
-  admin: {contains: [A, B, C]}
+  warehouse: {contains: [A, B, C]}
 ```
 
 ```yaml
 # agents/assistant.yaml
 name: assistant
 description: Answers questions about the data in this workspace.
-groups: [A, B]                 # who may open a session on this agent
+source_ids: [A, B]                 # who may open a session on this agent
 tools:
   - name: sql_query
-    groups: [A]                # this agent's sql_query is for A only
+    source_ids: [A]                # this agent's sql_query is for A only
   - name: http_fetch
-    groups: [A, B]
+    source_ids: [A, B]
 subagents:
   - name: reviewer
-    groups: [A]
+    source_ids: [A]
 skills: [code-review]          # a plain list means "these, at my audience"
 system_prompt: |
   ...
 ```
 
-`<workspace>/groups.yaml` by default; `KINGFISHER_GROUPS_FILE` points elsewhere,
+`<workspace>/source_ids.yaml` by default; `KINGFISHER_SOURCE_IDS_FILE` points elsewhere,
 so several deployments can share one vocabulary. Read once at startup, so a
 revocation lands on restart. A file that is present and will not parse stops the
 deployment: a vocabulary that cannot be honoured must never come up as *no*
@@ -948,7 +952,7 @@ Once a vocabulary exists, every call has to say:
 
 ```python
 kf = Kingfisher(config_from_env())
-kf.run(Request(task="...", agent="assistant"), groups=["B", "C"])
+kf.run(Request(task="...", agent="assistant"), source_ids=["B", "C"])
 ```
 
 `kf.run(...)` with nobody named is **refused**. That refusal is the point: the
@@ -957,38 +961,38 @@ handler would serve every caller everything with nothing to show for it. To run
 with no caller deliberately, say so:
 
 ```python
-kf.run(..., groups=UNSCOPED)           # a value someone typed, and greppable
+kf.run(..., source_ids=UNSCOPED)           # a value someone typed, and greppable
 ```
 
-It takes group *names*, never a `Capabilities`. A name is resolved against the
+It takes source id *names*, never a `Capabilities`. A name is resolved against the
 definitions this deployment wrote, so the only thing anyone can hand in is an
 input — there is no spelling of "give me everything" except `UNSCOPED`.
 
 ### The four spellings, and one rule
 
-`groups:` on a definition is the **default audience** for everything it holds,
+`source_ids:` on a definition is the **default audience** for everything it holds,
 and the **ceiling** on what any entry may say. That one rule covers every form
 the selection fields already had, so a definition written before audiences
-existed keeps its exact meaning once a `groups:` line is added above it:
+existed keeps its exact meaning once a `source_ids:` line is added above it:
 
 ```yaml
-groups: [A, B]
+source_ids: [A, B]
 tools:                     # omitted — every tool, for A and B
 ```
 ```yaml
-groups: [A, B]
+source_ids: [A, B]
 tools: [sql_query]         # a list — that tool, for A and B
 ```
 ```yaml
-groups: [A, B]
+source_ids: [A, B]
 tools:                     # the long form — per entry
   - name: sql_query
-    groups: [A]            #   for A only
+    source_ids: [A]            #   for A only
   - name: http_fetch
-    groups: ["*"]          #   for anyone who reaches this definition
+    source_ids: ["*"]          #   for anyone who reaches this definition
 ```
 
-**An entry is a name, or a mapping of `name` and `groups`** — the same shape
+**An entry is a name, or a mapping of `name` and `source_ids`** — the same shape
 `middlewares:` takes for its `settings`, so there is one long form to learn rather
 than one per field.
 
@@ -999,13 +1003,13 @@ of its audiences silently, with nothing able to refuse or report it.
 
 **Only the entries you restrict need one.** An entry that says nothing inherits
 the definition's own audience, so an agent holding five tools and restricting one
-writes one `groups:` line rather than five:
+writes one `source_ids:` line rather than five:
 
 ```yaml
-groups: [A, B]
+source_ids: [A, B]
 tools:
   - name: sql_query
-    groups: [A]            # narrower than the definition
+    source_ids: [A]            # narrower than the definition
   - http_fetch             # a bare name, so [A, B] — the definition's own
   - line_count
 ```
@@ -1015,25 +1019,26 @@ an entry with nothing to attach writes nothing. Long entries that restrict
 nothing mean exactly what bare names mean, which is what keeps the spellings
 honest about an unrestricted name.
 
-`groups: []` on an entry is refused rather than read as "nobody": leaving the
+`source_ids: []` on an entry is refused rather than read as "nobody": leaving the
 line out is how you say "no restriction", so an empty one is an unfinished edit.
 ```yaml
-groups: [A, B]
+source_ids: [A, B]
 tools: []                  # none, as it always meant
 ```
 
 An entry's audience is always an **and** with the definition's own line. The
 only way to reach an entry is through the definition holding it, and a caller
 who cannot open the agent never gets as far as its tools — so `sql_query:
-groups: [A]` under `groups: [A, B]` means "opens this agent, *and* is in A".
+source_ids: [A]` under `source_ids: [A, B]` means "opens this agent, *and*
+holds A".
 
-That makes a group from outside the definition's line useful rather than wrong:
+That makes a source id from outside the definition's line useful rather than wrong:
 
 ```yaml
-groups: [analysts, auditors]
+source_ids: [sales_db, audit_log]
 tools:
   - name: export
-    groups: [senior]        # anyone who opens this agent, and is senior
+    source_ids: [pii]        # anyone who opens this agent, and holds pii
 ```
 
 Startup reports it, because the same line is what somebody trying to *widen*
@@ -1043,14 +1048,14 @@ would write by accident:
 access:
   narrows past this definition's own audience,
   so it reaches only callers holding both:
-    agent analyst: tool export  [senior]
+    agent analyst: tool export  [pii]
 ```
 
-Said rather than refused, because no rule can tell the two apart — `[senior]`
-meaning "and senior" and `[auditors]` written under `[analysts]` by somebody who
-wanted to add auditors are the same shape, and only the author knows which.
+Said rather than refused, because no rule can tell the two apart — `[pii]`
+meaning "and pii" and `[audit_log]` written under `[sales_db]` by somebody who
+wanted to add `audit_log` are the same shape, and only the author knows which.
 
-**Any overlap grants.** A longer list means *more* people, which is what
+**Any overlap grants.** A longer list means *more* callers, which is what
 everyone reads an access list as meaning. `["*"]` is everyone.
 
 ### Which fields take an audience
@@ -1058,18 +1063,18 @@ everyone reads an access list as meaning. `["*"]` is everyone.
 `tools`, `subagents` and `skills` — all three, and identically:
 
 ```yaml
-groups: [A, B]
+source_ids: [A, B]
 tools:
   - name: sql_query
-    groups: [A]
+    source_ids: [A]
 subagents:
   - name: reviewer
-    groups: [A]
+    source_ids: [A]
 skills:
   - name: audit
-    groups: [A]           # only A is told this procedure exists
+    source_ids: [A]           # only A is told this procedure exists
   - name: review
-    groups: [A, B]
+    source_ids: [A, B]
 ```
 
 A skill reaches the model by a different road from a tool — it is advertised
@@ -1087,7 +1092,7 @@ itself, so kingfisher can filter them but never leave them out of a graph —
 `execute` from memory. Writing a mapping there is refused rather than parsed as a
 single tool named `{'execute': ['A']}`.
 
-What gates the built-ins is which *agents* a group may open: an agent declaring
+What gates the built-ins is which *agents* a source id may open: an agent declaring
 `builtin_tools: [read_file, ls, glob, grep]` cannot yield the shell to anyone,
 whatever they ask for.
 
@@ -1102,26 +1107,26 @@ The cost is that there is no single line answering "who reaches `sql_query`?".
 view, so a call site quietly wider than its neighbours is visible rather than
 something you would only find by grepping.
 
-### No `groups:` line means everyone
+### No `source_ids:` line means everyone
 
 An absent optional field means no restriction, which is what it means everywhere
 else in these formats — and reading it as "nobody" would stop every unannotated
-definition working the moment `groups.yaml` appeared. So adoption is
+definition working the moment `source_ids.yaml` appeared. So adoption is
 incremental: annotate the sensitive definitions first.
 
 That must not also be silent, so startup names what carries no line:
 
 ```
 access:
-  no groups: line, so reachable by everyone:
+  no source_ids: line, so reachable by everyone:
     agent assistant
     subagent extractor
 ```
 
 ### One grant, everywhere
 
-The caller's groups bound the agent, its delegates, and their delegates alike. A
-delegate's own `groups:` is its intrinsic ceiling — "this one is sensitive
+The caller's source ids bound the agent, its delegates, and their delegates alike. A
+delegate's own `source_ids:` is its intrinsic ceiling — "this one is sensitive
 wherever it is used" — and a parent's `subagents:` entry narrows it further for
 that parent's context. The two intersect; neither widens the other.
 
@@ -1131,12 +1136,12 @@ reports what was withheld**:
 ```yaml
 # subagents/reviewer.yaml
 name: reviewer
-groups: [A, B, C]
+source_ids: [A, B, C]
 tools:
   - name: sql_query
-    groups: [A, B]
+    source_ids: [A, B]
   - name: http_fetch
-    groups: [A, B, C]
+    source_ids: [A, B, C]
 ```
 
 A caller in `C` gets a `reviewer` holding `http_fetch` and not `sql_query`.
@@ -1150,21 +1155,21 @@ subagent is never compiled, so its graph is never paid for either.
 
 ### Compiled subagents
 
-A Python-declared delegate may carry `groups` and per-tool audiences:
+A Python-declared delegate may carry `source_ids` and per-tool audiences:
 
 ```python
 SUBAGENTS = [
     {
         "name": "profiler",
         "description": "...",
-        "groups": ["A", "B"],
-        "tools": {"sql_query": {"groups": ["A"]}},
+        "source_ids": ["A", "B"],
+        "tools": {"sql_query": {"source_ids": ["A"]}},
         "build": _build,
     }
 ]
 ```
 
-`groups` is a real boundary: whether a compiled delegate is built at all is
+`source_ids` is a real boundary: whether a compiled delegate is built at all is
 kingfisher's decision, so there is nothing there for a graph to ignore.
 
 The per-tool audience narrows what is **handed to** `build`, with the caveat the
@@ -1175,7 +1180,7 @@ see `NOT_COMPILED`.
 
 ### What a caller can see
 
-**Out of reach reads as not offered.** An asset a caller's groups do not reach is
+**Out of reach reads as not offered.** An asset a caller's source ids do not reach is
 absent from listings, from the "this workspace offers …" in a refusal, and from
 the report of what a run withheld. Naming one gives the same answer naming a typo
 does, so nothing lets a caller enumerate the catalogue by guessing.
@@ -1185,7 +1190,7 @@ The operator's view is the whole of it:
 ```
 $ kingfisher list                 # every definition, its audience, and a roll-up
 $ kingfisher list --as B,C        # exactly what that caller sees
-$ kingfisher list --as admin      # check `contains` before trusting it
+$ kingfisher list --as warehouse  # check `contains` before trusting it
 ```
 
 `list` is exempt from the refusal above, and only `list`: it is read-only, and
@@ -1199,7 +1204,7 @@ again on **every turn afterwards**.
 
 A session pins its agent for life, and a session id is a bearer credential.
 Checked only at the open, holding one would be a durable grant to an agent you
-may not open, and a caller who lost a group would keep running what they had. So:
+may not open, and a caller who lost a source id would keep running what they had. So:
 
 - A leaked session id grants nothing its holder could not open themselves.
 - A demotion takes effect on the caller's next turn, and an in-flight
@@ -1209,36 +1214,38 @@ may not open, and a caller who lost a group would keep running what they had. So
 
 ### The vocabulary is closed
 
-A group named in a definition, or by a caller, that `groups.yaml` does not
+A source id named in a definition, or by a caller, that `source_ids.yaml` does not
 declare is **refused**. Both directions matter and they fail differently:
 
-- A caller naming an undeclared group would otherwise reach nothing, which looks
+- A caller naming an undeclared source id would otherwise reach nothing, which looks
   exactly like a caller who was denied.
-- A definition naming one would otherwise invent a group nobody is in, and the
+- A definition naming one would otherwise invent a source id nobody holds, and the
   only symptom would be a tool quietly reachable by no one — found weeks later
   by whoever needed it.
 
 `contains` expands one name into others, once, when the file is read:
 
 ```yaml
-groups:
-  admin: {contains: [A, B, C]}
+source_ids:
+  warehouse: {contains: [A, B, C]}
 ```
 
-A caller in `admin` reaches anything listing `A`, `B` or `C`, without `admin`
-appearing on a single definition. A loop is refused naming the whole cycle rather
-than one edge, since one edge does not tell a reader which link to cut.
+A caller holding `warehouse` reaches anything listing `A`, `B` or `C`, without
+`warehouse` appearing on a single definition. A loop is refused naming the whole
+cycle rather than one edge, since one edge does not tell a reader which link to
+cut.
 
-### Requiring several groups at once
+### Requiring several source ids at once
 
 An audience list is an **or**: any one of the names is enough. An entry of that
 list may be an **and**, written `all_of`, which is satisfied only in full:
 
 ```yaml
-groups: [admin, {all_of: [finance, senior]}]
+source_ids: [warehouse, {all_of: [finance_db, pii]}]
 ```
 
-Either an `admin`, or somebody who is *both* in finance *and* senior. That is
+Either a `warehouse` holder, or a caller holding *both* `finance_db` *and*
+`pii`. That is
 or-of-ands, which is the shape access rules actually take, and it stays one
 field with no rule about how two fields combine.
 
@@ -1246,16 +1253,16 @@ Where the same requirement appears more than once, name it in the vocabulary
 instead — the same word, so the named form is simply a name for the inline one:
 
 ```yaml
-# groups.yaml
-groups:
-  finance: {}
-  senior: {}
-  finance-senior: {all_of: [finance, senior]}
+# source_ids.yaml
+source_ids:
+  finance_db: {}
+  pii: {}
+  finance_db_pii: {all_of: [finance_db, pii]}
 ```
 
 ```yaml
 # any definition
-groups: [admin, finance-senior]
+source_ids: [warehouse, finance_db_pii]
 ```
 
 Use the inline form for a one-off and the named form for anything reused; a name
@@ -1265,26 +1272,27 @@ vocabulary, where changing it changes both.
 Consequences worth knowing:
 
 - **`contains` satisfies `all_of`.** Expansion runs first and requirements are
-  checked against whatever is held afterwards, so an `admin` who contains both
-  parts satisfies a compound of them.
+  checked against whatever is held afterwards, so a `warehouse` that contains
+  both parts satisfies a compound of them.
 - **A caller may not present a compound name.** It is what holding its parts adds
   up to, not something to claim. The refusal names the parts to send instead.
-- **`contains` and `all_of` cannot both appear on one group.** One says what a
+- **`contains` and `all_of` cannot both appear on one source id.** One says what a
   name grants and the other what a caller must bring; a name that is both is a
   question with no answer. Requirement loops are refused like `contains` loops.
 - **`contains` may not hand out a compound.**
-  `admin: {contains: [finance-senior]}` is refused — it would give an admin the
-  compound while they hold neither part. Name the parts instead.
+  `warehouse: {contains: [finance_db_pii]}` is refused — it would hand a
+  `warehouse` holder the compound while they hold neither part. Name the parts
+  instead.
 
-`kingfisher list` writes a conjunction `finance+senior`, and prints what each
+`kingfisher list` writes a conjunction `finance_db+pii`, and prints what each
 named compound requires above the audiences, since a name alone tells a reader
 nothing on the line it appears on. The `--json` form nests it instead —
-`[["finance", "senior"]]` — so a script never has to parse a separator out of a
+`[["finance_db", "pii"]]` — so a script never has to parse a separator out of a
 name.
 
 ### Uploads are unchanged
 
 A request may still bring its own subagent or skill. Those cannot escalate: an
 uploaded definition is text the caller wrote, and it holds only the tools their
-groups already reach — `middlewares`, `endpoints` and `models` are never widened
-by an upload. What it buys someone is new instructions, never new powers.
+source ids already reach — `middlewares`, `endpoints` and `models` are never
+widened by an upload. What it buys someone is new instructions, never new powers.

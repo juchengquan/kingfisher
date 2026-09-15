@@ -466,7 +466,7 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
 
 
 #: What a fenced block has to mention to be a definition fragment rather than a
-#: `groups.yaml` or a `models.yaml` example, which the same page also shows.
+#: `source_ids.yaml` or a `models.yaml` example, which the same page also shows.
 DEFINITION_FIELDS = ("tools:", "skills:", "subagents:", "middlewares:", "builtin_tools:")
 
 

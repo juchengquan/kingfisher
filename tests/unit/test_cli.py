@@ -49,7 +49,7 @@ def test_seeding_puts_the_example_where_the_catalogue_is_read_from(
 
 
 def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, shipped):
-    """A remedy is only actionable if it is about the groups you are missing."""
+    """A remedy is only actionable if it is about the source ids you are missing."""
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_ASSETS", str(shipped))
 
@@ -57,7 +57,7 @@ def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, sh
 
     printed = capsys.readouterr().out
     assert "groups.yaml.example" not in printed, "still naming a file that is gone"
-    assert "groups: [analysts, auditors, reviewers, senior-analysts]" in printed, (
+    assert "source_ids: [audit_log, sales_db, sales_db_pii, warehouse]" in printed, (
         "the remedy does not carry the line to write, so the reader is told to "
         "produce a format they have not been shown"
     )
@@ -66,7 +66,7 @@ def test_the_skip_message_carries_the_line_to_write(cfg, monkeypatch, capsys, sh
 def test_the_line_is_printed_once_for_every_definition_skipped(
     cfg, monkeypatch, capsys, shipped
 ):
-    """Two definitions are skipped for groups and they want overlapping but different
+    """Two definitions are skipped for source ids and they want overlapping but different
     sets.
     """
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
@@ -75,11 +75,12 @@ def test_the_line_is_printed_once_for_every_definition_skipped(
     assert main(["seed"]) == 0
 
     printed = capsys.readouterr().out
-    assert printed.count("the groups.yaml that unblocks") == 1
-    assert len([ln for ln in printed.splitlines() if "does not check your groups.yaml" in ln]) > 1
+    assert printed.count("the source_ids.yaml that unblocks") == 1
+    unchecked = [ln for ln in printed.splitlines() if "does not check your source_ids.yaml" in ln]
+    assert len(unchecked) > 1
 
 
-def test_no_line_is_printed_when_nothing_wanted_a_group(cfg, monkeypatch, capsys, tmp_path):
+def test_no_line_is_printed_when_nothing_wanted_a_source_id(cfg, monkeypatch, capsys, tmp_path):
     """It earns its lines or it has none."""
     plain = tmp_path / "plain" / "skills" / "only"
     plain.mkdir(parents=True)
@@ -92,7 +93,7 @@ def test_no_line_is_printed_when_nothing_wanted_a_group(cfg, monkeypatch, capsys
 
     assert main(["seed"]) == 0
 
-    assert "groups.yaml" not in capsys.readouterr().out
+    assert "source_ids.yaml" not in capsys.readouterr().out
 
 
 def test_seeding_a_workspace_that_does_not_exist_yet_creates_it(
@@ -174,7 +175,7 @@ def test_serve_is_offered_whether_or_not_the_extra_is_installed():
     """
     from kingfisher.presentation.cli.__main__ import build_parser
 
-    # Through the public `_actions`, because `_subparsers._group_actions` is
+    # Through the public `_actions`, because `_subparsers._source_id_actions` is
     # typed as optionally absent and reaching into it needs a cast to satisfy a
     # checker -- which is a lot of ceremony for reading a list of verbs.
     verbs = {
@@ -368,8 +369,8 @@ def _ran(monkeypatch, events, cfg):
             # own does, or None for a removal that worked.
             self.failure: str | None = None
 
-        def stream(self, request, *, groups=None):
-            self.seen.append((request, groups))
+        def stream(self, request, *, source_ids=None):
+            self.seen.append((request, source_ids))
             yield from events
 
         def delete_session(self, session_id):
@@ -452,7 +453,7 @@ def test_a_file_that_is_not_there_is_refused_before_the_model(cfg, monkeypatch, 
 
 
 def test_who_is_calling_reaches_the_library(cfg, monkeypatch):
-    """`--as` is not decoration: on a workspace that declares groups the library refuses
+    """`--as` is not decoration: on a workspace that declares source ids the library refuses
     a turn that names nobody, and names this flag when it does.
     """
     stub = _ran(monkeypatch, [_finished()], cfg)

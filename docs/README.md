@@ -89,11 +89,11 @@ codebase. **A status line is only true on the day it was written -- check it
 against the code before trusting it.**
 
 `superpowers/plans/` held one more and is gone for a neighbouring reason: a plan
-for group access control, built and reversed on the day it was written. Its 2,224
-lines were implementation steps for a design the loader now refuses by name, and
-the part worth keeping -- the argument it lost, which is worth having read before
-anyone proposes a central table again -- is in `decisions.md` under *Group
-access*.
+for source-id access control, built and reversed on the day it was written. Its
+2,224 lines were implementation steps for a design the loader now refuses by
+name, and the part worth keeping -- the argument it lost, which is worth having
+read before anyone proposes a central table again -- is in `decisions.md` under
+*Source-id access*.
 
 ## What was removed, and how to get it back
 

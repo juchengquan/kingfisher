@@ -1,19 +1,20 @@
 name: analyst
-description: Answers questions from the data, with the database behind a group.
+description: Answers questions from the data, with the database behind a source id.
 # Who may open a session on this agent. Everything below narrows from here, and
 # nothing can widen past it.
 #
 # This line is the whole of what most definitions need. `assistant.yaml` and
 # `surveyor.yaml` beside this one carry none, which means they are reachable by
-# everyone -- and that is what an absent optional field means everywhere else in
-# these formats. Adopting group access is annotating the definitions that matter
-# and leaving the rest alone; startup names the ones carrying no line, so
-# default-open is not also silent.
+# everyone -- and that is what an absent optional field means everywhere else
+# in these formats. Adopting source-id access is annotating the definitions
+# that matter and leaving the rest alone; startup names the ones carrying no
+# line, so default-open is not also silent.
 #
-# The names have to be declared in `groups.yaml`. A typo here is refused at
-# startup rather than inventing a group nobody is in -- which would leave this
-# agent quietly reachable by no one, found weeks later by whoever needed it.
-groups: [analysts, auditors]
+# The names have to be declared in `source_ids.yaml`. A typo here is refused at
+# startup rather than inventing a source id nobody holds -- which would leave
+# this agent quietly reachable by no one, found weeks later by whoever needed
+# it.
+source_ids: [sales_db, audit_log]
 builtin_tools: [read_file, ls, glob, grep]
 # **Only the entry that is actually restricted carries an audience**, and that
 # is the point of this file.
@@ -25,52 +26,54 @@ builtin_tools: [read_file, ls, glob, grep]
 #     tools: [sql_query, http_fetch, csv_profile::csv_profile, line_count]
 #
 # is the same field with nothing restricted. An entry left as a bare name
-# inherits this definition's own `groups:` above, so restricting one tool is one
-# entry and the others are untouched -- which is what lets you start with the
-# list and add an audience later without rewriting the field.
+# inherits this definition's own `source_ids:` above, so restricting one tool
+# is one entry and the others are untouched -- which is what lets you start
+# with the list and add an audience later without rewriting the field.
 #
 # It is the shape `middlewares:` takes for its settings, and deliberately: an
 # entry is a name, or a mapping of `name` and the one thing that field lets a
 # name carry. One long form to learn rather than one per field.
 tools:
   - name: sql_query
-    # Narrower than the definition. An auditor opens this agent and runs it
-    # without the database; an analyst gets the whole set. One agent, two
-    # shapes, and no second file to keep in step with the first.
+    # Narrower than the definition. A caller holding only `audit_log` opens
+    # this agent and runs it without the database; one holding `sales_db` gets
+    # the whole set. One agent, two shapes, and no second file to keep in step
+    # with the first.
     #
     # An entry audience is an **and** with the definition's, always: the only
     # way to reach a tool is through the agent holding it, and a caller who
-    # cannot open this agent never gets here. So `[analysts]` means "opens this
-    # agent, and is an analyst".
+    # cannot open this agent never gets here. So `[sales_db]` means "opens this
+    # agent, and holds `sales_db`".
     #
-    # Which is why naming a group from *outside* the line above is allowed and
-    # useful. `groups: [senior]` here would mean "anyone who opens this agent,
-    # and is senior" -- a second requirement rather than a mistake. Startup
-    # reports it, under `narrows past this definition's own audience`, because
-    # the same line is what somebody trying to *widen* would write by accident.
-    # Only the author knows which, so it is said rather than vetoed.
-    groups: [analysts]
+    # Which is why naming a source id from *outside* the line above is allowed
+    # and useful. `source_ids: [pii]` here would mean "anyone who opens this
+    # agent, and holds `pii`" -- a second requirement rather than a mistake.
+    # Startup reports it, under `narrows past this definition's own audience`,
+    # because the same line is what somebody trying to *widen* would write by
+    # accident. Only the author knows which, so it is said rather than vetoed.
+    source_ids: [sales_db]
   # **A tool that takes two things at once.** Leaving the workspace to fetch
-  # something is for an analyst who is also senior -- not either, both.
+  # something is for a caller holding `sales_db` who also holds `pii` -- not
+  # either, both.
   #
-  # Named in `groups.yaml` rather than written out, because the same
+  # Named in `source_ids.yaml` rather than written out, because the same
   # requirement is on `subagents/auditor.yaml` too. One-off, it would be spelled
   # inline and read the same way:
   #
-  #     groups: [{all_of: [analysts, senior]}]
+  #     source_ids: [{all_of: [sales_db, pii]}]
   #
   # Same word, same meaning; the named form is just a name for it. Reuse is what
   # decides between them -- a requirement on two definitions should change in
   # one place.
   #
-  # The list around it is still an `or`. `[senior-analysts, auditors]` would
-  # mean "both of those, or else an auditor", which is how an exception is
+  # The list around it is still an `or`. `[sales_db_pii, audit_log]` would
+  # mean "both of those, or else `audit_log`", which is how an exception is
   # written next to a requirement.
   - name: http_fetch
-    groups: [senior-analysts]
-  # Bare names, so `[analysts, auditors]` -- this definition's own. Say nothing
-  # and you inherit; there is no way to spell "nobody" here, and `groups: []` is
-  # refused as the unfinished edit it almost always is.
+    source_ids: [sales_db_pii]
+  # Bare names, so `[sales_db, audit_log]` -- this definition's own. Say
+  # nothing and you inherit; there is no way to spell "nobody" here, and
+  # `source_ids: []` is refused as the unfinished edit it almost always is.
   #
   # Left short on purpose. An unrestricted entry has nothing to attach, so it
   # writes nothing -- the long form is for the entries that need it, and mixing
@@ -85,32 +88,33 @@ tools:
 # **The same long form, on the other two fields that take one.** `tools:` above
 # is where an audience is most often wanted, but nothing about it is special:
 # `skills:` and `subagents:` read identically, and one long form across all
-# three is the whole reason the entry is `{name, groups}` rather than a shape
-# per field.
+# three is the whole reason the entry is `{name, source_ids}` rather than a
+# shape per field.
 skills:
-  # Narrower than this definition. An auditor opens this agent and is never
-  # told the profiling procedure exists; an analyst is.
+  # Narrower than this definition. A caller holding only `audit_log` opens this
+  # agent and is never told the profiling procedure exists; one holding
+  # `sales_db` is.
   #
   # Worth being exact about what that does and does not buy. Removing a skill
   # means the agent is not *told* about it -- the file is still on disk, and a
   # skill was never a boundary. The boundary is the tools the procedure would
   # need, which carry audiences of their own, two fields up.
   - name: tabular-qa
-    groups: [analysts]
-  # Bare, so it inherits `[analysts, auditors]` -- reviewing the code that
+    source_ids: [sales_db]
+  # Bare, so it inherits `[sales_db, audit_log]` -- reviewing the code that
   # produced a figure is for whoever may open this agent at all.
   - code-review
 subagents:
-  # A delegate, restricted the same way. `auditor` is reachable by three groups
-  # in its own file; this line says which of them may reach it *through this
-  # agent*, which is the sense in which an audience is a property of the use
-  # rather than of the thing used.
+  # A delegate, restricted the same way. `auditor` is reachable by three source
+  # ids in its own file; this line says which of them may reach it *through
+  # this agent*, which is the sense in which an audience is a property of the
+  # use rather than of the thing used.
   #
   # `kingfisher list` prints a roll-up by delegate for exactly that reason: the
   # same auditor may be opened wider somewhere else, and a call site quietly
   # wider than its neighbours is what the roll-up exists to show.
   - name: auditor
-    groups: [analysts]
+    source_ids: [sales_db]
 memory: false
 system_prompt: |
   You answer questions about the data in this workspace.

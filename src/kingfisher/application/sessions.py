@@ -31,7 +31,7 @@ if TYPE_CHECKING:
     from pathlib import Path
 
     from kingfisher.config import Config
-    from kingfisher.domain.access import Groups, Held
+    from kingfisher.domain.access import Held, SourceIds
     from kingfisher.domain.ports import SessionRoot, SessionStore
 
 
@@ -42,7 +42,7 @@ class Sessions:
     #: than assumed: a mixin that read `self.dirs` without saying so would be a
     #: contract nothing checks, which is the shape this repository distrusts.
     cfg: Config
-    access: Groups | None
+    access: SourceIds | None
     dirs: Any
     workspace: Path
     sessions_store: SessionStore | None
@@ -85,7 +85,7 @@ class Sessions:
         """
         return known(self.dirs.listing(sessions_root(self.workspace)))
 
-    def session(self, session_id: str, *, groups: Held | None = None) -> SessionInfo | None:
+    def session(self, session_id: str, *, source_ids: Held | None = None) -> SessionInfo | None:
         """One session, or `None` when this caller has no such session.
 
         Filtered from the same listing rather than stat-ing one path, so both answers
@@ -101,14 +101,14 @@ class Sessions:
         line says.
         """
         found = next((s for s in self.sessions() if s.id == session_id), None)
-        if found is None or self.access is None or not isinstance(groups, tuple):
+        if found is None or self.access is None or not isinstance(source_ids, tuple):
             return found
         directory = sessions_root(self.workspace) / session_id
         kept = agent_started_with(directory)
         if kept is None:
             return found
         pinned = read(kept, agent_snapshot(directory))
-        return found if reaches(pinned.groups, self.access.expand(groups)) else None
+        return found if reaches(pinned.source_ids, self.access.expand(source_ids)) else None
 
     def start_session(self, session_id: str | None = None) -> str:
         """Open a new session and return its id.

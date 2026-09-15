@@ -22,7 +22,7 @@ mentions.
 | `KINGFISHER_WORKSPACE` | The workspace. Everything below defaults inside it. | **required** |
 | `KINGFISHER_ASSETS` | Where `kingfisher seed` copies definitions from. Without it seeding lays the workspace out, writes `models.yaml.example`, and then refuses — in that order, so a deployment with nothing to seed still gets somewhere to start. | none |
 | `KINGFISHER_MODELS_FILE` | The model catalogue: which models exist, where each runs, which key it uses. | `<workspace>/models.yaml` |
-| `KINGFISHER_GROUPS_FILE` | The group vocabulary. No file means access control is off entirely. | `<workspace>/groups.yaml` |
+| `KINGFISHER_SOURCE_IDS_FILE` | The source-id vocabulary. No file means access control is off entirely. | `<workspace>/source_ids.yaml` |
 | `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
 | `KINGFISHER_SKILLS_DIR` | Relocate the skills catalogue — this is how several deployments share one reviewed set. | inside the workspace |
 | `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |

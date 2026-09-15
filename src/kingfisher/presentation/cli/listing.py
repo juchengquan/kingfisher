@@ -112,7 +112,7 @@ def _access(found: Inventory) -> Iterator[str]:
         # Before the audiences rather than after, because it is what makes them
         # readable: a name that requires others tells a reader nothing on the
         # line it appears on, and every line it appears on needs it.
-        yield "\naccess — groups that require others"
+        yield "\naccess — source ids that require others"
         for name, parts in sorted(compounds.items()):
             yield f"  {name} = {'+'.join(sorted(parts))}"
     yield "\naccess — by definition"
@@ -120,7 +120,7 @@ def _access(found: Inventory) -> Iterator[str]:
     for kind, definitions in found.audiences.items():
         for name, stated in definitions.items():
             said = True
-            yield f"  {kind[:-1]} {name}  {_who(stated.groups)}"
+            yield f"  {kind[:-1]} {name}  {_who(stated.source_ids)}"
             for field_name in AUDIENCED:
                 for entry, audience in stated.of(field_name).items():
                     yield f"      {_singular(field_name)} {entry}  {_who(audience)}"
@@ -280,7 +280,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "audiences": {
             kind: {
                 name: {
-                    "groups": _audience_json(stated.groups),
+                    "source_ids": _audience_json(stated.source_ids),
                     **{
                         field_name: {
                             entry: _audience_json(who) for entry, who in entries.items()

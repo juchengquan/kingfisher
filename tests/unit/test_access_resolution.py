@@ -1,4 +1,4 @@
-"""The group vocabulary, and the rule the definitions apply to it."""
+"""The source-id vocabulary, and the rule the definitions apply to it."""
 
 from __future__ import annotations
 
@@ -7,7 +7,7 @@ import pytest
 from kingfisher.domain.access import (
     UNSCOPED,
     AccessError,
-    Groups,
+    SourceIds,
     reaches,
     reaching,
     spell,
@@ -15,26 +15,26 @@ from kingfisher.domain.access import (
 from kingfisher.domain.capabilities import ALL
 
 
-def vocabulary(**contains: tuple[str, ...]) -> Groups:
-    """A flat A/B/C vocabulary, plus any containing groups the test names."""
+def vocabulary(**contains: tuple[str, ...]) -> SourceIds:
+    """A flat A/B/C vocabulary, plus any containing source ids the test names."""
     names = {one: (one,) for one in ("A", "B", "C")}
     for name, holds in contains.items():
         names[name] = (name, *holds)
-    return Groups(names=names)
+    return SourceIds(names=names)
 
 
-def requiring(**all_of: tuple[str, ...]) -> Groups:
+def requiring(**all_of: tuple[str, ...]) -> SourceIds:
     """The same vocabulary, plus compounds a caller must hold the parts of."""
     names = {one: (one,) for one in ("A", "B", "C")}
     names.update({name: (name,) for name in all_of})
-    return Groups(names=names, compounds=dict(all_of))
+    return SourceIds(names=names, compounds=dict(all_of))
 
 
 # -- who reaches what -------------------------------------------------------
 
 
-def test_any_one_group_is_enough():
-    """The list is an OR, not an AND: a longer list means more people."""
+def test_any_one_source_id_is_enough():
+    """The list is an OR, not an AND: a longer list means more callers."""
     assert reaches(("A", "B"), frozenset({"B", "C"}))
 
 
@@ -87,33 +87,33 @@ def test_none_passes_through_untouched():
 # -- narrowing past the definition ------------------------------------------------------------
 
 
-def narrowing(entry, *, groups, vocab=None):
+def narrowing(entry, *, source_ids, vocab=None):
     """What the vocabulary says one entry audience asks beyond its definition."""
     return (vocab or vocabulary()).narrowing_in(
-        {"tools": {"sql_query": entry}}, groups=groups, where="x.yaml"
+        {"tools": {"sql_query": entry}}, source_ids=source_ids, where="x.yaml"
     )
 
 
 def test_an_entry_outside_the_definitions_own_audience_is_reported():
     """Reported, not refused."""
-    assert narrowing(("C",), groups=("A", "B")) == (("x.yaml: tool sql_query", "C"),)
+    assert narrowing(("C",), source_ids=("A", "B")) == (("x.yaml: tool sql_query", "C"),)
 
 
 def test_an_overlapping_entry_is_not_narrowing():
-    assert narrowing(("A",), groups=("A", "B")) == ()
+    assert narrowing(("A",), source_ids=("A", "B")) == ()
 
 
 def test_nothing_narrows_when_the_definition_reaches_everyone():
-    assert narrowing(("C",), groups=ALL) == ()
+    assert narrowing(("C",), source_ids=ALL) == ()
 
 
 def test_a_star_entry_never_narrows():
-    assert narrowing(ALL, groups=("A",)) == ()
+    assert narrowing(ALL, source_ids=("A",)) == ()
 
 
 def test_a_contained_entry_does_not_narrow():
     """Judged on meaning, not spelling."""
-    assert narrowing(("A",), groups=("wide",), vocab=vocabulary(wide=("A",))) == ()
+    assert narrowing(("A",), source_ids=("wide",), vocab=vocabulary(wide=("A",))) == ()
 
 
 def test_a_compound_does_not_narrow_beside_either_part():
@@ -121,14 +121,14 @@ def test_a_compound_does_not_narrow_beside_either_part():
     names a part, or the other way about.
     """
     vocab = vocabulary(**{"A+B": ()})
-    both = Groups(names=vocab.names, compounds={"A+B": ("A", "B")})
-    assert narrowing(("A",), groups=("A+B",), vocab=both) == ()
-    assert narrowing(("A+B",), groups=("A",), vocab=both) == ()
+    both = SourceIds(names=vocab.names, compounds={"A+B": ("A", "B")})
+    assert narrowing(("A",), source_ids=("A+B",), vocab=both) == ()
+    assert narrowing(("A+B",), source_ids=("A",), vocab=both) == ()
 
 
 def test_a_compound_sharing_no_part_narrows():
-    both = Groups(names={n: (n,) for n in ("A", "B", "C", "A+B")}, compounds={"A+B": ("A", "B")})
-    assert narrowing(("C",), groups=("A+B",), vocab=both) == (("x.yaml: tool sql_query", "C"),)
+    both = SourceIds(names={n: (n,) for n in ("A", "B", "C", "A+B")}, compounds={"A+B": ("A", "B")})
+    assert narrowing(("C",), source_ids=("A+B",), vocab=both) == (("x.yaml: tool sql_query", "C"),)
 
 
 def test_the_second_requirement_a_narrowing_states_actually_works():
@@ -146,46 +146,46 @@ def test_the_second_requirement_a_narrowing_states_actually_works():
 # -- the vocabulary ---------------------------------------------------------
 
 
-def test_a_group_expands_to_itself():
+def test_a_source_id_expands_to_itself():
     assert vocabulary().expand(["A"]) == frozenset({"A"})
 
 
-def test_a_containing_group_reaches_what_it_contains():
+def test_a_containing_source_id_reaches_what_it_contains():
     """The reason `contains` exists: `admin` need not appear on a single line."""
     assert vocabulary(admin=("A", "B")).expand(["admin"]) == frozenset({"admin", "A", "B"})
 
 
-def test_no_groups_at_all_expands_to_nothing():
+def test_no_source_ids_at_all_expands_to_nothing():
     assert vocabulary().expand([]) == frozenset()
 
 
-def test_an_unknown_group_is_refused_rather_than_ignored():
+def test_an_unknown_source_id_is_refused_rather_than_ignored():
     """A typo would otherwise reach nothing, which looks exactly like a caller who was
     denied.
     """
-    with pytest.raises(AccessError, match="unknown group"):
+    with pytest.raises(AccessError, match="unknown source id"):
         vocabulary().expand(["Q"])
 
 
-def test_a_definition_naming_an_undeclared_group_is_refused():
+def test_a_definition_naming_an_undeclared_source_id_is_refused():
     """The other end of the closed vocabulary: a mistyped audience would otherwise
-    invent a group nobody is in, and the only symptom would be something quietly
+    invent a source id nobody holds, and the only symptom would be something quietly
     reachable by no one.
     """
-    with pytest.raises(ValueError, match="undeclared group"):
+    with pytest.raises(ValueError, match="undeclared source id"):
         vocabulary().refuse_undeclared(("Q",), where="x.yaml: tools", error=ValueError)
 
 
-def test_a_star_names_no_group_so_is_never_undeclared():
+def test_a_star_names_no_source_id_so_is_never_undeclared():
     vocabulary().refuse_undeclared(ALL, where="x.yaml: tools", error=ValueError)
 
 
-def test_unscoped_is_a_sentinel_and_not_a_group_name():
+def test_unscoped_is_a_sentinel_and_not_a_source_id_name():
     assert UNSCOPED is not None
     assert not isinstance(UNSCOPED, str | tuple | list)
 
 
-# -- requiring several groups at once ---------------------------------------
+# -- requiring several source ids at once ---------------------------------------
 
 
 def test_an_inline_conjunction_needs_every_part():
@@ -216,7 +216,7 @@ def test_holding_one_part_earns_nothing():
 
 def test_contains_satisfies_a_requirement():
     """Expansion first, then requirements against what is held afterwards."""
-    vocab = Groups(
+    vocab = SourceIds(
         names={"A": ("A",), "B": ("B",), "both": ("both",), "admin": ("admin", "A", "B")},
         compounds={"both": ("A", "B")},
     )
@@ -224,11 +224,11 @@ def test_contains_satisfies_a_requirement():
     assert vocab.expand(["admin"]) == frozenset({"admin", "A", "B", "both"})
 
 
-def test_a_compound_a_group_contains_comes_with_it():
+def test_a_compound_a_source_id_contains_comes_with_it():
     """Earning a compound earns whatever contains it, or a name written into a
     `contains` chain would reach less than the same name written by hand.
     """
-    vocab = Groups(
+    vocab = SourceIds(
         names={"A": ("A",), "B": ("B",), "both": ("both", "C"), "C": ("C",)},
         compounds={"both": ("A", "B")},
     )

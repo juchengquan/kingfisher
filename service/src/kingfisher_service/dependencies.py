@@ -24,7 +24,7 @@ def kingfisher_of(request: Request) -> Kingfisher:
     return request.app.state.kingfisher
 
 
-def groups_of(request: Request) -> tuple[str, ...] | None:
-    """The caller's groups, from whatever this deployment wired."""
-    source = request.app.state.groups_from
+def source_ids_of(request: Request) -> tuple[str, ...] | None:
+    """The caller's source ids, from whatever this deployment wired."""
+    source = request.app.state.source_ids_from
     return None if source is None else tuple(source(request))

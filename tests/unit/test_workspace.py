@@ -55,21 +55,21 @@ def test_the_example_lands_beside_a_relocated_catalogue(tmp_path):
     ws = tmp_path / "ws"
     shared = tmp_path / "catalogue" / "models.yaml"
 
-    ensure_layout(ws, authored={"models.yaml": shared, "groups.yaml": ws / "groups.yaml"})
+    ensure_layout(ws, authored={"models.yaml": shared, "source_ids.yaml": ws / "source_ids.yaml"})
 
     assert (shared.parent / EXAMPLE).is_file()
     assert not (ws / EXAMPLE).exists(), "a second copy where nothing reads it"
 
 
-def test_no_groups_example_is_placed_anywhere(tmp_path):
+def test_no_source_ids_example_is_placed_anywhere(tmp_path):
     """`groups.yaml.example` shipped and was placed for two days, and went."""
     ws = tmp_path / "ws"
-    policy = tmp_path / "policy" / "groups.yaml"
+    policy = tmp_path / "policy" / "source_ids.yaml"
 
-    ensure_layout(ws, authored={"models.yaml": ws / "models.yaml", "groups.yaml": policy})
+    ensure_layout(ws, authored={"models.yaml": ws / "models.yaml", "source_ids.yaml": policy})
 
-    assert not list(policy.parent.glob("*.example")), "a groups example came back"
-    assert not list(ws.glob("groups.yaml*")), "a groups file appeared in the workspace"
+    assert not list(policy.parent.glob("*.example")), "a source ids example came back"
+    assert not list(ws.glob("source_ids.yaml*")), "a source ids file appeared in the workspace"
     assert (ws / EXAMPLE).is_file(), "the catalogue did not move, so its example stays"
 
 
@@ -83,7 +83,11 @@ def test_an_unwritable_destination_falls_back_to_the_workspace(tmp_path):
 
     try:
         ensure_layout(
-            ws, authored={"models.yaml": locked / "models.yaml", "groups.yaml": ws / "groups.yaml"}
+            ws,
+            authored={
+                "models.yaml": locked / "models.yaml",
+                "source_ids.yaml": ws / "source_ids.yaml",
+            },
         )
     finally:
         locked.chmod(0o700)

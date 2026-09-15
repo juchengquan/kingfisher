@@ -97,7 +97,7 @@ def outcome(error: BaseException) -> tuple[int, str]:
     # Walked rather than looked up, because starlette dispatches handlers by
     # walking the MRO and this has to agree with it. Asked as `STATUS.get(type)`
     # a subclass reached the right *handler* and the wrong status and code --
-    # `MissingGroups` is the first subclass to exist here, and it arrived as a
+    # `MissingSourceIdsError` is the first subclass to exist here, and it arrived as a
     # 500 called "error" from a table that says `misconfigured` two lines up.
     # Exactly the disagreement this function was written to end, in the other
     # direction.
@@ -126,7 +126,7 @@ logger = logging.getLogger("kingfisher_service")
 #: say something about the deployment. `access` and the audit log carry the
 #: difference to the people who can act on it.
 RESOLUTION_FAILED = (
-    "this deployment cannot resolve the caller's groups; its access policy and "
+    "this deployment cannot resolve the caller's source ids; its access policy and "
     "whatever states them have come apart"
 )
 
@@ -137,12 +137,12 @@ def install(app: FastAPI) -> None:
     async def from_kingfisher(_: Request, error: Exception) -> JSONResponse:
         status, code = outcome(error)
         if isinstance(error, AccessError):
-            # The one refusal whose message may not be repeated. It names every group
-            # this deployment declares -- "unknown group(s): Q; this deployment defines
+            # The one refusal whose message may not be repeated. It names every source id
+            # this deployment declares -- "unknown source id(s): Q; this deployment defines
             # A, B, C" -- which is exactly the enumeration that filtering listings and
             # refusals exists to prevent, handed over by the one path that was not
             # filtering anything.
-            logger.error("cannot resolve the caller's groups: %s", error)
+            logger.error("cannot resolve the caller's source_ids: %s", error)
             return problem(status, code, RESOLUTION_FAILED)
         return problem(status, code, str(error))
 

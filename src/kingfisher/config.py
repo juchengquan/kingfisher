@@ -8,7 +8,7 @@ from pathlib import Path
 from types import MappingProxyType
 from typing import Any
 
-from kingfisher.domain.access import Groups
+from kingfisher.domain.access import SourceIds
 
 #: The frozen default for an `extra` mapping. Shared with `Adapter.extra`
 #: rather than written twice: both spread into one `build_model` call and carry
@@ -78,14 +78,14 @@ def definition_roots_for(  # noqa: PLR0913, PLR0917 -- one per root, each
 def authored_files_for(
     workspace: Path,
     models_file: Path | None = None,
-    groups_file: Path | None = None,
+    source_ids_file: Path | None = None,
 ) -> dict[str, Path]:
     """The two files a deployment writes itself: an override, or a name in the
     workspace.
     """
     return {
         "models.yaml": models_file or workspace / "models.yaml",
-        "groups.yaml": groups_file or workspace / "groups.yaml",
+        "source_ids.yaml": source_ids_file or workspace / "source_ids.yaml",
     }
 
 
@@ -100,10 +100,10 @@ class WorkspacePaths:
     agents_root: Path | None = None
     #: The two single files, relocated. Not beside the definition roots because they
     #: are not directories and do not move together with them: one reviewed `models.yaml` shared
-    #: across a fleet is the arrangement `compose.yaml` ships, and a group policy may
+    #: across a fleet is the arrangement `compose.yaml` ships, and a source-id policy may
     #: sit somewhere else again.
     models_file: Path | None = None
-    groups_file: Path | None = None
+    source_ids_file: Path | None = None
     #: Where definitions are *copied from*, which is the opposite direction to the
     #: definition roots — those say where a catalogue is read, this says what
     #: seeding hands it. Deliberately not beside them for that reason.
@@ -125,7 +125,7 @@ class WorkspacePaths:
 
     @property
     def authored_files(self) -> dict[str, Path]:
-        return authored_files_for(self.workspace, self.models_file, self.groups_file)
+        return authored_files_for(self.workspace, self.models_file, self.source_ids_file)
 
 
 class ConfigError(RuntimeError):
@@ -219,9 +219,9 @@ class Config:
     #: invariants between its parts that siblings of `shell_sandbox` could not
     #: express. See `Models`.
     models: Models
-    #: Which groups reach which agents, subagents and tools, or `None` where this
+    #: Which source ids reach which agents, subagents and tools, or `None` where this
     #: deployment writes no policy.
-    access: Groups | None = None
+    access: SourceIds | None = None
     #: Where the policy above was looked for, whether or not one was found.
     access_source: Path | None = None
     #: What bounds one shell command or one interpreter run.
@@ -351,5 +351,5 @@ class Config:
 
     @property
     def authored_files(self) -> dict[str, Path]:
-        """Where `models.yaml` and `groups.yaml` are read from, found or not."""
+        """Where `models.yaml` and `source_ids.yaml` are read from, found or not."""
         return authored_files_for(self.workspace, self.models.source, self.access_source)

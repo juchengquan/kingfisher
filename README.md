@@ -25,7 +25,7 @@ get right. `seed` lays the workspace out itself, so `models.yaml.example` arrive
 whether or not you call `ensure_layout` — a deployment told to write
 `models.yaml` and given no example of one is a dead end, and the library closes
 it from the inside. `authored` is where that example goes: `models.yaml` and
-`groups.yaml` both relocate, and an example a directory away from the file it
+`source_ids.yaml` both relocate, and an example a directory away from the file it
 describes is the same dead end wearing a different coat.
 
 What the explicit call still buys is the path `seed` never reaches.
@@ -44,7 +44,7 @@ same two:
     kingfisher seed --from ./my-definitions  # from here instead
 
 **Read `skipped`, or your workspace will quietly be missing agents.** A
-definition naming middleware or groups this deployment has not registered is
+definition naming middleware or source ids this deployment has not registered is
 refused when it is built, so seeding one produces a file that cannot run.
 `seed` leaves those behind and says which names each would have needed;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have

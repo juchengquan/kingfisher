@@ -40,9 +40,9 @@ class Attempt:
     task: str
     started: float
     settings: ServiceConfig
-    #: The groups this request was resolved as, or `None` where the deployment controls
-    #: nothing by group.
-    groups: tuple[str, ...] | None = None
+    #: The source ids this request was resolved as, or `None` where the deployment controls
+    #: nothing by source id.
+    source_ids: tuple[str, ...] | None = None
 
     @property
     def elapsed_ms(self) -> float:
@@ -63,7 +63,7 @@ def refused(attempt: Attempt, error: BaseException, *, status: int, code: str) -
         status=status,
         detail=type(error).__name__,
         duration_ms=attempt.elapsed_ms,
-        groups=list(attempt.groups) if attempt.groups else None,
+        source_ids=list(attempt.source_ids) if attempt.source_ids else None,
     )
 
 
@@ -120,5 +120,5 @@ async def watching(
             output_tokens=totals["output_tokens"] or None,
             task=attempt.task if keep else None,
             answer=answer if keep else None,
-            groups=list(attempt.groups) if attempt.groups else None,
+            source_ids=list(attempt.source_ids) if attempt.source_ids else None,
         )
