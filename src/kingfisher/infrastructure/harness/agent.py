@@ -24,7 +24,6 @@ from kingfisher.domain.capabilities import (
     Selection,
     refuse_ungranted_models,
 )
-from kingfisher.domain.ports import CommandRunner
 from kingfisher.infrastructure.catalogue import Definitions, source_of
 from kingfisher.infrastructure.harness.activation import (
     _activated_subagents,
@@ -114,20 +113,20 @@ def _backend_for(
     session_dir: Path | None,
     backend: Any | None,
     catalogue: Definitions,
-    runner: CommandRunner | None = None,
 ) -> Any:
     """The filesystem an agent sees: supplied ready-made, or kingfisher's own rooted
     at a session.
 
     A deployment reaches this through `Kingfisher`, which calls its factory itself and
-    arrives here with the backend already made. What is left is the harness's own two
-    callers -- `--list` and this repository's tests -- which have a session and want
-    the default built for them.
+    arrives here with the backend already made -- runner and all, since the runner is
+    the factory's argument now. What is left is the harness's own two callers --
+    `--list` and this repository's tests -- which have a session, want the default
+    built for them, and have never had a runner to hand it.
     """
     if backend is not None:
         built = backend
     elif session_dir is not None:
-        built = default_backend(cfg, session_dir, catalogue=catalogue, runner=runner)
+        built = default_backend(cfg, session_dir, catalogue=catalogue)
     else:
         msg = "build_agent needs either a session_dir to root a backend at, or a backend"
         raise ValueError(msg)
@@ -222,7 +221,6 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     middleware_registry: Mapping[str, MiddlewareFactory] | None = None,
     model: Any | None = None,
     backend: Any | None = None,
-    runner: CommandRunner | None = None,
     checkpointer: Any | None = None,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
@@ -237,7 +235,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     asked = capabilities or Capabilities()
     capabilities = agent.declares(held).intersect(asked) if agent is not None else asked
     roots = catalogue or Definitions.from_config(cfg)
-    resolved_backend = _backend_for(cfg, session_dir, backend, roots, runner)
+    resolved_backend = _backend_for(cfg, session_dir, backend, roots)
     # Unconditional: the backend rejects host paths on every run, so the
     # thing that turns that rejection into a correction must always be here.
     middleware: list[Any] = [TodoListMiddleware(), HostPathGuard()]

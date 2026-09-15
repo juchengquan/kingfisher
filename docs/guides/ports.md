@@ -211,6 +211,14 @@ Three things to know:
 - **Setting `local = False` when you are local loses the fence**, silently. The
   default is True so that forgetting the flag yields more confinement than
   needed, never less.
+- **A replaced backend carries your runner, or drops it.** The runner reaches the
+  shell through the backend, so kingfisher hands it to the factory under
+  [`backend`](#backend--the-filesystem-the-agent-runs-against) rather than applying
+  it itself. Write your factory with the `runner` keyword and pass it on. A factory
+  that omits it silently runs every command under kingfisher's own fence instead of
+  yours, and the backend that comes back is perfectly well-formed — nothing at
+  runtime can tell. This is the one thing the two parameters share, and the reason
+  `BackendFactory` is typed.
 - **A timeout is a result, not an exception**: `exit_code` 124, the shell's own,
   with output saying so. Raising would make your failure the model's problem
   rather than a tool result it can read and retry. This is the one the kit
