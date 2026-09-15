@@ -58,15 +58,14 @@ RETIRED: dict[str, str] = {
     "KINGFISHER_SCRATCH_DIR": "nothing -- TMPDIR is a directory inside the session",
 }
 
-#: The prefix that went whole, matched rather than enumerated. Every service
-#: setting was renamed at once, so listing the suffixes here would put the
-#: service's own table in the base package for the second time -- and would
-#: quietly stop covering whichever one it gains next.
-RETIRED_PREFIX = "KINGFISHER_SERVER_"
-
-#: What that prefix became. Spelled rather than imported, because `doctor` runs
-#: in deployments where the service is not installed at all.
-SERVICE_PREFIX = "KINGFISHER_SERVICE_"
+#: Prefixes that went whole, matched rather than enumerated: every setting the
+#: HTTP service read, under both names it had. No suffix is listed, because a
+#: deployment still carrying one is the case this exists for, and a list would
+#: miss whichever one nobody remembered setting.
+RETIRED_PREFIXES: dict[str, str] = {
+    "KINGFISHER_SERVER_": "nothing -- the HTTP service was removed",
+    "KINGFISHER_SERVICE_": "nothing -- the HTTP service was removed",
+}
 
 
 @dataclass(frozen=True)
@@ -575,9 +574,10 @@ def _retired(environ: Mapping[str, str] | None = None) -> Iterator[Check]:
     # Matched on the prefix, so a suffix nobody thought to list is still caught.
     stale.update(
         {
-            name: SERVICE_PREFIX + name[len(RETIRED_PREFIX) :]
+            name: instead
             for name in values
-            if name.startswith(RETIRED_PREFIX) and (values.get(name) or "").strip()
+            for prefix, instead in RETIRED_PREFIXES.items()
+            if name.startswith(prefix) and (values.get(name) or "").strip()
         }
     )
     if not stale:

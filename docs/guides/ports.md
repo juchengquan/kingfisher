@@ -21,17 +21,16 @@ a dict.
 kingfisher = Kingfisher(cfg, sessions=MyStore(), session_root=MyRoot())
 ```
 
-**As a setting**, which two of them accept. The difference matters more than it
-looks: a constructor argument only reaches the construction site you control,
-and `kingfisher run` builds its own instance with nowhere to point it. A setting
-is read inside `Kingfisher.__init__`, so every entry point inherits it.
+**As a setting**, which only the session store accepts. The difference matters
+more than it looks: a constructor argument only reaches the construction site you
+control, and `kingfisher run` builds its own instance with nowhere to point it. A
+setting is read inside `Kingfisher.__init__`, so every entry point inherits it.
 
 ```
 KINGFISHER_SESSION_STORE_FACTORY=mycompany.stores:build_sessions
-KINGFISHER_SERVICE_FILE_STORE_FACTORY=mycompany.stores:build_files
 ```
 
-Both name `module:name` — something **callable with no arguments** that returns
+It names `module:name` — something **callable with no arguments** that returns
 the adapter. Zero arguments is the whole convention: kingfisher does not know
 whether your store wants a bucket, a region, a DSN or a pool, so it asks for none
 of them and your factory reads its own configuration. A class with a no-argument
@@ -93,8 +92,8 @@ Three things the kit will hold you to that the signatures do not say:
 - **`knows` must be false for an id you never saved.** It is what proves a
   resumed session belongs to whoever named it.
 - **A session id that climbs out is refused**, with `UnsafeReferenceError`, on
-  all four methods. Import it from `kingfisher`; the service maps that type to
-  400 and anything else becomes a 500.
+  all four methods. Import it from `kingfisher`: a caller tells a hostile id
+  from a broken store by that class.
 
 Verified with `SESSION_STORE_CONTRACT` — twelve checks.
 
@@ -118,7 +117,7 @@ check(Planted(store=S3FileStore(...), ref="sales.csv",
 **Half of what a file store must get right is which exception it raises.** A ref
 that does not resolve is `UnknownReferenceError`; one that names somewhere it may
 not is `UnsafeReferenceError`. A bare `FileNotFoundError` cannot be told from
-your disk being wrong, and answers 500 to a caller's typo.
+your disk being wrong, so a caller's typo looks like your outage.
 
 Verified with `FILE_STORE_CONTRACT` — four checks.
 
@@ -319,9 +318,8 @@ passed beside it. `run()` and `stream()` keep `backend=default_backend` in their
 signatures, because they are conveniences over a *default* `Kingfisher` and that
 is what makes the one-liner a one-liner.
 
-There is no setting for this one. Build `Kingfisher` yourself and hand it to
-`create_app` if you are behind the service; `kingfisher run` builds its own with
-the default.
+There is no setting for this one. Build `Kingfisher` yourself; `kingfisher run`
+builds its own with the default.
 
 ### Checking what you returned
 

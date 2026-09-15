@@ -224,14 +224,13 @@ def test_a_module_is_identified_by_where_it_is_not_what_it_is_called():
     )
 
 
-#: Everything in this repository that may import kingfisher. The other two
-#: distributions are included deliberately: they are separate wheels that depend
-#: on this one, so they are the first place a move here breaks and the last place
-#: anyone thinks to look.
+#: Everything in this repository that may import kingfisher, not only the package
+#: and its tests: a tree outside those two is the last place anyone thinks to look
+#: after a move here.
 
 
 def _everything_that_imports_kingfisher() -> list[Path]:
-    areas = ("src", "tests", "service", "evals", "spikes")
+    areas = ("src", "tests", "evals", "spikes")
     found = [
         p
         for area in areas
@@ -292,14 +291,14 @@ def test_the_dangling_import_rule_can_tell_a_gone_module_from_a_real_one():
     assert not _names_a_real_module("kingfisher.server.asgi")
 
 
-def test_the_second_distribution_is_in_scope():
-    """`assets/` is where the move actually broke, and the rule is worth nothing if it
-    stops looking there.
+def test_the_trees_outside_the_package_are_in_scope():
+    """`assets/` is where a move once broke, in a tree outside the package, and the
+    rule is worth nothing if it stops looking outside `src/` and `tests/`.
     """
     scanned = {p.relative_to(REPO).parts[0] for p in _everything_that_imports_kingfisher()}
-    assert "service" in scanned, (
-        "the dangling-import rule is not reading service/ — the other distribution "
-        "is where a move in src/ lands first"
+    assert {"evals", "spikes"} <= scanned, (
+        f"the dangling-import rule reads only {sorted(scanned)} — a move in src/ "
+        "would break evals/ or spikes/ with nothing red"
     )
 
 
@@ -839,9 +838,7 @@ def test_no_rule_here_is_parametrized_over_nothing():
 
     `_every` is what each rule asks now, and this is the half that survives a rule
     forgetting to ask: it names the collections rather than the rules, so dropping the
-    call still fails here. It only reaches a collection somebody wrote down, which is
-    why `_server_modules` is on the list -- it was the one a collapsed rule walked and
-    this did not.
+    call still fails here. It only reaches a collection somebody wrote down.
     """
     collections = {
         "domain": _modules_in("domain"),
@@ -849,7 +846,6 @@ def test_no_rule_here_is_parametrized_over_nothing():
         "infrastructure": _modules_in("infrastructure"),
         "the package": _package_modules(),
         "consumers": _consumer_modules(),
-        "the server": _server_modules(),
     }
     empty = sorted(name for name, found in collections.items() if not found)
     assert not empty, (
@@ -981,11 +977,8 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # `test_kinds_holds_exactly_the_kinds` refuses a directory that is not in
     # `DEFINITION_KINDS` -- so the hole needs a deliberate edit before it opens.
     "kinds": frozenset({"yaml"}),
-    # The one consumer still in this distribution. `presentation` was the other and is
-    # now `kingfisher-service`, a package of its own with its own rules -- so fastapi
-    # and uvicorn are no longer anything this table has an opinion about, and an area
-    # that named them would be permitting what it cannot see.
-    "presentation/cli": frozenset({"kingfisher_service", "dotenv"}),
+    # The command reads a `.env` in the directory it runs in; nothing else here does.
+    "presentation/cli": frozenset({"dotenv"}),
     # Nothing. The domain has a stricter rule of its own; these two are here so
     # the table is total and an unlisted area cannot mean "anything goes".
     "domain": frozenset(),
@@ -1042,8 +1035,8 @@ def test_an_area_is_refused_another_areas_dependencies():
     assert _undeclared({"deepagents", "langgraph"}, "infrastructure/harness") == set()
     assert _undeclared({"yaml"}, "infrastructure") == set()
     assert _undeclared({"fastapi"}, "presentation/cli") == {"fastapi"}
-    assert _undeclared({"kingfisher_service"}, "presentation/cli") == set()
-    assert _undeclared({"kingfisher_service"}, "application") == {"kingfisher_service"}
+    assert _undeclared({"dotenv"}, "presentation/cli") == set()
+    assert _undeclared({"dotenv"}, "application") == {"dotenv"}
 
 
 def test_a_subpackage_is_judged_by_its_own_area():
@@ -1527,17 +1520,15 @@ def test_the_stub_block_and_the_export_table_name_the_same_things():
 #: commit because nothing told a name added on a caller from a name added on a
 #: guess, and two more left on this rule.
 #:
-#: Three witnesses:
+#: Two witnesses:
 #:
-#: `service`  -- `kingfisher-service` imports it. Read off the service's own
-#:               imports below, so this half cannot rot.
 #: `document` -- a page tells a reader to write it. Checked by a person and
 #:               never by grep: `offered` gets five hits in the guides and `run`
 #:               gets thirty-one, every one of them the English word.
 #: `embedder` -- nothing in this repository asks and it is kept anyway. These
 #:               are the entries worth arguing about, so each says why.
 #:
-#: There was a fourth, `command`, for a name nothing outside this wheel asked
+#: There was another, `command`, for a name nothing outside this wheel asked
 #: for. It was never a witness -- it was the eviction list wearing the table's
 #: shape, so that the work remaining lived in the code rather than only in a
 #: proposal. Sixteen names carried it and all sixteen have gone; it went with
@@ -1552,40 +1543,40 @@ def test_the_stub_block_and_the_export_table_name_the_same_things():
 #: which is where somebody decides which kind it is rather than discovering a
 #: year later that nothing looked.
 WITNESSES: dict[str, str] = {
-    # The nineteen the service imports. Nothing to argue about and nothing to
-    # maintain: `test_the_service_witnesses_are_read_not_claimed` compares this
-    # against what `kingfisher_service` actually writes, both directions.
-    "AccessError": "service",
-    "Capabilities": "service",
-    "CapabilityError": "service",
-    "Config": "service",
-    "Kingfisher": "service",
-    "LocalFileStore": "service",
-    "QuotaExceededError": "service",
-    "Request": "service",
-    "RunEvent": "service",
-    "RunResult": "service",
-    "SessionBusyError": "service",
-    "SessionInfo": "service",
-    "SkillError": "service",
-    "SubagentError": "service",
-    "UnknownReferenceError": "service",
-    "UnknownSessionError": "service",
-    "UnsafeReferenceError": "service",
-    "UploadError": "service",
-    "config_from_env": "service",
-    # The service names the filesystem its agents run on, because every deployment
-    # now has to: `Kingfisher` refuses to be built with neither a backend nor a
-    # pre-built graph. Witnessed by `service` rather than `document` even though
-    # `ports.md` writes it too -- this half is read off the service's own imports
-    # and cannot go stale.
-    "default_backend": "service",
-    # Was `embedder` on this branch -- "raised by `config_from_env`, so a caller
-    # that builds a `Config` must be able to catch it" -- and the service picked
-    # it up before the branch landed. The rule read the service rather than the
-    # label and said so, which is the half of it that is not decoration.
-    "ConfigError": "service",
-    "file_store_named": "service",
+    # The guides write these out, and a reader who copied one is owed it. Grep
+    # `docs/guides/` for each rather than trusting a page named here -- which
+    # page says what is the part that moves.
+    "Kingfisher": "document",
+    "config_from_env": "document",
+    "default_backend": "document",
+    "Request": "document",
+    "Capabilities": "document",
+    # `ports.md` tells an adapter to raise these two, imported from `kingfisher`,
+    # because a caller tells a bad reference from a broken store by the class.
+    "UnknownReferenceError": "document",
+    "UnsafeReferenceError": "document",
+    # What those documented calls take and hand back -- `Kingfisher` takes a
+    # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
+    # type of a documented call's answer cannot be private.
+    "Config": "embedder",
+    "RunResult": "embedder",
+    "RunEvent": "embedder",
+    # What `Kingfisher.sessions()` and `session()` return.
+    "SessionInfo": "embedder",
+    # What they raise. A caller has to be able to catch, by name, what the
+    # library raises at it without reaching past the door.
+    "AccessError": "embedder",
+    "CapabilityError": "embedder",
+    "ConfigError": "embedder",
+    "QuotaExceededError": "embedder",
+    "SessionBusyError": "embedder",
+    "SkillError": "embedder",
+    "SubagentError": "embedder",
+    "UnknownSessionError": "embedder",
+    "UploadError": "embedder",
+    # The one `FileStore` this package ships. `files=` has no default, so a caller
+    # resolving refs out of a directory needs this or an adapter of its own.
+    "LocalFileStore": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
@@ -1647,14 +1638,6 @@ WITNESSES: dict[str, str] = {
 }
 
 
-def _through_the_front_door(root: Path) -> frozenset[str]:
-    """Every name a consumer takes from `kingfisher` itself."""
-    taken: set[str] = set()
-    for path in sorted(root.rglob("*.py")):
-        taken |= _imported_names(path).get("kingfisher", frozenset())
-    return frozenset(taken)
-
-
 def test_every_public_name_has_a_witness():
     """A name nobody can name a caller for is a promise nobody asked for."""
     import kingfisher
@@ -1664,23 +1647,11 @@ def test_every_public_name_has_a_witness():
 
     assert not unwitnessed, (
         f"{unwitnessed} are public and WITNESSES does not say who asked. Name the "
-        "caller: `service` if kingfisher-service imports it, `document` if a page "
-        "tells a reader to write it, `embedder` with a reason if neither -- and if "
-        "the honest answer is `command`, it does not belong on the door"
+        "caller: `document` if a page tells a reader to write it, `embedder` with a "
+        "reason if not -- and if the honest answer is `command`, it does not belong "
+        "on the door"
     )
     assert not stale, f"{stale} are in WITNESSES and are not exported any more"
-
-
-def test_the_service_witnesses_are_read_not_claimed():
-    """The half of the table that must never be maintained by hand."""
-    claimed = {name for name, why in WITNESSES.items() if why == "service"}
-    actual = _through_the_front_door(CONSUMERS["kingfisher_service"]) & set(WITNESSES)
-
-    assert claimed == actual, (
-        "WITNESSES and the service disagree about who imports what: "
-        f"claimed and not imported {sorted(claimed - actual)}, "
-        f"imported and labelled otherwise {sorted(actual - claimed)}"
-    )
 
 
 def test_the_layer_and_the_root_agree_about_this_layer():
@@ -2182,10 +2153,6 @@ LIGHT_EXPORTS = frozenset({
     # same route: `testing` reaches `domain.references` and the standard
     # library, and `CommandResult` is a frozen dataclass in `domain.ports`.
     "SESSION_ROOT_CONTRACT", "COMMAND_RUNNER_CONTRACT", "CommandResult",
-    # Turning `KINGFISHER_SERVICE_FILE_STORE_FACTORY` into a store. Light, and
-    # it has to be: the service resolves it in its lifespan, and the whole point
-    # of a named factory is that kingfisher has never imported what it names.
-    "file_store_named",
     "ensure_layout", "config_from_env",
     # Asking the host what it can fence with, either way round.
     "bubblewrap_available",
@@ -2888,25 +2855,14 @@ def test_a_caller_facing_error_is_the_same_class_either_way():
     assert kingfisher.SessionBusyError is SessionBusyError
 
 
-# -- the server is a consumer, not an insider ------------------------------
-#
-# `kingfisher-service` is its own distribution now, so half of this is enforced
-# by packaging: the library cannot import a package that is not installed. The
-# other half is not, and stays here -- an *installed* service is importable, and
-# nothing but this rule stops a library module reaching for it. The point is not
-# tidiness:
-# it puts the server on the same footing as anybody outside the package, so when
-# it needs something the library does not export, the answer is to export it
-# deliberately. Three things came out that way before the server existed -- the
-# caller-facing errors, `async_checkpointer`, and a way to send a file.
+# -- the command is a consumer, not an insider -----------------------------
 
 
 #: Every consumer held to the front door, and the directory each one lives in. The claim
 #: that any caller can drive this library is worth something only if the callers that
-#: ship with it are held to it -- which is why `offered` and `SKILL_LAYOUT` are public.
+#: ship with it are held to it.
 CONSUMERS: dict[str, Path] = {
     "cli": SRC / "presentation" / "cli",
-    "kingfisher_service": REPO / "service" / "src" / "kingfisher_service",
 }
 
 
@@ -2961,7 +2917,7 @@ def test_the_reach_predicate_says_what_it_means():
             ("kingfisher.application.service", True),   # past it, and the tempting one
             # the CLI ships inside the package
             ("kingfisher.presentation.cli.health", False),
-            ("kingfisher_service.app", False),          # a different top-level package
+            ("kingfisher_other.app", False),            # shares the prefix, not the package
             ("fastapi", False),                         # not ours to have an opinion on
         ]:
         assert _reaches_past_the_public_api(module) is reaches
@@ -3046,57 +3002,8 @@ def test_the_back_door_rule_tells_the_two_consumers_apart():
     assert _taken_by_the_back_door("kingfisher", frozenset({"Kingfisher"}), family=False) == set()
 
 
-#: The synchronous pair. On an event loop these do not merely block one
-#: request, they block every other turn sharing the process.
-BLOCKING_METHODS = frozenset({"run", "stream"})
-
-#: Receivers whose `run` is not `Kingfisher.run`. Named one by one rather than
-#: loosening the rule, because the rule is worth exactly as much as the list is
-#: short: `uvicorn.run` is how the server is served, and it is not the
-#: loop-blocking mistake this watches for.
-NOT_KINGFISHER = frozenset({"uvicorn"})
-
-
-#: The consumer this is about. It was every consumer until `kingfisher run`
-#: existed, at which point the rule caught the first caller it was never written
-#: for: its own reason is that the sync pair blocks "every other turn sharing the
-#: process", and a command has one turn and one process and exits after. Blocking
-#: is what a command wants. Narrowed by name rather than by loosening the
-#: predicate, so the server is held exactly as tightly as before.
-ON_AN_EVENT_LOOP = "kingfisher_service"
-
-
-def _server_modules() -> list[Path]:
-    return sorted(CONSUMERS[ON_AN_EVENT_LOOP].rglob("*.py"))
-
-
-def test_the_server_calls_the_async_turn_methods():
-    """`arun` and `astream`, never `run` and `stream`."""
-    blocking = []
-    for path in _every(_server_modules(), "the server"):
-        tree = ast.parse(path.read_text(encoding="utf-8"))
-        called = sorted({
-            node.func.attr
-            for node in ast.walk(tree)
-            if isinstance(node, ast.Call)
-            and isinstance(node.func, ast.Attribute)
-            and node.func.attr in BLOCKING_METHODS
-            and not (
-                isinstance(node.func.value, ast.Name)
-                and node.func.value.id in NOT_KINGFISHER
-            )
-        })
-        if called:
-            blocking.append(f"{_module_id(path)} calls {called}")
-
-    assert not blocking, (
-        f"{blocking} — use arun/astream; the sync pair blocks every other turn on "
-        "this loop, not just this one"
-    )
-
-
 def test_the_event_kinds_are_what_the_package_emits():
-    """`KINDS` is the closest thing to a wire contract here, and as prose it had drifted
+    """`KINDS` is the closest thing to a contract with a caller here, and as prose it had drifted
     both ways -- naming `swept` and `sweep_failed`, which have not fired since
     retention moved off the request path, and omitting `cut_short`, which is how a
     caller learns its answer is incomplete.
@@ -3116,14 +3023,14 @@ def test_the_event_kinds_are_what_the_package_emits():
                     emitted.add(word.value.value)
 
     assert emitted == set(KINDS), (
-        "KINDS and the kinds actually constructed have diverged — it is published "
-        "as the SSE event names, so an extra entry is a kind no client sees and a "
-        "missing one is a kind nobody handles"
+        "KINDS and the kinds actually constructed have diverged — it is what a "
+        "caller branching on `event.kind` is promised, so an extra entry is a kind "
+        "no caller sees and a missing one is a kind nobody handles"
     )
 
 
 def test_the_stop_reasons_are_what_the_package_assigns():
-    """`STOP_REASONS` is a wire contract like `KINDS`, and pinned the same way."""
+    """`STOP_REASONS` is a contract with a caller like `KINDS`, and pinned the same way."""
     from kingfisher.domain.result import STOP_REASONS
 
     assigned = set()
@@ -3141,8 +3048,8 @@ def test_the_stop_reasons_are_what_the_package_assigns():
 
     assert assigned == set(STOP_REASONS), (
         "STOP_REASONS and the reasons actually assigned have diverged — the value "
-        "goes on the wire, so an extra entry is a reason no turn produces and a "
-        "missing one is a reason no client knows to handle"
+        "reaches every caller as `stop_reason`, so an extra entry is a reason no "
+        "turn produces and a missing one is a reason no caller knows to handle"
     )
 
 
@@ -3176,7 +3083,6 @@ def test_no_surface_decides_for_itself_what_a_finished_turn_is():
     """
     decided = []
     trees = [path for path in SRC.rglob("*.py") if path != SRC / "domain" / "result.py"]
-    trees += list(CONSUMERS["kingfisher_service"].rglob("*.py"))
     for path in sorted(trees):
         for node in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
             if isinstance(node, ast.Compare) and _decides_from_a_stop_reason(node):
@@ -3430,16 +3336,15 @@ def test_nothing_is_defined_for_tests_alone():
 #: the rule already exempts, and reaching for this table instead would be the way
 #: to publish something without saying so.
 READ_ELSEWHERE = frozenset({
-    # The SSE event names. Nothing in `src/`, the driver, `evals/` or `service/src/`
-    # reads it -- `payloads.frame` puts `event.kind` on the wire straight from the event
-    # and only *mentions* `KINDS` in prose -- so its readers are the clients subscribing
-    # to those event names, and they are not in this repository to be counted.
+    # The event kinds `stream()` yields. Nothing in `src/`, the driver or `evals/`
+    # reads it, so its readers are the callers of `stream()` branching on
+    # `event.kind`, and they are not in this repository to be counted.
     "KINDS",
-    # The stop reasons, and the same argument one line for line: it goes on the
-    # wire as `stop_reason` in the turn payload, so its readers are the clients
-    # branching on that value and they are not in this repository. It is a
-    # declaration with nothing to derive from -- the rule below is what pins it,
-    # against the reasons the package actually assigns.
+    # The stop reasons, and the same argument one line for line: every caller gets
+    # one as `RunResult.stop_reason`, so its readers are the callers branching on
+    # that value and they are not in this repository. It is a declaration with
+    # nothing to derive from -- the rule below is what pins it, against the reasons
+    # the package actually assigns.
     "STOP_REASONS",
 })
 
@@ -3700,16 +3605,13 @@ def test_no_value_is_written_down_twice():
     )
 
 
-#: Import name -> distribution, for the two `packages_distributions()` cannot
-#: answer here. Both are absent from a macOS checkout for reasons that are the
-#: point rather than an oversight: `sandlock` ships Linux-only wheels and
-#: `kingfisher-service` is the workspace sibling, installed as a path rather
-#: than resolved from an index. A guard that only worked where everything
-#: happened to be installed would report success on the machine where the
-#: dependency is missing, which is the one case worth catching.
+#: Import name -> distribution, for the one `packages_distributions()` cannot
+#: answer here. It is absent from a macOS checkout for a reason that is the point
+#: rather than an oversight: `sandlock` ships Linux-only wheels. A guard that only
+#: worked where everything happened to be installed would report success on the
+#: machine where the dependency is missing, which is the one case worth catching.
 PROVIDED_BY: dict[str, str] = {
     "sandlock": "sandlock",
-    "kingfisher_service": "kingfisher-service",
 }
 
 
@@ -3796,7 +3698,6 @@ def test_the_provider_lookup_is_not_fooled_by_a_shared_root_name():
     assert "langgraph-checkpoint" in _providers("langgraph.checkpoint.memory")
     assert "langgraph" not in _providers("langgraph.checkpoint.memory")
 
-    assert _providers("kingfisher_service.app") == {"kingfisher-service"}
     assert _providers("sandlock") == {"sandlock"}
     assert _providers("nothing_ships_this") == set()
 

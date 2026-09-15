@@ -109,9 +109,7 @@ def test_the_session_route_refuses_an_unreachable_agent(two_agents):
 
 
 def test_a_turn_on_a_pinned_agent_out_of_reach_is_refused(two_agents):
-    """A session id is a bearer credential -- `kingfisher_service.access` says so
-    outright -- and a session pins its agent for life.
-    """
+    """A session id is a bearer credential, and a session pins its agent for life."""
     kf = Kingfisher(two_agents, backend=default_backend)
     opened = kf.open_session_for(Request(task="t", agent="assistant"))
 
@@ -141,8 +139,8 @@ def test_a_turn_on_a_pinned_agent_still_in_reach_resolves(two_agents):
 def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents):
     """A session you cannot run must be indistinguishable from one that was never there."""
     kf = Kingfisher(two_agents, backend=default_backend)
-    # Opened and pinned the way `POST /sessions` does it: the id and the
-    # directory come first, and the agent is remembered separately.
+    # Opened and pinned before any turn: the id and the directory come first,
+    # and the agent is remembered separately.
     session_id = kf.start_session()
     kf.remember_agent(session_id, "assistant")
 

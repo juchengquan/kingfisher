@@ -274,7 +274,7 @@ def test_no_message_names_a_variable_nothing_reads():
     # variable nothing reads *on purpose* -- saying so is the whole of what it is
     # for. Allowed rather than exempted by file, so a message inventing a name
     # anywhere, `health.py` included, still fails.
-    allowed = read | set(health.RETIRED) | {health.RETIRED_PREFIX, health.SERVICE_PREFIX}
+    allowed = read | set(health.RETIRED) | set(health.RETIRED_PREFIXES)
     package = _Path(kingfisher.__file__).parent
 
     def messages(tree: ast.Module) -> list[str]:

@@ -123,28 +123,6 @@ says why when it settled on nothing.
 Whatever you add to `PATH` is granted to the fence as readable, so a directory
 named here is one the agent can run from.
 
-## The HTTP service
-
-A prefix of its own, so that reading a deployment's environment tells you which
-half of the split each setting belongs to. **These are not in `.env.example`.**
-
-| Variable | What it does | Default |
-| --- | --- | --- |
-| `KINGFISHER_SERVICE_HOST` | Address to bind. | `127.0.0.1` |
-| `KINGFISHER_SERVICE_PORT` | Port to bind. | `8000` |
-| `KINGFISHER_SERVICE_MAX_BODY_BYTES` | Largest request body accepted. | `1048576` (1 MiB) |
-| `KINGFISHER_SERVICE_HEARTBEAT_S` | How often a streaming response sends a keep-alive. | `15.0` |
-| `KINGFISHER_SERVICE_FILE_STORE_DIR` | Where files named by id are fetched from. | none |
-| `KINGFISHER_SERVICE_FILE_STORE_FACTORY` | `module:name` naming something callable with no arguments that returns a store of your own, for files that are not a directory on this host. Set this or the directory above and never both — a deployment that names two is refused. | none |
-| `KINGFISHER_SERVICE_AUDIT_CONTENT` | Whether the audit log records content rather than only events. | `false` |
-
-`KINGFISHER_SERVER_*` was the earlier prefix and is read by nothing. Renaming an
-environment variable is the one rename that fails in silence — a moved import
-stops the program and says which, while a variable nobody reads falls back to its
-default and the server comes up on port 8000 with nothing to show for it — so
-`kingfisher doctor` reports the whole prefix, suffix by suffix, and is worth
-running after an upgrade.
-
 ## Two things that catch people
 
 **`KINGFISHER_SKILLS` means one thing now, and it is not a flag.** The agent's

@@ -1510,6 +1510,13 @@ suffixes in the base package would be its table written down twice, and the copy
 would stop covering whichever setting the service gains next.
 *(2026-09-10.)*
 
+**The service's own prefix joined the one it replaced.** With the service gone,
+`KINGFISHER_SERVICE_*` is read by nothing either, so `doctor` reports both
+prefixes and names nothing to use instead. A deployment still carrying
+`KINGFISHER_SERVICE_PORT` gets no server and no error -- the silent kind of rename
+this section is about -- and `doctor` is the one place that can say so.
+*(2026-09-15.)*
+
 **Not solved by inferring the flag from the catalogue**, which was the obvious
 alternative and is worse in four ways: the skills section lives in the system
 prompt, which is the cached prefix, so a prompt derived from directory contents
@@ -1584,6 +1591,20 @@ record over the HTTP surface, which authenticates nobody. And a `Config.paths`
 property, which nothing would have read.
 
 ## The HTTP service
+
+**Reversed: an HTTP service in this repository.** `kingfisher-service` was removed
+because nobody ran it. It was already its own distribution, imported nothing past
+the front door, and no container or compose file started it, so it came out as a
+deletion rather than a migration. The entries below are what it decided while it
+existed and stay as the record; the code is in the commit that removed `service/`.
+
+What it leaves is named rather than swept into the same change. Several library
+features had it as their only reader here -- opening a session without a turn,
+fixing its agent before one, files passed by id through `FileStore`, the async
+turn path -- and each is a decision about callers this repository cannot see, to
+be taken one at a time after counting what still uses it. `file_store_named`
+could not wait: it turned the service's own setting into a store, and with the
+setting gone it had no caller and no honest witness. *(2026-09-15.)*
 
 **Transport only -- the server never interprets identity**, and lives in its own
 wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
@@ -1687,6 +1708,12 @@ nothing else, which is enough: a name whose only caller is the command can be
 given none of the three remaining witnesses without somebody writing down a
 reason that is false, and the reason is the part a reader can check.
 *(Slices two and three, 2026-09-06.)*
+
+**The `service` witness went with the service.** It was the one kind read off
+real imports rather than claimed, and its names were witnessed again one at a
+time: `document` where a guide tells a reader to write the name, `embedder` where
+it is what a documented call takes, returns or raises. `file_store_named` had no
+second reader and left the door. *(2026-09-15.)*
 
 **The stub block is a third listing of these names, and is bound to the other
 two.** `__all__` and `_EXPORTS` were held to each other; the `if TYPE_CHECKING:`

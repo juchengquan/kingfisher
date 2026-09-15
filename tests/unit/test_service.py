@@ -894,7 +894,7 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
 def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
     """The other half of the same hole, through the other door.
 
-    `POST /sessions` pins before any turn exists, so it has an id and no directory
+    `remember_agent` pins before any turn exists, so it has an id and no directory
     and the workspace is the only place it can write. Under a custom root that is not
     where the first turn looks -- so a session opened as one agent ran as another and
     the refusal never fired, while the identical calls against the default root were
@@ -926,7 +926,7 @@ def test_a_session_opened_away_from_home_is_not_swept_out_of_its_own_store(cfg, 
     a turn *holds*, and `claim` is written inside that one too. So the stub was idle
     from the moment it was made and carried nothing to spare it -- `reap` swept it and
     called `forget` on the store, deleting the only durable copy of a session in
-    daily use. Opened the way `POST /sessions` opens one, which is the only way this
+    daily use. Opened by `start_session` before any turn, which is the only way this
     arises: a session minted by a turn leaves no stub.
     """
     from kingfisher import LocalSessionStore

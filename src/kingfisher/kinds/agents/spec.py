@@ -63,13 +63,12 @@ REFUSED: Mapping[str, str] = MappingProxyType(
         ),
         "interrupt_on": (
             "an agent has both a checkpointer and a caller, unlike a delegate; what "
-            "is missing is anything in the service that surfaces an interrupt to "
-            "that caller"
+            "is missing is anything that surfaces an interrupt to that caller"
         ),
         "response_format": (
             "an agent answers a real caller who may well want a schema, and there is "
             "nowhere to ask for one yet -- it changes what a *run returns*, so the "
-            "result, the service's response body and streaming all have a stake in it"
+            "result and streaming both have a stake in it"
         ),
     }
 )

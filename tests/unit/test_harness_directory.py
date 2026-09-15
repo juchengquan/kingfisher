@@ -169,9 +169,9 @@ def test_a_session_that_lost_its_directory_keeps_the_agent_it_opened_with(cfg, t
     """
     _agent(cfg)
     service, _ = _wired_to_a_store(cfg, tmp_path)
-    # Opened and pinned the way `POST /sessions` does it, which is also the only
-    # way a deployment that supplies its own graph ever pins: `_graph_for` returns
-    # that graph before it resolves an agent.
+    # Opened and pinned before any turn, which is the only way a deployment that
+    # supplies its own graph ever pins: `_graph_for` returns that graph before it
+    # resolves an agent.
     session_id = service.start_session()
     service.remember_agent(session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
