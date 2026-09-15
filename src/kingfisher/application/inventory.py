@@ -303,7 +303,7 @@ def _access(
         if (complaint := access.undeclared_in(specs, kind=kind, vocabulary=cfg.access))
         is not None
     }
-    held = cfg.access.expand(source_ids) if source_ids is not None else None
+    held = access.held_by(cfg.access, source_ids)
     return stated, report, held, broken
 
 

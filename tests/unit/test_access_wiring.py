@@ -130,6 +130,38 @@ def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied
         kf.held_for("A")
 
 
+def test_one_function_reads_what_shape_a_caller_s_source_ids_are_in():
+    """`agent_named` and `session()` each asked "is it a tuple?" while `held_for` took
+    any sequence, so `["B"]` opened an agent restricted to A -- one value, read three
+    ways. Walked from the source, so a fourth reader fails here the day it is written.
+    """
+    import ast
+
+    from tests.conftest import repository_root
+
+    application = repository_root() / "src" / "kingfisher" / "application"
+    readers = set()
+    for path in sorted(application.glob("*.py")):
+        for function in ast.walk(ast.parse(path.read_text(encoding="utf-8"))):
+            if not isinstance(function, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for node in ast.walk(function):
+                if (
+                    isinstance(node, ast.Call)
+                    and isinstance(node.func, ast.Name)
+                    and node.func.id == "isinstance"
+                    and node.args
+                    and isinstance(node.args[0], ast.Name)
+                    and node.args[0].id == "source_ids"
+                ):
+                    readers.add(f"{path.stem}.{function.name}")
+
+    assert readers == {"access.held_by"}, (
+        f"the shape of source_ids is read in {sorted(readers)} -- ask "
+        "`application.access.held_by` instead, or one reader will disagree with another"
+    )
+
+
 def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     """Everything that worked before this must still work untouched -- including calling
     `run` without saying anything about source ids.

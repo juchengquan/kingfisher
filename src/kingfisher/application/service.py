@@ -57,7 +57,6 @@ from kingfisher.domain.access import (
     AccessReport,
     Held,
     SourceIds,
-    _Unscoped,
     reaches,
 )
 from kingfisher.domain.capabilities import (
@@ -395,22 +394,8 @@ class Kingfisher(Sessions, Disposal):
         return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
 
     def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
-        """The caller's expanded source ids, or `None` for no vocabulary / UNSCOPED.
-
-        **Any sequence of names, not only a tuple.** This tested `isinstance(source ids,
-        tuple)` and answered `None` -- "no opinion", the same as no vocabulary at all
-        -- for anything else. That was safe only because `for_groups` coerced first
-        and was the single documented way in; with `source_ids=` the only way,
-        `source_ids=["analysts"]` would have validated the name and then narrowed
-        nothing. A list is the obvious thing to write, so it must mean what it looks
-        like.
-        """
-        if self.access is None or source_ids is None or isinstance(source_ids, _Unscoped):
-            return None
-        if isinstance(source_ids, str):
-            msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
-            raise AccessError(msg)
-        return self.access.expand(tuple(source_ids))
+        """The caller's expanded source ids, or `None` where nothing narrows."""
+        return access.held_by(self.access, source_ids)
 
     def _effective_grants(self, source_ids: Held | None) -> Capabilities:
         """The ceiling for one call: this deployment's, narrowed by the caller's."""
@@ -430,14 +415,12 @@ class Kingfisher(Sessions, Disposal):
                 "source_ids=UNSCOPED to run without one"
             )
             raise AccessError(msg)
-        if isinstance(source_ids, _Unscoped):
-            return self.grants
         # Nothing central left to intersect with: the narrowing that source ids
         # imply is per definition, and happens in `AgentSpec.declares` where
         # the spec is known. What this still does is validate the names -- a
         # caller naming a source id this deployment does not declare is refused
         # here rather than quietly reaching nothing.
-        self.access.expand(source_ids)
+        self.held_for(source_ids)
         return self.grants
 
     def _graph_for(
@@ -558,7 +541,7 @@ class Kingfisher(Sessions, Disposal):
         # exactly the way an agent that was never written is: anything else lets a
         # caller enumerate the catalogue by guessing, and sends them off to try
         # something they will only be refused for.
-        if (reach := self.access) is not None:
+        if self.access is not None:
             if source_ids is None:
                 msg = (
                     "this deployment has an access policy, so a call must say who "
@@ -566,8 +549,7 @@ class Kingfisher(Sessions, Disposal):
                     "source_ids=UNSCOPED to run without one"
                 )
                 raise AccessError(msg)
-            if isinstance(source_ids, tuple):
-                held = reach.expand(source_ids)
+            if (held := self.held_for(source_ids)) is not None:
                 offered = {
                     n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
                 }

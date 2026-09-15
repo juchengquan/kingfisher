@@ -223,6 +223,63 @@ def test_a_turn_naming_nobody_is_refused_before_it_writes(two_agents, tmp_path):
     assert not (two_agents.workspace / "sessions" / session_id / "data" / "planted.csv").exists()
 
 
+# -- a tuple, a list, a string ----------------------------------------------
+
+
+@pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
+def test_an_agent_out_of_reach_is_refused_however_the_ids_are_written(two_agents, held):
+    """`["B"]` opened an agent restricted to A: the check asked for a tuple and read
+    anything else as nobody in particular.
+    """
+    kf = Kingfisher(two_agents, backend=default_backend)
+
+    with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
+        kf.agent_named("assistant", source_ids=held)
+
+
+@pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
+def test_a_first_turn_is_refused_however_the_ids_are_written(two_agents, held):
+    """A first turn asks `agent_named`, so the same hole reached a turn."""
+    kf = Kingfisher(two_agents, backend=default_backend)
+
+    with pytest.raises(CapabilityError, match="no agent named 'assistant'"):
+        _first_event(kf, Request(task="t", agent="assistant"), held)
+
+
+@pytest.mark.parametrize("held", [("B",), ["B"]], ids=["tuple", "list"])
+def test_a_session_out_of_reach_is_hidden_however_the_ids_are_written(two_agents, held):
+    """And reading one: `["B"]` was shown a session pinned to A's agent."""
+    kf = Kingfisher(two_agents, backend=default_backend)
+
+    assert kf.session(_pinned_by_a(kf), source_ids=held) is None
+
+
+@pytest.mark.parametrize("held", [("A",), ["A"]], ids=["tuple", "list"])
+def test_a_caller_in_reach_is_let_in_however_the_ids_are_written(two_agents, held):
+    """So the refusals above are not passing because a list is turned away outright."""
+    kf = Kingfisher(two_agents, backend=default_backend)
+
+    assert kf.agent_named("assistant", source_ids=held) is not None
+    assert kf.session(_pinned_by_a(kf), source_ids=held) is not None
+
+
+def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_agents):
+    """Naming an agent and reading a session let `"B"` through unfiltered, and the
+    listing spelled it out a letter at a time, because a string is a sequence too.
+    """
+    from kingfisher import inventory
+
+    kf = Kingfisher(two_agents, backend=default_backend)
+    session_id = _pinned_by_a(kf)
+
+    with pytest.raises(AccessError, match="not a string"):
+        kf.agent_named("assistant", source_ids="B")
+    with pytest.raises(AccessError, match="not a string"):
+        kf.session(session_id, source_ids="B")
+    with pytest.raises(AccessError, match="not a string"):
+        inventory(two_agents, source_ids="B")
+
+
 # -- a session out of reach reads as one that is not there ------------------
 
 
