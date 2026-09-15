@@ -3,6 +3,8 @@
 from __future__ import annotations
 
 import re
+import subprocess
+import sys
 from dataclasses import fields, replace
 
 import pytest
@@ -61,15 +63,16 @@ def test_every_preset_skill_parses(shipped):
         "tabular-qa",
     }
     # So the files are found by walking for `SKILL.md` rather than by that
-    # listing. `incident/postmortem` is the one preset demonstrating that a
-    # folder is a source, and going by name made it the one preset skill nothing
-    # here opened -- the file with a structural job was the file with no check.
+    # listing. The skills in `incident/` are the ones demonstrating that a folder
+    # is a source, and a listing by name never reaches them -- which once left the
+    # file with a structural job as the file with no check.
     found = sorted(root.glob(f"*/{skill.FILENAME}")) + sorted(root.glob(f"*/*/{skill.FILENAME}"))
     assert {path.parent.name for path in found} == {
         "code-review",
         "postmortem",
         "release-notes",
         "tabular-qa",
+        "timeline",
     }
 
     for path in found:
@@ -82,8 +85,45 @@ def test_every_preset_skill_parses(shipped):
         assert name_from(text) == name  # header and directory agree
         assert yaml.safe_load(header)["description"].strip()
         # A real procedure, not a stub. The same threshold the subagent version
-        # uses; the shipped bodies measure 1222-1366 characters.
+        # uses.
         assert len(body.strip()) > 200
+
+
+def test_the_timeline_skill_runs_the_script_it_names(shipped, tmp_path):
+    """The command in `SKILL.md` is the procedure, so a script moved without it leaves a
+    skill telling the model to run a file that is not there -- and a script that parses
+    nothing prints an empty timeline, which reads as a quiet incident.
+    """
+    root = shipped / "skills"
+    text = (root / "incident" / "timeline" / skill.FILENAME).read_text(encoding="utf-8")
+    (named,) = set(re.findall(r"\$KINGFISHER_SKILLS/(\S+?\.py)", text))
+    script = root / named
+    assert script.is_file(), f"SKILL.md runs {named}, which is not in the catalogue"
+
+    (tmp_path / "data").mkdir()
+    (tmp_path / "data" / "api.log").write_text(
+        "2026-09-01T14:03:22 WARN pool at 90% of 50 connections\n"
+        "2026-09-01T14:03:40 WARN pool at 92% of 50 connections\n"
+        "2026-09-01T14:20:00 ERROR request 8f3a2b1c9d failed: timeout\n"
+        "a line with no timestamp\n",
+        encoding="utf-8",
+    )
+    # The shell's view of a session: run from its root, handed `data/...`.
+    done = subprocess.run(  # noqa: S603 -- our own interpreter, a script in this tree
+        [sys.executable, str(script), "data/api.log"],
+        cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        check=False,
+    )
+
+    assert done.returncode == 0, done.stderr
+    out = done.stdout
+    assert "1 skipped" in out.splitlines()[0]
+    assert "(x2, until 14:03:40)" in out, "a repeat was not collapsed"
+    assert "16 minute(s) with no log lines" in out
+    assert out.index("WARN") < out.index("16 minute(s)") < out.index("ERROR")
+    assert "data/api.log:3" in out, "an event has to cite the line it came from"
 
 
 def test_the_extractor_preset_demonstrates_the_optional_fields(shipped):
