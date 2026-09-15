@@ -134,15 +134,20 @@ in `yaml_settable`, which is not a contradiction:
 ```yaml
 middlewares:
   - name: compact
-    settings: {model: cheap}
+    settings: {model: MiniMax-M2.5}
 ```
 
-`cheap` is resolved through the same catalogue a subagent's `model:` field goes
-through — `models.yaml`, the profile's params, the endpoint's `base_url` — and an
-endpoint this request may not reach is refused before a prompt is sent anywhere.
-Write nothing and the fallback applies, which is the model the agent is already
-running. A `defaults` entry may name one too, which is how a deployment pins the
-model in its own code and opens nothing.
+`MiniMax-M2.5` is resolved through the same catalogue a subagent's `model:` field
+goes through — `models.yaml`, the profile's params, the endpoint's `base_url` —
+and an endpoint this request may not reach is refused before a prompt is sent
+anywhere. Write nothing and the fallback applies, which is the model the agent is
+already running. A `defaults` entry may name one too, which is how a deployment
+pins the model in its own code and opens nothing.
+
+**It is a key of `models.yaml`, not a nickname for one.** The key there *is* the
+id sent on the wire — `Models` refuses a table where the two differ — so what goes
+here is `MiniMax-M2.5` or `gpt-5`, whatever your catalogue defines, and never a
+label like `cheap` chosen for this line.
 
 `backend` and `definition` cannot be written, because there is no name a file
 could carry for them. A class naming one in `defaults` or `yaml_settable` is

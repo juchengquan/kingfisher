@@ -57,13 +57,18 @@ time `__init__` sees it:
 
     middlewares:
       - name: compact
-        settings: {model: cheap}
+        settings: {model: MiniMax-M2.5}
 
-resolves `cheap` through the same catalogue a subagent's `model:` field goes
+resolves that name through the same catalogue a subagent's `model:` field goes
 through -- `models.yaml`, the profile's `max_tokens` and `timeout_s`, the
 endpoint's `base_url` and adapter -- and refuses an endpoint this request may
 not reach, before a single prompt is sent anywhere. Write nothing and the
 fallback applies, which is the model the agent is already running.
+
+The name is a *key of `models.yaml`*, and that key is the id sent on the wire --
+`Models` refuses a table where the two differ. So it is whatever your catalogue
+defines, and never a label like `cheap` invented for this line, however much
+better that would read.
 
 `backend` and `definition` are not in `yaml_settable` and could not be. There is
 no name a file could write for "the filesystem", so a value written for one of

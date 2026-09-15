@@ -80,8 +80,9 @@ middlewares:
   # the agent is assembled; `middlewares/compaction.py` is the argument.
   #
   # Written bare, which means the model this agent is already running. The long
-  # form would name another -- `settings: {model: cheap}` -- and no shipped file
-  # may do that: a vendor's model id is portable nowhere.
+  # form would name another -- `settings: {model: MiniMax-M2.5}`, a key of your
+  # own `models.yaml` -- and no shipped file may do that: a vendor's model id is
+  # portable nowhere, which is why this one is bare rather than illustrative.
   - compact
 # Named, so what this agent may do stays legible. It reads and it delegates.
 builtin_tools: [read_file, ls, glob, grep]
