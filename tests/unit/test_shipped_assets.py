@@ -758,12 +758,15 @@ def test_every_middleware_a_shipped_definition_names_is_in_the_wiring_block(ship
     """The other end of it: a definition may not name what the block never wires."""
     wired = set(_documented_wiring(shipped))
     named: set[str] = set()
-    for definition in ("agents/researcher.yaml", "subagents/sweeper.yaml"):
-        document = yaml.safe_load((shipped / definition).read_text(encoding="utf-8"))
-        for entry in document.get("middlewares") or ():
-            named.add(entry if isinstance(entry, str) else entry["name"])
+    # Every definition rather than a list of them, so the next one to name middleware
+    # is covered by having been written rather than by somebody remembering.
+    for kind in ("agents", "subagents"):
+        for path in sorted((shipped / kind).rglob("*.yaml")):
+            document = yaml.safe_load(path.read_text(encoding="utf-8"))
+            for entry in document.get("middlewares") or ():
+                named.add(entry if isinstance(entry, str) else entry["name"])
 
-    assert named, "neither definition named middleware, so this asserts nothing"
+    assert named, "no definition named middleware, so this asserts nothing"
     assert named <= wired, (
         f"{sorted(named - wired)} is named by a shipped definition and wired by no "
         f"example, so pasting the block still leaves it unregistered"
@@ -816,12 +819,13 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     done = seed(Destination(), shipped)
 
     assert {left.label for left in done.skipped} == {
+        "agents/assistant.yaml",
         "agents/researcher.yaml",
         "subagents/sweeper.yaml",
         "agents/analyst.yaml",
         "subagents/auditor.yaml",
     }
-    for left in ("agents/researcher.yaml", "subagents/sweeper.yaml"):
+    for left in ("agents/assistant.yaml", "agents/researcher.yaml", "subagents/sweeper.yaml"):
         assert left not in done.written
         assert not (tmp_path / left).exists()
 
@@ -830,6 +834,10 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     # and "names source ids" to a file, so one sentence for both would send half
     # its readers to the wrong place.
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
+        "agents/assistant.yaml": (
+            "middlewares",
+            ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
+        ),
         "agents/researcher.yaml": (
             "middlewares",
             ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
@@ -844,7 +852,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
 
     # And everything else still arrives, which is the half that would break
     # quietly if the rule were ever widened by accident.
-    assert "agents/assistant.yaml" in done.written
+    assert "agents/general.yaml" in done.written
     assert "subagents/reviewer.yaml" in done.written
 
 
@@ -869,6 +877,7 @@ def test_seed_all_takes_the_definitions_it_would_otherwise_leave(shipped, tmp_pa
     assert not done.skipped
     assert "agents/researcher.yaml" in done.written
     assert "subagents/sweeper.yaml" in done.written
+    assert "agents/assistant.yaml" in done.written, "the agent a reader runs first"
     assert (tmp_path / "agents" / "researcher.yaml").is_file()
     assert (tmp_path / "subagents" / "sweeper.yaml").is_file()
 
@@ -929,30 +938,32 @@ def test_a_seeded_workspace_holds_nothing_that_names_middleware(shipped, tmp_pat
             named = middleware_named(path.read_text(encoding="utf-8"))
             assert not named, (
                 f"{path.relative_to(tmp_path)} was seeded naming {named}, which is "
-                "refused on any deployment that did not register it; a shipped "
-                "definition writes no `middlewares:` line instead"
+                "refused on any deployment that did not register it -- a plain seed "
+                "leaves such a definition behind for `--all`"
             )
 
 
-def test_a_seeded_assistant_runs_under_no_example_middleware(
+def test_assistant_runs_under_the_middleware_it_names_and_nothing_else(
     cfg, session_dir, shipped, monkeypatch
 ):
     """`assistant` wrote `middlewares: ["*"]`, and a seeded workspace offers every
-    example in `middlewares/` -- so the agent a reader runs first was capped at twenty
-    tool calls, noted on every result and summarised, by examples written for others.
+    example in `middlewares/`, so the star took whatever was there -- including anything
+    added later for another agent -- with neither its file nor its prompt saying so.
 
-    Built from a real seed: the test this replaced checked the star against an empty
+    Built from a real `seed --all`, which is how a name in a shipped file reaches a
+    workspace that resolves it. The test the star had checked it against an empty
     registry, which is the one registry a seeded workspace never has.
     """
     from kingfisher.infrastructure.workspace.seeding import seed
     from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 
-    seed(cfg, shipped)
+    seed(cfg, shipped, everything=True)
+    spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"]
     offered = set(LocalMiddlewareRepository(cfg.catalogue_roots["middlewares"]).names)
     captured = capture_build(monkeypatch)
     build_agent(
         replace(cfg, skills_enabled=True),
-        agent=LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["assistant"],
+        agent=spec,
         session_dir=session_dir,
         model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
     )
@@ -960,10 +971,9 @@ def test_a_seeded_assistant_runs_under_no_example_middleware(
     # By name, not by class: a `middlewares/` file is imported afresh each time the
     # catalogue is read, so the classes loaded here are not the ones built there.
     worn = {m.name for m in captured["middleware"]} & offered
-    handed = {m.name for s in captured["subagents"] for m in s.get("middleware", [])} & offered
-    assert offered, "the seed carried no middleware, so this asserts nothing"
-    assert not worn, f"assistant runs under {sorted(worn)}"
-    assert not handed, f"its delegates run under {sorted(handed)}"
+    assert spec.middlewares, "assistant names no middleware"
+    assert spec.middlewares != ALL, "assistant takes whatever is offered again"
+    assert worn == set(spec.middlewares), f"assistant runs under {sorted(worn)}"
 
 
 def test_the_middleware_example_caps_a_turn(shipped, cfg, session_dir):
@@ -1046,7 +1056,7 @@ def test_the_middleware_example_refuses_a_cap_that_refuses_everything(shipped):
 
 
 def _example_definitions(shipped):
-    """The agent and delegate that name middleware, from the kinds they belong to."""
+    """The agent-and-delegate pair that name middleware, from the kinds they belong to."""
     return (
         LocalAgentRepository(shipped / "agents").specs["researcher"],
         LocalSubagentRepository(shipped / "subagents").specs["sweeper"],
@@ -1413,8 +1423,8 @@ def test_the_other_presets_still_restrict_nobody(shipped):
 def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir, shipped):
     """The curriculum, run rather than read.
 
-    `researcher` and `sweeper` are the only shipped definitions that name
-    middleware, and the pair exists to show two ceilings over one behaviour.
+    `researcher` and `sweeper` are the shipped pair that name middleware, and
+    they exist to show two ceilings over one behaviour.
     Nothing had ever built them together. With no registry wired anywhere they
     failed for want of one, and every test that touched them either replaced the
     spec or supplied a registry of its own -- so the mismatch underneath was

@@ -241,24 +241,27 @@ assumed: an unset `trigger` normalises to no clauses and never fires, and a
 backend reports a failed write by returning one rather than raising.
 *(2026-09-15.)*
 
-**The shipped `assistant` names no middleware, and does not write the star.**
+**The shipped `assistant` names its middleware, and does not write the star.**
 `middlewares: ["*"]` was argued as the one form a shipped file could carry: a name
 is refused on a deployment that registered nothing, and a star resolves to nothing
 there. *Middleware is a definition kind* is what made that false, and nobody read
 the two together -- a file in the workspace's `middlewares/` counts as registered,
 and `seed` copies the examples in. So a seeded workspace wrapped the agent a reader
-runs first in every one of them: both caps, `ToolNote` on every tool result, and
-`Compact` summarising at sixty messages, on the agent and on its general-purpose
-delegate. Measured by building it. The test for the star checked it against an
-empty registry, which is the one registry a seeded workspace never has.
+runs first in every one of them, on the agent and on its general-purpose delegate,
+with neither its file nor its prompt saying so. Measured by building it. The test
+for the star checked it against an empty registry, which is the one registry a
+seeded workspace never has.
 
-Two other fixes were weighed. Seeding `middlewares/` only under `--all` would
-undo half of *Middleware is a definition kind* for one line of one file; a star
-that skipped workspace files would make the two sources of one registry mean
-different things to one field. Omitting the line costs what the star was for --
-a deployment's audit hook no longer reaches this agent unnamed, and its delegates
-may name only what it lists -- and a deployment pays that in its own copy, where a
-name is its own to resolve. *(2026-09-16.)*
+It names all four examples instead, so what it runs under is written in its file
+and its prompt can say so -- a twenty-call budget, a note on every tool result, a
+summariser past sixty messages -- and a middleware added later for another agent
+does not arrive here unasked. The price is `seed`'s rule against named middleware:
+a plain `kingfisher seed` now leaves `assistant` behind alongside `researcher`, and
+`--all` is how it arrives. Seeding `middlewares/` only under `--all`, and a star
+that skipped workspace files, were weighed and not taken: the first undoes half of
+*Middleware is a definition kind* for one line of one file, the second makes the
+two sources of one registry mean different things to one field.
+*(2026-09-16.)*
 
 ## Agents and delegation
 

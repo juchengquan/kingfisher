@@ -19,7 +19,11 @@ its edge: a definition can parse, build, and still be a bad prompt.
 It is a curriculum rather than a bag of assets. Read it, copy what you need, and
 change the copy:
 
-    kingfisher seed --from ./assets_examples
+    kingfisher seed --all --from ./assets_examples
+
+`--all` because several definitions here name middleware or source ids,
+`assistant` among them, and a plain `seed` leaves those behind. The middleware
+they name is in `middlewares/` and arrives in the same run.
 
 ## Where yours go
 
@@ -35,7 +39,7 @@ arrangement. `.env.example` points it here so a checkout works untouched; point
 it at `../assets` once there is something in there. `seed` merges rather than
 replaces, so using both is two commands in whichever order you choose:
 
-    kingfisher seed --from ./assets_examples
+    kingfisher seed --all --from ./assets_examples
     kingfisher seed --from ./assets
 
 `assets/README.md` says all of this from the other side, at more length.
