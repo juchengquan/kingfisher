@@ -1,4 +1,4 @@
-"""Who reaches what: the group vocabulary, and the rule the definitions apply."""
+"""Who reaches what: the source-id vocabulary, and the rule the definitions apply."""
 
 from __future__ import annotations
 
@@ -13,7 +13,7 @@ from kingfisher.domain.capabilities import ALL, Selection
 #: `builtin_tools` is absent because deepagents registers those itself: kingfisher
 #: can only filter them once a graph is built, never leave them out of one, so an
 #: audience here would promise a boundary nothing can hold. Control them through
-#: which *agents* a group may open instead.
+#: which *agents* a source id may open instead.
 AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
 
 #: Sections the central format defined, and where each has gone. Refused rather
@@ -23,7 +23,7 @@ AUDIENCED: Final[tuple[str, ...]] = ("tools", "subagents", "skills")
 #: Where audiences went, said once and shared by the three keys that used to
 #: hold them.
 _WENT = (
-    "audiences live in the definition now: write `groups:` in the file itself, "
+    "audiences live in the definition now: write `source_ids:` in the file itself, "
     "and a mapping under `tools:`, `subagents:` or `skills:` to narrow one "
     "entry further"
 )
@@ -51,14 +51,14 @@ class Stated:
     """What one definition says about who reaches what."""
 
     #: The definition's own audience: who may reach it at all.
-    groups: Audience = ALL
+    source_ids: Audience = ALL
     #: Field name -> entry name -> who reaches that entry there.
     entries: Mapping[str, Mapping[str, Audience]] = field(default_factory=dict)
 
     @property
     def says_nothing(self) -> bool:
         """Whether this definition restricts anyone at all."""
-        return self.groups == ALL and not self.entries
+        return self.source_ids == ALL and not self.entries
 
     def of(self, field_name: str) -> Mapping[str, Audience]:
         """One field's per-entry audiences, or nothing."""
@@ -66,11 +66,11 @@ class Stated:
 
 
 class AccessError(ValueError):
-    """The vocabulary is malformed, or a caller named a group it does not define."""
+    """The vocabulary is malformed, or a caller named a source id it does not define."""
 
 
 class _Unscoped:
-    """The type of `UNSCOPED`, so that it is not confusable with a group list."""
+    """The type of `UNSCOPED`, so that it is not confusable with a source id list."""
 
     __slots__ = ()
 
@@ -86,7 +86,7 @@ class _Unscoped:
 #: This has to be typed, which means it can be grepped for in a review.
 UNSCOPED: Final[_Unscoped] = _Unscoped()
 
-#: What a call may say about who is making it: the groups held, or the explicit refusal
+#: What a call may say about who is making it: the source ids held, or the explicit refusal
 #: to say.
 Held = Sequence[str] | _Unscoped
 
@@ -129,11 +129,11 @@ def spell(audience: Audience) -> str:
 class AccessReport:
     """What a deployment's policy leaves open, said once at startup."""
 
-    #: Definitions carrying no `groups:` line, and so reachable by everyone, as `(kind,
+    #: Definitions carrying no `source_ids:` line, and so reachable by everyone, as `(kind,
     #: name)`.
     unrestricted: tuple[tuple[str, str], ...] = ()
 
-    #: Entries naming a group their definition's own audience never mentions, as
+    #: Entries naming a source id their definition's own audience never mentions, as
     #: `(where, audience)`. Reached only by a caller holding one of each.
     narrowed: tuple[tuple[str, str], ...] = ()
 
@@ -147,7 +147,7 @@ class AccessReport:
             return ()
         said: list[str] = ["access:"]
         if self.unrestricted:
-            said.append("  no groups: line, so reachable by everyone:")
+            said.append("  no source_ids: line, so reachable by everyone:")
             said.extend(f"    {kind} {name}" for kind, name in self.unrestricted)
         if self.narrowed:
             said.append("  narrows past this definition's own audience,")
@@ -157,17 +157,17 @@ class AccessReport:
 
 
 @dataclass(frozen=True)
-class Groups:
-    """One deployment's group vocabulary: the names, and what each contains."""
+class SourceIds:
+    """One deployment's source-id vocabulary: the names, and what each contains."""
 
     #: Declared name -> that name plus everything it contains, transitively.
     names: Mapping[str, tuple[str, ...]]
-    #: Declared name -> the groups a caller must hold for it to apply, for the
-    #: names written with `all_of`. Absent for every ordinary group.
+    #: Declared name -> the source ids a caller must hold for it to apply, for the
+    #: names written with `all_of`. Absent for every ordinary source id.
     compounds: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
 
     def mentions(self, audience: Audience) -> frozenset[str]:
-        """Every group name an audience touches, following `contains` and `all_of`."""
+        """Every source id an audience touches, following `contains` and `all_of`."""
         if audience == ALL:
             return frozenset()
         seen: set[str] = set()
@@ -182,7 +182,7 @@ class Groups:
         return frozenset(seen)
 
     def expand(self, held: Iterable[str]) -> frozenset[str]:
-        """Every group a caller effectively holds, following `contains` then `all_of`."""
+        """Every source id a caller effectively holds, following `contains` then `all_of`."""
         wanted = tuple(held)
         if derived := sorted({name for name in wanted if name in self.compounds}):
             listed = "; ".join(
@@ -190,7 +190,7 @@ class Groups:
                 for name in derived
             )
             msg = (
-                f"derived group(s) cannot be held: {listed}. A name written with "
+                f"derived source id(s) cannot be held: {listed}. A name written with "
                 f"`all_of` is what holding its parts adds up to, not something to "
                 f"present -- name the parts instead"
             )
@@ -198,7 +198,7 @@ class Groups:
         if unknown := tuple(name for name in wanted if name not in self.names):
             known = ", ".join(sorted(self.names)) or "none"
             msg = (
-                f"unknown group(s): {', '.join(sorted(set(unknown)))}; "
+                f"unknown source id(s): {', '.join(sorted(set(unknown)))}; "
                 f"this deployment defines {known}"
             )
             raise AccessError(msg)
@@ -218,7 +218,7 @@ class Groups:
         return frozenset(reached)
 
     def refuse_undeclared(self, audience: Audience, *, where: str, error: type[Exception]) -> None:
-        """Refuse a definition naming a group this deployment does not declare."""
+        """Refuse a definition naming a source id this deployment does not declare."""
         if audience == ALL:
             return
         named = tuple(
@@ -227,7 +227,7 @@ class Groups:
         if unknown := tuple(name for name in named if name not in self.names):
             listed = ", ".join(repr(u) for u in sorted(set(unknown)))
             msg = (
-                f"{where}: names undeclared group(s) {listed}; "
+                f"{where}: names undeclared source id(s) {listed}; "
                 f"this deployment defines {', '.join(sorted(self.names)) or 'none'}"
             )
             raise error(msg)
@@ -236,20 +236,20 @@ class Groups:
         self,
         audiences: Mapping[str, Mapping[str, Audience]],
         *,
-        groups: Audience,
+        source_ids: Audience,
         where: str,
     ) -> tuple[tuple[str, str], ...]:
-        """Entries naming a group this definition's own audience never mentions.
+        """Entries naming a source id this definition's own audience never mentions.
 
         An entry audience is already an **and** with the definition's, because the
         only way to reach an entry is through the definition holding it --
         `agent_named` refuses a caller who cannot open the agent, and nothing else
-        hands out a spec. So `[senior]` under `[analysts, auditors]` means "everyone
-        who opens this agent, and is senior", which is a good second requirement.
+        hands out a spec. So `[pii]` under `[sales_db, audit_log]` means "everyone
+        who opens this agent, and holds `pii`", which is a good second requirement.
         """
-        if groups == ALL:
+        if source_ids == ALL:
             return ()
-        admitted = self.mentions(groups)
+        admitted = self.mentions(source_ids)
         return tuple(
             (f"{where}: {_singular(field_name)} {entry}", spell(audience))
             for field_name, entries in audiences.items()
@@ -258,15 +258,15 @@ class Groups:
         )
 
 
-#: The declared groups and what each contains, beside the ones written `all_of`.
+#: The declared source ids and what each contains, beside the ones written `all_of`.
 _Vocabulary = tuple[dict[str, tuple[str, ...]], dict[str, tuple[str, ...]]]
 
 
 def _vocabulary(raw: object, source: str) -> _Vocabulary:
-    """The declared groups, what each contains, and what each requires."""
+    """The declared source ids, what each contains, and what each requires."""
     if raw is None:
         msg = (
-            f"{source}: missing required section 'groups'; it is the closed "
+            f"{source}: missing required section 'source_ids'; it is the closed "
             f"vocabulary every definition's audience is checked against"
         )
         raise AccessError(msg)
@@ -274,7 +274,7 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
         return {str(name): () for name in raw}, {}
     if not isinstance(raw, Mapping):
         msg = (
-            f"{source}: 'groups' is a list of names, or a mapping of name to "
+            f"{source}: 'source_ids' is a list of names, or a mapping of name to "
             f"{{contains: [...]}} or {{all_of: [...]}}"
         )
         raise AccessError(msg)
@@ -286,16 +286,19 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
             declared[str(name)] = ()
             continue
         if not isinstance(body, Mapping):
-            msg = f"{source}: group {name!r} is {{contains: [...]}} or {{all_of: [...]}}, or empty"
+            msg = (
+                f"{source}: source id {name!r} is {{contains: [...]}} or "
+                f"{{all_of: [...]}}, or empty"
+            )
             raise AccessError(msg)
         if complaint := fields.unrecognised(body, known={"contains", "all_of"}, noun="key"):
-            msg = f"{source}: group {name!r}: {complaint}"
+            msg = f"{source}: source id {name!r}: {complaint}"
             raise AccessError(msg)
         if "contains" in body and "all_of" in body:
             msg = (
-                f"{source}: group {name!r} has both 'contains' and 'all_of'. "
+                f"{source}: source id {name!r} has both 'contains' and 'all_of'. "
                 f"'contains' says what this name grants and 'all_of' says what a "
-                f"caller must hold for it to apply -- a group that is both is a "
+                f"caller must hold for it to apply -- a source id that is both is a "
                 f"question with no answer"
             )
             raise AccessError(msg)
@@ -308,21 +311,21 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
             # iterates, so `all_of: {finance: senior}` became the single name
             # `finance` and threw away what was written beside it. Everything else
             # raised `TypeError` out of the comprehension below, which names
-            # neither the file nor the group.
+            # neither the file nor the source id.
             if isinstance(listed, str) or not isinstance(listed, (list, tuple)):
                 msg = (
-                    f"{source}: group {name!r}: {key!r} is a list of group names "
+                    f"{source}: source id {name!r}: {key!r} is a list of source ids "
                     f"-- got {listed!r}"
                 )
                 raise AccessError(msg)
             if not listed:
                 said = (
-                    "a group requiring nothing is reached by everyone, which is "
-                    "what a plain group already means"
+                    "a source id requiring nothing is reached by everyone, which is "
+                    "what a plain source id already means"
                     if key == "all_of"
-                    else "leave it out to declare a plain group"
+                    else "leave it out to declare a plain source id"
                 )
-                msg = f"{source}: group {name!r}: {key!r} is empty -- {said}"
+                msg = f"{source}: source id {name!r}: {key!r} is empty -- {said}"
                 raise AccessError(msg)
             into[str(name)] = tuple(str(one) for one in listed)
         # Declared either way: a compound is a name in the vocabulary like any
@@ -332,12 +335,12 @@ def _vocabulary(raw: object, source: str) -> _Vocabulary:
 
 
 def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, tuple[str, ...]]:
-    """Each group's transitive closure, itself included, with cycles refused."""
+    """Each source id's transitive closure, itself included, with cycles refused."""
     for name, contains in declared.items():
         for one in contains:
             if one not in declared:
                 msg = (
-                    f"{source}: group {name!r} contains {one!r}, which is not "
+                    f"{source}: source id {name!r} contains {one!r}, which is not "
                     f"declared; this file defines {', '.join(sorted(declared))}"
                 )
                 raise AccessError(msg)
@@ -348,7 +351,7 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
         if name in path:
             loop = " -> ".join((*path[path.index(name) :], name))
             msg = (
-                f"{source}: groups contain themselves: {loop}. Expansion "
+                f"{source}: source ids contain themselves: {loop}. Expansion "
                 f"follows every link, so a loop would never finish -- one of "
                 f"these has to stop containing the next"
             )
@@ -366,17 +369,17 @@ def _closed(declared: Mapping[str, tuple[str, ...]], source: str) -> dict[str, t
     return {name: walk(name, ()) for name in declared}
 
 
-def parse(document: Mapping[str, object], source: str) -> Groups:
+def parse(document: Mapping[str, object], source: str) -> SourceIds:
     """One vocabulary document, from its decoded fields."""
-    complaint = fields.unrecognised(document, known={"groups"}, declined=MOVED, noun="section")
+    complaint = fields.unrecognised(document, known={"source_ids"}, declined=MOVED, noun="section")
     if complaint is not None:
         msg = f"{source}: {complaint}"
         raise AccessError(msg)
-    declared, compounds = _vocabulary(document.get("groups"), source)
+    declared, compounds = _vocabulary(document.get("source_ids"), source)
     _refuse_undeclared_parts(declared, compounds, source)
     _refuse_granted_compounds(declared, compounds, source)
     _refuse_compound_loops(compounds, source)
-    return Groups(names=_closed(declared, source), compounds=compounds)
+    return SourceIds(names=_closed(declared, source), compounds=compounds)
 
 
 def _refuse_granted_compounds(
@@ -388,11 +391,11 @@ def _refuse_granted_compounds(
             if one in compounds:
                 parts = ", ".join(compounds[one])
                 msg = (
-                    f"{source}: group {name!r} contains {one!r}, which is derived "
+                    f"{source}: source id {name!r} contains {one!r}, which is derived "
                     f"rather than held -- it means all of [{parts}]. Handing it "
                     f"over directly is the requirement defeated by the file that "
                     f"declares it; write `contains: [{parts}]` instead, which "
-                    f"reaches the same people and says why"
+                    f"reaches the same callers and says why"
                 )
                 raise AccessError(msg)
 
@@ -405,7 +408,7 @@ def _refuse_undeclared_parts(
         for part in parts:
             if part not in declared:
                 msg = (
-                    f"{source}: group {name!r} requires {part!r}, which is not "
+                    f"{source}: source id {name!r} requires {part!r}, which is not "
                     f"declared; this file defines {', '.join(sorted(declared))}"
                 )
                 raise AccessError(msg)
@@ -419,7 +422,7 @@ def _refuse_compound_loops(compounds: Mapping[str, tuple[str, ...]], source: str
         if name in path:
             loop = " -> ".join((*path[path.index(name) :], name))
             msg = (
-                f"{source}: groups require themselves: {loop}. A requirement "
+                f"{source}: source ids require themselves: {loop}. A requirement "
                 f"loop can never be entered, so none of these is ever held -- "
                 f"one of them has to stop requiring the next"
             )

@@ -393,12 +393,12 @@ def test_the_two_records_cannot_disagree_about_the_authored_files(tmp_path):
     paths = WorkspacePaths(
         workspace=tmp_path / "ws",
         models_file=elsewhere / "models.yaml",
-        groups_file=elsewhere / "groups.yaml",
+        source_ids_file=elsewhere / "source_ids.yaml",
     )
     cfg = Config(
         workspace=tmp_path / "ws",
         models=replace(FAKE_CATALOGUE, source=elsewhere / "models.yaml"),
-        access_source=elsewhere / "groups.yaml",
+        access_source=elsewhere / "source_ids.yaml",
         turn_timeout_s=1,
         execution_timeout_s=1,
     )
@@ -415,7 +415,7 @@ def test_the_authored_files_default_into_the_workspace(tmp_path):
 
     assert files == {
         "models.yaml": tmp_path / "ws" / "models.yaml",
-        "groups.yaml": tmp_path / "ws" / "groups.yaml",
+        "source_ids.yaml": tmp_path / "ws" / "source_ids.yaml",
     }
 
 
@@ -425,12 +425,12 @@ def test_seeding_sees_a_relocated_catalogue(tmp_path, monkeypatch):
 
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(tmp_path / "ws"))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(tmp_path / "shared" / "models.yaml"))
-    monkeypatch.delenv("KINGFISHER_GROUPS_FILE", raising=False)
+    monkeypatch.delenv("KINGFISHER_SOURCE_IDS_FILE", raising=False)
 
     files = paths_from_env().authored_files
 
     assert files["models.yaml"] == tmp_path / "shared" / "models.yaml"
-    assert files["groups.yaml"] == tmp_path / "ws" / "groups.yaml"
+    assert files["source_ids.yaml"] == tmp_path / "ws" / "source_ids.yaml"
 
 
 def test_a_config_is_a_seeding_destination(tmp_path):
@@ -443,11 +443,11 @@ def test_a_config_is_a_seeding_destination(tmp_path):
     assert isinstance(WorkspacePaths(workspace=tmp_path), Destination)
 
 
-# -- the group vocabulary ------------------------------------------------------
+# -- the source-id vocabulary ------------------------------------------------------
 
 
 def test_a_workspace_without_a_vocabulary_file_has_none(env):
-    """Absent is the whole of what "this deployment controls nothing by group" means,
+    """Absent is the whole of what "this deployment controls nothing by source id" means,
     and it is what every deployment that predates the field has.
     """
     assert config_from_env(env).access is None
@@ -456,7 +456,7 @@ def test_a_workspace_without_a_vocabulary_file_has_none(env):
 def test_a_vocabulary_in_the_workspace_is_read(env):
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "groups.yaml").write_text("groups: [A, B]\n", encoding="utf-8")
+    (workspace / "source_ids.yaml").write_text("source_ids: [A, B]\n", encoding="utf-8")
     access = config_from_env(env).access
     assert access is not None
     assert set(access.names) == {"A", "B"}
@@ -467,8 +467,8 @@ def test_the_vocabulary_file_can_be_relocated(env, tmp_path):
     catalogue can -- it holds content a person authored and reviewed.
     """
     elsewhere = tmp_path / "vocab.yaml"
-    elsewhere.write_text("groups: [B]\n", encoding="utf-8")
-    access = config_from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
+    elsewhere.write_text("source_ids: [B]\n", encoding="utf-8")
+    access = config_from_env({**env, "KINGFISHER_SOURCE_IDS_FILE": str(elsewhere)}).access
     assert access is not None
     assert access.names == {"B": ("B",)}
 
@@ -476,10 +476,10 @@ def test_the_vocabulary_file_can_be_relocated(env, tmp_path):
 def test_a_relocated_vocabulary_wins_over_one_in_the_workspace(env, tmp_path):
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "groups.yaml").write_text("groups: [A]\n", encoding="utf-8")
+    (workspace / "source_ids.yaml").write_text("source_ids: [A]\n", encoding="utf-8")
     elsewhere = tmp_path / "vocab.yaml"
-    elsewhere.write_text("groups: [B]\n", encoding="utf-8")
-    access = config_from_env({**env, "KINGFISHER_GROUPS_FILE": str(elsewhere)}).access
+    elsewhere.write_text("source_ids: [B]\n", encoding="utf-8")
+    access = config_from_env({**env, "KINGFISHER_SOURCE_IDS_FILE": str(elsewhere)}).access
     assert access is not None
     assert set(access.names) == {"B"}
 
@@ -488,7 +488,7 @@ def test_a_vocabulary_that_will_not_parse_stops_the_deployment(env):
     """Fail closed."""
     workspace = Path(env["KINGFISHER_WORKSPACE"])
     workspace.mkdir(parents=True, exist_ok=True)
-    (workspace / "groups.yaml").write_text("groups: [A\n", encoding="utf-8")
+    (workspace / "source_ids.yaml").write_text("source_ids: [A\n", encoding="utf-8")
     with pytest.raises(AccessError):
         config_from_env(env)
 

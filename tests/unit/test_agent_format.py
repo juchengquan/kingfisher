@@ -250,9 +250,9 @@ def test_an_agent_naming_one_model_is_untouched():
 
 
 def test_an_agent_may_say_who_reaches_it():
-    spec = _read(MINIMAL.rstrip() + "\ngroups: [A, B]\n", "plain.yaml")
+    spec = _read(MINIMAL.rstrip() + "\nsource_ids: [A, B]\n", "plain.yaml")
 
-    assert spec.groups == ("A", "B")
+    assert spec.source_ids == ("A", "B")
 
 
 def test_an_agent_that_says_nothing_is_reachable_by_everyone():
@@ -260,7 +260,7 @@ def test_an_agent_that_says_nothing_is_reachable_by_everyone():
     else in this format -- and what makes adopting audiences incremental rather than
     all-or-nothing.
     """
-    assert _read(MINIMAL, "plain.yaml").groups == ALL
+    assert _read(MINIMAL, "plain.yaml").source_ids == ALL
 
 
 def test_every_audienced_field_takes_a_mapping():
@@ -268,14 +268,14 @@ def test_every_audienced_field_takes_a_mapping():
     third of a rule.
     """
     for field_name, written in [
-            ("tools", "tools:\n  - name: sql_query\n    groups: [A]\n"
-                "  - name: http_fetch\n    groups: [A, B]\n"),
-            ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
-                "  - name: review\n    groups: [A, B]\n"),
-            ("subagents", "subagents:\n  - name: checker\n    groups: [A]\n"
-                "  - name: reviewer\n    groups: [A, B]\n"),
+            ("tools", "tools:\n  - name: sql_query\n    source_ids: [A]\n"
+                "  - name: http_fetch\n    source_ids: [A, B]\n"),
+            ("skills", "skills:\n  - name: audit\n    source_ids: [A]\n"
+                "  - name: review\n    source_ids: [A, B]\n"),
+            ("subagents", "subagents:\n  - name: checker\n    source_ids: [A]\n"
+                "  - name: reviewer\n    source_ids: [A, B]\n"),
         ]:
-        spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
+        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{written}", "plain.yaml")
 
         first, second = (getattr(spec, field_name))[0], (getattr(spec, field_name))[1]
         assert spec.audiences[field_name] == {first: ("A",), second: ("A", "B")}
@@ -285,20 +285,20 @@ def test_every_audienced_field_narrows_for_a_caller():
     for field_name, written, kept in [
             (
                 "tools",
-                "tools:\n  - name: sql_query\n    groups: [A]\n"
-                    "  - name: http_fetch\n    groups: [A, B]\n",
+                "tools:\n  - name: sql_query\n    source_ids: [A]\n"
+                    "  - name: http_fetch\n    source_ids: [A, B]\n",
                 "http_fetch",
             ),
-            ("skills", "skills:\n  - name: audit\n    groups: [A]\n"
-                "  - name: review\n    groups: [A, B]\n", "review"),
+            ("skills", "skills:\n  - name: audit\n    source_ids: [A]\n"
+                "  - name: review\n    source_ids: [A, B]\n", "review"),
             (
                 "subagents",
-                "subagents:\n  - name: checker\n    groups: [A]\n"
-                    "  - name: reviewer\n    groups: [A, B]\n",
+                "subagents:\n  - name: checker\n    source_ids: [A]\n"
+                    "  - name: reviewer\n    source_ids: [A, B]\n",
                 "reviewer",
             ),
         ]:
-        spec = _read(MINIMAL.rstrip() + f"\ngroups: [A, B]\n{written}", "plain.yaml")
+        spec = _read(MINIMAL.rstrip() + f"\nsource_ids: [A, B]\n{written}", "plain.yaml")
 
         assert getattr(spec.declares(frozenset({"B"})), field_name) == (kept,)
 
@@ -307,7 +307,7 @@ def test_an_entry_with_no_audience_inherits_the_definitions():
     """A plain list under a policied definition means 'these, at my audience', which is
     what keeps every file written before audiences unchanged.
     """
-    spec = _read(MINIMAL.rstrip() + "\ngroups: [A]\ntools: [sql_query]\n", "plain.yaml")
+    spec = _read(MINIMAL.rstrip() + "\nsource_ids: [A]\ntools: [sql_query]\n", "plain.yaml")
 
     assert spec.declares(frozenset({"A"})).tools == ("sql_query",)
     assert spec.declares(frozenset({"B"})).tools == ()
@@ -316,7 +316,7 @@ def test_an_entry_with_no_audience_inherits_the_definitions():
 def test_declaring_with_no_caller_is_what_it_always_was():
     """A deployment with no vocabulary, or an UNSCOPED call."""
     spec = _read(
-        MINIMAL.rstrip() + "\ngroups: [A]\ntools:\n  - name: sql_query\n    groups: [A]\n",
+        MINIMAL.rstrip() + "\nsource_ids: [A]\ntools:\n  - name: sql_query\n    source_ids: [A]\n",
         "plain.yaml",
     )
 
@@ -328,7 +328,10 @@ def test_builtin_tools_takes_no_audience():
     a graph -- an audience here would promise a boundary it cannot keep.
     """
     with pytest.raises(AgentError, match="this field takes a list"):
-        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    groups: [A]\n", "plain.yaml")
+        _read(
+            MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    source_ids: [A]\n",
+            "plain.yaml",
+        )
 
 
 def test_only_the_audienced_fields_take_a_mapping():
@@ -338,7 +341,10 @@ def test_only_the_audienced_fields_take_a_mapping():
     from kingfisher.domain.access import AUDIENCED
 
     with pytest.raises(AgentError) as raised:
-        _read(MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    groups: [A]\n", "plain.yaml")
+        _read(
+            MINIMAL.rstrip() + "\nbuiltin_tools:\n  execute:\n    source_ids: [A]\n",
+            "plain.yaml",
+        )
 
     for field_name in AUDIENCED:
         assert field_name in str(raised.value)
@@ -350,11 +356,12 @@ def test_an_entry_audience_outside_the_definitions_own_is_recorded_not_judged():
     or `A` may require it.
     """
     spec = _read(
-        MINIMAL.rstrip() + "\ngroups: [A, B]\ntools:\n  - name: sql_query\n    groups: [C]\n",
+        MINIMAL.rstrip()
+        + "\nsource_ids: [A, B]\ntools:\n  - name: sql_query\n    source_ids: [C]\n",
         "plain.yaml",
     )
 
-    assert spec.groups == ("A", "B")
+    assert spec.source_ids == ("A", "B")
     assert spec.audiences["tools"]["sql_query"] == ("C",)
 
 
@@ -363,18 +370,18 @@ def test_a_conjunction_is_read_as_one_entry_of_the_list():
     vocabulary uses for a named one.
     """
     spec = _read(
-        MINIMAL.rstrip() + "\ngroups: [admin, {all_of: [finance, senior]}]\n",
+        MINIMAL.rstrip() + "\nsource_ids: [admin, {all_of: [finance, senior]}]\n",
         "plain.yaml",
     )
 
-    assert spec.groups == ("admin", frozenset({"finance", "senior"}))
+    assert spec.source_ids == ("admin", frozenset({"finance", "senior"}))
 
 
 def test_only_the_restricted_entries_need_an_audience():
     """The ergonomics of the long form, and the reason an entry may stay short."""
     spec = _read(
         MINIMAL.rstrip()
-        + "\ngroups: [A, B]\ntools:\n  - name: sql_query\n    groups: [A]\n"
+        + "\nsource_ids: [A, B]\ntools:\n  - name: sql_query\n    source_ids: [A]\n"
         + "  - http_fetch\n  - line_count\n",
         "plain.yaml",
     )
@@ -389,8 +396,8 @@ def test_long_entries_that_restrict_nothing_mean_what_the_list_means():
     """The two spellings have to agree about an unrestricted name, or the mapping form
     would quietly change what a definition holds.
     """
-    written = "\ngroups: [A]\ntools:\n  - name: sql_query\n  - name: http_fetch\n"
-    as_list = "\ngroups: [A]\ntools: [sql_query, http_fetch]\n"
+    written = "\nsource_ids: [A]\ntools:\n  - name: sql_query\n  - name: http_fetch\n"
+    as_list = "\nsource_ids: [A]\ntools: [sql_query, http_fetch]\n"
 
     mapped = _read(MINIMAL.rstrip() + written, "plain.yaml")
     listed = _read(MINIMAL.rstrip() + as_list, "plain.yaml")

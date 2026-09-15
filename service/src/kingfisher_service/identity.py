@@ -10,16 +10,16 @@ from kingfisher import AccessError
 if TYPE_CHECKING:
     from fastapi import Request
 
-#: What a deployment supplies: a request in, the caller's groups out.
-GroupsFrom = Callable[[Any], Iterable[str]]
+#: What a deployment supplies: a request in, the caller's source ids out.
+SourceIdsFrom = Callable[[Any], Iterable[str]]
 
 
-class MissingGroupsError(AccessError):
+class MissingSourceIdsError(AccessError):
     """The source could not say who is calling."""
 
 
-def from_header(name: str) -> GroupsFrom:
-    """Read the caller's groups from a header a gateway sets.
+def from_header(name: str) -> SourceIdsFrom:
+    """Read the caller's source ids from a header a gateway sets.
 
     Comma-separated, and a repeated header is the same list. RFC 9110 defines those
     two as equivalent for a list-valued field, so accepting both is one spelling
@@ -29,18 +29,18 @@ def from_header(name: str) -> GroupsFrom:
 
     def read(request: Request) -> Iterable[str]:
         # `getlist` joined rather than `get`: starlette keeps repeated headers,
-        # and a gateway emitting one per group is as correct as one emitting a
+        # and a gateway emitting one per source id is as correct as one emitting a
         # list.
         written = ",".join(request.headers.getlist(name))
-        groups = tuple(part.strip() for part in written.split(",") if part.strip())
-        if not groups:
+        source_ids = tuple(part.strip() for part in written.split(",") if part.strip())
+        if not source_ids:
             msg = (
                 f"header {name!r} is not set on this request, so there is nothing "
-                f"to resolve the caller's groups from. Whatever sits in front of "
+                f"to resolve the caller's source ids from. Whatever sits in front of "
                 f"this server sets it -- and must strip it from inbound requests, "
-                f"or a caller can name their own groups"
+                f"or a caller can name their own source ids"
             )
-            raise MissingGroupsError(msg)
-        return groups
+            raise MissingSourceIdsError(msg)
+        return source_ids
 
     return read

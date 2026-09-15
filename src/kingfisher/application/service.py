@@ -55,8 +55,8 @@ from kingfisher.config import Config, ConfigError
 from kingfisher.domain.access import (
     AccessError,
     AccessReport,
-    Groups,
     Held,
+    SourceIds,
     _Unscoped,
     reaches,
 )
@@ -351,7 +351,7 @@ class Kingfisher(Sessions, Disposal):
         # it is about -- there is no such thing as a line naming something the workspace
         # does not offer, and a definition naming a tool that does not exist was already
         # refused by `Offering.refuse_unknown` long before any of this.
-        self.access: Groups | None = self.cfg.access
+        self.access: SourceIds | None = self.cfg.access
         self.access_report: AccessReport = AccessReport()
         if self.access is not None:
             # One walk of the definitions, not three. `defined_subagents` reads a
@@ -377,50 +377,50 @@ class Kingfisher(Sessions, Disposal):
         """Where this deployment is actually reading from."""
         return Origins.of(self.cfg, catalogue=self.catalogue, sessions=self.sessions_store)
 
-    def held_for(self, groups: Held | None) -> frozenset[str] | None:
-        """The caller's expanded groups, or `None` for no vocabulary / UNSCOPED.
+    def held_for(self, source_ids: Held | None) -> frozenset[str] | None:
+        """The caller's expanded source ids, or `None` for no vocabulary / UNSCOPED.
 
-        **Any sequence of names, not only a tuple.** This tested `isinstance(groups,
+        **Any sequence of names, not only a tuple.** This tested `isinstance(source ids,
         tuple)` and answered `None` -- "no opinion", the same as no vocabulary at all
         -- for anything else. That was safe only because `for_groups` coerced first
-        and was the single documented way in; with `groups=` the only way,
-        `groups=["analysts"]` would have validated the name and then narrowed
+        and was the single documented way in; with `source_ids=` the only way,
+        `source_ids=["analysts"]` would have validated the name and then narrowed
         nothing. A list is the obvious thing to write, so it must mean what it looks
         like.
         """
-        if self.access is None or groups is None or isinstance(groups, _Unscoped):
+        if self.access is None or source_ids is None or isinstance(source_ids, _Unscoped):
             return None
-        if isinstance(groups, str):
-            msg = f"groups is a sequence of names, not a string -- write [{groups!r}]"
+        if isinstance(source_ids, str):
+            msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
             raise AccessError(msg)
-        return self.access.expand(tuple(groups))
+        return self.access.expand(tuple(source_ids))
 
-    def _effective_grants(self, groups: Held | None) -> Capabilities:
+    def _effective_grants(self, source_ids: Held | None) -> Capabilities:
         """The ceiling for one call: this deployment's, narrowed by the caller's."""
         if self.access is None:
-            if groups is not None:
+            if source_ids is not None:
                 msg = (
-                    "this deployment has no access policy, so naming groups means "
-                    "nothing here -- write groups.yaml in the workspace, or set "
-                    "KINGFISHER_GROUPS_FILE"
+                    "this deployment has no access policy, so naming source ids means "
+                    "nothing here -- write source_ids.yaml in the workspace, or set "
+                    "KINGFISHER_SOURCE_IDS_FILE"
                 )
                 raise AccessError(msg)
             return self.grants
-        if groups is None:
+        if source_ids is None:
             msg = (
                 "this deployment has an access policy, so a call must say who is "
-                "calling: pass groups=[...] with the caller's groups, or "
-                "groups=UNSCOPED to run without one"
+                "calling: pass source_ids=[...] with the caller's source ids, or "
+                "source_ids=UNSCOPED to run without one"
             )
             raise AccessError(msg)
-        if isinstance(groups, _Unscoped):
+        if isinstance(source_ids, _Unscoped):
             return self.grants
-        # Nothing central left to intersect with: the narrowing that groups
+        # Nothing central left to intersect with: the narrowing that source ids
         # imply is per definition, and happens in `AgentSpec.declares` where
         # the spec is known. What this still does is validate the names -- a
-        # caller naming a group this deployment does not declare is refused
+        # caller naming a source id this deployment does not declare is refused
         # here rather than quietly reaching nothing.
-        self.access.expand(groups)
+        self.access.expand(source_ids)
         return self.grants
 
     def _graph_for(
@@ -430,7 +430,7 @@ class Kingfisher(Sessions, Disposal):
         capabilities: Capabilities | None = None,
         checkpointer: Any = _UNSET,
         *,
-        groups: Held | None = None,
+        source_ids: Held | None = None,
     ) -> Any:
         """The graph that serves one request, rooted at its session."""
         if self._graph is not None:
@@ -441,8 +441,8 @@ class Kingfisher(Sessions, Disposal):
 
         return build_agent(
             self.cfg,
-            agent=self._agent_for(request, session_dir, groups=groups),
-            held=self.held_for(groups),
+            agent=self._agent_for(request, session_dir, source_ids=source_ids),
+            held=self.held_for(source_ids),
             # Called here rather than passed down. This is where a turn first
             # has a session directory, and `build_agent` is where one is already
             # known -- so the harness keeps taking a runner, and only the
@@ -503,12 +503,12 @@ class Kingfisher(Sessions, Disposal):
             remember_agent(session_dir, text)
 
     def _agent_for(
-        self, request: Request, session_dir: Path, *, groups: Held | None = None
+        self, request: Request, session_dir: Path, *, source_ids: Held | None = None
     ) -> AgentSpec | None:
         """The agent this turn runs, which is the one its session opened with."""
         kept = agent_started_with(session_dir)
         if kept is None:
-            spec = self.agent_named(request.agent, groups=groups)
+            spec = self.agent_named(request.agent, source_ids=source_ids)
             self._pin_agent_in(session_dir, request.agent)
             return spec
 
@@ -523,7 +523,7 @@ class Kingfisher(Sessions, Disposal):
         return started
 
     def agent_named(
-        self, name: str | None, *, groups: Held | None = None
+        self, name: str | None, *, source_ids: Held | None = None
     ) -> AgentSpec | None:
         """The agent this request asked for, out of the catalogue."""
         offered = self.catalogue.agents.specs
@@ -533,17 +533,17 @@ class Kingfisher(Sessions, Disposal):
         # caller enumerate the catalogue by guessing, and sends them off to try
         # something they will only be refused for.
         if (reach := self.access) is not None:
-            if groups is None:
+            if source_ids is None:
                 msg = (
                     "this deployment has an access policy, so a call must say who "
-                    "is calling: pass groups=[...] with the caller's groups, or "
-                    "groups=UNSCOPED to run without one"
+                    "is calling: pass source_ids=[...] with the caller's source ids, or "
+                    "source_ids=UNSCOPED to run without one"
                 )
                 raise AccessError(msg)
-            if isinstance(groups, tuple):
-                held = reach.expand(groups)
+            if isinstance(source_ids, tuple):
+                held = reach.expand(source_ids)
                 offered = {
-                    n: spec for n, spec in offered.items() if reaches(spec.groups, held)
+                    n: spec for n, spec in offered.items() if reaches(spec.source_ids, held)
                 }
         listing = ", ".join(sorted(offered)) if offered else "none"
         # Two refusals, one remedy, and the remedy is different when there is nothing at
@@ -567,7 +567,7 @@ class Kingfisher(Sessions, Disposal):
         session: Session | None = None,
         checkpointer: Any = _UNSET,
         *,
-        groups: Held | None = None,
+        source_ids: Held | None = None,
     ) -> Prepared:
         """Do everything up to the model call, and return what the loop needs.
 
@@ -575,7 +575,7 @@ class Kingfisher(Sessions, Disposal):
         measured at 15-46ms end to end -- of which 9.2ms is the agent. `astream` runs
         it on a worker thread rather than pretending otherwise.
         """
-        return self._open_turn(self._admit(request, session, checkpointer, groups=groups))
+        return self._open_turn(self._admit(request, session, checkpointer, source_ids=source_ids))
 
     def _checkpointer_for(self, session_dir: Path) -> tuple[Any, Any]:
         """The saver this turn runs on, and how to release it when the turn ends."""
@@ -608,7 +608,7 @@ class Kingfisher(Sessions, Disposal):
         session: Session | None = None,
         checkpointer: Any = _UNSET,
         *,
-        groups: Held | None = None,
+        source_ids: Held | None = None,
     ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand."""
         request = Request.coerce(request)
@@ -625,7 +625,7 @@ class Kingfisher(Sessions, Disposal):
             dirs, claim_path(session.directory), stale_after=cfg.claim_stale_after, now=time()
         )
         try:
-            return self._admitted(request, session, cfg, checkpointer, groups=groups)
+            return self._admitted(request, session, cfg, checkpointer, source_ids=source_ids)
         except BaseException:
             session.release(dirs, claim_path(session.directory))
             raise
@@ -637,7 +637,7 @@ class Kingfisher(Sessions, Disposal):
         cfg: Config,
         checkpointer: Any = _UNSET,
         *,
-        groups: Held | None = None,
+        source_ids: Held | None = None,
     ) -> Admitted:
         """The rest of admission, once the session is claimed."""
         # Kernel-level guard; the deny rule covers only the file tools. Paths
@@ -671,14 +671,14 @@ class Kingfisher(Sessions, Disposal):
         # Definitions the request brought itself are added back: their content
         # came from the caller, so a grant list -- written before their names
         # existed -- has no opinion about them.
-        allowed = self._effective_grants(groups).intersect(request.capabilities).including(
+        allowed = self._effective_grants(source_ids).intersect(request.capabilities).including(
             skills=brought.skills, subagents=brought.subagents
         )
         # Named here rather than inline below, because two things want it and
         # the expression is a mouthful. `None` for a run with no policy or an
         # `UNSCOPED` one: both see the whole workspace, so there is nothing to
         # filter the report against.
-        held = self.held_for(groups)
+        held = self.held_for(source_ids)
         # Resolved here rather than in `__init__`, because the default is a
         # database inside this session and there is no session until now. The
         # async path opens its own on the event loop and hands it down, which is
@@ -691,7 +691,7 @@ class Kingfisher(Sessions, Disposal):
             session.directory,
             capabilities=allowed,
             checkpointer=checkpointer,
-            groups=groups,
+            source_ids=source_ids,
         )
 
         # The last thing that can refuse, and the reason this half exists. The
@@ -720,12 +720,12 @@ class Kingfisher(Sessions, Disposal):
                 graph,
                 self.catalogue,
                 # Only where a vocabulary is in force. With none, `held` is
-                # `None`, nothing was narrowed by groups and the filter is a
+                # `None`, nothing was narrowed by source ids and the filter is a
                 # no-op -- so the spec is not merely unused, it is unavailable:
                 # an injected graph never resolves one, which is exactly the
                 # case every test that hands in its own graph is.
                 agent=(
-                    self._agent_for(request, session.directory, groups=groups)
+                    self._agent_for(request, session.directory, source_ids=source_ids)
                     if held is not None
                     else None
                 ),
@@ -875,7 +875,7 @@ class Kingfisher(Sessions, Disposal):
             write_transcript(prepared.session.directory, runtime.as_transcript(messages))
 
     def stream(
-        self, request: str | Request, *, groups: Held | None = None
+        self, request: str | Request, *, source_ids: Held | None = None
     ) -> Iterator[RunEvent]:
         """Run one task, yielding progress as it happens."""
         # Coerced here rather than only in `_prepare`, because holding the
@@ -883,13 +883,13 @@ class Kingfisher(Sessions, Disposal):
         # read.
         request = Request.coerce(request)
         with self._held_session(request) as session:
-            yield from self._stream_turn(request, session, groups=groups)
+            yield from self._stream_turn(request, session, source_ids=source_ids)
 
     def _stream_turn(
-        self, request: Request, session: Session, *, groups: Held | None = None
+        self, request: Request, session: Session, *, source_ids: Held | None = None
     ) -> Iterator[RunEvent]:
         """One turn, with its directory already held."""
-        prepared = self._prepare(request, session, groups=groups)
+        prepared = self._prepare(request, session, source_ids=source_ids)
         answer = ""
         ok = False
         stop_reason = "end_turn"
@@ -955,7 +955,7 @@ class Kingfisher(Sessions, Disposal):
         yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
 
     async def astream(
-        self, request: str | Request, *, groups: Held | None = None
+        self, request: str | Request, *, source_ids: Held | None = None
     ) -> AsyncIterator[RunEvent]:
         """`stream`, on an event loop.
 
@@ -980,15 +980,15 @@ class Kingfisher(Sessions, Disposal):
             # After entering, so a hold that failed is not then released.
             stack.push(holding)
             saver = await self._async_checkpointer_for(stack, session.directory)
-            async for event in self._astream_turn(request, session, saver, groups=groups):
+            async for event in self._astream_turn(request, session, saver, source_ids=source_ids):
                 yield event
 
     async def _astream_turn(
-        self, request: Request, session: Session, saver: Any, *, groups: Held | None = None
+        self, request: Request, session: Session, saver: Any, *, source_ids: Held | None = None
     ) -> AsyncIterator[RunEvent]:
         """One async turn, with its session and saver already resolved."""
         prepared = await asyncio.to_thread(
-            partial(self._prepare, request, session, saver, groups=groups)
+            partial(self._prepare, request, session, saver, source_ids=source_ids)
         )
         answer = ""
         ok = False
@@ -1052,11 +1052,11 @@ class Kingfisher(Sessions, Disposal):
         yield self._finished(prepared, answer, kept, stop_reason=stop_reason)
 
     async def arun(
-        self, request: str | Request, *, groups: Held | None = None
+        self, request: str | Request, *, source_ids: Held | None = None
     ) -> RunResult:
         """Run one task to completion on an event loop. A drain of `astream`."""
         result: RunResult | None = None
-        async for event in self.astream(request, groups=groups):
+        async for event in self.astream(request, source_ids=source_ids):
             if event.kind == "finished":
                 result = event.result
 
@@ -1069,7 +1069,7 @@ class Kingfisher(Sessions, Disposal):
         self,
         request: str | Request,
         *,
-        groups: Held | None = None,
+        source_ids: Held | None = None,
         delete_session: bool = False,
     ) -> RunResult:
         """Run one task to completion. A drain of `stream`.
@@ -1087,7 +1087,7 @@ class Kingfisher(Sessions, Disposal):
         deleted because somebody closed a loop early. A drain has an after.
         """
         result: RunResult | None = None
-        for event in self.stream(request, groups=groups):
+        for event in self.stream(request, source_ids=source_ids):
             if event.kind == "finished":
                 result = event.result
 

@@ -96,7 +96,7 @@ class Environment:
             # example in the workspace has been handed an annotated file for a
             # path nothing reads.
             models_file=self.optional_path("KINGFISHER_MODELS_FILE"),
-            groups_file=self.optional_path("KINGFISHER_GROUPS_FILE"),
+            source_ids_file=self.optional_path("KINGFISHER_SOURCE_IDS_FILE"),
             # Read here rather than at the command that uses it, so that a rule
             # scanning this module can see it: one read at a CLI edge would go
             # undocumented with nothing to notice.
@@ -119,10 +119,10 @@ class Environment:
         # and models cross-reference, and splitting them would let half a
         # catalogue load.
         models_file = paths.authored_files["models.yaml"]
-        # The group vocabulary, and nothing else: who reaches what is written in the
+        # The source-id vocabulary, and nothing else: who reaches what is written in the
         # definitions themselves. Defaults and relocates exactly as the catalogue above
         # does, through the same function.
-        access_file = paths.authored_files["groups.yaml"]
+        access_file = paths.authored_files["source_ids.yaml"]
 
         return Config(
             workspace=paths.workspace,

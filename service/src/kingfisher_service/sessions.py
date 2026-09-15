@@ -16,7 +16,7 @@ from pydantic import BaseModel, ConfigDict
 # annotations at runtime, and an unresolvable one is read as a body field --
 # which turns every request into a 422 asking for a "kf" object.
 from kingfisher import Kingfisher, UnknownSessionError
-from kingfisher_service.dependencies import groups_of, kingfisher_of
+from kingfisher_service.dependencies import kingfisher_of, source_ids_of
 from kingfisher_service.payloads import session_payload
 
 router = APIRouter(tags=["sessions"])
@@ -34,19 +34,19 @@ class OpenBody(BaseModel):
 def open_session(
     body: OpenBody,
     kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
-    groups: tuple[str, ...] | None = Depends(groups_of),
+    source_ids: tuple[str, ...] | None = Depends(source_ids_of),
 ) -> dict[str, object]:
     """Start a session on one agent and say what that resolved to."""
-    spec = kf.agent_named(body.agent, groups=groups)
+    spec = kf.agent_named(body.agent, source_ids=source_ids)
     session_id = kf.start_session()
     # Fixed to the session at the same moment it is reported, so the two cannot
     # disagree: what this says is what every turn will be built from.
     kf.remember_agent(session_id, body.agent)
-    held = kf.held_for(groups)
+    held = kf.held_for(source_ids)
     mine = spec.declares(held)
     return {
         "session_id": session_id,
-        **({} if groups is None else {"groups": list(groups)}),
+        **({} if source_ids is None else {"source_ids": list(source_ids)}),
         "agent": {
             "name": spec.name,
             "description": spec.description,
@@ -65,10 +65,10 @@ def _named(selection: object) -> object:
 def read_session(
     session_id: str,
     kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
-    groups: tuple[str, ...] | None = Depends(groups_of),
+    source_ids: tuple[str, ...] | None = Depends(source_ids_of),
 ) -> dict[str, object]:
     """Whether this session still exists, and when it was last used."""
-    info = kf.session(session_id, groups=groups)
+    info = kf.session(session_id, source_ids=source_ids)
     if info is None:
         # The library's own error rather than a 404 built here. It is what a
         # turn on a missing session raises, so both paths answer identically --
@@ -82,7 +82,7 @@ def read_session(
 def close_session(
     session_id: str,
     kf: Kingfisher = Depends(kingfisher_of),  # noqa: B008
-    groups: tuple[str, ...] | None = Depends(groups_of),
+    source_ids: tuple[str, ...] | None = Depends(source_ids_of),
 ) -> Response:
     """Dispose of a session, its files, its thread and its claim.
 
@@ -90,7 +90,7 @@ def close_session(
     they cannot destroy, and it answers 404 rather than 403 so that a leaked id is
     worth nothing at all rather than worth a confirmation.
     """
-    if kf.session(session_id, groups=groups) is None:
+    if kf.session(session_id, source_ids=source_ids) is None:
         missing = f"no session {session_id!r}"
         raise UnknownSessionError(missing)
     failure = kf.delete_session(session_id)

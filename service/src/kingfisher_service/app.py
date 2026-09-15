@@ -16,14 +16,14 @@ from kingfisher import (
 )
 from kingfisher_service import access, errors, sessions
 from kingfisher_service.config import PREFIX, ServiceConfig
-from kingfisher_service.identity import GroupsFrom
+from kingfisher_service.identity import SourceIdsFrom
 from kingfisher_service.turns import turn_router
 
 if TYPE_CHECKING:
     from collections.abc import AsyncIterator
 
 
-def _refuse_mismatch(kf: Kingfisher, groups_from: GroupsFrom | None) -> None:
+def _refuse_mismatch(kf: Kingfisher, source_ids_from: SourceIdsFrom | None) -> None:
     """Refuse a deployment whose policy and identity do not agree.
 
     A vocabulary with no source cannot serve one request: the library refuses a call
@@ -31,20 +31,20 @@ def _refuse_mismatch(kf: Kingfisher, groups_from: GroupsFrom | None) -> None:
     is up while serving nothing. One message at startup, where somebody is watching,
     beats that on every axis.
     """
-    if (kf.access is not None) == (groups_from is not None):
+    if (kf.access is not None) == (source_ids_from is not None):
         return
-    if groups_from is None:
+    if source_ids_from is None:
         msg = (
             "this deployment has an access policy, so every request must say who "
-            "is calling: pass groups_from= to create_app -- "
-            "`from_header(\'X-Kf-Groups\')` if a gateway states them, or your own "
+            "is calling: pass source_ids_from= to create_app -- "
+            "`from_header(\'X-Kf-Source-Ids\')` if a gateway states them, or your own "
             "callable. Without one, no route can serve a request at all"
         )
     else:
         msg = (
-            "groups_from= was given but this deployment has no access policy, so "
-            "the groups it resolves would narrow nothing. Write groups.yaml, or "
-            "set KINGFISHER_GROUPS_FILE -- a server wired for identity that "
+            "source_ids_from= was given but this deployment has no access policy, so "
+            "the source ids it resolves would narrow nothing. Write source_ids.yaml, or "
+            "set KINGFISHER_SOURCE_IDS_FILE -- a server wired for identity that "
             "controls nothing is the one that looks locked down and is not"
         )
     raise RuntimeError(msg)
@@ -64,12 +64,12 @@ def _file_store(settings: ServiceConfig) -> Any:
 def create_app(
     kingfisher: Kingfisher | None = None,
     config: ServiceConfig | None = None,
-    groups_from: GroupsFrom | None = None,
+    source_ids_from: SourceIdsFrom | None = None,
 ) -> FastAPI:
     """Build the app, optionally around an instance somebody else made."""
     settings = config or ServiceConfig.from_env()
     if kingfisher is not None:
-        _refuse_mismatch(kingfisher, groups_from)
+        _refuse_mismatch(kingfisher, source_ids_from)
 
     @asynccontextmanager
     async def lifespan(app: FastAPI) -> AsyncIterator[None]:
@@ -83,7 +83,7 @@ def create_app(
         # there is nothing to check until here -- and here is still before the
         # first request, which is the whole of what "refuses to start" has to
         # mean.
-        _refuse_mismatch(built, groups_from)
+        _refuse_mismatch(built, source_ids_from)
         app.state.kingfisher = built
         try:
             yield
@@ -98,7 +98,7 @@ def create_app(
     )
     app.state.kingfisher = kingfisher
     app.state.settings = settings
-    app.state.groups_from = groups_from
+    app.state.source_ids_from = source_ids_from
 
     @app.middleware("http")
     async def refuse_oversize_bodies(request: Request, call_next):  # noqa: ANN001, ANN202

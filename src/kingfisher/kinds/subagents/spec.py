@@ -93,7 +93,7 @@ class SubagentSpec:
     #: deepagents runs as given.
     build: Any = field(default=None, metadata={"derived": True})
     #: Who may reach this delegate, wherever it is used.
-    groups: Audience = ALL
+    source_ids: Audience = ALL
     #: Field name -> entry name -> who reaches that entry, for the fields in
     #: `AUDIENCED`. Empty for a definition written as plain lists.
     audiences: Mapping[str, Mapping[str, Audience]] = field(
@@ -115,19 +115,19 @@ class SubagentSpec:
             tools=reaching(
                 self.tools,
                 audiences=self.audiences.get("tools", {}),
-                default=self.groups,
+                default=self.source_ids,
                 held=held,
             ),
             skills=reaching(
                 self.skills,
                 audiences=self.audiences.get("skills", {}),
-                default=self.groups,
+                default=self.source_ids,
                 held=held,
             ),
             subagents=reaching(
                 self.subagents,
                 audiences=self.audiences.get("subagents", {}),
-                default=self.groups,
+                default=self.source_ids,
                 held=held,
             ),
             middlewares=self.middlewares,

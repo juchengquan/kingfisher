@@ -55,10 +55,10 @@ class Origins:
     tools: Origin
 
     #: The two operator-authored files. `models` is required, so it is never
-    #: `unset`; `groups` is optional, and its `unset` is the most useful thing
+    #: `unset`; `source_ids` is optional, and its `unset` is the most useful thing
     #: in this record.
     models: Origin
-    groups: Origin
+    source_ids: Origin
 
     #: Where `kingfisher seed` copies *from*, which is the opposite direction to
     #: the catalogues above. Named `seed` rather than `assets` for that reason:
@@ -86,7 +86,7 @@ class Origins:
                 kind: _catalogue(cfg, kind, catalogue) for kind in DEFINITION_KINDS
             },  # type: ignore[arg-type]
             models=_file(cfg.models.source, cfg.workspace / "models.yaml"),
-            groups=_groups(cfg),
+            source_ids=_source_ids(cfg),
             seed=_configured(cfg.assets),
             sessions=_sessions(cfg, sessions),
         )
@@ -168,13 +168,13 @@ def _catalogue(cfg: Config, kind: str, catalogue: Definitions | None) -> Origin:
     return Origin(_derived(root, cfg.workspace / kind), root)
 
 
-def _groups(cfg: Config) -> Origin:
+def _source_ids(cfg: Config) -> Origin:
     """The policy file, whose absence is the case worth reporting."""
     if cfg.access_source is None:
         return Origin("supplied") if cfg.access is not None else Origin("unset")
     if cfg.access is None:
         return Origin("unset", cfg.access_source)
-    return Origin(_derived(cfg.access_source, cfg.workspace / "groups.yaml"), cfg.access_source)
+    return Origin(_derived(cfg.access_source, cfg.workspace / "source_ids.yaml"), cfg.access_source)
 
 
 def _sessions(cfg: Config, store: object | None) -> Origin:

@@ -169,7 +169,7 @@ def test_the_header_names_every_catalogue_including_tools(cfg):
 
     assert [line.split(" :")[0].strip() for line in header] == [
         "workspace", "agents", "middlewares", "skills", "subagents", "tools",
-        "models", "groups", "seed", "sessions",
+        "models", "source_ids", "seed", "sessions",
     ]
 
 
@@ -186,7 +186,7 @@ def test_the_json_carries_the_kind_and_a_path_a_script_can_open(cfg, tmp_path):
 
     assert origins["skills"]["path"].startswith("/"), "not the ./name the header prints"
     assert origins["seed"] == {"kind": "relocated", "path": str(tmp_path)}
-    assert origins["groups"]["kind"] == "unset"
+    assert origins["source_ids"]["kind"] == "unset"
 
 
 def test_json_and_the_human_form_describe_the_same_workspace(cfg, monkeypatch, capsys):
@@ -453,7 +453,7 @@ def test_an_unloadable_tool_still_leaves_the_rest_of_the_listing(cfg, monkeypatc
     assert "helper" in printed, "so did the subagents"
 
 
-# -- listing under a group vocabulary ---------------------------------------
+# -- listing under a source-id vocabulary ---------------------------------------
 
 TOOL = '''
 def line_count(path: str) -> str:
@@ -467,10 +467,10 @@ TOOLS = [line_count]
 
 NARROW = """name: narrow
 description: An agent.
-groups: [A, B]
+source_ids: [A, B]
 tools:
   - name: line_count
-    groups: [A]
+    source_ids: [A]
 system_prompt: |
   You do the task.
 """
@@ -478,16 +478,16 @@ system_prompt: |
 
 WIDE = """name: wide
 description: An agent.
-groups: [A, B]
+source_ids: [A, B]
 tools:
   - name: line_count
-    groups: [A, B]
+    source_ids: [A, B]
 system_prompt: |
   You do the task.
 """
 
 
-def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "groups: [A, B]\n"):
+def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "source_ids: [A, B]\n"):
     """A workspace with one tool and whichever agents the test names."""
     from tests.conftest import tools_dir
 
@@ -498,7 +498,7 @@ def _workspace(cfg, monkeypatch, *agents: str, vocabulary: str = "groups: [A, B]
     for document in agents:
         name = document.split("name: ", 1)[1].split("\n", 1)[0]
         (directory / f"{name}.yaml").write_text(document, encoding="utf-8")
-    (cfg.workspace / "groups.yaml").write_text(vocabulary, encoding="utf-8")
+    (cfg.workspace / "source_ids.yaml").write_text(vocabulary, encoding="utf-8")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
@@ -542,10 +542,10 @@ def test_the_roll_up_shows_one_tool_at_two_audiences(cfg, monkeypatch, capsys):
 
 BOTH = """name: both
 description: An agent.
-groups: [{all_of: [A, B]}]
+source_ids: [{all_of: [A, B]}]
 tools:
   - name: line_count
-    groups: [A, B]
+    source_ids: [A, B]
 system_prompt: |
   You do the task.
 """
@@ -553,7 +553,7 @@ system_prompt: |
 
 NAMED = """name: named
 description: An agent.
-groups: [ab]
+source_ids: [ab]
 system_prompt: |
   You do the task.
 """
@@ -585,13 +585,16 @@ def test_a_named_compound_says_what_it_requires(cfg, monkeypatch, capsys):
     appears on needs it -- so it is said once, above.
     """
     _workspace(
-        cfg, monkeypatch, NAMED, vocabulary="groups:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n"
+        cfg,
+        monkeypatch,
+        NAMED,
+        vocabulary="source_ids:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n",
     )
 
     assert main(["list"]) == 0
 
     shown = capsys.readouterr().out
-    assert "groups that require others" in shown
+    assert "source ids that require others" in shown
     assert "ab = A+B" in shown
     assert "agent named  [ab]" in shown
 
@@ -600,7 +603,7 @@ def test_a_vocabulary_with_no_compounds_gets_no_such_section(policied, capsys):
     """It exists to make audiences readable, so it earns its lines or it has none."""
     assert main(["list"]) == 0
 
-    assert "groups that require others" not in capsys.readouterr().out
+    assert "source ids that require others" not in capsys.readouterr().out
 
 
 def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
@@ -614,7 +617,7 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
 
     _workspace(
         cfg, monkeypatch, BOTH, NAMED,
-        vocabulary="groups:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n",
+        vocabulary="source_ids:\n  A: {}\n  B: {}\n  ab: {all_of: [A, B]}\n",
     )
 
     # From the environment, not the fixture: the vocabulary is a file the
@@ -622,18 +625,18 @@ def test_a_conjunction_survives_the_json_round_trip(cfg, monkeypatch):
     document = json.loads(json.dumps(as_json(inventory(config_from_env()))))
 
     # Nested, not "A+B": a script should not have to parse a separator out of a
-    # name, and a group name may legally contain one.
-    assert document["audiences"]["agents"]["both"]["groups"] == [["A", "B"]]
+    # name, and a source id may legally contain one.
+    assert document["audiences"]["agents"]["both"]["source_ids"] == [["A", "B"]]
     assert document["access"]["requires"]["ab"] == ["A", "B"]
     assert document["access"]["names"]["A"] == ["A"]
 
 
 NARROWED = """name: narrowed
 description: An agent.
-groups: [A, B]
+source_ids: [A, B]
 tools:
   - name: line_count
-    groups: [C]
+    source_ids: [C]
 system_prompt: |
   You do the task.
 """
@@ -641,7 +644,7 @@ system_prompt: |
 
 def test_an_entry_narrowing_past_its_definition_is_reported(cfg, monkeypatch, capsys):
     """It used to be refused."""
-    _workspace(cfg, monkeypatch, NARROWED, vocabulary="groups: [A, B, C]\n")
+    _workspace(cfg, monkeypatch, NARROWED, vocabulary="source_ids: [A, B, C]\n")
 
     assert main(["list"]) == 0
 
@@ -656,7 +659,7 @@ def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, monkeypatch):
     from kingfisher.domain.access import reaches
     from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 
-    _workspace(cfg, monkeypatch, NARROWED, vocabulary="groups: [A, B, C]\n")
+    _workspace(cfg, monkeypatch, NARROWED, vocabulary="source_ids: [A, B, C]\n")
     reach = config_from_env().access
     assert reach is not None
     spec = LocalAgentRepository(cfg.catalogue_roots["agents"]).specs["narrowed"]
@@ -665,7 +668,7 @@ def test_a_narrowed_entry_reaches_a_caller_holding_both(cfg, monkeypatch):
     assert spec.declares(reach.expand(["A"])).tools == ()
     # And the definition's own line still gates the agent itself: C alone opens
     # nothing, so there is no way to reach the tool by holding only C.
-    assert not reaches(spec.groups, reach.expand(["C"]))
+    assert not reaches(spec.source_ids, reach.expand(["C"]))
 
 
 def test_a_callers_view_carries_no_audiences(policied, capsys):
@@ -678,7 +681,7 @@ def test_a_callers_view_carries_no_audiences(policied, capsys):
 
 
 def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, monkeypatch, capsys):
-    _workspace(cfg, monkeypatch, NARROW, vocabulary="groups: [A, B, C]\n")
+    _workspace(cfg, monkeypatch, NARROW, vocabulary="source_ids: [A, B, C]\n")
 
     assert main(["list", "--as", "C"]) == 0
 
@@ -687,7 +690,7 @@ def test_a_callers_view_drops_an_agent_they_cannot_open(cfg, monkeypatch, capsys
 
 def test_the_operator_still_sees_it(cfg, monkeypatch, capsys):
     """So the assertion above is not passing because the agent vanished."""
-    _workspace(cfg, monkeypatch, NARROW, vocabulary="groups: [A, B, C]\n")
+    _workspace(cfg, monkeypatch, NARROW, vocabulary="source_ids: [A, B, C]\n")
 
     assert main(["list"]) == 0
 
@@ -708,10 +711,10 @@ def test_listing_names_a_definition_that_restricts_nobody(cfg, monkeypatch, caps
     assert "open_to_all" in printed
 
 
-def test_naming_a_group_that_does_not_exist_is_refused(policied, capsys):
+def test_naming_a_source_id_that_does_not_exist_is_refused(policied, capsys):
     assert main(["list", "--as", "Q"]) != 0
 
-    assert "unknown group" in capsys.readouterr().err
+    assert "unknown source id" in capsys.readouterr().err
 
 
 def test_no_vocabulary_means_no_access_section(cfg, monkeypatch, capsys):
@@ -726,15 +729,15 @@ def test_no_vocabulary_means_no_access_section(cfg, monkeypatch, capsys):
     assert "access —" not in capsys.readouterr().out
 
 
-def test_the_listing_reports_a_definition_naming_an_undeclared_group(cfg, monkeypatch, capsys):
+def test_the_listing_reports_a_definition_naming_an_undeclared_source_id(cfg, monkeypatch, capsys):
     """The listing is where somebody diagnosing this looks, and it goes through
     `inventory` rather than `Kingfisher` -- so the check has to be in both or the one
     place a reader would check shows a broken definition as ordinary.
     """
     from tests.conftest import an_agent
 
-    an_agent(cfg, "analyst", groups="[analists]")
-    (cfg.workspace / "groups.yaml").write_text("groups: [analysts]\n", encoding="utf-8")
+    an_agent(cfg, "analyst", source_ids="[analists]")
+    (cfg.workspace / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")
@@ -746,12 +749,12 @@ def test_the_listing_reports_a_definition_naming_an_undeclared_group(cfg, monkey
     assert "analysts" in printed, "and the spelling that would have worked"
 
 
-def test_the_listing_is_clean_when_every_group_is_declared(cfg, monkeypatch, capsys):
+def test_the_listing_is_clean_when_every_source_id_is_declared(cfg, monkeypatch, capsys):
     """So the rule above is not passing because every listing says that."""
     from tests.conftest import an_agent
 
-    an_agent(cfg, "analyst", groups="[analysts]")
-    (cfg.workspace / "groups.yaml").write_text("groups: [analysts]\n", encoding="utf-8")
+    an_agent(cfg, "analyst", source_ids="[analysts]")
+    (cfg.workspace / "source_ids.yaml").write_text("source_ids: [analysts]\n", encoding="utf-8")
     monkeypatch.setenv("KINGFISHER_WORKSPACE", str(cfg.workspace))
     monkeypatch.setenv("KINGFISHER_MODELS_FILE", str(_catalogue(cfg)))
     monkeypatch.setenv("FAKE_KEY", "not-a-real-key")

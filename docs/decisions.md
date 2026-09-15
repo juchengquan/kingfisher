@@ -23,7 +23,7 @@ lines apart.
 | | |
 |---|---|
 | **What a deployment authors** | [The definition format](#the-definition-format) · [The catalogue](#the-catalogue) · [Agents and delegation](#agents-and-delegation) · [Packaging](#packaging-where-the-definitions-live) |
-| **What a request may do** | [Capabilities](#capabilities) · [Group access](#group-access) · [Models and endpoints](#models-and-endpoints) |
+| **What a request may do** | [Capabilities](#capabilities) · [Source-id access](#source-id-access) · [Models and endpoints](#models-and-endpoints) |
 | **What a run meets** | [What a tool returns](#what-a-tool-returns) · [Tool failure](#tool-failure) · [Confining the shell](#confining-the-shell) · [Sessions: what persists](#sessions-what-persists-and-where) · [Wiring a store](#wiring-a-store) |
 | **The surfaces** | [The command line](#the-command-line) · [What doctor promises](#what-doctor-promises) · [Where a deployment reads from](#where-a-deployment-reads-from) · [The HTTP service](#the-http-service) · [The front door](#the-front-door) |
 | **The codebase itself** | [Layering](#layering) · [Splitting a file](#splitting-a-file) · [The architecture rules](#the-architecture-rules) · [How much a comment says](#how-much-a-comment-says) · [The size of the test suite](#the-size-of-the-test-suite) |
@@ -39,7 +39,7 @@ that one covers `FileStore` as well, which is why it is no longer called
 ## The definition format
 
 **An entry is a name, or a mapping of `name` and the one thing that field lets a
-name carry.** `groups` for `tools`, `skills` and `subagents`; `settings` for
+name carry.** `source_ids` for `tools`, `skills` and `subagents`; `settings` for
 `middlewares`. One long form, whichever field it belongs to, read through one
 loop -- so a reader who has met one has met the other.
 
@@ -288,23 +288,23 @@ skills and subagents, because those are the caller's own text. A middleware name
 is not -- it selects code the deployment wrote -- so it gets no such exemption.
 *(2026-08-18, `agents-as-definitions.md`, and the middleware work of 2026-08-31.)*
 
-## Group access
+## Source-id access
 
 **An audience lives in the definition it is about.** An agent or subagent writes
-`groups:` for who may reach it, and an entry of `tools:`, `subagents:` or
-`skills:` may be written long -- `{name: X, groups: [...]}` -- for who reaches
+`source_ids:` for who may reach it, and an entry of `tools:`, `subagents:` or
+`skills:` may be written long -- `{name: X, source_ids: [...]}` -- for who reaches
 that one. One central
-file, `groups.yaml`, holds the vocabulary and `contains` -- names only, no policy.
+file, `source_ids.yaml`, holds the vocabulary and `contains` -- names only, no policy.
 An audience resolves into an ordinary `Capabilities`, so nothing downstream
 changed: an ungranted tool is never attached to the graph and an ungranted
 subagent is never compiled. *(2026-08-31.)*
 
-The rule that makes it safe to add to an existing definition: **`groups:` is the
+The rule that makes it safe to add to an existing definition: **`source_ids:` is the
 default audience for everything the definition holds, and the ceiling on what any
 entry may say.** So an omitted or plain-list `tools:` keeps its exact meaning, and
 an entry is always an *and* with the definition's own line -- the only way to
-reach an entry is through the definition holding it, so naming a group from
-outside that line adds a second requirement rather than replacing the first. A definition with no `groups:` line is reachable by everyone, and startup
+reach an entry is through the definition holding it, so naming a source id from
+outside that line adds a second requirement rather than replacing the first. A definition with no `source_ids:` line is reachable by everyone, and startup
 names every such definition -- default-open must not also be silent.
 
 **Reversed: a central `access.yaml` listing every asset by name.** Built in full
@@ -321,24 +321,24 @@ closed vocabulary. `for_groups` survived that reversal too and did not survive
 the next one -- see below. *(2026-08-31, reversed the same day.)*
 
 **Reversed: `for_groups` and the `Caller` handle.** A caller said who they were
-once and reused the handle; now every call takes `groups=`. Counted before
+once and reused the handle; now every call takes `source_ids=`. Counted before
 removing: zero production callers. The service -- the only consumer that serves
-several callers, which is the case the handle was built for -- resolves groups
-per request from a header and passed `groups=` at all seven of its call sites.
+several callers, which is the case the handle was built for -- resolves source ids
+per request from a header and passed `source_ids=` at all seven of its call sites.
 Two of the handle's three stated benefits did not survive checking either: the
 grant it resolved once measures **0.81 microseconds**, because the transitive
-closure is computed when `groups.yaml` loads; and refusing an unknown group "at
+closure is computed when `source_ids.yaml` loads; and refusing an unknown source id "at
 the boundary rather than at the first turn" is a gap of one call, since `expand`
 still refuses before any agent is built. What was real was the script
 ergonomics, and one thing that was not a benefit at all: `held_for` tested
-`isinstance(groups, tuple)` and read anything else as *no opinion*, so the
+`isinstance(source_ids, tuple)` and read anything else as *no opinion*, so the
 coercion inside `for_groups` was the only reason `["A"]` ever narrowed. That
 moved into `held_for`, which now takes any sequence and refuses a bare string.
 *(2026-09-03.)*
 
 **An audience list is an `or`, and an entry of it may be an `and`.** `all_of`
-requires a caller to hold several groups at once, and is written two ways
-deliberately: named in `groups.yaml` for anything reused, inline as one entry of
+requires a caller to hold several source ids at once, and is written two ways
+deliberately: named in `source_ids.yaml` for anything reused, inline as one entry of
 a list for a one-off. The same word both places, so the named form is literally a
 *name for* the inline one rather than a second mechanism -- the argument against
 two spellings was drift, and using one word with one evaluation is what answers
@@ -369,7 +369,7 @@ parts reaches the same people and is visible, since the listing prints what a
 compound requires and never prints `contains`.
 
 **Reversed: `refuse_dead`, the rule that an entry audience must overlap its
-definition's.** It moved off `parse` onto `Groups` first, which was a real fix
+definition's.** It moved off `parse` onto `SourceIds` first, which was a real fix
 -- a definition `[reviewers]` with an entry `[analysts]` is alive when
 `reviewers` contains `analysts`, and comparing raw names at parse called it
 dead. Then measuring it settled the larger question: it had no true positives
@@ -384,7 +384,7 @@ blocked writing it, and the fault it meant to catch -- `[auditors]` written
 under `[analysts]` by somebody trying to widen -- is the same shape, so no rule
 can separate them.
 
-What survived is the looking. It is `Groups.narrowing_in` now, and feeds
+What survived is the looking. It is `SourceIds.narrowing_in` now, and feeds
 `AccessReport.narrowed`, on the same reasoning as the `unrestricted` line beside
 it: a thing worth noticing, said once, where an operator sees it. The typos it
 was really catching are `refuse_undeclared`'s, which refuses them by name.
@@ -394,7 +394,7 @@ misspelling used to trip both checks, and `never reaches anyone` explained it as
 a reachability problem without mentioning the spelling. There is now one refusal
 on that path.
 
-**`groups.yaml` now holds vocabulary with a rule in it**, and the file's pitch
+**`source_ids.yaml` now holds vocabulary with a rule in it**, and the file's pitch
 was "a dictionary, not a policy". A compound sits on that line: it still answers
 "what does this name mean", but answers it with a condition. Judged to stay on
 the right side -- what it cannot do is say who reaches what, which is the
@@ -404,43 +404,43 @@ disagree with now and expensive later.
 The `--json` listing's `access` key grew from a name-to-closure mapping into
 `{names, requires}`. A shape change for scripts, taken because a compound has no
 honest place in the old shape and the alternative was dropping the second fact.
-Group access was two days old at the time.
+Source-id access was two days old at the time.
 
 **`builtin_tools` takes no audience, and that is not an omission.** deepagents
 registers its own tools, so kingfisher can filter them but never leave them out
 of a graph -- `harness/narrowing.py` records a live run where a model called
 `execute` from memory. Gating them here would promise a boundary it cannot keep.
-What gates them is which *agents* a group may open, since an agent declaring a
+What gates them is which *agents* a source id may open, since an agent declaring a
 read-only builtin set cannot yield the shell to anyone.
 
-**Out of reach reads as not offered.** An asset a caller's groups do not reach is
+**Out of reach reads as not offered.** An asset a caller's source ids do not reach is
 absent from listings, from the "this workspace offers ..." in a refusal, and from
 the report of what a run withheld -- so nothing lets a caller enumerate the
-catalogue by guessing. The withheld report hides only what group narrowing
+catalogue by guessing. The withheld report hides only what source-id narrowing
 removed, never what the agent simply never declared: the second is a fact about
 the agent and has always been reported.
 
 **The HTTP surface asks who is calling; it still authenticates nobody.**
-`create_app(groups_from=...)` takes a callable given the request and returning
-group names, and `from_header` is shipped but never defaulted -- the header is an
+`create_app(source_ids_from=...)` takes a callable given the request and returning
+source ids, and `from_header` is shipped but never defaulted -- the header is an
 argument so that trusting one is a line somebody wrote rather than what happens
 when nobody decides. A deployment whose policy and identity disagree refuses at
 startup, in both directions: a vocabulary with no source cannot serve a single
 request, and a source with no vocabulary is a server somebody believes is locked
 down and is not. *(2026-09-01.)*
 
-A source may return group names and nothing else. **`UNSCOPED` is unreachable
+A source may return source ids and nothing else. **`UNSCOPED` is unreachable
 over HTTP**, because it exists to be a value a person types at a call site they
 can see -- reachable from a request it is a value a *bug* can produce, and one
 returned on a parse failure hands every caller everything at once. "Reaches
-everything" is already a group that contains the others, which is declared and
+everything" is already a source id that contains the others, which is declared and
 visible in the listing where an unscoped run would never appear.
 
 **The caller gets a code, the log gets the reason**, and it is one rule at every
 refusal. A session whose pinned agent a caller cannot reach answers 404
 `unknown_session` -- the same code a wrong id gets, so holding a real one teaches
-nothing. A group the vocabulary does not declare answers 500 `misconfigured`
-with a body naming no group, while the message that lists them all goes to the
+nothing. A source id the vocabulary does not declare answers 500 `misconfigured`
+with a body naming no source id, while the message that lists them all goes to the
 service logger. Reading and deleting a session are checked like running one: a
 session you cannot run is one you cannot touch.
 
@@ -450,7 +450,7 @@ as such -- the first table's value is that it is checkable in both directions,
 and an entry a caller cannot cause would be a status nobody decided on.
 
 **Reversed: `groups.yaml.example`, shipped in the package and placed by
-`ensure_layout`.** The reasoning was that `seed` names `groups.yaml` in a skip
+`ensure_layout`.** The reasoning was that `seed` names `source_ids.yaml` in a skip
 message, and that message named a file no example of existed anywhere an
 installed deployment could reach. True, and the example still did not help --
 which only became visible by running it. An example ships *one* vocabulary and a
@@ -466,18 +466,18 @@ partial lists and whoever pastes the first is skipped again on the second. The
 flat form only: `contains` and `all_of` are a deployment's choices about its own
 organisation, and nothing can infer which a name wants.
 
-`assets_examples/groups.yaml` is now the only groups example, and it is named
+`assets_examples/source_ids.yaml` is now the only source ids example, and it is named
 the thing the message points at rather than a `.example` beside it.
 
 **`models.yaml.example` stays, and the asymmetry is the point.** The two were
 never alike: `models.yaml` is required with no fallback, its example is a
 hundred lines of annotation about endpoints and keys, and nothing else anywhere
-carries that -- where deleting the groups example leaves
-`assets_examples/groups.yaml` standing. Its error message already prints a
+carries that -- where deleting the source ids example leaves
+`assets_examples/source_ids.yaml` standing. Its error message already prints a
 minimal working catalogue inline, so the getting-started path exists and the
 file is the reference beside it.
 
-Still not seeded, which is unchanged. `groups` is not a definition kind, and
+Still not seeded, which is unchanged. `source_ids` is not a definition kind, and
 copying a policy would make adopting access control something a deployment
 inherits rather than does. *(2026-09-02, reversed 2026-09-04.)*
 
@@ -503,6 +503,45 @@ mounted read-only, and a layout that raised there would take `kingfisher seed`
 down for exactly the deployment this fixes; the example falls back to the
 workspace, which is where it went before it could follow the file at all.
 *(2026-09-03.)*
+
+**`groups` is `source_ids`.** The concept did not move: an audience, resolved by
+`reaches` against a closed vocabulary, with `contains`, `all_of`, the ceiling
+rule and default-open all untouched. What changed is the word, and it changed
+everywhere it appeared -- the definitions' key, `source_ids.yaml` and the section
+inside it, `KINGFISHER_SOURCE_IDS_FILE`, `run(source_ids=)`, `SourceIds`,
+`Stated.source_ids`, the `--as` metavar, both `list --json` keys,
+`create_app(source_ids_from=)`, and the header this service's own examples spell
+`X-Kf-Source-Ids`. Renaming the definitions' key alone was the first shape of it
+and the wrong one: it leaves a reader two words for one thing and an Access
+chapter obliged to teach both.
+
+**The prose noun is "source id", never bare "source".** That word is taken here
+-- `definitions_source`, `access_source`, `skill_sources`, `models.source`, and
+197 bare uses -- and it means *where a definition was read from*. A message
+reading `source_ids.yaml: source 'sales_db' contains ...` would put both meanings
+in one sentence with a file path as the prefix. `formats.md` says the same thing
+once, positively, in the Access chapter: a source id is a name in the vocabulary
+and nothing else, not a path a definition came from and not a data file a run is
+handed.
+
+**The shipped example's vocabulary moved with the key.** `analysts`, `auditors`,
+`reviewers`, `senior` and `senior-analysts` are now `sales_db`, `audit_log`,
+`warehouse`, `pii` and `sales_db_pii`. A key called `source_ids` whose worked
+example lists job titles teaches the wrong reading of the line it is there to
+explain, and `assets_examples/` is built and run by the suite rather than
+eyeballed, so the sentences around those names had to move too.
+
+No compatibility window, on the precedent the export table set at 0.1.0. Most of
+the old spelling fails loudly -- `run(groups=)` is a `TypeError`, a definition
+still writing `groups:` is refused as an unknown field. One does not, and it is
+worth stating rather than discovering: a workspace whose vocabulary file is still
+named `groups.yaml` finds no file, and no file has always meant *no policy*, so
+it comes up reachable by everyone with nothing red. That is the documented
+meaning of an absent vocabulary, and it was accepted here rather than guarded.
+
+Entries above still say `for_groups` and `groups.yaml.example`. Those name things
+that were deleted, and `for_source_ids` describes a function that never existed.
+*(2026-09-15.)*
 
 ## Models and endpoints
 
@@ -682,7 +721,7 @@ code of a file that had not been there.
 
 The other three roots decide rather than execute, and are denied for the same
 reason one step along. An agent that edits its own `agents/*.yaml` strikes out the
-`groups:` line saying who may reach it, and groups are read when the catalogue
+`source_ids:` line saying who may reach it, and source ids are read when the catalogue
 loads -- which is per request.
 
 Half of this was already recorded under *Wiring a store*, which quotes the same
@@ -715,11 +754,11 @@ list, so a fifth kind is covered the day it exists rather than the day somebody
 remembers. That test is what makes *Middleware as a definition kind* buildable at
 all.
 
-**`models.yaml` and `groups.yaml` are deliberately not included.** Both are
+**`models.yaml` and `source_ids.yaml` are deliberately not included.** Both are
 workspace files and both are writable, but `config_from_env` runs once when
 `Kingfisher` is constructed, so an edit lands at the next restart rather than the
 next request. A different shape, and its own argument about who writes
-`groups.yaml` and when. *(2026-09-07.)*
+`source_ids.yaml` and when. *(2026-09-07.)*
 
 **The profile was not the agent's to edit either, and was.** The rule above
 applied one object further in than anybody had looked: `shell.sb` sat inside the
@@ -1224,7 +1263,7 @@ declares it.
 
 `--data` was never a candidate for cutting: `/data` is read-only to the agent,
 so it is the only supported way to hand one a file at all. Nor was `--as`,
-measured rather than assumed -- on a workspace declaring groups, a run that
+measured rather than assumed -- on a workspace declaring source ids, a run that
 names nobody is refused by the library, so a `run` without it would be broken on
 exactly the deployments that took access control seriously. Unlike `list --as`,
 an absent one is not the operator's view: a listing is read-only, and a turn
@@ -1412,9 +1451,9 @@ repository with no directory, and `unset` carries where it looked. `--json` and
 the service read this, so "nothing is configured" and "you handed me a store"
 must not arrive as two spellings a consumer has to match on.
 
-**`Config` remembers where it looked for `groups.yaml`.** The path was read,
+**`Config` remembers where it looked for `source_ids.yaml`.** The path was read,
 used for error-message prefixes and discarded. It sits on `Config` rather than on
-`Groups` because of the absent case: with no file there is no record to hang a
+`SourceIds` because of the absent case: with no file there is no record to hang a
 path on, and "not set, and here is where I looked" is the one line that makes a
 policy written one directory off visible at all -- otherwise the deployment comes
 up reachable by everyone and says nothing.
@@ -1613,7 +1652,7 @@ the edges a layering argument is about, and it does it silently.
 
 **`documents.py` split along the two audiences it already had.** *Not moved:
 `documents.py`* argued it was not a kinds file because `decode` and
-`require_literal_prompt` serve the kind readers while `groups_named` and
+`require_literal_prompt` serve the kind readers while `source_ids_named` and
 `middleware_named` serve workspace seeding. That is still the reading; what changed is
 that the file could not stay whole once a kind may not name a layer. So the first half
 is `kinds/documents.py`, beside `kinds/importing.py` in `KINDS_HELPERS`, and the second
@@ -1719,7 +1758,7 @@ are here so the next reader is not told a better story than the one that happene
 **`infrastructure/importing.py` came too, and `documents.py` did not.** Four kind
 catalogues are `kinds.importing`'s only readers and it imports nothing from
 kingfisher at all. `documents` serves two audiences -- `decode` and
-`require_literal_prompt` for the kind readers, `groups_named` and `middleware_named`
+`require_literal_prompt` for the kind readers, `source_ids_named` and `middleware_named`
 for workspace seeding -- so it is not a kinds file, and *"Two modules came up a
 directory, and an import cycle is why"* is why moving it again would need its own
 argument. The cycle that entry records cannot recur here: `kinds/__init__` imports
@@ -2030,7 +2069,7 @@ which the paragraph above stated as though it did. What separates them is how
 merely covers the same ground repeatedly, and a tangled one cannot be touched
 anywhere without being touched in six places. `service.py` averages 2.9
 definitions per commit, and 44 of its 68 commits touch one or two. The wide ones
-are all features -- group access at 17, per-session thread databases at 13, a
+are all features -- source-id access at 17, per-session thread databases at 13, a
 session surviving its machine at 10 -- and the hub is `__init__`, which is the
 composition root's constructor and is what every new dependency arrives through.
 
@@ -2268,7 +2307,7 @@ carry. And `subgraphs`, on both loops.
 **Six are not gaps**: one is `# pragma: no cover`, one is refused by a
 `ConfigError` above it, one is a branch its comment says no definition can
 reach, and two are defensive keywords that show only on a second call. The sixth
-is `held_for`, which was written down as a gap and is not: a caller naming groups
+is `held_for`, which was written down as a gap and is not: a caller naming source ids
 without a vocabulary, and a caller naming none with one, are both refused before
 that line is reached, so no combination that can arrive behaves differently. It
 was reclassified by writing the test and watching it fail against unmutated
@@ -2282,7 +2321,7 @@ mutation-tested rather than assumed. None of them changed `src/`: every one was
 a test that was missing, not a behaviour that was wrong.
 
 One `src/` change came out of it anyway, from pointing a test at the wrong
-parser: `groups.yaml` read `all_of: {finance: senior}` as the single name
+parser: `source_ids.yaml` read `all_of: {finance: senior}` as the single name
 `finance` and discarded the rest, because a mapping is truthy and iterates. That
 one is a defect, and it is fixed.
 

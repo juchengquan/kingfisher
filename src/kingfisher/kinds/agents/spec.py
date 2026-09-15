@@ -46,7 +46,7 @@ KNOWN: frozenset[str] = frozenset(
         "model",
         "memory",
         "metadata",
-        "groups",
+        "source_ids",
     }
 )
 
@@ -110,7 +110,7 @@ class AgentSpec:
     memory: bool | None = None
     metadata: Mapping[str, object] = field(default_factory=dict)
     #: Who may open a session on this agent.
-    groups: Audience = ALL
+    source_ids: Audience = ALL
     #: Field name -> entry name -> who reaches that entry, for the fields in
     #: `AUDIENCED`. Empty for a definition written as plain lists.
     audiences: Mapping[str, Mapping[str, Audience]] = field(
@@ -123,15 +123,15 @@ class AgentSpec:
             builtin_tools=self.builtin_tools,
             tools=self.tools if held is None else reaching(
                 self.tools, audiences=self.audiences.get("tools", {}),
-                default=self.groups, held=held,
+                default=self.source_ids, held=held,
             ),
             skills=self.skills if held is None else reaching(
                 self.skills, audiences=self.audiences.get("skills", {}),
-                default=self.groups, held=held,
+                default=self.source_ids, held=held,
             ),
             subagents=self.subagents if held is None else reaching(
                 self.subagents, audiences=self.audiences.get("subagents", {}),
-                default=self.groups, held=held,
+                default=self.source_ids, held=held,
             ),
             # Narrowed, unlike `endpoints` and `models`, because middleware is not additive
             # in effect: `call-cap-generous` is a *looser* ceiling than
@@ -191,7 +191,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         )
         if entries
     }
-    groups = read.groups(document.get("groups"))
+    source_ids = read.source_ids(document.get("source_ids"))
     # Read together, because they are one field. `middlewares` takes no audience,
     # and that is not an oversight: it is the one field naming *code the deployment
     # registered* rather than something the workspace offers, so it is granted
@@ -211,7 +211,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         tool_sources=claimed_sources(written_tools),
         skills=written_skills,
         subagents=written_delegates,
-        groups=groups,
+        source_ids=source_ids,
         audiences=audiences,
         middlewares=written_middleware,
         middleware_settings=middleware_settings,

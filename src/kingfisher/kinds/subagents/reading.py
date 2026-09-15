@@ -46,7 +46,7 @@ KNOWN: frozenset[str] = frozenset(
         "subagents",
         "model",
         "metadata",
-        "groups",
+        "source_ids",
     }
 )
 
@@ -102,7 +102,7 @@ DECLARED: frozenset[str] = frozenset(
         "tools",
         "model",
         "metadata",
-        "groups",
+        "source_ids",
     }
 )
 
@@ -182,7 +182,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
     # Only `tools` here: `skills` and `subagents` are refused for a compiled
     # delegate by `NOT_COMPILED`, so there is nothing else to carry an audience.
     audiences = {"tools": tool_audiences} if tool_audiences else {}
-    groups = read.groups(entry.get("groups"))
+    source_ids = read.source_ids(entry.get("source_ids"))
     return SubagentSpec(
         name=fields.text(entry["name"]),
         description=fields.text(entry["description"]),
@@ -197,7 +197,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         tool_sources=claimed_sources(written_tools),
         wanted=wanted,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
-        groups=groups,
+        source_ids=source_ids,
         audiences=audiences,
     )
 
@@ -279,7 +279,7 @@ def read(text: str, source: Path) -> SubagentSpec:
         )
         if entries
     }
-    groups = reader.groups(document.get("groups"))
+    source_ids = reader.source_ids(document.get("source_ids"))
 
     return SubagentSpec(
         name=fields.text(document["name"]),
@@ -301,7 +301,7 @@ def read(text: str, source: Path) -> SubagentSpec:
         subagents=written_delegates,
         wanted=wanted,
         metadata=reader.mapping(document.get("metadata"), key="metadata"),
-        groups=groups,
+        source_ids=source_ids,
         audiences=audiences,
     )
 

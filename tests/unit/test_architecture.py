@@ -1575,7 +1575,7 @@ WITNESSES: dict[str, str] = {
     "paths_from_env": "document",
     "seed": "document",
     "run": "document",
-    # `formats.md` writes them out: `groups=UNSCOPED`, and
+    # `formats.md` writes them out: `source_ids=UNSCOPED`, and
     # `from kingfisher import Request, RunOn`. Grep for those rather than trusting a
     # line number here -- two were written down and both went stale the first time
     # that page was edited.
@@ -1599,7 +1599,7 @@ WITNESSES: dict[str, str] = {
     # repository cannot see.
     "BACKEND_CONTRACT": "document",
     "CommandResult": "document",
-    # The type of `Kingfisher.run`'s `groups=`. `UNSCOPED` is one of its two
+    # The type of `Kingfisher.run`'s `source_ids=`. `UNSCOPED` is one of its two
     # members and is documented; the type that admits it cannot be private.
     "Held": "embedder",
     # Seeding and the inventory, plus what each returns.
@@ -2714,7 +2714,7 @@ def test_the_package_ships_the_catalogue_example():
 
     # Both, from `EXAMPLES` rather than named here, so the file added next is
     # covered by having been added rather than by somebody remembering. The
-    # groups example is optional where the catalogue one is required, and that
+    # source ids example is optional where the catalogue one is required, and that
     # changes nothing about this: `_place_example` skips a missing source
     # silently, so a packaging fault would show up as a workspace quietly
     # missing furniture rather than as anything failing.

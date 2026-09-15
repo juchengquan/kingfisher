@@ -1,4 +1,4 @@
-"""Reading `groups.yaml`: the group names this deployment declares."""
+"""Reading `source_ids.yaml`: the source ids this deployment declares."""
 
 from __future__ import annotations
 
@@ -6,13 +6,13 @@ from typing import TYPE_CHECKING
 
 import yaml
 
-from kingfisher.domain.access import AccessError, Groups, parse
+from kingfisher.domain.access import AccessError, SourceIds, parse
 
 if TYPE_CHECKING:
     from pathlib import Path
 
 
-def load(path: Path) -> Groups | None:
+def load(path: Path) -> SourceIds | None:
     """The policy at `path`, or `None` if there is no file there."""
     if not path.is_file():
         return None
@@ -28,7 +28,7 @@ def load(path: Path) -> Groups | None:
     if document is None:
         msg = (
             f"{path}: is empty. A policy file that exists but says nothing is "
-            f"not the same as no policy -- delete it, or give it a 'groups' section"
+            f"not the same as no policy -- delete it, or give it a 'source_ids' section"
         )
         raise AccessError(msg)
     if not isinstance(document, dict):

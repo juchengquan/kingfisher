@@ -13,16 +13,16 @@ from kingfisher_service.identity import from_header
 from kingfisher import Kingfisher
 from kingfisher.domain.access import parse
 
-HEADER = "X-Kf-Groups"
+HEADER = "X-Kf-Source-Ids"
 AS_A = {HEADER: "A"}
 AS_C = {HEADER: "C"}
 
-VOCABULARY = "groups: [A, B, C]\n"
+VOCABULARY = "source_ids: [A, B, C]\n"
 
 #: Reachable by A only, and holding a delegate that is narrower still.
 NARROW = """name: narrow
 description: An agent for A.
-groups: [A]
+source_ids: [A]
 system_prompt: |
   You do the task.
 """
@@ -33,14 +33,14 @@ SHARED = """name: shared
 description: An agent for everyone.
 subagents:
   - name: reviewer
-    groups: [A]
+    source_ids: [A]
 system_prompt: |
   You do the task.
 """
 
 REVIEWER = """name: reviewer
 description: A delegate.
-groups: [A]
+source_ids: [A]
 system_prompt: |
   You check things.
 """
@@ -55,12 +55,12 @@ def policied(cfg):
     delegates = cfg.catalogue_roots["subagents"]
     delegates.mkdir(parents=True, exist_ok=True)
     (delegates / "reviewer.yaml").write_text(REVIEWER, encoding="utf-8")
-    return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="groups.yaml"))
+    return replace(cfg, access=parse(yaml.safe_load(VOCABULARY), source="source_ids.yaml"))
 
 
 @pytest.fixture
 def client(policied):
-    app = create_app(kingfisher=Kingfisher(policied), groups_from=from_header(HEADER))
+    app = create_app(kingfisher=Kingfisher(policied), source_ids_from=from_header(HEADER))
     return TestClient(app, raise_server_exceptions=False)
 
 
@@ -102,12 +102,12 @@ def test_the_open_response_narrows_what_it_reports(client):
     assert for_c["agent"]["subagents"] == []
 
 
-def test_the_open_response_echoes_the_groups_it_resolved_as(client):
+def test_the_open_response_echoes_the_source_ids_it_resolved_as(client):
     """A caller behind a gateway usually cannot see what identity was asserted for them;
     this is the one place to find out.
     """
     assert client.post("/sessions", json={"agent": "shared"}, headers=AS_C).json()[
-        "groups"
+        "source_ids"
     ] == ["C"]
 
 
@@ -147,7 +147,7 @@ def test_deleting_a_session_in_reach_works(client):
 # -- a deployment that cannot resolve a caller ------------------------------
 
 
-def test_an_undeclared_group_is_a_misconfiguration(client):
+def test_an_undeclared_source_id_is_a_misconfiguration(client):
     """The only way an AccessError reaches a live request once startup refuses the two
     mismatches: the identity provider and the vocabulary have drifted.
     """
@@ -158,7 +158,7 @@ def test_an_undeclared_group_is_a_misconfiguration(client):
 
 
 def test_the_body_does_not_name_the_vocabulary(client):
-    """The library's message names every group this deployment defines."""
+    """The library's message names every source id this deployment defines."""
     got = client.post("/sessions", json={"agent": "shared"}, headers={HEADER: "Q"})
 
     for name in ("A", "B", "C"):
@@ -166,7 +166,7 @@ def test_the_body_does_not_name_the_vocabulary(client):
 
 
 def test_a_missing_header_is_the_same_misconfiguration(client):
-    """A caller must not be able to tell a stripped header from an unknown group: both
+    """A caller must not be able to tell a stripped header from an unknown source_id: both
     are the deployment's to fix and neither is theirs.
     """
     got = client.post("/sessions", json={"agent": "shared"})

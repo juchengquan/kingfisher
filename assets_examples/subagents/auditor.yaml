@@ -5,26 +5,26 @@ description: Re-checks figures against their sources. Use before reporting numbe
 # tools per caller.**
 #
 # An audience is a property of *this definition's use* of a tool, not of the
-# tool. `analyst.yaml` restricts `sql_query` to `[analysts]` and so does this;
+# tool. `analyst.yaml` restricts `sql_query` to `[sales_db]` and so does this;
 # a third definition could open it to everyone, and all three would be correct,
 # because they are different contexts. `kingfisher list` prints a roll-up by
 # tool for exactly that reason -- it is where a call site quietly wider than its
 # neighbours becomes visible.
-groups: [analysts, auditors, reviewers]
+source_ids: [sales_db, audit_log, warehouse]
 builtin_tools: [read_file, glob, grep]
 tools:
   - name: sql_query
-    # The compounding case, in three lines. Reached by an auditor, this
-    # delegate holds `line_count` and not `sql_query`; reached by an analyst it
+    # The compounding case, in three lines. Reached on `audit_log` alone, this
+    # delegate holds `line_count` and not `sql_query`; reached on `sales_db` it
     # holds both. Nothing is refused, nothing errors -- it simply runs with
     # less, and the run reports `tool sql_query` as withheld.
-    groups: [analysts]
+    source_ids: [sales_db]
   # The same requirement as `agents/analyst.yaml` writes, by the same name --
   # which is the whole argument for naming one. Two definitions, one place to
   # change it, and `kingfisher list` prints what it requires once above the
   # audiences rather than on every line that mentions it.
   - name: http_fetch
-    groups: [senior-analysts]
+    source_ids: [sales_db_pii]
   # Unrestricted, so a bare name with nothing attached.
   - line_count
 system_prompt: |

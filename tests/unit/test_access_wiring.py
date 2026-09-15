@@ -23,29 +23,29 @@ def line_count(path: str) -> str:
 TOOLS = [line_count]
 '''
 
-VOCABULARY = "groups: [A, B]\n"
+VOCABULARY = "source_ids: [A, B]\n"
 
-#: `surveyor` is for A and B; its one tool is for A alone. So a caller in B
+#: `surveyor` is for A and B; its one tool is for A alone. So a caller holding B
 #: reaches the agent and runs it with nothing -- the compounding case, in one
 #: file.
 AGENT = """name: surveyor
 description: An agent.
-groups: [A, B]
+source_ids: [A, B]
 tools:
   - name: line_count
-    groups: [A]
+    source_ids: [A]
 system_prompt: |
   You do the task.
 """
 
 
 def vocabulary(text: str = VOCABULARY):
-    return parse(yaml.safe_load(text), source="groups.yaml")
+    return parse(yaml.safe_load(text), source="source_ids.yaml")
 
 
 @pytest.fixture
 def policied(cfg):
-    """A deployment where group A reaches `line_count` through `surveyor`."""
+    """A deployment where source id A reaches `line_count` through `surveyor`."""
     tools_dir(cfg).mkdir(parents=True, exist_ok=True)
     (tools_dir(cfg) / "line_count.py").write_text(TOOL, encoding="utf-8")
     directory = cfg.catalogue_roots["agents"]
@@ -61,16 +61,16 @@ def session_at(kf, name: str):
     return session
 
 
-def built(kf, monkeypatch, groups, name: str):
+def built(kf, monkeypatch, source_ids, name: str):
     """The tool names handed to `create_deep_agent` for this caller."""
     captured = capture_build(monkeypatch)
-    held = tuple(groups) if groups is not UNSCOPED else groups
+    held = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
     kf._graph_for(
         Request(task="t", agent="surveyor"),
         session_at(kf, name),
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        groups=held,
+        source_ids=held,
     )
     return [getattr(t, "name", getattr(t, "__name__", "")) for t in captured["tools"] or ()]
 
@@ -83,7 +83,7 @@ def test_a_call_that_does_not_say_who_is_calling_is_refused(policied):
     rather than left to grant everything in silence.
     """
     kf = Kingfisher(policied)
-    with pytest.raises(AccessError, match="groups="):
+    with pytest.raises(AccessError, match="source_ids="):
         kf.run("anything")
 
 
@@ -93,17 +93,17 @@ def test_unscoped_runs_without_a_caller_and_says_so_at_the_call(policied):
     assert kf.held_for(UNSCOPED) is None
 
 
-def test_an_unknown_group_is_refused(policied):
+def test_an_unknown_source_id_is_refused(policied):
     """The closed vocabulary, from the caller's end: a typo would otherwise reach
     nothing, which looks exactly like a caller who was denied.
     """
     kf = Kingfisher(policied)
-    with pytest.raises(AccessError, match="unknown group"):
+    with pytest.raises(AccessError, match="unknown source id"):
         kf.held_for(("Q",))
 
 
-def test_naming_groups_where_there_is_no_vocabulary_is_refused(cfg):
-    """A caller naming groups against a deployment that declares none is confused, and
+def test_naming_source_ids_where_there_is_no_vocabulary_is_refused(cfg):
+    """A caller naming source ids against a deployment that declares none is confused, and
     silently ignoring them is how they stay confused.
     """
     kf = Kingfisher(cfg)
@@ -111,7 +111,7 @@ def test_naming_groups_where_there_is_no_vocabulary_is_refused(cfg):
         kf._effective_grants(("A",))
 
 
-def test_a_list_of_groups_narrows_exactly_as_a_tuple_does(policied):
+def test_a_list_of_source_ids_narrows_exactly_as_a_tuple_does(policied):
     """The trap that folding `for_groups` in had to disarm."""
     kf = Kingfisher(policied)
 
@@ -119,8 +119,8 @@ def test_a_list_of_groups_narrows_exactly_as_a_tuple_does(policied):
     assert kf.held_for(["A"]) is not None, "a list read as no opinion at all"
 
 
-def test_a_bare_string_of_groups_is_refused_rather_than_spelled_out(policied):
-    """`groups="analysts"` is iterable, so coercing it yields nine one-letter group
+def test_a_bare_string_of_source_ids_is_refused_rather_than_spelled_out(policied):
+    """`source_ids="sales_db"` is iterable, so coercing it yields eight one-letter source id
     names.
     """
     kf = Kingfisher(policied)
@@ -131,14 +131,14 @@ def test_a_bare_string_of_groups_is_refused_rather_than_spelled_out(policied):
 
 def test_a_deployment_without_a_vocabulary_is_unchanged(cfg):
     """Everything that worked before this must still work untouched -- including calling
-    `run` without saying anything about groups.
+    `run` without saying anything about source ids.
     """
     kf = Kingfisher(cfg)
     assert kf.access is None
     assert kf.held_for(None) is None
 
 
-def test_resolving_the_same_groups_twice_gives_the_same_grant(policied):
+def test_resolving_the_same_source_ids_twice_gives_the_same_grant(policied):
     """It was a handle that could be bound once and reused; now the resolution happens
     per call, so the thing worth asserting is that it is stable.
     """
@@ -178,14 +178,14 @@ def policied_kf(cfg):
 # -- the report -------------------------------------------------------------
 
 
-def test_a_definition_with_no_groups_line_is_named(cfg):
+def test_a_definition_with_no_source_ids_line_is_named(cfg):
     """Default-open must not also be silent."""
     an_agent(cfg, "assistant")
     kf = Kingfisher(replace(cfg, access=vocabulary()))
     assert ("agent", "assistant") in kf.access_report.unrestricted
 
 
-def test_a_subagent_with_no_groups_line_is_named_too(cfg):
+def test_a_subagent_with_no_source_ids_line_is_named_too(cfg):
     """Both kinds, asserted rather than assumed.
 
     Mutation testing found this: the walk could stop looking at subagents entirely
@@ -224,19 +224,19 @@ def test_the_report_reads_as_a_sentence(cfg):
 # -- what a caller is told --------------------------------------------------
 
 
-def reported(kf, groups, name: str):
-    """The withheld report a caller in these groups is handed for one turn."""
+def reported(kf, source_ids, name: str):
+    """The withheld report a caller holding these source ids is handed for one turn."""
     from kingfisher.application.reporting import withheld_by_kind
 
     session = session_at(kf, name)
-    held_names = tuple(groups) if groups is not UNSCOPED else groups
+    held_names = tuple(source_ids) if source_ids is not UNSCOPED else source_ids
     held = kf.held_for(held_names)
     graph = kf._graph_for(
         Request(task="t", agent="surveyor"),
         session,
         capabilities=kf._effective_grants(held_names),
         checkpointer=None,
-        groups=held_names,
+        source_ids=held_names,
     )
     return withheld_by_kind(
         kf._effective_grants(held_names),
@@ -244,18 +244,18 @@ def reported(kf, groups, name: str):
         session,
         graph,
         kf.catalogue,
-        agent=kf.agent_named("surveyor", groups=held_names),
+        agent=kf.agent_named("surveyor", source_ids=held_names),
         held=held,
     )
 
 
-def test_a_caller_is_not_told_about_what_their_groups_took_away(policied):
+def test_a_caller_is_not_told_about_what_their_source_ids_took_away(policied):
     """This report names every offered thing a grant left out -- so measured against the
-    unfiltered catalogue it would hand a caller the exact list of what their groups
+    unfiltered catalogue it would hand a caller the exact list of what their source ids
     denied them.
     """
     kf = Kingfisher(policied)
-    names = " ".join(n for _kind, group in reported(kf, ["B"], "w1") for n in group)
+    names = " ".join(n for _kind, withheld in reported(kf, ["B"], "w1") for n in withheld)
     assert "line_count" not in names
 
 
@@ -272,7 +272,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         session,
         capabilities=grants,
         checkpointer=None,
-        groups=held,
+        source_ids=held,
     )
     from kingfisher.application.reporting import withheld_by_kind
 
@@ -283,7 +283,7 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
             session,
             graph,
             kf.catalogue,
-            agent=kf.agent_named("surveyor", groups=held),
+            agent=kf.agent_named("surveyor", source_ids=held),
             held=kf.held_for(held),
         )
     )
@@ -302,12 +302,12 @@ Do it.
 
 SKILLED = """name: skilled
 description: Holds two skills at different audiences.
-groups: [A, B]
+source_ids: [A, B]
 skills:
   - name: audit
-    groups: [A]
+    source_ids: [A]
   - name: review
-    groups: [A, B]
+    source_ids: [A, B]
 system_prompt: |
   You do the task.
 """
@@ -329,10 +329,10 @@ def with_skills(cfg):
 def test_a_skill_audience_narrows_the_selection(with_skills):
     kf = Kingfisher(with_skills)
 
-    assert kf.agent_named("skilled", groups=UNSCOPED).declares(
+    assert kf.agent_named("skilled", source_ids=UNSCOPED).declares(
         kf.held_for(("A",))
     ).skills == ("audit", "review")
-    assert kf.agent_named("skilled", groups=UNSCOPED).declares(
+    assert kf.agent_named("skilled", source_ids=UNSCOPED).declares(
         kf.held_for(("B",))
     ).skills == ("review",)
 
@@ -347,7 +347,7 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkey
         session_at(kf, "sk1"),
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        groups=held,
+        source_ids=held,
     )
     narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
@@ -366,7 +366,7 @@ def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatc
         session_at(kf, "sk2"),
         capabilities=kf._effective_grants(held),
         checkpointer=None,
-        groups=held,
+        source_ids=held,
     )
     narrowed = [m for m in captured["middleware"] if type(m).__name__ == "NarrowedSkills"]
     advertised = {name for m in narrowed for name in m._allowed}
