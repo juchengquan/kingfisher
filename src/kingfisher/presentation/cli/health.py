@@ -21,10 +21,10 @@ from kingfisher.domain.session import sessions_root
 # everybody who runs `pip install kingfisher`. The command ships in this wheel, so it
 # takes each name where it lives.
 from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
+from kingfisher.infrastructure.sandbox import confinement
 from kingfisher.infrastructure.sandbox.bubblewrap import bubblewrap_available
 from kingfisher.infrastructure.sandbox.confinement import (
     Confinement,
-    landlock_abi,
     shell_confinement,
 )
 from kingfisher.infrastructure.workspace.backing import MemoryBacking, memory_backing
@@ -463,12 +463,6 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
         )
 
 
-#: What `sandlock` wants for its full ruleset. Below this it offers to run
-#: degraded, which S6 of `2026-08-25-a-fence-for-the-shell.md` says to report
-#: rather than accept quietly.
-FULL_LANDLOCK_ABI = 6
-
-
 #: Appended to every answer this check gives, because it qualifies all of them.
 FROM_CONFIG = " (from configuration; an injected runner is not visible here)"
 
@@ -506,24 +500,31 @@ def _or_bubblewrap() -> str:
 
 
 def _what_this_host_could_do() -> str:
-    """The remedy, from what the kernel actually answers rather than its name."""
+    """The remedy, from what the kernel actually answers rather than its name.
+
+    Asked through `confinement`, the same questions the fence asks of the same probes,
+    so this advice and the fence cannot disagree about what the host can do.
+    """
     if platform.system() != "Linux":
         return "set KINGFISHER_SHELL_SANDBOX, or confine the process itself"
-    abi = landlock_abi()
+    release, abi = platform.release(), confinement.landlock_abi()
     if abi is None:
+        return f"this kernel ({release}) offers no Landlock. {_or_bubblewrap()}"
+    if abi < confinement.REQUIRED_LANDLOCK_ABI:
         return (
-            f"this kernel ({platform.release()}) offers no Landlock. {_or_bubblewrap()}"
+            f"this kernel ({release}) has Landlock ABI {abi}, below the "
+            f"{confinement.REQUIRED_LANDLOCK_ABI} a full ruleset needs -- a fence here "
+            f"would be weaker than one on a newer node. {_or_bubblewrap()}"
         )
-    if abi < FULL_LANDLOCK_ABI:
+    if not confinement.landlock_ready():
         return (
-            f"this kernel ({platform.release()}) has Landlock ABI {abi}, below the "
-            f"{FULL_LANDLOCK_ABI} a full ruleset needs -- a fence here would be weaker "
-            f"than one on a newer node. {_or_bubblewrap()}"
+            f"this kernel ({release}) has Landlock ABI {abi}, enough for a full fence, "
+            "and `sandlock` is the missing half: pip install 'kingfisher[fence]', and "
+            "KINGFISHER_SHELL_SANDBOX=auto, the default, fences `execute` here"
         )
     return (
-        f"this kernel ({platform.release()}) has Landlock ABI {abi}, which is enough to fence "
-        "`execute` -- until that is wired, set KINGFISHER_SHELL_SANDBOX=external and run it in "
-        "a container that mounts only the workspace"
+        f"this kernel ({release}) has Landlock ABI {abi} and `sandlock` is installed, "
+        "so KINGFISHER_SHELL_SANDBOX=auto, the default, fences `execute` here"
     )
 
 

@@ -964,7 +964,7 @@ def test_an_unconfined_shell_is_told_what_this_kernel_could_do(cfg, monkeypatch)
 
     monkeypatch.setattr(health.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
-    monkeypatch.setattr(health, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
 
     check = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"]
 
@@ -980,7 +980,7 @@ def test_a_kernel_below_the_full_ruleset_is_told_it_is_below(cfg, monkeypatch):
 
     monkeypatch.setattr(health.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health.platform, "release", lambda: "6.1.0")
-    monkeypatch.setattr(health, "landlock_abi", lambda: 4)
+    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 4)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
@@ -996,12 +996,67 @@ def test_a_kernel_with_no_landlock_is_not_offered_one(cfg, monkeypatch):
 
     monkeypatch.setattr(health.platform, "system", lambda: "Linux")
     monkeypatch.setattr(health.platform, "release", lambda: "5.10.0")
-    monkeypatch.setattr(health, "landlock_abi", lambda: None)
+    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: None)
 
     remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
 
     assert "no Landlock" in remedy
     assert "external" in remedy
+
+
+def test_a_kernel_that_can_fence_is_told_what_is_missing_rather_than_to_wait(cfg, monkeypatch):
+    """The remedy told a kernel that could already be fenced to wait "until that is
+    wired", beside a warning from the fence naming the one package that was missing.
+    """
+    from dataclasses import replace
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health.confinement, "landlock_ready", lambda: False)
+
+    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+
+    assert "kingfisher[fence]" in remedy
+    assert "wired" not in remedy
+    assert "below" not in remedy
+
+
+def test_a_kernel_ready_to_fence_is_told_the_one_setting_that_turns_it_on(cfg, monkeypatch):
+    """`off` on a host with Landlock and `sandlock` both in place is one setting away."""
+    from dataclasses import replace
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health.confinement, "landlock_ready", lambda: True)
+
+    remedy = {c.name: c for c in examine(replace(cfg, shell_sandbox="off"))}["shell"].remedy
+
+    assert "KINGFISHER_SHELL_SANDBOX=auto" in remedy
+    assert "kingfisher[fence]" not in remedy
+
+
+def test_the_warning_and_the_remedy_name_the_same_missing_piece(cfg, monkeypatch):
+    """On `auto` the warning is the fence's account of why it is not running and the
+    remedy is doctor's. Faked once, at the fence, so a reading of the kernel of
+    doctor's own would show here as the two disagreeing.
+    """
+    from dataclasses import replace
+
+    from kingfisher.infrastructure.sandbox import bubblewrap
+
+    monkeypatch.setattr(health.platform, "system", lambda: "Linux")
+    monkeypatch.setattr(health.platform, "release", lambda: "6.12.0")
+    monkeypatch.setattr(health.confinement, "landlock_abi", lambda: 6)
+    monkeypatch.setattr(health.confinement, "landlock_ready", lambda: False)
+    monkeypatch.setattr(bubblewrap, "bubblewrap_available", lambda: False)
+
+    check = {c.name: c for c in examine(replace(cfg, shell_sandbox="auto"))}["shell"]
+
+    assert check.verdict == "warn"
+    assert "sandlock" in check.detail
+    assert "sandlock" in check.remedy
 
 
 def test_a_confined_shell_names_what_is_confining_it(monkeypatch):
