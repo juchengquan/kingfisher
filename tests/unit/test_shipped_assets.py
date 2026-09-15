@@ -270,12 +270,14 @@ def test_no_preset_names_a_model(shipped):
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 
-def test_a_shipped_subagent_writes_metadata(shipped):
+def test_metadata_is_shown_on_both_kinds_that_take_it(shipped):
     """`metadata:` is a field both definition formats document, and one no shipped file
     writes is a field a reader has to take on trust.
     """
+    agents = LocalAgentRepository(shipped / "agents").specs.values()
     delegates = LocalSubagentRepository(shipped / "subagents").specs.values()
 
+    assert any(spec.metadata for spec in agents), "no shipped agent writes metadata"
     assert any(spec.metadata for spec in delegates), "no shipped subagent writes metadata"
 
 
@@ -332,7 +334,7 @@ def test_every_preset_agent_parses(shipped):
     # `test_seed_leaves_behind_a_definition_that_names_middleware`. Left behind
     # is not unread: they are definitions of this kind, in this kind's folder,
     # and they parse like the rest.
-    assert set(specs) == {"analyst", "assistant", "general", "researcher", "surveyor"}
+    assert set(specs) == {"analyst", "assistant", "general", "researcher", "scribe", "surveyor"}
     for spec in specs.values():
         assert spec.description.strip()
         assert len(spec.system_prompt) > 200  # a real prompt, not a stub
@@ -1385,6 +1387,7 @@ def test_the_other_presets_still_restrict_nobody(shipped):
         "assistant",
         "general",
         "researcher",
+        "scribe",
         "surveyor",
     }
 
@@ -1531,3 +1534,83 @@ def test_the_compaction_example_stops_rather_than_lose_the_note(shipped):
 
     with pytest.raises(RuntimeError, match="could not write"):
         _fired(compact, plenty)
+
+
+# -- an agent in a folder, and the delegates it reaches -----------------------
+
+
+def _scribe_delegates(cfg, session_dir, shipped, monkeypatch) -> dict:
+    """`scribe`, built from the shipped catalogue alone, as the delegates it handed on."""
+    from kingfisher.infrastructure.catalogue import Definitions
+
+    captured = capture_build(monkeypatch)
+    build_agent(
+        replace(cfg, skills_enabled=True),
+        agent=LocalAgentRepository(shipped / "agents").specs["scribe"],
+        catalogue=Definitions.from_roots(
+            {
+                kind: shipped / kind
+                for kind in ("agents", "skills", "subagents", "tools", "middlewares")
+            }
+        ),
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+    )
+    return {spec["name"]: spec for spec in captured["subagents"]}
+
+
+def test_an_agent_in_a_folder_is_named_by_its_field(shipped):
+    """`agents/` may nest at any depth, and a walk that stopped at its top would lose
+    `scribe` without a word.
+    """
+    assert (shipped / "agents" / "incident" / "scribe.yaml").is_file(), (
+        "the example left its folder, so nothing shows that an agent may sit in one"
+    )
+    assert "scribe" in LocalAgentRepository(shipped / "agents").specs
+
+
+def test_a_shipped_agent_says_every_builtin_with_the_star(shipped):
+    """`formats.md` documents three spellings of every built-in, and this is the only
+    file showing the one that says so on purpose.
+    """
+    written = yaml.safe_load(
+        (shipped / "agents" / "incident" / "scribe.yaml").read_text(encoding="utf-8")
+    )
+
+    assert written["builtin_tools"] == ["*"]
+    assert LocalAgentRepository(shipped / "agents").specs["scribe"].builtin_tools == ALL
+
+
+def test_every_shipped_delegate_is_named_by_some_agent(shipped):
+    """A delegate no agent names is a definition nothing can call.
+
+    `redactor` and `show-your-work` were both, and every test of either built it
+    directly, so nothing noticed that no shipped agent could reach them.
+    """
+    delegates = LocalSubagentRepository(shipped / "subagents").specs
+    named: set[str] = set()
+    for agent in LocalAgentRepository(shipped / "agents").specs.values():
+        # Each agent's own list, not the chain below it. The build activates what an
+        # agent names; whether a helper arrives unnamed is a separate question, and
+        # this rule should not lean on the answer.
+        named |= set(delegates) if agent.subagents == ALL else set(agent.subagents or ())
+
+    assert delegates, "an empty catalogue would pass the assertion below"
+    assert set(delegates) <= named, f"no shipped agent names {sorted(set(delegates) - named)}"
+
+
+def test_the_nested_agent_hands_the_compiled_delegate_its_own_grant(
+    cfg, session_dir, shipped, monkeypatch
+):
+    """`show-your-work` writes no `tools:`, so it is handed exactly what `scribe` was
+    granted -- three tools that read a log, and nothing that reaches the network.
+
+    Driven through a build, because what a compiled delegate is handed is decided when
+    the agent is assembled, and shows in no definition.
+    """
+    delegates = _scribe_delegates(cfg, session_dir, shipped, monkeypatch)
+
+    assert {"redactor", "show-your-work"} <= set(delegates)
+    answering = delegates["show-your-work"]["runnable"].nodes["answer"].bound
+    handed = set(answering.nodes["tools"].bound.tools_by_name)
+    assert handed == {"log_levels", "status_codes", "line_count"}
