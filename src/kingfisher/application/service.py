@@ -640,6 +640,14 @@ class Kingfisher(Sessions, Disposal):
         request = Request.coerce(request)
         cfg, dirs = self.cfg, self.dirs
         session = session if session is not None else self.open_session_for(request)
+        # Who is calling, before the session is marked, claimed or written to. Any
+        # later and a refused caller's files are already in the `/data` of a session
+        # that was never theirs; after the claim, and a turn running in it would
+        # answer "busy" where an id nobody issued answers "no session". The grant
+        # is asked for here only for its refusals, and again below for itself.
+        self._effective_grants(source_ids)
+        if not self._reaches_session(session.directory, self.held_for(source_ids)):
+            raise self._unknown_session(session.id)
         # A turn writes inside the session, never to the session itself, so the
         # timestamp `retention.expired` reads would still say "idle" for a
         # conversation in daily use. Recorded here, at the top of a turn, rather

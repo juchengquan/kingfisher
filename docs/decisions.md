@@ -454,6 +454,25 @@ with a body naming no source id, while the message that lists them all goes to t
 service logger. Reading and deleting a session are checked like running one: a
 session you cannot run is one you cannot touch.
 
+**A turn checks who is calling before it touches the session.** The entry
+reversing `access.yaml` lists "the per-turn re-check of a session's pinned agent"
+among what survived, and nothing performed it. A session's first turn asked
+whether the caller could open the agent it named; every later turn returned the
+pinned agent without asking, so a caller holding another's session id ran in it
+with everything that agent grants, while reading the same session answered that
+it did not exist. The test named for the case never pinned an agent, and passed on
+the first-turn check.
+
+It is the first thing a turn does, before the session is marked used, claimed or
+written to. Refused at the agent -- the obvious place, and one line -- the
+caller's files were already in the session's `/data` and the session marked as
+used, which was measured rather than reasoned about; the refusal of a call that
+names nobody sat equally late and moved up with it. The rule is the one reading
+a session already used, now written once for both, and the refusal is word for
+word the one an id nobody issued gets, so holding a real id teaches nothing: not
+whose the session is, not which agent it runs, not whether a turn is running in
+it. *(2026-09-15.)*
+
 **`errors.STATUS` stays exactly the caller-facing set.** A deployment error that
 still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
 as such -- the first table's value is that it is checkable in both directions,
