@@ -89,6 +89,7 @@ class Environment:
             subagents_root=self.optional_path("KINGFISHER_SUBAGENTS_DIR"),
             tools_root=self.optional_path("KINGFISHER_TOOLS_DIR"),
             agents_root=self.optional_path("KINGFISHER_AGENTS_DIR"),
+            middlewares_root=self.optional_path("KINGFISHER_MIDDLEWARES_DIR"),
             # Read here rather than only in `config` below for the reason the
             # definition roots are: laying a workspace out places the worked example
             # for each of these, and that happens before a catalogue can be
@@ -147,6 +148,7 @@ class Environment:
             subagents_root=paths.subagents_root,
             tools_root=paths.tools_root,
             agents_root=paths.agents_root,
+            middlewares_root=paths.middlewares_root,
             assets=paths.assets,
             session_store=self.optional_path("KINGFISHER_SESSION_STORE"),
             session_store_factory=self.optional_text("KINGFISHER_SESSION_STORE_FACTORY"),
