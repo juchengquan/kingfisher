@@ -5,6 +5,7 @@ from __future__ import annotations
 import sys
 import warnings
 from collections.abc import Callable
+from dataclasses import dataclass
 from functools import cache
 from typing import TYPE_CHECKING, Any
 
@@ -15,6 +16,8 @@ from kingfisher.domain.capabilities import (
     Selection,
     approved_middleware,
     approved_settings,
+    refuse_unprovided_wants,
+    refuse_written_wants,
 )
 
 if TYPE_CHECKING:
@@ -29,6 +32,22 @@ if TYPE_CHECKING:
 #: and a signature narrower than the contract is worse than a loose one, because
 #: the reader who believes it is the one following the docs.
 MiddlewareFactory = Callable[..., Any]
+
+
+@dataclass(frozen=True)
+class ByName:
+    """A want a definition may choose by name, and what it falls back to.
+
+    Wrapping is what makes a want writable at all. `backend` is an object with no
+    name a file could carry, so a value written for it is refused; a model has one,
+    and `resolve` is what that name means -- the catalogue lookup, the endpoint the
+    request may or may not reach, and the instance built from the profile.
+    """
+
+    fallback: Any
+    #: Called with the name a definition wrote and a subject naming who wrote it --
+    #: the refusal it raises is read by whoever owns that file, not by the harness.
+    resolve: Callable[[str, str], Any]
 
 
 def offered_middleware(registered: Mapping[str, Any], workspace: Any) -> dict[str, Any]:
@@ -57,8 +76,14 @@ def declared_middleware(
     allowed: Selection,
     *,
     kind: str,
+    provisions: Mapping[str, Any] | None = None,
 ) -> list[Any]:
-    """Build the middleware a definition asked for, agent or delegate."""
+    """Build the middleware a definition asked for, agent or delegate.
+
+    `provisions` is what this build holds for a class that declared `wants` -- see
+    `_wanted`. Defaulted to nothing rather than required, so a caller with no graph
+    around it can still build a middleware that wants none.
+    """
     subject = f"{kind} {spec.name!r}"
     approved = approved_middleware(
         spec.middlewares,
@@ -77,6 +102,7 @@ def declared_middleware(
             wrote.get(name) or {},
             registered_as=name,
             subject=subject,
+            provisions=provisions or {},
         )
         _warn_if_it_replaces_deepagents(instance, registered_as=name, subject=subject)
         built.append(instance)
@@ -112,15 +138,74 @@ def refuse_unbuildable_middleware(registry: Mapping[str, Any]) -> None:
             raise CapabilityError(_uncallable(entry, registered_as=name))
 
 
+def _wanted(
+    entry: type,
+    written: dict[str, Any],
+    provisions: Mapping[str, Any],
+    *,
+    registered_as: str,
+    subject: str,
+) -> dict[str, Any]:
+    """`written`, with every key the class declared in `wants` replaced by an object.
+
+    A want is filled in where the agent is assembled, because that is the only place
+    that knows -- the model this graph runs, say. None of what belongs here is a
+    scalar, so none of it can come out of a yaml file, and a class closing over one
+    instead would close over the deployment's answer rather than this build's.
+
+    What may be wanted is whatever the call site holds, deliberately: a list here
+    would be a second place to edit and a place to be wrong.
+    """
+    wants = tuple(getattr(entry, "wants", ()) or ())
+    if not wants:
+        return written
+    refuse_unprovided_wants(
+        wants, provided=tuple(provisions), subject=subject, registered_as=registered_as
+    )
+    # Which wants may be written is decided here rather than in the domain because it
+    # is a fact about the objects this build is holding, not about a list of names.
+    whole = tuple(name for name in wants if not isinstance(provisions[name], ByName))
+    refuse_written_wants(
+        whole,
+        written=(*(getattr(entry, "yaml_settable", ()) or ()), *written),
+        subject=subject,
+        registered_as=registered_as,
+    )
+
+    named = set(wants)
+    arguments = {key: value for key, value in written.items() if key not in named}
+    for name in wants:
+        held = provisions[name]
+        if not isinstance(held, ByName):
+            arguments[name] = held
+        elif name in written:
+            # Whatever the file wrote, as the name it was meant to be. `resolve`
+            # refuses an unknown one and quotes what it read, which is the answer
+            # `model: 5` wants as much as a misspelling is.
+            arguments[name] = held.resolve(
+                str(written[name]), f"middleware {registered_as!r} on {subject}"
+            )
+        else:
+            arguments[name] = held.fallback
+    return arguments
+
+
 def _instantiate(
-    entry: Any, wrote: Mapping[str, object], *, registered_as: str, subject: str
+    entry: Any,
+    wrote: Mapping[str, object],
+    *,
+    registered_as: str,
+    subject: str,
+    provisions: Mapping[str, Any],
 ) -> Any:
     """One registry entry, built into the middleware it stands for.
 
     A **class** is the shape that can be configured. `defaults` is what the
     deployment supplies, the settings a definition wrote are laid over the top, and
     `yaml_settable` on the class decides which of those it was allowed to write.
-    Deployment first and definition second is the whole precedence rule.
+    Deployment first and definition second is the whole precedence rule, and `wants`
+    sits underneath both: a wanted key falls back to what the harness holds, and a
+    name written over it in either half is resolved rather than passed through.
 
     Anything else is a **zero-argument factory**. It takes no settings and cannot be
     given any -- there is no seam to pass them through, since whatever values it uses
@@ -145,6 +230,18 @@ def _instantiate(
                 f"these"
             )
             raise CapabilityError(msg)
+        if getattr(entry, "wants", None):
+            # A callable object that declared `wants` and is not a class. Refused
+            # rather than ignored: a want silently dropped is a middleware built
+            # without the model it was written to use, which fails later and
+            # somewhere else.
+            msg = (
+                f"{subject} names middleware {registered_as!r}, which declares `wants` "
+                f"and was registered as a factory taking no arguments. Only a "
+                f"registered *class* is handed anything -- a factory is called with "
+                f"nothing, and there is nowhere for these to go"
+            )
+            raise CapabilityError(msg)
         return entry()
 
     approved = approved_settings(
@@ -156,7 +253,10 @@ def _instantiate(
     # `defaults` is the deployment's half and is copied rather than passed, so a
     # class attribute cannot be mutated by the merge and carry one definition's
     # setting into the next agent built from the same registry.
-    arguments = {**dict(getattr(entry, "defaults", None) or {}), **approved}
+    written = {**dict(getattr(entry, "defaults", None) or {}), **approved}
+    arguments = _wanted(
+        entry, written, provisions, registered_as=registered_as, subject=subject
+    )
     try:
         return entry(**arguments)
     except TypeError as exc:
@@ -168,9 +268,9 @@ def _instantiate(
         msg = (
             f"{subject} could not build middleware {registered_as!r}: "
             f"{entry.__name__} was called with {given} and refused -- {exc}. A "
-            f"registered class is called with its own `defaults` plus whatever the "
-            f"definition was allowed to write, so every argument it requires "
-            f"belongs in `defaults`"
+            f"registered class is called with its own `defaults`, whatever the "
+            f"definition was allowed to write, and whatever it named in `wants`, so "
+            f"every argument it requires belongs in one of those"
         )
         raise CapabilityError(msg) from exc
 

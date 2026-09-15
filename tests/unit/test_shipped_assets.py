@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import fields, replace
+from typing import Any
 
 import pytest
 import yaml
@@ -11,6 +12,7 @@ from langchain_core.messages import AIMessage, HumanMessage, ToolMessage
 
 from kingfisher.domain.capabilities import ALL, Capabilities, CapabilityError
 from kingfisher.infrastructure.harness.agent import build_agent, declared_middleware
+from kingfisher.infrastructure.harness.middleware import ByName
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.importing import load
@@ -471,10 +473,29 @@ def _documented_registry(shipped):
     """The wiring block the examples tell you to paste, pasted."""
     cap = _call_cap_module(shipped)
     note = load(shipped / "middlewares" / "tool_note.py", declares="ToolNote")
+    compaction = load(shipped / "middlewares" / "compaction.py", declares="Compact")
     return {
         "call-cap-strict": cap.CallCap,
         "call-cap-generous": cap.CallCapGenerous,
         "tool-note": note.ToolNote,
+        "compact": compaction.Compact,
+    }
+
+
+def _shipped_provisions(definition):
+    """What `build_agent` would fill a `wants` from, for a test that calls the
+    builder directly instead.
+
+    The values are stand-ins and one of them is a bare object, because these tests
+    assert which middleware was built rather than what it then does. What this has
+    to be right about is the *keys*: a class declaring a want is refused against
+    them, so a key missing here would fail every one of these for the wrong reason.
+    """
+    model = FakeToolCallingModel(responses=[AIMessage(content="ok")])
+    return {
+        "model": ByName(model, resolve=lambda written, subject: model),
+        "backend": object(),
+        "definition": definition,
     }
 
 
@@ -500,7 +521,11 @@ def _wiring_per_example(shipped) -> dict[str, dict[str, str]]:
                 load(shipped / "middlewares" / filename, declares=declares).__doc__ or ""
             )
         )
-        for filename, declares in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
+        for filename, declares in (
+            ("call_cap.py", "CallCap"),
+            ("tool_note.py", "ToolNote"),
+            ("compaction.py", "Compact"),
+        )
     }
 
 
@@ -535,7 +560,11 @@ def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
     """The block a deployment pastes has to name code that is there."""
     modules = {
         name: load(shipped / "middlewares" / filename, declares=name)
-        for filename, name in (("call_cap.py", "CallCap"), ("tool_note.py", "ToolNote"))
+        for filename, name in (
+            ("call_cap.py", "CallCap"),
+            ("tool_note.py", "ToolNote"),
+            ("compaction.py", "Compact"),
+        )
     }
     defined = {
         attribute
@@ -559,6 +588,24 @@ def test_the_wiring_block_names_classes_the_examples_actually_define(shipped):
     assert not missing, (
         f"a wiring block registers {missing}, and those classes are not defined "
         f"by the examples that print it"
+    )
+
+
+def test_the_block_the_agent_file_prints_registers_what_the_agent_names(shipped):
+    """`researcher.yaml` prints its own copy of the wiring block, and nothing read it.
+
+    There are four copies of one registry: three module docstrings, held equal to
+    each other and to what the directory offers, and this header, held to nothing.
+    It drifted the moment a fourth middleware was added -- seeding the agent and
+    pasting its block would have left `compact` unregistered, with the refusal
+    naming a name the block never mentions.
+    """
+    printed = dict(WIRING.findall((shipped / "agents" / "researcher.yaml").read_text("utf-8")))
+
+    assert printed, "the block moved out of the header or changed shape"
+    assert set(printed) == set(_documented_registry(shipped)), (
+        "the block the agent file prints registers different names from the one the "
+        "examples print, so one of the two leaves a reader with a broken deployment"
     )
 
 
@@ -653,7 +700,7 @@ def test_seed_leaves_behind_a_definition_that_names_middleware(shipped, tmp_path
     assert {left.label: (left.wants, left.names) for left in done.skipped} == {
         "agents/researcher.yaml": (
             "middlewares",
-            ("call-cap-strict", "call-cap-generous", "tool-note"),
+            ("call-cap-strict", "call-cap-generous", "tool-note", "compact"),
         ),
         "subagents/sweeper.yaml": ("middlewares", ("call-cap-generous", "tool-note")),
         "agents/analyst.yaml": ("source_ids", ("sales_db", "audit_log", "sales_db_pii")),
@@ -861,10 +908,15 @@ def test_the_middleware_examples_are_definitions_the_formats_accept(shipped):
     agent, delegate = _example_definitions(shipped)
 
     assert agent.name == "researcher"
-    # Three, not two: `call-cap-generous` is granted here so `sweeper` may name
-    # it, since an agent's `middlewares:` is the ceiling its delegates are
-    # clamped by. The agent runs under both caps and the stricter one decides.
-    assert agent.middlewares == ("call-cap-strict", "call-cap-generous", "tool-note")
+    # `call-cap-generous` is granted here so `sweeper` may name it, since an
+    # agent's `middlewares:` is the ceiling its delegates are clamped by. The
+    # agent runs under both caps and the stricter one decides.
+    assert agent.middlewares == (
+        "call-cap-strict",
+        "call-cap-generous",
+        "tool-note",
+        "compact",
+    )
     assert delegate.name == "sweeper"
     assert delegate.middlewares == ("call-cap-generous", "tool-note")
     assert agent.subagents == ("sweeper",), "the agent half has to name the delegate half"
@@ -897,13 +949,22 @@ def test_the_middleware_examples_build_against_the_registry_they_document(shippe
     registry = _documented_registry(shipped)
     agent, delegate = _example_definitions(shipped)
 
-    built = declared_middleware(agent, registry, ALL, kind="agent")
-    delegated = declared_middleware(delegate, registry, ALL, kind="subagent")
+    built = declared_middleware(
+        agent, registry, ALL, kind="agent", provisions=_shipped_provisions(agent)
+    )
+    delegated = declared_middleware(
+        delegate, registry, ALL, kind="subagent", provisions=_shipped_provisions(delegate)
+    )
 
     # `CallCapGenerous` is in the agent's list because `sweeper` names it and an
     # agent grants what its delegates may reach. It is built for the agent too,
     # which the file says out loud -- the stricter cap beside it still decides.
-    assert [type(m).__name__ for m in built] == ["CallCap", "CallCapGenerous", "ToolNote"]
+    assert [type(m).__name__ for m in built] == [
+        "CallCap",
+        "CallCapGenerous",
+        "ToolNote",
+        "Compact",
+    ]
     assert [type(m).__name__ for m in delegated] == ["CallCapGenerous", "ToolNote"]
     assert built[0] is not delegated[0], "one instance for both would share a budget"
     assert built[1] is not delegated[0], (
@@ -929,8 +990,16 @@ def test_the_note_example_is_one_class_configured_two_ways(shipped):
     def _note(built):
         return next(m for m in built if type(m).__name__ == "ToolNote")
 
-    note = _note(declared_middleware(agent, registry, ALL, kind="agent"))
-    delegated = _note(declared_middleware(delegate, registry, ALL, kind="subagent"))
+    note = _note(
+        declared_middleware(
+            agent, registry, ALL, kind="agent", provisions=_shipped_provisions(agent)
+        )
+    )
+    delegated = _note(
+        declared_middleware(
+            delegate, registry, ALL, kind="subagent", provisions=_shipped_provisions(delegate)
+        )
+    )
 
     assert note._text == "Cite the path and line for anything you assert."
     assert delegated._text == "Return the path and line, not the file."
@@ -958,7 +1027,9 @@ def test_the_note_example_refuses_the_key_it_did_not_open(shipped):
     )
 
     with pytest.raises(CapabilityError, match="does not accept"):
-        declared_middleware(greedy, registry, ALL, kind="agent")
+        declared_middleware(
+            greedy, registry, ALL, kind="agent", provisions=_shipped_provisions(greedy)
+        )
 
 
 def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
@@ -973,7 +1044,9 @@ def test_the_note_example_falls_back_to_the_deployments_wording(shipped):
     agent, _ = _example_definitions(shipped)
     quiet = replace(agent, middlewares=("tool-note",), middleware_settings={})
 
-    (built,) = declared_middleware(quiet, registry, ALL, kind="agent")
+    (built,) = declared_middleware(
+        quiet, registry, ALL, kind="agent", provisions=_shipped_provisions(quiet)
+    )
 
     assert built._text == registry["tool-note"].defaults["text"]
     assert built._text, "the bare form has to do something"
@@ -1205,3 +1278,109 @@ def test_the_middleware_pairing_builds_from_the_workspace_alone(cfg, session_dir
     )
 
     assert graph is not None
+
+
+def _compaction(shipped):
+    """`Compact`, loaded the way a deployment would import it."""
+    return load(shipped / "middlewares" / "compaction.py", declares="Compact").Compact
+
+
+def _fired(middleware: Any, messages: list[Any]) -> Any:
+    """One `before_model` call, with the middleware deliberately typed loosely.
+
+    No `Runtime` is constructed: this hook never reads it, and building one would
+    be a test of langchain's constructor rather than of the example.
+    """
+    return middleware.before_model({"messages": messages}, None)
+
+
+async def _afired(middleware: Any, messages: list[Any]) -> Any:
+    """Its other half, which is a separate loop over one turn rather than a wrapper."""
+    return await middleware.abefore_model({"messages": messages}, None)
+
+
+def test_an_unset_trigger_never_fires_which_is_why_the_example_sets_one(shipped):
+    """The claim `Compact.defaults` rests on, pinned against langchain itself.
+
+    `trigger=None` normalises to no clauses, so a summariser shipped without one
+    installs, reports, wraps every model call and summarises nothing -- for the life
+    of the deployment, with nothing said. The comment saying so is worth no more
+    than this assertion: if upstream ever gives it a default, the file is wrong and
+    this is what says so.
+    """
+    from langchain.agents.middleware import SummarizationMiddleware
+
+    plenty = [HumanMessage(content="x" * 400) for _ in range(500)]
+    unset = SummarizationMiddleware(model=FakeToolCallingModel(responses=[AIMessage("ok")]))
+
+    assert _fired(unset, plenty) is None
+
+
+def test_the_compaction_example_keeps_what_it_threw_away(shipped, cfg, session_dir):
+    """The example run rather than read, on both paths.
+
+    It is the only shipped middleware that needs an object rather than a scalar, so
+    it is the only one whose `wants` can be wrong in a way no import catches: built
+    with the model and the backend this build holds, it has to summarise *and* leave
+    the discarded messages somewhere readable. `stream` and `astream` are two loops
+    over one turn, and a note written on only one of them is absent for whoever
+    reached for the other.
+    """
+    import asyncio
+
+    from kingfisher.infrastructure.harness.backend import default_backend
+
+    backend = default_backend(cfg, session_dir)
+    spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
+    cls = _compaction(shipped)
+    # Its own `defaults`, the way the build path applies them. Values written here
+    # instead would be a test of numbers this file chose rather than of the ones
+    # the example ships, which is how a trigger nobody set passes its own test.
+    compact = cls(
+        model=FakeToolCallingModel(responses=[AIMessage("a summary")] * 2),
+        backend=backend,
+        definition=spec,
+        **cls.defaults,
+    )
+    # Distinguishable content, so the note can be checked for the messages that
+    # went rather than merely for having been written.
+    plenty = [HumanMessage(content=f"message {n}", id=str(n)) for n in range(200)]
+
+    assert _fired(compact, plenty) is not None
+    assert asyncio.run(_afired(compact, plenty)) is not None
+
+    first = backend.read(f"/derived/compaction/{spec.name}-1.md")
+    second = backend.read(f"/derived/compaction/{spec.name}-2.md")
+
+    assert "message 0" in str(first), "the sync path kept nothing"
+    assert "message 0" in str(second), "the async path kept nothing"
+
+
+def test_the_compaction_example_stops_rather_than_lose_the_note(shipped):
+    """A backend reports a failed write by *returning* one, not by raising.
+
+    So ignoring the result is what happens by default rather than a decision
+    anybody makes, and it is the wrong one here: the middleware exists so that what
+    compaction discards stays readable, and a run carrying on in the belief that it
+    has that record is worse off than one that stops.
+    """
+    from types import SimpleNamespace
+
+    class Refuses:
+        """A backend that cannot write, which is what a full disk looks like."""
+
+        def write(self, file_path, content):
+            return SimpleNamespace(error="no space left on device")
+
+    cls = _compaction(shipped)
+    spec = LocalAgentRepository(shipped / "agents").specs["researcher"]
+    compact = cls(
+        model=FakeToolCallingModel(responses=[AIMessage("a summary")]),
+        backend=Refuses(),
+        definition=spec,
+        **cls.defaults,
+    )
+    plenty = [HumanMessage(content=f"message {n}", id=str(n)) for n in range(200)]
+
+    with pytest.raises(RuntimeError, match="could not write"):
+        _fired(compact, plenty)

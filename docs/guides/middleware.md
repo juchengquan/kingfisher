@@ -14,10 +14,10 @@ in [`decisions.md`](../decisions.md) has the rule, and
 
 This page is the deployment's half. What a definition may then write — the field,
 the long form with `settings`, what is granted rather than inherited — is
-[`formats.md`](formats.md). The two worked examples are
-`assets_examples/middlewares/call_cap.py` and `tool_note.py`, in that order; the
-suite loads and runs both, so they cannot rot quietly, and nothing here repeats
-them.
+[`formats.md`](formats.md). The three worked examples are
+`assets_examples/middlewares/call_cap.py`, `tool_note.py` and `compaction.py`, in
+that order; the suite loads and runs all three, so they cannot rot quietly, and
+nothing here repeats them.
 
 **A kingfisher middleware is a LangChain middleware.** The base class is
 `langchain.agents.middleware.AgentMiddleware`, the hooks are LangChain's to
@@ -91,6 +91,67 @@ repository is built per request, so a client made at module level would be a new
 client on every turn. Put the object where it is made once: in the program that
 constructs `Kingfisher`.
 
+**And it is the wrong answer for anything this build decides.** A client is the
+same object for every agent and every turn, which is why closing over one works.
+The model an agent runs is not — the agent file may pin one, a delegate may pin
+another, a request may override either — so a class closing over a model closes
+over the deployment's *default* and runs that whatever the agent in front of it
+was pinned to. The next section is for those.
+
+## When it needs something this build decides
+
+Three things are not the deployment's to make once: **the model this graph runs**,
+**the backend it reads and writes through**, and **the definition it was built
+for**. A class asks for them by name:
+
+```python
+class Compact(SummarizationMiddleware):
+    name = "compact"
+    wants = frozenset({"model", "backend", "definition"})
+    defaults = {"trigger": ("messages", 60), "keep": ("messages", 20)}
+    yaml_settable = frozenset({"model"})
+
+    def __init__(self, model, backend, definition, trigger, keep) -> None:
+        ...
+```
+
+`wants` is the third class attribute, beside `defaults` and `yaml_settable`, and
+each name in it is filled in where the agent is assembled. `model` is what *this*
+graph runs — the agent's own, a delegate's own, or whatever a delegate inherited
+from the one that summoned it. `backend` is the filesystem the agent sees, rooted
+at this session. `definition` is the `AgentSpec` or `SubagentSpec` this instance
+belongs to.
+
+**The set is not a closed list.** It is whatever the two build sites hold, and
+both hold the same keys so a `middlewares:` line means the same thing in an agent
+file and a subagent file. A want nothing there answers to is refused when the
+agent is built, listing what this build does provide — which is the listing to
+read, because there is no constant anywhere to look up instead.
+
+**A wanted key is a name in yaml and an object in Python.** `model` above is also
+in `yaml_settable`, which is not a contradiction:
+
+```yaml
+middlewares:
+  - name: compact
+    settings: {model: cheap}
+```
+
+`cheap` is resolved through the same catalogue a subagent's `model:` field goes
+through — `models.yaml`, the profile's params, the endpoint's `base_url` — and an
+endpoint this request may not reach is refused before a prompt is sent anywhere.
+Write nothing and the fallback applies, which is the model the agent is already
+running. A `defaults` entry may name one too, which is how a deployment pins the
+model in its own code and opens nothing.
+
+`backend` and `definition` cannot be written, because there is no name a file
+could carry for them. A class naming one in `defaults` or `yaml_settable` is
+refused, whether or not any definition ever writes it.
+
+**A middleware still imports nothing from kingfisher.** What it receives is a
+LangChain chat model, a deepagents backend and a frozen spec; `compaction.py`
+imports `langchain` and nothing else, exactly as the other two do.
+
 ## Or put it in the workspace
 
 `middlewares/` is a definition kind, so a deployment that does not need to wire
@@ -139,7 +200,8 @@ thing could rewrite.
 
 ## What a definition may configure
 
-Two class attributes, and neither is required:
+Two class attributes, and neither is required — `wants` above is the third and is
+the harness's half rather than a definition's:
 
 ```python
 class ToolNote(AgentMiddleware):
@@ -245,6 +307,10 @@ agent is built, before the model is reached.
 | A definition writes a setting outside `yaml_settable` | what that entry does accept, or that it accepts nothing at all |
 | A definition writes settings for an entry registered as a factory | that only a registered *class* takes settings |
 | A registered class needs an argument `defaults` does not cover | `could not build middleware`, naming the entry and what it was called with |
+| A class `wants` something this build does not provide | what it wants and what is provided, since there is no list to look up instead |
+| A class gives a wanted key a value, and that key is not written by name | that the harness hands it over whole, so a value there has nowhere to go |
+| A definition names a model whose endpoint the request withheld | `resolves to endpoint ... which this request may not reach`, before anything is sent |
+| A registered factory declares `wants` | that only a registered *class* is handed anything |
 
 The last one is the deployment's mistake rather than the definition's, and it is
 worded that way: every argument the class requires belongs in `defaults`.

@@ -14,6 +14,7 @@
 # which is the whole of the setup:
 #
 #     from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
+#     from assets_examples.middlewares.compaction import Compact
 #     from assets_examples.middlewares.tool_note import ToolNote
 #
 #     kingfisher = Kingfisher(
@@ -22,6 +23,7 @@
 #             "call-cap-strict":   CallCap,
 #             "call-cap-generous": CallCapGenerous,
 #             "tool-note":         ToolNote,
+#             "compact":           Compact,
 #         },
 #     )
 name: researcher
@@ -71,6 +73,16 @@ middlewares:
   - name: tool-note
     settings:
       text: Cite the path and line for anything you assert.
+  # The third example, and the one that needs something no line of this file
+  # could hold. `compact` summarises the older half of a long conversation, and a
+  # summariser needs a *model* -- a client with an endpoint, a key and a timeout
+  # behind it, which is not a value `settings:` can carry. It is filled in where
+  # the agent is assembled; `middlewares/compaction.py` is the argument.
+  #
+  # Written bare, which means the model this agent is already running. The long
+  # form would name another -- `settings: {model: cheap}` -- and no shipped file
+  # may do that: a vendor's model id is portable nowhere.
+  - compact
 # Named, so what this agent may do stays legible. It reads and it delegates.
 builtin_tools: [read_file, ls, glob, grep]
 tools: []

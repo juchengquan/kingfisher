@@ -191,6 +191,56 @@ middleware* keep the singular, because `ToolRepository` already sits behind a
 kind called `tools`: naming the type for one of the things is what the other four
 kinds do. *(2026-09-15.)*
 
+**A class may ask the harness for what only the harness knows.** `wants` is a
+third class attribute beside `defaults` and `yaml_settable`, naming kwargs filled
+in where the agent is assembled: `model`, `backend`, `definition`. It was argued
+as "no asset can depend on a deployment object", and that framing was wrong and
+worth correcting here, because the next person will know it is. A registered
+class has always been able to close over one -- `guides/middleware.md` documents
+the pattern, and a deployment can build a model in its own program and capture it.
+What could not be reached was narrower and sharper: *this build's* answer, which
+is decided per agent and per delegate and cannot be closed over at startup, and
+anything at all from a `middlewares/` file, which is re-imported per request and
+so has nothing made once to capture.
+
+**The set is open and lives at the two call sites.** No constant enumerates it.
+Each site in `build_agent` builds a mapping from what it holds, `_instantiate`
+pulls out the keys a class named, and a want nothing answers to is refused with
+the site's own listing -- which is the listing to read precisely because there is
+no table to read instead. Both sites go through one builder, so they cannot offer
+different keys by accident; `test_both_kinds_are_handed_the_same_things_to_want`
+is what catches a second mapping written inline at one of them.
+
+**A wanted key is a name in yaml and an object in Python.** `model` may also
+appear in `yaml_settable`, and what a definition writes there is resolved -- the
+catalogue lookup, the endpoint check, the instance -- rather than passed through.
+That keeps the vocabulary of "which model" the one every other file already uses
+and puts `refuse_ungranted_endpoint` on this path for free, in `model_named`,
+which `model_object` now calls as well: two copies of those three steps, one of
+them forgetting the middle one, is a run sent where the caller refused with
+nothing said. A want with no such resolver -- `backend`, `definition` -- has no
+name a file could carry, so a value written for one is refused rather than
+interpreted, on the class rather than on the write.
+
+**A delegate is handed its own model, not its agent's.** The proposal said both
+call sites had the built model in scope; only one did. A delegate's is not built
+until `as_subagent`'s last line, so what is in scope where its middleware is made
+is the *agent's* -- and handing that over is wrong in the direction that costs
+money, since a delegate pinned to the cheap model would be compacted by the
+expensive one. `_with_helpers` already knew the answer and now passes it down.
+The same mistake had been made once before for a helper's inherited model.
+
+**The example is `compaction.py`, and it runs.** A `SummarizationMiddleware`
+subclass that wants all three: six lines of declaration, a note written to
+`/derived` on both the sync and async paths, and `researcher.yaml` names it. It is
+the motivating case rather than an illustration of one -- handed `model: "gpt-5"`
+as a string, langchain's own class passes it to `init_chat_model`, which infers a
+provider and reads credentials from the environment, around the catalogue and the
+endpoint's `base_url` entirely. Two things it teaches were measured rather than
+assumed: an unset `trigger` normalises to no clauses and never fires, and a
+backend reports a failed write by returning one rather than raising.
+*(2026-09-15.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that

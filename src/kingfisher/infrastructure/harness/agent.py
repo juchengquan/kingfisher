@@ -42,11 +42,12 @@ from kingfisher.infrastructure.harness.backend import (
 from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.interpreter import _interpreter
 from kingfisher.infrastructure.harness.middleware import (
+    ByName,
     MiddlewareFactory,
     declared_middleware,
     offered_middleware,
 )
-from kingfisher.infrastructure.harness.models import build_model
+from kingfisher.infrastructure.harness.models import build_model, model_named
 from kingfisher.infrastructure.harness.narrowing import (
     DeclaredDelegatesOnly,
     NarrowedSkills,
@@ -290,6 +291,25 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
 
     running = _running(agent, cfg, capabilities.endpoints, model)
 
+    def _model_named(written: str, subject: str) -> Any:
+        """A model named beside a middleware, under this request's ceiling."""
+        return model_named(written, cfg, endpoints=capabilities.endpoints, subject=subject)
+
+    def _provisions(runs: Any, definition: Any) -> dict[str, Any]:
+        """What a class that declared `wants` is filled in from, for one graph.
+
+        Both call sites hand over the same keys and different values -- a delegate's
+        model is its own, not this agent's -- so a `middlewares:` line means the same
+        thing in an agent file and a subagent file. One builder rather than two, so
+        they cannot drift; a second mapping written inline at one of them is what
+        `test_both_kinds_are_handed_the_same_things_to_want` would catch.
+        """
+        return {
+            "model": ByName(runs, resolve=_model_named),
+            "backend": resolved_backend,
+            "definition": definition,
+        }
+
     def assemble(extra_tools: tuple[Any, ...]) -> CompiledStateGraph:
         return create_deep_agent(
             model=running,
@@ -382,6 +402,9 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         def _built(
             name: str,
             *,
+            # This delegate's model, not the agent's -- see `_with_helpers`, which
+            # is the only caller and the only place the difference is known.
+            runs: Any,
             helpers: list[Any] | None = None,
             default_model: Any = None,
             tool_objects: list[Any] | None = None,
@@ -408,7 +431,11 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 private_skills=_private_skills(roots, name),
                 run_on=wanted.get(name),
                 extra_middleware=declared_middleware(
-                    defined[name], registry, capabilities.middlewares, kind="subagent"
+                    defined[name],
+                    registry,
+                    capabilities.middlewares,
+                    kind="subagent",
+                    provisions=_provisions(runs, defined[name]),
                 ),
             )
 
@@ -453,6 +480,13 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 ]
                 compiled[key] = _built(
                     name,
+                    # What this delegate actually runs: its own model, or the model
+                    # of whoever summoned it when it names none and inherits none.
+                    # `as_subagent` leaves `model` off the spec in that case and
+                    # deepagents hands it the parent's, so a middleware told the
+                    # agent's model here would be told the wrong one exactly when a
+                    # delegate was pinned to a cheaper one.
+                    runs=mine if mine is not None else root,
                     helpers=helpers or None,
                     default_model=inherited if nested else None,
                     tool_objects=list(surface.objects.values()) if nested else None,
@@ -467,7 +501,13 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         """What this deployment's registry owes one graph, freshly built."""
         if agent is None:
             return []
-        return declared_middleware(agent, registry, capabilities.middlewares, kind="agent")
+        return declared_middleware(
+            agent,
+            registry,
+            capabilities.middlewares,
+            kind="agent",
+            provisions=_provisions(running, agent),
+        )
 
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))

@@ -9,7 +9,7 @@ import yaml
 from langchain.agents.middleware import AgentMiddleware
 
 from kingfisher.domain.capabilities import ALL, CapabilityError
-from kingfisher.infrastructure.harness.middleware import declared_middleware
+from kingfisher.infrastructure.harness.middleware import ByName, declared_middleware
 from kingfisher.kinds.agents import spec as agent_format
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.subagents import reading as subagent_format
@@ -43,6 +43,37 @@ class NeedsAnArgument(AgentMiddleware):
     def __init__(self, required: str) -> None:
         self.required = required
         super().__init__()
+
+
+class WantsABackend(AgentMiddleware):
+    """A class needing an object, which is the half no yaml file can reach."""
+
+    name = "WantsABackend"
+    wants = frozenset({"backend"})
+
+    def __init__(self, backend: object) -> None:
+        self.backend = backend
+        super().__init__()
+
+
+class WantsAModel(AgentMiddleware):
+    """The shape `compaction.py` ships: a want a definition may name instead."""
+
+    name = "WantsAModel"
+    wants = frozenset({"model"})
+    defaults = {"keep": 20}
+    yaml_settable = frozenset({"model"})
+
+    def __init__(self, model: object, keep: int) -> None:
+        self.model = model
+        self.keep = keep
+        super().__init__()
+
+
+def _never_resolved(written: str, subject: str) -> object:
+    """A resolver that fails the test if a name was resolved when none was written."""
+    msg = f"resolved {written!r} for {subject}, and nothing named one"
+    raise AssertionError(msg)
 
 
 def agent_spec(body: str):
@@ -348,3 +379,176 @@ def test_a_star_that_resolves_to_a_registry_takes_no_settings_with_it():
     assert sorted(type(m).__name__ for m in built) == ["Audit", "Bare"]
     audit = next(m for m in built if type(m).__name__ == "Audit")
     assert audit.level == "INFO"
+
+
+# -- what the harness hands over ------------------------------------------
+
+
+def test_a_want_arrives_as_the_object_this_build_is_holding():
+    """The whole reason `wants` exists: a class needing a live object gets the one
+    this graph was assembled with, where `defaults` could only have given it a scalar.
+    """
+    spec = agent_spec(written("middlewares: [fs]\n"))
+    backend = object()
+
+    (built,) = declared_middleware(
+        spec, {"fs": WantsABackend}, ALL, kind="agent", provisions={"backend": backend}
+    )
+
+    assert built.backend is backend
+
+
+def test_a_want_this_build_does_not_provide_is_refused_naming_what_it_does():
+    """A typo in `wants`, or a class written against a build that holds more.
+
+    The listing is the actionable half. Without it the reader is told `backend` is
+    unavailable and left to guess what is -- and the set is deliberately not a
+    constant anywhere, so there is nothing to go and read instead.
+    """
+    spec = agent_spec(written("middlewares: [fs]\n"))
+
+    with pytest.raises(CapabilityError, match="wants 'backend'") as raised:
+        declared_middleware(
+            spec, {"fs": WantsABackend}, ALL, kind="agent", provisions={"definition": spec}
+        )
+
+    assert "provides definition" in str(raised.value)
+
+
+def test_a_want_nobody_named_falls_back_to_what_this_build_runs():
+    """`middlewares: [compact]` with no settings is a working line.
+
+    A fallback that resolved something would mean the bare form ran the deployment's
+    default rather than the model the agent in front of it was pinned to, which is
+    the whole failure `wants` exists to close.
+    """
+    spec = agent_spec(written("middlewares: [needs-model]\n"))
+    running = object()
+
+    (built,) = declared_middleware(
+        spec,
+        {"needs-model": WantsAModel},
+        ALL,
+        kind="agent",
+        provisions={"model": ByName(running, resolve=_never_resolved)},
+    )
+
+    assert built.model is running
+    assert built.keep == 20, "the ordinary `defaults` half still applies beside it"
+
+
+def test_a_name_a_definition_wrote_is_resolved_rather_than_passed_through():
+    """`model: cheap` is a name in the file and an object in the constructor.
+
+    Passed through, the class is handed the string -- which is how
+    `SummarizationMiddleware` ends up at `init_chat_model`, inferring a provider and
+    reading credentials from the environment around the catalogue entirely.
+    """
+    spec = agent_spec(
+        written("middlewares:\n  - name: needs-model\n    settings:\n      model: cheap\n")
+    )
+    cheap = object()
+    asked: list[tuple[str, str]] = []
+
+    def resolve(name: str, subject: str) -> object:
+        asked.append((name, subject))
+        return cheap
+
+    (built,) = declared_middleware(
+        spec,
+        {"needs-model": WantsAModel},
+        ALL,
+        kind="agent",
+        provisions={"model": ByName(object(), resolve=resolve)},
+    )
+
+    assert built.model is cheap
+    # The subject is what a bad name's refusal is read under, and it has to name
+    # both halves: which file wrote it, and which middleware it was written for.
+    assert asked == [("cheap", "middleware 'needs-model' on agent 'researcher'")]
+
+
+def test_a_deployments_own_default_may_name_one_too():
+    """Static configuration, with `yaml_settable` shut.
+
+    A class shipping `defaults = {"model": "cheap"}` and opening nothing pins the
+    model in the deployment's code -- the right shape for a middleware whose model
+    is not a definition's business, and unreachable if only `settings:` were read.
+    """
+
+    class Pinned(WantsAModel):
+        name = "Pinned"
+        defaults = {"model": "cheap", "keep": 20}
+        yaml_settable = frozenset()
+
+    spec = agent_spec(written("middlewares: [pinned]\n"))
+    cheap = object()
+
+    (built,) = declared_middleware(
+        spec,
+        {"pinned": Pinned},
+        ALL,
+        kind="agent",
+        provisions={"model": ByName(object(), resolve=lambda name, subject: cheap)},
+    )
+
+    assert built.model is cheap
+
+
+def test_a_value_written_for_a_want_that_arrives_whole_is_refused():
+    """There is no name a file could carry for "the filesystem", so a value for one
+    means nothing and is a mistake worth saying out loud rather than ignoring.
+    """
+
+    class Confused(WantsABackend):
+        name = "Confused"
+        defaults = {"backend": "/tmp"}
+
+    spec = agent_spec(written("middlewares: [confused]\n"))
+
+    with pytest.raises(CapabilityError, match="wants 'backend'"):
+        declared_middleware(
+            spec, {"confused": Confused}, ALL, kind="agent", provisions={"backend": object()}
+        )
+
+
+def test_a_whole_want_opened_to_definitions_is_refused_before_one_writes_it():
+    """Refused on the class rather than on the write, or the trap stays armed until
+    somebody falls into it -- and the definition that does gets blamed for a
+    declaration the deployment made.
+    """
+
+    class Opened(WantsABackend):
+        name = "Opened"
+        yaml_settable = frozenset({"backend"})
+
+    spec = agent_spec(written("middlewares: [opened]\n"))
+
+    with pytest.raises(CapabilityError, match="wants 'backend'"):
+        declared_middleware(
+            spec, {"opened": Opened}, ALL, kind="agent", provisions={"backend": object()}
+        )
+
+
+def test_a_factory_declaring_wants_is_refused_rather_than_built_without_them():
+    """A callable that is not a class is called with nothing, so a want it declared
+    would be dropped in silence -- the middleware built without the model it was
+    written to use, failing later and somewhere else.
+    """
+
+    class FactoryThatWants:
+        wants = frozenset({"model"})
+
+        def __call__(self) -> Bare:
+            return Bare()
+
+    spec = agent_spec(written("middlewares: [made]\n"))
+
+    with pytest.raises(CapabilityError, match="declares `wants`"):
+        declared_middleware(
+            spec,
+            {"made": FactoryThatWants()},
+            ALL,
+            kind="agent",
+            provisions={"model": ByName(object(), resolve=_never_resolved)},
+        )
