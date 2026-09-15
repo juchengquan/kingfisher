@@ -21,16 +21,23 @@ builtin_tools: [ls, glob, grep]
 # text never enters the transcript, and a delegate holding both tools would have
 # the careful path and the careless one side by side.
 #
-# `tools:` is not written at all, and that is the other half of the example: a
-# bundle is always held by its owner. `mask_secrets` arrives because it is in
-# this folder, not because this file names it -- the file being there is the
-# declaration, and listing it again would be a second place to keep in step.
-#
+# `tools: []` grants no catalogue tool, and `mask_secrets` arrives all the same:
+# a bundle is held by its owner whatever this line or a request says, so the
+# line governs only what the shared `tools/` adds. Left out, that would be every
+# catalogue tool -- `sql_query` returning rows unmasked among them -- on the one
+# delegate whose job is being careful with what it returns.
+tools: []
 # The same goes for `skills:`, which usually defaults to none. `redaction/` is
-# in this folder, so this delegate is told about it.
+# in this folder, so this delegate is told about it without a line saying so.
 #
-# No `model:` either, so it runs your deployment's default. Masking is cheap
-# work; pin it to a cheap model if you have one.
+# Keys of your own, which nothing in a run reads. A script checking that every
+# delegate names an owner does, and a delegate handling credentials is the one
+# that check exists for.
+metadata:
+  owner: security-team
+  handles: credentials
+# No `model:`, so it runs your deployment's default. Masking is cheap work; pin
+# it to a cheap model if you have one.
 system_prompt: |
   You quote from files that may contain credentials.
 

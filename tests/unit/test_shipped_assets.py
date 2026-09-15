@@ -183,6 +183,15 @@ def test_no_preset_names_a_model(shipped):
     assert not [f for f in fields(next(iter(specs.values()))) if f.name == "provider"]
 
 
+def test_a_shipped_subagent_writes_metadata(shipped):
+    """`metadata:` is a field both definition formats document, and one no shipped file
+    writes is a field a reader has to take on trust.
+    """
+    delegates = LocalSubagentRepository(shipped / "subagents").specs.values()
+
+    assert any(spec.metadata for spec in delegates), "no shipped subagent writes metadata"
+
+
 def test_the_shipped_catalogue_has_no_delegation_cycle(shipped):
     """Seeding a catalogue that refuses to load would be the worst kind of example:
     copied, broken on the first run, and the format blamed.

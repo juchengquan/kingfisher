@@ -689,3 +689,25 @@ def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):
 
     assert "sk-live-123" not in answer
     assert "1 masked" in answer
+
+
+def test_the_shipped_bundle_takes_nothing_from_the_catalogue(
+    workspace_with_presets, session_dir, monkeypatch
+):
+    """`redactor.yaml` writes `tools: []`, so it holds its own tool and no shared one.
+
+    Without the line it held every catalogue tool, `sql_query` and `http_fetch` among
+    them, on the delegate whose job is being careful with what it returns.
+    """
+    captured = capture_build(monkeypatch)
+    build_agent(
+        workspace_with_presets,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("redactor",)),
+    )
+
+    (allowlist,) = [
+        m for m in only(captured, "redactor")["middleware"] if isinstance(m, ToolAllowlist)
+    ]
+    assert set(allowlist._allowed) == {"ls", "glob", "grep", "mask_secrets"}
