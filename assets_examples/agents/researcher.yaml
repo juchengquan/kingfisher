@@ -1,5 +1,5 @@
-# The agent half of the middleware example, and one of the only two definitions
-# in this repository that name middleware at all.
+# The agent half of the middleware pairing: this agent and its delegate
+# `sweeper` run under two ceilings over one behaviour.
 #
 # `kingfisher seed` will not copy it, and that is what the `middlewares:` line
 # below costs. A definition naming `call-cap-strict` is refused when the agent

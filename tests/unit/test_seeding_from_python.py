@@ -37,7 +37,9 @@ def test_the_readme_flow_seeds_a_workspace(tmp_path, assets_examples):
     assert not done.overwritten, "a fresh workspace has nothing to overwrite"
     # What landed is loadable, which is the half `test_seeding.py` cannot see:
     # it asserts on what `seed` reported, and this asserts on what is on disk.
-    assert (paths.workspace / "agents" / "assistant.yaml").is_file()
+    # `general` rather than `assistant`, which names middleware and so arrives
+    # only with `everything=True`.
+    assert (paths.workspace / "agents" / "general.yaml").is_file()
     assert (paths.workspace / "skills").is_dir()
 
 
@@ -135,7 +137,7 @@ def test_the_example_script_seeds_a_workspace(tmp_path, assets_examples):
     done = seed_workspace(tmp_path / "ws", assets_examples)
 
     assert done.written
-    assert (tmp_path / "ws" / "agents" / "assistant.yaml").is_file()
+    assert (tmp_path / "ws" / "agents" / "general.yaml").is_file()
     assert (tmp_path / "ws" / "models.yaml.example").is_file(), (
         "the example stopped laying the workspace out before seeding it"
     )
@@ -157,7 +159,7 @@ def test_the_example_script_reports_what_it_left(tmp_path, assets_examples, caps
     printed = capsys.readouterr().out
 
     assert code == 0
-    assert "seeded agents/assistant.yaml" in printed
+    assert "seeded agents/general.yaml" in printed
     assert "skipped " in printed, "the example stopped reporting what it left behind"
     assert "run again with --all" in printed, "a skip with no remedy is half a message"
 

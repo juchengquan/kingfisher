@@ -50,8 +50,8 @@ and in `agents/researcher.yaml`, or any `subagents/*.yaml`:
 
 Both halves of that are written out: `assets_examples/agents/researcher.yaml` and
 `assets_examples/subagents/sweeper.yaml` are an agent and its delegate, naming the
-registry entries above -- the only definitions in this repository that name
-middleware at all.
+registry entries above under two different ceilings.
+`assets_examples/agents/assistant.yaml` names every example as well.
 
 They live under their own kinds, and `seed` is what keeps them out of a
 workspace that cannot build them: it reads the `middlewares:` field, leaves such

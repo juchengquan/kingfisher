@@ -48,8 +48,9 @@ definition naming middleware or source ids this deployment has not registered is
 refused when it is built, so seeding one produces a file that cannot run.
 `seed` leaves those behind and says which names each would have needed;
 `seed(..., everything=True)` and `kingfisher seed --all` take them once you have
-registered the names. Seeding the shipped `assets_examples/` on a bare checkout
-leaves five behind and writes thirteen.
+registered the names. The shipped `assets_examples/` has several, `assistant`
+among them, and ships the middleware they name beside them -- so seed that set
+with `--all`.
 
 `seed` takes a *destination* rather than a whole `Config` — anything with a
 `workspace` and `catalogue_roots`, which both `WorkspacePaths` and `Config`

@@ -19,13 +19,11 @@ an example *of*, so that it sorts beside this directory and finding either finds
 both. That was the whole argument for the name: this pair is the one part of the
 arrangement a reader has to meet as a pair.
 
-One folder under `assets_examples/` is not a definition and is not copied by
-`seed`: `middlewares/`. `DEFINITION_KINDS` is the fields of `Definitions` —
-agents, skills, subagents, tools — and `seed` walks exactly those. Middleware
-is deliberately not among them: a middleware name selects code the
-*deployment* wrote, and one read out of the workspace would be code the agent
-can edit, wrapped around the agent that edited it. So the class is imported by
-whatever constructs `Kingfisher` and the name is all a definition ever says. See
+`assets_examples/middlewares/` is a definition kind like the rest, and `seed`
+copies it. A definition that *names* middleware is the different case: `seed`
+cannot see what a deployment registered, so it leaves such a definition behind
+and `--all` takes it — which is why the worked set is seeded with `--all`. A
+name is still all a definition ever says, and no upload may bring one; see
 `assets_examples/middlewares/call_cap.py`.
 
 **`assets/`** — here — is theirs. A skill fetched from another project arrives
@@ -39,7 +37,7 @@ somebody else's terms as a side effect of `git add -A`.
 `seed` takes one directory, and merges rather than replacing, so two sources is
 two commands in the order you choose:
 
-    kingfisher seed --from ./assets_examples
+    kingfisher seed --all --from ./assets_examples
     kingfisher seed --from ./assets
 
 Files that collide are reported; files that do not are left alone.

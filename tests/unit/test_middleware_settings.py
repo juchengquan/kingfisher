@@ -153,7 +153,7 @@ def test_a_subagent_reads_the_same_field_the_same_way():
 
 
 def test_the_plain_star_still_means_everything():
-    """The form `assistant.yaml` ships, and the only one a shipped file may carry."""
+    """`["*"]` reads as every middleware on offer, not as one named `*`."""
     spec = agent_spec(written('middlewares: ["*"]\n'))
 
     assert spec.middlewares == ALL

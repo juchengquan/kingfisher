@@ -21,26 +21,26 @@ skills: ["*"]
 # A delegate that names helpers of its own brings them with it: grant the
 # delegate and its helpers arrive, without the agent listing them here.
 subagents: [extractor, reviewer, profiler]
-# Every middleware this deployment registered and this request still grants --
-# the same idiom as `skills: ["*"]` above, on the one axis where a definition
-# cannot name anything portable. A registry entry is code the *deployment*
-# wrote, so no name written in a file that ships inside a wheel could resolve
-# anywhere but the machine it was written for.
+# Every example middleware this repository ships, each by name. Named rather
+# than `["*"]`: a star takes whatever the workspace offers, so on a seeded one it
+# would also take anything added later for another agent, and a name says
+# exactly what this agent runs under. The prompt below tells it the same.
 #
-# The star is the only form of this field a shipped file may carry, and the
-# difference is what happens when the deployment has registered nothing -- which
-# is every fresh checkout. A name is refused when the agent is built (`names
-# unregistered middleware`) and the first run dies to demonstrate a feature. A
-# star resolves to nothing and raises nothing. It degrades where a name refuses.
+# The price of a name is `seed`'s rule. `seed` cannot see what a deployment
+# registered, so it leaves behind any definition naming middleware -- this one
+# arrives with `kingfisher seed --all`, which copies the `middlewares/` these
+# names resolve to in the same run.
 #
-# So an audit hook or a rate limit you register reaches this agent without
-# editing this file, which is the case the axis exists for. The cost is the
-# other side of the same sentence: it takes whatever is there, so a middleware
-# registered for one narrow purpose arrives here too. When that is wrong, narrow
-# the axis on the request -- a star resolves smaller when the caller withheld
-# something, and raises nothing then either -- or delete this line and name what
-# you want, which is what `assets_examples/middlewares/` shows.
-middlewares: ["*"]
+# Both caps, which is `researcher`'s shape: the stricter decides, so a turn
+# stops at twenty calls. `call-cap-generous` is here so a delegate may name it,
+# since this line is what its delegates are clamped by. `tool-note` bare carries
+# the deployment's own wording, where `researcher` and `sweeper` each write
+# theirs; `compact` bare summarises on the model this agent already runs.
+middlewares:
+  - call-cap-strict
+  - call-cap-generous
+  - tool-note
+  - compact
 # No `model:` and no `alias:`, so this runs the `default:` in your models.yaml.
 # That is the right answer for a general agent -- and for a file that ships
 # inside a wheel, since no vendor's model id is portable anywhere else.
@@ -69,6 +69,15 @@ system_prompt: |
   turned into a short answer without a hundred files landing in your context,
   and `profiler` exists so nobody computes a figure from a column they have not
   looked at. Both run on a cheaper model than you do.
+
+  You work under a budget. A middleware caps how many tool calls you may make
+  in one turn; when it runs out, the next call comes back as an error saying
+  so, and you answer from what you have and say where you stopped. A delegate's
+  calls are its own, so a hundred files read through `extractor` cost you one.
+
+  In a long conversation the older part is summarised for you. What the summary
+  replaced is kept under `/derived/compaction/`; read it when the summary is not
+  enough.
 
   Check what you would report. `reviewer` recomputes a figure from the file
   rather than from your working, which is the only kind of check worth having.
