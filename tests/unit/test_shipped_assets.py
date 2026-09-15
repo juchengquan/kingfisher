@@ -103,6 +103,9 @@ def test_every_preset_tool_loads(shipped):
 
     assert {tool_name(t) for t in tools} == {
         "http_fetch", "sql_tables", "sql_query", "csv_profile", "csv_columns",
+        # From `tools/logs/`, a folder with no `__init__.py`: each file loads on its
+        # own, and a name never carries the folder it sat in.
+        "log_levels", "status_codes",
         # A plain function rather than a `BaseTool`, which is the other thing
         # this set is here to show: kingfisher takes either, and a definition
         # should not have to know which one deepagents prefers this month.
@@ -166,6 +169,47 @@ def test_every_preset_tool_describes_itself_to_the_model(shipped):
     for tool in LocalToolRepository(shipped / "tools").tools:
         described = getattr(tool, "description", None) or (tool.__doc__ or "")
         assert len(described.strip()) > 60, f"{tool_name(tool)} says too little"
+
+
+def test_a_tool_folder_without_an_init_is_only_organisation(shipped):
+    """`tools/logs/` holds two tools, one a level deeper, and neither folder is a
+    package -- made one, it would load as a unit and every name here would still pass.
+    """
+    found = {one.name: one.source for one in LocalToolRepository(shipped / "tools").found}
+
+    assert not (shipped / "tools" / "logs" / "__init__.py").exists()
+    assert found["log_levels"] == "logs/log_levels.py"
+    assert found["status_codes"] == "logs/access/status_codes.py"
+
+
+def test_the_log_tools_answer_from_a_log(shipped, tmp_path):
+    """Code, so "does it run" is the bar: a pattern that matched nothing would load,
+    describe itself, and answer every log with zero.
+    """
+    tools = {tool_name(t): t for t in LocalToolRepository(shipped / "tools").tools}
+    app = tmp_path / "app.log"
+    app.write_text(
+        "2026-09-01T14:03:22 WARN pool at 90% of 50 connections\n"
+        "2026-09-01T14:17:40 ERROR queue full, dropping message 8812\n"
+        "2026-09-01T14:17:41 ERROR queue full, dropping message 8813\n"
+        "a line with no timestamp\n",
+        encoding="utf-8",
+    )
+    access = tmp_path / "access.log"
+    access.write_text(
+        '10.0.0.1 - - [01/Sep/2026:14:17:40 +0000] "GET /orders HTTP/1.1" 503 17\n'
+        '10.0.0.1 - - [01/Sep/2026:14:17:41 +0000] "GET /orders HTTP/1.1" 200 1187\n',
+        encoding="utf-8",
+    )
+
+    levels = tools["log_levels"].invoke({"path": str(app)})
+    codes = tools["status_codes"].invoke({"path": str(access)})
+
+    assert "1 undated" in levels
+    # Loudest first, which is what makes the answer a place to start reading.
+    assert levels.index("14:17  ERROR 2") < levels.index("14:03  WARN 1")
+    assert "5xx: 1" in codes
+    assert "503: 1" in codes
 
 
 def test_no_preset_names_a_model(shipped):
