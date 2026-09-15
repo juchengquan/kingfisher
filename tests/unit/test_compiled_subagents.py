@@ -177,7 +177,7 @@ def test_a_key_deepagents_would_ignore_is_refused_with_its_reason():
     answer is that deepagents would ignore it. A looser assertion here passed exactly
     that mutation.
     """
-    for key in ["system_prompt", "skills", "middleware", "subagents", "builtin_tools"]:
+    for key in ["system_prompt", "skills", "middlewares", "subagents", "builtin_tools"]:
         with pytest.raises(SubagentError, match=key) as raised:
             declared(_entry(**{key: "x"}), "researcher.py")
 

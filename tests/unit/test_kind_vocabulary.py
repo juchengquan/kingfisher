@@ -32,7 +32,7 @@ AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
 NOT_UPLOADABLE = {
     "builtin_tools": "deepagents brings them; there is nothing to supply",
     "tools": "code, imported into this process -- never caller-supplied",
-    "middleware": "selects code the deployment registered",
+    "middlewares": "selects code the deployment registered",
     "endpoints": "decides which credentials are used",
     "models": "an assignment, not a definition",
     "memory": "a switch, not names",
@@ -41,9 +41,9 @@ NOT_UPLOADABLE = {
 #: Why a kind is not read from the catalogue directories.
 NOT_ON_DISK = {
     "builtin_tools": "deepagents brings them",
-    # `middleware` left this table on 2026-09-07. It was here for as long as the
+    # `middlewares` left this table on 2026-09-07. It was here for as long as the
     # workspace was writable by the agent's shell; once the definition roots were
-    # denied, a `middleware/` directory became an ordinary kind and this entry
+    # denied, a `middlewares/` directory became an ordinary kind and this entry
     # became a claim the catalogue contradicts.
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
@@ -59,10 +59,10 @@ NOT_BUNDLED = {
     "subagents": "a bundle is one subagent's own, so nesting makes 'whose' unanswerable",
     # Still not bundled, and the reason had to be rewritten rather than kept: it
     # said "registered in the process, not staged as files", which stopped being
-    # true when `middleware/` became a kind. What holds now is narrower and is
+    # true when `middlewares/` became a kind. What holds now is narrower and is
     # about audience -- a bundle is a delegate's own tools and skills, and
     # middleware is granted by the deployment rather than carried by a delegate.
-    "middleware": "granted by the deployment, so a delegate cannot bring its own",
+    "middlewares": "granted by the deployment, so a delegate cannot bring its own",
     "endpoints": "settings, not assets",
     "models": "settings, not assets",
     "memory": "a switch, not names",
@@ -96,7 +96,7 @@ NOT_AN_AXIS = {
 #: Why a kind has no `--without-<kind>` flag. Not a CLI concern only: these are
 #: the axes a *library* caller narrows differently too.
 NOT_SUBTRACTABLE = {
-    "middleware": "selects code, and `including` never widens it",
+    "middlewares": "selects code, and `including` never widens it",
     "endpoints": "decides which credentials are used",
     "models": "an assignment, not a permission",
     "memory": "a switch, not names -- `--no-memory` says it",
@@ -137,7 +137,7 @@ def test_a_ninth_axis_cannot_be_added_in_silence():
 
 #: Directories under `assets_examples/` that are not a catalogue kind, and why each is
 #: there in spite of that.
-#: Empty since 2026-09-07. `middleware` was its only entry, on the argument that
+#: Empty since 2026-09-07. `middlewares` was its only entry, on the argument that
 #: one read out of the workspace would be code the agent could edit wrapped
 #: around the agent that edited it -- true until the definition roots were
 #: denied to the shell. The table stays because the next folder that wants to

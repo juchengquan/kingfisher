@@ -83,7 +83,7 @@ def destinations(cfg: Destination) -> tuple[tuple[str, Path], ...]:
     return tuple((kind, roots[kind]) for kind in DEFINITION_KINDS if kind in roots)
 
 
-#: The kinds whose definitions are YAML documents with a `middleware:` field.
+#: The kinds whose definitions are YAML documents with a `middlewares:` field.
 #:
 #: `skills` is markdown and `tools` is Python, so neither has one to read. Named
 #: rather than "try to parse everything and see", because a `.yaml` under
@@ -98,12 +98,12 @@ class Skipped:
 
     label: str
     names: tuple[str, ...]
-    #: What those names *are* -- `middleware` or `groups`. The remedy differs by
+    #: What those names *are* -- `middlewares` or `groups`. The remedy differs by
     #: kind, so a message built from the names alone could only be right for one
     #: of them: middleware is registered in code, a group is declared in
     #: `groups.yaml`, and sending a reader to the wrong file is worse than
     #: saying less.
-    wants: str = "middleware"
+    wants: str = "middlewares"
 
 
 @dataclass(frozen=True)
@@ -161,7 +161,7 @@ def middleware_named(text: str) -> tuple[str, ...]:
     if not isinstance(parsed, dict):
         return ()
 
-    written = parsed.get("middleware")
+    written = parsed.get("middlewares")
     if isinstance(written, str):
         written = [written]
     if not isinstance(written, (list, tuple)):
@@ -194,7 +194,7 @@ def _deployment_specific(path: Path) -> tuple[str, tuple[str, ...]] | None:
         # copies it and lets that happen.
         return None
     if named := middleware_named(text):
-        return "middleware", named
+        return "middlewares", named
     if grouped := groups_named(text):
         return "groups", grouped
     return None

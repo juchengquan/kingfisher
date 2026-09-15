@@ -84,11 +84,11 @@ def a_tool_module_that_will_not_import(cfg):
 
 
 def a_middleware_module_declaring_nothing(cfg):
-    _write(_root(cfg, "middleware") / "m.py", "X = 1\n")
+    _write(_root(cfg, "middlewares") / "m.py", "X = 1\n")
 
 
 def a_middleware_that_is_not_one(cfg):
-    _write(_root(cfg, "middleware") / "m.py", "class M:\n    name = 'm'\n\n\nMIDDLEWARE = [M]\n")
+    _write(_root(cfg, "middlewares") / "m.py", "class M:\n    name = 'm'\n\n\nMIDDLEWARES = [M]\n")
 
 
 def a_bundle_holding_two_definitions(cfg):
@@ -159,9 +159,9 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/documents.py::require_literal_prompt": Refusal(
         1, defect=a_prompt_written_so_it_reflows),
     "kinds/importing.py::load": Refusal(2, defect=a_tool_module_that_will_not_import),
-    "kinds/middleware/catalogue.py::LocalMiddlewareRepository.found": Refusal(
+    "kinds/middlewares/catalogue.py::LocalMiddlewareRepository.found": Refusal(
         3, defect=a_middleware_module_declaring_nothing),
-    "kinds/middleware/catalogue.py::_refuse_unless_buildable": Refusal(
+    "kinds/middlewares/catalogue.py::_refuse_unless_buildable": Refusal(
         2, defect=a_middleware_that_is_not_one),
     "kinds/subagents/catalogue.py::LocalSubagentRepository.bundles": Refusal(
         1, defect=a_bundle_holding_two_definitions),

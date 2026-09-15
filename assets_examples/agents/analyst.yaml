@@ -29,7 +29,7 @@ builtin_tools: [read_file, ls, glob, grep]
 # entry and the others are untouched -- which is what lets you start with the
 # list and add an audience later without rewriting the field.
 #
-# It is the shape `middleware:` takes for its settings, and deliberately: an
+# It is the shape `middlewares:` takes for its settings, and deliberately: an
 # entry is a name, or a mapping of `name` and the one thing that field lets a
 # name carry. One long form to learn rather than one per field.
 tools:

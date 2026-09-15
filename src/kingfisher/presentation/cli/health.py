@@ -278,7 +278,7 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     walk and were read by `kingfisher list` and by nothing here. A broken agent file
     passed `doctor` and stopped `Kingfisher(...)` dead.
 
-    The fifth was worse: `middleware` was computed nowhere at all, because nothing
+    The fifth was worse: `middlewares` was computed nowhere at all, because nothing
     read that directory until a definition named one. A module that would not import
     was invisible to every check a deployment has, and surfaced on the first request
     activating an agent that named it.
@@ -302,12 +302,12 @@ def _catalogues(found: Inventory) -> Iterator[Check]:
     else:
         yield Check("subagents", "ok", f"{len(found.subagents)} defined")
 
-    if found.middleware_error is not None:
+    if found.middlewares_error is not None:
         yield Check(
-            "middleware", "fail", found.middleware_error, "fix or remove the module it names"
+            "middlewares", "fail", found.middlewares_error, "fix or remove the module it names"
         )
     else:
-        yield Check("middleware", "ok", f"{len(found.middleware)} defined")
+        yield Check("middlewares", "ok", f"{len(found.middlewares)} defined")
 
 def _tool_references(found: Inventory) -> Iterator[Check]:
     """A definition naming a tool by a path it no longer lives at.

@@ -18,12 +18,12 @@ registry that grows every time somebody writes a sentence.
 
 ## Wiring it
 
-    from assets_examples.middleware.call_cap import CallCap, CallCapGenerous
-    from assets_examples.middleware.tool_note import ToolNote
+    from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
+    from assets_examples.middlewares.tool_note import ToolNote
 
     kingfisher = Kingfisher(
         cfg,
-        middleware={
+        middlewares={
             "call-cap-strict":   CallCap,
             "call-cap-generous": CallCapGenerous,
             "tool-note":         ToolNote,
@@ -68,7 +68,7 @@ reads as dangerous at a glance.
 ## What a definition writing nothing gets
 
 `defaults` is the deployment's half and applies whole when a definition writes
-no settings at all, so `middleware: [tool-note]` is a working line rather than
+no settings at all, so `middlewares: [tool-note]` is a working line rather than
 a no-op -- it gets the wording below. A definition that writes `text` overrides
 that one key and leaves `max_length` alone; the merge is per key, not
 all-or-nothing.
@@ -171,4 +171,4 @@ class ToolNote(AgentMiddleware):
 #: to build a variant would otherwise be offered as a second entry nobody meant
 #: to expose. One, where the cap needed two -- this class varies by `settings:` instead,
 # which is the other half of that same lesson.
-MIDDLEWARE = [ToolNote]
+MIDDLEWARES = [ToolNote]

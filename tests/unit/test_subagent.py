@@ -156,7 +156,7 @@ def test_an_unrecognisable_field_is_refused_and_lists_what_is_allowed(tmp_path):
 
     message = str(raised.value)
     assert "did you mean" not in message
-    for field in ("name", "description", "tools", "skills", "middleware", "model"):
+    for field in ("name", "description", "tools", "skills", "middlewares", "model"):
         assert field in message
 
 
@@ -221,14 +221,14 @@ def test_every_known_field_still_parses(tmp_path):
         "description: d\n"
         "tools: [read_file]\n"
         "skills: [tabular-qa]\n"
-        "middleware: [audit]\n"
+        "middlewares: [audit]\n"
         "model: gpt-5\n"
         "system_prompt: |\n  You review.\n"
     )
     spec = reading.read(body, tmp_path / "reviewer.yaml")
 
     assert spec.tools == ("read_file",)
-    assert spec.middleware == ("audit",)
+    assert spec.middlewares == ("audit",)
     assert spec.wanted == "gpt-5"
 
 

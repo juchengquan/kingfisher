@@ -33,7 +33,7 @@ def test_nothing_ships_to_seed_from(shipped):
         "skills",
         "subagents",
         "tools",
-        "middleware",
+        "middlewares",
     )
     # What the claim actually is, rather than "no such directory". A stale
     # `__pycache__` left by a checkout from before the move would fail that

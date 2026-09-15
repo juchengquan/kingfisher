@@ -67,18 +67,18 @@ def written(middleware: str) -> str:
 
 def test_a_name_on_its_own_is_what_it_always_was():
     """The form every existing definition uses, unchanged and settings-free."""
-    spec = agent_spec(written("middleware: [audit]\n"))
+    spec = agent_spec(written("middlewares: [audit]\n"))
 
-    assert spec.middleware == ("audit",)
+    assert spec.middlewares == ("audit",)
     assert dict(spec.middleware_settings) == {}
 
 
 def test_a_name_written_long_carries_its_settings():
     spec = agent_spec(
-        written("middleware:\n  - name: audit\n    settings:\n      level: DEBUG\n")
+        written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
 
-    assert spec.middleware == ("audit",), "the name is still just a name"
+    assert spec.middlewares == ("audit",), "the name is still just a name"
     assert dict(spec.middleware_settings) == {"audit": {"level": "DEBUG"}}
 
 
@@ -86,7 +86,7 @@ def test_both_spellings_may_share_one_list():
     """An entry is a name, and the mapping is that name with values attached."""
     spec = agent_spec(
         written(
-            "middleware:\n"
+            "middlewares:\n"
             "  - call-cap-strict\n"
             "  - name: audit\n"
             "    settings:\n"
@@ -94,15 +94,15 @@ def test_both_spellings_may_share_one_list():
         )
     )
 
-    assert spec.middleware == ("call-cap-strict", "audit")
+    assert spec.middlewares == ("call-cap-strict", "audit")
     assert dict(spec.middleware_settings) == {"audit": {"level": "DEBUG"}}
 
 
 def test_the_long_form_may_write_no_settings_at_all():
     """Absent and empty are the same answer here: this entry asked for nothing."""
-    spec = agent_spec(written("middleware:\n  - name: audit\n"))
+    spec = agent_spec(written("middlewares:\n  - name: audit\n"))
 
-    assert spec.middleware == ("audit",)
+    assert spec.middlewares == ("audit",)
     assert dict(spec.middleware_settings) == {"audit": {}}
 
 
@@ -110,11 +110,11 @@ def test_a_subagent_reads_the_same_field_the_same_way():
     """One field, two formats."""
     spec = subagent_spec(
         "name: sweeper\ndescription: d\n"
-        "middleware:\n  - name: audit\n    settings:\n      level: DEBUG\n"
+        "middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n"
         "system_prompt: |\n  You read a lot.\n"
     )
 
-    assert spec.middleware == ("audit",)
+    assert spec.middlewares == ("audit",)
     assert dict(spec.middleware_settings) == {"audit": {"level": "DEBUG"}}
 
 
@@ -123,9 +123,9 @@ def test_a_subagent_reads_the_same_field_the_same_way():
 
 def test_the_plain_star_still_means_everything():
     """The form `assistant.yaml` ships, and the only one a shipped file may carry."""
-    spec = agent_spec(written('middleware: ["*"]\n'))
+    spec = agent_spec(written('middlewares: ["*"]\n'))
 
-    assert spec.middleware == ALL
+    assert spec.middlewares == ALL
     assert dict(spec.middleware_settings) == {}
 
 
@@ -135,14 +135,14 @@ def test_a_star_may_not_be_written_in_the_mapping_form():
     """
     with pytest.raises(AgentError, match="does not take"):
         agent_spec(
-            written('middleware:\n  - name: "*"\n    settings:\n      level: DEBUG\n')
+            written('middlewares:\n  - name: "*"\n    settings:\n      level: DEBUG\n')
         )
 
 
 def test_a_star_in_the_mapping_form_is_refused_even_with_no_settings():
     """Two ways to say one thing is one way too many."""
     with pytest.raises(AgentError, match="does not take"):
-        agent_spec(written('middleware:\n  - name: "*"\n'))
+        agent_spec(written('middlewares:\n  - name: "*"\n'))
 
 
 # -- what the format refuses ----------------------------------------------
@@ -154,7 +154,7 @@ def test_an_unknown_key_in_an_entry_is_refused_with_a_guess():
     """
     with pytest.raises(AgentError, match="setings"):
         agent_spec(
-            written("middleware:\n  - name: audit\n    setings:\n      level: DEBUG\n")
+            written("middlewares:\n  - name: audit\n    setings:\n      level: DEBUG\n")
         )
 
 
@@ -163,7 +163,7 @@ def test_an_entry_with_no_name_is_refused():
     one.
     """
     with pytest.raises(AgentError, match="no 'name'"):
-        agent_spec(written("middleware:\n  - settings:\n      level: DEBUG\n"))
+        agent_spec(written("middlewares:\n  - settings:\n      level: DEBUG\n"))
 
 
 def test_one_name_written_twice_is_refused():
@@ -173,7 +173,7 @@ def test_one_name_written_twice_is_refused():
     with pytest.raises(AgentError, match="twice"):
         agent_spec(
             written(
-                "middleware:\n"
+                "middlewares:\n"
                 "  - name: audit\n"
                 "    settings: {level: DEBUG}\n"
                 "  - name: audit\n"
@@ -186,13 +186,13 @@ def test_a_bare_name_and_the_same_name_written_long_are_still_twice():
     """The duplicate rule is about the name, not the spelling."""
     with pytest.raises(AgentError, match="twice"):
         agent_spec(
-            written("middleware:\n  - audit\n  - name: audit\n    settings: {level: X}\n")
+            written("middlewares:\n  - audit\n  - name: audit\n    settings: {level: X}\n")
         )
 
 
 def test_an_entry_that_is_neither_a_name_nor_a_mapping_is_refused():
     with pytest.raises(AgentError, match="neither a name nor a mapping"):
-        agent_spec(written("middleware: [3]\n"))
+        agent_spec(written("middlewares: [3]\n"))
 
 
 def test_settings_that_are_not_a_mapping_are_refused():
@@ -200,7 +200,7 @@ def test_settings_that_are_not_a_mapping_are_refused():
     settings reach it at all.
     """
     with pytest.raises(AgentError, match="must be a mapping"):
-        agent_spec(written("middleware:\n  - name: audit\n    settings: gold\n"))
+        agent_spec(written("middlewares:\n  - name: audit\n    settings: gold\n"))
 
 
 def test_a_subagent_refuses_the_same_shapes_as_its_own_error():
@@ -210,7 +210,7 @@ def test_a_subagent_refuses_the_same_shapes_as_its_own_error():
     with pytest.raises(SubagentError, match="does not take"):
         subagent_spec(
             "name: sweeper\ndescription: d\n"
-            'middleware:\n  - name: "*"\n    settings: {level: X}\n'
+            'middlewares:\n  - name: "*"\n    settings: {level: X}\n'
             "system_prompt: |\n  You read.\n"
         )
 
@@ -219,7 +219,7 @@ def test_a_subagent_refuses_the_same_shapes_as_its_own_error():
 
 
 def test_a_deployments_defaults_apply_when_a_definition_wrote_nothing():
-    spec = agent_spec(written("middleware: [audit]\n"))
+    spec = agent_spec(written("middlewares: [audit]\n"))
 
     (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
 
@@ -233,7 +233,7 @@ def test_a_definition_overrides_the_default_for_a_key_it_may_write():
     said it may.
     """
     spec = agent_spec(
-        written("middleware:\n  - name: audit\n    settings:\n      level: DEBUG\n")
+        written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
 
     (built,) = declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
@@ -245,7 +245,7 @@ def test_a_definition_overrides_the_default_for_a_key_it_may_write():
 def test_a_key_the_class_did_not_offer_is_refused():
     """The rule the shape exists for, and the one that has to be loud."""
     spec = agent_spec(
-        written("middleware:\n  - name: audit\n    settings:\n      destination: /tmp/mine\n")
+        written("middlewares:\n  - name: audit\n    settings:\n      destination: /tmp/mine\n")
     )
 
     with pytest.raises(CapabilityError, match="does not accept"):
@@ -255,7 +255,7 @@ def test_a_key_the_class_did_not_offer_is_refused():
 def test_a_class_offering_nothing_says_so_rather_than_printing_an_empty_list():
     """`Bare` declares no `yaml_settable`, which is most classes."""
     spec = agent_spec(
-        written("middleware:\n  - name: bare\n    settings:\n      level: DEBUG\n")
+        written("middlewares:\n  - name: bare\n    settings:\n      level: DEBUG\n")
     )
 
     with pytest.raises(CapabilityError, match="takes no settings from a definition"):
@@ -266,7 +266,7 @@ def test_a_class_that_declares_neither_attribute_still_builds():
     """Registering a class was legal before settings existed and stays legal without
     them: no `defaults` means called with nothing.
     """
-    spec = agent_spec(written("middleware: [bare]\n"))
+    spec = agent_spec(written("middlewares: [bare]\n"))
 
     (built,) = declared_middleware(spec, {"bare": Bare}, ALL, kind="agent")
 
@@ -278,7 +278,7 @@ def test_an_old_style_factory_still_works():
     breaking every deployment that wrote one would be a poor trade for a field most
     definitions will never use.
     """
-    spec = agent_spec(written("middleware: [audit]\n"))
+    spec = agent_spec(written("middlewares: [audit]\n"))
     registry = {"audit": lambda: Audit(level="WARN", destination="/dev/null")}
 
     (built,) = declared_middleware(spec, registry, ALL, kind="agent")
@@ -291,7 +291,7 @@ def test_settings_written_for_a_factory_are_refused_rather_than_dropped():
     is no seam to pass a setting through.
     """
     spec = agent_spec(
-        written("middleware:\n  - name: audit\n    settings:\n      level: DEBUG\n")
+        written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
     registry = {"audit": lambda: Audit(level="WARN", destination="/dev/null")}
 
@@ -304,7 +304,7 @@ def test_a_class_whose_defaults_miss_an_argument_names_the_registry_entry():
     rather than surfacing a bare `TypeError` from a constructor the definition's
     author has never seen.
     """
-    spec = agent_spec(written("middleware: [needy]\n"))
+    spec = agent_spec(written("middlewares: [needy]\n"))
 
     with pytest.raises(CapabilityError, match="could not build middleware 'needy'"):
         declared_middleware(spec, {"needy": NeedsAnArgument}, ALL, kind="agent")
@@ -313,13 +313,13 @@ def test_a_class_whose_defaults_miss_an_argument_names_the_registry_entry():
 def test_a_class_attribute_is_not_mutated_by_the_merge():
     """`defaults` is copied before the settings go over it."""
     spec = agent_spec(
-        written("middleware:\n  - name: audit\n    settings:\n      level: DEBUG\n")
+        written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
 
     declared_middleware(spec, {"audit": Audit}, ALL, kind="agent")
 
     assert Audit.defaults == {"level": "INFO", "destination": "/var/log/audit"}
-    plain = agent_spec(written("middleware: [audit]\n"))
+    plain = agent_spec(written("middlewares: [audit]\n"))
     (second,) = declared_middleware(plain, {"audit": Audit}, ALL, kind="agent")
     assert second.level == "INFO", "the first build's setting leaked into the second"
 
@@ -330,7 +330,7 @@ def test_a_class_attribute_is_not_mutated_by_the_merge():
 def test_a_withheld_name_is_refused_even_when_it_carries_settings():
     """Settings change nothing about how a name narrows."""
     spec = agent_spec(
-        written("middleware:\n  - name: audit\n    settings:\n      level: DEBUG\n")
+        written("middlewares:\n  - name: audit\n    settings:\n      level: DEBUG\n")
     )
 
     with pytest.raises(CapabilityError, match="may not use"):
@@ -341,7 +341,7 @@ def test_a_star_that_resolves_to_a_registry_takes_no_settings_with_it():
     """`["*"]` cannot carry settings by construction, so everything it resolves to is
     built on the deployment's own values.
     """
-    spec = agent_spec(written('middleware: ["*"]\n'))
+    spec = agent_spec(written('middlewares: ["*"]\n'))
 
     built = declared_middleware(spec, {"audit": Audit, "bare": Bare}, ALL, kind="agent")
 

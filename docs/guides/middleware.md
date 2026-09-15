@@ -2,20 +2,20 @@
 
 Middleware is code the deployment writes and a definition may only *name*. A
 class goes in a dict handed to `Kingfisher`, an agent or subagent file writes
-`middleware: [that-name]`, and the two halves meet nowhere else.
+`middlewares: [that-name]`, and the two halves meet nowhere else.
 
 The asymmetry is the design rather than a gap. A tool or a skill is read out of
 the workspace, and the workspace is a directory the agent can write to;
 middleware wraps the agent that would be doing the writing. So there is no
-`middleware/` directory, `seed` leaves behind any definition naming middleware
+`middlewares/` directory, `seed` leaves behind any definition naming middleware
 this deployment cannot build, and an upload never widens the axis — *Capabilities*
 in [`decisions.md`](../decisions.md) has the rule, and
-`assets_examples/middleware/call_cap.py` has the long version.
+`assets_examples/middlewares/call_cap.py` has the long version.
 
 This page is the deployment's half. What a definition may then write — the field,
 the long form with `settings`, what is granted rather than inherited — is
 [`formats.md`](formats.md). The two worked examples are
-`assets_examples/middleware/call_cap.py` and `tool_note.py`, in that order; the
+`assets_examples/middlewares/call_cap.py` and `tool_note.py`, in that order; the
 suite loads and runs both, so they cannot rot quietly, and nothing here repeats
 them.
 
@@ -31,11 +31,11 @@ here wraps either.
 ```python
 from kingfisher import Kingfisher
 
-from assets_examples.middleware.call_cap import CallCap, CallCapGenerous
+from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
 
 kingfisher = Kingfisher(
     cfg,
-    middleware={
+    middlewares={
         "call-cap-strict": CallCap,
         "call-cap-generous": CallCapGenerous,
     },
@@ -76,7 +76,7 @@ class Traced(AgentMiddleware):
         self._level = level
 
 
-kingfisher = Kingfisher(cfg, middleware={"traced": Traced})
+kingfisher = Kingfisher(cfg, middlewares={"traced": Traced})
 ```
 
 A definition still writes `settings: {level: debug}`, because it is a class and
@@ -86,14 +86,14 @@ would work too, and costs you `settings:` — a factory has already chosen its
 values, so a definition writing one is refused.
 
 **This cannot be a workspace file**, and not by rule — by construction. A
-`middleware/` module is executed each time the repository reads it, and a
+`middlewares/` module is executed each time the repository reads it, and a
 repository is built per request, so a client made at module level would be a new
 client on every turn. Put the object where it is made once: in the program that
 constructs `Kingfisher`.
 
 ## Or put it in the workspace
 
-`middleware/` is a definition kind, so a deployment that does not need to wire
+`middlewares/` is a definition kind, so a deployment that does not need to wire
 anything in Python can write a file instead and `kingfisher seed` will copy it:
 
 ```python
@@ -107,10 +107,10 @@ class CallCap(AgentMiddleware):
     ...
 
 
-MIDDLEWARE = [CallCap]
+MIDDLEWARES = [CallCap]
 ```
 
-`MIDDLEWARE` is declared rather than inferred, exactly as `TOOLS` is, so a class
+`MIDDLEWARES` is declared rather than inferred, exactly as `TOOLS` is, so a class
 imported to build a variant is not offered as a second entry nobody meant to
 expose.
 
@@ -121,7 +121,7 @@ class overrides it with a string — which the shipped examples do, because
 
 **Classes only, here.** A registry may hold a zero-argument factory; a file may
 not, and the difference is not tidiness. A file is imported once, so an object
-in `MIDDLEWARE` would be built once and shared by every graph in the process —
+in `MIDDLEWARES` would be built once and shared by every graph in the process —
 the state leak that makes a cap stop capping. A class in a file does everything
 a factory does and takes settings besides.
 
@@ -131,10 +131,10 @@ registry is not going away — a middleware closing over a live object, a
 connection or a metrics client, cannot be a file in a directory.
 
 **A workspace middleware is not the caller's.** A definition still only names,
-an upload still cannot widen `middleware`, and the file is put there by whoever
+an upload still cannot widen `middlewares`, and the file is put there by whoever
 administers the workspace. What makes this safe at all is that the definition
 roots are denied to the agent's shell — `decisions.md`, under *Confining the
-shell*. Before that, a `middleware/` directory would have been a cap the capped
+shell*. Before that, a `middlewares/` directory would have been a cap the capped
 thing could rewrite.
 
 ## What a definition may configure
@@ -148,7 +148,7 @@ class ToolNote(AgentMiddleware):
 ```
 
 `defaults` is the deployment's half and applies whole when a definition writes no
-settings at all, so `middleware: [tool-note]` is a working line rather than a
+settings at all, so `middlewares: [tool-note]` is a working line rather than a
 no-op. `yaml_settable` is the whitelist of keys a definition may override. The
 merge is per key and deployment first: a definition that writes `text` leaves
 `max_length` at the default. A class naming no `yaml_settable` is a class no
@@ -215,9 +215,9 @@ is not a way around an audit hook — otherwise the way to run unaudited would b
 to ask for nothing in particular.
 
 A delegate inherits none of its parent's middleware — each definition's is built
-from its own `middleware:` field.
+from its own `middlewares:` field.
 
-**So register the class, not an instance of it.** `middleware={"audit": Audit}`,
+**So register the class, not an instance of it.** `middlewares={"audit": Audit}`,
 never `{"audit": Audit()}`. Building it yourself hands every graph the same
 object, and the state it accumulates is exactly what a counter or a rate limit
 is for — `CallCap` would spend its budget on the first graph and refuse every
@@ -237,8 +237,8 @@ agent is built, before the model is reached.
 | What happened | What it says |
 |---|---|
 | A registry entry that cannot be called — an already-built middleware, most often | `register the class itself, or a zero-argument factory returning one`, and why one shared object would be wrong |
-| A `middleware/` file exports something that is not an `AgentMiddleware` class | what `MIDDLEWARE` takes, refused as the directory is read rather than at the first turn |
-| Two `middleware/` files define one name | both files, and to rename a class or give one an explicit `name` |
+| A `middlewares/` file exports something that is not an `AgentMiddleware` class | what `MIDDLEWARES` takes, refused as the directory is read rather than at the first turn |
+| Two `middlewares/` files define one name | both files, and to rename a class or give one an explicit `name` |
 | A name is both registered in code and defined in the workspace | both sources, and to rename the class or its registry key |
 | A definition names middleware nothing registered | `names unregistered middleware`, with what this deployment did register |
 | A definition names middleware the request withheld | `names middleware this request may not use` |

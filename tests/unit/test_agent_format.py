@@ -102,7 +102,7 @@ def test_leaving_skills_and_delegates_out_grants_none():
 
     assert spec.skills is None
     assert spec.subagents is None
-    assert spec.middleware is None
+    assert spec.middlewares is None
 
 
 def test_a_tool_may_say_where_it_lives_and_the_claim_is_kept():

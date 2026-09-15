@@ -69,7 +69,7 @@ moves, nothing here moves with it.
 
 ## The change, stated plainly
 
-A registry the deployment supplies, mirroring `middleware`:
+A registry the deployment supplies, mirroring `middlewares`:
 
     Kingfisher(cfg, schemas={"a2ui": A2UI_SCHEMA})
 
@@ -297,7 +297,7 @@ before `reasoning` is lit up, since it will meet this first.
 **No `Capabilities` axis.** Every axis there is a `Selection` and `intersect`
 only ever subtracts -- *"a grant is a whitelist, so it can only mean less than
 the workspace"*. There is no less of a schema. Removing one does not restrict an
-agent, it substitutes a different agent that answers in prose. `middleware` is
+agent, it substitutes a different agent that answers in prose. `middlewares` is
 on the axis because it selects code that runs; a schema is data that shapes a
 return value. Access is already answered one level up by the agent's own
 `groups:`.

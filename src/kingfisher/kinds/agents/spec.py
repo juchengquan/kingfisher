@@ -42,7 +42,7 @@ KNOWN: frozenset[str] = frozenset(
         "tools",
         "skills",
         "subagents",
-        "middleware",
+        "middlewares",
         "model",
         "memory",
         "metadata",
@@ -93,8 +93,8 @@ class AgentSpec:
     tool_sources: Mapping[str, str] = field(default_factory=dict)
     skills: Selection = None
     subagents: Selection = None
-    middleware: Selection = None
-    #: What each `middleware:` entry wrote under `settings:`. Beside the names rather
+    middlewares: Selection = None
+    #: What each `middlewares:` entry wrote under `settings:`. Beside the names rather
     #: than folded into them, like `tool_sources` beside `tools`: granting and narrowing
     #: are operations on names, and neither has anything to say about a value passed to
     #: one.
@@ -140,7 +140,7 @@ class AgentSpec:
             # the bound its parent runs under. This is what makes an agent decide
             # which its delegates may choose from -- and why an agent lists one it
             # does not use itself when a delegate needs it.
-            middleware=self.middleware,
+            middlewares=self.middlewares,
             endpoints=ALL,
             models=ALL,
             memory=self.memory,
@@ -192,12 +192,12 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         if entries
     }
     groups = read.groups(document.get("groups"))
-    # Read together, because they are one field. `middleware` takes no audience,
+    # Read together, because they are one field. `middlewares` takes no audience,
     # and that is not an oversight: it is the one field naming *code the deployment
     # registered* rather than something the workspace offers, so it is granted
     # rather than reachable.
     written_middleware, middleware_settings = read.selection_with_settings(
-        document.get("middleware"), absent=None, key="middleware"
+        document.get("middlewares"), absent=None, key="middlewares"
     )
 
     return AgentSpec(
@@ -213,7 +213,7 @@ def parse(document: Mapping[str, object], source: Path) -> AgentSpec:
         subagents=written_delegates,
         groups=groups,
         audiences=audiences,
-        middleware=written_middleware,
+        middlewares=written_middleware,
         middleware_settings=middleware_settings,
         wanted=fields.wanted_model(document, read),
         # Absent is `None` rather than `False`, which `flag` alone cannot say:

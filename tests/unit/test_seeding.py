@@ -272,7 +272,7 @@ def test_a_definition_naming_middleware_is_left_behind(cfg, tmp_path):
         "name: plain\ndescription: d\nsystem_prompt: |\n  Hi.\n", encoding="utf-8"
     )
     (source / "agents" / "wired.yaml").write_text(
-        "name: wired\ndescription: d\nmiddleware: [audit]\nsystem_prompt: |\n  Hi.\n",
+        "name: wired\ndescription: d\nmiddlewares: [audit]\nsystem_prompt: |\n  Hi.\n",
         encoding="utf-8",
     )
 
@@ -287,7 +287,7 @@ def test_a_tools_own_json_is_not_read_as_a_definition(cfg, tmp_path):
     """`seed` decides what to leave behind by reading one YAML field, and it has to
     check the extension before the content: JSON is valid YAML.
 
-    A tool shipping `{"middleware": [...]}` beside itself is configuration for
+    A tool shipping `{"middlewares": [...]}` beside itself is configuration for
     that tool, not a definition naming this deployment's middleware. Dropping it
     leaves the workspace a tool that cannot start, and the skip list would not
     mention it -- that list is about definitions.
@@ -295,7 +295,7 @@ def test_a_tools_own_json_is_not_read_as_a_definition(cfg, tmp_path):
     source = tmp_path / "presets"
     (source / "tools").mkdir(parents=True)
     (source / "tools" / "note.py").write_text("TOOLS = []\n", encoding="utf-8")
-    (source / "tools" / "note.json").write_text('{"middleware": ["audit"]}\n', encoding="utf-8")
+    (source / "tools" / "note.json").write_text('{"middlewares": ["audit"]}\n', encoding="utf-8")
 
     done = seeding.seed(cfg, source)
 
@@ -304,13 +304,13 @@ def test_a_tools_own_json_is_not_read_as_a_definition(cfg, tmp_path):
 
 
 def test_a_star_is_not_a_name_and_is_seeded(cfg, tmp_path):
-    """`middleware: ["*"]` resolves against whatever the deployment registered, which on
+    """`middlewares: ["*"]` resolves against whatever the deployment registered, which on
     an empty registry is nothing -- and raises nothing either way.
     """
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
     (source / "agents" / "starry.yaml").write_text(
-        'name: starry\ndescription: d\nmiddleware: ["*"]\nsystem_prompt: |\n  Hi.\n',
+        'name: starry\ndescription: d\nmiddlewares: ["*"]\nsystem_prompt: |\n  Hi.\n',
         encoding="utf-8",
     )
 
@@ -328,7 +328,7 @@ def test_the_rule_holds_below_the_top_level(cfg, tmp_path):
     nested = source / "subagents" / "analysis"
     nested.mkdir(parents=True)
     (nested / "deep.yaml").write_text(
-        "name: deep\ndescription: d\nmiddleware: [audit]\nsystem_prompt: |\n  Hi.\n",
+        "name: deep\ndescription: d\nmiddlewares: [audit]\nsystem_prompt: |\n  Hi.\n",
         encoding="utf-8",
     )
     (nested / "shallow.yaml").write_text(
@@ -348,7 +348,7 @@ def test_everything_takes_what_the_default_leaves(cfg, tmp_path):
     source = tmp_path / "presets"
     (source / "agents").mkdir(parents=True)
     (source / "agents" / "wired.yaml").write_text(
-        "name: wired\ndescription: d\nmiddleware: [audit]\nsystem_prompt: |\n  Hi.\n",
+        "name: wired\ndescription: d\nmiddlewares: [audit]\nsystem_prompt: |\n  Hi.\n",
         encoding="utf-8",
     )
 
@@ -467,7 +467,7 @@ def test_every_complete_definition_in_the_readme_parses(formats_doc):
 
 #: What a fenced block has to mention to be a definition fragment rather than a
 #: `groups.yaml` or a `models.yaml` example, which the same page also shows.
-DEFINITION_FIELDS = ("tools:", "skills:", "subagents:", "middleware:", "builtin_tools:")
+DEFINITION_FIELDS = ("tools:", "skills:", "subagents:", "middlewares:", "builtin_tools:")
 
 
 def test_every_field_fragment_in_the_readme_parses_too(formats_doc):

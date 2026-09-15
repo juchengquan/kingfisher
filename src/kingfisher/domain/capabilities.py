@@ -80,8 +80,8 @@ class Capabilities:
     #: Middleware a definition may name, out of what the deployment registered.
     #: Unlike `tools`, `skills` and `subagents` it is never widened by `including`
     #: -- see there.
-    middleware: Selection = ALL
-    #: Endpoints a definition may reach. Granted like `middleware` and for a stronger
+    middlewares: Selection = ALL
+    #: Endpoints a definition may reach. Granted like `middlewares` and for a stronger
     #: reason: this one decides which credentials are used and which endpoint receives
     #: the run's prompts and files. Checked against where a named model *resolves to*,
     #: since definitions name models rather than endpoints.
@@ -96,7 +96,7 @@ class Capabilities:
             "tools",
             "skills",
             "subagents",
-            "middleware",
+            "middlewares",
             "endpoints",
             "models",
         ):
@@ -112,7 +112,7 @@ class Capabilities:
     ) -> Capabilities:
         """Widen by definitions the request brought with it.
 
-        **`middleware` and `endpoints` are deliberately absent**, and that absence is
+        **`middlewares` and `endpoints` are deliberately absent**, and that absence is
         the rule. A skill or subagent an upload brings is the caller's own text; a
         middleware *name* selects code the deployment wrote. Widening it would let
         anyone who can upload a definition activate anything the deployment
@@ -126,7 +126,7 @@ class Capabilities:
             tools=self.tools,
             skills=_widened(self.skills, skills),
             subagents=_widened(self.subagents, subagents),
-            middleware=self.middleware,  # never widened; see above
+            middlewares=self.middlewares,  # never widened; see above
             endpoints=self.endpoints,  # nor this: it chooses where prompts go
             models=self.models,  # nor this: it chooses what the run costs
             memory=self.memory,
@@ -139,7 +139,7 @@ class Capabilities:
             tools=narrowed(other.tools, by=self.tools),
             skills=narrowed(other.skills, by=self.skills),
             subagents=narrowed(other.subagents, by=self.subagents),
-            middleware=narrowed(other.middleware, by=self.middleware),
+            middlewares=narrowed(other.middlewares, by=self.middlewares),
             endpoints=narrowed(other.endpoints, by=self.endpoints),
             models=narrowed(other.models, by=self.models),
             memory=_narrow_switch(self.memory, other.memory),

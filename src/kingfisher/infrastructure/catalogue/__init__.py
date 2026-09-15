@@ -17,7 +17,7 @@ from kingfisher.domain.ports import (
 )
 from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.agents.spec import DIRECTORY as AGENT_DIRECTORY
-from kingfisher.kinds.middleware.catalogue import LocalMiddlewareRepository, NoMiddleware
+from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository, NoMiddleware
 from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.skills.registry import SkillRegistry
@@ -39,7 +39,7 @@ class Definitions:
     #: a required field would have made every caller spelling the other four out
     #: stop working, which is the breakage `from_config` reads roots with `.get`
     #: to avoid.
-    middleware: MiddlewareRepository = field(default_factory=NoMiddleware)
+    middlewares: MiddlewareRepository = field(default_factory=NoMiddleware)
 
     @cached_property
     def registry(self) -> SkillRegistry:
@@ -76,12 +76,12 @@ class Definitions:
         """Read all three now, so a broken definition fails here."""
         _ = self.agents.specs, self.skills.names, self.subagents.specs, self.tools.found
         # The fifth kind, which this read for none of the time it has existed.
-        # `middleware/*.py` is Python that has to import, exactly like `tools/*.py`,
+        # `middlewares/*.py` is Python that has to import, exactly like `tools/*.py`,
         # and the refusal for a class that is not an `AgentMiddleware` was written
         # to fire "as the directory is read rather than at the first turn" -- true
         # of the refusal and not of anything that read the directory, because
         # nothing did until a definition named one.
-        _ = self.middleware.classes
+        _ = self.middlewares.classes
         _ = self.registry
         # A bundle's tools are imported here for the reason every other kind is,
         # and the reason survives the fact that only one delegate can call them:
@@ -122,8 +122,8 @@ class Definitions:
             # `.get` with a fallback, the same as `agents` above and for the
             # reason written there: a deployment that spelled out the roots it
             # knew about should not stop starting because a fifth kind exists.
-            middleware=LocalMiddlewareRepository(
-                Path(roots.get("middleware", Path(roots["skills"]).parent / "middleware"))
+            middlewares=LocalMiddlewareRepository(
+                Path(roots.get("middlewares", Path(roots["skills"]).parent / "middlewares"))
             ),
             skills=LocalSkillRepository(Path(roots["skills"])),
             subagents=LocalSubagentRepository(Path(roots["subagents"])),
@@ -136,12 +136,12 @@ DEFINITION_KINDS: tuple[str, ...] = tuple(f.name for f in fields(Definitions))
 
 #: The kinds a *supplied* catalogue has to name and stage itself.
 #:
-#: `agents` and `middleware` are both outside it, and for one reason: each
+#: `agents` and `middlewares` are both outside it, and for one reason: each
 #: arrived after this seam was published, so a deployment that spelled out the
 #: kinds it knew about must not stop starting because another exists. Left in,
-#: `middleware` stopped every supplied catalogue in the tree loading at once.
+#: `middlewares` stopped every supplied catalogue in the tree loading at once.
 STAGED_KINDS: tuple[str, ...] = tuple(
-    k for k in DEFINITION_KINDS if k not in (AGENT_DIRECTORY, "middleware")
+    k for k in DEFINITION_KINDS if k not in (AGENT_DIRECTORY, "middlewares")
 )
 
 

@@ -61,7 +61,7 @@ def declared_middleware(
     """Build the middleware a definition asked for, agent or delegate."""
     subject = f"{kind} {spec.name!r}"
     approved = approved_middleware(
-        spec.middleware,
+        spec.middlewares,
         registered=registry,
         granted=allowed,
         subject=subject,

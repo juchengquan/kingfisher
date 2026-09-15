@@ -967,10 +967,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # Nothing, and this one never had anything: an agent's runtime half is
     # `harness/agent.py`, which is not this package's.
     "kinds/agents": frozenset(),
-    # The fifth, and back on the boundary: `kinds.middleware.catalogue` refuses a class
+    # The fifth, and back on the boundary: `kinds.middlewares.catalogue` refuses a class
     # that is not an `AgentMiddleware` as the directory is read rather than at the
     # first turn, which cannot be done without naming the type.
-    "kinds/middleware": frozenset({"langchain"}),
+    "kinds/middlewares": frozenset({"langchain"}),
     # The folder itself, which holds no kind. `kinds.importing` loads a workspace's
     # own Python and takes nothing but the standard library; `kinds.documents` reads
     # the YAML header all three document formats share, which takes the parser.
@@ -2805,7 +2805,7 @@ DEPLOYMENT_ERRORS = frozenset({
     #
     # `MiddlewareError` joins `ToolError` here for the reason `AgentError` sits here
     # while `SubagentError` sits above: a caller may upload a subagent and cannot
-    # upload middleware, so a `middleware/` file that will not load is always the
+    # upload middleware, so a `middlewares/` file that will not load is always the
     # deployment's own.
     "AccessError", "AgentError", "ConfigError", "DataError", "HostPathError",
     "LoadError", "MiddlewareError", "MissingStoreError", "ToolError",

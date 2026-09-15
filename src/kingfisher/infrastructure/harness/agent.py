@@ -379,12 +379,12 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     # be bound inside the delegates' block, which meant an agent with no
     # delegates never reached a registry at all.
     #
-    # Two sources since `middleware/` became a definition kind: what this
+    # Two sources since `middlewares/` became a definition kind: what this
     # deployment wired in its own program, and what its workspace defines.
     # Merged once here for the same reason it was hoisted -- an agent and its
     # delegates must select from one mapping, or a name would mean different
     # things one level apart.
-    registry = offered_middleware(middleware_registry or {}, roots.middleware)
+    registry = offered_middleware(middleware_registry or {}, roots.middlewares)
 
     if capabilities.subagents is not None:
         # The registry rather than its `names`: a delegate's grant has to be
@@ -432,7 +432,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 private_skills=_private_skills(roots, name),
                 run_on=wanted.get(name),
                 extra_middleware=declared_middleware(
-                    defined[name], registry, capabilities.middleware, kind="subagent"
+                    defined[name], registry, capabilities.middlewares, kind="subagent"
                 ),
             )
 
@@ -491,7 +491,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         """What this deployment's registry owes one graph, freshly built."""
         if agent is None:
             return []
-        return declared_middleware(agent, registry, capabilities.middleware, kind="agent")
+        return declared_middleware(agent, registry, capabilities.middlewares, kind="agent")
 
     if permitted is not None:
         middleware.append(ToolAllowlist(permitted))

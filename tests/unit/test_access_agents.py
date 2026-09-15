@@ -302,10 +302,10 @@ def test_a_delegate_cannot_reach_a_looser_middleware_than_its_agent_granted():
         name="researcher",
         description="an agent that caps itself",
         system_prompt="You work.",
-        middleware=("call-cap-strict",),
+        middlewares=("call-cap-strict",),
     )
 
-    assert spec.declares().middleware == ("call-cap-strict",), (
+    assert spec.declares().middlewares == ("call-cap-strict",), (
         "an agent's middleware is the ceiling its delegates are clamped by; at "
         "`ALL` a delegate could pick any registered entry, including a looser cap"
     )

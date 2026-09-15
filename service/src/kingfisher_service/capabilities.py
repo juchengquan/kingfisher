@@ -28,7 +28,7 @@ class CapabilitiesBody(BaseModel):
     # JSON caller writes "*" because there is nothing else to write. The test
     # below holds it equal to the lattice's own default.
     subagents: Axis = "*"
-    middleware: Axis = "*"
+    middlewares: Axis = "*"
     endpoints: Axis = "*"
     models: Axis = None
     memory: Axis = None

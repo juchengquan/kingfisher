@@ -1,6 +1,6 @@
 # The delegate half, and the reason the example is two files rather than one.
 #
-# Left behind by `seed` for the same reason `researcher.yaml` is: `middleware:`
+# Left behind by `seed` for the same reason `researcher.yaml` is: `middlewares:`
 # below names a registry entry, and a subagent naming `call-cap-generous` on a
 # deployment that never registered it is refused when the delegate is built.
 #
@@ -28,7 +28,7 @@ description: Reads many files and returns only what was asked for. Use to keep b
 # request that subtracts it refuses this delegate rather than quietly building
 # it uncapped: running with less middleware than the definition specified could
 # mean running without the audit hook it was written to have.
-middleware:
+middlewares:
   - call-cap-generous
   # The same registry entry `researcher.yaml` names, written with a different
   # sentence. That is the half of the axis a cap cannot demonstrate: one class

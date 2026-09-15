@@ -1,7 +1,7 @@
 # The agent half of the middleware example, and one of the only two definitions
 # in this repository that name middleware at all.
 #
-# `kingfisher seed` will not copy it, and that is what the `middleware:` line
+# `kingfisher seed` will not copy it, and that is what the `middlewares:` line
 # below costs. A definition naming `call-cap-strict` is refused when the agent
 # is built -- `names unregistered middleware` -- on every deployment that has
 # not written the factory behind that name, so seeding one into a fresh
@@ -13,12 +13,12 @@
 # cannot build it. `seed --all` takes it once you have registered the names,
 # which is the whole of the setup:
 #
-#     from assets_examples.middleware.call_cap import CallCap, CallCapGenerous
-#     from assets_examples.middleware.tool_note import ToolNote
+#     from assets_examples.middlewares.call_cap import CallCap, CallCapGenerous
+#     from assets_examples.middlewares.tool_note import ToolNote
 #
 #     kingfisher = Kingfisher(
 #         cfg,
-#         middleware={
+#         middlewares={
 #             "call-cap-strict":   CallCap,
 #             "call-cap-generous": CallCapGenerous,
 #             "tool-note":         ToolNote,
@@ -26,7 +26,7 @@
 #     )
 name: researcher
 description: Answers questions from a workspace's files under a ceiling on how much it may do to get there.
-# The line this example exists for. `middleware` names entries from a registry
+# The line this example exists for. `middlewares` names entries from a registry
 # the *deployment* supplies -- not files, not anything a workspace holds -- and
 # the name selects code. Which is why the ceiling is `call-cap-strict` rather
 # than a number written here: a cap a definition can set is not a cap.
@@ -53,7 +53,7 @@ description: Answers questions from a workspace's files under a ceiling on how m
 # axes. An agent that says nothing here runs with no middleware of its own.
 #
 # `call-cap-generous` is listed and *not the ceiling this agent runs under*,
-# which needs saying because it reads as a mistake. An agent's `middleware:` is
+# which needs saying because it reads as a mistake. An agent's `middlewares:` is
 # also the grant its delegates are clamped by -- `AgentSpec.declares` returns
 # this list as the request's -- so a name absent here is one no delegate may
 # reach. `sweeper` names `call-cap-generous`, so this file has to grant it.
@@ -65,7 +65,7 @@ description: Answers questions from a workspace's files under a ceiling on how m
 # Nothing granted it until 2026-09-07 and nothing noticed. With no middleware
 # registered anywhere, `researcher` failed earlier for want of a registry, so
 # the pairing these two files exist to demonstrate had never once been built.
-middleware:
+middlewares:
   - call-cap-strict
   - call-cap-generous
   - name: tool-note

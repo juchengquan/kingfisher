@@ -42,7 +42,7 @@ replaces, so using both is two commands in whichever order you choose:
 
 ## The folder that stopped being an exception
 
-`middleware/` was the one thing here a workspace could not hold, on the argument
+`middlewares/` was the one thing here a workspace could not hold, on the argument
 that a middleware read out of the workspace would be code the agent can edit
 wrapped around the agent that edited it. `protected` covers every definition
 root now, so the premise is gone and this is a definition kind like the rest:
@@ -52,5 +52,5 @@ imported.
 The half that did not change is what a *name* reaches. A definition naming
 `call-cap-strict` selects code the deployment wrote, and no upload may widen
 that -- which is why a request can bring a skill and cannot bring a middleware.
-`middleware/call_cap.py` carries the argument in place, and `assets/README.md`
+`middlewares/call_cap.py` carries the argument in place, and `assets/README.md`
 gives it again next to the seeding rule it comes from.

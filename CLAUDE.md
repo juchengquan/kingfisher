@@ -95,7 +95,7 @@ imports against `THIRD_PARTY`, one entry per area, deny by default: `domain/`
 takes the standard library, itself and an asset kind's `spec`, and the agent
 runtime is reachable from `infrastructure/harness/` and from the two kinds that
 must name its types -- `kinds/skills`, which hands a repository to the lister that
-reads it, and `kinds/middleware`, which refuses a class that is not an
+reads it, and `kinds/middlewares`, which refuses a class that is not an
 `AgentMiddleware`. The other three kinds grant nothing. Adding a foreign
 dependency means editing that table, not working around it. No test reads this
 paragraph against that table, so this is the one place the two can drift apart --
