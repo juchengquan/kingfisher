@@ -1208,6 +1208,25 @@ lives in `RunResult.completed`, and
 `test_no_surface_decides_for_itself_what_a_finished_turn_is` is what keeps a
 second copy of it from being written. *(2026-09-14.)*
 
+**Rejected: sweeping at the start of a run.** With `reap` a verb and
+`--delete-session` a flag, the obvious third move is for `kingfisher run` to
+sweep whatever the TTL calls expired before it does anything else -- so that
+`KINGFISHER_SESSION_TTL_S` finally decides something without anybody typing a
+command.
+
+Not rejected on cost, which was measured first and is nothing: a sweep finding
+nothing expired is 1.65ms at fifty sessions, 6.3ms at two hundred and 33ms at a
+thousand, against a turn of 1.5-1.9s. It is rejected on shape. A command that
+deletes as a side effect of being asked to do something else has a blast radius
+nobody reads, because the person reading `kingfisher run --help` is asking how
+to run a task. The janitor already has a door -- `reap` is it -- and a
+deployment wanting this on a schedule has cron and a `reap()` to call from it.
+
+What that leaves standing is that nothing enforces the TTL, which is why the
+row in `configuration.md` says so rather than letting the setting read as
+automatic. Anyone re-proposing this should know the measurement was never the
+objection. *(2026-09-15.)*
+
 The half that survives: a bare invocation of the driver spends real money on the
 smoke, which is a fine default for a driver and a wrong one for a stranger's
 first command. A verb with a required task argument cannot be reached by
