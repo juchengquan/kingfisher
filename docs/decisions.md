@@ -108,6 +108,16 @@ the agent can edit wrapped around the agent that edited it -- true while the
 shell could write into a definition root, and false the moment `protected` was
 widened to every one of them. The premise moved, so this followed.
 
+It relocates like `tools/` as well, and that arrived late enough to be worth
+recording: `definition_roots_for` took a `middlewares_root` from the day the
+kind existed, under a comment promising each root "separately relocatable by its
+own environment variable", and no caller ever passed it -- no variable read, no
+field on `WorkspacePaths` or `Config`, and neither call site forwarding. Nothing
+went red, because nothing ran from the kinds to the settings that move them.
+`KINGFISHER_MIDDLEWARES_DIR` closes it, and
+`test_every_definition_kind_relocates_by_its_own_variable` drives all five so a
+sixth kind cannot arrive the same way.
+
 **The name comes from the class**, the way a tool's comes from the tool.
 `AgentMiddleware.name` is a *property* answering the class's own name, so
 `getattr(cls, "name")` is a `str` exactly when a subclass overrode it with one --

@@ -7,9 +7,10 @@ from pathlib import Path
 import pytest
 
 from kingfisher.application import config as config_module
-from kingfisher.application.config import config_from_env
+from kingfisher.application.config import Environment, config_from_env
 from kingfisher.config import ConfigError
 from kingfisher.domain.access import AccessError
+from kingfisher.infrastructure.catalogue import DEFINITION_KINDS
 from tests.conftest import FAKE_CATALOGUE, subagents_dir
 
 CATALOGUE = """
@@ -193,6 +194,34 @@ def test_the_catalogue_can_be_shared_between_workspaces(env, tmp_path):
 
     assert cfg.skills_dir == tmp_path / "catalogue" / "skills"
     assert subagents_dir(cfg) == tmp_path / "catalogue" / "subagents"
+
+
+@pytest.mark.parametrize("kind", DEFINITION_KINDS)
+def test_every_definition_kind_relocates_by_its_own_variable(kind, env, tmp_path):
+    """Driven rather than read off the source, because the chain that broke had four
+    links and a check on any one of them passes while the value goes nowhere.
+
+    `middlewares` was unreachable from the day it arrived: `definition_roots_for` took
+    a `middlewares_root` under a comment promising each root "separately relocatable by
+    its own environment variable", no variable was read for it, neither
+    `WorkspacePaths` nor `Config` carried the field, and neither call site passed it.
+    Nothing was red, because nothing went from the kinds to the settings that move
+    them. Parametrized over `DEFINITION_KINDS` so a sixth kind meets this on the day it
+    is added rather than the day somebody notices.
+    """
+    elsewhere = tmp_path / "catalogue" / kind
+    values = {**env, f"KINGFISHER_{kind.upper()}_DIR": str(elsewhere)}
+
+    # Both answers. They are two call sites with two chances to forget:
+    # `WorkspacePaths` is what lays a workspace out before a catalogue can be
+    # read, and `Config` is what every reader asks afterwards.
+    laid_out = Environment(values).paths().catalogue_roots
+    configured = config_from_env(values).catalogue_roots
+
+    # The set rather than the one entry, so a variable wired to the wrong root
+    # fails here too -- which a lone `roots[kind] == elsewhere` would not catch.
+    assert {name for name, path in laid_out.items() if path == elsewhere} == {kind}
+    assert {name for name, path in configured.items() if path == elsewhere} == {kind}
 
 
 def test_the_file_shows_exactly_the_knobs_that_exist():

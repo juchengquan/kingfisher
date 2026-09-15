@@ -98,6 +98,7 @@ class WorkspacePaths:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
+    middlewares_root: Path | None = None
     #: The two single files, relocated. Not beside the definition roots because they
     #: are not directories and do not move together with them: one reviewed `models.yaml` shared
     #: across a fleet is the arrangement `compose.yaml` ships, and a source-id policy may
@@ -121,6 +122,7 @@ class WorkspacePaths:
             self.subagents_root,
             self.tools_root,
             self.agents_root,
+            self.middlewares_root,
         )
 
     @property
@@ -268,6 +270,7 @@ class Config:
     subagents_root: Path | None = None
     tools_root: Path | None = None
     agents_root: Path | None = None
+    middlewares_root: Path | None = None
     # Where definitions are copied *from*, which is the opposite direction to
     # the definition roots. Carried here as well as on `WorkspacePaths` because
     # `doctor` is handed a whole `Config` and has to report on it -- an unset,
@@ -340,13 +343,14 @@ class Config:
 
     @property
     def catalogue_roots(self) -> dict[str, Path]:
-        """The four definition directories, together, as one answer."""
+        """Every definition directory, together, as one answer."""
         return definition_roots_for(
             self.workspace,
             self.skills_root,
             self.subagents_root,
             self.tools_root,
             self.agents_root,
+            self.middlewares_root,
         )
 
     @property

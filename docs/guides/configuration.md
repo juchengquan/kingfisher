@@ -24,6 +24,7 @@ mentions.
 | `KINGFISHER_MODELS_FILE` | The model catalogue: which models exist, where each runs, which key it uses. | `<workspace>/models.yaml` |
 | `KINGFISHER_SOURCE_IDS_FILE` | The source-id vocabulary. No file means access control is off entirely. | `<workspace>/source_ids.yaml` |
 | `KINGFISHER_AGENTS_DIR` | Relocate the agents catalogue. | inside the workspace |
+| `KINGFISHER_MIDDLEWARES_DIR` | Relocate the middlewares catalogue. Code, like the tools one. | inside the workspace |
 | `KINGFISHER_SKILLS_DIR` | Relocate the skills catalogue — this is how several deployments share one reviewed set. | inside the workspace |
 | `KINGFISHER_SUBAGENTS_DIR` | Relocate the subagents catalogue. | inside the workspace |
 | `KINGFISHER_TOOLS_DIR` | Relocate the tools catalogue. | inside the workspace |
@@ -41,8 +42,10 @@ is *copied* for safekeeping, not where it lives while it runs. A deployment whos
 session tree exists only for the length of a turn wants the `SessionRoot` port
 instead — see [`ports.md`](ports.md).
 
-The four `*_DIR` settings exist because definitions are authored and reviewed
-rather than produced by a run. Relocating them is safe for the reason relocating
+The `*_DIR` settings exist because definitions are authored and reviewed
+rather than produced by a run — one per definition kind, and
+`test_every_definition_kind_relocates_by_its_own_variable` is what keeps it one
+per kind as kinds are added. Relocating them is safe for the reason relocating
 the state directory is: the agent reaches a catalogue through a route, and the
 shell has no business there.
 
