@@ -362,14 +362,14 @@ def _require_layout(session_dir: Path) -> None:
         raise ValueError(msg)
 
 
-def build_backend(
+def default_backend(
     cfg: Config,
     session_dir: Path,
     *,
     catalogue: Definitions | None = None,
     runner: CommandRunner | None = None,
 ) -> BackendProtocol:
-    """Build the backend rooted at one session."""
+    """Kingfisher's own backend, rooted at one session."""
     skills = (catalogue or Definitions.from_config(cfg)).skills
     # A directory on this host stays a directory: cheaper than copying every
     # skill into a store, and the only shape whose skills can also be *run*,

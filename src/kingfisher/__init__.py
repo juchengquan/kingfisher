@@ -17,7 +17,7 @@ __version__ = "0.1.0"
 #: and `__all__`, so the two cannot drift.
 #:
 #: **A caller means a caller outside this wheel**, which is the rule eleven names --
-#: `build_agent`, `build_backend`, `build_model` and the rest -- were removed under.
+#: `build_agent`, `default_backend`, `build_model` and the rest -- were removed under.
 #: Every one is live, and every one of their callers already imports it from the module
 #: that defines it, so nothing had ever come through the front door for them. The
 #: command ships in this distribution and is family: it reaches such a name directly,

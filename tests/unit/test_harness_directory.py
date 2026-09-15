@@ -20,7 +20,7 @@ from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.infrastructure.harness.agent import build_agent
-from kingfisher.infrastructure.harness.backend import build_backend
+from kingfisher.infrastructure.harness.backend import default_backend
 from kingfisher.infrastructure.harness.runlog import log_path
 from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.sessions import claim_path
@@ -116,7 +116,7 @@ def test_the_shell_cannot_write_into_the_harness(cfg, session_dir):
     pinned = agent_snapshot(session_dir)
     pinned.parent.mkdir(parents=True, exist_ok=True)
     pinned.write_text(AGENT, encoding="utf-8")
-    shell = build_backend(cfg, session_dir)
+    shell = default_backend(cfg, session_dir)
 
     shell.execute(f'printf "name: mine" > "{pinned}"')
     shell.execute(f'rm -f "{pinned}"')
@@ -127,7 +127,7 @@ def test_the_shell_cannot_write_into_the_harness(cfg, session_dir):
 @macos
 def test_the_shell_can_still_write_the_rest_of_the_session(cfg, session_dir):
     """The bound on the rule: one directory is carved out, not the session."""
-    shell = build_backend(cfg, session_dir)
+    shell = default_backend(cfg, session_dir)
 
     assert shell.execute(f'echo fine > "{session_dir}/derived/ok.txt"').exit_code == 0
     assert shell.execute('echo fine > "$TMPDIR/ok.txt"').exit_code == 0
@@ -143,7 +143,7 @@ def test_one_session_s_harness_is_not_denied_by_naming_another(cfg, workspace):
     session = ensure_session_layout(workspace / "sessions" / "second")
     decoy = session / "derived" / ".harness"
     decoy.mkdir(parents=True, exist_ok=True)
-    shell = build_backend(cfg, session)
+    shell = default_backend(cfg, session)
 
     assert shell.execute(f'echo fine > "{decoy}/ok.txt"').exit_code == 0
 

@@ -113,7 +113,7 @@ def policy_for(
     `subprocess` anyway.
     """
     # Imported here, not at the top. `sandlock` ships Linux-only wheels, and
-    # this module is imported on macOS every time `build_backend` runs -- a
+    # this module is imported on macOS every time `default_backend` runs -- a
     # top-level import would make the package unusable there to gain nothing.
     # `ty: ignore` for the same reason: it is not installed on the machine
     # this is developed on, and an optional Linux-only dependency that

@@ -17,7 +17,7 @@ from kingfisher.infrastructure.harness.agent import (
     CapabilityError,
     build_agent,
 )
-from kingfisher.infrastructure.harness.backend import build_backend, skills_sources
+from kingfisher.infrastructure.harness.backend import default_backend, skills_sources
 from kingfisher.infrastructure.harness.narrowing import NarrowedSkills, ToolAllowlist
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from tests.conftest import (
@@ -445,7 +445,7 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
     )
     relocated = replace(cfg, skills_root=catalogue, skills_enabled=True)
 
-    backend = build_backend(relocated, session_dir)
+    backend = default_backend(relocated, session_dir)
 
     assert str(backend.routes["/skills/"].cwd) == str(catalogue.resolve())
     assert backend.read("/skills/shared/SKILL.md").error is None

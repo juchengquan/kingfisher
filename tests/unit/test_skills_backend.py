@@ -8,7 +8,7 @@ import pytest
 
 from kingfisher.domain.ports import SkillRepository
 from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
-from kingfisher.infrastructure.harness.backend import build_backend, shell_env
+from kingfisher.infrastructure.harness.backend import default_backend, shell_env
 from kingfisher.kinds.skills.backend import skills_backend
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.layout import SKILLS_ROUTE
@@ -99,7 +99,7 @@ def test_the_agent_can_read_a_skill_held_in_a_store(cfg, session_dir):
     """The whole point."""
     catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
 
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
 
     assert "body of remote" in str(backend.read(f"{SKILLS_ROUTE}remote/SKILL.md"))
 
@@ -110,7 +110,7 @@ def test_the_listing_deepagents_reads_finds_it(cfg, session_dir):
     """
     catalogue = replace(Definitions.from_config(cfg), skills=_held("alpha", "beta"))
 
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
     entries = {entry["path"] for entry in backend.ls(SKILLS_ROUTE).entries or []}
 
     assert any("alpha" in path for path in entries)
@@ -121,7 +121,7 @@ def test_a_directory_backed_catalogue_still_gets_a_filesystem_mount(cfg, session
     """Not everything becomes a store."""
     from deepagents.backends.filesystem import FilesystemBackend
 
-    backend = build_backend(cfg, session_dir)
+    backend = default_backend(cfg, session_dir)
 
     assert isinstance(backend.routes[SKILLS_ROUTE], FilesystemBackend)
 
@@ -129,7 +129,7 @@ def test_a_directory_backed_catalogue_still_gets_a_filesystem_mount(cfg, session
 def test_a_store_mount_is_read_only_by_construction(cfg, session_dir):
     """Not by a permission someone remembers to add."""
     catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
 
     refused = backend.write(f"{SKILLS_ROUTE}remote/PWNED.md", "tampered")
 
@@ -162,7 +162,7 @@ def test_the_async_half_refuses_too(cfg, session_dir):
         return await backend.aupload_files([(f"{SKILLS_ROUTE}remote/up.md", b"y")])
 
     catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
     path = f"{SKILLS_ROUTE}remote/SKILL.md"
 
     for operation in ["write", "edit", "delete", "upload"]:
@@ -179,7 +179,7 @@ def test_every_mutating_operation_is_refused(cfg, session_dir):
     operation is allowed to change anything, so the second sees what the first did.
     """
     catalogue = replace(Definitions.from_config(cfg), skills=_held("remote"))
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
     path = f"{SKILLS_ROUTE}remote/SKILL.md"
 
     for refused in (backend.edit(path, "body", "tampered"), backend.delete(path)):
@@ -239,7 +239,7 @@ def test_a_skill_shipping_something_binary_does_not_break_the_catalogue(tmp_path
 
     # and the catalogue still mounts, which is the point of not refusing
     catalogue = replace(Definitions.from_config(cfg), skills=InStore({"demo": files}))
-    backend = build_backend(cfg, session_dir, catalogue=catalogue)
+    backend = default_backend(cfg, session_dir, catalogue=catalogue)
 
     assert "body of demo" in str(backend.read(f"{SKILLS_ROUTE}demo/SKILL.md"))
 
