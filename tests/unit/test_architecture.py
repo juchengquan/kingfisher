@@ -2674,9 +2674,17 @@ def _kinds_directory_contents(root: Path) -> tuple[frozenset[str], frozenset[str
 
     `root` is a parameter so the reporting can be tested against a tree built wrong on
     purpose, rather than by waiting for this one to go wrong.
+
+    **A directory counts only where it holds Python**, which covers `__pycache__` by
+    the same rule rather than by name. Not a loosening: git cannot commit an empty
+    directory, so one with no source in it never arrived in a diff -- it is left on a
+    working tree, which is what renaming `middleware` to `middlewares` did. The tracked
+    files moved, the ignored `__pycache__` beside them did not, and the rule below then
+    named a kind whose code was gone on every tree that had run the suite before the
+    rename, with nothing in the diff to explain it.
     """
     return (
-        frozenset(d.name for d in root.iterdir() if d.is_dir() and d.name != "__pycache__"),
+        frozenset(d.name for d in root.iterdir() if d.is_dir() and any(d.glob("*.py"))),
         frozenset(f.stem for f in root.glob("*.py")),
     )
 
@@ -2715,9 +2723,17 @@ def test_the_kinds_directory_rule_can_tell_a_stray_from_a_kind(tmp_path):
     against a tree where there is not -- which is how it would pass while reading the
     wrong directory, or none.
     """
-    (tmp_path / "skills").mkdir()
-    (tmp_path / "widgets").mkdir()
+    for name in ("skills", "widgets"):
+        (tmp_path / name).mkdir()
+        (tmp_path / name / "catalogue.py").write_text("", encoding="utf-8")
     (tmp_path / "__pycache__").mkdir()
+    # A kind renamed away, as `middleware` was: the tracked files went with the
+    # rename and the ignored build output stayed. Built here rather than trusted
+    # to the real tree, because the real tree is clean exactly when somebody has
+    # just cleaned it -- and this rule going red days after an unrelated commit
+    # is the failure being prevented.
+    (tmp_path / "middleware" / "__pycache__").mkdir(parents=True)
+    (tmp_path / "middleware" / "__pycache__" / "spec.cpython-312.pyc").write_bytes(b"")
     (tmp_path / "__init__.py").write_text("", encoding="utf-8")
     (tmp_path / "shared.py").write_text("", encoding="utf-8")
 
@@ -2726,6 +2742,7 @@ def test_the_kinds_directory_rule_can_tell_a_stray_from_a_kind(tmp_path):
     assert directories == {"skills", "widgets"}, "a directory that is no kind is reported"
     assert modules == {"__init__", "shared"}, "and so is a loose module beside them"
     assert "__pycache__" not in directories, "build output is not a claim about anything"
+    assert "middleware" not in directories, "and neither is what a renamed kind left"
 
 
 def test_the_package_ships_the_catalogue_example():
