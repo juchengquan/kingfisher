@@ -41,6 +41,7 @@ from kingfisher.infrastructure.harness.backend import (
     default_backend,
     skills_sources,
 )
+from kingfisher.infrastructure.harness.backend_contract import refuse_unusable_backend
 from kingfisher.infrastructure.harness.interpreter import _interpreter
 from kingfisher.infrastructure.harness.middleware import (
     MiddlewareFactory,
@@ -141,20 +142,26 @@ def _backend_for(  # noqa: PLR0913 -- four of these are what building a backend
         msg = "build_agent needs either a session_dir to root a backend at, or a backend"
         raise ValueError(msg)
 
-    if backend_from is None:
-        return built
-    if session_dir is None:
-        msg = (
-            "backend_from is called with the session its backend is rooted at, so "
-            "build_agent needs a session_dir to pass it"
-        )
-        raise ValueError(msg)
-    # Built first and handed over, rather than the deployment being asked for one from
-    # nothing. Everything the default carries -- refusing host paths, the routes that
-    # make a read-only rule legal at all, the confinement around the shell -- is kept
-    # by a deployment that adjusts what it was given, and lost only by one that
-    # deliberately returns something else.
-    return backend_from(built, session_dir)
+    if backend_from is not None:
+        if session_dir is None:
+            msg = (
+                "backend_from is called with the session its backend is rooted at, so "
+                "build_agent needs a session_dir to pass it"
+            )
+            raise ValueError(msg)
+        # Built first and handed over, rather than the deployment being asked for one
+        # from nothing. Everything the default carries -- refusing host paths, the
+        # routes that make a read-only rule legal at all, the confinement around the
+        # shell -- is kept by a deployment that adjusts what it was given, and lost
+        # only by one that deliberately returns something else.
+        built = backend_from(built, session_dir)
+
+    # After the seam rather than before it, because what a deployment returns is what
+    # the agent runs against and is the only one worth asking about. The default is
+    # asked too, and that is the point: a check only the supplied path ran would be a
+    # check nothing in this repository exercises.
+    refuse_unusable_backend(built)
+    return built
 
 
 def _wanted_endpoints(

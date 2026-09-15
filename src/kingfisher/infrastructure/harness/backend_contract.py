@@ -18,6 +18,7 @@ from uuid import uuid4
 from deepagents.backends import CompositeBackend
 from deepagents.backends.protocol import SandboxBackendProtocol
 
+from kingfisher.config import ConfigError
 from kingfisher.infrastructure.harness.backend import HostPathError
 from kingfisher.layout import denied_read_scopes, denied_scopes
 
@@ -162,3 +163,30 @@ BACKEND_CONTRACT: tuple[Callable[[Callable[[], Any]], None], ...] = (
     filesystem_consistency,
     host_path_refusal,
 )
+
+
+def refuse_unusable_backend(backend: Any) -> None:
+    """Two of the four, run on every backend the harness resolves.
+
+    These two only *look*: an isinstance and a scan of the routes, no I/O and no
+    turn's worth of work, so running them costs nothing and the default pays the
+    same nothing every other build does. The other two write files and run shell
+    commands -- a deployment's to pay in its own tests, never a turn's.
+
+    Running any of them at all is what stands in for a property this seam used to
+    have for free. A deployment handed the backend kingfisher built kept the route
+    table and the confinement by returning what it was given; one that builds its
+    own starts from nothing, and `execution_support` is the failure with no symptom
+    at the end of that road -- deepagents drops the shell, tells the model execution
+    is unavailable, and says nothing to the deployment.
+
+    `ConfigError` rather than the kit's `AssertionError`, and the difference is who
+    made the mistake: the kit is a deployment asserting about its own adapter, this
+    is a library refusing what it was handed, and an `AssertionError` out of a
+    library reads as the library's own bug.
+    """
+    try:
+        execution_support(lambda: backend)
+        route_coverage(lambda: backend)
+    except AssertionError as unusable:
+        raise ConfigError(str(unusable)) from unusable
