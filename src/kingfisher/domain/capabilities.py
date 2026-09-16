@@ -78,8 +78,6 @@ class Capabilities:
     #: graph -- 5-6ms each, re-measured 2026-09-03.
     subagents: Selection = ALL
     #: Middleware a definition may name, out of what the deployment registered.
-    #: Unlike `tools`, `skills` and `subagents` it is never widened by `including`
-    #: -- see there.
     middlewares: Selection = ALL
     #: Endpoints a definition may reach. Granted like `middlewares` and for a stronger
     #: reason: this one decides which credentials are used and which endpoint receives
@@ -106,31 +104,6 @@ class Capabilities:
     def is_unrestricted(self) -> bool:
         """True when nothing is narrowed, so the agent can be built as configured."""
         return self == Capabilities()
-
-    def including(
-        self, *, skills: tuple[str, ...] = (), subagents: tuple[str, ...] = ()
-    ) -> Capabilities:
-        """Widen by definitions the request brought with it.
-
-        **`middlewares` and `endpoints` are deliberately absent**, and that absence is
-        the rule. A skill or subagent an upload brings is the caller's own text; a
-        middleware *name* selects code the deployment wrote. Widening it would let
-        anyone who can upload a definition activate anything the deployment
-        registered -- the escalation the rest of this method exists to avoid.
-        `endpoints` is the same argument with more at stake: it chooses which
-        endpoint receives the run's prompts and files, and whose credentials pay for
-        them.
-        """
-        return Capabilities(
-            builtin_tools=self.builtin_tools,
-            tools=self.tools,
-            skills=_widened(self.skills, skills),
-            subagents=_widened(self.subagents, subagents),
-            middlewares=self.middlewares,  # never widened; see above
-            endpoints=self.endpoints,  # nor this: it chooses where prompts go
-            models=self.models,  # nor this: it chooses what the run costs
-            memory=self.memory,
-        )
 
     def intersect(self, other: Capabilities) -> Capabilities:
         """Narrow these capabilities by another set. Never widens."""
@@ -176,13 +149,6 @@ def narrowed(selection: Selection, *, by: Selection) -> Selection:
         return selection
     allowed = set(by)
     return tuple(name for name in selection if name in allowed)
-
-
-def _widened(selection: Selection, extra: tuple[str, ...]) -> Selection:
-    """`selection` plus names the caller brought with it -- see `including`."""
-    if selection is None or selection == ALL:
-        return selection
-    return (*selection, *extra)
 
 
 def withheld(granted: Selection, *, offered: Iterable[str]) -> tuple[str, ...]:

@@ -7,7 +7,7 @@ from pathlib import Path
 import pytest
 
 from kingfisher import Kingfisher, default_backend
-from kingfisher.domain.capabilities import ALL, UNRESTRICTED, Capabilities
+from kingfisher.domain.capabilities import UNRESTRICTED, Capabilities
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import (
     Session,
@@ -86,25 +86,6 @@ def test_grants_are_unrestricted_by_default(cfg):
     """A deployment serving one caller is unaffected by any of this."""
     kf = Kingfisher(cfg, backend=default_backend, threads=StubCheckpointer())
     assert kf.grants == UNRESTRICTED
-
-
-def test_an_uploaded_definition_is_added_back_after_clamping(cfg):
-    """A grant list is written before an upload exists and its name is unknowable then,
-    so clamping against it would strip every upload rather than authorise it.
-    """
-    granted = Capabilities(skills=("tabular-qa",), builtin_tools=("read_file",))
-
-    allowed = granted.intersect(Capabilities()).including(skills=("theirs",))
-
-    assert allowed.skills is not None
-    assert set(allowed.skills) == {"tabular-qa", "theirs"}
-    assert allowed.builtin_tools == ("read_file",)  # untouched
-
-
-def test_including_cannot_widen_an_unrestricted_set(cfg):
-    """`ALL` already includes them; adding names would narrow it."""
-    assert Capabilities().including(skills=("theirs",)).skills == ALL
-    assert Capabilities(skills=None).including(skills=("theirs",)).skills is None
 
 
 # -- one turn at a time, per session --------------------------------------

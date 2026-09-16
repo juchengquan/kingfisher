@@ -27,12 +27,6 @@ class Request:
     turn_id: str | None = None
     inputs: tuple[Path, ...] = ()
     data: tuple[Path, ...] = ()
-    # Provisioning, not activation. These are catalogue ids saying which
-    # definitions to fetch for this session, while `capabilities` still selects by
-    # name. Keeping them apart stops a catalogue's identifier scheme leaking into
-    # the agent's vocabulary, and the agent's naming rules into the catalogue.
-    skill_refs: tuple[str, ...] = ()
-    subagent_refs: tuple[str, ...] = ()
     capabilities: Capabilities = field(default_factory=Capabilities)
     #: Delegate name -> where this request wants it to run. Empty by default.
     #:

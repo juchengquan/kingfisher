@@ -25,7 +25,6 @@ from kingfisher import (
     UnknownReferenceError,
     UnknownSessionError,
     UnsafeReferenceError,
-    UploadError,
     config_from_env,
     definitions_source,
     ensure_layout,
@@ -726,7 +725,6 @@ REFUSALS = (
     UnknownReferenceError,
     UnknownSessionError,
     UnsafeReferenceError,
-    UploadError,
 )
 
 #: Verb -> what runs it. A table rather than a chain of `if`s. The chain needed

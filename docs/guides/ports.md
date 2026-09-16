@@ -220,7 +220,6 @@ the shell backend is also the filesystem for every unrouted path, so handing ove
 
 | Port | What it is | Replace it when |
 |---|---|---|
-| `DefinitionStore` | A request's own skills and subagents, by id | Callers upload definitions and you hold them somewhere |
 | `SkillRepository` | Skills: names, and the files each is made of | Your catalogue is not a directory |
 | `AgentRepository`, `SubagentRepository` | Parsed definitions, by name | Same |
 | `ToolRepository` | Workspace tools, imported | Rarely — a tool is Python that gets imported, so an implementation must stage to disk first |

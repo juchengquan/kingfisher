@@ -101,9 +101,8 @@ def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
 
 def test_a_sessions_own_uploaded_skills_are_read_only_too(cfg, session_dir):
     """`/skills/uploaded/` is the session's half rather than the deployment's, and it is
-    covered by the same rule on purpose: kingfisher writes it host-side from
-    `skill_refs`, and an agent able to rewrite an uploaded skill could rewrite the
-    instructions it was about to follow.
+    covered by the same rule on purpose: an agent able to rewrite a skill kept
+    there could rewrite the instructions it was about to follow.
     """
     _catalogue(cfg)
     uploaded = session_dir / "skills" / "uploaded" / "mine"

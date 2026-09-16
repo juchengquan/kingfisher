@@ -89,8 +89,7 @@ def for_session(catalogue: Definitions, session_dir: Path | None) -> Definitions
             base=catalogue.subagents,
             overlay=LocalSubagentRepository(uploaded_subagents(session_dir)),
         ),
-        # `tools` has no layer: a tool is Python imported into this process, and
-        # a session cannot upload one -- `uploads` reads `skill_refs` and
-        # `subagent_refs` and nothing else. A layer for symmetry would advertise
-        # a capability that does not exist.
+        # `tools` has no layer: a tool is Python imported into this process, so a
+        # session has no way to contribute one. A layer for symmetry would
+        # advertise a capability that does not exist.
     )

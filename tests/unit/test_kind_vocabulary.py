@@ -15,7 +15,6 @@ from dataclasses import fields
 
 from kingfisher.domain.capabilities import Capabilities
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.workspace.uploads import Brought
 from kingfisher.kinds.subagents.catalogue import ASSET_DIRECTORIES
 from tests.integration import driver
 
@@ -26,17 +25,6 @@ from tests.integration import driver
 #: API surface pointing the wrong way; `fields(Capabilities)` is the same
 #: sentence and cannot drift from the type it asks.
 AXES: tuple[str, ...] = tuple(f.name for f in fields(Capabilities))
-
-#: Why a kind is not something a caller can upload. A definition arrives as a
-#: document this package parses; these are not that.
-NOT_UPLOADABLE = {
-    "builtin_tools": "deepagents brings them; there is nothing to supply",
-    "tools": "code, imported into this process -- never caller-supplied",
-    "middlewares": "selects code the deployment registered",
-    "endpoints": "decides which credentials are used",
-    "models": "an assignment, not a definition",
-    "memory": "a switch, not names",
-}
 
 #: Why a kind is not read from the catalogue directories.
 NOT_ON_DISK = {
@@ -96,19 +84,11 @@ NOT_AN_AXIS = {
 #: Why a kind has no `--without-<kind>` flag. Not a CLI concern only: these are
 #: the axes a *library* caller narrows differently too.
 NOT_SUBTRACTABLE = {
-    "middlewares": "selects code, and `including` never widens it",
+    "middlewares": "selects code the deployment registered",
     "endpoints": "decides which credentials are used",
     "models": "an assignment, not a permission",
     "memory": "a switch, not names -- `--no-memory` says it",
 }
-
-
-def test_what_a_request_may_upload_is_accounted_for():
-    """`Brought` has two fields."""
-    covered = {f.name for f in fields(Brought)}
-
-    assert covered | set(NOT_UPLOADABLE) == set(AXES)
-    assert not covered & set(NOT_UPLOADABLE), "a kind cannot be both carried and refused"
 
 
 def test_what_the_catalogue_loads_is_accounted_for():
@@ -129,9 +109,7 @@ def test_what_a_caller_can_subtract_is_accounted_for():
 
 def test_a_ninth_axis_cannot_be_added_in_silence():
     """The point of all of the above."""
-    unaccounted = set(AXES) - (
-        {f.name for f in fields(Brought)} | set(NOT_UPLOADABLE)
-    )
+    unaccounted = set(AXES) - (set(driver.GRANTS) | set(NOT_SUBTRACTABLE))
     assert not unaccounted, f"{sorted(unaccounted)} is a kind nothing has decided about"
 
 

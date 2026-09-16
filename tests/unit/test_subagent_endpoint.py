@@ -245,18 +245,6 @@ def test_the_grant_is_checked_against_where_the_model_resolves(cfg, session_dir,
         build(elsewhere(cfg), session_dir, monkeypatch, endpoints=("fake",))
 
 
-def test_an_upload_cannot_widen_where_the_run_goes():
-    """The same structural rule as middleware, for a stronger reason: this one chooses
-    which endpoint receives the prompts and whose credentials pay.
-    """
-    import inspect
-
-    accepted = set(inspect.signature(Capabilities.including).parameters)
-
-    assert "endpoints" not in accepted
-    assert Capabilities(endpoints=("a",)).including(skills=("x",)).endpoints == ("a",)
-
-
 def test_grants_clamp_endpoints_like_everything_else():
     granted = Capabilities(endpoints=("minimax",))
 

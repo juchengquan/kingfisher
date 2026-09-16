@@ -113,7 +113,6 @@ from kingfisher.infrastructure.workspace.snapshots import (
     agent_started_with,
     remember_agent,
 )
-from kingfisher.infrastructure.workspace.uploads import provision
 from kingfisher.kinds.agents.reading import read
 from kingfisher.kinds.agents.spec import AgentSpec
 
@@ -122,7 +121,6 @@ if TYPE_CHECKING:
 
     from kingfisher.domain.ports import (
         CommandRunner,
-        DefinitionStore,
         SessionDirs,
         SessionRoot,
         ThreadStore,
@@ -203,7 +201,6 @@ class Kingfisher(Sessions, Disposal):
         # default -- see `_checkpointer_for`. The union is the contract, so it
         # is written here rather than left for a reader to infer from a branch.
         threads: ThreadStore | Callable[[Path], Any] | None = None,
-        definitions: DefinitionStore | None = None,
         # Where a session's files go when the machine may not keep them. `None`
         # means the session directory is the only copy, which is what every
         # deployment has had until now and stays correct wherever the host is
@@ -301,10 +298,6 @@ class Kingfisher(Sessions, Disposal):
         # which is `InMemorySaver` and holds nothing after the turn that made it.
         self.threads: Any = threads
         self._shared: Any = threads if (threads is not None and not callable(threads)) else None
-        # No default. A deployment that never serves uploaded definitions has
-        # nothing to wire, and a request that supplies ids without one is a
-        # configuration error worth saying out loud rather than a silent no-op.
-        self.definitions: Any = definitions
         # What this deployment permits, before any request asks for anything.
         # Unrestricted by default, so a single-caller deployment is unaffected;
         # a service in front of many callers sets it, and `intersect` can only
@@ -619,19 +612,8 @@ class Kingfisher(Sessions, Disposal):
         # ones that were. `place_data` re-hardens `/data` on its way out.
         placement = place_data(request.data, session.directory)
 
-        # Before the agent, which discovers definitions by reading the
-        # directories this writes.
-        brought = provision(
-            request, self.definitions, session.directory, cfg, catalogue=self.catalogue
-        )
-
         # What this deployment permits, narrowed by what the request asked for.
-        # Definitions the request brought itself are added back: their content
-        # came from the caller, so a grant list -- written before their names
-        # existed -- has no opinion about them.
-        allowed = self._effective_grants(source_ids).intersect(request.capabilities).including(
-            skills=brought.skills, subagents=brought.subagents
-        )
+        allowed = self._effective_grants(source_ids).intersect(request.capabilities)
         # Named here rather than inline below, because two things want it and
         # the expression is a mouthful. `None` for a run with no policy or an
         # `UNSCOPED` one: both see the whole workspace, so there is nothing to
