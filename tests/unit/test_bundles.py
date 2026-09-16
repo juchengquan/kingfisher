@@ -542,6 +542,82 @@ def test_a_listing_says_when_a_bundle_shadows_the_catalogue(cfg):
     assert "shadowing the catalogue's" in "\n".join(_catalogue(found))
 
 
+def test_a_listing_names_the_folder_whose_definition_was_renamed(cfg):
+    """A renamed definition takes its bundle with it and says nothing, which is the
+    failure `orphaned_assets` was written for and nothing printed for as long as it
+    existed: `redactor.yaml` told readers a listing reports the orphan while no
+    caller anywhere read the field.
+
+    Driven by renaming a bundle that works, rather than by a folder built orphaned,
+    so the loss is the same one a reader would hit.
+    """
+    workspace_with_bundle(cfg)
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.yaml"
+    definition.write_text(
+        definition.read_text(encoding="utf-8").replace("name: surveyor", "name: surveys"),
+        encoding="utf-8",
+    )
+
+    found = inventory(cfg)
+
+    # The silent half, asserted first because it is what the line is about: the
+    # delegate still loads, and holds none of what is in its folder.
+    assert "surveys" in found.subagents
+    assert found.bundled_tools == {}
+    assert found.orphaned_assets == ("surveyor",)
+    assert "surveyor/ holds tools/ or skills/" in "\n".join(_catalogue(found))
+
+
+def test_a_listing_does_not_report_a_grouping_folder_that_holds_no_assets(cfg):
+    """The control. `analysis/profiler.yaml` next to the shipped bundle is ordinary
+    organisation, and a check that reported every folder naming no definition would
+    put a warning on it forever.
+    """
+    define(cfg.workspace / "subagents" / "analysis", "profiler")
+
+    found = inventory(cfg)
+
+    assert found.orphaned_assets == ()
+    assert "holds tools/ or skills/" not in "\n".join(_catalogue(found))
+
+
+def test_an_orphaned_bundle_does_not_make_the_listing_non_zero(cfg):
+    """Legal, and the split `misfiled` already draws: a folder naming no definition
+    is reported, never refused, so a deployment that meant it still exits zero.
+    """
+    workspace_with_bundle(cfg)
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.yaml"
+    definition.write_text(
+        definition.read_text(encoding="utf-8").replace("name: surveyor", "name: surveys"),
+        encoding="utf-8",
+    )
+
+    found = inventory(cfg)
+
+    assert found.orphaned_assets == ("surveyor",)
+    assert not failed(found)
+
+
+def test_doctor_warns_about_an_orphaned_bundle_and_does_not_fail_on_it(cfg):
+    """Its own check name rather than `delegate tools`: the folder may hold only
+    `skills/`, and a row naming the wrong half sends a reader looking for a tool
+    that was never there.
+    """
+    workspace_with_bundle(cfg)
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.yaml"
+    definition.write_text(
+        definition.read_text(encoding="utf-8").replace("name: surveyor", "name: surveys"),
+        encoding="utf-8",
+    )
+
+    checks = examine(cfg)
+    named = {check.name: check for check in checks}
+
+    assert named["delegate bundles"].verdict == "warn"
+    assert "surveyor/" in named["delegate bundles"].detail
+    assert worst(checks) != "fail", "a folder naming no definition is legal"
+
+
 def test_doctor_names_the_delegate_whose_private_tools_will_not_load(cfg):
     """Its own check rather than folded into `tools`, for the reason the field is
     its own: a reader has to be told which delegate to go and open.

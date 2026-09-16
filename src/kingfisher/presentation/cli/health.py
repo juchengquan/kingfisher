@@ -361,6 +361,27 @@ def _delegate_tools(found: Inventory) -> Iterator[Check]:
             "rename one side if the delegate was meant to get the catalogue's",
         )
 
+    # A warning rather than a failure for the reason the catalogue refuses
+    # nothing here: a folder naming no definition is legal organisation, and
+    # `analysis/` next to the shipped bundle is one. It is worth saying anyway
+    # because the likeliest cause is the other thing entirely -- a definition
+    # renamed out from under its own folder, whose delegate then holds none of
+    # what is in it and says nothing about that at any point in a run.
+    #
+    # Its own name rather than `delegate tools`: the folder may hold only
+    # `skills/`, and a doctor row that names the wrong half sends a reader to
+    # look for a tool that was never there.
+    if found.orphaned_assets:
+        yield Check(
+            "delegate bundles",
+            "warn",
+            # Phrased without a verb the count has to agree with: one orphan is
+            # the common case and a rename can produce several.
+            f"{', '.join(f'{one}/' for one in found.orphaned_assets)}: "
+            f"tools/ or skills/ that reach no delegate",
+            "rename the folder, or the `name:` inside it, so the two match",
+        )
+
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
         detail += ", and KINGFISHER_SKILLS_ENABLED is off so none will be offered"

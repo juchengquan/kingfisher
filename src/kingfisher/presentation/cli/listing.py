@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from collections.abc import Iterator
+from pathlib import PurePath
 
 from kingfisher import Inventory, Origins
 
@@ -153,6 +154,12 @@ def _catalogue(found: Inventory) -> Iterator[str]:
     """The skills and subagents sections, which are the same whether or not the tools
     catalogue loaded.
     """
+    yield from _skills(found)
+    yield from _subagents(found)
+
+
+def _skills(found: Inventory) -> Iterator[str]:
+    """The skills section: what loaded, and the three ways one does not reach the agent."""
     yield (
         "\nskills" if found.skills_enabled else "\nskills (KINGFISHER_SKILLS_ENABLED is off)"
     )
@@ -186,6 +193,14 @@ def _catalogue(found: Inventory) -> Iterator[str]:
         yield f"  ! {directory}/ is offered as {name} — its own header names that instead"
         yield f"    (grant it as {name}, or rename the directory to match)"
 
+
+def _subagents(found: Inventory) -> Iterator[str]:
+    """The subagents section, with what each one brings that nobody else holds.
+
+    The `return` below ends this section, not the listing. Anything appended after
+    it is dropped for a deployment whose subagents will not load -- which is the
+    deployment reading this output.
+    """
     yield "\nsubagents"
     if found.subagents_error is not None:
         yield f"  cannot load: {found.subagents_error}"
@@ -228,6 +243,16 @@ def _catalogue(found: Inventory) -> Iterator[str]:
         yield "   --builtin-tools do not restrict what it can call)"
     if not found.subagents:
         yield f"  (none)  — try {SEED_HINT}"
+    for folder in found.orphaned_assets:
+        # The delegate this folder was written for has no line of its own to be
+        # missing from: it still lists, still runs, and holds none of what is in
+        # here. Nothing else a reader can see says so.
+        owner = PurePath(folder).name
+        yield (
+            f"  ! {folder}/ holds tools/ or skills/ that reach no delegate "
+            f"— nothing in it is named {owner}"
+        )
+        yield "    (rename the folder, or the `name:` inside it, so the two match)"
 
 
 def _audience_json(audience: Audience) -> list[object]:
@@ -265,6 +290,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
+        "orphaned_assets": list(found.orphaned_assets),
         # The vocabulary, or `null` where this deployment declares none. Who reaches
         # what is `audiences` below, keyed the way the definitions themselves are.
         "access": (
