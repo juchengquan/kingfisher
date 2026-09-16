@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from kingfisher.domain.access import AccessError, AccessReport, Stated, _Unscoped
+from kingfisher.domain.access import AccessError, AccessReport, _Unscoped, stated
 from kingfisher.domain.capabilities import ALL
 
 if TYPE_CHECKING:
@@ -36,16 +36,6 @@ def held_by(
         msg = f"source ids is a sequence of names, not a string -- write [{source_ids!r}]"
         raise AccessError(msg)
     return vocabulary.expand(tuple(source_ids))
-
-
-def stated(spec: object) -> Stated:
-    """What one definition says about who reaches what."""
-    return Stated(
-        source_ids=getattr(spec, "source_ids", ALL),
-        entries={
-            field: dict(entries) for field, entries in getattr(spec, "audiences", {}).items()
-        },
-    )
 
 
 def undeclared_in(specs: Mapping[str, object], *, kind: str, vocabulary: SourceIds) -> str | None:

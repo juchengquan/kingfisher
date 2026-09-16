@@ -461,3 +461,29 @@ def test_a_workspace_that_has_agents_is_not_lectured(cfg):
     said = str(refused.value)
     assert "only" in said
     assert "system_prompt" not in said
+
+
+# -- the axes no audience touches -------------------------------------------
+
+
+def test_the_two_kinds_declare_the_unaudienced_axes_differently():
+    """An agent widens `models` to everything and states its own `memory`; a delegate
+    leaves both unset. Pinned because nothing else asserts it: `declares` narrows three
+    fields against an audience, and the axes it does *not* narrow were carried along by
+    two hand-written bodies -- so one body serving both kinds would flatten this with
+    the whole suite still green.
+    """
+    agent = _read(MINIMAL.rstrip() + "\nmemory: false\n", "plain.yaml")
+    delegate = reading.read(
+        "name: reviewer\ndescription: d\nsystem_prompt: |\n  You review.\n",
+        Path("reviewer.yaml"),
+    )
+
+    for held in (None, frozenset({"A"})):
+        said, theirs = agent.declares(held), delegate.declares(held)
+
+        assert said.models == ALL, "an agent may put a delegate on any model it names"
+        assert said.memory is False, "the file said so, and only the agent has the field"
+        assert theirs.models is None, "a delegate names its own model or inherits one"
+        assert theirs.memory is None, "memory is the agent's to decline, not a delegate's"
+        assert said.endpoints == ALL and theirs.endpoints == ALL, "no audience reaches these"

@@ -6,7 +6,7 @@ from collections.abc import Mapping
 from dataclasses import dataclass, field
 from typing import Any
 
-from kingfisher.domain.access import Audience, reaching
+from kingfisher.domain.access import Audience, narrowed_for
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 
@@ -102,34 +102,12 @@ class SubagentSpec:
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this delegate holds, narrowed to what one caller reaches."""
-        if held is None:
-            return Capabilities(
-                builtin_tools=self.builtin_tools,
-                tools=self.tools,
-                skills=self.skills,
-                subagents=self.subagents,
-                middlewares=self.middlewares,
-            )
+        reached = narrowed_for(self, held)
         return Capabilities(
             builtin_tools=self.builtin_tools,
-            tools=reaching(
-                self.tools,
-                audiences=self.audiences.get("tools", {}),
-                default=self.source_ids,
-                held=held,
-            ),
-            skills=reaching(
-                self.skills,
-                audiences=self.audiences.get("skills", {}),
-                default=self.source_ids,
-                held=held,
-            ),
-            subagents=reaching(
-                self.subagents,
-                audiences=self.audiences.get("subagents", {}),
-                default=self.source_ids,
-                held=held,
-            ),
+            tools=reached["tools"],
+            skills=reached["skills"],
+            subagents=reached["subagents"],
             middlewares=self.middlewares,
         )
 

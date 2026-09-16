@@ -607,6 +607,24 @@ to `A` and was shown a session pinned to it, and `"B"` got through both.
 and the listing all ask it -- and a rule holds `application/` to that, because a
 second reader is how this happened. *(2026-09-15.)*
 
+**One reader of what a definition says, and one narrowing of it.** The sibling of
+the entry above, found the same way: `Stated` was built from a spec in two places
+with the same pair of `getattr` calls, and the rule that narrows a definition's
+audienced fields to one caller was written out six times -- three fields, in each
+of the two `declares` bodies, with the delegate listing its own fields a second
+time for the no-caller case. `AUDIENCED` already named those three fields and
+already drove five other loops, so the enumeration was the duplicated part rather
+than the rule. `domain.access.stated` and `narrowed_for` are the one of each now,
+and they live beside `reaching` because a kind may not hold a helper the kinds
+share.
+
+`narrowed_for` returns the three selections and never a `Capabilities`, which is
+the part worth keeping deliberate: an agent widens `models` to everything where a
+delegate leaves it unset, and `memory` is an agent's to state. Those axes carry no
+audience, so they stay with the definition that has an opinion about them -- a
+shared body returning the whole record would have flattened a difference no test
+was watching. One is now. *(2026-09-16.)*
+
 **`errors.STATUS` stays exactly the caller-facing set.** A deployment error that
 still deserves a name goes in `DEPLOYMENT_STATUS` beside it, disjoint and tested
 as such -- the first table's value is that it is checkable in both directions,

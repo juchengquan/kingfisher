@@ -271,12 +271,13 @@ def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
     """What each definition of one kind says about who reaches what."""
     found: dict[str, Stated] = {}
     for name, spec in sorted(specs.items()):
-        stated = Stated(
-            source_ids=getattr(spec, "source_ids", ALL),
-            entries={k: dict(v) for k, v in getattr(spec, "audiences", {}).items()},
-        )
-        if not stated.says_nothing:
-            found[name] = stated
+        # The `says_nothing` filter stays here rather than in the reader: a
+        # listing shows the definitions that restrict somebody, and every other
+        # caller of it wants what a definition says whether or not that is
+        # anything.
+        said = access.stated(spec)
+        if not said.says_nothing:
+            found[name] = said
     return found
 
 

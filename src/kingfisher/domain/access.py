@@ -111,6 +111,48 @@ def reaching(
     return tuple(name for name in selection if reaches(audiences.get(name, default), held))
 
 
+def stated(spec: object) -> Stated:
+    """What one definition says about who reaches what.
+
+    `getattr` rather than a type, because the two kinds that carry an audience
+    are read by four callers that have no reason to agree on anything else --
+    and a definition written in Python satisfies this by having the fields.
+    """
+    return Stated(
+        source_ids=getattr(spec, "source_ids", ALL),
+        entries={
+            field: dict(entries) for field, entries in getattr(spec, "audiences", {}).items()
+        },
+    )
+
+
+def narrowed_for(spec: object, held: frozenset[str] | None) -> dict[str, Selection]:
+    """Each field in `AUDIENCED` on one definition, as one caller reaches it.
+
+    `held` of `None` is no caller to narrow for -- no vocabulary, nobody named,
+    or `UNSCOPED` -- and every selection comes back as the definition wrote it.
+
+    Driven by `AUDIENCED` rather than by three lines each, because the two
+    definitions that hold audiences wrote those lines out twice over and the
+    list of fields is already declared once, here. What this deliberately does
+    *not* return is a `Capabilities`: an agent widens `models` where a delegate
+    leaves it unset, so the axes no audience touches stay with the definition
+    that has an opinion about them.
+    """
+    said = stated(spec)
+    return {
+        field: getattr(spec, field)
+        if held is None
+        else reaching(
+            getattr(spec, field),
+            audiences=said.of(field),
+            default=said.source_ids,
+            held=held,
+        )
+        for field in AUDIENCED
+    }
+
+
 def _singular(field_name: str) -> str:
     """`tools` -> `tool`. `skills` is the one that does not just lose an s."""
     return "skill" if field_name == "skills" else field_name[:-1]
