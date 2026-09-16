@@ -15,7 +15,7 @@ from kingfisher.domain.session import (
     UnknownSessionError,
     known,
 )
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
 
@@ -63,17 +63,6 @@ def test_minted_ids_are_not_guessable(cfg):
     minted = kf.run(Request("go")).session_id
 
     assert len(minted) == 32  # uuid4().hex, 128 bits
-
-
-def test_the_service_may_name_a_session_even_though_a_request_may_not(cfg):
-    """T2 is about who is asking, not about names; the caller of `start_session` knows."""
-    kf = service(cfg)
-
-    kf.start_session("chosen-by-the-service")
-
-    assert kf.run(Request("go", session_id="chosen-by-the-service")).session_id == (
-        "chosen-by-the-service"
-    )
 
 
 # -- T3: grants clamp, uploads do not need clamping -----------------------
@@ -142,7 +131,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
     doing, and tells a racing caller nothing.
     """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session = service.start_session("s")
+    session = start(cfg, "s")
 
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
     held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
@@ -154,7 +143,7 @@ def test_a_second_turn_on_a_busy_session_is_refused(cfg):
 def test_the_slot_goes_back_when_the_turn_ends(cfg):
     """Or the first turn would wedge the session for an hour."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.start_session("s")
+    start(cfg, "s")
 
     service.run(Request("first", session_id="s"))
     second = service.run(Request("second", session_id="s"))
@@ -168,7 +157,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
     out would wedge the session over a typo.
     """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.start_session("s")
+    start(cfg, "s")
 
     with pytest.raises(ValueError):
         service.run(Request("go", session_id="s", data=(tmp_path / "gone.csv",)))
@@ -180,7 +169,7 @@ def test_the_slot_goes_back_when_admission_refuses(cfg, tmp_path):
 def test_a_claim_older_than_a_turn_could_be_is_taken_over(cfg):
     """A process that died leaves its claim behind."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session = service.start_session("s")
+    session = start(cfg, "s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
     held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
 
@@ -203,7 +192,7 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
     from kingfisher.layout import HARNESS, denied_read_scopes, denied_scopes
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session = service.start_session("s")
+    session = start(cfg, "s")
     held = Session(id=session, directory=cfg.workspace / "sessions" / session)
     claim = held.claim(service.dirs, _claim(cfg, session), stale_after=3600, now=1000.0)
 
@@ -216,8 +205,8 @@ def test_the_claim_is_somewhere_the_agent_cannot_reach(cfg):
 def test_two_sessions_do_not_block_each_other(cfg):
     """The slot is per session. One busy conversation must not stop another."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    busy = service.start_session("busy")
-    other = service.start_session("other")
+    busy = start(cfg, "busy")
+    other = start(cfg, "other")
 
     held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
     held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=1000.0)
@@ -238,7 +227,7 @@ def test_a_lookup_finds_a_session_and_a_stranger_gets_none(cfg):
     two ordinary answers.
     """
     kf = service(cfg)
-    session = kf.start_session()
+    session = start(cfg, "s")
 
     assert kf.session(session).id == session
     assert kf.session("0" * 32) is None
@@ -250,7 +239,7 @@ def test_asking_does_not_disturb_the_session(cfg):
     import time
 
     kf = service(cfg)
-    session = kf.start_session()
+    session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
     stale = time.time() - 10_000
     os.utime(directory, (stale, stale))
@@ -268,8 +257,8 @@ def test_sessions_come_back_most_recently_used_first(cfg):
     not moved by use at all.
     """
     kf = service(cfg)
-    first = kf.start_session()
-    second = kf.start_session()
+    first = start(cfg, "first")
+    second = start(cfg, "second")
 
     kf.run(Request("go", session_id=first))
 
@@ -279,8 +268,8 @@ def test_sessions_come_back_most_recently_used_first(cfg):
 
 def test_a_deleted_session_stops_being_listed(cfg):
     kf = service(cfg)
-    kept = kf.start_session()
-    gone = kf.start_session()
+    kept = start(cfg, "kept")
+    gone = start(cfg, "gone")
 
     kf.delete_session(gone)
 
@@ -295,7 +284,7 @@ def test_what_comes_back_names_no_path(cfg):
     import dataclasses
 
     kf = service(cfg)
-    kf.start_session()
+    start(cfg, "s")
 
     (info,) = kf.sessions()
 
@@ -319,8 +308,8 @@ def test_the_read_path_and_the_sweep_see_the_same_sessions(cfg):
     import time
 
     kf = service(cfg)
-    for _ in range(3):
-        kf.start_session()
+    for n in range(3):
+        start(cfg, f"s{n}")
 
     listed = {s.id for s in kf.sessions()}
     swept = set(kf.reap(older_than_seconds=0.0, now=time.time() + 10).removed)

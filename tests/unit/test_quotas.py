@@ -12,7 +12,7 @@ from kingfisher import Kingfisher
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import QuotaExceededError
 from kingfisher.infrastructure.workspace.sessions import session_bytes
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
 
@@ -148,7 +148,7 @@ def test_a_session_over_its_disk_bound_cannot_start_another_turn(cfg):
     """
     kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
                     threads=StubCheckpointer())
-    session_id = kf.start_session()
+    session_id = start(cfg, "s")
     (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 100)
 
     with pytest.raises(QuotaExceededError, match="over the 10 allowed"):
@@ -162,7 +162,7 @@ def test_the_disk_bound_is_off_unless_a_deployment_sets_one(cfg):
     assert cfg.session_max_bytes is None
 
     kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session_id = kf.start_session()
+    session_id = start(cfg, "s")
     (cfg.workspace / "sessions" / session_id / "derived" / "big.bin").write_bytes(b"x" * 10_000)
 
     assert kf.run(Request("go", session_id=session_id)).answer == "ok"
@@ -188,7 +188,7 @@ def test_reap_falls_back_to_the_configured_ttl(cfg):
                     threads=StubCheckpointer())
     import os
 
-    idle = kf.start_session()
+    idle = start(cfg, "idle")
     os.utime(cfg.workspace / "sessions" / idle, (1_000, 1_000))
 
     assert kf.reap(now=10_000).removed == (idle,)
@@ -201,7 +201,7 @@ def test_a_session_over_budget_is_refused_before_its_data_is_placed(cfg, tmp_pat
 
     kf = Kingfisher(replace(cfg, session_max_bytes=10), graph=StubAgent("ok"),
                     threads=StubCheckpointer())
-    session_id = kf.start_session()
+    session_id = start(cfg, "s")
     session = cfg.workspace / "sessions" / session_id
     (session / "derived" / "already.bin").write_bytes(b"x" * 100)
 

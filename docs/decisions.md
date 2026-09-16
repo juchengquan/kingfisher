@@ -1806,6 +1806,19 @@ kept for fetched bytes. A caller whose files are elsewhere copies them to this
 host and passes paths, which is what `kingfisher run --input` and `--data`
 already do. *(2026-09-16.)*
 
+**Taken: opening a session without a turn goes.** `start_session`,
+`remember_agent` and `open_session_for` minted a session, fixed its agent and
+handed back an id before any turn ran -- what a server does between the request
+that opens a session and the first one to use it. Nothing here does that: the
+command continues a session it was given and mints one by running a turn, and the
+only callers left were tests. A session now begins with its first turn, so an id
+is only ever issued, and `_admit` is handed the session its caller is already
+holding rather than opening one itself. The pre-turn route had cost a data-loss
+bug twice over -- a stub session laid out under the workspace whatever
+`session_root` answered, swept by `reap` out of its own store, and a pin written
+where a custom root's turn would not look -- and what is left cannot produce
+either. *(2026-09-16.)*
+
 **Transport only -- the server never interprets identity**, and lives in its own
 wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
 web service on disk. One request per turn, streamed, with no result persistence;

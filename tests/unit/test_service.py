@@ -325,16 +325,16 @@ def test_what_was_withheld_comes_off_the_assembled_agent(cfg, shipped):
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
     service = Kingfisher(cfg, backend=default_backend)  # adds http_fetch, sql_query, sql_tables
-    service.start_session("s")
-
-    admitted = service._admit(
-        Request(
-            "go",
-            agent="only",
-            session_id="s",
-            capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
-        )
+    start(cfg, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(builtin_tools=("read_file",), tools=("sql_query",)),
     )
+
+    with service._held_session(asked) as session:
+        admitted = service._admit(asked, session)
 
     by_kind = dict(admitted.withheld)
 
@@ -356,21 +356,22 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
     service = Kingfisher(cfg, backend=default_backend)
-    service.start_session("s")
-
-    admitted = service._admit(
-        Request(
-            "go",
-            agent="only",
-            session_id="s",
-            capabilities=Capabilities(
-                builtin_tools=("read_file",),
-                tools=("sql_query",),
-                skills=("code-review",),
-                subagents=("reviewer",),
-            ),
-        )
+    start(cfg, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(
+            builtin_tools=("read_file",),
+            tools=("sql_query",),
+            skills=("code-review",),
+            subagents=("reviewer",),
+        ),
     )
+
+    with service._held_session(asked) as session:
+        admitted = service._admit(asked, session)
+
     by_kind = dict(admitted.withheld)
 
     # Asked of what `seed` actually wrote, rather than named here. The literal
@@ -411,16 +412,16 @@ def test_a_kind_that_lost_nothing_says_nothing(cfg, shipped):
     # narrowing tools to `sql_query` refuses `profiler` before it gets here.
     an_agent(cfg)
     service = Kingfisher(cfg, backend=default_backend)
-    service.start_session("s")
-
-    admitted = service._admit(
-        Request(
-            "go",
-            agent="only",
-            session_id="s",
-            capabilities=Capabilities(builtin_tools=("read_file",)),
-        )
+    start(cfg, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(builtin_tools=("read_file",)),
     )
+
+    with service._held_session(asked) as session:
+        admitted = service._admit(asked, session)
 
     assert [kind for kind, _ in admitted.withheld] == ["builtin tool"]
 
@@ -493,6 +494,9 @@ def test_a_turn_runs_in_the_directory_it_was_handed(cfg, tmp_path):
 
     assert result.run_dir.is_relative_to(roots.root)
     assert not (cfg.workspace / "sessions" / result.session_id).exists()
+    # And nothing for `sessions()` or `reap` to see, which is what `ports.md`
+    # promises a custom root: both walk `<workspace>/sessions/`.
+    assert service.sessions() == ()
 
 
 def test_a_session_survives_a_tree_that_does_not(cfg, tmp_path):
@@ -894,53 +898,56 @@ def test_the_pinned_agent_is_kept_where_the_turn_runs(cfg, tmp_path):
 def test_a_session_opened_as_one_agent_cannot_run_as_another_somewhere_else(cfg, tmp_path):
     """The other half of the same hole, through the other door.
 
-    `remember_agent` pins before any turn exists, so it has an id and no directory
-    and the workspace is the only place it can write. Under a custom root that is not
-    where the first turn looks -- so a session opened as one agent ran as another and
-    the refusal never fired, while the identical calls against the default root were
-    refused. The store is the one thing both ends see: `_ready` restores the pin into
-    the held directory before `_agent_for` reads it.
+    Under a custom root the pin is not in the workspace, and the store is the one
+    thing both ends see: `_ready` restores it into the directory this turn holds,
+    before `_agent_for` reads it. While it did not, a session opened as one agent
+    ran as another and the refusal never fired, though the identical calls against
+    the default root were refused.
     """
     from kingfisher import LocalSessionStore
+    from kingfisher.infrastructure.workspace.snapshots import AGENT_SNAPSHOT
 
     an_agent(cfg, "only")
     an_agent(cfg, "other")
+    kept = LocalSessionStore(tmp_path / "kept-elsewhere")
     service = Kingfisher(
         cfg, backend=default_backend,
-        sessions=LocalSessionStore(tmp_path / "kept-elsewhere"),
+        sessions=kept,
         session_root=FreshEachTurn(tmp_path / "for-one-turn"),
     )
-    session_id = service.start_session()
-    service.remember_agent(session_id, "only")
+    # Held in the store and nowhere else, pinned to `only`: which is how a session
+    # arrives on a machine that has never run it.
+    document = service.catalogue.agents.documents["only"]
+    kept.save("s", {AGENT_SNAPSHOT: document.encode("utf-8")})
 
-    asked = Request("go", agent="other", session_id=session_id)
+    asked = Request("go", agent="other", session_id="s")
     with pytest.raises(CapabilityError, match="cannot be changed"), \
             service._held_session(asked) as session:
         service._graph_for(asked, session.directory)
 
 
-def test_a_session_opened_away_from_home_is_not_swept_out_of_its_own_store(cfg, tmp_path):
-    """The one that lost data. `start_session` laid the session out under the
-    workspace whatever `session_root` answered, and under any other root that
-    directory is a stub the session never runs in: `mark_used` touches the directory
-    a turn *holds*, and `claim` is written inside that one too. So the stub was idle
-    from the moment it was made and carried nothing to spare it -- `reap` swept it and
-    called `forget` on the store, deleting the only durable copy of a session in
-    daily use. Opened by `start_session` before any turn, which is the only way this
-    arises: a session minted by a turn leaves no stub.
+def test_a_session_kept_only_in_a_store_is_not_swept_out_of_it(cfg, tmp_path):
+    """`reap` walks `<workspace>/sessions/`, which a session under a root of the
+    deployment's own never uses -- so a sweep cannot see it, and must not forget it.
+
+    This is what the predecessor lost data over: opening a session before its first
+    turn laid a stub out under the workspace whatever `session_root` answered, and
+    the stub was idle from the moment it was made, so `reap` swept it and called
+    `forget` on the store -- deleting the only durable copy of a session in daily
+    use. Nothing opens a session before a turn now, so the stub has no route; this
+    holds the property it violated.
     """
     from kingfisher import LocalSessionStore
 
-    an_agent(cfg, "only")
     kept = LocalSessionStore(tmp_path / "kept-elsewhere")
     service = Kingfisher(
         cfg,
-        backend=default_backend,
+        graph=StubAgent("ok"),
+        threads=StubCheckpointer(),
         sessions=kept,
         session_root=FreshEachTurn(tmp_path / "for-one-turn"),
     )
-    session_id = service.start_session()
-    service.remember_agent(session_id, "only")
+    session_id = service.run(Request(task="anything")).session_id
     assert kept.knows(session_id), "the store never got the session to begin with"
 
     # Long enough after that anything the sweep can see is expired.
@@ -948,19 +955,3 @@ def test_a_session_opened_away_from_home_is_not_swept_out_of_its_own_store(cfg, 
 
     assert session_id not in swept.removed
     assert kept.knows(session_id), "a live session was swept out of its own store"
-
-
-def test_opening_a_session_writes_nothing_the_root_did_not_ask_for(cfg, tmp_path):
-    """What `ports.md` promises about a custom root -- that `sessions()` and `reap`
-    see nothing -- was false while this left a directory behind for each one.
-    """
-    service = Kingfisher(
-        cfg, backend=default_backend,
-        threads=StubCheckpointer(),
-        session_root=FreshEachTurn(tmp_path / "for-one-turn"),
-    )
-
-    session_id = service.start_session()
-
-    assert not (cfg.workspace / "sessions" / session_id).exists()
-    assert service.sessions() == ()

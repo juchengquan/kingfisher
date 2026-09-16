@@ -19,7 +19,6 @@ from kingfisher.domain.session import (
 )
 from kingfisher.infrastructure.session_store import restore_into
 from kingfisher.infrastructure.workspace.sessions import (
-    ensure_session_layout,
     make_session_dirs,
     scaffold_memory,
     session_bytes,
@@ -128,39 +127,6 @@ class Sessions:
             return None
         directory = sessions_root(self.workspace) / session_id
         return found if self._reaches_session(directory, held) else None
-
-    def start_session(self, session_id: str | None = None) -> str:
-        """Open a new session and return its id.
-
-        **Held, rather than laid out under the workspace.** This wrote
-        `<workspace>/sessions/<id>` whatever `session_root` answered, and under any
-        other root that directory is not the session -- it is a stub the session
-        never runs in. Nothing updates its timestamp, because `mark_used` touches
-        the directory a turn holds; nothing claims it, because `claim` is written
-        inside that one too. So `reap` read a stub that had been idle since the
-        moment it was made, swept it, and called `forget` on the store -- deleting
-        the only durable copy of a session in daily use. Measured against a session
-        opened by `start_session` and pinned before its first turn.
-
-        It is also what made `sessions()` and `reap` see anything at all under a
-        custom root, which `ports.md` says they do not.
-        """
-        session_id = session_id or uuid4().hex
-        with self.session_root.hold(session_id) as directory:
-            ensure_session_layout(Session.at(session_id, directory, self.dirs).directory)
-        return session_id
-
-    def open_session_for(self, request: Request) -> Session:
-        """Name this request's session and make sure its directory exists."""
-        root = sessions_root(self.workspace)
-        session_id = self._session_id_for(request, root)
-        # The session directory has to exist before the agent, because the
-        # agent's backend is rooted at it. Creating it before the refusals does
-        # not weaken the ordering rule: that rule is about not *destroying*
-        # anything before the request is known to be valid, and an empty session
-        # directory left by a rejected request is idempotent -- the retry reuses
-        # it.
-        return self._ready(Session.open(self.workspace, session_id, self.dirs))
 
     def _ready(self, session: Session) -> Session:
         """A session with its layout made and its files back, wherever it is."""
