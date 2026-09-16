@@ -49,7 +49,7 @@ jobs:
       # Three separate steps rather than one `&&` chain, so a red build says
       # which of the three failed from the job list without opening the log.
       - name: ruff
-        run: uv run ruff check src/ tests/ assets_examples/
+        run: uv run ruff check src/ tests/ assets_examples/ evals/
 
       - name: ty
         run: uv run ty check
@@ -105,7 +105,7 @@ jobs:
         run: uv sync --all-extras --dev
 
       - name: ruff
-        run: uv run ruff check src/ tests/ assets_examples/
+        run: uv run ruff check src/ tests/ assets_examples/ evals/
 
       - name: ty
         run: uv run ty check

@@ -291,7 +291,11 @@ python = ".venv"
 # would fall out of this list silently, which is the kind of check that stops
 # running without ever going red. It was `examples` until the directory was
 # renamed, and this comment naming the old one would have been the same silence.
-include = ["src", "tests", "assets_examples", "spikes"]
+#
+# `evals` is the same case, and was missed: the driver imports it, and nothing
+# checked it. `test_every_directory_holding_python_is_type_checked` is what says
+# so next time, because this comment could not.
+include = ["src", "tests", "assets_examples", "spikes", "evals"]
 
 [tool.ty.terminal]
 output-format = "concise"
@@ -342,8 +346,14 @@ unresolved-import = "ignore"
 # fields are populated by the code under test. These three rules fire on that
 # and nothing else here, so they are scoped off for tests rather than silenced
 # globally -- the same rules still guard `src/`.
+#
+# Test modules, not everything under `tests/`. The driver, `conftest.py` and the
+# helper scripts beside the tests have none of those seams, and `tests/**` let
+# the driver read a `Config` field that had been removed until a live smoke run
+# crashed on it. `test_ty_exempts_test_modules_and_nothing_else_under_tests`
+# holds the line.
 [[tool.ty.overrides]]
-include = ["tests/**"]
+include = ["tests/**/test_*.py"]
 
 [tool.ty.overrides.rules]
 unresolved-attribute = "ignore"
