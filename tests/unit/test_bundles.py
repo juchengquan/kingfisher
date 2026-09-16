@@ -79,9 +79,28 @@ def test_a_bundle_folder_is_keyed_the_way_a_grant_names_it(tmp_path):
     assert len(repository.bundles) == 2
 
 
-def test_a_subagent_declared_in_python_gets_no_bundle(tmp_path):
-    """`where` is then a module path, and the folder it names is a package whose
-    `__init__.py` decides what it exports.
+#: A compiled delegate, small enough to declare inline and real enough to build.
+COMPILED = """
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {"name": "surveyor", "description": "A compiled subagent.", "build": build}
+]
+"""
+
+
+def test_a_subagent_declared_in_a_package_gets_no_bundle(tmp_path):
+    """The folder a package names is the package, whose `__init__.py` decides what it
+    exports -- so `surveyor/tools/` there is `surveyor.tools`, importable and not a
+    bundle.
+
+    This was called `..._declared_in_python_...` and proved only the package half,
+    which read as a rule about every Python definition. A module in a folder named
+    after it is the test below, and does get one.
     """
     package = tmp_path / "surveyor"
     package.mkdir()
@@ -95,6 +114,18 @@ def test_a_subagent_declared_in_python_gets_no_bundle(tmp_path):
     (package / "tools").mkdir()
 
     assert LocalSubagentRepository(tmp_path).bundles == {}
+
+
+def test_a_compiled_subagent_in_a_folder_named_after_it_owns_a_bundle(tmp_path):
+    """The other Python shape, and it is the ordinary rule rather than an exception:
+    a folder holding `surveyor.py` is a folder, not a package, so it is a bundle for
+    the same reason a folder holding `surveyor.yaml` is.
+    """
+    folder = tmp_path / "surveyor"
+    (folder / "tools").mkdir(parents=True)
+    (folder / "surveyor.py").write_text(COMPILED, encoding="utf-8")
+
+    assert set(LocalSubagentRepository(tmp_path).bundles) == {"surveyor"}
 
 
 # -- the ambiguity that has to be refused -----------------------------------
@@ -936,6 +967,196 @@ def test_a_clean_catalogue_says_so_rather_than_saying_nothing(cfg):
     named = {check.name: check for check in examine(cfg)}
 
     assert named["bundle claims"].verdict == "ok"
+
+
+# -- a compiled delegate's own folder ---------------------------------------
+
+
+def compiled_bundle(cfg, *, skill=False):
+    """A workspace whose `surveyor` is a graph in a folder holding its own tool."""
+    folder = cfg.workspace / "subagents" / "surveyor"
+    (folder / "tools").mkdir(parents=True, exist_ok=True)
+    (folder / "surveyor.py").write_text(COMPILED, encoding="utf-8")
+    (folder / "tools" / "probe.py").write_text(
+        TOOL.format(name="probe", answer="from the bundle"), encoding="utf-8"
+    )
+    tools = cfg.workspace / "tools"
+    tools.mkdir(exist_ok=True)
+    (tools / "shared.py").write_text(
+        TOOL.format(name="shared", answer="from the catalogue"), encoding="utf-8"
+    )
+    if skill:
+        with_private_skill(cfg)
+
+
+def dispatched_by(subagent) -> tuple[str, ...]:
+    """What the graph a compiled delegate built will actually answer to.
+
+    Read off the built graph rather than off what `build` was handed, which is the
+    whole point: a tool passed to `build` and dropped on the floor is a delegate
+    that does not have it, and the two look identical from this side of the call.
+    """
+    node = getattr(subagent["runnable"], "nodes", {}).get("tools")
+    return tuple(sorted(getattr(getattr(node, "bound", None), "tools_by_name", None) or {}))
+
+
+def test_a_compiled_delegate_is_handed_the_tools_in_its_own_folder(
+    cfg, session_dir, monkeypatch
+):
+    """`compiled` took every parameter `as_subagent` resolves except this one, so a
+    compiled delegate's bundle reached the listing and never the graph: `probe
+    [private tool]` printed under a delegate that dispatched nothing.
+    """
+    compiled_bundle(cfg)
+    captured = capture_build(monkeypatch)
+    build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(responses=[AIMessage(content="ok")]),
+        capabilities=Capabilities(subagents=("surveyor",)),
+    )
+
+    assert "probe" in dispatched_by(only(captured, "surveyor"))
+
+
+def test_a_compiled_delegates_bundle_wins_a_name_the_catalogue_also_defines(cfg, tmp_path):
+    """The assembled path's rule, which has to hold here too: `build` is handed one
+    list and whatever it builds dispatches by name, so two tools of a name is one tool
+    and nothing saying which.
+
+    Asserted on the list `build` *receives*, which is the only place the duplicate is
+    visible. Through a built graph it is not: `tools_by_name` is a dict, so counting
+    its keys can never see two, and the later entry wins by accident of order -- an
+    earlier version of this test asserted exactly that and passed against a `compiled`
+    that deduplicated nothing.
+    """
+    from langchain_core.runnables import RunnableLambda
+
+    from kingfisher.infrastructure.harness.subagents import compiled
+    from kingfisher.kinds.subagents.spec import SubagentSpec
+    from kingfisher.kinds.tools.catalogue import LocalToolRepository
+
+    # Two `probe` definitions answering differently, so the winner can be named.
+    for where, answer in (
+        (tmp_path / "shared", "from the catalogue"),
+        (tmp_path / "own", "from the bundle"),
+    ):
+        where.mkdir()
+        (where / "probe.py").write_text(TOOL.format(name="probe", answer=answer), encoding="utf-8")
+    (tmp_path / "shared" / "other.py").write_text(
+        TOOL.format(name="other", answer="ok"), encoding="utf-8"
+    )
+
+    handed: list = []
+
+    def build(model, tools):
+        handed.extend(tools)
+        return RunnableLambda(lambda value: value)
+
+    compiled(
+        SubagentSpec(name="surveyor", description="A compiled subagent.", build=build),
+        cfg,
+        catalogue=LocalToolRepository(tmp_path / "shared").found,
+        private=LocalToolRepository(tmp_path / "own").found,
+    )
+
+    # `tool_name` rather than an attribute: a workspace tool reaches `build` as
+    # whatever its module exported, which for a plain function is the function.
+    names = [tool_name(one) for one in handed]
+    assert names.count("probe") == 1, "two tools of a name reached `build`"
+    assert names[0] == "probe", "the bundle's goes first, so the order is stated here"
+    assert handed[0]() == "from the bundle"
+    assert "other" in names, "the catalogue's own still arrive"
+
+
+def test_a_compiled_delegates_bundled_skill_is_reported_as_reaching_nothing(cfg):
+    """A skills index arrives through middleware and a compiled graph is given none,
+    so this half of a bundle cannot work -- while the other half now does, which is
+    exactly why it needs saying: there is no symptom to notice.
+    """
+    compiled_bundle(cfg, skill=True)
+
+    found = inventory(cfg)
+
+    assert found.stranded_skills == {"surveyor": ("sampling",)}
+    assert "told about no skills" in "\n".join(_catalogue(found))
+
+
+def test_an_assembled_delegates_bundled_skill_is_not_reported_as_stranded(cfg):
+    """The control. The warning is about graphs, not about bundles -- pointed at every
+    bundled skill it would fire on the shipped `redactor`, whose skill arrives.
+    """
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE)
+    with_private_skill(cfg)
+
+    found = inventory(cfg)
+
+    assert found.stranded_skills == {}
+    assert "told about no skills" not in "\n".join(_catalogue(found))
+
+
+def test_doctor_warns_that_a_compiled_delegate_is_told_about_no_skills(cfg):
+    """Warned and not failed: the delegate runs, and what it is missing is a procedure
+    nobody told it about.
+    """
+    compiled_bundle(cfg, skill=True)
+
+    checks = examine(cfg)
+    named = {check.name: check for check in checks}
+
+    assert named["delegate bundles"].verdict == "warn"
+    assert "sampling" in named["delegate bundles"].detail
+    assert worst(checks) != "fail"
+
+
+#: The same delegate, describing the folder it sits in. A dict rather than YAML,
+#: because a compiled delegate is only ever declared in Python.
+COMPILED_ECHOING = """
+def build(model, tools):
+    from langchain.agents import create_agent
+
+    return create_agent(model, tools)
+
+
+SUBAGENTS = [
+    {
+        "name": "surveyor",
+        "description": "A compiled subagent.",
+        "build": build,
+        "bundle": {"tools": [%r]},
+    }
+]
+"""
+
+
+def test_a_compiled_delegate_may_describe_its_own_folder(cfg):
+    """`bundle:` was refused here on the argument that a compiled graph never sees
+    its folder. Half of that stopped being true when its tools started reaching
+    `build`, and `NOT_COMPILED` is for keys that would do nothing -- so a reason that
+    no longer holds is a refusal with nothing behind it.
+    """
+    compiled_bundle(cfg)
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.py"
+    definition.write_text(COMPILED_ECHOING % "probe", encoding="utf-8")
+
+    catalogue = Definitions.from_config(cfg).warm()
+
+    assert catalogue.subagents.specs["surveyor"].bundle == {"tools": ("probe",)}
+
+
+def test_a_compiled_delegate_is_held_to_what_it_describes(cfg):
+    """Held rather than merely permitted, which is the only reason to allow the key:
+    a definition that may write it and is never checked is decoration.
+    """
+    compiled_bundle(cfg)
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.py"
+    definition.write_text(COMPILED_ECHOING % "gone", encoding="utf-8")
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "gone" in str(raised.value)
+    assert "surveyor/tools/" in str(raised.value)
 
 
 # -- the one that ships -----------------------------------------------------

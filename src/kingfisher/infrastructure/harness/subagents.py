@@ -176,6 +176,12 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     endpoints: Selection = ALL,
     tools: Selection = ALL,
     catalogue: Sequence[Found] = (),
+    #: This delegate's own tools, from the folder named after it, held whatever the
+    #: request granted -- the same argument the assembled path makes, and it does not
+    #: weaken for a graph the workspace wrote. A compiled delegate reached this
+    #: function without them for as long as both features have existed: `list`
+    #: printed `[private tool]` under it and the graph dispatched nothing.
+    private: Sequence[Found] = (),
     run_on: RunOn | None = None,
     default_model: Any = None,
 ) -> dict[str, Any]:
@@ -201,7 +207,15 @@ def compiled(  # noqa: PLR0913 -- one parameter per thing kingfisher still
     # written `where::what` for a tool no other file defines, and `narrowed`
     # would drop it silently rather than hand the delegate nothing loudly.
     written = Offering.of(catalogue).spelt(spec.tools)
-    granted = [one.tool for one in select(narrowed(written, by=tools), catalogue)]
+    shared = select(narrowed(written, by=tools), catalogue)
+    # Bundle first and the catalogue's namesake dropped, which is the assembled
+    # path's rule read here rather than copied: `build` is handed one list and
+    # dispatches by name, so two tools answering to one name is one tool and no
+    # way to say which. The order is stated before the lookup for the reason it is
+    # there -- a delegate that has had its own `fetch` for months should not change
+    # behaviour because somebody else shipped one.
+    owned = {one.name for one in private}
+    granted = [one.tool for one in (*private, *(o for o in shared if o.name not in owned))]
 
     runnable = spec.build(model, granted)
     # Against `Runnable`, which is what `CompiledSubAgent` declares this field to be --
@@ -276,6 +290,7 @@ def as_subagent(  # noqa: PLR0913 -- one parameter per thing a definition may
             endpoints=endpoints,
             tools=tools,
             catalogue=catalogue,
+            private=private,
             run_on=run_on,
             default_model=default_model,
         )

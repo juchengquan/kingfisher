@@ -226,9 +226,14 @@ def _subagents(found: Inventory) -> Iterator[str]:
         # because that is the fact: nothing else holds them. A reader scanning
         # the `tools` section above has seen everything the *agent* can call,
         # and these are the ones it cannot.
+        stranded = found.stranded_skills.get(name, ())
         for kind, held in (("tools", found.bundled_tools), ("skills", found.bundled_skills)):
             for own in held.get(name, ()):
-                yield f"      {own}  [private {kind[:-1]}]"
+                # Said on the line itself rather than in a note below, because the
+                # line above it is the one it contradicts: without this, a compiled
+                # delegate's private skill prints exactly like one that arrives.
+                reaches = "  (a compiled graph is told about no skills)" if own in stranded else ""
+                yield f"      {own}  [private {kind[:-1]}]{reaches}"
         if (miscounted := found.miscounted_bundles.get(name)) is not None:
             # Under the delegate rather than in a section of its own: the two lines
             # above say what it holds, and this says the definition disagrees with
@@ -293,6 +298,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
+        "stranded_skills": {k: list(v) for k, v in found.stranded_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
         "orphaned_assets": list(found.orphaned_assets),

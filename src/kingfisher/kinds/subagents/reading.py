@@ -101,6 +101,11 @@ DECLARED: frozenset[str] = frozenset(
         "description",
         "build",
         "tools",
+        #: Written here as well as in a document, because a compiled delegate owns
+        #: a folder like any other and its tools reach the graph. This table is for
+        #: keys that would do nothing, and this one checks the folder -- which is
+        #: all it ever does, for either kind of delegate.
+        "bundle",
         "model",
         "metadata",
         "source_ids",
@@ -136,14 +141,6 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "delegation reaches a delegate through the `task` tool its own "
             "middleware supplies, and a compiled graph is given no middleware. "
             "Build the nesting into the graph if it needs it"
-        ),
-        # A claim about a bundle that never arrives would be a line going red for
-        # being right: a compiled graph is run as given and handed the tools it was
-        # granted, so its folder reaches it no more than its middleware does.
-        "bundle": (
-            "a bundle is handed to a delegate kingfisher assembles; a compiled "
-            "graph is run as given, gets the tools it was granted and no skills "
-            "middleware at all. Pass what the graph needs to `build`"
         ),
     }
 )
@@ -204,6 +201,7 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         builtin_tools=None,
         tools=written_tools,
         tool_sources=claimed_sources(written_tools),
+        bundle=_bundle(entry.get("bundle"), read),
         wanted=wanted,
         metadata=read.mapping(entry.get("metadata"), key="metadata"),
         source_ids=source_ids,
