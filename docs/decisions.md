@@ -2767,6 +2767,28 @@ built, and that half is worth keeping in git rather than here: two of its
 decisions were wrong in ways that would have shipped a fault, and the commit that
 fixed them says how each was caught.*
 
+**Not taken: splitting the build plan.** An architecture review named
+`build_agent` as assembling in one pass with thin seams, and the reading went the
+other way. The pass is deliberate and already recorded at the function: it was 657
+lines doing four jobs, `prompting` and `infrastructure.harness.subagents` left with
+a rule that neither calls back, and what remains is wiring where every statement
+attaches one thing to the graph. Four decisions above constrain the shape further --
+the middleware registry merged once before either branch reads it, both `wants`
+sites through one builder, `test_both_kinds_are_handed_the_same_things_to_want`
+guarding a second inline mapping, and one compiled agent per definition because per
+path is exponential. The piece that could come out already did: `_resolve_tools`,
+whose probe is 7.7ms and is skipped when no definition names a tool.
+
+What the review saw as thin seams is real and is one seam: 21 test files reach what
+a build produced by monkeypatching `create_deep_agent` by string path and reading
+its kwargs -- 16 assertions on `middleware`, 9 on `subagents`, 5 on `permissions`.
+The improvement would be for the build to return a record of what it attached, the
+way `_ToolSurface` already does for the tool picture inside it. Not taken because
+the cost is every one of those files plus a return type 29 call sites consume, for
+no behaviour change -- and because `_ToolSurface` is precedent in code with no entry
+here, so this would be a new decision rather than an extension of one. Recorded so
+the next review reads this instead of re-raising it. *(2026-09-16.)*
+
 *`nothing-at-rest-on-this-machine` was the last one out, on 2026-09-04, and its
 removal is the sharpest example this file has of why a status line is not
 evidence. It was audited decision by decision on 2026-09-01 and still reported
