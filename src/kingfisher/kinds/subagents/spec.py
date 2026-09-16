@@ -78,6 +78,22 @@ class SubagentSpec:
     #: none -- like `skills`, and for the same reason: a delegate that needed the whole
     #: catalogue would not have been worth defining.
     subagents: Selection = None
+    #: What this delegate's own folder holds, written down so the definition says it.
+    #: `tools` and `skills`, each present only where the file wrote that half; empty
+    #: is the ordinary case, since a bundle reaches its owner whether this names it
+    #: or not and nothing here decides what is granted.
+    #:
+    #: Nested under one key rather than two fields beside `tools:` and `skills:`,
+    #: and the indent is the point: every other list in a definition grants
+    #: something, so one that describes instead has to look unlike them or it will
+    #: be read as a grant and then as a bug when it grants nothing.
+    #:
+    #: Checked and never used, which is the whole of what it is for. A definition
+    #: renamed out from under its folder, or a tool added to the folder and nowhere
+    #: else, changes what a delegate holds with no line in any file to show it -- so
+    #: a definition that has written this is refused once the two stop matching. The
+    #: match is exact: a subset would let through the addition it exists to surface.
+    bundle: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
     #: The model this delegate runs, out of what the catalogue defines. `None` means
     #: whatever summoned it. Naming one decides where the prompt goes and whose
     #: credentials pay -- the endpoint follows from the model -- which is why it is

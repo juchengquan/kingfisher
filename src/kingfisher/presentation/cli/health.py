@@ -329,6 +329,26 @@ def _tool_references(found: Inventory) -> Iterator[Check]:
         )
 
 
+def _bundle_claims(found: Inventory) -> Iterator[Check]:
+    """A definition saying what its own folder holds, about a folder that has changed.
+
+    Beside `_tool_references` rather than in `_delegate_tools`, because it is the same
+    kind of thing: a definition making a checkable claim, and the check being what the
+    claim was written for. A failure because `warm` refuses it -- a deployment carrying
+    one does not start, and this check exists to say that before the deployment does.
+    """
+    if not found.miscounted_bundles:
+        yield Check("bundle claims", "ok", "every definition describes its own folder")
+        return
+    for name, complaint in sorted(found.miscounted_bundles.items()):
+        yield Check(
+            "bundle claims",
+            "fail",
+            f"subagent {name!r}: {complaint}",
+            "bring the two into line, or drop the line and let the folder speak",
+        )
+
+
 def _delegate_tools(found: Inventory) -> Iterator[Check]:
     """What a delegate brings itself, which is not a definition directory.
 
@@ -627,6 +647,7 @@ def examine(cfg: Config, found: Inventory | None = None) -> tuple[Check, ...]:
             found = inventory(cfg)
         checks += _catalogues(found)
         checks += _tool_references(found)
+        checks += _bundle_claims(found)
         checks += _delegate_tools(found)
         # After the counts, because it explains one: a zero that is ordinary and
         # a zero that means the path is wrong print the same number.

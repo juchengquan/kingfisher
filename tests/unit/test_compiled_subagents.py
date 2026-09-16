@@ -177,7 +177,10 @@ def test_a_key_deepagents_would_ignore_is_refused_with_its_reason():
     answer is that deepagents would ignore it. A looser assertion here passed exactly
     that mutation.
     """
-    for key in ["system_prompt", "skills", "middlewares", "subagents", "builtin_tools"]:
+    # Over the table rather than a copy of it: a key added there and not here is a
+    # reason nothing asserts, which is the shape of the entry this test exists for.
+    assert NOT_COMPILED, "no keys to refuse -- this walks nothing and passes"
+    for key in NOT_COMPILED:
         with pytest.raises(SubagentError, match=key) as raised:
             declared(_entry(**{key: "x"}), "researcher.py")
 

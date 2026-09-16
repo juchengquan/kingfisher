@@ -230,6 +230,64 @@ def test_every_known_field_still_parses(tmp_path):
     assert spec.wanted == "gpt-5"
 
 
+#: The fields that refuse `*` outright, and a word from the reason each gives. Not
+#: the whole message: what is asserted is that the field's *own* reason arrives,
+#: which is the half a generic refusal would not have.
+REFUSE_THE_STAR = {
+    "skills": "arrives as none",
+    "subagents": "always a loop",
+    "bundle": "true of every bundle",
+}
+
+
+@pytest.mark.parametrize("field", sorted(REFUSE_THE_STAR))
+@pytest.mark.parametrize("spelling", ['"*"', '["*"]'])
+def test_a_field_that_refuses_the_star_says_so_however_it_was_written(field, spelling):
+    """Both spellings are one mistake, and only one of them used to be answered.
+
+    A bare `*` got "write ['*'] instead" -- correct for a field that takes the star,
+    and on one that refuses it, advice pointing straight at the spelling that is
+    forbidden. `skills:` and `subagents:` both did that for as long as either has
+    refused it, and nothing was red: no test read the message.
+    """
+    written = f"  tools: {spelling}" if field == "bundle" else f"{field}: {spelling}"
+    body = f"{field}:\n{written}\n" if field == "bundle" else f"{written}\n"
+
+    with pytest.raises(SubagentError) as raised:
+        reading.read(MINIMAL + body, Path("reviewer.yaml"))
+
+    assert REFUSE_THE_STAR[field] in str(raised.value)
+    assert "write" not in str(raised.value), "the bracket advice is for a field that takes it"
+
+
+#: The other half: where `*` means something, so the advice above is right.
+TAKES_THE_STAR = ("tools", "builtin_tools")
+
+
+@pytest.mark.parametrize("field", TAKES_THE_STAR)
+def test_a_field_that_takes_the_star_still_does(field):
+    """The control for the rule above, and the reason it is not "refuse it everywhere":
+    two fields read `*` as a grant, and a refusal that spread to them would be silent
+    here -- the definition would stop loading rather than stop meaning what it said.
+    """
+    assert TAKES_THE_STAR, "no fields listed -- this parametrizes over nothing"
+
+    spec = reading.read(MINIMAL + f'{field}: ["*"]\n', Path("reviewer.yaml"))
+
+    assert getattr(spec, field) == ALL
+
+
+def test_no_field_is_in_both_star_tables():
+    """Two tables written by hand, and the failure is invisible from either: a field
+    listed in both would have one of its two cases quietly asserting the opposite of
+    the other, and both would pass on whichever behaviour it actually had.
+    """
+    assert not set(REFUSE_THE_STAR) & set(TAKES_THE_STAR)
+    assert set(REFUSE_THE_STAR) | set(TAKES_THE_STAR) <= KNOWN, (
+        "a star table names a field this format does not define"
+    )
+
+
 #: Keys a definition writes that reach the spec through a *derived* field
 #: instead of one named after them. `model:` is read into `wanted`, which is the
 #: derived field the resolution works on, so it has no field of its own.

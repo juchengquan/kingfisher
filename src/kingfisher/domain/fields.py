@@ -108,6 +108,10 @@ class Reader:
             raise self.error(msg)
         return text(value) or None
 
+    def _no_star(self, key: str, why: str) -> str:
+        """What a field that refuses the star says, however the star was spelled."""
+        return f"{self.source}: {key} may not be {ALL!r} -- {why}"
+
     def selection(
         self,
         value: object,
@@ -118,6 +122,12 @@ class Reader:
     ) -> Selection:
         """One name-list field, or what its absence means for that field."""
         if isinstance(value, str) and value.strip() == ALL:
+            if refuse_all is not None:
+                # The bracket advice below is for a field that takes the star. On one
+                # that refuses it, it sent its reader to write the forbidden spelling
+                # and be refused again -- `skills: "*"` and `subagents: "*"` both did
+                # that for as long as either field has refused the star.
+                raise self.error(self._no_star(key, refuse_all))
             msg = (
                 f"{self.source}: {key} is written {value.strip()!r}; write [{ALL!r}] "
                 f"instead. Every selection here is a list, so everything is a list too"
@@ -141,8 +151,7 @@ class Reader:
         if ALL not in written:
             return written
         if refuse_all is not None:
-            msg = f"{self.source}: {key} may not be [{ALL!r}] -- {refuse_all}"
-            raise self.error(msg)
+            raise self.error(self._no_star(key, refuse_all))
         if len(written) > 1:
             others = ", ".join(n for n in written if n != ALL)
             msg = (

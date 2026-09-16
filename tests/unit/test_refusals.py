@@ -128,6 +128,21 @@ def a_subagent_naming_a_tool_that_moved(cfg):
     )
 
 
+def a_subagent_miscounting_its_own_folder(cfg):
+    _write(
+        _root(cfg, "subagents") / "s" / "s.yaml",
+        SUBAGENT.format(name="s") + "bundle:\n  tools: [probe]\n",
+    )
+    _write(_root(cfg, "subagents") / "s" / "tools" / "t.py", TOOL.format(n="other"))
+
+
+def a_subagent_describing_a_bundle_it_has_not_got(cfg):
+    _write(
+        _root(cfg, "subagents") / "s.yaml",
+        SUBAGENT.format(name="s") + "bundle: {}\n",
+    )
+
+
 @dataclass(frozen=True)
 class Refusal:
     """One function that refuses a catalogue, and how a person finds out.
@@ -170,6 +185,8 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/subagents/catalogue.py::_definitions_in": Refusal(1, defect=a_subagent_filed_as_yml),
     "kinds/subagents/reading.py::_refuse_unknown": Refusal(
         1, defect=a_subagent_with_a_field_nobody_reads),
+    "kinds/subagents/reading.py::_bundle": Refusal(
+        3, defect=a_subagent_describing_a_bundle_it_has_not_got),
     "kinds/subagents/reading.py::declared": Refusal(5, defect=a_declared_subagent_with_no_name),
     "kinds/subagents/reading.py::read": Refusal(3, defect=a_subagent_that_will_not_parse),
     "kinds/tools/catalogue.py::LocalToolRepository.found": Refusal(
@@ -182,6 +199,8 @@ REFUSALS: dict[str, Refusal] = {
     # most likely to be wrong and least likely to be noticed.
     "kinds/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
+    "kinds/subagents/rules.py::refuse_miscounted": Refusal(
+        1, defect=a_subagent_miscounting_its_own_folder),
     "kinds/subagents/rules.py::refuse_cycles": Refusal(
         1, unreachable="asked in `_activated_subagents`, over the set a request "
                        "activates rather than over a file on disk"),

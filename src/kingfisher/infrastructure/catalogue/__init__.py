@@ -22,6 +22,7 @@ from kingfisher.kinds.skills import registry as skill_registry
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.skills.registry import SkillRegistry
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
+from kingfisher.kinds.subagents.rules import refuse_miscounted
 from kingfisher.kinds.tools.catalogue import LocalToolRepository
 from kingfisher.kinds.tools.spec import Offering
 
@@ -105,7 +106,29 @@ class Definitions:
         offers = Offering.of(self.tools.found)
         for spec in self.subagents.specs.values():
             offers.refuse_moved(spec.tool_sources, subject=f"subagent {spec.name!r}")
+        # And a definition saying what its own folder holds, checked here for the
+        # same reason and against the two readings above: both halves are now in
+        # hand, and neither half alone can tell whether the claim is still true.
+        for name, spec in self.subagents.specs.items():
+            where, tools, skills = self.bundled(name)
+            refuse_miscounted(spec, where=where, tools=tools, skills=skills)
         return self
+
+    def bundled(self, name: str) -> tuple[str | None, tuple[str, ...], tuple[str, ...]]:
+        """Where one subagent's own folder is and what is in it, by the name a grant uses.
+
+        `None` for a definition that owns no folder, which is most of them and is not
+        the same answer as a folder holding nothing.
+        """
+        bundles = getattr(self.subagents, "bundles", None) or {}
+        bundle = bundles.get(name)
+        tools = self.bundled_tools.get(name)
+        skills = self.bundled_skills.get(name)
+        return (
+            None if bundle is None else bundle.where,
+            () if tools is None else tuple(one.name for one in tools.found),
+            () if skills is None else tuple(skills.names),
+        )
 
     @classmethod
     def from_config(cls, cfg: Config) -> Definitions:
