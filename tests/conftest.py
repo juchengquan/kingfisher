@@ -1,9 +1,13 @@
 from __future__ import annotations
 
+import os
+from collections.abc import Callable, Iterator
+from contextlib import contextmanager
 from pathlib import Path
 
 import pytest
 from deepagents import create_deep_agent
+from dotenv import load_dotenv
 from langchain_core.language_models.fake_chat_models import FakeMessagesListChatModel
 
 from kingfisher.config import Config, Endpoint, ModelProfile, Models
@@ -156,6 +160,56 @@ def repository_root(start: Path | None = None) -> Path:
         f"otherwise scan the wrong tree, or nothing, and report success."
     )
     raise AssertionError(msg)
+
+
+#: Every module that calls `load_dotenv`, each reached by a test. Named rather than
+#: found at run time so the guard below patches the name those modules bound, and
+#: `test_every_module_that_loads_a_dotenv_file_is_guarded` is what finds a third.
+READS_DOTENV = ("kingfisher.presentation.cli.__main__", "tests.integration.driver")
+
+
+def refusing(protected: Path) -> Callable[..., bool]:
+    """`load_dotenv`, answering as though one file were not there."""
+
+    def load(dotenv_path: str | os.PathLike[str] | None = None, *args, **kwargs) -> bool:
+        # Bare, `load_dotenv` walks up from its caller -- and from anywhere in this
+        # checkout that reaches the checkout's own file.
+        target = protected if dotenv_path is None else Path(dotenv_path).resolve()
+        if target == protected:
+            return False
+        return load_dotenv(dotenv_path, *args, **kwargs)
+
+    return load
+
+
+@contextmanager
+def environment_restored() -> Iterator[None]:
+    """`os.environ` as it was on entry, whatever changed it in between."""
+    before = dict(os.environ)
+    try:
+        yield
+    finally:
+        for key in set(os.environ) - set(before):
+            del os.environ[key]
+        for key, value in before.items():
+            if os.environ.get(key) != value:
+                os.environ[key] = value
+
+
+@pytest.fixture(autouse=True)
+def isolated_from_the_developer(monkeypatch):
+    """No test reads the checkout's `.env`, and none leaves the environment changed.
+
+    Both halves were one bug. `main()` loads `./.env`, pytest runs from the checkout,
+    so a CLI test loaded the developer's own file -- keys included -- and four `doctor`
+    tests failed on any machine that had one. What it loaded was set outside
+    `monkeypatch`, which restores only what it recorded, so it stayed set for every
+    test after.
+    """
+    for module in READS_DOTENV:
+        monkeypatch.setattr(f"{module}.load_dotenv", refusing(repository_root() / ".env"))
+    with environment_restored():
+        yield
 
 
 @pytest.fixture(scope="session")
