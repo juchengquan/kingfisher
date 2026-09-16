@@ -402,6 +402,21 @@ def _delegate_tools(found: Inventory) -> Iterator[Check]:
             "rename the folder, or the `name:` inside it, so the two match",
         )
 
+    # A warning rather than a failure: the delegate runs, and what it is missing is
+    # a procedure it was never told about. Worth saying because the folder looks
+    # like every other bundle and half of it works -- the tools in it do reach a
+    # compiled graph, so there is no symptom pointing at the half that does not.
+    if found.stranded_skills:
+        stranded = ", ".join(
+            f"{name} ({', '.join(held)})" for name, held in sorted(found.stranded_skills.items())
+        )
+        yield Check(
+            "delegate bundles",
+            "warn",
+            f"held by a compiled delegate, which is told about no skills: {stranded}",
+            "move the skill to the shared catalogue, or read it inside the graph",
+        )
+
     detail = f"{len(found.skills)} loadable"
     if not found.skills_enabled:
         detail += ", and KINGFISHER_SKILLS_ENABLED is off so none will be offered"

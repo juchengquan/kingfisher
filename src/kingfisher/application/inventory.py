@@ -113,6 +113,13 @@ class Inventory:
     #: agent does *not* get, and a reader has no other way to find that out.
     bundled_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     bundled_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Skills in a bundle whose owner is a compiled delegate, by subagent. They
+    #: load, they are mounted, and nothing is ever told about them: a skills index
+    #: arrives through middleware and deepagents gives a compiled graph none. Its
+    #: tools do reach it -- `build` is handed a list -- so this is one half of a
+    #: bundle working and the other half not, which is why it has to be said rather
+    #: than left to be inferred from two fields that each look fine.
+    stranded_skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     #: Catalogue tools a bundle answers for instead, by subagent. Printed
     #: because shadowing is only acceptable while it is visible: the delegate
     #: gets its own and the shared one never reaches it, and nothing else in
@@ -559,6 +566,15 @@ def inventory(
         miscounted_bundles=miscounted_bundles,
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,
+        # Computed here rather than in `_bundled`, which is the only place that
+        # knows what is in a bundle and not which definitions carry a graph.
+        stranded_skills=MappingProxyType(
+            {
+                name: bundled_skills[name]
+                for name in compiled_subagents
+                if bundled_skills.get(name)
+            }
+        ),
         shadowed=shadowed,
         bundles_error=bundles_error,
         orphaned_assets=orphaned_assets,

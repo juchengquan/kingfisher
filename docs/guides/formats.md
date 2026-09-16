@@ -714,10 +714,21 @@ this format has to refuse below.
 | `skills` | deepagents mounts skills for a delegate *it* builds, never for a compiled one |
 | `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
-| `bundle` | a bundle is handed to a delegate kingfisher assembles; a compiled graph gets what it was granted, and no skills middleware at all |
 
-`name`, `description`, `build`, `tools`, `model` and `metadata` are what
-remain.
+`name`, `description`, `build`, `tools`, `bundle`, `model` and `metadata` are
+what remain. `bundle:` is checked against the folder here exactly as it is in a
+document — see below for the half of one a compiled delegate gets.
+
+**A compiled delegate can own a bundle, and gets half of one.** Put
+`surveyor.py` in `subagents/surveyor/` and its `tools/` reach the graph like any
+other bundle's — `build` is handed one list, its own tools first. Its `skills/`
+reach nothing, for the reason the table above gives: an index arrives through
+middleware and a compiled graph is given none. `kingfisher list` says so on the
+line, and `doctor` warns. Keep a compiled delegate's procedure inside the graph.
+
+A *package* named after the definition — `subagents/surveyor/__init__.py` — is
+not a bundle. That folder is the package, and what is under it is importable as
+`surveyor.tools`; the `__init__.py` decides what it exports.
 
 **A tool grant is not a limit here.** deepagents runs the graph as given and
 never applies kingfisher's allowlist to it, so `--tools` narrows what `build`
@@ -809,6 +820,11 @@ delegate gets its own folder, which is true of every bundle. So is an empty
 Writing it also changes what a rename costs. Without it, renaming the folder or
 the `name:` is the warning below; with it that is a refusal, because the
 definition is still naming things nothing can hand it.
+
+**A compiled delegate gets the tools half only.** Its `tools/` reach the graph;
+its `skills/` cannot be mounted on one, and `bundle:` describes the folder
+either way. [A subagent that builds itself](#a-subagent-that-builds-itself--subagentsmodulepy)
+has the detail, and `kingfisher list` prints it on the line.
 
 **A bundle wins a name the catalogue also uses.** If `redactor/tools/` defines a
 `fetch` and so does `tools/`, the delegate gets its own — permanently, whatever
