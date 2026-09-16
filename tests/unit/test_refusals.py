@@ -183,8 +183,8 @@ REFUSALS: dict[str, Refusal] = {
     "kinds/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
     "kinds/subagents/rules.py::refuse_cycles": Refusal(
-        1, unreachable="asked in `_activated_subagents`, once the request's uploads are "
-                       "merged over the catalogue"),
+        1, unreachable="asked in `_activated_subagents`, over the set a request "
+                       "activates rather than over a file on disk"),
     "kinds/subagents/rules.py::refuse_two_of_a_name": Refusal(
         1, unreachable="two of a name coexist in a catalogue on purpose; it is an agent "
                        "holding both that is refused, which is a request"),

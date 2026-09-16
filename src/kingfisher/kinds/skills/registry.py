@@ -15,7 +15,6 @@ from typing import TYPE_CHECKING, Any
 from kingfisher.domain.capabilities import SEPARATOR, CapabilityError
 from kingfisher.kinds.skills import spec as skill
 from kingfisher.kinds.skills.catalogue import reachable
-from kingfisher.layout import UPLOADED_SKILL_DIR as UPLOADED
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
@@ -23,14 +22,12 @@ if TYPE_CHECKING:
 
     from kingfisher.domain.ports import SkillRepository
 
-# `SEPARATOR` and `UPLOADED` are imported above rather than defined here.
-# Both were written out again with a comment saying they matched something
-# else -- the separator tools already use, and the string the backend mounts
-# uploads at -- which is a claim a copied literal cannot keep. `kinds.tools.spec`
-# had already made this exact move for the separator and said why: one
-# separator both kinds import beats two that agree by coincidence. It named
-# skills as the other kind; this is skills. Re-exported by the import, so
-# `skills.registry.SEPARATOR` still resolves for readers who look here first.
+# `SEPARATOR` is imported above rather than defined here. It was written out
+# again with a comment saying it matched the separator tools already use, which
+# is a claim a copied literal cannot keep. `kinds.tools.spec` had already made
+# this move and said why: one separator both kinds import beats two that agree
+# by coincidence. Re-exported by the import, so `skills.registry.SEPARATOR`
+# still resolves for readers who look here first.
 
 #: The key a qualified id travels under inside deepagents' own metadata. Added
 #: beside `name` rather than replacing it: `name` is what the file says and what
@@ -106,15 +103,6 @@ class SkillRegistry:
     #: the agent loads under come from one walk.
     folders: tuple[str, ...] = ()
 
-    def merged(self, other: SkillRegistry) -> SkillRegistry:
-        """This registry and one more, as the single answer a caller needs."""
-        return SkillRegistry(
-            offered={**self.offered, **other.offered},
-            unloadable=tuple(sorted({*self.unloadable, *other.unloadable})),
-            misfiled=tuple(sorted({*self.misfiled, *other.misfiled})),
-            folders=self.folders,
-        )
-
     @property
     def names(self) -> tuple[str, ...]:
         """What a request may write, sorted: bare where unique, qualified where not."""
@@ -188,28 +176,6 @@ class SkillRegistry:
         """What a skill says it is for. Empty for anything this does not hold."""
         key = self.identity(written)
         return str(self.offered.get(key, {}).get("description", "")) if key else ""
-
-
-def read_uploaded(root: Path | None) -> SkillRegistry:
-    """The skills this request brought with it, asked of the same reader."""
-    if root is None or not root.is_dir():
-        return SkillRegistry(offered={})
-
-    from deepagents.backends import FilesystemBackend  # noqa: PLC0415
-    from deepagents.middleware.skills import _list_skills_with_errors  # noqa: PLC0415
-
-    loaded, _error = _list_skills_with_errors(FilesystemBackend(root_dir=str(root)), ROOT)
-    kept = {one["path"] for one in loaded}
-    return SkillRegistry(
-        offered={qualified(UPLOADED, one["name"]): one for one in loaded},
-        unloadable=tuple(
-            sorted(
-                directory.name
-                for directory in reachable(root)
-                if not any(f"/{directory.name}/" in path for path in kept)
-            )
-        ),
-    )
 
 
 def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegistry:

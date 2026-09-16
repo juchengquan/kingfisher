@@ -44,7 +44,7 @@ def test_home_points_at_this_session_not_the_real_home(cfg, session_dir):
 
 def test_a_session_that_was_never_made_is_refused(cfg, tmp_path):
     """This function used to create what it needed, and that is why `.home` and
-    `skills/uploaded` were made in one file and listed in none.
+    `.tmp` were made in one file and listed in none.
     """
     bare = tmp_path / "never-made"
     bare.mkdir()
@@ -61,7 +61,7 @@ def test_every_name_a_backend_needs_is_named_in_the_refusal(cfg, tmp_path):
     bare.mkdir()
     (bare / "data").mkdir()
 
-    wanted = r"missing derived, memory, runs, \.home, \.tmp, \.harness, skills/uploaded"
+    wanted = r"missing derived, memory, runs, \.home, \.tmp, \.harness"
     with pytest.raises(ValueError, match=wanted):
         default_backend(cfg, bare)
 
@@ -350,8 +350,8 @@ def test_the_home_directory_exists_before_a_command_runs(cfg, session_dir):
 
 # -- one file, listed once ------------------------------------------------
 #
-# Three of the routes point *inside* the default backend's own root: `/data`,
-# `/memory` and `/skills/uploaded` are real directories under the session.
+# Two of the routes point *inside* the default backend's own root: `/data` and
+# `/memory` are real directories under the session.
 # `CompositeBackend` merges every backend's answer, so each of those files was
 # found twice -- once by the route and once by the default walking past it.
 # `/skills` never showed it, because it points at the catalogue, somewhere else
@@ -367,7 +367,6 @@ def _rows(result):
 INSIDE_THE_ROOT = {
     "/data": ("data",),
     "/memory": ("memory",),
-    "/skills/uploaded": ("skills", "uploaded"),
 }
 
 

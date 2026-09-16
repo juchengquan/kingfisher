@@ -1046,7 +1046,7 @@ def test_an_area_is_refused_another_areas_dependencies():
 def test_a_subpackage_is_judged_by_its_own_area():
     """`infrastructure/harness/agent.py` is not judged as `infrastructure/`."""
     catalogue = SRC / "infrastructure" / "catalogue" / "__init__.py"
-    buried = SRC / "infrastructure" / "catalogue" / "layered.py"
+    buried = SRC / "infrastructure" / "workspace" / "placement.py"
     for path in (catalogue, buried, SRC / "domain" / "capabilities.py", SRC / "config.py"):
         assert path.exists(), f"{path} does not exist, so the assertion below is about nothing"
 
@@ -1550,9 +1550,8 @@ WITNESSES: dict[str, str] = {
     "default_backend": "document",
     "Request": "document",
     "Capabilities": "document",
-    # `ports.md` tells an adapter to raise these two, imported from `kingfisher`,
-    # because a caller tells a bad reference from a broken store by the class.
-    "UnknownReferenceError": "document",
+    # `ports.md` tells an adapter to raise this one, imported from `kingfisher`,
+    # because a caller tells a bad session id from a broken store by the class.
     "UnsafeReferenceError": "document",
     # What those documented calls take and hand back -- `Kingfisher` takes a
     # `Config`, `run` returns a `RunResult`, `stream` yields `RunEvent`s. The
@@ -2129,7 +2128,6 @@ LIGHT_EXPORTS = frozenset({
     # catch them by name -- the server being the first such consumer.
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
-    "UnknownReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
     # suite, and a kit that pulled three provider SDKs in to check four methods
@@ -2784,8 +2782,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 #: Errors a caller can cause and must be able to tell apart. Public.
 CALLER_FACING_ERRORS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
-    "SubagentError", "UnknownReferenceError", "UnknownSessionError",
-    "UnsafeReferenceError",
+    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.

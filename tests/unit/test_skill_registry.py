@@ -76,7 +76,7 @@ def test_validation_offers_only_what_will_load(cfg):
     _skill(cfg.skills_dir, "good", GOOD.format(name="good", desc="A fine skill."))
     _skill(cfg.skills_dir, "nodesc", "---\nname: nodesc\n---\nBody.\n")
 
-    assert available_skills(cfg, None) == ("good",)
+    assert available_skills(cfg) == ("good",)
 
 
 def test_activating_a_skill_the_agent_cannot_load_is_refused(cfg, session_dir):

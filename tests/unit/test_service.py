@@ -385,7 +385,7 @@ def test_every_kind_a_request_can_narrow_is_reported(cfg, shipped):
     # show. The two agreed until a sourced skill shipped.
     from kingfisher.infrastructure.harness.activation import available_skills
 
-    seeded_skills = set(available_skills(cfg, None))
+    seeded_skills = set(available_skills(cfg))
     seeded_subagents = set(LocalSubagentRepository(subagents_dir(cfg)).specs)
     # Not vacuous: the granted name has to be one the catalogue offers, or
     # "everything except it" would be the whole catalogue by accident.

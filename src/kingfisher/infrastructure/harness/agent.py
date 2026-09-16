@@ -256,7 +256,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
         permissions.append(MEMORY_IS_DENIED)
 
     if cfg.skills_enabled:
-        registry = activatable_skills(cfg, session_dir, catalogue=roots)
+        registry = activatable_skills(cfg, catalogue=roots)
         # One source per folder, so a skill below the top level is visible at
         # all -- and labelled the way the registry labelled it, because a label
         # is the first half of what a request grants.
@@ -344,7 +344,7 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
                 WorkspaceToolPaths(frozenset(entry.name for entry in walked), session_dir)
             )
 
-    defined, activated = _activated_subagents(cfg, capabilities, session_dir, catalogue=roots)
+    defined, activated = _activated_subagents(cfg, capabilities, catalogue=roots)
     surface = _resolve_tools(
         source_of(roots.tools),
         capabilities,
@@ -385,16 +385,14 @@ def build_agent(  # noqa: PLR0913, PLR0915, PLR0912 -- the composition root; eac
     if capabilities.subagents is not None:
         # The registry rather than its `names`: a delegate's grant has to be
         # resolved to the skill it means, not merely recognised as a word.
-        offered = activatable_skills(cfg, session_dir, catalogue=roots)
+        offered = activatable_skills(cfg, catalogue=roots)
         for name in activated:
             subject = f"subagent {name!r}"
             surface.offers.refuse_unknown(
                 defined[name].builtin_tools, defined[name].tools, subject=subject
             )
             # After the unknown-name check, so a definition naming `csv_column`
-            # hears that the name is wrong rather than that it has moved. The
-            # catalogue's own definitions had their paths checked at
-            # construction; this is what covers one a request uploaded.
+            # hears that the name is wrong rather than that it has moved.
             surface.offers.refuse_moved(defined[name].tool_sources, subject=subject)
 
         wanted = _wanted_endpoints(run_on, activated, capabilities.models)

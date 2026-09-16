@@ -22,7 +22,6 @@ from kingfisher import (
     SessionBusyError,
     SkillError,
     SubagentError,
-    UnknownReferenceError,
     UnknownSessionError,
     UnsafeReferenceError,
     config_from_env,
@@ -722,7 +721,6 @@ REFUSALS = (
     QuotaExceededError,
     SkillError,
     SubagentError,
-    UnknownReferenceError,
     UnknownSessionError,
     UnsafeReferenceError,
 )

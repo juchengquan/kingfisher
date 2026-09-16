@@ -1832,6 +1832,18 @@ gone rather than merely unused. What fed on it -- `/skills/uploaded`, the overla
 in `layered.py`, and the write the shell was granted there -- reads empty
 directories until the change after this one removes it. *(2026-09-16.)*
 
+**Taken: a session contributes no definitions.** With nothing able to put one
+there, the half that read them goes: the overlay `layered.py` built per turn,
+`read_uploaded` and the registry merge behind it, the `/skills/uploaded` route
+and its mount, and the entry in `SESSION_PLUMBING` that made the directory in
+every session. That entry is also what granted the shell write access to it, so
+the fence now grants `data`, `derived`, `memory`, `runs`, `.home` and `.tmp` and
+nothing more -- the list *A session's directories are granted one at a time*
+above names one place fewer. The `session_dir` that threaded through
+`available_skills`, `defined_subagents`, `indistinct_delegates` and
+`withheld_by_kind` went with it: what a request may activate is what the
+catalogue holds, and a turn reads no definitions of its own. *(2026-09-16.)*
+
 **Transport only -- the server never interprets identity**, and lives in its own
 wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
 web service on disk. One request per turn, streamed, with no result persistence;

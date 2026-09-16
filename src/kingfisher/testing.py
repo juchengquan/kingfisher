@@ -109,8 +109,8 @@ def saving_merges_rather_than_mirrors(make: Factory) -> None:
 
 
 def nesting_survives_a_round_trip(make: Factory) -> None:
-    """A session's keys nest several levels -- uploaded definitions land under a folder
-    per delegate, and `/derived` is whatever the agent decided to make.
+    """A session's keys nest several levels: `/derived` is whatever the agent
+    decided to make.
     """
     store = make()
     deep: Mapping[str, bytes] = {"derived/reports/2026/q1/summary.md": b"deep"}

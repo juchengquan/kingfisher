@@ -48,20 +48,14 @@ RUNS = "runs"
 
 SESSION_DIRS: tuple[str, ...] = (DATA, DERIVED, MEMORY, RUNS)
 
-#: The agent's HOME, and where a caller's uploaded skills land. Created inside
-#: every session like `SESSION_DIRS`, and kept apart from it because that tuple
-#: means "the names the agent addresses" and these are plumbing: `.home` exists so
-#: a pip cache lands inside the session that caused it and counts toward its
-#: quota, and uploads are reached through a route rather than by this path.
+#: The agent's HOME. Created inside every session like `SESSION_DIRS`, and kept
+#: apart from it because that tuple means "the names the agent addresses" and
+#: this is plumbing: `.home` exists so a pip cache lands inside the session that
+#: caused it and counts toward its quota.
 AGENT_HOME = ".home"
 
-#: Where skills live, and the reserved name an upload goes under inside a session.
-#: A catalogue skill called `uploaded` would shadow the route and hide every
-#: upload, which is why the name is reserved rather than merely used.
+#: Where skills live.
 SKILLS = "skills"
-UPLOADED_SKILL_DIR = "uploaded"
-
-UPLOADED_SKILLS = f"{SKILLS}/{UPLOADED_SKILL_DIR}"
 
 #: The agent's `TMPDIR`, for the reason `.home` is here: one shared scratch
 #: directory for the whole workspace was swept by nothing, counted against no
@@ -99,7 +93,6 @@ SESSION_PLUMBING: tuple[str, ...] = (
     AGENT_HOME,
     AGENT_TMP,
     HARNESS,
-    UPLOADED_SKILLS,
 )
 
 #: What a run produces and would lose. `/data` is read-only and came from the
@@ -122,7 +115,6 @@ def _route(*parts: str) -> str:
 DATA_ROUTE = _route(DATA)
 MEMORY_ROUTE = _route(MEMORY)
 SKILLS_ROUTE = _route(SKILLS)
-UPLOADED_SKILLS_ROUTE = _route(UPLOADED_SKILLS)
 BUNDLED_SKILLS_ROUTE = _route(SKILLS, RESERVED_SKILL_FOLDER)
 
 #: The paths that are *not* routed, kept in the table rather than left out of it:
@@ -185,13 +177,6 @@ ROUTES: tuple[Route, ...] = (
     # outlasts the request that made it: a skill edited during one request is read
     # by every later one, in every deployment sharing that directory.
     Route(SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**"),
-    # A request's own skills. A *longer* prefix than the catalogue's, and the
-    # composite matches longest-first, so this wins beneath it while everything
-    # else under `/skills/` still reaches the shared set.
-    #
-    # Refused writes too: an agent able to rewrite an uploaded skill could rewrite
-    # the instructions it was about to follow.
-    Route(UPLOADED_SKILLS_ROUTE, deny_write_under=f"{SKILLS_ROUTE}**"),
     # One mount per subagent bundle that ships skills, keyed by where the bundle
     # sits under the catalogue so two folders may each hold a `surveyor`.
     #

@@ -19,8 +19,6 @@ from kingfisher.infrastructure.harness.tools import (
 from kingfisher.kinds.tools.spec import Offering
 
 if TYPE_CHECKING:
-    from pathlib import Path
-
     from kingfisher.config import Config
     from kingfisher.kinds.agents.spec import AgentSpec
 
@@ -30,15 +28,14 @@ def _named(selection: Selection) -> set[str]:
     return set(selection) if isinstance(selection, tuple) else set()
 
 
-def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
+def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     # "what the workspace offers" comes from, and none is derivable from
-    # another: the grant, the config, the session, the built graph and the
-    # catalogue. The last two are who is asking. Folding any of them into a
-    # parameter object would hide which source a kind is measured against,
-    # which is the one thing a reader of this function needs to see.
+    # another: the grant, the config, the built graph and the catalogue. The
+    # last two are who is asking. Folding any of them into a parameter object
+    # would hide which source a kind is measured against, which is the one
+    # thing a reader of this function needs to see.
     allowed: Capabilities,
     cfg: Config,
-    session_dir: Path,
     graph: Any,
     catalogue: Definitions,
     *,
@@ -101,12 +98,12 @@ def withheld_by_kind(  # noqa: PLR0913 -- five of these are the five places
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
         ("tool", "tools", "tools", lambda: workspace),
-        ("skill", "skills", None, lambda: available_skills(cfg, session_dir, catalogue=catalogue)),
+        ("skill", "skills", None, lambda: available_skills(cfg, catalogue=catalogue)),
         (
             "subagent",
             "subagents",
             "subagents",
-            lambda: tuple(defined_subagents(cfg, session_dir, catalogue=catalogue)),
+            lambda: tuple(defined_subagents(cfg, catalogue=catalogue)),
         ),
     )
     found = []

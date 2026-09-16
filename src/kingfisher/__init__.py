@@ -38,7 +38,6 @@ _EXPORTS = {
     "SessionBusyError": "kingfisher.domain.session",
     "SkillError": "kingfisher.kinds.skills.spec",
     "SubagentError": "kingfisher.kinds.subagents.spec",
-    "UnknownReferenceError": "kingfisher.domain.references",
     "UnsafeReferenceError": "kingfisher.domain.references",
     "LocalSessionStore": "kingfisher.infrastructure.session_store",
     # The port's contract, for a deployment checking its own adapter against it.
@@ -132,7 +131,6 @@ __all__ = [
     "SessionInfo",
     "SkillError",
     "SubagentError",
-    "UnknownReferenceError",
     "UnknownSessionError",
     "UnsafeReferenceError",
     "WorkspacePaths",
@@ -170,9 +168,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.capabilities import Capabilities as Capabilities
     from kingfisher.domain.capabilities import CapabilityError as CapabilityError
     from kingfisher.domain.ports import CommandResult as CommandResult
-    from kingfisher.domain.references import (
-        UnknownReferenceError as UnknownReferenceError,
-    )
     from kingfisher.domain.references import UnsafeReferenceError as UnsafeReferenceError
     from kingfisher.domain.request import Request as Request
     from kingfisher.domain.result import RunEvent as RunEvent
