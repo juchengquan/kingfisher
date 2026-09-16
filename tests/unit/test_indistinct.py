@@ -13,7 +13,7 @@ from kingfisher.infrastructure.harness.activation import indistinct_delegates
 from kingfisher.infrastructure.harness.subagents import model_for
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import RunOn
-from tests.conftest import an_agent, subagents_dir
+from tests.conftest import an_agent, start, subagents_dir
 
 ASKED = """name: second-opinion
 description: Answers again, elsewhere.
@@ -200,16 +200,16 @@ def test_the_caller_is_told_before_the_turn_starts(cfg, session_dir):
     _define(same, ASKED)
     an_agent(same, subagents="[second-opinion]")
     service = Kingfisher(same, backend=default_backend)
-    service.start_session("s")
-
-    admitted = service._admit(
-        Request(
-            "go",
-            agent="only",
-            session_id="s",
-            capabilities=Capabilities(subagents=("second-opinion",)),
-        )
+    start(same, "s")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="s",
+        capabilities=Capabilities(subagents=("second-opinion",)),
     )
+
+    with service._held_session(asked) as session:
+        admitted = service._admit(asked, session)
 
     (name, why) = admitted.indistinct[0]
     assert name == "second-opinion"
@@ -228,16 +228,16 @@ def test_a_run_with_nothing_to_say_says_nothing(cfg, session_dir):
     _define(cfg, ASKED_FOR_NOTHING)
     an_agent(cfg, subagents="[reviewer]")
     service = Kingfisher(cfg, backend=default_backend)
-    service.start_session("quiet")
-
-    admitted = service._admit(
-        Request(
-            "go",
-            agent="only",
-            session_id="quiet",
-            capabilities=Capabilities(subagents=("reviewer",)),
-        )
+    start(cfg, "quiet")
+    asked = Request(
+        "go",
+        agent="only",
+        session_id="quiet",
+        capabilities=Capabilities(subagents=("reviewer",)),
     )
+
+    with service._held_session(asked) as session:
+        admitted = service._admit(asked, session)
 
     assert admitted.indistinct == ()
     assert not [

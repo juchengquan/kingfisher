@@ -13,7 +13,7 @@ from kingfisher.domain.session import (
     still_held,
 )
 from kingfisher.infrastructure.workspace.sessions import LocalSessionDirs
-from tests.conftest import StubCheckpointer
+from tests.conftest import StubCheckpointer, start
 from tests.unit.test_run import StubAgent
 
 # The two helpers both halves of the old file build against, left where the other
@@ -37,7 +37,7 @@ def test_a_turn_disposes_of_nothing(cfg):
     quiet one on a turn that had nothing to do with it.
     """
     kf = service(cfg)
-    quiet = kf.start_session()
+    quiet = start(cfg, "quiet")
     for _ in range(5):
         kf.run(Request("busy"))
 
@@ -104,7 +104,7 @@ def test_reap_disposes_of_the_idle_and_leaves_the_rest(cfg):
     import os
 
     kf = service(cfg)
-    old, fresh = kf.start_session("old"), kf.start_session("fresh")
+    old, fresh = start(cfg, "old"), start(cfg, "fresh")
     os.utime(cfg.workspace / "sessions" / old, (1_000, 1_000))
 
     result = kf.reap(older_than_seconds=60, now=10_000)
@@ -153,8 +153,7 @@ def test_a_thread_whose_session_is_gone_is_deleted(cfg):
 
 def test_a_thread_whose_session_still_exists_is_left_alone(cfg):
     """The reconciliation must not eat live conversations."""
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    live = kf.start_session()
+    live = start(cfg, "live")
 
     threads = ListingCheckpointer(held=(live, "ghost"))
     kf2 = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads)
@@ -172,8 +171,7 @@ def test_orphans_are_reported_apart_from_sessions_this_sweep_ended(cfg):
     """
     import time
 
-    kf = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    doomed = kf.start_session()
+    doomed = start(cfg, "doomed")
 
     threads = ListingCheckpointer(held=("ghost",))
     result = Kingfisher(cfg, graph=StubAgent("ok"), threads=threads).reap(
@@ -189,7 +187,7 @@ def test_a_store_that_cannot_enumerate_still_sweeps(cfg):
     import time
 
     kf = service(cfg)
-    idle = kf.start_session()
+    idle = start(cfg, "idle")
 
     result = kf.reap(older_than_seconds=0, now=time.time())
 
@@ -212,7 +210,7 @@ def test_a_turn_records_that_its_session_was_used(cfg):
     import time
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session = service.start_session("s")
+    session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
     stale = time.time() - 10_000
@@ -232,7 +230,7 @@ def test_a_sweep_keeps_a_session_that_has_a_turn_running(cfg):
     import time
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session = service.start_session("s")
+    session = start(cfg, "s")
     directory = cfg.workspace / "sessions" / session
 
     held = Session(id=session, directory=directory)
@@ -252,8 +250,8 @@ def test_a_busy_session_does_not_shelter_an_idle_one(cfg):
     import time
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    busy = service.start_session("busy")
-    idle = service.start_session("idle")
+    busy = start(cfg, "busy")
+    idle = start(cfg, "idle")
 
     held = Session(id=busy, directory=cfg.workspace / "sessions" / busy)
     held.claim(service.dirs, _claim(cfg, busy), stale_after=3600, now=time.time())
@@ -289,7 +287,7 @@ def test_a_claim_left_by_a_dead_process_stops_sparing_its_session(cfg):
     import time
 
     kf = service(cfg)
-    crashed = kf.start_session()
+    crashed = start(cfg, "crashed")
     _claim(cfg, crashed).mkdir(parents=True, exist_ok=True)
 
     decade = time.time() + 10 * 365 * 24 * 3600
@@ -304,7 +302,7 @@ def test_a_claim_someone_could_still_hold_spares_its_session(cfg):
     import time
 
     kf = service(cfg)
-    running = kf.start_session()
+    running = start(cfg, "running")
     _claim(cfg, running).mkdir(parents=True, exist_ok=True)
 
     result = kf.reap(older_than_seconds=0.0, now=time.time())
@@ -319,7 +317,7 @@ def test_retention_and_claim_agree_on_when_a_claim_went_stale(cfg):
     import time
 
     kf = service(cfg)
-    held = kf.start_session()
+    held = start(cfg, "held")
     _claim(cfg, held).mkdir(parents=True, exist_ok=True)
     now = time.time()
 
@@ -337,7 +335,7 @@ def test_a_claim_survives_the_deadline_that_stops_its_turn(cfg):
     from kingfisher.domain.session import Session, still_held
 
     kf = service(cfg)
-    held = kf.start_session()
+    held = start(cfg, "held")
     slot = _claim(cfg, held)
     session = Session(id=held, directory=cfg.workspace / "sessions" / held)
     taken = time.time()
@@ -373,7 +371,7 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
     import time
 
     kf = service(cfg)
-    crashed = kf.start_session()
+    crashed = start(cfg, "crashed")
     claim = _claim(cfg, crashed)
     claim.mkdir(parents=True, exist_ok=True)
 
@@ -385,7 +383,7 @@ def test_a_sweep_leaves_no_claim_behind(cfg):
 
 def test_deleting_a_session_takes_its_claim_with_it(cfg):
     kf = service(cfg)
-    session = kf.start_session()
+    session = start(cfg, "s")
     claim = _claim(cfg, session)
     claim.mkdir(parents=True, exist_ok=True)
 
@@ -397,11 +395,11 @@ def test_deleting_a_session_takes_its_claim_with_it(cfg):
 def test_reopening_a_deleted_id_is_not_refused_as_busy(cfg):
     """Why the leftover mattered rather than merely accumulated."""
     kf = service(cfg)
-    kf.start_session("reused")
+    start(cfg, "reused")
     _claim(cfg, "reused").mkdir(parents=True, exist_ok=True)
     kf.delete_session("reused")
 
-    kf.start_session("reused")
+    start(cfg, "reused")
 
     assert kf.run(Request("go", session_id="reused")).answer == "ok"
 

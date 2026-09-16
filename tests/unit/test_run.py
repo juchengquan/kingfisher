@@ -349,7 +349,7 @@ def test_the_result_names_the_turn_the_way_the_agent_does(cfg):
     the answer and a caller reading the files agree.
     """
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.start_session("s")
+    start(cfg, "s")
 
     result = service.run(Request("go", session_id="s"))
 
@@ -361,7 +361,7 @@ def test_everything_but_the_host_paths_is_json(cfg):
     import dataclasses
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.start_session("s")
+    start(cfg, "s")
     result = service.run(Request("go", session_id="s"))
 
     sendable = {
@@ -377,7 +377,7 @@ def test_the_host_paths_refuse_to_serialise(cfg):
     import dataclasses
 
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.start_session("s")
+    start(cfg, "s")
     result = service.run(Request("go", session_id="s"))
 
     with pytest.raises(TypeError, match="not JSON serializable"):
@@ -387,7 +387,7 @@ def test_the_host_paths_refuse_to_serialise(cfg):
 def test_the_virtual_directory_and_the_artifacts_share_a_root(cfg):
     """Both are rooted at the session, so they read together."""
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    service.start_session("s")
+    start(cfg, "s")
 
     result = service.run(Request("go", session_id="s"))
 

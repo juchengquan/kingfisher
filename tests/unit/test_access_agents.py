@@ -13,7 +13,7 @@ from kingfisher.domain.access import UNSCOPED, AccessError, parse
 from kingfisher.domain.capabilities import CapabilityError
 from kingfisher.domain.request import Request
 from kingfisher.domain.session import UnknownSessionError
-from tests.conftest import an_agent
+from tests.conftest import an_agent, pin, start
 
 VOCABULARY = "source_ids: [A, B]\n"
 
@@ -92,14 +92,6 @@ def test_agent_named_without_saying_who_is_calling_is_refused(two_agents):
         kf.agent_named("assistant")
 
 
-def test_opening_a_session_names_a_directory_rather_than_authorising(two_agents):
-    """`open_session_for` mints an id and a directory; it resolves no agent, so there is
-    nothing for a policy to check there.
-    """
-    kf = Kingfisher(two_agents, backend=default_backend)
-    assert kf.open_session_for(Request(task="t", agent="assistant"))
-
-
 def test_the_session_route_refuses_an_unreachable_agent(two_agents):
     """What a service calls when a caller opens a session: `agent_named` is the check,
     and it is the same one a turn makes.
@@ -115,8 +107,8 @@ def test_the_session_route_refuses_an_unreachable_agent(two_agents):
 def _pinned_by_a(kf) -> str:
     """A session opened for caller A and fixed to the agent only A may run."""
     kf.agent_named("assistant", source_ids=("A",))
-    session_id = kf.start_session()
-    kf.remember_agent(session_id, "assistant")
+    session_id = start(kf.cfg, "pinned-by-a")
+    pin(kf, session_id, "assistant")
     return session_id
 
 
@@ -268,10 +260,8 @@ def test_a_bare_string_is_refused_rather_than_read_as_nobody_in_particular(two_a
 def test_a_session_whose_agent_is_out_of_reach_reads_as_missing(two_agents):
     """A session you cannot run must be indistinguishable from one that was never there."""
     kf = Kingfisher(two_agents, backend=default_backend)
-    # Opened and pinned before any turn: the id and the directory come first,
-    # and the agent is remembered separately.
-    session_id = kf.start_session()
-    kf.remember_agent(session_id, "assistant")
+    session_id = start(two_agents, "pinned")
+    pin(kf, session_id, "assistant")
 
     assert kf.session(session_id, source_ids=("A",)) is not None
     assert kf.session(session_id, source_ids=("B",)) is None
@@ -281,16 +271,16 @@ def test_a_session_is_visible_where_there_is_no_vocabulary(cfg):
     """Every deployment that predates this keeps answering as it did."""
     an_agent(cfg, "assistant")
     kf = Kingfisher(cfg, backend=default_backend)
-    session_id = kf.start_session()
-    kf.remember_agent(session_id, "assistant")
+    session_id = start(cfg, "pinned")
+    pin(kf, session_id, "assistant")
 
     assert kf.session(session_id) is not None
 
 
 def test_unscoped_sees_a_session_whatever_it_runs(two_agents):
     kf = Kingfisher(two_agents, backend=default_backend)
-    session_id = kf.start_session()
-    kf.remember_agent(session_id, "assistant")
+    session_id = start(two_agents, "pinned")
+    pin(kf, session_id, "assistant")
 
     assert kf.session(session_id, source_ids=UNSCOPED) is not None
 
@@ -298,7 +288,7 @@ def test_unscoped_sees_a_session_whatever_it_runs(two_agents):
 def test_a_session_with_nothing_pinned_stays_visible(two_agents):
     """It has no agent to be out of reach of."""
     kf = Kingfisher(two_agents, backend=default_backend)
-    session_id = kf.start_session()
+    session_id = start(two_agents, "unpinned")
 
     assert kf.session(session_id, source_ids=("B",)) is not None
 

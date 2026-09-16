@@ -26,7 +26,7 @@ from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.sessions import claim_path
 from kingfisher.infrastructure.workspace.snapshots import agent_snapshot
 from kingfisher.layout import LAYOUT_VERSION, MARKER
-from tests.conftest import FakeToolCallingModel
+from tests.conftest import FakeToolCallingModel, pin, start
 
 macos = pytest.mark.skipif(
     platform.system() != "Darwin", reason="sandbox-exec is the macOS mechanism"
@@ -172,8 +172,8 @@ def test_a_session_that_lost_its_directory_keeps_the_agent_it_opened_with(cfg, t
     # Opened and pinned before any turn, which is the only way a deployment that
     # supplies its own graph ever pins: `_graph_for` returns that graph before it
     # resolves an agent.
-    session_id = service.start_session()
-    service.remember_agent(session_id, "assistant")
+    session_id = start(cfg, "s")
+    pin(service, session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
 
     # The machine goes; the store is all that is left.
@@ -192,8 +192,8 @@ def test_the_claim_and_the_run_log_stay_on_the_machine(cfg, tmp_path):
     """
     _agent(cfg)
     service, kept = _wired_to_a_store(cfg, tmp_path)
-    session_id = service.start_session()
-    service.remember_agent(session_id, "assistant")
+    session_id = start(cfg, "s")
+    pin(service, session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
 
     held = kept.fetch(session_id)
@@ -213,8 +213,8 @@ def test_the_run_log_and_the_claim_go_with_the_session(cfg):
 
     _agent(cfg)
     service = Kingfisher(cfg, graph=StubAgent("ok"), threads=StubCheckpointer())
-    session_id = service.start_session()
-    service.remember_agent(session_id, "assistant")
+    session_id = start(cfg, "s")
+    pin(service, session_id, "assistant")
     service.run(Request(task="go", session_id=session_id))
     directory = cfg.workspace / "sessions" / session_id
     assert log_path(directory).is_file()

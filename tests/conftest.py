@@ -107,6 +107,20 @@ def start(cfg, session_id: str) -> str:
     return session_id
 
 
+def pin(kf, session_id: str, name: str) -> None:
+    """Fix a session's agent before it has run, the way its first turn would.
+
+    The document comes from the service's own catalogue, which is where
+    `_pin_agent_in` reads it. A deployment that supplies its own graph never
+    resolves an agent at all, so a test whose subject is the pin cannot get one by
+    running a turn.
+    """
+    from kingfisher.infrastructure.workspace.snapshots import remember_agent
+
+    document = kf.catalogue.agents.documents[name]
+    remember_agent(kf.workspace / "sessions" / session_id, document)
+
+
 def declared_subagents(captured: dict) -> list:
     """The delegate specs a build activated, without the built-in one."""
     return [s for s in captured.get("subagents") or () if s.get("name") != "general-purpose"]

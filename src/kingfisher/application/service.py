@@ -457,30 +457,6 @@ class Kingfisher(Sessions, Disposal):
             catalogue=self.catalogue,
         )
 
-    def remember_agent(self, session_id: str, name: str | None) -> None:
-        """Have this session keep the agent it opened with, before it has run.
-
-        Takes an id because its caller has one and no directory: a session from
-        `start_session` has not run a turn yet. Where that session *is* is
-        `session_root`'s answer and nobody else's, so this holds it to find out
-        rather than assuming `<workspace>/sessions/<id>` -- which is the session
-        only under the default root.
-
-        **And handed to the store, which is what reaches a turn running elsewhere.**
-        A held directory may not outlive the hold. The store is the one thing both
-        ends see: `_ready` restores it into whatever the first turn holds, before
-        `_agent_for` looks there. Without a store a custom root has nothing that
-        survives a turn boundary at all, which is the limit `ports.md` states.
-        """
-        with self.session_root.hold(session_id) as directory:
-            self._pin_agent_in(directory, name)
-            # Asked rather than assumed, because `_pin_agent_in` writes nothing for
-            # a name the catalogue has no document for, or for a repository that
-            # keeps none. Without it, opening a session against an unknown agent
-            # spends a write on a store to hand it an empty mapping.
-            if self.sessions_store is not None and agent_snapshot(directory).is_file():
-                keep_from(self.sessions_store, session_id, directory, (AGENT_SNAPSHOT,))
-
     def _pin_agent_in(self, session_dir: Path, name: str | None) -> None:
         """Keep the agent, in the directory this is about.
 
@@ -561,8 +537,8 @@ class Kingfisher(Sessions, Disposal):
 
     def _prepare(
         self,
-        request: str | Request,
-        session: Session | None = None,
+        request: Request,
+        session: Session,
         *,
         source_ids: Held | None = None,
     ) -> Prepared:
@@ -587,15 +563,13 @@ class Kingfisher(Sessions, Disposal):
 
     def _admit(
         self,
-        request: str | Request,
-        session: Session | None = None,
+        request: Request,
+        session: Session,
         *,
         source_ids: Held | None = None,
     ) -> Admitted:
         """Everything that can refuse, before anything a refusal would strand."""
-        request = Request.coerce(request)
         cfg, dirs = self.cfg, self.dirs
-        session = session if session is not None else self.open_session_for(request)
         # Who is calling, before the session is marked, claimed or written to. Any
         # later and a refused caller's files are already in the `/data` of a session
         # that was never theirs; after the claim, and a turn running in it would
