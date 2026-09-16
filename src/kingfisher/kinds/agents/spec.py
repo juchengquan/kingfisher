@@ -89,7 +89,9 @@ class AgentSpec:
     tools: Selection = ALL
     #: Where each `tools:` entry said its tool lives, for the entries that said.
     #: A claim to check, never a choice between tools.
-    tool_sources: Mapping[str, str] = field(default_factory=dict)
+    tool_sources: Mapping[str, str] = field(
+        default_factory=dict, metadata={"derived": True}
+    )
     skills: Selection = None
     subagents: Selection = None
     middlewares: Selection = None
@@ -98,11 +100,11 @@ class AgentSpec:
     #: are operations on names, and neither has anything to say about a value passed to
     #: one.
     middleware_settings: Mapping[str, Mapping[str, object]] = field(
-        default_factory=dict
+        default_factory=dict, metadata={"derived": True}
     )
     #: What this agent asked to run, in the order it would prefer. Empty means
     #: it named nothing, so it runs the deployment's `default:`.
-    wanted: str | None = None
+    wanted: str | None = field(default=None, metadata={"derived": True})
     #: `False` to run without the memory file on a deployment that wired one.
     #: `None` is no opinion, which is not the same: a switch narrows like every
     #: other axis, and only `False` can subtract.

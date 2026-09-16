@@ -115,8 +115,8 @@ def test_a_tool_may_say_where_it_lives_and_the_claim_is_kept():
 
 
 def test_an_agent_may_name_every_subagent_and_a_subagent_may_not():
-    """The one field that answers `["*"]` differently in the two folders, and the reason
-    is in the files rather than in a table somebody has to remember.
+    """One of the two fields that answer `["*"]` differently in the two folders, and the
+    reason is in the files rather than in a table somebody has to remember.
     """
     assert _read(MINIMAL.rstrip() + '\nsubagents: ["*"]\n', "plain.yaml").subagents == ALL
 
