@@ -14,7 +14,7 @@ from pathlib import Path
 from types import MappingProxyType
 
 from kingfisher.domain import fields
-from kingfisher.domain.access import AUDIENCED, Audience, reaching
+from kingfisher.domain.access import AUDIENCED, Audience, narrowed_for
 from kingfisher.domain.capabilities import ALL, Capabilities, Selection
 
 # A `tools:` entry may be written `where::what`, so reading this format means
@@ -118,20 +118,12 @@ class AgentSpec:
 
     def declares(self, held: frozenset[str] | None = None) -> Capabilities:
         """What this agent holds, said as the narrowing a request is clamped by."""
+        reached = narrowed_for(self, held)
         return Capabilities(
             builtin_tools=self.builtin_tools,
-            tools=self.tools if held is None else reaching(
-                self.tools, audiences=self.audiences.get("tools", {}),
-                default=self.source_ids, held=held,
-            ),
-            skills=self.skills if held is None else reaching(
-                self.skills, audiences=self.audiences.get("skills", {}),
-                default=self.source_ids, held=held,
-            ),
-            subagents=self.subagents if held is None else reaching(
-                self.subagents, audiences=self.audiences.get("subagents", {}),
-                default=self.source_ids, held=held,
-            ),
+            tools=reached["tools"],
+            skills=reached["skills"],
+            subagents=reached["subagents"],
             # Narrowed, unlike `endpoints` and `models`, because middleware is not additive
             # in effect: `call-cap-generous` is a *looser* ceiling than
             # `call-cap-strict`, so a delegate free to name any registered entry
