@@ -2813,6 +2813,32 @@ no behaviour change -- and because `_ToolSurface` is precedent in code with no e
 here, so this would be a new decision rather than an extension of one. Recorded so
 the next review reads this instead of re-raising it. *(2026-09-16.)*
 
+**Not taken: one reader for the agent and subagent formats.** The same review found
+the two formats reading the same fields through copies kept by hand, and 14 of the 23
+commits to `kinds/agents/spec.py` touching `kinds/subagents/reading.py` too. By the
+time anybody read the code, most of what it named was already shared: who reaches
+what and the narrowing in `declares` through `narrowed_for`, unknown keys through
+`fields.unrecognised`, and every per-field rule through `fields.Reader` and
+`wanted_model`. Seven of the 14 commits were renames, moves or the prose pass rather
+than one change made twice.
+
+What stays copied is each format's list of calls -- which rule reads which field,
+and what leaving it out means -- with the required-field check and the fields both
+specs declare. Merging that would take roughly fifty lines out of each format and
+add a shared function of about the same size, with the list behind a layer of
+options -- and the list is where the deliberate differences live: the star on
+`skills` and `subagents`, `memory`, `bundle`, `build`.
+
+The risk the history does show is a fix reaching one reader: refusing a list where
+one model goes reached the subagent format and left the agent's turning the list into
+a string. `tests/unit/test_format_parity.py` holds the readers to each other instead.
+It reads the same documents through both and compares every shared field or the
+refusal, tries `["*"]` on every shared key and requires the two to part on those two
+fields and no others, and checks each format's keys against its spec. The agent's had
+never been checked, which is why `AgentSpec` now marks its derived fields. So a field
+both formats take goes into both readers and into a document there, and the test is
+red until it does. *(2026-09-16.)*
+
 *`nothing-at-rest-on-this-machine` was the last one out, on 2026-09-04, and its
 removal is the sharpest example this file has of why a status line is not
 evidence. It was audited decision by decision on 2026-09-01 and still reported

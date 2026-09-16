@@ -288,32 +288,6 @@ def test_no_field_is_in_both_star_tables():
     )
 
 
-#: Keys a definition writes that reach the spec through a *derived* field
-#: instead of one named after them. `model:` is read into `wanted`, which is the
-#: derived field the resolution works on, so it has no field of its own.
-#:
-#: Here rather than in `kinds.subagents.reading` because only this test needs it, and a
-#: constant defined for a test is what `test_nothing_is_defined_for_tests_alone`
-#: exists to refuse.
-FOLDED_INTO = {"model": "wanted"}
-
-
-def test_the_known_set_matches_the_spec_it_builds():
-    """Two lists that must agree, in both directions."""
-    fields_by_name = SubagentSpec.__dataclass_fields__
-    written = {
-        name for name, f in fields_by_name.items() if not f.metadata.get("derived")
-    }
-
-    assert written | set(FOLDED_INTO) == KNOWN
-
-    for key, target in FOLDED_INTO.items():
-        assert key not in fields_by_name, f"{key!r} has a field, so it is not folded"
-        assert fields_by_name[target].metadata.get("derived"), (
-            f"{key!r} claims to fold into {target!r}, which is not a derived field"
-        )
-
-
 def test_a_prompt_that_begins_indented_still_loads(tmp_path):
     """`system_prompt: |` takes its indentation from the first line, so a prompt opening
     with a code example *fails to parse*.
