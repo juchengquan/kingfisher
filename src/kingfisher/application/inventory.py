@@ -116,6 +116,12 @@ class Inventory:
     #: folder that is one subagent's and holds two definitions. Its own field
     #: rather than `tools_error`, so a listing says which delegate to go and open.
     bundles_error: str | None = None
+    #: Folders under `subagents/` holding `tools/` or `skills/` that no definition
+    #: is named for. Legal, and nine times in ten a bundle whose definition was
+    #: renamed -- which is why it is carried rather than left to the repository that
+    #: computes it: a delegate that lost its bundle has no other symptom, at any
+    #: point in a run, than holding nothing.
+    orphaned_assets: tuple[str, ...] = ()
 
     #: Which of them are graphs the workspace built rather than definitions kingfisher
     #: assembles. Carried because it changes what the rest of the listing *means* for
@@ -185,12 +191,19 @@ def _bundled(
     Mapping[str, tuple[str, ...]],
     Mapping[str, tuple[str, ...]],
     str | None,
+    tuple[str, ...],
 ]:
-    """What each subagent brings itself, for a listing: tools, skills, shadowed."""
+    """What each subagent brings itself, for a listing: tools, skills, shadowed.
+
+    And the folders that bring it to nobody, which belong here rather than in a
+    function of their own: an orphan is decided by the same `bundles` read, so
+    asking separately means a second `try` around the failure this one returns on.
+    """
     tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
     skills: Mapping[str, tuple[str, ...]] = _NO_NAMES
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
     error: str | None = None
+    orphans: tuple[str, ...] = ()
     try:
         # Imported here for the reason `tools` is: a listing is where someone
         # goes *because* something is broken, so the error is carried and
@@ -216,7 +229,7 @@ def _bundled(
         # the same shape as a workspace tool wearing a built-in's name, found the
         # same way, by a rule that drove the refusal rather than reading about it.
         error = str(exc)
-        return tools, skills, shadowed, error
+        return tools, skills, shadowed, error, orphans
 
     # Inside no `try` of its own, and that is the point: it reads the same bundles,
     # so the only way it raises is a way the block above has already returned on.
@@ -226,7 +239,11 @@ def _bundled(
             for name, registry in resolved.bundled_skills.items()
         }
     )
-    return tools, skills, shadowed, error
+    # `getattr` for the reason `bundled_tools` uses one: the port declares `specs`
+    # and nothing else, so a repository that is not the local one answers nothing
+    # here rather than raising.
+    orphans = tuple(getattr(resolved.subagents, "orphaned_assets", ()))
+    return tools, skills, shadowed, error, orphans
 
 
 def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
@@ -439,8 +456,10 @@ def inventory(
     except SubagentError as exc:
         subagents_error = str(exc)
 
-    bundled_tools, bundled_skills, shadowed, bundles_error = (
-        _bundled(resolved) if subagents_error is None else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None)
+    bundled_tools, bundled_skills, shadowed, bundles_error, orphaned_assets = (
+        _bundled(resolved)
+        if subagents_error is None
+        else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, ())
     )
 
     agents: Mapping[str, str] = _NOTHING
@@ -502,6 +521,7 @@ def inventory(
         bundled_skills=bundled_skills,
         shadowed=shadowed,
         bundles_error=bundles_error,
+        orphaned_assets=orphaned_assets,
         compiled_subagents=compiled_subagents,
         skills_enabled=cfg.skills_enabled,
         access=cfg.access,

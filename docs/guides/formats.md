@@ -778,6 +778,19 @@ acceptable while it is visible.
 `redactor/redactor.yaml` is refused: whether `helper` is inside the bundle has
 no honest answer, and the two answers differ in what `helper` may call.
 
+**A folder nobody is named for is reported, not refused.** Rename the folder or
+the `name:` inside it and the two stop being paired: the delegate still loads
+and holds none of what is beside it. That is legal — a grouping folder may have
+directories in it — so `kingfisher list` prints
+
+```
+  ! redactor/ holds tools/ or skills/ that reach no delegate — nothing in it is named redactor
+```
+
+and `doctor` warns on `delegate bundles`, neither of them failing. It is the
+only symptom: a bundle that reaches nobody costs the delegate its tools and its
+skills without a word at any point in a run.
+
 **`tools` and `skills` are reserved directory names** anywhere under
 `subagents/`, so a skill's own `config.yaml` is never read as a subagent
 definition. A grouping folder cannot be called either of them.
