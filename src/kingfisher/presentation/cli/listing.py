@@ -227,13 +227,18 @@ def _subagents(found: Inventory) -> Iterator[str]:
         # the `tools` section above has seen everything the *agent* can call,
         # and these are the ones it cannot.
         stranded = found.stranded_skills.get(name, ())
+        # On the same line and for the same reason the note beside it is: without
+        # it, a tool installed by pip prints exactly like one a reader can open in
+        # this workspace, and the whole of what `list` is being asked here is where
+        # the code actually is.
+        carried = ", carried" if name in found.carried_bundles else ""
         for kind, held in (("tools", found.bundled_tools), ("skills", found.bundled_skills)):
             for own in held.get(name, ()):
                 # Said on the line itself rather than in a note below, because the
                 # line above it is the one it contradicts: without this, a compiled
                 # delegate's private skill prints exactly like one that arrives.
                 reaches = "  (a compiled graph is told about no skills)" if own in stranded else ""
-                yield f"      {own}  [private {kind[:-1]}]{reaches}"
+                yield f"      {own}  [private {kind[:-1]}{carried}]{reaches}"
         if (miscounted := found.miscounted_bundles.get(name)) is not None:
             # Under the delegate rather than in a section of its own: the two lines
             # above say what it holds, and this says the definition disagrees with
@@ -298,6 +303,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "moved_tools": {k: list(v) for k, v in found.moved_tools.items()},
         "bundled_tools": {k: list(v) for k, v in found.bundled_tools.items()},
         "bundled_skills": {k: list(v) for k, v in found.bundled_skills.items()},
+        "carried_bundles": list(found.carried_bundles),
         "stranded_skills": {k: list(v) for k, v in found.stranded_skills.items()},
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,

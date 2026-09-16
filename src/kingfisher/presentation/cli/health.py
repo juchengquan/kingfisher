@@ -366,6 +366,18 @@ def _delegate_tools(found: Inventory) -> Iterator[Check]:
             "delegate tools", "fail", found.bundles_error, "fix or remove the module it names"
         )
 
+    # An `ok` and not a warning: installing a package is a decision somebody made,
+    # and there is nothing to fix. It is said at all because the names alone do not
+    # say where the code is -- a carried bundle's tools run in this sandbox on this
+    # deployment's credentials and are not files anybody here reviewed.
+    if found.carried_bundles:
+        yield Check(
+            "delegate tools",
+            "ok",
+            f"carried with the definition rather than kept in this workspace: "
+            f"{', '.join(found.carried_bundles)}",
+        )
+
     # A warning and never a failure, because nothing is broken: the delegate
     # answers with its own and the catalogue's never reaches it. That is a
     # decision somebody made, and it is only acceptable while it is visible --
