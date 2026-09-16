@@ -199,8 +199,15 @@ def test_build_has_to_be_callable():
         declared({"name": "r", "description": "d", "build": "nope"}, "researcher.py")
 
 
-def test_the_three_required_keys_are_required():
-    for missing in ["name", "description", "build"]:
+def test_the_two_required_keys_are_required():
+    """Only two, and `build` is not one of them.
+
+    It used to be three. Dropping `build` no longer leaves a compiled entry missing a
+    key -- it makes the entry a *portable* declaration, which is a different shape
+    with its own required fields -- so demanding it here would be this format
+    refusing on behalf of one it is not.
+    """
+    for missing in ["name", "description"]:
         entry = _entry()
         del entry[missing]
 

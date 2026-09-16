@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from collections.abc import Mapping
+from dataclasses import dataclass, field
 from functools import cached_property
 from pathlib import Path
+from typing import TYPE_CHECKING, Any
 
 from kingfisher.kinds.importing import (
     PACKAGE_MARKER,
@@ -15,7 +17,11 @@ from kingfisher.kinds.importing import (
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.reading import EXPORT, NEAR_MISS, SUFFIX, declared
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
-from kingfisher.kinds.tools.spec import reference
+from kingfisher.kinds.tools.catalogue import CarriedTools, LocalToolRepository
+from kingfisher.kinds.tools.spec import SEPARATOR, reference
+
+if TYPE_CHECKING:
+    from kingfisher.domain.ports import ToolRepository
 
 #: What a bundle's own assets are kept in, and therefore the two directory names that
 #: are not organisation here. A folder under `subagents/` is normally free -- it groups
@@ -91,26 +97,61 @@ class Holdings:
     """
 
     name: str
-    root: Path
     where: str
+    #: The folder these are in, for the usual backing. `None` for a definition that
+    #: carried them instead, which is what a subagent imported from an installed
+    #: package does: it has no folder under this catalogue to be named after.
+    root: Path | None = None
+    #: What it carried, by the same two halves a folder has. Tools arrive as the
+    #: objects; skills as the directory the definition resolved for itself, since a
+    #: skill is files deepagents mounts and there is nothing else to hand it.
+    carried: Mapping[str, Any] = field(default_factory=dict)
 
     @property
-    def tools(self) -> Path | None:
-        """This subagent's tool directory, when it has one."""
-        return self._asset("tools")
+    def tools(self) -> ToolRepository | None:
+        """This subagent's own tools, as the repository everything downstream asks.
+
+        A repository rather than the directory it used to be, because the two
+        backings have nothing else in common: one is a folder to walk, the other is
+        objects already in hand. Both answer `found`, so this is the narrowest thing
+        that lets a carried bundle reach the consumers a folder reaches.
+        """
+        if "tools" in self.carried:
+            return CarriedTools(tuple(self.carried["tools"]), source=self.where)
+        found = self._asset("tools")
+        return None if found is None else LocalToolRepository(found)
 
     @property
     def skills(self) -> Path | None:
-        """This subagent's skill directory, when it has one."""
+        """This subagent's skill directory, when it has one.
+
+        A path for either backing, and not for want of symmetry with `tools`:
+        deepagents mounts a skills source by path, so a carried bundle has to name a
+        real directory too. What differs is who resolved it -- the catalogue walk, or
+        the definition itself.
+        """
+        carried = self.carried.get("skills")
+        if carried is not None:
+            return Path(carried)
         return self._asset("skills")
 
     def _asset(self, kind: str) -> Path | None:
+        if self.root is None:
+            return None
         found = self.root / kind
         return found if found.is_dir() else None
 
 
-def _bundle_of(spec: SubagentSpec, where: str, root: Path) -> Holdings | None:
-    """What a definition owns, if its folder is named after it."""
+def _bundle_of(spec: SubagentSpec, where: str, root: Path, key: str) -> Holdings | None:
+    """What a definition owns: what it carried, or the folder named after it."""
+    if spec.carried:
+        # Keyed as a grant names it, because that is the one label guaranteed unique
+        # -- two packages may each ship a `reviewer`, and the catalogue has already
+        # told those apart by the file each came through. A route may not hold the
+        # separator, so it travels as a dash.
+        return Holdings(
+            name=spec.name, where=key.replace(SEPARATOR, "-"), carried=spec.carried
+        )
     parent = Path(where).parent
     # A loose definition directly under the catalogue has no folder to be named
     # after, which `parent.name` reports as the empty string.
@@ -177,11 +218,15 @@ class LocalSubagentRepository:
         found: dict[str, Holdings] = {}
         holders: dict[str, list[str]] = {}
         for key, (spec, where) in self._defined.items():
-            bundle = _bundle_of(spec, where, Path(self.root))
+            bundle = _bundle_of(spec, where, Path(self.root), key)
             if bundle is None:
                 continue
             found[key] = bundle
-            holders.setdefault(bundle.where, []).append(where)
+            # Only the folder-backed ones are counted here. A carried bundle's
+            # `where` is a label rather than a directory, so booking it in would
+            # invent a folder and then refuse the next definition to land in it.
+            if bundle.root is not None:
+                holders.setdefault(bundle.where, []).append(where)
 
         # Every definition under a bundle folder, not only the ones named after
         # it: the neighbour is the whole problem, and it never gets a bundle of
@@ -210,6 +255,17 @@ class LocalSubagentRepository:
         if not directory.is_dir():
             return ()
         owned = {bundle.where for bundle in self.bundles.values()}
+        # And the folder a carried bundle pointed at, when it pointed inside this
+        # catalogue. A definition that carries names its skills by absolute path
+        # rather than by sitting next to them, so the folder is reached by nothing
+        # this walk can see -- and an example arranged the way a package is would be
+        # reported as abandoned while the delegate reading it works.
+        for bundle in self.bundles.values():
+            skills = bundle.skills
+            if bundle.root is not None or skills is None:
+                continue
+            if skills.is_relative_to(directory):
+                owned.add(str(skills.parent.relative_to(directory)))
         return tuple(
             sorted(
                 str(entry.relative_to(directory))

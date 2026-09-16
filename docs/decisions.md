@@ -315,6 +315,45 @@ be read and copied. `assets/` is committed holding only a `README.md` and ignore
 everything else, because it is where a deployment puts content it did not write.
 *(2026-08-19, `examples-are-ours-assets-are-yours.md`.)*
 
+**A subagent can travel, and kingfisher discovers nothing.** A `SUBAGENTS` entry
+with no `build` is a declaration kingfisher assembles, restricted to what a
+definition can answer without seeing the deployment it lands in: `name`,
+`description`, `system_prompt`, `builtin_tools`, `bundle`, `metadata`. The six it
+may not write -- `tools` and `skills` as names, `subagents`, `middlewares`,
+`model`, `source_ids` -- each name something only one deployment knows, and each
+is refused with that reason rather than as an unknown key.
+
+**This is not the entry above, and the difference is who does the finding.** That
+reversal was about *discovery*: assets leaving the repository and being found
+through entry points kingfisher named none of. Here kingfisher finds nothing.
+A deployment writes `subagents/acme.py` holding `from acme_agents import
+SUBAGENTS`, and that file is the whole of the opt-in -- in the workspace, beside
+every other definition, where `Origins` and `doctor` already report from. The
+mechanism needed no new code: the catalogue has always imported `subagents/*.py`
+and read `SUBAGENTS`, and the only thing stopping a package import was `declared`
+demanding a `build`.
+
+**The rules hang on the shape, not on the origin.** A re-export hands over
+mappings indistinguishable from ones typed into the same file, so nothing can ask
+whether an entry was imported. `build` present means the compiled rules, absent
+means the portable ones. The alternative was a second export name or a
+self-declared marker, and both would have been a rule about where an entry came
+from that any local file could claim.
+
+**What it carries is its own, and `builtin_tools` is the exception.** Carried
+tools reach that delegate and nothing else -- they enter no catalogue, so nothing
+can grant or narrow them, which is what atomic means. Built-ins are the host's
+rather than the definition's, so they stay narrowed by the request: otherwise
+`pip install` would be a way to put back a shell a deployment had turned off.
+
+**`Holdings` gained a second backing rather than the spec gaining contents.**
+`SubagentSpec.bundle` stays the claim it was -- names, checked against a folder --
+and `carried` beside it holds what a definition brought instead, refused together
+by `__post_init__` since a delegate owns one or the other. Putting imported tool
+objects on the spec for folder bundles too would have made reading the catalogue
+import every bundle's Python, which `kingfisher list` deliberately avoids by
+skipping `warm`. *(2026-09-16.)*
+
 **Reversed: definitions as separate pip packages.** Assets were to leave the
 repository entirely, become distributions of their own, and be found through
 entry points that kingfisher named none of. Built in full, then taken back out.

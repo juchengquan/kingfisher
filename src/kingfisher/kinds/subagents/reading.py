@@ -12,6 +12,7 @@ from __future__ import annotations
 from collections.abc import Mapping
 from pathlib import Path
 from types import MappingProxyType
+from typing import Any
 
 from kingfisher.domain import fields
 from kingfisher.domain.access import AUDIENCED
@@ -91,10 +92,10 @@ REFUSED: Mapping[str, str] = MappingProxyType(
 #: nobody meant to expose.
 EXPORT = "SUBAGENTS"
 
-#: Every key a Python declaration may write. Deliberately not `KNOWN`: the two
-#: formats describe the same delegate and do not describe it with the same
-#: words, and a shared set would have to be the union, which permits each format
-#: the other's keys.
+#: Every key a *compiled* Python declaration may write -- one carrying `build`.
+#: Deliberately not `KNOWN`: the two formats describe the same delegate and do not
+#: describe it with the same words, and a shared set would have to be the union,
+#: which permits each format the other's keys.
 DECLARED: frozenset[str] = frozenset(
     {
         "name",
@@ -146,14 +147,88 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
 )
 
 
+#: What `bundle:` may say: one half per directory a bundle can hold, which is the
+#: same two names `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
+#: `test_the_bundle_key_covers_every_directory_a_bundle_holds` is what stops the two
+#: drifting -- a third asset kind added to the walk and not here would be a folder a
+#: definition could never describe, and nothing else would say so.
+BUNDLE_KEYS: tuple[str, ...] = ("tools", "skills")
+
+
+#: Every key a *portable* declaration may write -- one with no `build`, assembled by
+#: kingfisher from what it says. Each is something a definition can answer without
+#: seeing the deployment it will be installed into, which is the whole of the rule.
+PORTABLE: frozenset[str] = frozenset(
+    {
+        "name",
+        "description",
+        "system_prompt",
+        # deepagents' own, and the same names wherever kingfisher runs. Still
+        # narrowed by the request: they are the host's tools rather than this
+        # definition's, so a request that withheld `execute` withholds it here.
+        "builtin_tools",
+        # Carried rather than described, for a definition that has no folder.
+        "bundle",
+        "metadata",
+    }
+)
+
+#: Keys this format defines that a portable declaration may not write, each with the
+#: reason. Named one at a time for the reason `NOT_COMPILED` is, and every reason here
+#: is one sentence of the same rule: the key names something only the deployment
+#: knows, so a definition written elsewhere cannot mean anything by it.
+NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
+    {
+        "tools": (
+            "a name here is a lookup in the deployment's own catalogue, which a "
+            "definition written somewhere else has never seen -- on one machine it "
+            "finds nothing and on the next a different tool wearing the name. Carry "
+            "the tools themselves under 'bundle'"
+        ),
+        "skills": (
+            "the same lookup in the same catalogue, with the same two ways to be "
+            "wrong. Carry them under 'bundle' instead, as the directory they are in"
+        ),
+        "subagents": (
+            "a helper has to be a catalogue entry, and an imported delegate is "
+            "atomic -- what it owns reaches it and nothing else reaches that. Fold "
+            "the step into this one's prompt"
+        ),
+        "middlewares": (
+            "it selects code the deployment wrote and registered, which is neither "
+            "shipped with this definition nor nameable from outside"
+        ),
+        "model": (
+            "it names a model profile only this deployment defines, and naming one "
+            "decides where the prompt goes and whose credentials pay. A request pins "
+            "any delegate's model by name with 'run_on', which is where the choice "
+            "belongs"
+        ),
+        "source_ids": (
+            "it names ids from the deployment's source_ids.yaml. The agent that "
+            "grants this delegate carries the audience deciding who reaches it"
+        ),
+    }
+)
+
+
 def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
-    """One entry of a module's `SUBAGENTS` into the spec kingfisher works with."""
+    """One entry of a module's `SUBAGENTS` into the spec kingfisher works with.
+
+    Two shapes, told apart by `build` and never by where the entry came from. A
+    re-export -- `from acme_agents import SUBAGENTS` -- hands over dictionaries
+    indistinguishable from ones written in the file itself, so nothing here can ask
+    whether an entry was imported. The shape it wrote is the only honest subject for
+    a rule, which is why the portable vocabulary is a property of the format.
+    """
     if not isinstance(entry, Mapping):
         msg = (
             f"{source}: every entry of {EXPORT} must be a mapping with a "
-            f"'name', a 'description' and a 'build'; got {type(entry).__name__}"
+            f"'name' and a 'description'; got {type(entry).__name__}"
         )
         raise SubagentError(msg)
+    if "build" not in entry:
+        return _portable(entry, source)
 
     if declined := sorted(set(entry) & set(NOT_COMPILED)):
         reasons = "; ".join(f"{key!r} -- {NOT_COMPILED[key]}" for key in declined)
@@ -167,7 +242,8 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         )
         raise SubagentError(msg)
 
-    for required in ("name", "description", "build"):
+    # `build` is not among them: whether it is there is what chose this branch.
+    for required in ("name", "description"):
         if required not in entry:
             msg = f"{source}: {EXPORT} entry is missing {required!r}"
             raise SubagentError(msg)
@@ -207,14 +283,6 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         source_ids=source_ids,
         audiences=audiences,
     )
-
-
-#: What `bundle:` may say: one half per directory a bundle can hold, which is the
-#: same two names `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
-#: `test_the_bundle_key_covers_every_directory_a_bundle_holds` is what stops the two
-#: drifting -- a third asset kind added to the walk and not here would be a folder a
-#: definition could never describe, and nothing else would say so.
-BUNDLE_KEYS: tuple[str, ...] = ("tools", "skills")
 
 
 def _bundle(value: object, reader: fields.Reader) -> Mapping[str, tuple[str, ...]]:
@@ -267,6 +335,131 @@ def _bundle(value: object, reader: fields.Reader) -> Mapping[str, tuple[str, ...
         )
         claimed[half] = tuple(names or ())
     return claimed
+
+
+def _portable(entry: Mapping[str, object], source: str) -> SubagentSpec:
+    """One `SUBAGENTS` entry with no `build`: a definition kingfisher assembles."""
+    if declined := sorted(set(entry) & set(NOT_PORTABLE)):
+        reasons = "; ".join(f"{key!r} -- {NOT_PORTABLE[key]}" for key in declined)
+        msg = f"{source}: {reasons}"
+        raise SubagentError(msg)
+
+    if unknown := sorted(set(entry) - PORTABLE):
+        msg = (
+            f"{source}: {EXPORT} entry names {unknown}, which this format does not "
+            f"define; a declaration without 'build' takes {sorted(PORTABLE)}"
+        )
+        raise SubagentError(msg)
+
+    for required in ("name", "description", "system_prompt"):
+        if required not in entry:
+            msg = f"{source}: {EXPORT} entry is missing {required!r}"
+            raise SubagentError(msg)
+        if not fields.text(entry[required]):
+            msg = f"{source}: {EXPORT} entry has {required!r} present but empty"
+            raise SubagentError(msg)
+
+    read = fields.Reader(source=source, error=SubagentError)
+    return SubagentSpec(
+        name=fields.text(entry["name"]),
+        description=fields.text(entry["description"]),
+        system_prompt=fields.text(entry["system_prompt"]),
+        builtin_tools=read.selection(
+            entry.get("builtin_tools"), absent=ALL, key="builtin_tools"
+        ),
+        # Explicit, and the one line here that would be a hole if it were left out.
+        # The field defaults to `ALL`, which means *inherit whatever the request
+        # granted* -- so a definition saying nothing about workspace tools, which
+        # every portable one does since it has no `tools:` key to say it with, would
+        # be handed the deployment's entire catalogue. An imported delegate holds
+        # what it carried and nothing else.
+        tools=None,
+        carried=_carried(entry.get("bundle"), read),
+        metadata=read.mapping(entry.get("metadata"), key="metadata"),
+    )
+
+
+def _carried(value: object, reader: fields.Reader) -> Mapping[str, Any]:
+    """What `bundle:` brought, for a definition with no folder to describe.
+
+    The other reading of the same key. A document names what its folder holds so the
+    two can be checked against each other; a declaration with no folder hands over the
+    things themselves, and there is nothing left to check -- which is why a spec
+    carrying these makes no claim, and `miscounted` has nothing to say about it.
+    """
+    if value is None:
+        return {}
+    if not isinstance(value, Mapping):
+        msg = (
+            f"{reader.source}: bundle is {type(value).__name__}; it takes "
+            f"{' and/or '.join(BUNDLE_KEYS)} -- the tools themselves, and the "
+            f"directory holding the skills"
+        )
+        raise SubagentError(msg)
+    written = dict(value)
+    if unknown := sorted(set(written) - set(BUNDLE_KEYS)):
+        msg = (
+            f"{reader.source}: bundle names {unknown}, and a bundle holds "
+            f"{list(BUNDLE_KEYS)}"
+        )
+        raise SubagentError(msg)
+    if not written:
+        msg = (
+            f"{reader.source}: bundle is empty; it takes "
+            f"{' and/or '.join(BUNDLE_KEYS)}. Leave the key out to carry nothing"
+        )
+        raise SubagentError(msg)
+
+    carried: dict[str, Any] = {}
+    if "tools" in written:
+        tools = written["tools"]
+        # A list or a tuple, and nothing looser -- the rule `TOOLS` and `SUBAGENTS`
+        # both make, for the reason they both give: a single tool is a pydantic
+        # model, and a pydantic model is iterable, so `tools: my_tool` would pass a
+        # duck test and then loop over the tool's own fields.
+        if not isinstance(tools, (list, tuple)):
+            msg = (
+                f"{reader.source}: bundle tools is {type(tools).__name__}; it takes a "
+                f"list of the tools themselves -- write tools: [my_tool]"
+            )
+            raise SubagentError(msg)
+        carried["tools"] = tuple(tools)
+    if "skills" in written:
+        carried["skills"] = _skills_directory(written["skills"], reader)
+    return carried
+
+
+def _skills_directory(value: object, reader: fields.Reader) -> Path:
+    """The directory a definition resolved for its own skills, checked here.
+
+    Absolute, because a relative one resolves against the working directory: the
+    package would find its skills when kingfisher happened to be started from the
+    right place and silently offer none otherwise. Whoever ships the definition knows
+    where its files are -- `Path(__file__).parent` -- and kingfisher never guesses.
+    """
+    if not isinstance(value, (str, Path)):
+        msg = (
+            f"{reader.source}: bundle skills is {type(value).__name__}; it takes the "
+            f"directory the skills are in, as a path"
+        )
+        raise SubagentError(msg)
+    found = Path(value)
+    if not found.is_absolute():
+        msg = (
+            f"{reader.source}: bundle skills is {str(found)!r}, which is relative -- "
+            f"it would be resolved against whatever directory kingfisher was started "
+            f"in. Write an absolute path, which for a definition beside its own "
+            f"skills is Path(__file__).parent / 'skills'"
+        )
+        raise SubagentError(msg)
+    if not found.is_dir():
+        msg = (
+            f"{reader.source}: bundle skills is {str(found)!r}, which is not a "
+            f"directory. A carried bundle is checked here because there is nowhere "
+            f"else it could be: nothing walks a catalogue to find it"
+        )
+        raise SubagentError(msg)
+    return found
 
 
 def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:

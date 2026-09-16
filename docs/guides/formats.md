@@ -746,6 +746,95 @@ workspace defines is worse than saying so.
 
 ---
 
+### A subagent that travels — a `SUBAGENTS` entry with no `build`
+
+The third shape. A module's `SUBAGENTS` entry that writes no `build` is a
+*declaration*: kingfisher assembles the delegate from what it says, exactly as it
+does from a document. What makes it worth having is what it cannot say.
+
+```python
+from pathlib import Path
+
+from langchain_core.tools import tool
+
+HERE = Path(__file__).parent
+
+
+@tool
+def iso_timestamp(written: str) -> str:
+    """Normalise one date to ISO 8601."""
+    ...
+
+
+SUBAGENTS = [
+    {
+        "name": "timestamps",
+        "description": "Normalises the dates in a file, and flags the ambiguous ones.",
+        "system_prompt": "You normalise dates. ...",
+        "builtin_tools": ["read_file", "ls", "glob", "grep"],
+        "bundle": {
+            "tools": [iso_timestamp],        # the tools themselves, not their names
+            "skills": HERE / "skills",       # resolved by this definition
+        },
+        "metadata": {"ships_with": "acme-agents"},
+    }
+]
+```
+
+**It may write `name`, `description`, `system_prompt`, `builtin_tools`, `bundle`
+and `metadata`, and nothing else.** Every other field this format defines names
+something only one deployment knows — `tools` and `skills` are lookups in *your*
+catalogue, `subagents` names *your* delegates, `middlewares` selects code *you*
+registered, `model` a profile in *your* `models.yaml`, `source_ids` ids in *your*
+`source_ids.yaml`. A definition written somewhere else cannot mean anything by
+them, so each is refused with that reason rather than a generic "unknown key".
+
+Nothing is lost by the last two. A request pins any delegate's model by name with
+`run_on`, and the agent granting the delegate carries the audience that decides
+who reaches it — so both stay with the deployment, in files it owns.
+
+**This is what makes a subagent importable from an installed package.** Export
+`SUBAGENTS` from the package, and a deployment takes it by writing one file of
+its own:
+
+```python
+# subagents/acme.py — the whole of the opt-in
+from acme_agents import SUBAGENTS
+```
+
+Kingfisher discovers no packages and names none. Installing one changes nothing
+until somebody writes that line, and the line lives in the workspace beside every
+other definition, where `kingfisher list` and `doctor` already report from.
+
+**The shape decides the rules, not where the entry came from.** A re-export hands
+over mappings indistinguishable from ones typed into the same file, so there is
+nothing for a rule about imports to fire on. Write `build` and you get the
+compiled rules; leave it out and you get these. A definition that genuinely needs
+your `sql_query` is not portable and belongs in a document, which is the better
+format for it anyway.
+
+#### What it carries is its own
+
+`bundle` here holds the things rather than naming them — a folder's contents, for
+a definition that has no folder. They reach that delegate and nothing else: its
+tools are in no catalogue, so no agent can be granted them and no request can
+narrow them away. That is what an imported subagent being **atomic** means. You
+use it, or you do not; there is no third option where you take it apart.
+
+`skills` is still a directory, because deepagents mounts a skills source by path.
+It must be **absolute** — a relative path would resolve against whatever directory
+kingfisher was started in, so the definition would find its skills from one
+working directory and silently offer none from the next. The definition resolves
+it, typically `Path(__file__).parent / "skills"`; kingfisher never guesses.
+
+`builtin_tools` is the exception, and deliberately. Those are deepagents' tools
+rather than the definition's, so a request or agent that withheld `execute` still
+withholds it. A package cannot grant itself a shell.
+
+`kingfisher seed` ships `timestamps/` as a worked example.
+
+---
+
 ### Tools and skills of its own — `/subagents/<name>/`
 
 A subagent can keep tools and skills that belong to it alone. Put them in a

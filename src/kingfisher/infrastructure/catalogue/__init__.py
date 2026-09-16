@@ -53,10 +53,14 @@ class Definitions:
         bundles = getattr(self.subagents, "bundles", None)
         if not bundles:
             return {}
+        # Asked of the bundle rather than built here. What backs one is the bundle's
+        # own business now that there are two backings -- a folder to walk, or the
+        # objects a definition carried -- and a second reading of that here would be
+        # the place the two could disagree about what a delegate holds.
         return {
-            name: LocalToolRepository(bundle.tools)
+            name: repository
             for name, bundle in bundles.items()
-            if bundle.tools is not None
+            if (repository := bundle.tools) is not None
         }
 
     @cached_property

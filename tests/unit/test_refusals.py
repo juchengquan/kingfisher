@@ -116,6 +116,58 @@ def a_subagent_that_will_not_parse(cfg):
     _write(_root(cfg, "subagents") / "bad.yaml", "name: [unclosed\n")
 
 
+#: A portable declaration -- no `build`, so kingfisher assembles it -- with one key
+#: spliced in. One template rather than six literals: every defect below differs by
+#: exactly that key, and six copies would let five of them drift out of the format
+#: while still refusing something.
+PORTABLE = (
+    "SUBAGENTS = [{{'name': 'p', 'description': 'd', "
+    "'system_prompt': 'Go.'{extra}}}]\n"
+)
+
+#: The same, with a real tool defined above it to carry.
+CARRYING = (
+    "from langchain_core.tools import tool\n\n\n"
+    "@tool\ndef one(x: str) -> str:\n"
+    '    """Do one."""\n    return x\n\n\n'
+    "SUBAGENTS = [{{'name': 'p', 'description': 'd', 'system_prompt': 'Go.', "
+    "'bundle': {{'tools': {tools}}}}}]\n"
+)
+
+
+def a_compiled_subagent_whose_build_is_not_callable(cfg):
+    _write(
+        _root(cfg, "subagents") / "c.py",
+        "SUBAGENTS = [{'name': 'c', 'description': 'd', 'build': 'nope'}]\n",
+    )
+
+
+def a_portable_subagent_naming_a_model(cfg):
+    _write(_root(cfg, "subagents") / "p.py", PORTABLE.format(extra=", 'model': 'cheap'"))
+
+
+def a_portable_subagent_carrying_tools_that_are_not_a_list(cfg):
+    _write(
+        _root(cfg, "subagents") / "p.py",
+        PORTABLE.format(extra=", 'bundle': {'tools': 'nope'}"),
+    )
+
+
+def a_portable_subagent_whose_skills_are_a_relative_path(cfg):
+    _write(
+        _root(cfg, "subagents") / "p.py",
+        PORTABLE.format(extra=", 'bundle': {'skills': 'skills'}"),
+    )
+
+
+def a_portable_subagent_carrying_a_class(cfg):
+    _write(_root(cfg, "subagents") / "p.py", CARRYING.format(tools="[str]"))
+
+
+def a_portable_subagent_carrying_two_tools_of_a_name(cfg):
+    _write(_root(cfg, "subagents") / "p.py", CARRYING.format(tools="[one, one]"))
+
+
 def a_tool_module_declaring_nothing(cfg):
     _write(_root(cfg, "tools") / "x.py", "X = 1\n")
 
@@ -187,10 +239,24 @@ REFUSALS: dict[str, Refusal] = {
         1, defect=a_subagent_with_a_field_nobody_reads),
     "kinds/subagents/reading.py::_bundle": Refusal(
         3, defect=a_subagent_describing_a_bundle_it_has_not_got),
-    "kinds/subagents/reading.py::declared": Refusal(5, defect=a_declared_subagent_with_no_name),
+    "kinds/subagents/reading.py::_carried": Refusal(
+        4, defect=a_portable_subagent_carrying_tools_that_are_not_a_list),
+    "kinds/subagents/reading.py::_portable": Refusal(
+        4, defect=a_declared_subagent_with_no_name),
+    "kinds/subagents/reading.py::_skills_directory": Refusal(
+        3, defect=a_portable_subagent_whose_skills_are_a_relative_path),
+    # Filed on the build rather than on a missing name, which is what it used to be:
+    # an entry with no `build` is now a portable declaration rather than a compiled
+    # one missing a key, so the old defect reaches `_portable` and never gets here.
+    "kinds/subagents/reading.py::declared": Refusal(
+        5, defect=a_compiled_subagent_whose_build_is_not_callable),
     "kinds/subagents/reading.py::read": Refusal(3, defect=a_subagent_that_will_not_parse),
+    "kinds/tools/catalogue.py::CarriedTools.found": Refusal(
+        1, defect=a_portable_subagent_carrying_two_tools_of_a_name),
     "kinds/tools/catalogue.py::LocalToolRepository.found": Refusal(
-        5, defect=a_tool_module_declaring_nothing),
+        3, defect=a_tool_module_declaring_nothing),
+    "kinds/tools/catalogue.py::refuse_untoollike": Refusal(
+        2, defect=a_portable_subagent_carrying_a_class),
     "kinds/tools/spec.py::Offering.refuse_moved": Refusal(
         1, defect=a_subagent_naming_a_tool_that_moved),
     # The four a file on disk cannot reach. Each was measured the same way the others
