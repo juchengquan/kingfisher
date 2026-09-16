@@ -80,8 +80,15 @@ def _declared_in(directory: Path) -> list[tuple[SubagentSpec, str]]:
 
 
 @dataclass(frozen=True)
-class Bundle:
-    """The tools and skills that belong to one subagent and to nothing else."""
+class Holdings:
+    """The tools and skills that belong to one subagent and to nothing else.
+
+    Named for the goods rather than for the bundle, because `SubagentSpec.bundle` is
+    the other half of the pair and is not these: it is a *claim* about what a folder
+    holds, checked against this and never used to decide anything. One word would put
+    the claim and the goods a line apart in `rules.miscounted`, which exists to tell
+    them apart.
+    """
 
     name: str
     root: Path
@@ -89,12 +96,12 @@ class Bundle:
 
     @property
     def tools(self) -> Path | None:
-        """This bundle's tool directory, when it has one."""
+        """This subagent's tool directory, when it has one."""
         return self._asset("tools")
 
     @property
     def skills(self) -> Path | None:
-        """This bundle's skill directory, when it has one."""
+        """This subagent's skill directory, when it has one."""
         return self._asset("skills")
 
     def _asset(self, kind: str) -> Path | None:
@@ -102,14 +109,14 @@ class Bundle:
         return found if found.is_dir() else None
 
 
-def _bundle_of(spec: SubagentSpec, where: str, root: Path) -> Bundle | None:
-    """The bundle a definition owns, if its folder is named after it."""
+def _bundle_of(spec: SubagentSpec, where: str, root: Path) -> Holdings | None:
+    """What a definition owns, if its folder is named after it."""
     parent = Path(where).parent
     # A loose definition directly under the catalogue has no folder to be named
     # after, which `parent.name` reports as the empty string.
     if not parent.name or parent.name != spec.name:
         return None
-    return Bundle(name=spec.name, root=root / parent, where=str(parent))
+    return Holdings(name=spec.name, root=root / parent, where=str(parent))
 
 
 @dataclass(frozen=True)
@@ -165,9 +172,9 @@ class LocalSubagentRepository:
         return tuple(self._defined)
 
     @cached_property
-    def bundles(self) -> dict[str, Bundle]:
+    def bundles(self) -> dict[str, Holdings]:
         """Each subagent's own tools and skills, by the name a grant would use."""
-        found: dict[str, Bundle] = {}
+        found: dict[str, Holdings] = {}
         holders: dict[str, list[str]] = {}
         for key, (spec, where) in self._defined.items():
             bundle = _bundle_of(spec, where, Path(self.root))
