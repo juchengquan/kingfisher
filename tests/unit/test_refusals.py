@@ -176,14 +176,10 @@ REFUSALS: dict[str, Refusal] = {
         5, defect=a_tool_module_declaring_nothing),
     "kinds/tools/spec.py::Offering.refuse_moved": Refusal(
         1, defect=a_subagent_naming_a_tool_that_moved),
-    # The five a file on disk cannot reach. Each was measured the same way the others
+    # The four a file on disk cannot reach. Each was measured the same way the others
     # were -- by writing the defect and watching a catalogue accept it -- rather than
     # reasoned about, because "nothing can reach this" is the claim in this table
     # most likely to be wrong and least likely to be noticed.
-    "kinds/skills/reading.py::name_from": Refusal(
-        4, unreachable="a skill that will not load is reported and never fatal, so the "
-                       "catalogue walks past it; these fire on an upload, which "
-                       "arrives with a request"),
     "kinds/skills/registry.py::SkillRegistry.resolve": Refusal(
         3, unreachable="a grant naming a skill two sources both offer, which is a request"),
     "kinds/subagents/rules.py::refuse_cycles": Refusal(

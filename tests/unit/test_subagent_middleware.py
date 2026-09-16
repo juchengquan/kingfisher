@@ -138,33 +138,6 @@ def test_grants_clamp_middleware_like_everything_else():
     assert narrowed.middlewares == ("audit",)
 
 
-# -- the rule that inverts for uploads ------------------------------------
-
-
-def test_an_upload_widens_its_own_text_and_nothing_else():
-    """Skills and subagents an upload brings are the caller's own text, so permitting
-    them grants nothing new.
-    """
-    granted = Capabilities(skills=("vetted",), middlewares=("audit",))
-
-    widened = granted.including(skills=("theirs",), subagents=("mine",))
-
-    assert set(widened.skills or ()) == {"vetted", "theirs"}
-    assert widened.middlewares == ("audit",)
-
-
-def test_including_cannot_be_asked_to_widen_middleware():
-    """The actual guarantee, and it is structural rather than a check: there is no
-    parameter to pass.
-    """
-    import inspect
-
-    accepted = set(inspect.signature(Capabilities.including).parameters)
-
-    assert "middlewares" not in accepted
-    assert {"skills", "subagents"} <= accepted
-
-
 # -- the format -----------------------------------------------------------
 
 

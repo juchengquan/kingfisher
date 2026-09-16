@@ -71,10 +71,8 @@ def test_skills_are_a_flat_sorted_union():
 
 
 def test_a_session_subagent_wins_a_collision():
-    """Unreachable today -- `uploads` refuses a name the catalogue defines -- so what
-    this settles is which way to fall if that check ever fails: to the definition
-    belonging to the one request, not to the reviewed catalogue every other request
-    shares.
+    """Which way to fall on a collision: to the definition belonging to the one
+    session, not to the reviewed catalogue every other request shares.
     """
     layered = LayeredSubagents(
         base=InMemory({"reviewer": _spec("reviewer", "reviewed")}),
@@ -186,9 +184,9 @@ def test_tools_are_not_layered(cfg, session_dir):
 
 
 def test_uploads_reach_the_agents_view_of_both_kinds(cfg, session_dir):
-    """End to end through the real directories, which is what the two path helpers are
-    for -- `uploads` writes there and this reads there, and a disagreement between
-    them would be silent.
+    """End to end through the real directories, which is what the two path helpers
+    are for: a disagreement between where they point and where this reads would be
+    silent.
     """
     _upload_skill(session_dir, "session-only")
     _upload_subagent(session_dir, "session-only")

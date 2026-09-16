@@ -1819,6 +1819,19 @@ bug twice over -- a stub session laid out under the workspace whatever
 where a custom root's turn would not look -- and what is left cannot produce
 either. *(2026-09-16.)*
 
+**Taken: definitions passed by id go.** `Request.skill_refs` and
+`subagent_refs` let a caller send catalogue ids for skills and subagents of its
+own, which `provision` fetched through a `DefinitionStore` and unpacked into the
+session. That is a route for a caller with no filesystem here, which is what the
+service was; with it gone nothing built such a request, and every use was in the
+feature's own tests. The port goes, with `uploads.py`, `UploadError` and
+`Kingfisher(definitions=)` -- and so does `Capabilities.including`, which existed
+for the single exception to *Capabilities narrow and never widen* above: an
+upload widening skills and subagents. Nothing widens now, so the exception is
+gone rather than merely unused. What fed on it -- `/skills/uploaded`, the overlay
+in `layered.py`, and the write the shell was granted there -- reads empty
+directories until the change after this one removes it. *(2026-09-16.)*
+
 **Transport only -- the server never interprets identity**, and lives in its own
 wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
 web service on disk. One request per turn, streamed, with no result persistence;

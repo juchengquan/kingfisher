@@ -350,6 +350,10 @@ NOT_A_MODULE = frozenset({
 #: is the rule doing its job and the other is the defect it exists to catch, and
 #: a table keyed by name alone would have to excuse both.
 PROSE_GONE: dict[str, frozenset[str]] = {
+    # The entry recording which move consolidated three document readers names one
+    # that has since gone: its only caller was the upload path, and the reader went
+    # with it.
+    "docs/decisions.md": frozenset({"kinds.skills.reading.name_from"}),
     # The file that owns the rules is the one place a gone module is named on
     # purpose -- in the docstring of the rule that renaming broke, in the
     # negatives below, which are asserted gone rather than merely absent, and in
@@ -705,7 +709,7 @@ def test_the_prose_rule_can_tell_a_gone_module_from_a_real_one():
     above passes whether it discriminates or answers nothing at all.
     """
     assert _prose_unresolved("`infrastructure.harness.backend`") == []
-    assert _prose_unresolved("`kinds.skills.spec.split` and `application.inventory`") == []
+    assert _prose_unresolved("`kinds.skills.spec.FILENAME` and `application.inventory`") == []
     assert _prose_unresolved("`infrastructure.harness.backend.shell_env`") == []
 
     assert _prose_unresolved("`infrastructure.backend.shell_env`") == [
@@ -778,9 +782,9 @@ def test_a_nested_package_is_a_prose_root(tmp_path):
 def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
     """`tools`, `skills` and `subagents` left the layers and left this rule's sight.
 
-    The positive cases were already here and one was vacuous: `kinds.skills.spec.split` was
-    asserted to resolve while `skills` was not a root, so the pattern never matched it
-    and the assertion held for the wrong reason.
+    The positive cases were already here and one was vacuous: a name under
+    `kinds.skills` was asserted to resolve while `skills` was not a root, so the
+    pattern never matched it and the assertion held for the wrong reason.
     """
     for missing in ("kinds.nowhere", "config.nowhere"):
         assert _prose_unresolved(f"`{missing}`") == [missing], (
@@ -788,7 +792,7 @@ def test_the_prose_rule_reaches_the_packages_that_are_not_layers():
         )
 
     # And the live ones still resolve, now that they are actually being read.
-    assert _prose_unresolved("`kinds.skills.spec.split`") == []
+    assert _prose_unresolved("`kinds.skills.spec.FILENAME`") == []
     assert _prose_unresolved("`kinds.tools.spec`, `kinds.subagents.rules`, `config`") == []
 
 
@@ -813,7 +817,7 @@ def test_a_name_a_class_holds_is_a_name_the_module_defines():
     assert _prose_unresolved("`config.models`") == []
 
     # And the module's own top level still counts, which is most of the traffic.
-    assert _prose_unresolved("`kinds.skills.spec.split`") == []
+    assert _prose_unresolved("`kinds.skills.spec.FILENAME`") == []
 
 
 def test_the_documents_are_read_by_the_prose_rule():
@@ -1259,9 +1263,6 @@ HARNESS_EDGES: dict[str, frozenset[str]] = {
     # registry is `kinds.skills.registry` now, which is not the harness, so this is
     # no longer an edge into it at all.
     "catalogue": frozenset(),
-    # Asks the registry what names are taken before accepting an upload, which is the
-    # same question `catalogue` asks and the same answer.
-    "workspace.uploads": frozenset(),
     # Builds an agent to enumerate what it registered -- the only way to know the
     # built-in tool set is to assemble one and look. It used to read the roster off
     # the graph itself; `agent.builtin_tool_names` does both halves now, because
@@ -1571,7 +1572,6 @@ WITNESSES: dict[str, str] = {
     "SkillError": "embedder",
     "SubagentError": "embedder",
     "UnknownSessionError": "embedder",
-    "UploadError": "embedder",
     # `README.md` opens on these four and the package docstring on `run`. A
     # reader who copied either is owed them.
     "definitions_source": "document",
@@ -2064,12 +2064,12 @@ def test_only_the_named_modules_load_a_provider_sdk():
 
 
 #: One module from each side of that rule, imported for real below. `kinds.skills.backend`
-#: is the only entry outside `harness/` and `application/`, and the uploads module is
-#: the module nearest it that has to stay clear -- it reads the skills registry, which
-#: is the half of skills that does not touch deepagents until it is called.
+#: is the only entry outside `harness/` and `application/`, and the registry beside it
+#: is what has to stay clear -- it is the half of skills that does not touch deepagents
+#: until one of its functions is called, and it defers those imports to say so.
 SDK_WITNESSES = {
     "kingfisher.kinds.skills.backend": True,
-    "kingfisher.infrastructure.workspace.uploads": False,
+    "kingfisher.kinds.skills.registry": False,
 }
 
 
@@ -2128,7 +2128,7 @@ LIGHT_EXPORTS = frozenset({
     # The errors a caller must tell apart. Public so a consumer outside the package can
     # catch them by name -- the server being the first such consumer.
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
-    "SubagentError", "UnknownSessionError", "UploadError", "UnsafeReferenceError",
+    "SubagentError", "UnknownSessionError", "UnsafeReferenceError",
     "UnknownReferenceError",
     # The `SessionStore` contract, for a deployment checking its own adapter.
     # Light, and it has to stay light: a deployment runs this from its own test
@@ -2785,7 +2785,7 @@ def test_every_record_this_package_hands_out_is_frozen():
 CALLER_FACING_ERRORS = frozenset({
     "CapabilityError", "QuotaExceededError", "SessionBusyError", "SkillError",
     "SubagentError", "UnknownReferenceError", "UnknownSessionError",
-    "UnsafeReferenceError", "UploadError",
+    "UnsafeReferenceError",
 })
 
 #: The rest, which say the deployment is wrong rather than the caller.
@@ -3169,8 +3169,6 @@ PRODUCTION = ("src/kingfisher", "tests/integration/driver.py", "evals")
 #: framework contract rather than a convenience nobody got round to using, and
 #: each is listed by name so adding one stays a decision.
 DISPATCHED_ELSEWHERE = frozenset({
-    # fastapi calls a route handler through its decorator.
-    "open_session", "read_session", "close_session", "run_turn", "run_one_shot",
     # langchain's callback protocol and deepagents' middleware hooks.
     "on_llm_end", "on_llm_error", "on_tool_start", "on_tool_end", "on_tool_error",
     "awrap_model_call", "awrap_tool_call", "wrap_model_call", "wrap_tool_call",

@@ -127,15 +127,6 @@ class SessionDirs(Protocol):
 
 
 @runtime_checkable
-class DefinitionStore(Protocol):
-    """Where a request's own skills and subagents are fetched from, by id."""
-
-    def fetch(self, definition_id: str) -> Mapping[str, bytes]:
-        """The files making up one definition, keyed by path relative to it."""
-        ...
-
-
-@runtime_checkable
 class SessionStore(Protocol):
     """Where a session's files live when the machine may not keep them.
 

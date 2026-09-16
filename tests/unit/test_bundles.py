@@ -607,8 +607,8 @@ def test_a_broken_bundle_does_not_hide_the_rest_of_the_listing(cfg):
 
 
 def test_a_session_cannot_contribute_a_bundle(tmp_path):
-    """A bundle holds tools, and `NOT_UPLOADABLE` already says why a caller may not
-    supply one: "code, imported into this process -- never caller-supplied".
+    """A bundle holds tools, which are code imported into this process, so a
+    session's own definitions can never bring one.
     """
     for kind in ("agents", "skills", "subagents", "tools"):
         (tmp_path / kind).mkdir(parents=True)

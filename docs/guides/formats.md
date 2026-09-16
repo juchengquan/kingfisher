@@ -806,10 +806,6 @@ the shell against `$KINGFISHER_SKILLS`, and the sandbox grants the shell the
 skills catalogue only. A bundle sits under `subagents/`, so its skills can be
 read and listed but not run. Keep executable skills in the shared catalogue.
 
-**A caller cannot upload one.** Uploads may carry a skill or a subagent, never a
-tool — a bundle holds code that runs in this process, so bundles come from the
-deployment's catalogue and nowhere else.
-
 ---
 
 ## Skills — `/skills/<name>/SKILL.md`, or one folder deep
@@ -1286,10 +1282,3 @@ and prints what each named compound requires above the audiences, since a name
 alone tells a reader nothing on the line it appears on. The `--json` form nests
 it instead — `[["finance_db", "pii"]]` — so a script never has to parse a set out
 of a string.
-
-### Uploads are unchanged
-
-A request may still bring its own subagent or skill. Those cannot escalate: an
-uploaded definition is text the caller wrote, and it holds only the tools their
-source ids already reach — `middlewares`, `endpoints` and `models` are never
-widened by an upload. What it buys someone is new instructions, never new powers.

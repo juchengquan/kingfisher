@@ -20,7 +20,6 @@ from kingfisher.kinds.agents.catalogue import LocalAgentRepository
 from kingfisher.kinds.importing import load
 from kingfisher.kinds.skills import spec as skill
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
-from kingfisher.kinds.skills.reading import name_from
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.tools.catalogue import LocalToolRepository, tool_name
 from kingfisher.kinds.tools.spec import Offering
@@ -81,12 +80,12 @@ def test_every_preset_skill_parses(shipped):
     for path in found:
         name = path.parent.name
         text = path.read_text(encoding="utf-8")
-        parts = skill.split(text)
 
-        assert parts is not None, f"{name}: no `---` header"
-        header, body = parts
-        assert name_from(text) == name  # header and directory agree
-        assert yaml.safe_load(header)["description"].strip()
+        assert text.startswith("---\n"), f"{name}: no `---` header"
+        header, body = text.removeprefix("---\n").split("\n---\n", 1)
+        document = yaml.safe_load(header)
+        assert document["name"] == name  # header and directory agree
+        assert document["description"].strip()
         # A real procedure, not a stub. The same threshold the subagent version
         # uses.
         assert len(body.strip()) > 200

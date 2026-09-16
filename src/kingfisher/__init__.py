@@ -76,7 +76,6 @@ _EXPORTS = {
     # `test_root_and_runner_contracts` had to import it from somewhere.
     "CommandResult": "kingfisher.domain.ports",
     "UnknownSessionError": "kingfisher.domain.session",
-    "UploadError": "kingfisher.infrastructure.workspace.uploads",
     "Config": "kingfisher.config",
     "WorkspacePaths": "kingfisher.config",
     "Kingfisher": "kingfisher.application.service",
@@ -136,7 +135,6 @@ __all__ = [
     "UnknownReferenceError",
     "UnknownSessionError",
     "UnsafeReferenceError",
-    "UploadError",
     "WorkspacePaths",
     "config_from_env",
     "default_backend",
@@ -199,7 +197,6 @@ if TYPE_CHECKING:
     )
     from kingfisher.infrastructure.workspace.seeding import kinds_at as kinds_at
     from kingfisher.infrastructure.workspace.seeding import seed as seed
-    from kingfisher.infrastructure.workspace.uploads import UploadError as UploadError
     from kingfisher.kinds.skills.spec import SkillError as SkillError
     from kingfisher.kinds.subagents.spec import RunOn as RunOn
     from kingfisher.kinds.subagents.spec import SubagentError as SubagentError

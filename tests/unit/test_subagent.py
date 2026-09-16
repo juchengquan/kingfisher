@@ -7,8 +7,6 @@ from pathlib import Path
 import pytest
 
 from kingfisher.domain.capabilities import ALL
-from kingfisher.kinds.skills.reading import name_from
-from kingfisher.kinds.skills.spec import SkillError
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
 from kingfisher.kinds.subagents.reading import KNOWN, REFUSED
@@ -256,32 +254,6 @@ def test_the_known_set_matches_the_spec_it_builds():
         assert fields_by_name[target].metadata.get("derived"), (
             f"{key!r} claims to fold into {target!r}, which is not a derived field"
         )
-
-
-def test_a_skill_may_carry_fields_kingfisher_does_not_know(tmp_path):
-    """Deliberately the opposite rule."""
-    body = "---\nname: code-review\nallowed-tools: [read_file]\nlicense: MIT\n---\nBody.\n"
-
-    assert name_from(body) == "code-review"
-
-
-def test_a_skill_without_frontmatter_says_which_delimiter_is_missing():
-    """A skill is markdown with a `---` header, and a file without one is not one.
-
-    Found by mutation rather than by review: this check and the one below moved from
-    two other modules when reading a skill's name became one function, and deleting
-    either left the whole suite green. They had never been exercised -- the gap is
-    older than the move, which is what made it worth writing down.
-    """
-    with pytest.raises(SkillError, match="delimited by ---"):
-        name_from("name: code-review\n\nNo header at all.\n")
-
-
-def test_a_skill_name_that_is_a_path_is_refused():
-    """The name becomes a directory name, so a separator in it writes elsewhere."""
-    for written in ("../elsewhere", "nested/skill", ".", ".."):
-        with pytest.raises(SkillError, match="not usable as a directory name"):
-            name_from(f"---\nname: {written}\n---\nBody.\n")
 
 
 def test_a_prompt_that_begins_indented_still_loads(tmp_path):

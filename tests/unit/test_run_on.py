@@ -127,11 +127,6 @@ def test_the_deployment_clamps_what_a_request_asks_for():
     assert allowed.models == ("cheap",)
 
 
-def test_an_upload_cannot_widen_it():
-    """`including` adds back a caller's *own* definitions."""
-    assert Capabilities(models=("cheap",)).including(subagents=("mine",)).models == ("cheap",)
-
-
 # -- it replaces the endpoint, never half of it ---------------------------
 
 
