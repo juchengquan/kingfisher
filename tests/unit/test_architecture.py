@@ -3520,6 +3520,78 @@ def test_every_console_script_points_at_something_that_exists():
         assert callable(getattr(module, attribute, None)), f"{command} -> {target}"
 
 
+def _tracked_python() -> list[str]:
+    """Every Python file git tracks, as a path from the repository root.
+
+    Asked of git rather than walked: the root also holds a `.venv`, caches and
+    whatever a developer left there, and a walk finds different things on different
+    machines.
+    """
+    import subprocess
+
+    listed = subprocess.run(
+        ["git", "ls-files", "*.py"], cwd=REPO, capture_output=True, text=True, check=False
+    )
+    assert listed.returncode == 0, f"git could not list the tracked files: {listed.stderr}"
+    return listed.stdout.split()
+
+
+def _ty() -> dict:
+    import tomllib
+
+    return tomllib.loads((REPO / "pyproject.toml").read_text(encoding="utf-8"))["tool"]["ty"]
+
+
+def test_every_directory_holding_python_is_type_checked():
+    """A directory missing from ty's `include` is never checked, and nothing goes red --
+    which is how `evals/` went unchecked while the driver imported it.
+    """
+    tracked = _tracked_python()
+    holding = {path.split("/", 1)[0] for path in tracked}
+    included = set(_ty()["src"]["include"])
+
+    assert holding, "git lists no Python -- this rule is about nothing"
+    assert holding <= included, (
+        f"{sorted(holding - included)} holds Python that ty never reads -- add it to "
+        "`include` under [tool.ty.src]"
+    )
+
+
+def test_ty_exempts_test_modules_and_nothing_else_under_tests():
+    """The override for tests' seams covered all of `tests/`, driver included, and
+    ignoring unresolved attributes there let the driver read a `Config` field that had
+    been removed until a live smoke run crashed on it.
+    """
+    from fnmatch import fnmatch
+    from pathlib import PurePosixPath
+
+    patterns = [
+        pattern for override in _ty().get("overrides", []) for pattern in override["include"]
+    ]
+
+    # `*` crosses `/` in fnmatch, and `**/` is also tried as nothing, so this matches
+    # at least what ty's globs match for patterns like these: loose towards a red
+    # build, never towards a quiet one.
+    def exempted(path: str) -> bool:
+        return any(
+            fnmatch(path, pattern) or fnmatch(path, pattern.replace("**/", ""))
+            for pattern in patterns
+        )
+
+    under_tests = [path for path in _tracked_python() if path.startswith("tests/")]
+    modules = [path for path in under_tests if PurePosixPath(path).name.startswith("test_")]
+    helpers = [path for path in under_tests if path not in modules]
+
+    assert helpers, "nothing under tests/ but test modules -- this rule is about nothing"
+    assert any(exempted(path) for path in modules), (
+        "no override reaches a test module, so this is reading the wrong table"
+    )
+    assert not [path for path in helpers if exempted(path)], (
+        f"{sorted(path for path in helpers if exempted(path))} are not test modules, and "
+        "a ty override exempts them from rules the tests need switched off"
+    )
+
+
 def test_only_the_confinement_module_calls_resolve_directly():
     """`shell_confinement` is the one place a `Config` becomes a confinement."""
     # Production only. A test of `resolve` calls `resolve`, and exempting the

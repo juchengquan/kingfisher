@@ -1178,6 +1178,14 @@ where the report is, and the pass/fail signal was always `check_result`.
 `test_a_smoke_run_reaches_its_end` drives those lines without a model.
 *(2026-09-16.)*
 
+The override was then narrowed to test modules. None of the 55 findings it hid
+were outside one, so the driver, `conftest.py` and the helper scripts under
+`tests/` lost nothing by being checked, and with the narrower glob `ty` reports
+this bug directly. `evals/`, which the driver imports, turned out to be outside
+both `ty` and CI's `ruff` and is in both now. Two rules keep it so:
+`test_ty_exempts_test_modules_and_nothing_else_under_tests` and
+`test_every_directory_holding_python_is_type_checked`. *(2026-09-16.)*
+
 **Containerise and use a sized tmpfs; do not adopt mirage for the filesystem.**
 That was *Nothing at rest*'s closing recommendation and it is what shipped. A
 tmpfs inside a container gives memory-backed files that are *real paths* -- any
