@@ -44,6 +44,7 @@ KNOWN: frozenset[str] = frozenset(
         "skills",
         "middlewares",
         "subagents",
+        "bundle",
         "model",
         "metadata",
         "source_ids",
@@ -136,6 +137,14 @@ NOT_COMPILED: Mapping[str, str] = MappingProxyType(
             "middleware supplies, and a compiled graph is given no middleware. "
             "Build the nesting into the graph if it needs it"
         ),
+        # A claim about a bundle that never arrives would be a line going red for
+        # being right: a compiled graph is run as given and handed the tools it was
+        # granted, so its folder reaches it no more than its middleware does.
+        "bundle": (
+            "a bundle is handed to a delegate kingfisher assembles; a compiled "
+            "graph is run as given, gets the tools it was granted and no skills "
+            "middleware at all. Pass what the graph needs to `build`"
+        ),
     }
 )
 
@@ -200,6 +209,66 @@ def declared(entry: Mapping[str, object], source: str) -> SubagentSpec:
         source_ids=source_ids,
         audiences=audiences,
     )
+
+
+#: What `bundle:` may say: one half per directory a bundle can hold, which is the
+#: same two names `catalogue.ASSET_DIRECTORIES` keeps the walk out of.
+#: `test_the_bundle_key_covers_every_directory_a_bundle_holds` is what stops the two
+#: drifting -- a third asset kind added to the walk and not here would be a folder a
+#: definition could never describe, and nothing else would say so.
+BUNDLE_KEYS: tuple[str, ...] = ("tools", "skills")
+
+
+def _bundle(value: object, reader: fields.Reader) -> Mapping[str, tuple[str, ...]]:
+    """What `bundle:` claims its folder holds, by half, for the halves it wrote."""
+    if value is None:
+        return {}
+    # Not `reader.mapping`, whose refusal says "a mapping of your own keys" -- true
+    # of `metadata:` and the opposite of true here, where the keys are the two the
+    # format names. Someone reaching for `bundle: [mask_secrets]` needs to be told
+    # which half they meant, not that they may write whatever they like.
+    if not isinstance(value, Mapping):
+        msg = (
+            f"{reader.source}: bundle is {type(value).__name__}; it takes "
+            f"{' and/or '.join(BUNDLE_KEYS)}, each naming what that folder holds:\n"
+            f"    bundle:\n      tools: [mask_secrets]"
+        )
+        raise SubagentError(msg)
+    written = dict(value)
+    if unknown := sorted(set(written) - set(BUNDLE_KEYS)):
+        msg = (
+            f"{reader.source}: bundle names {unknown}, and a bundle holds "
+            f"{list(BUNDLE_KEYS)} -- those are the folders under "
+            f"subagents/<name>/ that reach the delegate"
+        )
+        raise SubagentError(msg)
+    if not written:
+        # An empty mapping describes nothing, so it cannot be wrong, so it checks
+        # nothing -- which is the one thing this key must never be.
+        msg = (
+            f"{reader.source}: bundle is empty; it takes "
+            f"{' and/or '.join(BUNDLE_KEYS)}, naming what the folder holds. "
+            f"Leave the key out to say nothing"
+        )
+        raise SubagentError(msg)
+    claimed: dict[str, tuple[str, ...]] = {}
+    for half in BUNDLE_KEYS:
+        if half not in written:
+            continue  # said nothing about this half, which is not the same as none
+        # `*` would mean "whatever the folder holds", a claim that cannot be wrong,
+        # in the one key whose whole job is to be wrong when the folder changes.
+        names = reader.selection(
+            written[half],
+            absent=(),
+            key=f"bundle {half}",
+            refuse_all=(
+                f"it would say only that this delegate gets the {half} in its own "
+                f"folder, which is true of every bundle. Name them, or leave the "
+                f"line out"
+            ),
+        )
+        claimed[half] = tuple(names or ())
+    return claimed
 
 
 def _refuse_unknown(document: Mapping[str, object], source: Path) -> None:
@@ -299,6 +368,7 @@ def read(text: str, source: Path) -> SubagentSpec:
         middlewares=written_middleware,
         middleware_settings=middleware_settings,
         subagents=written_delegates,
+        bundle=_bundle(document.get("bundle"), reader),
         wanted=wanted,
         metadata=reader.mapping(document.get("metadata"), key="metadata"),
         source_ids=source_ids,

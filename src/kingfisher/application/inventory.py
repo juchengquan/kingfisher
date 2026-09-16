@@ -14,7 +14,7 @@ from kingfisher.domain.capabilities import ALL, CapabilityError, Selection
 from kingfisher.infrastructure.catalogue import Definitions, resolve_definitions
 from kingfisher.kinds.agents.spec import AgentError
 from kingfisher.kinds.middlewares.catalogue import MiddlewareError
-from kingfisher.kinds.subagents.rules import refuse_cycles
+from kingfisher.kinds.subagents.rules import miscounted, refuse_cycles
 from kingfisher.kinds.subagents.spec import SubagentError, SubagentSpec
 from kingfisher.kinds.tools.catalogue import ToolError
 from kingfisher.kinds.tools.spec import Found, Offering
@@ -92,6 +92,12 @@ class Inventory:
     #: stops the deployment at startup, an agent's stops nothing at all and the
     #: agent simply runs without the tool it was granted.
     moved_tools: Mapping[str, tuple[str, ...]] = _NO_NAMES
+
+    #: Definitions whose `bundle:` has stopped describing their own folder, by the
+    #: name a grant uses, each with how the two differ.
+    #: Carried for the reason `moved_tools` is: startup refuses this, and `doctor`
+    #: promises to say in advance what startup will refuse.
+    miscounted_bundles: Mapping[str, str] = _NOTHING
 
     #: Middleware class name -> the module that defined it.
     middlewares: Mapping[str, str] = _NOTHING
@@ -269,6 +275,28 @@ def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
         return _NO_NAMES
 
 
+def _miscounted_bundles(resolved: Definitions) -> Mapping[str, str]:
+    """Definitions whose echo of their own folder no longer matches it.
+
+    Through the same rule `warm` refuses with, not a second reading of the same
+    fields: two walks that can disagree would let a listing call a catalogue fine
+    that the constructor then refuses, which is the whole failure this reports.
+
+    A catalogue that will not walk answers nothing rather than raising, the way
+    `_moved_tools` does -- whichever kind failed is already on its own line.
+    """
+    found: dict[str, str] = {}
+    try:
+        for name, spec in resolved.subagents.specs.items():
+            where, tools, skills = resolved.bundled(name)
+            complaint = miscounted(spec, where=where, tools=tools, skills=skills)
+            if complaint is not None:
+                found[name] = complaint
+    except (ToolError, SubagentError):
+        return _NOTHING
+    return MappingProxyType(found)
+
+
 def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
     """What the workspace registers, and why it could not be read.
 
@@ -431,6 +459,7 @@ def inventory(
 
     middlewares, middlewares_error = _middlewares(resolved)
     moved_tools = _moved_tools(resolved)
+    miscounted_bundles = _miscounted_bundles(resolved)
 
     builtin, workspace_tools, sources, tools_error = _tools(cfg, resolved)
 
@@ -527,6 +556,7 @@ def inventory(
         middlewares=middlewares,
         middlewares_error=middlewares_error,
         moved_tools=moved_tools,
+        miscounted_bundles=miscounted_bundles,
         bundled_tools=bundled_tools,
         bundled_skills=bundled_skills,
         shadowed=shadowed,

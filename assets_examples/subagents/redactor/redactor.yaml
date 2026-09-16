@@ -30,6 +30,25 @@ tools: []
 # The same goes for `skills:`, which usually defaults to none. `redaction/` is
 # in this folder, so this delegate is told about it without a line saying so.
 #
+# Which leaves nothing above naming either of the two things this delegate
+# actually works with. `bundle:` does, and it is checked rather than used: the
+# folder still decides what arrives, and a list that stops matching it in either
+# direction refuses this definition as the catalogue is read.
+#
+# It is indented on purpose. Every other list in this file grants something
+# and this one grants nothing, so it is written in a shape none of them have --
+# `tools: []` above is a decision about what reaches this delegate, and these two
+# lines are a description of a directory.
+#
+# What it buys is the change nobody would otherwise see. Dropping a file into
+# `redactor/tools/` hands this delegate a capability with no line in any file
+# altered, and renaming `redactor` above takes every one away just as quietly --
+# neither shows in a diff of this file, because without this key it does not
+# mention them. Optional, and every other bundle in this tree does without; the
+# delegate that handles credentials is where it earns its keep.
+bundle:
+  tools: [mask_secrets]
+  skills: [redaction]
 # Keys of your own, which nothing in a run reads. A script checking that every
 # delegate names an owner does, and a delegate handling credentials is the one
 # that check exists for.

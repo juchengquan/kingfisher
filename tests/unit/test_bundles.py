@@ -676,6 +676,268 @@ def test_a_broken_bundle_does_not_hide_the_rest_of_the_listing(cfg):
     assert "shared" in found.tools
 
 
+# -- saying what is in there, and being held to it --------------------------
+
+
+def echoing(cfg, tools=None, skills=None, *, skill=False, written=None):
+    """A `surveyor` bundle whose definition writes the `bundle:` key given.
+
+    Rendered rather than taken as text, so a test says what it claims and the YAML
+    shape lives in one place -- `written` is for the handful that need a malformed
+    one, and those say so by passing it.
+    """
+    halves = "".join(
+        f"  {half}: [{', '.join(names)}]\n"
+        for half, names in (("tools", tools), ("skills", skills))
+        if names is not None
+    )
+    key = written if written is not None else (f"bundle:\n{halves}" if halves else "")
+    workspace_with_bundle(cfg, definition=NO_TOOLS_LINE + key)
+    if skill:
+        with_private_skill(cfg)
+
+
+def test_a_definition_that_names_what_its_folder_holds_loads(cfg):
+    """The control, and it has to come first: every refusal below would also fire on a
+    definition that simply cannot be read, and then none of them would be about the
+    `bundle:` key at all.
+    """
+    echoing(cfg, tools=["probe"], skills=["sampling"], skill=True)
+
+    catalogue = Definitions.from_config(cfg).warm()
+
+    assert catalogue.subagents.specs["surveyor"].bundle == {
+        "tools": ("probe",),
+        "skills": ("sampling",),
+    }
+
+
+def test_a_name_the_folder_does_not_hold_is_refused(cfg):
+    """The stale direction: a definition still naming a tool somebody deleted."""
+    echoing(cfg, tools=["probe", "gone"])
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "gone" in str(raised.value)
+    assert "surveyor/tools/" in str(raised.value)
+
+
+def test_a_tool_the_folder_gained_is_refused(cfg):
+    """The direction the key is actually for, and the one a subset check would let
+    through: a tool dropped into the folder reaches this delegate with no line in any
+    file changed, so a definition that has written the list has to go red for it.
+    """
+    echoing(cfg, tools=["probe"])
+    arrived = cfg.workspace / "subagents" / "surveyor" / "tools" / "later.py"
+    arrived.write_text(TOOL.format(name="later", answer="ok"), encoding="utf-8")
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "later" in str(raised.value)
+    assert "bundle.tools does not name" in str(raised.value)
+
+
+def test_a_skill_the_folder_holds_and_the_definition_does_not_name_is_refused(cfg):
+    """Both halves, or the second is a line that reads like a check and is not one."""
+    echoing(cfg, tools=["probe"], skills=[], skill=True)
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "sampling" in str(raised.value)
+    assert "bundle.skills does not name" in str(raised.value)
+
+
+def test_a_half_left_out_is_not_a_half_claiming_none(cfg):
+    """`skills:` absent says nothing about skills; `skills: []` says there are none.
+
+    Collapsing the two would make the shorter form silently assert something, which
+    is how a definition naming only its tools would start refusing every bundle that
+    also ships a skill.
+    """
+    echoing(cfg, tools=["probe"], skill=True)
+
+    catalogue = Definitions.from_config(cfg).warm()
+
+    assert set(catalogue.subagents.specs["surveyor"].bundle) == {"tools"}
+
+
+def test_a_definition_that_echoes_a_folder_it_no_longer_owns_is_refused(cfg):
+    """The rename, from the side the definition is on.
+
+    `orphaned_assets` sees the folder left behind and cannot see what the file thought
+    it had; this is the only place the two halves of that rename meet, and without it
+    a renamed bundle is a delegate that quietly holds nothing.
+    """
+    echoing(cfg, tools=["probe"])
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.yaml"
+    definition.write_text(
+        definition.read_text(encoding="utf-8").replace("name: surveyor", "name: surveys"),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "owns no folder" in str(raised.value)
+    assert "bundle" in str(raised.value)
+
+
+def test_a_rename_is_reported_from_both_sides(cfg):
+    """The folder left behind and the file that walked away from it, which are
+    different facts: the orphan report knows a folder reaches nobody and cannot know
+    what was supposed to be in it, and this knows what the definition thought it had
+    and not that the folder is still sitting there.
+
+    Also what opting in costs and buys: without `bundle:` a rename is a warning and a
+    zero exit, and with it a refusal.
+    """
+    echoing(cfg, tools=["probe"])
+    definition = cfg.workspace / "subagents" / "surveyor" / "surveyor.yaml"
+    definition.write_text(
+        definition.read_text(encoding="utf-8").replace("name: surveyor", "name: surveys"),
+        encoding="utf-8",
+    )
+
+    found = inventory(cfg)
+    named = {check.name: check for check in examine(cfg)}
+
+    assert found.orphaned_assets == ("surveyor",)
+    assert "owns no folder" in found.miscounted_bundles["surveys"]
+    assert named["delegate bundles"].verdict == "warn"
+    assert named["bundle claims"].verdict == "fail"
+
+
+def test_a_star_is_refused_because_it_would_check_nothing(cfg):
+    """`['*']` would say only that a bundle reaches its owner, which is true of every
+    bundle -- a claim that cannot be wrong, in a key whose only job is to be wrong
+    when the folder changes.
+    """
+    echoing(cfg, tools=['"*"'])
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "may not be" in str(raised.value)
+
+
+def test_both_spellings_of_the_star_are_refused_the_same_way(cfg):
+    """`"*"` and `["*"]` are one mistake, and the generic reader answered the first
+    with "write ['*'] instead" -- advice pointing straight at the second, which this
+    key forbids. Asserted on the reason rather than on failing at all, because it
+    failed at all before too.
+    """
+    for spelling in ('  tools: "*"\n', '  tools: ["*"]\n'):
+        echoing(cfg, written=f"bundle:\n{spelling}")
+
+        with pytest.raises(SubagentError) as raised:
+            Definitions.from_config(cfg).warm()
+
+        assert "true of every bundle" in str(raised.value), spelling
+        assert "write" not in str(raised.value), spelling
+
+
+def test_a_bundle_that_is_not_a_mapping_says_which_halves_it_takes(cfg):
+    """`reader.mapping` refuses with "a mapping of your own keys" -- true of
+    `metadata:` and the opposite of true here, where the two keys are the format's.
+    Somebody writing `bundle: [mask_secrets]` needs to be told which half they meant.
+    """
+    echoing(cfg, written="bundle: [probe]\n")
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "your own keys" not in str(raised.value)
+    assert "tools and/or skills" in str(raised.value)
+
+
+def test_an_empty_bundle_is_refused_for_the_same_reason(cfg):
+    """`bundle: {}` describes nothing, so it cannot be wrong, so it checks nothing --
+    while looking in a diff exactly like a definition that had opted in.
+    """
+    echoing(cfg, written="bundle: {}\n")
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "bundle is empty" in str(raised.value)
+
+
+def test_a_half_that_is_not_a_directory_a_bundle_holds_is_refused(cfg):
+    """`bundle: {middlewares: [...]}` names a folder no bundle has, so it would sit
+    there describing nothing and checking nothing -- the same failure as an empty one,
+    wearing a plausible word.
+    """
+    echoing(cfg, written="bundle:\n  middlewares: [call-cap]\n")
+
+    with pytest.raises(SubagentError) as raised:
+        Definitions.from_config(cfg).warm()
+
+    assert "middlewares" in str(raised.value)
+    assert "['tools', 'skills']" in str(raised.value)
+
+
+def test_the_bundle_key_covers_every_directory_a_bundle_holds():
+    """Two lists that must agree, in both directions.
+
+    `BUNDLE_KEYS` is what a definition may describe and `ASSET_DIRECTORIES` is what
+    the walk keeps out of the definition scan. A third asset kind added to one and
+    not the other is either a folder nobody can describe or a key describing a folder
+    that is read as a subagent, and neither has a symptom before it happens.
+    """
+    from kingfisher.kinds.subagents.catalogue import ASSET_DIRECTORIES
+    from kingfisher.kinds.subagents.reading import BUNDLE_KEYS
+
+    assert set(BUNDLE_KEYS) == set(ASSET_DIRECTORIES)
+
+
+def test_a_definition_saying_nothing_is_not_asked_to(cfg):
+    """Optional, and the shipped set is mostly definitions that write no `bundle:`."""
+    echoing(cfg)
+
+    catalogue = Definitions.from_config(cfg).warm()
+
+    assert catalogue.subagents.specs["surveyor"].bundle == {}
+
+
+def test_a_listing_names_the_delegate_whose_echo_has_gone_stale(cfg):
+    """A refusal reachable only through the constructor is one `list` cannot see, which
+    is how `orphaned_assets` came to be computed for a year and printed never.
+    """
+    echoing(cfg, tools=["probe", "gone"])
+
+    found = inventory(cfg)
+
+    assert "gone" in found.miscounted_bundles["surveyor"]
+    assert "gone" in "\n".join(_catalogue(found))
+    assert failed(found), "the catalogue refuses this, so a zero exit would be a lie"
+
+
+def test_doctor_names_the_delegate_whose_echo_has_gone_stale(cfg):
+    """The exit code is held by `test_doctor_fails_on_every_refusal_a_file_can_reach`;
+    what this adds is that the row says which definition to open.
+    """
+    echoing(cfg, tools=["probe", "gone"])
+
+    named = {check.name: check for check in examine(cfg)}
+
+    assert named["bundle claims"].verdict == "fail"
+    assert "surveyor" in named["bundle claims"].detail
+
+
+def test_a_clean_catalogue_says_so_rather_than_saying_nothing(cfg):
+    """An absent row and a passing one look identical in a list of checks, and the
+    absent one is what a check that stopped running looks like.
+    """
+    echoing(cfg, tools=["probe"])
+
+    named = {check.name: check for check in examine(cfg)}
+
+    assert named["bundle claims"].verdict == "ok"
+
+
 # -- the one that ships -----------------------------------------------------
 
 
@@ -693,6 +955,22 @@ def test_the_shipped_bundle_is_a_bundle(shipped):
     # folder naming no definition is organisation and stays so.
     assert "profiler" in repository.specs
     assert repository.orphaned_assets == ()
+
+
+def test_the_shipped_bundle_says_what_it_holds(workspace_with_presets):
+    """The example is where a reader meets this, and `assets_examples/` is held to
+    working -- so the check is driven by reading the shipped catalogue rather than by
+    comparing the definition against a list written here, which would pass against
+    itself however wrong both were.
+    """
+    catalogue = Definitions.from_config(workspace_with_presets).warm()
+    spec = catalogue.subagents.specs["redactor"]
+
+    assert spec.bundle == {"tools": ("mask_secrets",), "skills": ("redaction",)}
+    # Driven: `warm` above is what refuses a stale echo, so reaching this line is the
+    # assertion. Named anyway, because a `warm()` whose refusal moved elsewhere would
+    # leave the two lines above passing on a definition nothing checked.
+    assert inventory(workspace_with_presets).miscounted_bundles == {}
 
 
 def test_the_shipped_bundles_tool_loads_and_masks(tmp_path, shipped):

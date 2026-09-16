@@ -448,6 +448,7 @@ on the spot, so every entry after the first would be unreachable.
 | `skills` | optional | Which procedures it is told about. Unset grants **none** — the opposite of `tools`, because its body is already its procedure. Name them: `["*"]` is refused here, where an agent takes it |
 | `middlewares` | optional | Names entries from a registry the deployment supplies — [`middleware.md`](middleware.md) is who supplies it. The one field that selects *code*, so it is granted, never inherited |
 | `subagents` | optional | Delegates this one may consult mid-job. Unset grants **none**. One level — see below |
+| `bundle` | optional | `tools:` and `skills:`, naming what this delegate's own folder holds. Checked against the folder, never used to select — see [its own folder](#tools-and-skills-of-its-own--subagentsname) |
 | `model` | optional | One entry in your `models.yaml`. The endpoint follows from it; this is where cost routing goes. Omitted, the delegate runs whatever summoned it |
 | `metadata` | optional | A mapping of your own keys. Nothing in a run reads it — it is for whatever loads the catalogue |
 | `source_ids` | optional | Who may reach this delegate, wherever it is used. Unset means everyone. Also the default audience, and the ceiling, for its `tools`, `subagents` and `skills` entries — see [Access](#access--source_ids-in-the-definitions-source_idsyaml-for-the-vocabulary) |
@@ -713,6 +714,7 @@ this format has to refuse below.
 | `skills` | deepagents mounts skills for a delegate *it* builds, never for a compiled one |
 | `middlewares` | middleware wraps a graph deepagents builds; this one is already built |
 | `subagents` | delegation arrives through middleware, which a compiled graph is not given |
+| `bundle` | a bundle is handed to a delegate kingfisher assembles; a compiled graph gets what it was granted, and no skills middleware at all |
 
 `name`, `description`, `build`, `tools`, `model` and `metadata` are what
 remain.
@@ -767,6 +769,46 @@ declines the whole delegate; there is no finer lever, deliberately.
 declaration; listing it again in the definition would be a second place to keep
 in step with the first. A `tools:` line still governs which *catalogue* tools it
 also gets.
+
+**If you want, you can write down what is in there and be held to it.**
+Optional — every bundle above works without it, and most should. `bundle:` names
+what the folder holds, selects nothing, and is refused when it and the folder
+stop matching, in either direction:
+
+```yaml
+name: redactor
+description: Quotes from files that may hold credentials, with secrets masked first. Use before quoting an untrusted file.
+tools: []             # a grant: no catalogue tool
+bundle:               # a description: what subagents/redactor/ holds
+  tools: [mask_secrets]
+  skills: [redaction]
+system_prompt: |
+  You quote from files that may contain credentials. Follow the `redaction`
+  skill; it is the whole procedure.
+```
+
+It is nested for a reason worth knowing before you copy it. Every other list in
+a definition grants something, and this one grants nothing — so it is written in
+a shape none of them have, because a description sitting flat among grants gets
+read as a grant, and then as a bug when it grants nothing.
+
+What it buys is the change that otherwise leaves no trace. Dropping a file into
+`redactor/tools/` hands that delegate a capability with no line in any file
+altered, and renaming `redactor` takes every one away just as quietly — neither
+shows up in a diff of the definition, because without this key the definition
+does not mention them. With it both are a failure: `kingfisher list` prints it
+under the delegate, `doctor` fails on `bundle claims`, and building the
+deployment raises.
+
+The match is exact rather than a subset, because a subset would let through the
+one case the key exists to surface — the tool that arrived without being asked
+for. `["*"]` is refused for the same reason: it would say only that this
+delegate gets its own folder, which is true of every bundle. So is an empty
+`bundle: {}`, which describes nothing and so cannot be wrong.
+
+Writing it also changes what a rename costs. Without it, renaming the folder or
+the `name:` is the warning below; with it that is a refusal, because the
+definition is still naming things nothing can hand it.
 
 **A bundle wins a name the catalogue also uses.** If `redactor/tools/` defines a
 `fetch` and so does `tools/`, the delegate gets its own — permanently, whatever

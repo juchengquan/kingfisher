@@ -229,6 +229,11 @@ def _subagents(found: Inventory) -> Iterator[str]:
         for kind, held in (("tools", found.bundled_tools), ("skills", found.bundled_skills)):
             for own in held.get(name, ()):
                 yield f"      {own}  [private {kind[:-1]}]"
+        if (miscounted := found.miscounted_bundles.get(name)) is not None:
+            # Under the delegate rather than in a section of its own: the two lines
+            # above say what it holds, and this says the definition disagrees with
+            # them. A reader comparing the three is the point.
+            yield f"      ! {miscounted}"
         for hidden in found.shadowed.get(name, ()):
             # Said out loud because shadowing is only acceptable while it is
             # visible. The delegate answers `fetch` with its own; the
@@ -291,6 +296,7 @@ def as_json(found: Inventory) -> dict[str, object]:
         "shadowed": {k: list(v) for k, v in found.shadowed.items()},
         "bundles_error": found.bundles_error,
         "orphaned_assets": list(found.orphaned_assets),
+        "miscounted_bundles": dict(found.miscounted_bundles),
         # The vocabulary, or `null` where this deployment declares none. Who reaches
         # what is `audiences` below, keyed the way the definitions themselves are.
         "access": (
@@ -333,8 +339,12 @@ def failed(found: Inventory) -> bool:
     moved from. A subagent doing that will not load; an agent doing it loads and
     runs without the tool, which is not the same fault and is worse to find out
     about later -- so the predicate covers both and is named for what they share.
+
+    A definition that has stopped describing its own folder is the first sort: the
+    catalogue refuses it, so a listing that exited zero over one would be promising
+    a deployment that cannot start.
     """
-    if found.moved_tools:
+    if found.moved_tools or found.miscounted_bundles:
         return True
     return any(
         error is not None
