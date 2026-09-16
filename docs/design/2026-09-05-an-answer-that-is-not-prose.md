@@ -5,6 +5,8 @@ refusal whose reason deepagents contradicted; it went first because it depended
 on nothing else here. Slices 2 and 3 are deliberately held: nothing renders
 structured output yet, and the argument for waiting is in *What this does not
 do* at the foot. It stays here until they land or the proposal is withdrawn.
+**Revised on 2026-09-16** when the HTTP service was removed: what a document
+reaches now is the library's own `RunResult` and `kingfisher run`.
 **Date:** 2026-09-05
 **Occasion:** an investigation into carrying A2UI, Google's declarative
 agent-driven UI format, as what a kingfisher run returns. The conclusion was
@@ -15,19 +17,22 @@ constant or a heading, because this document is written to sit unbuilt while
 something to render its output appears. Three of its line numbers had already
 gone stale two days after it was drafted, one of them moved by its own first
 slice. A `grep` for the name still lands; a line number is a claim with a
-shelf life.
+shelf life. Nor is it cited by quoting a comment: most of the comments it
+quoted were cut in a later pass over the prose while the behaviour they
+described stayed, so it states the behaviour and names where to find it.
 
 The `REFUSED` table in `agents/spec.py` declines `response_format` on an agent
 definition, and the refusal reads like a specification:
 
 > an agent answers a real caller who may well want a schema, and there is
-> nowhere to ask for one yet -- it changes what a *run returns*, so the result,
-> the service's response body and streaming all have a stake in it
+> nowhere to ask for one yet -- it changes what a *run returns*, so the result
+> and streaming both have a stake in it
 
-Three stakeholders and a missing asking-place. This proposal answers all four,
-and finds that the hard part is none of them: it is five things upstream does
-that are invisible from this codebase, four of which produce a turn that looks
-like it worked.
+Two stakeholders and a missing asking-place, and a third the refusal does not
+name: `kingfisher run`, which prints what a turn said and has nowhere to put a
+document. This proposal answers all four, and finds that the hard part is none
+of them: it is five things upstream does that are invisible from this codebase,
+four of which produce a turn that looks like it worked.
 
 ## What a run returns today
 
@@ -36,9 +41,11 @@ Three exits, and prose owns two of them.
 `RunResult.answer` is a `str`, passed through `normalize_answer` in
 `domain/result.py` to strip the `<think>` blocks some gateways inline. Prose
 reaches a streaming caller only as `token` events while it is being
-generated -- `RunEvent` has no `message` kind, and its docstring says why:
-carrying prose twice *"would mean rendering the same text at two granularities
-and asking every consumer to know that"*. Files reach a caller as `artifacts`,
+generated -- `RunEvent` has no `message` kind, because carrying the finished
+prose as well would hand every consumer the same text at two granularities.
+`kingfisher run` is built on that: `Progress` writes tokens as they arrive and
+prints nothing when `finished` delivers the result, since *"saying it again
+would read as the model answering twice"*. Files reach a caller as `artifacts`,
 paths relative to the session root.
 
 There is no fourth exit, and nothing in the package holds a value that is
@@ -169,10 +176,10 @@ are two agents: one has been told about a catalogue and the other has not.
 kind.** Inline means every agent file carries a copy of a versioned schema, and
 a v1.0 that lands is a migration across a workspace -- two lists of one fact,
 which `test_architecture.py` already spends an import to avoid elsewhere. It
-also breaks the property `AgentSpec` says the format exists to have: an agent
-file *"activates what the workspace already offers and cannot invent a tool or
-write a delegate's prompt"*. A two-hundred-line schema pasted into YAML is
-inventing.
+also breaks the property the format is built around: an agent file selects by
+name what the workspace already offers -- its tools, skills, delegates and
+middleware -- and defines none of them. A two-hundred-line schema pasted into
+YAML is defining.
 
 A `schemas/` catalogue kind was the other candidate and is rejected for a
 concrete reason rather than a stylistic one: because A2UI's catalogue is
@@ -234,9 +241,10 @@ line in whatever guide the field gets, not a fallback in the code: a schema wort
 registering says in its `description` what it is for, because the model reads it.
 
 **`answer` keeps holding prose, and a new `structured` field holds the
-document.** Not a `str | Mapping` union: `answer` is typed `str` in
-`result_payload`, in the audit record, in `run_end(answer_chars=...)` and in
-`RunEvent.text`, which streams. And not JSON-in-`answer`, which is `api:
+document.** Not a `str | Mapping` union: `answer` is a `str` on `RunResult`,
+counted by `run_end(answer_chars=...)` and streamed as `RunEvent.text`, and
+`RunResult` is the whole of what a library caller is handed. And not
+JSON-in-`answer`, which is `api:
 openai` in a third costume -- a field whose name promises prose delivering
 something a consumer must know to parse, through a `normalize_answer` regex
 that would happily eat a document containing `<think>`.
@@ -250,15 +258,15 @@ is the one line that would otherwise be written by accident.
 
 **The transcript records one assistant message carrying the document.** The
 synthetic call and its result are translated away rather than stored. This is
-what `as_transcript` is for -- *"the only place that knows how LangChain spells
-a conversation"* -- and a structured return is LangChain spelling an answer as a
-tool call. It halves the replay cost, and it keeps a framework-generated tool
-name out of a record whose whole purpose is to outlive the harness:
-*"nothing here holds a provider's raw payload."*
+what `as_transcript` is for -- it is where what the graph holds becomes records
+this package owns -- and a structured return is LangChain spelling an answer as
+a tool call. It halves the replay cost, and it keeps a framework-generated tool
+name out of a record whose whole purpose is to outlive the harness.
 
 Recording a marker instead of the document is not an option. That is the
-flattened transcript `domain/transcript.py` rejects by name, and an agent that
-cannot see the document it just emitted will contradict it on the next turn.
+flattened transcript `domain/transcript.py` argues against in its opening
+paragraph, and an agent that cannot see the document it just emitted will
+contradict it on the next turn.
 
 **One full copy is still replayed in every later turn, and no cap is designed.**
 The remaining cost, named rather than hidden. A session-level cap is a real
@@ -266,37 +274,48 @@ piece of work with its own argument, and nothing has measured the need.
 
 **A fourth stop reason, for a turn that never satisfied its schema.** The fact
 is derivable -- with a schema declared, `max_steps` and an absent `structured`
-can only mean this -- and normally that would argue against adding to what
-`domain/result.py` calls the closest thing to a wire contract the package has.
+can only mean this -- and normally that would argue against adding to
+`STOP_REASONS`, which `domain/result.py` calls the whole of why a turn stops.
 What decides it is that the existing message does not merely under-inform: it
 tells the operator to raise `KINGFISHER_RECURSION_LIMIT`, and they will, and
-they will pay for a longer failure. `STOP_REASONS` says it expects to grow.
+they will pay for a longer failure.
 
-It needs a mapping in the service's `errors.py`. `GraphRecursionError` reaching
-the HTTP surface with no mapping at all is the precedent for remembering.
+It is decided where `service.py` catches `runtime.OutOfSteps`, and needs its own
+`cut_short` text beside `out_of_steps` in `application/turn.py`, naming the
+schema rather than the limit. Nothing else has to learn it:
+`RunResult.completed` compares against `end_turn` alone, and
+`test_no_surface_decides_for_itself_what_a_finished_turn_is` holds every surface
+to asking it, which is what makes a fourth reason cheap.
 
 **Streaming emits nothing new.** Under `ToolStrategy` the document arrives as
-tool-call argument fragments, which `_token_event` already
-discards by design: *"chunks holding only usage, or only the fragments of a
-tool call's arguments, carry no text and are likewise nothing to show."* So a
-structured turn streams `model_call` and `tool_result` events, then goes quiet
-through the final generation, then delivers the document on `finished`.
+tool-call argument fragments, and `_token_event` makes a `token` only from a
+chunk whose `text` is non-empty -- which a chunk holding nothing but argument
+fragments is not. So a structured turn streams `model_call` and `tool_result`
+events, then goes quiet through the final generation, then delivers the
+document on `finished`.
 
 The silence does not threaten the turn. Provider SSE still arrives, so the read
-clock still resets and `overrun` still checks between chunks; `streaming.py`'s
-`PING` still holds the connection. What is lost is visibility.
+clock still resets and `overrun` still checks between chunks. What is lost is
+visibility.
 
 The tempting alternative is `RunEvent.channel`, which exists for exactly this
-kind of growth -- *"nothing emits `reasoning` yet; the field exists so that when
-one does, it is not a new event kind"*. It is a trap here. `event_payload` omits
-`channel` when it equals `answer`, so a consumer that does not read the field
-sees an ordinary `token` with text in it, and any consumer building an answer by
-concatenating `token.text` would splice JSON into its prose. Worth knowing
-before `reasoning` is lit up, since it will meet this first.
+kind of growth -- *"Nothing emits `reasoning` yet — the field exists so that
+when one does, it is not a new event kind."* It is a trap here. Nothing in this
+package reads `channel`: `Progress` writes every `token` from the asked-for agent
+to the answer stream, so `kingfisher run` would splice JSON into the prose on
+stdout, and so would any consumer building an answer by concatenating
+`token.text`. Worth knowing before `reasoning` is lit up, since it will meet
+this first.
+
+**`kingfisher run` prints the document where it would have printed prose.** At
+`finished`, to the answer stream, because that is the one event a structured
+turn's document arrives on and `Progress` prints nothing there today. Without
+it a structured turn run from the command line writes an empty stdout for a
+turn that worked, which is the filler hazard again with the filler removed.
 
 **No `Capabilities` axis.** Every axis there is a `Selection` and `intersect`
-only ever subtracts -- *"a grant is a whitelist, so it can only mean less than
-the workspace"*. There is no less of a schema. Removing one does not restrict an
+never widens: a grant can only mean less than the workspace offers. There is no
+less of a schema. Removing one does not restrict an
 agent, it substitutes a different agent that answers in prose. `middlewares` is
 on the axis because it selects code that runs; a schema is data that shapes a
 return value. Access is already answered one level up by the agent's own
@@ -305,7 +324,8 @@ return value. Access is already answered one level up by the agent's own
 **`kingfisher list` says which schema an agent declares.** `list` exists to show
 what a workspace offers a request, and an agent that answers with a document
 rather than prose is the most surprising thing about it. Discovering that from a
-run is worse than reading it from a listing.
+run is worse than reading it from a listing, and the `--json` document says it
+too, since a script is the reader most likely to be surprised.
 
 **`run_end(answer_chars=...)` stops reporting zero for a turn that worked.**
 Small, and fixed inside the slice that causes it rather than left for somebody
@@ -359,8 +379,8 @@ avoid -- someone will check it, find it wrong, and stop trusting the other two.
 
 **2. The feature.** Registry, the `response_format` field, the load-time name
 refusal, `ToolStrategy` with an explicit name, `structured` on `RunResult` and
-in `result_payload`, the transcript translation, the fourth stop reason and its
-`errors.py` mapping, the `run_end` line, and the documentation in
+printed by `kingfisher run`, the transcript translation, the fourth stop reason
+and its `cut_short` text, the `run_end` line, and the documentation in
 `guides/formats.md` and `decisions.md`.
 
 Large, and it resists splitting because every seam ships something untrue.
@@ -392,9 +412,9 @@ A test that passes is not a test that bites.
 
 Nothing, which was the expected obstacle and is not one. `AgentSpec` gains a
 `str | None`. The registry and the `ToolStrategy` live in
-`infrastructure/harness/` beside `MiddlewareFactory`. The service passes it
-down through an edge already declared. **No new foreign import, and no new
-`HARNESS_EDGES` entry.**
+`infrastructure/harness/` beside `MiddlewareFactory`. `Kingfisher.__init__`
+takes it beside `middlewares` and passes it down through an edge already
+declared. **No new foreign import, and no new `HARNESS_EDGES` entry.**
 
 ## What this does not do
 
@@ -410,8 +430,8 @@ nothing true to put through it, and a green suite would not be evidence that
 anything renders.
 
 That is the ground *A wire format is named after what it speaks* in
-`decisions.md` declined a Chat-Completions row on --
-*"nothing needs one, and the table is built to take one the day something
-measures the need"*. This proposal is the table. What it buys is that the day
+`decisions.md` declined a Chat-Completions row on -- *"Nothing needs one"*, and
+*"the table is built to take one the day something measures the need"*. This
+proposal is the table. What it buys is that the day
 something measures the need, five hazards that cost more to find than to fix
 are already found.
