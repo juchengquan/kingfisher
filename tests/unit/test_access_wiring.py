@@ -274,7 +274,6 @@ def reported(kf, source_ids, name: str):
     return withheld_by_kind(
         kf._effective_grants(held_names),
         kf.cfg,
-        session,
         graph,
         kf.catalogue,
         agent=kf.agent_named("surveyor", source_ids=held_names),
@@ -313,7 +312,6 @@ def test_the_report_still_names_a_builtin_the_request_declined(policied):
         withheld_by_kind(
             grants,
             kf.cfg,
-            session,
             graph,
             kf.catalogue,
             agent=kf.agent_named("surveyor", source_ids=held),

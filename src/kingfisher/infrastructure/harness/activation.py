@@ -6,11 +6,9 @@ from typing import TYPE_CHECKING, Any
 
 from deepagents import FilesystemPermission
 
-from kingfisher import layout
 from kingfisher.config import ConfigError
 from kingfisher.domain.capabilities import ALL, Capabilities, refuse_unoffered
 from kingfisher.infrastructure.catalogue import Definitions
-from kingfisher.infrastructure.catalogue.layered import for_session
 from kingfisher.infrastructure.harness.backend import bundled_skills_route
 from kingfisher.infrastructure.harness.subagents import indistinct, model_for
 from kingfisher.kinds.skills import registry as skill_registry
@@ -21,36 +19,27 @@ from kingfisher.layout import SKILLS_ROUTE
 
 if TYPE_CHECKING:
     from collections.abc import Mapping
-    from pathlib import Path
 
     from kingfisher.config import Config
 
 
-def available_skills(
-    cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
-) -> tuple[str, ...]:
-    """Every skill this request may activate: the catalogue, plus its own."""
-    return activatable_skills(cfg, session_dir, catalogue=catalogue).names
+def available_skills(cfg: Config, *, catalogue: Definitions | None = None) -> tuple[str, ...]:
+    """Every skill this request may activate."""
+    return activatable_skills(cfg, catalogue=catalogue).names
 
 
 def activatable_skills(
-    cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
+    cfg: Config, *, catalogue: Definitions | None = None
 ) -> SkillRegistry:
-    """One registry for both halves: the catalogue, plus this request's own."""
-    resolved = catalogue or Definitions.from_config(cfg)
-    uploaded = (
-        None
-        if session_dir is None
-        else session_dir / layout.SKILLS / layout.UPLOADED_SKILL_DIR
-    )
-    return resolved.registry.merged(skill_registry.read_uploaded(uploaded))
+    """The registry that decides which skills the agent is told about."""
+    return (catalogue or Definitions.from_config(cfg)).registry
 
 
 def defined_subagents(
-    cfg: Config, session_dir: Path | None, *, catalogue: Definitions | None = None
+    cfg: Config, *, catalogue: Definitions | None = None
 ) -> dict[str, SubagentSpec]:
-    """Every subagent this request may activate: the catalogue, plus its own."""
-    return dict(for_session(catalogue or Definitions.from_config(cfg), session_dir).subagents.specs)
+    """Every subagent this request may activate."""
+    return dict((catalogue or Definitions.from_config(cfg)).subagents.specs)
 
 
 def unrunnable_delegates(
@@ -58,7 +47,7 @@ def unrunnable_delegates(
 ) -> tuple[tuple[str, str], ...]:
     """`(name, why)` for each defined delegate this deployment cannot run."""
     found: list[tuple[str, str]] = []
-    for name, spec in sorted(defined_subagents(cfg, None, catalogue=catalogue).items()):
+    for name, spec in sorted(defined_subagents(cfg, catalogue=catalogue).items()):
         try:
             model = model_for(spec)
             if model is not None:
@@ -71,7 +60,6 @@ def unrunnable_delegates(
 def indistinct_delegates(
     cfg: Config,
     capabilities: Capabilities,
-    session_dir: Path | None,
     *,
     catalogue: Definitions | None = None,
     run_on: Mapping[str, RunOn] | None = None,
@@ -81,7 +69,7 @@ def indistinct_delegates(
     """
     if capabilities.subagents is None:
         return ()
-    defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
+    defined = defined_subagents(cfg, catalogue=catalogue)
     activated = tuple(defined) if capabilities.subagents == ALL else capabilities.subagents
     wanted = run_on or {}
 
@@ -154,18 +142,15 @@ def _private_skills(
 def _activated_subagents(
     cfg: Config,
     capabilities: Capabilities,
-    session_dir: Path | None,
     *,
     catalogue: Definitions | None = None,
 ) -> tuple[Mapping[str, Any], tuple[str, ...]]:
     """Which delegates this request wired, and every definition available."""
     if capabilities.subagents is None:
         return {}, ()
-    defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
-    # A property of the definitions, not of this request, so it is asked once
-    # the merged set is known and before anything reads a single spec. An
-    # upload can break it by shadowing a catalogue name, which is why it cannot
-    # be checked at seed time and left at that.
+    defined = defined_subagents(cfg, catalogue=catalogue)
+    # A property of the definitions rather than of this request, and asked here
+    # because here is where the set is known -- before anything reads a spec.
     refuse_cycles(defined)
     # There is deliberately *no* matching check that every definition names a
     # runnable model. Helper depth is structural -- a catalogue asking for two

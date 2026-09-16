@@ -131,12 +131,12 @@ def test_the_agent_reads_the_supplied_catalogue_and_not_the_workspace(tmp_path, 
     )
     roots = _staged(tmp_path / "staged", skill="staged-only", subagent=SUBAGENT, tool=TOOL)
 
-    assert available_skills(cfg, None, catalogue=roots) == ("staged-only",)
-    assert tuple(defined_subagents(cfg, None, catalogue=roots)) == ("reviewer",)
+    assert available_skills(cfg, catalogue=roots) == ("staged-only",)
+    assert tuple(defined_subagents(cfg, catalogue=roots)) == ("reviewer",)
     assert workspace_tool_names(cfg, catalogue=roots) == ("elsewhere",)
 
     # And the configured one is still what is read when nothing is supplied.
-    assert available_skills(cfg, None) == ("in-the-workspace",)
+    assert available_skills(cfg) == ("in-the-workspace",)
 
 
 def test_the_skills_route_follows_the_catalogue(tmp_path, cfg, session_dir):
@@ -312,7 +312,7 @@ def test_the_agent_it_builds_offers_the_staged_definitions(tmp_path, cfg, sessio
     )
 
     assert graph is not None
-    assert available_skills(enabled, session_dir, catalogue=roots) == ("staged-only",)
+    assert available_skills(enabled, catalogue=roots) == ("staged-only",)
 
 
 # -- the type itself ------------------------------------------------------
@@ -357,16 +357,13 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
     turn paid for nothing. Measured before building: 4ms per turn at five of
     each kind, 81ms at a hundred.
 
-    Counted through the modules that actually bind the name, not just the store's.
-    Two do, and they are the two halves this is about: `catalogue.py` builds the
-    deployment's repository once, and `layered.py` builds the session's per turn.
-    Patching only one measured nothing and reported a clean zero, which is what this
-    originally did.
+    Counted through the module that binds the name rather than the store's own:
+    patching the store measured nothing and reported a clean zero, which is what
+    this originally did.
     """
     from functools import cached_property
 
     from kingfisher.infrastructure import catalogue as catalogue_module
-    from kingfisher.infrastructure.catalogue import layered as layered_module
     from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
     from tests.unit.test_run import StubAgent
 
@@ -385,7 +382,6 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
             return LocalSubagentRepository(self.root).specs
 
     monkeypatch.setattr(catalogue_module, "LocalSubagentRepository", Counting)
-    monkeypatch.setattr(layered_module, "LocalSubagentRepository", Counting)
 
     service = Kingfisher(cfg, graph=StubAgent("ok"))
     at_construction = len(reads)
@@ -393,9 +389,8 @@ def test_the_catalogue_reads_each_kind_once_not_once_per_turn(cfg, monkeypatch):
         service.run(Request("go"))
 
     assert at_construction == 1, "the catalogue was not read when the service was wired"
-    # One per turn remains, and it is the session's own uploads -- those arrive
-    # per request and cannot be read in advance.
-    assert len(reads) - at_construction == 3
+    # And not again: a turn reads no definitions of its own.
+    assert len(reads) == at_construction
     assert all("sessions" in str(d) for d in reads[at_construction:])
 
 
@@ -483,7 +478,7 @@ def test_the_agent_is_built_from_a_supplied_repository(cfg, session_dir):
         Definitions.from_config(cfg), subagents=InMemorySubagents({"ghost": _spec("ghost")})
     )
 
-    defined = defined_subagents(cfg, session_dir, catalogue=catalogue)
+    defined = defined_subagents(cfg, catalogue=catalogue)
 
     assert "ghost" in defined
     assert defined["ghost"].system_prompt == "You are supplied."

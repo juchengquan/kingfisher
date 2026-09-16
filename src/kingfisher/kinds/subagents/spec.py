@@ -64,8 +64,8 @@ class SubagentSpec:
     #: it in a context whose narrowness is the reason to delegate at all.
     skills: Selection = None
     #: Middleware this delegate runs with, by name, from a registry the
-    #: deployment supplies. A name here selects *code*, which is why it is the
-    #: one field never widened for an uploaded definition.
+    #: deployment supplies. A name here selects *code* the deployment wrote,
+    #: which is why a request may narrow it and never add to it.
     middlewares: Selection = None
     #: What each `middlewares:` entry wrote under `settings:`, for the entries that wrote
     #: one. Keyed by name and kept beside them, the way `tool_sources` sits beside

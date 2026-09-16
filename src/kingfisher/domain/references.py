@@ -5,15 +5,6 @@ from __future__ import annotations
 from pathlib import Path, PurePosixPath, PureWindowsPath
 
 
-class UnknownReferenceError(ValueError):
-    """A store has no such reference.
-
-    Distinct from `FileNotFoundError` on purpose: a bare one cannot be told from
-    the deployment's own disk being wrong, which turns a caller naming something
-    that is not there into an operator's problem.
-    """
-
-
 class UnsafeReferenceError(ValueError):
     """A reference names somewhere other than where it was allowed to."""
 

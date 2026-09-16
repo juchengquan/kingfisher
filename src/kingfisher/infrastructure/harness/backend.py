@@ -34,8 +34,6 @@ from kingfisher.layout import (
     SESSION_DIRS,
     SESSION_PLUMBING,
     SKILLS_ROUTE,
-    UPLOADED_SKILLS,
-    UPLOADED_SKILLS_ROUTE,
     routed_paths,
 )
 
@@ -192,11 +190,11 @@ def _once(result: Any, *, key: Callable[[Any], Any]) -> Any:
 class WorkspaceScopedBackend(CompositeBackend):
     """A `CompositeBackend` that refuses host paths instead of re-rooting them.
 
-    `glob` and `grep` are deduplicated. They merge every backend's answer, and three
-    of the routes here point *inside* the default backend's own root -- `/data`,
-    `/memory`, `/skills/uploaded` are all real directories under the session -- so
-    each saw the same file twice: measured, one file supplied with `--data` came back
-    as two matches with one path between them, on every pattern.
+    `glob` and `grep` are deduplicated. They merge every backend's answer, and two
+    of the routes here point *inside* the default backend's own root -- `/data` and
+    `/memory` are real directories under the session -- so each saw the same file
+    twice: measured, one file supplied with `--data` came back as two matches with
+    one path between them, on every pattern.
     """
 
     def glob(self, pattern: str, path: str | None = None) -> Any:
@@ -256,13 +254,10 @@ def bundled_skills_route(where: str) -> str:
 def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
     """Every place the agent should look for skills, labelled."""
     if RESERVED_SKILL_FOLDER in folders:
-        # Refused rather than skipped, which is the other half of the `uploaded`
-        # decision below and deliberately not the same answer. `uploaded` is
-        # skipped because a session's route existed first and a catalogue folder
-        # of that name is merely confusing; `subagents/` under the skills root
-        # would shadow *every* bundle at once, so the skills of every delegate
-        # that has any would silently stop being found. A folder that vanishes
-        # is the failure this package keeps naming, and the fix is one rename.
+        # Refused rather than skipped: `subagents/` under the skills root would
+        # shadow *every* bundle at once, so the skills of every delegate that has
+        # any would silently stop being found. A folder that vanishes is the
+        # failure this package keeps naming, and the fix is one rename.
         msg = (
             f"the skills catalogue has a folder called {RESERVED_SKILL_FOLDER!r}, "
             f"which is where each subagent's own skills are mounted "
@@ -270,17 +265,10 @@ def skills_sources(folders: tuple[str, ...] = ()) -> list[tuple[str, str]]:
             "every bundled skill in the deployment"
         )
         raise ConfigError(msg)
-    catalogue = [(SKILLS_ROUTE, "catalogue")]
-    catalogue += [
-        (f"{SKILLS_ROUTE}{name}/", name)
-        for name in folders
-        # `/skills/uploaded/` is already a route of its own, and a catalogue
-        # folder of that name would mount over it. Skipped rather than renamed:
-        # a folder called `uploaded` in a shared catalogue is confusing enough
-        # without it also silently becoming the session's.
-        if f"{SKILLS_ROUTE}{name}/" != UPLOADED_SKILLS_ROUTE
+    return [
+        (SKILLS_ROUTE, "catalogue"),
+        *((f"{SKILLS_ROUTE}{name}/", name) for name in folders),
     ]
-    return [*catalogue, (UPLOADED_SKILLS_ROUTE, "uploaded")]
 
 
 #: The one memory file the agent is told to read. `/memory/` is a route so a
@@ -412,7 +400,6 @@ def default_backend(
     skills_dir = catalogue_root(skills)
 
     _require_layout(session_dir)
-    uploaded = session_dir / UPLOADED_SKILLS
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
     # already refused by `resolve_definitions` if it did not, so this only ever
     # creates a derived one -- and stays here for the callers that build a
@@ -457,7 +444,6 @@ def default_backend(
         # the composite routes -- so the mount is what makes the refusal legal,
         # not a way in.
         HARNESS_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / HARNESS)),
-        UPLOADED_SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(uploaded)),
     }
     missing = [path for path in routed_paths() if path not in backing]
     if missing:  # pragma: no cover -- a table edit, caught by its own test

@@ -84,6 +84,25 @@ def test_no_writable_rule_has_the_harness_underneath_it(sandlock, tmp_path):
         assert not harness.is_relative_to(granted), f"{granted} re-opens {HARNESS}"
 
 
+def test_the_shell_may_write_exactly_these_places_in_a_session(sandlock, tmp_path):
+    """Written out one by one rather than derived from the layout tables, which is the
+    point of it: a directory becoming writable to the shell has to be written here too.
+
+    `skills/uploaded` was on this list for as long as a request could send skills of its
+    own, and an agent able to write a skill can rewrite the instructions it is about to
+    follow. Nothing fills that directory now, so nothing grants it either -- and a
+    reader comparing the two lists is what catches the next one.
+    """
+    session = tmp_path / "sessions" / "s1"
+
+    policy = a_policy(tmp_path)
+
+    assert set(policy.fs_writable) == {
+        str(session / name)
+        for name in ("data", "derived", "memory", "runs", ".home", ".tmp")
+    }
+
+
 def test_the_session_stays_readable_even_though_it_is_not_writable(sandlock, tmp_path):
     """The shell starts in the session directory. A fence that could not list it would
     be swapped out for no fence at all, which is the expensive way to lose one.

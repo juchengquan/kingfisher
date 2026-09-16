@@ -73,9 +73,9 @@ def _elsewhere(cfg, url: str):
     )
 
 
-def _found(cfg, session_dir, names, **kwargs):
+def _found(cfg, names, **kwargs):
     return dict(
-        indistinct_delegates(cfg, Capabilities(subagents=names), session_dir, **kwargs)
+        indistinct_delegates(cfg, Capabilities(subagents=names), **kwargs)
     )
 
 
@@ -93,7 +93,7 @@ def test_a_second_endpoint_pointing_at_the_same_host_is_reported(cfg, session_di
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
 
-    found = _found(same, session_dir, ("second-opinion",))
+    found = _found(same, ("second-opinion",))
 
     assert "second-opinion" in found
     assert "same host" in found["second-opinion"]
@@ -109,9 +109,9 @@ def test_granting_every_delegate_reports_what_naming_them_reports(cfg, session_d
     same = _elsewhere(cfg, cfg.models.resolve()[1].base_url.replace("/anthropic", "/v1"))
     _define(same, ASKED)
 
-    everything = _found(same, session_dir, ALL)
+    everything = _found(same, ALL)
 
-    assert everything == _found(same, session_dir, ("second-opinion",))
+    assert everything == _found(same, ("second-opinion",))
     assert "second-opinion" in everything
 
 
@@ -120,7 +120,7 @@ def test_a_second_endpoint_somewhere_else_is_not_reported(cfg, session_dir):
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
     _define(elsewhere, ASKED)
 
-    assert _found(elsewhere, session_dir, ("second-opinion",)) == {}
+    assert _found(elsewhere, ("second-opinion",)) == {}
 
 
 # -- the model turned out to be the same model -----------------------------
@@ -132,7 +132,7 @@ def test_pinning_the_deployments_own_model_is_reported(cfg, session_dir):
     """
     _define(cfg, ASKED_FOR_A_MODEL.format(model=cfg.models.default))
 
-    found = _found(cfg, session_dir, ("cheap",))
+    found = _found(cfg, ("cheap",))
 
     assert "same model as the main agent" in found["cheap"]
 
@@ -144,21 +144,21 @@ def test_pinning_a_different_model_is_not_reported(cfg, session_dir):
     elsewhere = _elsewhere(cfg, "https://api.openai.com/v1")
     _define(elsewhere, ASKED_FOR_A_MODEL.format(model="gpt-5"))
 
-    assert _found(elsewhere, session_dir, ("cheap",)) == {}
+    assert _found(elsewhere, ("cheap",)) == {}
 
 
 def test_a_different_model_on_the_same_gateway_is_reported(cfg, session_dir):
     """`cheap-model` is a different model and the same machine."""
     _define(cfg, ASKED_FOR_A_MODEL.format(model="cheap-model"))
 
-    assert "same host" in _found(cfg, session_dir, ("cheap",))["cheap"]
+    assert "same host" in _found(cfg, ("cheap",))["cheap"]
 
 
 def test_a_delegate_that_asked_for_nothing_is_never_reported(cfg, session_dir):
     """`reviewer` runs on the deployment's own model on purpose."""
     _define(cfg, ASKED_FOR_NOTHING)
 
-    assert _found(cfg, session_dir, ("reviewer",)) == {}
+    assert _found(cfg, ("reviewer",)) == {}
 
 
 def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir):
@@ -167,7 +167,7 @@ def test_a_request_that_activated_no_delegates_is_asked_nothing(cfg, session_dir
     """
     _define(cfg, ASKED)
 
-    assert indistinct_delegates(cfg, Capabilities(subagents=None), session_dir) == ()
+    assert indistinct_delegates(cfg, Capabilities(subagents=None)) == ()
 
 
 # -- an override counts as asking too --------------------------------------
@@ -179,7 +179,6 @@ def test_an_override_onto_the_deployments_own_model_is_reported(cfg, session_dir
 
     found = _found(
         cfg,
-        session_dir,
         ("cheap",),
         run_on={"cheap": RunOn(cfg.models.default)},
     )
@@ -296,4 +295,4 @@ def test_naming_the_same_model_is_reported_and_never_refused(cfg, session_dir):
     )
 
     assert model_for(spec) == cfg.models.default
-    assert "cheap" in _found(cfg, session_dir, ("cheap",))
+    assert "cheap" in _found(cfg, ("cheap",))

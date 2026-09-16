@@ -450,7 +450,7 @@ def test_the_catalogue_can_live_outside_the_workspace(cfg, session_dir, tmp_path
     assert str(backend.routes["/skills/"].cwd) == str(catalogue.resolve())
     assert backend.read("/skills/shared/SKILL.md").error is None
     # Offered to the agent without any copy existing in the workspace.
-    assert available_skills(relocated, None) == ("shared",)
+    assert available_skills(relocated) == ("shared",)
     assert not (relocated.workspace / "skills" / "shared").exists()
 
 

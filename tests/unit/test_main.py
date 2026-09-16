@@ -233,7 +233,7 @@ def test_skills_stay_shared_across_sessions(cfg):
 
     assert (cfg.workspace / "skills" / "tabular-qa" / "SKILL.md").is_file()
     assert not (session / "skills" / "tabular-qa").exists()
-    assert list((session / "skills" / "uploaded").iterdir()) == []
+    assert not (session / "skills").exists()
 
 
 def _unused(cfg, tmp_path):

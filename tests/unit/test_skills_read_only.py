@@ -99,25 +99,6 @@ def test_an_edit_is_refused_as_well_as_a_write(cfg, session_dir):
     assert "Do the thing" in (cfg.skills_dir / "demo" / "SKILL.md").read_text(encoding="utf-8")
 
 
-def test_a_sessions_own_uploaded_skills_are_read_only_too(cfg, session_dir):
-    """`/skills/uploaded/` is the session's half rather than the deployment's, and it is
-    covered by the same rule on purpose: an agent able to rewrite a skill kept
-    there could rewrite the instructions it was about to follow.
-    """
-    _catalogue(cfg)
-    uploaded = session_dir / "skills" / "uploaded" / "mine"
-    uploaded.mkdir(parents=True, exist_ok=True)
-    (uploaded / "SKILL.md").write_text(SKILL, encoding="utf-8")
-
-    said = _drive(
-        cfg, session_dir, "write_file",
-        {"file_path": "/skills/uploaded/mine/SKILL.md", "content": "tampered"},
-    )
-
-    assert "permission denied" in said.lower()
-    assert (uploaded / "SKILL.md").read_text(encoding="utf-8") == SKILL
-
-
 def test_reading_a_skill_still_works(cfg, session_dir):
     """The point is read-only, not unreachable."""
     _catalogue(cfg)

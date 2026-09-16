@@ -358,7 +358,7 @@ class Kingfisher(Sessions, Disposal):
             # times at every startup.
             kinds = (
                 ("agent", self.catalogue.agents.specs),
-                ("subagent", defined_subagents(self.cfg, None, catalogue=self.catalogue)),
+                ("subagent", defined_subagents(self.cfg, catalogue=self.catalogue)),
             )
             # Refusals first: a typo makes a line both undeclared and narrowing,
             # and reported as a narrowing it would explain the wrong fault.
@@ -651,7 +651,6 @@ class Kingfisher(Sessions, Disposal):
             withheld=withheld_by_kind(
                 allowed,
                 cfg,
-                session.directory,
                 graph,
                 self.catalogue,
                 # Only where a vocabulary is in force. With none, `held` is
@@ -670,7 +669,6 @@ class Kingfisher(Sessions, Disposal):
             indistinct=indistinct_delegates(
                 cfg,
                 allowed,
-                session.directory,
                 catalogue=self.catalogue,
                 run_on=request.run_on,
             ),

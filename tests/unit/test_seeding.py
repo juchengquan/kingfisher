@@ -42,7 +42,7 @@ def test_a_seeded_skill_is_discovered(cfg):
     """Seeding puts a skill where discovery looks."""
     seeding.seed(cfg, FIXTURE)
 
-    assert "probe-skill" in available_skills(cfg, None)
+    assert "probe-skill" in available_skills(cfg)
 
 
 def _materialise(readme: str, cfg) -> None:
