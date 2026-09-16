@@ -1168,6 +1168,16 @@ neither was set anywhere -- `.env.example` had them commented out. *(2026-09-08,
 in four slices. `docs/design/2026-09-08-a-session-owns-what-it-costs.md` argued
 it and is removed.)*
 
+*Not set anywhere, but still read in one place.* The one generated file state held
+was the smoke report the integration driver copied there, and the driver went on
+reading `cfg.state_dir` after the field was gone -- on the last lines of a smoke
+run, which only a live model call reaches, in a tree where `ty` ignores unresolved
+attributes under `tests/**`. So every smoke run finished its turn and then raised.
+The copy was dropped rather than moved: nothing read it, the run already prints
+where the report is, and the pass/fail signal was always `check_result`.
+`test_a_smoke_run_reaches_its_end` drives those lines without a model.
+*(2026-09-16.)*
+
 **Containerise and use a sized tmpfs; do not adopt mirage for the filesystem.**
 That was *Nothing at rest*'s closing recommendation and it is what shipped. A
 tmpfs inside a container gives memory-backed files that are *real paths* -- any
