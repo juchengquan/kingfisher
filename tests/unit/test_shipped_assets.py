@@ -38,6 +38,7 @@ def test_every_preset_subagent_parses(shipped):
         "reviewer",
         "extractor",
         "profiler",
+        "timestamps",
         "redactor",
         "show-your-work",
         "sweeper",

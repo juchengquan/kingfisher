@@ -94,6 +94,21 @@ class SubagentSpec:
     #: a definition that has written this is refused once the two stop matching. The
     #: match is exact: a subset would let through the addition it exists to surface.
     bundle: Mapping[str, tuple[str, ...]] = field(default_factory=dict)
+    #: The same two halves, brought rather than described: tool objects, and the
+    #: directory a package resolved for its own skills. Written under `bundle:` like
+    #: the claim above and kept in a field of its own, because the two are answers to
+    #: one question and not one answer -- a claim is checked against a folder, and this
+    #: *is* the folder for a definition that has none.
+    #:
+    #: Derived, because no document writes a key called `carried`. A YAML definition
+    #: could not: the objects do not survive being written down, which is the whole
+    #: reason a bundle is a folder there.
+    #:
+    #: Empty for every definition that owns a folder, and `__post_init__` refuses a
+    #: spec holding both -- a delegate whose tools came from two places would have no
+    #: rule saying which wins, and `miscounted` would check the claim against the
+    #: wrong half.
+    carried: Mapping[str, Any] = field(default_factory=dict, metadata={"derived": True})
     #: The model this delegate runs, out of what the catalogue defines. `None` means
     #: whatever summoned it. Naming one decides where the prompt goes and whose
     #: credentials pay -- the endpoint follows from the model -- which is why it is
@@ -128,8 +143,15 @@ class SubagentSpec:
         )
 
     def __post_init__(self) -> None:
-        """Exactly one of `system_prompt` and `build`."""
+        """Exactly one of `system_prompt` and `build`, and never two kinds of bundle."""
         if bool(self.system_prompt) == (self.build is not None):
             written = "both a system_prompt and a build" if self.system_prompt else "neither"
             msg = f"subagent {self.name!r} has {written}; a delegate is one or the other"
+            raise ValueError(msg)
+        if self.bundle and self.carried:
+            msg = (
+                f"subagent {self.name!r} both describes a folder and carries a bundle; "
+                "a delegate owns one or the other, since a claim is checked against a "
+                "folder and carried tools are the folder"
+            )
             raise ValueError(msg)

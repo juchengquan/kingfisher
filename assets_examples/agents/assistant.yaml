@@ -20,7 +20,11 @@ skills: ["*"]
 #
 # A delegate that names helpers of its own brings them with it: grant the
 # delegate and its helpers arrive, without the agent listing them here.
-subagents: [extractor, reviewer, profiler]
+# `timestamps` is the portable one, and it is granted here exactly like the
+# others -- that is the whole of what "atomic" costs a caller. What it brought
+# with it arrives too, and cannot be named separately: its tool is in no
+# catalogue and no agent can ask for it alone.
+subagents: [extractor, reviewer, profiler, timestamps]
 # Every example middleware this repository ships, each by name. Named rather
 # than `["*"]`: a star takes whatever the workspace offers, so on a seeded one it
 # would also take anything added later for another agent, and a name says
