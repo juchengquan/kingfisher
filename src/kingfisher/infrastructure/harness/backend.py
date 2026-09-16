@@ -233,7 +233,7 @@ class WorkspaceScopedBackend(CompositeBackend):
 def _bundles_with_skills(catalogue: Definitions) -> tuple[Any, ...]:
     """Every bundle that has skills to mount, or none."""
     try:
-        bundles = getattr(catalogue.subagents, "bundles", None) or {}
+        bundles = catalogue.subagents.bundles
     except SubagentError:
         # A catalogue that will not parse has no bundles to mount, and this is
         # not the place that says so. `--list` exists to be run *because*

@@ -466,8 +466,7 @@ class Kingfisher(Sessions, Disposal):
         """
         if name is None:
             return
-        documents = getattr(self.catalogue.agents, "documents", {})
-        if (text := documents.get(name)) is not None:
+        if (text := self.catalogue.agents.documents.get(name)) is not None:
             remember_agent(session_dir, text)
 
     def _agent_for(

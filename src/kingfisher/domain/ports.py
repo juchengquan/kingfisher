@@ -15,11 +15,23 @@ from kingfisher.kinds.tools.spec import Found
 
 @runtime_checkable
 class AssetRepository(Protocol):
-    """Something a deployment's definitions can be read from."""
+    """Something a deployment's definitions can be read from.
+
+    Internal, and not a port a deployment replaces: definitions kept elsewhere are
+    staged into directories, and these are what kingfisher builds from them. So each
+    repository below declares everything the rest of kingfisher reads from it, and a
+    member a repository may not have is declared with what it answers instead -- a
+    `getattr` with a default would answer nothing, silently, where it should fail.
+    """
 
     @property
     def names(self) -> tuple[str, ...]:
         """Every definition held, by the name a request grants it, in a stable order."""
+        ...
+
+    @property
+    def root(self) -> Path | None:
+        """The directory these are read from, or `None` for a repository with none."""
         ...
 
 
@@ -29,6 +41,11 @@ class SkillRepository(AssetRepository, Protocol):
 
     def files(self, name: str) -> Mapping[str, str]:
         """The files making up one skill, keyed by path relative to the skill."""
+        ...
+
+    @property
+    def misplaced(self) -> tuple[str, ...]:
+        """Skills written where deepagents will not look for them, for a listing."""
         ...
 
 
@@ -41,6 +58,16 @@ class AgentRepository(AssetRepository, Protocol):
         """Every agent defined here, by name."""
         ...
 
+    @property
+    def documents(self) -> Mapping[str, str]:
+        """The text each agent was read from, which is what a session is pinned to."""
+        ...
+
+    @property
+    def sources(self) -> Mapping[str, str]:
+        """Where each agent is defined, by name."""
+        ...
+
 
 @runtime_checkable
 class SubagentRepository(AssetRepository, Protocol):
@@ -50,6 +77,50 @@ class SubagentRepository(AssetRepository, Protocol):
     @property
     def specs(self) -> Mapping[str, SubagentSpec]:
         """Every subagent defined here, by name."""
+        ...
+
+    @property
+    def bundles(self) -> Mapping[str, Bundle]:
+        """What each subagent brings of its own, for the ones that bring anything."""
+        ...
+
+    @property
+    def sources(self) -> Mapping[str, str]:
+        """Where each subagent is defined, by name."""
+        ...
+
+    @property
+    def orphaned_assets(self) -> tuple[str, ...]:
+        """Folders holding a bundle's directories that no definition is named for."""
+        ...
+
+
+class Bundle(Protocol):
+    """One subagent's own tools and skills: a folder it is named after, or what it
+    carried.
+
+    Described here rather than imported, because the one implementation is in a kind's
+    `catalogue` and the domain may name a kind's `spec` and nothing below it.
+    """
+
+    @property
+    def where(self) -> str:
+        """The folder, relative to the catalogue, or a label for a carried bundle."""
+        ...
+
+    @property
+    def root(self) -> Path | None:
+        """The folder on this host, or `None` for a bundle that was carried."""
+        ...
+
+    @property
+    def tools(self) -> ToolRepository | None:
+        """This subagent's own tools, when it has any."""
+        ...
+
+    @property
+    def skills(self) -> Path | None:
+        """This subagent's skill directory, when it has one."""
         ...
 
 

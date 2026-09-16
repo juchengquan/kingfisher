@@ -130,6 +130,10 @@ class NoMiddleware:
     def names(self) -> tuple[str, ...]:
         return ()
 
+    @property
+    def root(self) -> None:
+        return None
+
 
 def _refuse_unless_buildable(entry: Any, *, where: str) -> None:
     """A class, and one deepagents will run.

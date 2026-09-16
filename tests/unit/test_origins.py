@@ -68,12 +68,12 @@ def test_a_supplied_catalogue_matching_the_configuration_is_not_an_override(cfg)
 
 
 def test_a_repository_with_no_directory_has_no_path(cfg):
-    """A store the deployment wired satisfies the port without a root, and the record
-    says so rather than inventing a folder.
+    """A repository with no directory behind it says so with a `root` of `None`, and the
+    record reports it as supplied rather than inventing a folder.
     """
 
     class Rootless:
-        pass
+        root = None
 
     catalogue = replace(Definitions.from_roots(cfg.catalogue_roots), subagents=Rootless())  # type: ignore[arg-type]
 
@@ -215,7 +215,7 @@ def test_no_value_on_the_line_contains_a_space(cfg, tmp_path):
     """
 
     class Rootless:
-        pass
+        root = None
 
     catalogue = replace(
         Definitions.from_roots(cfg.catalogue_roots),
