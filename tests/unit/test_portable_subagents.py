@@ -333,3 +333,68 @@ def test_a_carried_skills_folder_is_not_reported_as_abandoned(cfg):
 
     assert repository.bundles["surveyor"].skills == root / "assets" / "skills"
     assert repository.orphaned_assets == ()
+
+
+# -- visible, not grantable --------------------------------------------------
+
+
+def test_the_listing_says_a_carried_tool_is_not_in_this_workspace(
+    workspace_with_presets,
+):
+    """Both shapes print their private tools the same way, and the names alone do not
+    say where the code is. A tool installed by pip that reads exactly like a file in
+    this workspace is the thing an operator cannot audit -- driven against the shipped
+    catalogue rather than a fixture, so it is the output a reader actually gets.
+    """
+    from kingfisher.application.inventory import inventory
+    from kingfisher.presentation.cli.listing import _catalogue
+
+    printed = list(_catalogue(inventory(workspace_with_presets)))
+
+    assert "      iso_timestamp  [private tool, carried]" in printed
+    assert "      iso-8601  [private skill, carried]" in printed
+    # The folder-backed one is unmarked, which is the half that makes the mark mean
+    # something: mark both and the word says only that a bundle exists.
+    assert "      mask_secrets  [private tool]" in printed
+
+
+def test_doctor_names_what_arrived_with_a_definition(workspace_with_presets):
+    """`ok` rather than a warning -- installing a package is a decision, not a
+    defect -- but said at all, because a carried bundle's tools run in this sandbox
+    on this deployment's credentials and are files nobody here reviewed.
+    """
+    from kingfisher.presentation.cli.health import examine
+
+    said = [
+        check
+        for check in examine(workspace_with_presets)
+        if check.name == "delegate tools" and "carried" in check.detail
+    ]
+
+    assert [check.verdict for check in said] == ["ok"]
+    assert "timestamps" in said[0].detail
+
+
+def test_carrying_is_read_off_the_backing_rather_than_the_file_extension(cfg):
+    """A `.py` under `subagents/` may own a folder like any document, so a listing
+    that decided this by how a definition was written would call a compiled delegate
+    with an ordinary bundle 'carried' and mislead about where its tools are.
+    """
+    from kingfisher.application.inventory import inventory
+
+    root = cfg.workspace / "subagents" / "surveyor"
+    root.mkdir(parents=True, exist_ok=True)
+    (root / "tools").mkdir(exist_ok=True)
+    (root / "tools" / "probe.py").write_text(
+        TOOL.format(name="probe", answer="from the folder"), encoding="utf-8"
+    )
+    (root / "surveyor.py").write_text(
+        "SUBAGENTS = [{'name': 'surveyor', 'description': 'd', "
+        "'system_prompt': 'Go.'}]\n",
+        encoding="utf-8",
+    )
+
+    found = inventory(cfg)
+
+    assert found.bundled_tools["surveyor"] == ("probe",)
+    assert found.carried_bundles == ()

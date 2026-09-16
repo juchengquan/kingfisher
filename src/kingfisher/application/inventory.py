@@ -125,6 +125,12 @@ class Inventory:
     #: gets its own and the shared one never reaches it, and nothing else in
     #: this output would say so.
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
+    #: Delegates whose bundle arrived with the definition rather than sitting in a
+    #: folder under the catalogue. What that changes for a reader is where the code
+    #: is: a folder's tools are files in this workspace, and a carried bundle's were
+    #: installed -- so the names below print the same and one set is reviewable here
+    #: while the other is not.
+    carried_bundles: tuple[str, ...] = ()
     #: A bundle this deployment cannot read: tools that will not import, or a
     #: folder that is one subagent's and holds two definitions. Its own field
     #: rather than `tools_error`, so a listing says which delegate to go and open.
@@ -205,6 +211,7 @@ def _bundled(
     Mapping[str, tuple[str, ...]],
     str | None,
     tuple[str, ...],
+    tuple[str, ...],
 ]:
     """What each subagent brings itself, for a listing: tools, skills, shadowed.
 
@@ -217,6 +224,7 @@ def _bundled(
     shadowed: Mapping[str, tuple[str, ...]] = _NO_NAMES
     error: str | None = None
     orphans: tuple[str, ...] = ()
+    carried: tuple[str, ...] = ()
     try:
         # Imported here for the reason `tools` is: a listing is where someone
         # goes *because* something is broken, so the error is carried and
@@ -242,7 +250,7 @@ def _bundled(
         # the same shape as a workspace tool wearing a built-in's name, found the
         # same way, by a rule that drove the refusal rather than reading about it.
         error = str(exc)
-        return tools, skills, shadowed, error, orphans
+        return tools, skills, shadowed, error, orphans, carried
 
     # Inside no `try` of its own, and that is the point: it reads the same bundles,
     # so the only way it raises is a way the block above has already returned on.
@@ -256,7 +264,12 @@ def _bundled(
     # and nothing else, so a repository that is not the local one answers nothing
     # here rather than raising.
     orphans = tuple(getattr(resolved.subagents, "orphaned_assets", ()))
-    return tools, skills, shadowed, error, orphans
+    # Read off the same bundles, and asked of the backing rather than of the file
+    # extension: a `.py` under `subagents/` may own a folder like any document, so
+    # the honest question is whether there is a root, not how it was written.
+    bundles = getattr(resolved.subagents, "bundles", None) or {}
+    carried = tuple(sorted(name for name, one in bundles.items() if one.root is None))
+    return tools, skills, shadowed, error, orphans, carried
 
 
 def _moved_tools(resolved: Definitions) -> Mapping[str, tuple[str, ...]]:
@@ -502,10 +515,10 @@ def inventory(
     except SubagentError as exc:
         subagents_error = str(exc)
 
-    bundled_tools, bundled_skills, shadowed, bundles_error, orphaned_assets = (
+    bundled_tools, bundled_skills, shadowed, bundles_error, orphaned_assets, carried = (
         _bundled(resolved)
         if subagents_error is None
-        else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, ())
+        else (_NO_NAMES, _NO_NAMES, _NO_NAMES, None, (), ())
     )
 
     agents: Mapping[str, str] = _NOTHING
@@ -576,6 +589,7 @@ def inventory(
             }
         ),
         shadowed=shadowed,
+        carried_bundles=carried,
         bundles_error=bundles_error,
         orphaned_assets=orphaned_assets,
         compiled_subagents=compiled_subagents,
