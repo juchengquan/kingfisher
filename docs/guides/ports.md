@@ -220,14 +220,18 @@ the shell backend is also the filesystem for every unrouted path, so handing ove
 
 | Port | What it is | Replace it when |
 |---|---|---|
-| `SkillRepository` | Skills: names, and the files each is made of | Your catalogue is not a directory |
-| `AgentRepository`, `SubagentRepository` | Parsed definitions, by name | Same |
-| `ToolRepository` | Workspace tools, imported | Rarely — a tool is Python that gets imported, so an implementation must stage to disk first |
 | `ThreadStore` | The checkpointer, seen as "something that forgets a thread" | You keep graph state somewhere durable |
 | `SessionDirs` | The *rules* about session directories — create exclusively, mark used, list, remove | Rarely; this is a primitive, not a place |
 
 `SessionDirs` and `SessionRoot` are the two easiest to confuse. That one is the
 rules about session directories; this one is where the directory is.
+
+The definition repositories in `domain/ports.py` — one per kind, from
+`SkillRepository` to `MiddlewareRepository` — are not on this list, because they
+are not for replacing. They are what kingfisher builds from a catalogue's
+directories. Definitions kept somewhere else are staged into directories first, and
+the `KINGFISHER_*_DIR` settings in [configuration](configuration.md) say where each
+kind is read from.
 
 ## `backend` — the filesystem the agent runs against
 

@@ -423,7 +423,7 @@ def test_listing_still_survives_a_definition_that_will_not_load(cfg):
         _ = catalogue.subagents.specs
 
 
-# -- a deployment's own repository ----------------------------------------
+# -- a repository with no directory behind it ----------------------------
 
 
 @dataclass(frozen=True)
@@ -439,6 +439,25 @@ class InMemorySubagents:
     @property
     def specs(self):
         return self.held
+
+    # Nothing to say about a folder, and said rather than left off: a member the
+    # port declares is read without a default, so leaving one off is an error at
+    # the first reader instead of an empty answer.
+    @property
+    def root(self):
+        return None
+
+    @property
+    def bundles(self):
+        return {}
+
+    @property
+    def sources(self):
+        return {}
+
+    @property
+    def orphaned_assets(self):
+        return ()
 
 
 def _spec(name):
@@ -498,6 +517,14 @@ def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, ses
             if name != "imaginary":
                 raise KeyError(name)
             return {"SKILL.md": "---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
+
+        @property
+        def root(self):
+            return None
+
+        @property
+        def misplaced(self):
+            return ()
 
     catalogue = replace(Definitions.from_config(cfg), skills=Nowhere())
 

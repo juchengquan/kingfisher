@@ -260,14 +260,11 @@ def _bundled(
             for name, registry in resolved.bundled_skills.items()
         }
     )
-    # `getattr` for the reason `bundled_tools` uses one: the port declares `specs`
-    # and nothing else, so a repository that is not the local one answers nothing
-    # here rather than raising.
-    orphans = tuple(getattr(resolved.subagents, "orphaned_assets", ()))
+    orphans = tuple(resolved.subagents.orphaned_assets)
     # Read off the same bundles, and asked of the backing rather than of the file
     # extension: a `.py` under `subagents/` may own a folder like any document, so
     # the honest question is whether there is a root, not how it was written.
-    bundles = getattr(resolved.subagents, "bundles", None) or {}
+    bundles = resolved.subagents.bundles
     carried = tuple(sorted(name for name, one in bundles.items() if one.root is None))
     return tools, skills, shadowed, error, orphans, carried
 
@@ -509,9 +506,7 @@ def inventory(
         compiled_subagents = tuple(
             name for name, spec in specs.items() if spec.build is not None
         )
-        subagent_sources = MappingProxyType(
-            dict(getattr(resolved.subagents, "sources", {}))
-        )
+        subagent_sources = MappingProxyType(dict(resolved.subagents.sources))
     except SubagentError as exc:
         subagents_error = str(exc)
 
@@ -531,7 +526,7 @@ def inventory(
         # same reason: `sources` parses the files `specs` does.
         defined_agents = resolved.agents.specs
         agents = {name: spec.description for name, spec in defined_agents.items()}
-        agent_sources = MappingProxyType(dict(getattr(resolved.agents, "sources", {})))
+        agent_sources = MappingProxyType(dict(resolved.agents.sources))
         agent_delegates = MappingProxyType(
             {
                 name: reached(spec.subagents, resolved.subagents.specs)
@@ -568,7 +563,7 @@ def inventory(
         tools_error=tools_error,
         skills={name: registry.description(name) for name in registry.names},
         skills_unloadable=tuple(registry.unloadable),
-        skills_misplaced=tuple(getattr(resolved.skills, "misplaced", ())),
+        skills_misplaced=tuple(resolved.skills.misplaced),
         skills_misfiled=tuple(registry.misfiled),
         subagents=MappingProxyType(dict(reaching("subagents", subagents))),
         subagent_sources=subagent_sources,

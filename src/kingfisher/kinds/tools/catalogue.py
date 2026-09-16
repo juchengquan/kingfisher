@@ -129,6 +129,11 @@ class CarriedTools:
         """Tool names carried here."""
         return tuple(found.name for found in self.found)
 
+    @property
+    def root(self) -> None:
+        """No directory: these arrived as objects."""
+        return None
+
 
 @dataclass(frozen=True)
 class LocalToolRepository:

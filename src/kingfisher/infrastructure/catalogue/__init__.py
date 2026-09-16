@@ -10,6 +10,7 @@ from pathlib import Path
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import (
     AgentRepository,
+    AssetRepository,
     MiddlewareRepository,
     SkillRepository,
     SubagentRepository,
@@ -50,7 +51,7 @@ class Definitions:
     @cached_property
     def bundled_tools(self) -> Mapping[str, ToolRepository]:
         """Each subagent's own tools, by the name a grant would use."""
-        bundles = getattr(self.subagents, "bundles", None)
+        bundles = self.subagents.bundles
         if not bundles:
             return {}
         # Asked of the bundle rather than built here. What backs one is the bundle's
@@ -66,7 +67,7 @@ class Definitions:
     @cached_property
     def bundled_skills(self) -> Mapping[str, SkillRegistry]:
         """Each subagent's own skills, as deepagents will actually load them."""
-        bundles = getattr(self.subagents, "bundles", None)
+        bundles = self.subagents.bundles
         if not bundles:
             return {}
         return {
@@ -124,8 +125,7 @@ class Definitions:
         `None` for a definition that owns no folder, which is most of them and is not
         the same answer as a folder holding nothing.
         """
-        bundles = getattr(self.subagents, "bundles", None) or {}
-        bundle = bundles.get(name)
+        bundle = self.subagents.bundles.get(name)
         tools = self.bundled_tools.get(name)
         skills = self.bundled_skills.get(name)
         return (
@@ -172,21 +172,14 @@ STAGED_KINDS: tuple[str, ...] = tuple(
 )
 
 
-def _root_of(repository: object) -> Path | None:
-    """The directory behind a repository, when there is one."""
-    root = getattr(repository, "root", None)
-    return Path(root) if isinstance(root, (str, Path)) else None
-
-
-def source_of(repository: object) -> str:
+def source_of(repository: AssetRepository) -> str:
     """Where a repository's definitions live, for a message a person reads."""
-    root = _root_of(repository)
-    return str(root) if root is not None else "the catalogue"
+    return str(repository.root) if repository.root is not None else "the catalogue"
 
 
-def catalogue_root(repository: object) -> Path | None:
+def catalogue_root(repository: AssetRepository) -> Path | None:
     """The directory behind a repository, or `None` when there is not one."""
-    return _root_of(repository)
+    return repository.root
 
 
 def resolve_definitions(
@@ -224,9 +217,8 @@ def resolve_definitions(
         supplied = Definitions.from_roots(supplied)
 
     # Checked however it arrived, and only where there is something to check: a
-    # repository backed by a service has no directory that could be missing, so
-    # what it holds is its own business.
-    roots = {kind: _root_of(getattr(supplied, kind)) for kind in STAGED_KINDS}
+    # repository with a `root` of `None` has no directory that could be missing.
+    roots = {kind: catalogue_root(getattr(supplied, kind)) for kind in STAGED_KINDS}
     if absent := tuple(
         f"{kind} ({path})" for kind, path in roots.items() if path is not None and not path.is_dir()
     ):

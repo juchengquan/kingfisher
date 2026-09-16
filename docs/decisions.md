@@ -263,6 +263,28 @@ that skipped workspace files, were weighed and not taken: the first undoes half 
 two sources of one registry mean different things to one field.
 *(2026-09-16.)*
 
+**The definition repositories are internal, and each declares what is read from
+it.** `ports.md` listed four of them as ports to replace when a catalogue is not a
+directory, and nothing outside this repository could: neither `Definitions` nor the
+interfaces are exported. The repositories with no directory were test fakes, a
+delegate's carried tools, and the empty middleware default. So the interfaces declared the basics, the local repositories carried the
+rest, and thirteen reads went through `getattr` with a default -- one of them under
+a comment saying a repository that is not the local one answers nothing rather than
+raising. Two of those answers were behaviour, and running an in-memory repository
+through them showed it: without `documents` a session was never pinned to its agent,
+so a later turn asking the same session for another agent was served instead of
+refused; without `bundles` a delegate's carried tools were dropped.
+
+Settled the way `CatalogueSource` was, above: one implementation is not a seam. The
+rows left `ports.md`, every member a consumer reads is on its interface -- `root`
+too, as `Path | None`, which `CarriedTools`, `NoMiddleware` and the fakes answer --
+and `test_nothing_reads_a_repository_member_with_a_default` holds it. It exempts one
+read by name, because it is not of a repository: a `SessionStore`'s `root`, which is
+a port a deployment does implement.
+
+Left as it was: skills can still be mounted from a repository with no directory,
+through `files`, and nothing in production does that any more. *(2026-09-16.)*
+
 ## Agents and delegation
 
 **The main agent is a definition.** It used to be assembled from four places that

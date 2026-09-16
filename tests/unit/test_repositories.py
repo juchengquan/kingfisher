@@ -5,11 +5,15 @@ from __future__ import annotations
 import pytest
 
 from kingfisher.domain.ports import (
+    AgentRepository,
     AssetRepository,
+    MiddlewareRepository,
     SkillRepository,
     SubagentRepository,
     ToolRepository,
 )
+from kingfisher.kinds.agents.catalogue import LocalAgentRepository
+from kingfisher.kinds.middlewares.catalogue import LocalMiddlewareRepository
 from kingfisher.kinds.skills.catalogue import LocalSkillRepository
 from kingfisher.kinds.subagents import catalogue as store
 from kingfisher.kinds.subagents.catalogue import LocalSubagentRepository
@@ -47,12 +51,12 @@ def catalogue(tmp_path):
     return tmp_path
 
 
-# -- the shape a deployment may replace -----------------------------------
+# -- the shape everything downstream reads -----------------------------
 
 
 def test_each_local_repository_satisfies_the_port_for_its_kind(catalogue):
-    """The point of the ports: a deployment holding its definitions somewhere else
-    supplies its own, and nothing downstream knows.
+    """Every member a port declares is read without a default, so a local repository
+    missing one fails here rather than at whichever reader reaches it first.
     """
     skills = LocalSkillRepository(catalogue / "skills")
     subagents = LocalSubagentRepository(catalogue / "subagents")
@@ -61,6 +65,69 @@ def test_each_local_repository_satisfies_the_port_for_its_kind(catalogue):
     assert isinstance(skills, SkillRepository)
     assert isinstance(subagents, SubagentRepository)
     assert isinstance(tools, ToolRepository)
+    assert isinstance(LocalAgentRepository(catalogue / "agents"), AgentRepository)
+    assert isinstance(
+        LocalMiddlewareRepository(catalogue / "middlewares"), MiddlewareRepository
+    )
+
+
+#: Reads of a repository member's name that are not reads of a repository, each with
+#: what they are reading instead. The rule matches by name, so these are the collisions.
+NOT_A_REPOSITORY = {
+    ("kingfisher/application/origins.py", "root"): (
+        "a `SessionStore`, which a deployment does implement, and which may have no "
+        "directory at all"
+    ),
+}
+
+
+def test_nothing_reads_a_repository_member_with_a_default():
+    """A member read with `getattr` and a default answers nothing for a repository that
+    lacks it -- which is how an agent repository without `documents` ran without pinning
+    the session to its agent, and a subagent repository without `bundles` dropped a
+    delegate's carried tools. A member worth reading goes on the port.
+    """
+    import ast
+
+    from tests.conftest import repository_root
+
+    declared = {
+        name
+        for port in (
+            AssetRepository,
+            AgentRepository,
+            MiddlewareRepository,
+            SkillRepository,
+            SubagentRepository,
+            ToolRepository,
+        )
+        for name in vars(port)
+        if not name.startswith("_")
+    }
+    assert {"documents", "bundles", "root"} <= declared, (
+        "the ports no longer declare the members this rule is about"
+    )
+
+    src = repository_root() / "src"
+    reads = {
+        (path.relative_to(src).as_posix(), node.args[1].value)
+        for path in sorted(src.rglob("*.py"))
+        for node in ast.walk(ast.parse(path.read_text(encoding="utf-8")))
+        if isinstance(node, ast.Call)
+        and getattr(node.func, "id", None) in ("getattr", "hasattr")
+        and len(node.args) >= 2
+        and isinstance(node.args[1], ast.Constant)
+        and node.args[1].value in declared
+    }
+
+    assert not reads - set(NOT_A_REPOSITORY), (
+        f"{sorted(reads - set(NOT_A_REPOSITORY))} -- read the member directly. If a "
+        "repository may lack it, the port says what it answers instead"
+    )
+    assert set(NOT_A_REPOSITORY) <= reads, (
+        f"{sorted(set(NOT_A_REPOSITORY) - reads)} is exempted and no longer read -- "
+        "drop the entry"
+    )
 
 
 def test_all_three_answer_the_one_question_the_grant_layer_asks(catalogue):

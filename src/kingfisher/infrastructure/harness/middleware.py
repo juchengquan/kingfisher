@@ -23,6 +23,8 @@ from kingfisher.domain.capabilities import (
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from kingfisher.domain.ports import MiddlewareRepository
+
 
 #: `defaults` plus whatever the definition was allowed to write.
 #:
@@ -50,7 +52,9 @@ class ByName:
     resolve: Callable[[str, str], Any]
 
 
-def offered_middleware(registered: Mapping[str, Any], workspace: Any) -> dict[str, Any]:
+def offered_middleware(
+    registered: Mapping[str, Any], workspace: MiddlewareRepository
+) -> dict[str, Any]:
     """Both sources of middleware, as the one mapping a definition selects from.
 
     Merged once, so an agent and its delegates select from the same thing. A name
@@ -58,7 +62,7 @@ def offered_middleware(registered: Mapping[str, Any], workspace: Any) -> dict[st
     so renaming is available -- unlike a tool clash between two vendors, which is
     why that one is qualified instead.
     """
-    offered = getattr(workspace, "classes", None) or {}
+    offered = workspace.classes
     if clashing := sorted(set(registered) & set(offered)):
         names = ", ".join(repr(name) for name in clashing)
         msg = (

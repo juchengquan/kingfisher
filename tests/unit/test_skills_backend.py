@@ -29,6 +29,14 @@ class InStore:
     def files(self, name):
         return self.held[name]
 
+    @property
+    def root(self):
+        return None
+
+    @property
+    def misplaced(self):
+        return ()
+
 
 def _held(*names):
     return InStore(
@@ -50,8 +58,8 @@ def _on_disk(root, *names):
 
 
 def test_a_store_backed_repository_satisfies_the_port(tmp_path):
-    """Both do, which is the point: `files` is on the port, so a deployment's own
-    repository is not a special case anywhere downstream.
+    """Both do, which is the point: `files` is on the port, so a repository with
+    nothing on disk is not a special case anywhere downstream.
     """
     assert isinstance(_held("a"), SkillRepository)
     assert isinstance(_on_disk(tmp_path, "a"), SkillRepository)
