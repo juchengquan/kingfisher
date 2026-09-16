@@ -833,6 +833,46 @@ def test_the_documents_are_read_by_the_prose_rule():
     )
 
 
+#: The kinds whose formats `kinds.documents` is written for, which its own docstring
+#: names. Here rather than parsed out of the prose: a rule that reads the sentence it
+#: guards passes whatever the sentence says.
+SHARE_A_DOCUMENT_READER = frozenset({"agents", "subagents"})
+
+
+def test_the_shared_document_reader_is_read_by_the_kinds_it_names():
+    """`kinds.documents` says which formats it serves, and the sentence went stale.
+
+    It read "all three kinds" while a skill's frontmatter came through it, and went on
+    reading three for four commits after the reader that did that went with the upload
+    path it served -- with the paragraph below naming two, contradicting a sentence one
+    line up in the same docstring, and nothing red.
+
+    Both directions, because the stale half is the one nobody removes: a kind that
+    stops reading this leaves a sentence too generous, and a kind that starts leaves
+    one too mean.
+    """
+    def reads_it(module: Path) -> bool:
+        # Both spellings: `import kingfisher.kinds.documents` names the module, and
+        # `from kingfisher.kinds import documents` -- which is what both callers
+        # write -- names the package and takes the module as a name from it.
+        return "kingfisher.kinds.documents" in _imported_modules(module) or (
+            "documents" in _imported_names(module).get("kingfisher.kinds", frozenset())
+        )
+
+    kinds = _every(
+        [one for one in sorted((SRC / "kinds").iterdir()) if (one / "__init__.py").is_file()],
+        "kind packages",
+    )
+    reading_it = {
+        one.name for one in kinds if any(reads_it(m) for m in _modules_in(f"kinds/{one.name}"))
+    }
+
+    assert reading_it == set(SHARE_A_DOCUMENT_READER), (
+        f"{sorted(reading_it)} read kingfisher.kinds.documents, and its docstring "
+        f"names {sorted(SHARE_A_DOCUMENT_READER)} -- update whichever is behind"
+    )
+
+
 def test_no_rule_here_is_parametrized_over_nothing():
     """A directory that stops existing takes its rule down with it, silently.
 

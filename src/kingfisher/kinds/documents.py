@@ -1,8 +1,15 @@
-"""The YAML a definition's header is written in, read the same way by all three kinds.
+"""The YAML an agent or subagent definition is written in, read the same way by both.
 
 Shared rather than duplicated, which is the one exception to *kinds do not share*: a
 scalar's style is a fact about a document rather than about what any kind means, and the
 agent and subagent formats reflow a prompt identically.
+
+Named rather than counted, and the count is why. This said "all three kinds" and
+"a header", both true while a skill's frontmatter came through here, and neither
+true after the reader that did it went with the upload path it served. Nothing was
+red: the paragraph above has named the two ever since, contradicting a sentence one
+line up in the same docstring. A name a reader can grep beats a number nobody
+re-counts.
 
 Here rather than under `infrastructure/` because a kind may not name a layer. That is
 the whole of the reason -- by subject this is as much the workspace's business as the
@@ -24,12 +31,12 @@ if TYPE_CHECKING:
 LITERAL = "|"
 
 
-def decode(header: str) -> dict[str, object] | str:
-    """A header's fields, or one line saying why it could not be read."""
+def decode(text: str) -> dict[str, object] | str:
+    """A definition's fields, or one line saying why it could not be read."""
     try:
-        parsed = yaml.safe_load(header)
+        parsed = yaml.safe_load(text)
     except yaml.YAMLError as exc:
-        # One line: this ends up inside a `SkillError` or `SubagentError`
+        # One line: this ends up inside an `AgentError` or `SubagentError`
         # message, and YAML's own report spans several with a caret diagram.
         return " ".join(str(exc).split())
     if parsed is None:
