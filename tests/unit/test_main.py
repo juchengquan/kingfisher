@@ -562,3 +562,26 @@ def test_the_flag_is_offered_in_help(capsys):
     flags = {action.dest for action in parser._actions}
 
     assert "agent" in flags
+
+
+def test_a_smoke_run_reaches_its_end(cfg, tmp_path, monkeypatch):
+    """The lines only a smoke run reaches, driven without a model.
+
+    Every other test here stops at "run produced no result", because its stub turn hands
+    back nothing -- which is how `cfg.state_dir` outlived the setting it named: a smoke
+    run finished a real turn and then raised on the line after, and nothing offline ever
+    got that far.
+    """
+    from types import SimpleNamespace
+
+    driver = _driver_on(monkeypatch, cfg)
+    run_dir = tmp_path / "run"
+    run_dir.mkdir()
+    (run_dir / "report.md").write_text("# smoke\n", encoding="utf-8")
+    finished = SimpleNamespace(
+        session_id="smoke", run_dir=run_dir, log_path=tmp_path / "runlog.jsonl"
+    )
+    monkeypatch.setattr("kingfisher.stream", lambda request, **kwargs: iter(()), raising=False)
+    monkeypatch.setattr(driver, "show", lambda events, out: finished)
+
+    assert driver.main(["driver.py", "--no-checks"]) == 0

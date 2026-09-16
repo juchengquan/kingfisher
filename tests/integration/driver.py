@@ -27,7 +27,7 @@ if TYPE_CHECKING:
 # on an import that has not changed.
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent.parent))
 
-from evals.artifacts import load_result, promote_report
+from evals.artifacts import load_result
 from evals.checks import check_result
 from evals.seed import seed_sample_data, seed_sample_skill
 from evals.task import SMOKE_TASK
@@ -405,13 +405,6 @@ def main(argv: list[str]) -> int:
 
     if not is_smoke:
         return 0
-
-    # The state directory: host-side, outlives any session, and not a name
-    # the agent addresses. `workspace/derived` stopped being anywhere when
-    # `/derived` became a session directory.
-    promoted = promote_report(result.run_dir, cfg.state_dir)
-    if promoted:
-        print(f"promoted    : {promoted}")
 
     if args.no_checks:
         return 0
