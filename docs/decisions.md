@@ -602,6 +602,20 @@ it. *(2026-09-15.)*
 read as nobody in particular, and two readers never asked it: naming an agent and
 reading a session each tested for a tuple, so `["B"]` opened an agent restricted
 to `A` and was shown a session pinned to it, and `"B"` got through both.
+**One walk of the definitions, for three questions.** `audit` reports what a
+policy leaves open, `undeclared_in` returns the first definition naming a source
+id nobody declared, and a listing prints what each one says. All three began by
+asking `stated` for the same spec, so the specs -- a directory read -- were walked
+three times per listing and twice at every startup, where the comment beside it
+already claimed one walk. `access.walked` yields `(kind, name, said)` and the
+three questions consume it.
+
+Shared and not merged, which is the whole of the care here: a report that stopped
+at the first fault would be a refusal, and a refusal that carried on would be a
+report. `Kingfisher.__init__` still calls them in order -- refusals first, because
+a typo makes a line both undeclared and narrowing and reporting it as a narrowing
+explains the wrong fault. *(2026-09-16.)*
+
 `held_by` in `application/access.py` is now the only place the shape of
 `source_ids` is read -- `held_for`, the turn, naming an agent, reading a session
 and the listing all ask it -- and a rule holds `application/` to that, because a

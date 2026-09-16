@@ -284,18 +284,18 @@ def _middlewares(resolved: Definitions) -> tuple[Mapping[str, str], str | None]:
         return _NOTHING, str(exc)
 
 
-def _audiences(specs: Mapping[str, object]) -> dict[str, Stated]:
-    """What each definition of one kind says about who reaches what."""
-    found: dict[str, Stated] = {}
-    for name, spec in sorted(specs.items()):
-        # The `says_nothing` filter stays here rather than in the reader: a
-        # listing shows the definitions that restrict somebody, and every other
-        # caller of it wants what a definition says whether or not that is
-        # anything.
-        said = access.stated(spec)
-        if not said.says_nothing:
-            found[name] = said
-    return found
+def _audiences(specs: Mapping[str, object], *, kind: str) -> dict[str, Stated]:
+    """What each definition of one kind says about who reaches what.
+
+    The `says_nothing` filter is here rather than in the walk: a listing shows the
+    definitions that restrict somebody, and the other two callers want what a
+    definition says whether or not that is anything.
+    """
+    return {
+        name: said
+        for _kind, name, said in access.walked((kind, specs))
+        if not said.says_nothing
+    }
 
 
 def _access(
@@ -306,7 +306,10 @@ def _access(
     subagents: Mapping[str, object],
 ) -> tuple[dict[str, Mapping[str, Stated]], AccessReport, frozenset[str] | None, dict[str, str]]:
     """What the definitions say, what restricts nobody, and whose view this is."""
-    stated = {"agents": _audiences(agents), "subagents": _audiences(subagents)}
+    stated = {
+        "agents": _audiences(agents, kind="agent"),
+        "subagents": _audiences(subagents, kind="subagent"),
+    }
     if cfg.access is None:
         return stated, AccessReport(), None, {}
     # The same walk `Kingfisher` runs at construction, and the same functions -- which
@@ -332,12 +335,19 @@ def _reaching(
     if held is None:
         return lambda _kind, names: names
 
+    # Bound once, rather than re-tested inside the closure. The comprehension used
+    # to carry its own `held is None`, which could never be true -- this closure is
+    # only built on the branch where it is not -- but removing it left the checker
+    # with nothing to narrow the optional by, since the guard above is a statement
+    # away across a closure. A name the guard has already settled says it to both.
+    reachable = held
+
     def keep(kind: str, names: Mapping[str, str]) -> Mapping[str, str]:
         stated = audiences.get(kind, {})
         return {
             name: value
             for name, value in names.items()
-            if held is None or reaches(stated.get(name, Stated()).source_ids, held)
+            if reaches(stated.get(name, Stated()).source_ids, reachable)
         }
 
     return keep

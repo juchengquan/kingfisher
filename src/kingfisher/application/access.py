@@ -10,9 +10,9 @@ from kingfisher.domain.access import AccessError, AccessReport, _Unscoped, state
 from kingfisher.domain.capabilities import ALL
 
 if TYPE_CHECKING:
-    from collections.abc import Iterable, Mapping
+    from collections.abc import Iterable, Iterator, Mapping
 
-    from kingfisher.domain.access import SourceIds
+    from kingfisher.domain.access import SourceIds, Stated
 
 #: One kind of definition and what this deployment has of it, as the callers
 #: hold it: `("agent", {name: spec})`. A pair rather than two arguments because
@@ -38,10 +38,23 @@ def held_by(
     return vocabulary.expand(tuple(source_ids))
 
 
+def walked(*kinds: Kind) -> Iterator[tuple[str, str, Stated]]:
+    """Every definition of every kind, with what it says, in a stable order.
+
+    One walk for three questions. `audit` wants a report, `undeclared_in` wants the
+    first refusal, and a listing wants what to print -- all three began by asking
+    `stated` for the same definition, and the specs are a directory read. Shared
+    here rather than merged: a report that stopped at the first fault would be a
+    refusal, and a refusal that carried on would be a report.
+    """
+    for kind, specs in kinds:
+        for name, spec in sorted(specs.items()):
+            yield kind, name, stated(spec)
+
+
 def undeclared_in(specs: Mapping[str, object], *, kind: str, vocabulary: SourceIds) -> str | None:
     """The first definition naming a source id this deployment does not declare."""
-    for name, spec in sorted(specs.items()):
-        said = stated(spec)
+    for _kind, name, said in walked((kind, specs)):
         for where, audience in (
             (f"{kind} {name!r}", said.source_ids),
             *(
@@ -68,14 +81,12 @@ def audit(*kinds: Kind, vocabulary: SourceIds) -> AccessReport:
     """What this deployment's policy leaves open, in one pass over the files."""
     unrestricted: list[tuple[str, str]] = []
     narrowed: list[tuple[str, str]] = []
-    for kind, specs in kinds:
-        for name, spec in sorted(specs.items()):
-            said = stated(spec)
-            if said.source_ids == ALL:
-                unrestricted.append((kind, name))
-            narrowed.extend(
-                vocabulary.narrowing_in(
-                    said.entries, source_ids=said.source_ids, where=f"{kind} {name}"
-                )
+    for kind, name, said in walked(*kinds):
+        if said.source_ids == ALL:
+            unrestricted.append((kind, name))
+        narrowed.extend(
+            vocabulary.narrowing_in(
+                said.entries, source_ids=said.source_ids, where=f"{kind} {name}"
             )
+        )
     return AccessReport(unrestricted=tuple(unrestricted), narrowed=tuple(narrowed))
