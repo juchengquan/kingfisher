@@ -76,6 +76,43 @@ def sources(root: Path | None) -> tuple[tuple[str, str], ...]:
     return tuple(found)
 
 
+def listed(backend: Any, path: str) -> list[Any]:
+    """Every skill deepagents finds under one source, in its own metadata shape.
+
+    The one call to its private lister, which `test_skill_registry` pins, so an
+    upgrade that moves it breaks here and nowhere else. The error it returns beside
+    the skills is one it has already logged. Deferred, because `Definitions` holds a
+    registry and is reachable from `kingfisher`'s light exports: at module scope this
+    import would make `from kingfisher import Config` load three provider SDKs.
+    """
+    from deepagents.middleware.skills import _list_skills_with_errors  # noqa: PLC0415
+
+    found, _error = _list_skills_with_errors(backend, path)
+    return found
+
+
+async def alisted(backend: Any, path: str) -> list[Any]:
+    """`listed`, for a graph run on an event loop."""
+    from deepagents.middleware.skills import _alist_skills_with_errors  # noqa: PLC0415
+
+    found, _error = await _alist_skills_with_errors(backend, path)
+    return found
+
+
+@dataclass(frozen=True)
+class Listed:
+    """One loaded skill, as the three things read from deepagents' metadata for it.
+
+    Built where a listing arrives, so the keys of a dictionary this package does not
+    own are spelled in one function rather than wherever an entry is read.
+    """
+
+    name: str
+    #: Where its skill file is, as the listing's backend addresses it.
+    path: str
+    description: str
+
+
 #: The path a source is listed under when reading a repository directly. Not
 #: `SKILLS_ROUTE`: this reads a catalogue on its own, before any session exists
 #: and outside the backend an agent will eventually get, so there is no route to
@@ -91,7 +128,7 @@ class SkillRegistry:
     #: than by name because a name is no longer unique: two parties who never
     #: met can both ship a `lookup`, and keying by name is exactly the collapse
     #: this exists to undo.
-    offered: Mapping[str, Any]
+    offered: Mapping[str, Listed]
     unloadable: tuple[str, ...] = ()
     #: Skills deepagents filed under a name their directory does not have, as
     #: `(directory, name)`. Loaded, offered, and reachable -- under the name in the
@@ -175,21 +212,13 @@ class SkillRegistry:
     def description(self, written: str) -> str:
         """What a skill says it is for. Empty for anything this does not hold."""
         key = self.identity(written)
-        return str(self.offered.get(key, {}).get("description", "")) if key else ""
+        return self.offered[key].description if key is not None and key in self.offered else ""
 
 
 def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegistry:
     """Ask deepagents what this repository offers."""
-    # Deferred, and the architecture test is why: `Definitions` holds a registry
-    # and `Definitions` is reachable from `kingfisher`'s light exports, so a
-    # module-scope import here would make `from kingfisher import Config` load
-    # three provider SDKs. The lister is private, which is the coupling
-    # `test_skill_registry` pins -- a rename upstream fails there rather than
-    # emptying this registry in silence.
+    # Deferred for the reason `listed` gives.
     from deepagents.backends import FilesystemBackend  # noqa: PLC0415
-    from deepagents.middleware.skills import (  # noqa: PLC0415
-        _list_skills_with_errors,
-    )
 
     from kingfisher.kinds.skills.backend import skills_backend  # noqa: PLC0415
 
@@ -199,19 +228,19 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
     # lets the last win, which is the collapse this exists to undo: two parties
     # who never met can both ship a `lookup`, and being told about one of them
     # is worse than being told about neither.
-    offered: dict[str, Any] = {}
-    loaded: list[Any] = []
+    offered: dict[str, Listed] = {}
+    loaded: list[Listed] = []
     found_sources = sources(root)
     for label, path in found_sources:
-        found, _source_error = _list_skills_with_errors(backend, path)
-        loaded.extend(found)
-        for one in found:
-            offered[qualified(label, one["name"])] = one
+        for one in listed(backend, path):
+            entry = Listed(name=one["name"], path=one["path"], description=one["description"])
+            loaded.append(entry)
+            offered[qualified(label, entry.name)] = entry
 
     # A directory that looked like a skill and did not come back. deepagents says why in
     # a warning it logs; what matters here is only which ones, so a reader can go and
     # look at the file rather than wonder why a skill they wrote is not on offer.
-    kept = {one["path"] for one in loaded}
+    kept = {one.path for one in loaded}
     missing = tuple(
         sorted(
             str(directory.relative_to(root))
@@ -227,9 +256,9 @@ def read(repository: SkillRepository, *, root: Path | None = None) -> SkillRegis
     # a skill that is plainly there.
     misfiled = tuple(
         sorted(
-            (directory, one["name"])
+            (directory, one.name)
             for one in loaded
-            if (directory := PurePosixPath(one["path"]).parent.name) != one["name"]
+            if (directory := PurePosixPath(one.path).parent.name) != one.name
         )
     )
     return SkillRegistry(

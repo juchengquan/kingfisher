@@ -14,7 +14,7 @@ from kingfisher.infrastructure.harness.agent import build_agent
 from kingfisher.infrastructure.harness.narrowing import ToolAllowlist
 from kingfisher.infrastructure.harness.subagents import as_subagent, subagent_skills
 from kingfisher.kinds.agents.spec import AgentSpec
-from kingfisher.kinds.skills.registry import SkillRegistry
+from kingfisher.kinds.skills.registry import Listed, SkillRegistry
 from kingfisher.kinds.subagents import reading
 from kingfisher.kinds.subagents.spec import SubagentError
 from tests.conftest import FakeToolCallingModel, capture_build, subagents_dir
@@ -419,7 +419,12 @@ DECLARED = [case for case in NARROWING if case[0] is not None]
 
 def offering(*names: str) -> SkillRegistry:
     """A registry of skills sitting directly under the root, which is one source."""
-    return SkillRegistry(offered={f"catalogue::{name}": {"name": name} for name in names})
+    return SkillRegistry(
+        offered={
+            f"catalogue::{name}": Listed(name=name, path=f"/{name}/SKILL.md", description="")
+            for name in names
+        }
+    )
 
 
 def as_identities(selection):

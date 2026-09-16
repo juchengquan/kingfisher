@@ -110,7 +110,7 @@ def _skill_denials(activated: tuple[str, ...], registry: Any) -> list[Filesystem
     allowed = set(activated)
     return [
         FilesystemPermission(
-            operations=["read"], paths=[_denied_path(one["path"])], mode="deny"
+            operations=["read"], paths=[_denied_path(one.path)], mode="deny"
         )
         for key, one in registry.offered.items()
         if key not in allowed
