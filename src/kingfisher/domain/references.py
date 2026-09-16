@@ -8,8 +8,8 @@ from pathlib import Path, PurePosixPath, PureWindowsPath
 class UnknownReferenceError(ValueError):
     """A store has no such reference.
 
-    Part of the `FileStore` and `DefinitionStore` contract rather than each
-    adapter's own choice: a bare `FileNotFoundError` is indistinguishable from the
+    Part of the `DefinitionStore` contract rather than each adapter's own
+    choice: a bare `FileNotFoundError` is indistinguishable from the
     deployment's own disk being wrong, and would answer 500 to a caller who simply
     named a file that is not there.
     """

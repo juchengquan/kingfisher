@@ -161,22 +161,6 @@ class SessionStore(Protocol):
         ...
 
 
-@runtime_checkable
-class FileStore(Protocol):
-    """Where a request's files are fetched from, by id."""
-
-    def fetch(self, file_id: str) -> Mapping[str, bytes]:
-        """The files this reference names, keyed by path relative to it.
-
-        Raises `references.UnknownReferenceError` for a ref it cannot resolve and
-        `references.UnsafeReferenceError` for one that names somewhere it was not
-        allowed to. Part of the contract rather than each adapter's own choice: a
-        bare `FileNotFoundError` cannot be told from the deployment's own disk
-        being wrong, and would answer 500 to a caller's typo.
-        """
-        ...
-
-
 @dataclass(frozen=True)
 class CommandResult:
     """What running one command produced."""

@@ -17,9 +17,9 @@ from tests.conftest import FAKE_CATALOGUE
 
 HERE = __name__
 
-#: The setting these are about. `store_named` is generic now -- the file store
-#: passes its own -- so the name a message must carry is an argument, and a test
-#: that spelled it at every call would stop checking that the caller passes it.
+#: The setting these are about. `store_named` takes the name a message must carry
+#: as an argument, so a test that spelled it at every call would stop checking
+#: that the caller passes it.
 SETTING = "KINGFISHER_SESSION_STORE_FACTORY"
 
 

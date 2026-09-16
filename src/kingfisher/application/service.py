@@ -97,7 +97,6 @@ from kingfisher.infrastructure.session_store import (
     write_transcript,
 )
 from kingfisher.infrastructure.wiring import store_named
-from kingfisher.infrastructure.workspace.files import fetch_refs
 from kingfisher.infrastructure.workspace.layout import ensure_layout
 from kingfisher.infrastructure.workspace.permissions import protect_data
 from kingfisher.infrastructure.workspace.placement import check_placeable, place_data, place_inputs
@@ -124,7 +123,6 @@ if TYPE_CHECKING:
     from kingfisher.domain.ports import (
         CommandRunner,
         DefinitionStore,
-        FileStore,
         SessionDirs,
         SessionRoot,
         ThreadStore,
@@ -206,7 +204,6 @@ class Kingfisher(Sessions, Disposal):
         # is written here rather than left for a reader to infer from a branch.
         threads: ThreadStore | Callable[[Path], Any] | None = None,
         definitions: DefinitionStore | None = None,
-        files: FileStore | None = None,
         # Where a session's files go when the machine may not keep them. `None`
         # means the session directory is the only copy, which is what every
         # deployment has had until now and stays correct wherever the host is
@@ -308,10 +305,6 @@ class Kingfisher(Sessions, Disposal):
         # nothing to wire, and a request that supplies ids without one is a
         # configuration error worth saying out loud rather than a silent no-op.
         self.definitions: Any = definitions
-        # Beside `definitions` and for the same reason: a caller with no host
-        # paths names files by id, and only something the deployment wired can
-        # turn a name into content.
-        self.files: Any = files
         # What this deployment permits, before any request asks for anything.
         # Unrestricted by default, so a single-caller deployment is unaffected;
         # a service in front of many callers sets it, and `intersect` can only
@@ -647,15 +640,10 @@ class Kingfisher(Sessions, Disposal):
         # budget add to it and only then be refused.
         self._refuse_if_over_budget(session)
 
-        # Both halves of "a request naming something that is not there must
-        # fail before it leaves anything behind": the paths are checked by
-        # `place_data`, the ids by the store, and neither has written yet.
-        fetched = fetch_refs(request, self.files)
-
         # Before the turn exists, and before anything is destroyed: a request
         # naming a file that is not there must fail without having placed the
         # ones that were. `place_data` re-hardens `/data` on its way out.
-        placement = place_data(request.data, session.directory, contents=fetched.data)
+        placement = place_data(request.data, session.directory)
 
         # Before the agent, which discovers definitions by reading the
         # directories this writes.
@@ -697,7 +685,6 @@ class Kingfisher(Sessions, Disposal):
             graph=graph,
             unprotected=unprotected,
             placement=placement,
-            fetched_inputs=fetched.inputs,
             release=release,
             # Tools come off the assembled graph rather than a list kept
             # somewhere: the surface includes whatever the workspace defined, so
@@ -742,7 +729,7 @@ class Kingfisher(Sessions, Disposal):
         # The aggregate owns turn allocation: atomic, and a caller-supplied id wins.
         turn = session.allocate_turn(dirs, request.turn_id)
 
-        place_inputs(request.inputs, turn.input_dir, contents=admitted.fetched_inputs)
+        place_inputs(request.inputs, turn.input_dir)
 
         logger = JsonlRunLogger(
             log_path(session.directory),
@@ -760,10 +747,7 @@ class Kingfisher(Sessions, Disposal):
                 request.task,
                 turn,
                 admitted.placement.placed,
-                # Fetched inputs are inputs. The agent is told the directory
-                # exists on the same terms either way -- where a file came from
-                # is the deployment's business, not the agent's.
-                has_inputs=bool(request.inputs or admitted.fetched_inputs),
+                has_inputs=bool(request.inputs),
             ),
             session=session,
             turn=turn,

@@ -26,12 +26,6 @@ class Admitted:
     #: than raised, so they cross the boundary instead of stopping at it.
     unprotected: tuple[str, ...]
     placement: Any
-    #: Content resolved from `input_refs`, held until the turn exists.
-    #:
-    #: Fetched during admission because a ref that will not resolve must refuse
-    #: the request, and written in `_open_turn` because a turn's `input/` is not
-    #: there yet. The bytes wait in between rather than the refusal moving.
-    fetched_inputs: Any = None
     #: The saver this service opened for the turn, or None when it opened
     #: nothing -- an injected instance is the deployment's to close.
     release: Any = None

@@ -1796,6 +1796,16 @@ caller wanting turns to overlap runs `run` on threads, which should overlap as
 well since a turn is almost all waiting on the model -- reasoned, not measured.
 *(2026-09-15.)*
 
+**Taken: files passed by id go.** `Request.input_refs` and `data_refs` let a
+caller with no host paths name files for a `FileStore` the deployment wired to
+resolve -- the service's vocabulary, which is why that store's setting was the
+service's. With the service gone nothing built a request carrying one; every use
+was in the feature's own tests. The port goes with them, as do `LocalFileStore`,
+its contract kit and `Planted`, and the `contents=` path the placement writers
+kept for fetched bytes. A caller whose files are elsewhere copies them to this
+host and passes paths, which is what `kingfisher run --input` and `--data`
+already do. *(2026-09-16.)*
+
 **Transport only -- the server never interprets identity**, and lives in its own
 wheel, installed by `kingfisher[service]`. `pip install kingfisher` does not put a
 web service on disk. One request per turn, streamed, with no result persistence;
