@@ -90,6 +90,75 @@ def test_climbing_out_is_refused_with_the_rule(bridge):
     assert "/data/<name>" in answer.content
 
 
+# -- an argument that is not `path` -------------------------------------------
+#
+# Nothing says such an argument names a file, so it is not translated -- and before
+# this, it reached the tool as written. A tool calling its file `input_file` was
+# handed the host path of another session's file and returned what was in it.
+
+
+def test_a_host_path_in_any_other_argument_is_refused(bridge, session):
+    """The leak the translation did not cover, because it keys on the name."""
+    other = session.parent / "other" / "data" / "secret.txt"
+    seen: list[object] = []
+
+    answer = bridge.wrap_tool_call(a_call(input_file=str(other)), seen.append)
+
+    assert not seen, "the tool was called with another session's host path"
+    assert answer.status == "error"
+    assert "host path" in answer.content
+
+
+def test_another_session_is_refused_where_no_host_root_would_catch_it():
+    """A container puts the workspace at `/workspace`, which is not a host root. What
+    catches it there is the directory this session's siblings are in.
+    """
+    mine = WorkspaceToolPaths(frozenset({"peek"}), Path("/workspace/sessions/mine"))
+    seen: list[object] = []
+
+    answer = mine.wrap_tool_call(
+        a_call("peek", input_file="/workspace/sessions/other/data/secret.txt"), seen.append
+    )
+
+    assert not seen
+    assert answer.status == "error"
+
+
+def test_a_host_path_inside_a_list_is_refused_too(bridge):
+    """An argument may carry several files, and the first one is not the only one."""
+    seen: list[object] = []
+
+    answer = bridge.wrap_tool_call(
+        a_call(files=["notes.txt", {"source": "/etc/passwd"}]), seen.append
+    )
+
+    assert not seen
+    assert answer.status == "error"
+
+
+def test_what_a_process_reads_itself_through_is_refused(bridge):
+    """`/proc/self/environ` is this process's environment, keys and all, and it is not
+    under any root the file tools refuse.
+    """
+    for spelled in ("/proc/self/environ", "/proc"):
+        answer = bridge.wrap_tool_call(a_call(input_file=spelled), lambda r: None)
+
+        assert answer.status == "error", spelled
+
+
+def test_an_argument_that_only_looks_like_a_path_is_handed_over(bridge):
+    """The control: a URL, a route and a statement are not host paths, and a check that
+    refused every leading slash would break the tools that take them.
+    """
+    written = {
+        "url": "https://example.com/home/users/",
+        "route": "/api/v1/users",
+        "statement": "SELECT * FROM tmp",
+    }
+
+    assert handed(bridge, a_call(**written)) == written
+
+
 # -- what it leaves alone ----------------------------------------------------
 
 
@@ -198,6 +267,53 @@ def test_another_sessions_file_is_not_reachable_through_a_tool(cfg, session_dir)
     assert "exists=False" in transcript
     assert "TENANT-A-PRIVATE" not in transcript
     assert transcript.count(str(session_dir)) >= 1, "resolved under this session"
+
+
+A_TOOL_WITH_ANOTHER_NAME = '''
+"""A tool that reads a file it calls something other than `path`."""
+
+
+def peek_file(input_file: str) -> str:
+    """Read it."""
+    from pathlib import Path
+
+    return Path(input_file).read_text()
+
+
+TOOLS = [peek_file]
+'''
+
+
+def test_a_file_argument_with_another_name_cannot_read_another_session(cfg, session_dir):
+    """The leak, end to end, exactly as it was measured: `TENANT-A-PRIVATE` came back
+    through a tool whose argument was not called `path`.
+    """
+    from langchain_core.messages import AIMessage
+
+    from kingfisher.infrastructure.harness.agent import build_agent
+    from tests.conftest import FakeToolCallingModel, tools_dir
+
+    tools_dir(cfg).mkdir(parents=True, exist_ok=True)
+    (tools_dir(cfg) / "peek_file.py").write_text(A_TOOL_WITH_ANOTHER_NAME, encoding="utf-8")
+    other = session_dir.parent / "another-tenant" / "data"
+    other.mkdir(parents=True, exist_ok=True)
+    (other / "secret.txt").write_text("TENANT-A-PRIVATE", encoding="utf-8")
+
+    call = {"name": "peek_file", "args": {"input_file": str(other / "secret.txt")}, "id": "c1"}
+    agent = build_agent(
+        cfg,
+        session_dir=session_dir,
+        model=FakeToolCallingModel(
+            responses=[AIMessage(content="", tool_calls=[call]), AIMessage(content="done")]
+        ),
+    )
+    out = agent.invoke(
+        {"messages": [{"role": "user", "content": "go"}]}, config={"recursion_limit": 12}
+    )
+    transcript = "\n".join(str(getattr(m, "content", "")) for m in out["messages"])
+
+    assert "TENANT-A-PRIVATE" not in transcript
+    assert "host path" in transcript
 
 
 A_READER = '''

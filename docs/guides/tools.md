@@ -246,6 +246,26 @@ Hidden directories and `__pycache__` are not descended into. A virtualenv left
 under `tools/` would otherwise be imported, and this directory is imported
 rather than read.
 
+## A file the tool reads is an argument called `path`
+
+The model knows files by the paths the file tools take — `/data/report.csv`,
+`/derived/summary.md` — and never by where they sit on the host. Name the
+argument `path` and the tool is handed the real file inside this session: a path
+that climbs out with `..` is refused, and so is a link inside the session pointing
+out of it. Say in the docstring that it is the same virtual path the file tools
+take, because the docstring is what the model reads.
+
+**Only `path` is translated.** An argument with any other name reaches the tool as
+written, so a tool calling its file `input_file` is handed `/data/report.csv`
+literally and does not find it. One kind of string is refused in every argument: a
+host path — under `/Users/`, `/home/`, `/tmp/`, `/proc/` and the other roots a
+file tool refuses, or under the directory this session's neighbours are in --
+comes back to the model as a failed tool result instead of reaching the tool.
+
+That refusal is not a boundary, and the next section is why. A tool is ordinary
+Python, and one that opens whatever string it is handed can still be pointed
+somewhere by a relative path, or by text that does not look like a path at all.
+
 ## A tool is code, and it runs in the kingfisher process
 
 Not in the agent's sandbox, and not under the filesystem permissions. `tools/`

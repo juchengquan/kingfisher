@@ -1007,9 +1007,21 @@ because `execute` is rooted in a directory the agent can write to and a link at
 Rewriting the call rather than wrapping each tool, because tools are not alike --
 some are `BaseTool`s from `@tool`, some plain functions -- and the call is the one
 shape they share. `PATH_ARGUMENTS` is `{"path"}`, the convention this repository
-already enforces on shipped tools; a tool calling it `input_file` is missed, and
-that fails visibly on the first call rather than silently, because a name that is
-*not* translated cannot reach outside the session either.
+already enforces on shipped tools; a tool calling it `input_file` is missed, and the
+virtual path the model writes fails visibly on the first call.
+
+**Corrected: an argument with another name could reach outside the session.** This
+entry said it could not, and a host path showed otherwise: a workspace tool taking
+`input_file`, handed the real path of another session's file, returned
+`TENANT-A-PRIVATE`. Nothing translates such an argument, so it reached the tool as
+written, and a tool is Python in kingfisher's own process with nothing fencing it.
+Every other string argument of a workspace tool call is now refused when it names a
+host path -- the roots the file tools refuse, `/root/`, `/proc/`, `/sys/` and `/dev/`,
+or the directory this session's neighbours are in, which is what catches
+`/workspace/sessions/...` in a container where no host root would. Defence rather
+than a boundary: a relative path, or text a tool turns into a path, still reaches
+it. `tools.md` now says that only `path` is translated, which it had never told
+anyone writing a tool. *(2026-09-17.)*
 
 **Still open from it.** Whether a repeatedly failing tool should be taken away
 from the model rather than left to the recursion limit. Three failures of the
