@@ -82,6 +82,6 @@ step.
 
 The cost is real and is not hidden. A fresh install seeds nothing, and since a
 request must name an agent, it cannot run until definitions arrive from
-somewhere. This repository keeps a worked set in `assets_examples/` — one agent,
-skill, subagent and tool, each demonstrating a distinct feature — and `assets/`
-is where a deployment puts content it fetched from elsewhere.
+somewhere. This repository keeps a worked set in `assets_examples/` — every kind
+the formats define, each file demonstrating a distinct feature of one — and
+`assets/` is where a deployment puts content it fetched from elsewhere.
