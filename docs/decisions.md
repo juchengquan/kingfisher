@@ -1159,10 +1159,16 @@ workspace files and both are writable, but `config_from_env` runs once when
 next request. A different shape, and its own argument about who writes
 `source_ids.yaml` and when. *(2026-09-07.)*
 
-The shape is not different: the definitions are read at construction too, as the
-corrected paragraph above says, so an edit to either lands at the same next start.
-What is left to exclude these two is the argument about who writes
-`source_ids.yaml`, and that has not been had. *(2026-09-17.)*
+**Reversed: they are protected too.** The shape was not different -- the definitions
+are read at construction as well, so an edit to any of them lands at the same next
+start -- and the argument about who writes `source_ids.yaml` comes out one way: not
+the agent, since it is who may reach what, and a shell that could edit it could grant
+itself anything from the next start on. They are denied by exact `path` rather than
+`subpath`, because they sit in a workspace that has to stay writable, and by where the
+configuration reads them from, so a relocated file is covered and one that does not
+exist yet cannot be created. Only the macOS profile needed it: Landlock and bubblewrap
+grant writes inside the session and nowhere else, and `off` and `external` apply
+nothing, as before. *(2026-09-17.)*
 
 **The profile was not the agent's to edit either, and was.** The rule above
 applied one object further in than anybody had looked: `shell.sb` sat inside the
@@ -1477,8 +1483,9 @@ out only `skills/`, so `models.yaml`, `agents/`, `subagents/` and `tools/` were
 writable by the agent's shell. The rule was quoted from `confinement.resolve` --
 *"host-side configuration, and a file the agent could edit is not a boundary"* --
 though *Confining the shell* found that sentence already gone. The definition
-roots have been protected since 2026-09-07; `models.yaml` still is not, so the
-rule still holds. This is why a store as a workspace *asset* is closed
+roots have been protected since 2026-09-07 and `models.yaml` since 2026-09-17, but
+only under the fences kingfisher applies -- under `off` or `external` a workspace file
+is whatever the deployment makes it -- so the rule still holds. This is why a store as a workspace *asset* is closed
 rather than deferred: it is the middleware decision again, one object further in.
 The agent cannot reach environment variables at all -- its shell gets an
 allowlist of five plus the skills directory.

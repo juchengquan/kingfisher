@@ -204,6 +204,7 @@ def shell_confinement(cfg: Config, *, skills: Path | None = None) -> Confinement
         extra=cfg.shell_path_extra,
         skills=cfg.skills_dir if skills is None else skills,
         definitions=tuple(cfg.catalogue_roots.values()),
+        authored=tuple(cfg.authored_files.values()),
     )
 
 
@@ -217,6 +218,7 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     writable: tuple[Path, ...],
     itself: Path,
     protected: tuple[Path, ...] = (),
+    protected_files: tuple[Path, ...] = (),
 ) -> str:
     """A `sandbox-exec` profile denying the operator's home, minus what runs code.
 
@@ -296,6 +298,11 @@ def profile(  # noqa: PLR0913 -- one parameter per thing the rules name, and eac
     # allows rather than instead of them: the workspace has to stay writable, and
     # only this carve-out inside it does not.
     lines += [f"(deny file-write* (subpath {_sb(p)}))" for p in protected]
+    # And the files a deployment writes itself, by `path` for the reason the profile's
+    # own rule below gives: rename-over and unlink are `file-write*` against the name.
+    # `source_ids.yaml` is who may reach what, so a shell that could edit it could grant
+    # itself -- or the next caller -- anything, and it lands at the next start.
+    lines += [f"(deny file-write* (path {_sb(p)}))" for p in protected_files]
     # After those, because it is the rule that keeps the rest enforceable, and
     # `path` rather than `subpath` so a relocated `TMPDIR` beside it stays
     # writable. It covers more than an overwrite: append, unlink and
@@ -411,10 +418,12 @@ def _sandbox_exec(profile_path: Path) -> Callable[[str], str]:
     return wrap
 
 
-def resolve(
+def resolve(  # noqa: PLR0913 -- one keyword per kind of path the rules name, as
+    # `profile` has: directories denied by `subpath` and files by `path` are not one list
     mode: str, *, workspace: Path,
     extra: tuple[str, ...] = (), skills: Path | None = None,
     definitions: tuple[Path, ...] = (),
+    authored: tuple[Path, ...] = (),
 ) -> Confinement:
     """Choose a confinement for this deployment, writing any profile it needs."""
     if mode == BUBBLEWRAP:
@@ -467,6 +476,10 @@ def resolve(
             # by the deny rule `kingfisher.layout` declares for this route; both are
             # needed, because the shell bypasses tool permissions entirely.
             protected=protected_roots(workspace, skills, definitions),
+            # Resolved, because the profile matches real paths and a workspace under
+            # `/tmp` or `/var` is really under `/private`. A file that does not exist
+            # yet is named anyway: the shell must not be the one to create it.
+            protected_files=tuple(dict.fromkeys(Path(p).resolve() for p in authored)),
         ),
     )
     return Confinement(wrap=_sandbox_exec(path), mechanism="sandbox-exec")

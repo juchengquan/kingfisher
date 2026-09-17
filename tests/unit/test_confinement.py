@@ -657,6 +657,77 @@ def test_a_definition_root_that_does_not_exist_is_still_named(cfg, tmp_path):
     assert absent.resolve() in protected
 
 
+# -- nor are the files a deployment authors -----------------------------------
+
+
+@macos
+def test_the_shell_cannot_change_the_files_a_deployment_authors(cfg, session_dir):
+    """`models.yaml` and `source_ids.yaml` were left writable on the reasoning that an
+    edit lands at the next restart -- which is when an edited definition lands too --
+    and `source_ids.yaml` is who may reach what. Tried four ways: overwrite, replace by
+    rename, delete, and create where there was none.
+    """
+    models = cfg.authored_files["models.yaml"]
+    source_ids = cfg.authored_files["source_ids.yaml"]
+    beside = cfg.workspace / "notes.yaml"
+    for written in (models, beside):
+        written.write_text("as written\n", encoding="utf-8")
+    source_ids.unlink(missing_ok=True)
+    scratch = session_dir / "derived" / "swap"
+    backend = default_backend(cfg, session_dir)
+
+    for target in (models, beside):
+        backend.execute(f'printf x > "{target}"')
+        backend.execute(f'printf y > "{scratch}" && mv "{scratch}" "{target}"')
+    backend.execute(f'rm -f "{models}"')
+    backend.execute(f'printf "open: [everyone]" > "{source_ids}"')
+
+    assert models.read_text(encoding="utf-8") == "as written\n"
+    assert not source_ids.exists(), "the shell created the access policy"
+    # The control: the same commands against a file beside them, so a pass above is
+    # the profile refusing rather than the commands never working.
+    assert beside.read_text(encoding="utf-8") == "y"
+
+
+def test_an_authored_file_is_denied_by_its_exact_path(tmp_path):
+    """By `path`, as the profile's own rule is, so the deny names the file rather than
+    whatever directory it happens to sit in -- `models.yaml` sits in the workspace, which
+    has to stay writable.
+    """
+    workspace = tmp_path / "ws"
+    models = workspace / "config" / "models.yaml"
+
+    text = confinement.profile(
+        home=tmp_path / "home",
+        workspace=workspace,
+        readable=(),
+        writable=(workspace,),
+        itself=workspace / ".kingfisher" / "shell.sb",
+        protected_files=(models,),
+    )
+
+    assert f'(deny file-write* (path "{models}"))' in text
+    assert f'(deny file-write* (subpath "{models}"))' not in text
+
+
+@macos
+def test_a_relocated_authored_file_is_denied_where_it_was_moved_to(cfg, tmp_path):
+    """The files are named by where the configuration reads them from, not by the
+    names they have in a workspace, so an access policy kept in a subfolder is covered --
+    and named by the real path, because the profile matches real paths and a
+    configuration may spell one through a link.
+    """
+    link = tmp_path / "linked-workspace"
+    link.symlink_to(cfg.workspace)
+    moved = link / "policy" / "source_ids.yaml"
+
+    confinement.shell_confinement(replace(cfg, access_source=moved))
+    written = confinement.profile_path(cfg.workspace).read_text(encoding="utf-8")
+    real = cfg.workspace.resolve() / "policy" / "source_ids.yaml"
+
+    assert f'(deny file-write* (path "{real}"))' in written
+
+
 # -- the profile is not the agent's to edit either ------------------------
 
 
