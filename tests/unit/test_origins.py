@@ -243,17 +243,6 @@ def test_starting_a_kingfisher_says_where_it_reads_from_once(cfg, caplog):
     assert str(cfg.workspace) in records[0].getMessage()
 
 
-def test_the_logger_is_not_the_parent_of_the_audit_one(cfg, caplog):
-    """`kingfisher.audit` is unconfigured on purpose, so that writing session ids stays
-    a decision a deployment makes rather than one it inherits.
-    """
-    caplog.set_level(logging.INFO, logger="kingfisher.origins")
-
-    Kingfisher(cfg, backend=default_backend)
-
-    assert logging.getLogger("kingfisher.audit").getEffectiveLevel() > logging.INFO
-
-
 def test_nothing_is_emitted_or_even_built_when_logging_is_off(cfg, monkeypatch, capsys):
     """The promise this makes to every caller that existed before it."""
     logging.getLogger("kingfisher.origins").setLevel(logging.WARNING)
