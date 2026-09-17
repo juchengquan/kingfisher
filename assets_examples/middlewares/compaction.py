@@ -26,10 +26,9 @@ that whatever the agent in front of it was pinned to. An agent on the cheap
 model would be compacted by the expensive one, silently, and the only symptom is
 the bill.
 
-And this file could not close over anything in the first place. A `middlewares/`
-module is executed every time the repository is read, and a repository is built
-per request, so an object made at module level here is a new object on every
-turn -- which is the whole argument for the registry keeping factories.
+And this file could not close over the model either. A `middlewares/` module is
+imported once, when `Kingfisher` reads its catalogue, which is before any agent is
+built -- so there is no model yet for anything made at module level here to hold.
 
 ## `wants`
 

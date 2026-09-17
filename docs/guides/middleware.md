@@ -6,11 +6,11 @@ class goes in a dict handed to `Kingfisher`, an agent or subagent file writes
 
 The asymmetry is the design rather than a gap. A tool or a skill is read out of
 the workspace, and the workspace is a directory the agent can write to;
-middleware wraps the agent that would be doing the writing. So there is no
-`middlewares/` directory, `seed` leaves behind any definition naming middleware
-this deployment cannot build, and an upload never widens the axis — *Capabilities*
-in [`decisions.md`](../decisions.md) has the rule, and
-`assets_examples/middlewares/call_cap.py` has the long version.
+middleware wraps the agent that would be doing the writing. So a `middlewares/`
+directory is one the agent's shell is denied, `seed` leaves behind any definition
+naming middleware this deployment cannot build, and nothing a request carries
+widens the axis — *Capabilities* in [`decisions.md`](../decisions.md) has the
+rule, and `assets_examples/middlewares/call_cap.py` has the long version.
 
 This page is the deployment's half. What a definition may then write — the field,
 the long form with `settings`, what is granted rather than inherited — is
@@ -85,10 +85,11 @@ them shares the client. A zero-argument factory closing over the same object
 would work too, and costs you `settings:` — a factory has already chosen its
 values, so a definition writing one is refused.
 
-**This cannot be a workspace file**, and not by rule — by construction. A
-`middlewares/` module is executed each time the repository reads it, and a
-repository is built per request, so a client made at module level would be a new
-client on every turn. Put the object where it is made once: in the program that
+**A workspace file can make one of its own, and cannot share yours.** A
+`middlewares/` module is imported once, when `Kingfisher` reads its catalogue, so
+a client made at module level there is made once too. What it cannot reach is an
+object your program already holds — the connection pool, the metrics handle the
+rest of the process writes to. Put that where it is made: in the program that
 constructs `Kingfisher`.
 
 **And it is the wrong answer for anything this build decides.** A client is the
@@ -197,7 +198,7 @@ registry is not going away — a middleware closing over a live object, a
 connection or a metrics client, cannot be a file in a directory.
 
 **A workspace middleware is not the caller's.** A definition still only names,
-an upload still cannot widen `middlewares`, and the file is put there by whoever
+nothing a request carries can widen `middlewares`, and the file is put there by whoever
 administers the workspace. What makes this safe at all is that the definition
 roots are denied to the agent's shell — `decisions.md`, under *Confining the
 shell*. Before that, a `middlewares/` directory would have been a cap the capped

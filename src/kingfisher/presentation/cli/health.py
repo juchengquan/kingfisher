@@ -527,7 +527,7 @@ def _definitions(cfg: Config, found: Inventory) -> Iterator[Check]:
             f"definition {name!r}",
             "fail",
             why,
-            "set the credential it needs, or bind its alias to a model you can run",
+            "set the credential it needs, or name a model you can run",
         )
 
 

@@ -81,7 +81,7 @@ def indistinct_delegates(
         try:
             model = model_for(spec, override=wanted.get(name))
         except ConfigError:
-            # An unbound alias, or a model this deployment cannot run. The build
+            # A model this deployment cannot run. The build
             # refuses it with the message worth reading; reporting is not
             # refusing, and raising a second copy of that refusal from here
             # would put it in front of the caller twice, worded for the wrong

@@ -139,7 +139,7 @@ class Route:
     path: str
     #: The scope whose deny rule covers this path, or `None` where the agent may
     #: write. Several routes share one scope on purpose: `/skills/**` covers the
-    #: catalogue, uploads and every bundle, and one rule per mount would make the
+    #: catalogue and every bundle, and one rule per mount would make the
     #: rule count depend on how many bundles a catalogue happens to have.
     deny_write_under: str | None = None
     #: The scope whose *read* deny covers this path, for the one route that is
@@ -206,8 +206,8 @@ ROUTES: tuple[Route, ...] = (
 def denied_scopes() -> tuple[str, ...]:
     """Every scope a write is refused under, once each, in a stable order.
 
-    Deduplicated because `/skills/**` covers four routes and more when a catalogue
-    ships bundles. Sorted so the rules a deployment gets do not depend on the
+    Deduplicated because `/skills/**` covers the catalogue's route and one more for
+    every bundle a catalogue ships. Sorted so the rules a deployment gets do not depend on the
     order this table happens to be written in.
     """
     return tuple(sorted({r.deny_write_under for r in ROUTES if r.deny_write_under}))

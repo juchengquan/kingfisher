@@ -17,9 +17,8 @@ middleware, 20 deny rules and 2 subagents predicted 20.8ms and measured 21.6ms.
 Re-measured 2026-09-03. Construction is CPU-bound Python and does not parallelise --
 about 100 builds a second per process, worker threads slightly worse -- so the
 ceiling is roughly 150 concurrent turns, or 34 if every one activates eight
-subagents. Above that, a cache keyed on session *and* capabilities *and* a
-fingerprint of the definitions is the thing to reach for; the fingerprint because
-uploads change what a session offers between turns.
+subagents. Above that, a cache keyed on capabilities *and* a fingerprint of the
+definitions is the thing to reach for.
 """
 
 from __future__ import annotations
