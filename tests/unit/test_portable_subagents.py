@@ -398,3 +398,20 @@ def test_carrying_is_read_off_the_backing_rather_than_the_file_extension(cfg):
 
     assert found.bundled_tools["surveyor"] == ("probe",)
     assert found.carried_bundles == ()
+
+
+def test_the_helper_refusal_points_at_a_key_that_exists():
+    """The advice sends a reader to `build`, and prose cannot be renamed by a
+    refactor that renames the key.
+
+    It guards staleness rather than wrongness -- no test catches advice that is
+    merely bad, which is what this message used to be: it said to fold the step into
+    the prompt, in the one case where a prompt cannot help. What it does catch is the
+    remedy quietly ceasing to exist.
+    """
+    from kingfisher.kinds.subagents.reading import DECLARED
+
+    said = NOT_PORTABLE["subagents"]
+    named = [key for key in DECLARED if f"'{key}'" in said]
+
+    assert named == ["build"]

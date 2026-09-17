@@ -191,8 +191,9 @@ NOT_PORTABLE: Mapping[str, str] = MappingProxyType(
         ),
         "subagents": (
             "a helper has to be a catalogue entry, and an imported delegate is "
-            "atomic -- what it owns reaches it and nothing else reaches that. Fold "
-            "the step into this one's prompt"
+            "atomic -- what it owns reaches it and nothing else reaches that. Ship "
+            "the helper as a delegate of its own for an agent to grant beside this "
+            "one, or write 'build' and compose the graph yourself"
         ),
         "middlewares": (
             "it selects code the deployment wrote and registered, which is neither "
