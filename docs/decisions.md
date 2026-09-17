@@ -415,6 +415,37 @@ objects on the spec for folder bundles too would have made reading the catalogue
 import every bundle's Python, which `kingfisher list` deliberately avoids by
 skipping `warm`. *(2026-09-16.)*
 
+**Considered and not taken: `own_subagents`, private nested helpers.** The key was
+reserved when `subagents:` was refused, so that a portable definition wanting a
+helper could get one later without any file changing meaning. Costed on 2026-09-17
+and not built.
+
+The case for it is one thing, because the other two reasons to delegate are already
+unavailable to a portable definition: it cannot give a helper a different tool
+surface, since its carried bundle is one set with nothing to split it between, and
+it cannot give one a different model, since `model` is refused as unportable. What
+is left is context isolation -- a delegate burning its own context and handing back
+an answer -- and `build` already answers that. A compiled entry composes whatever
+graph it likes and closes over its own tools.
+
+The cost was not small either. Nested specs inside specs means recursion in the
+reader; a cycle check over a shape where `entry["own_subagents"] = [entry]` is
+constructible in Python; a compilation memo keyed on `(name, nested, id(inherited))`
+that two packages each shipping a private `checker` would collide in; and decisions
+about whether a request may narrow a private helper away, and how `list` shows one.
+
+So the refusal stays and the key stays reserved, and what changed instead was the
+advice. It used to say *fold the step into this one's prompt*, which is wrong in the
+one case somebody would be reading it: a prompt cannot buy a fresh context, which is
+the whole reason to want a helper. It now names the two real answers -- ship the
+helper as a delegate of its own, or write `build` -- and `formats.md` says what each
+costs. `test_the_helper_refusal_points_at_a_key_that_exists` holds the advice to the
+format, so a renamed `build` cannot leave it pointing at nothing.
+
+Not measured, and said so plainly: nobody has hit the refusal yet. Build it when
+somebody does, and their case will say which of the decisions above to take.
+*(2026-09-17.)*
+
 **Reversed: definitions as separate pip packages.** Assets were to leave the
 repository entirely, become distributions of their own, and be found through
 entry points that kingfisher named none of. Built in full, then taken back out.

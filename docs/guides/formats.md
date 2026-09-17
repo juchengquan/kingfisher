@@ -833,6 +833,31 @@ withholds it. A package cannot grant itself a shell.
 
 `kingfisher seed` ships `timestamps/` as a worked example.
 
+#### When it wants a helper of its own
+
+`subagents:` is refused here, so a portable definition cannot delegate to another.
+There are two ways to get what a helper would have given you, and they cost
+different things.
+
+**Ship the helper as a delegate of its own**, in the same `SUBAGENTS` list, and let
+an agent grant the two side by side. Each keeps the harness it would have had —
+skills, the tool narrowing, the path translation. What it costs is the package's
+encapsulation: the deployment has to know to grant both, and the order they work in
+lives in somebody else's agent prompt rather than with the definitions.
+
+**Or write `build`** and compose the graph yourself, delegating inside it. That keeps
+the whole procedure in the package and is the right shape for one, because internal
+delegation is a graph-shaped thing. What it costs is everything in *A subagent that
+builds itself* above: a compiled graph is run as given, so it is mounted no skills
+index and wrapped in none of kingfisher's middleware, and it reads what it needs
+itself.
+
+Folding the step into the prompt is **not** a third option, whatever it looks like.
+The reason to delegate is that the delegate burns its own context and hands back an
+answer; a prompt cannot buy you a fresh context, which is the one thing you were
+after.
+
+
 ---
 
 ### Tools and skills of its own — `/subagents/<name>/`
