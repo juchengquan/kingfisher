@@ -387,6 +387,65 @@ def test_a_skill_out_of_reach_is_not_advertised_to_the_model(with_skills, monkey
     assert any(name.endswith("::review") for name in advertised)
 
 
+def skills_withheld(kf, held: tuple[str, ...], granted: tuple[str, ...]) -> tuple[str, ...]:
+    """The skills a caller holding `held` is told a request granting `granted` left out."""
+    from kingfisher.application.reporting import withheld_by_kind
+
+    grants = replace(kf._effective_grants(held), skills=granted)
+    graph = kf._graph_for(
+        Request(task="t", agent="skilled"),
+        session_at(kf, "withheld-" + "-".join(held)),
+        capabilities=grants,
+        checkpointer=None,
+        source_ids=held,
+    )
+    report = withheld_by_kind(
+        grants,
+        kf.cfg,
+        graph,
+        kf.catalogue,
+        agent=kf.agent_named("skilled", source_ids=held),
+        held=kf.held_for(held),
+    )
+    return dict(report).get("skill", ())
+
+
+def test_a_skill_out_of_reach_is_not_reported_as_withheld(with_skills):
+    """The skills row went unfiltered after skills gained an audience, so a caller who
+    could not reach `audit` was told a run had withheld it -- naming the one skill their
+    source ids exist to hide.
+    """
+    kf = Kingfisher(with_skills, backend=default_backend)
+
+    assert "audit" not in skills_withheld(kf, ("B",), ("review",))
+
+
+def test_a_skill_in_reach_is_still_reported_when_the_request_left_it_out(with_skills):
+    """The control, from the same caller: `B` cannot reach `audit` but can reach
+    `review`, so a request granting neither is told about `review` and only that. Asked
+    of a caller with something hidden, because for one who reaches everything the filter
+    never runs, and a report that hid every skill would pass.
+    """
+    kf = Kingfisher(with_skills, backend=default_backend)
+
+    assert skills_withheld(kf, ("B",), ()) == ("review",)
+
+
+def test_a_skill_audience_written_qualified_hides_the_bare_name_too(with_skills):
+    """The agent file may spell a skill `catalogue::audit` while the listing says `audit`.
+    Compared as written, the audience would hide nothing.
+    """
+    agent = with_skills.catalogue_roots["agents"] / "skilled.yaml"
+    agent.write_text(
+        agent.read_text(encoding="utf-8").replace("- name: audit", "- name: catalogue::audit"),
+        encoding="utf-8",
+    )
+    kf = Kingfisher(with_skills, backend=default_backend)
+
+    assert "audit" not in skills_withheld(kf, ("B",), ("review",))
+    assert "audit" in skills_withheld(kf, ("A",), ("review",))
+
+
 def test_a_caller_the_audience_admits_is_told_about_both(with_skills, monkeypatch):
     """So the assertion above is not passing because nothing was advertised."""
     captured = capture_build(monkeypatch)

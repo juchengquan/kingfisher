@@ -9,6 +9,7 @@ from kingfisher.domain.capabilities import Capabilities, Selection, withheld
 from kingfisher.domain.result import RunEvent
 from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.harness.activation import (
+    activatable_skills,
     available_skills,
     defined_subagents,
 )
@@ -26,6 +27,11 @@ if TYPE_CHECKING:
 def _named(selection: Selection) -> set[str]:
     """A selection as a set of names, with the two ends read as empty."""
     return set(selection) if isinstance(selection, tuple) else set()
+
+
+def _as_written(name: str) -> str | None:
+    """A name that has one spelling, compared as it stands."""
+    return name
 
 
 def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
@@ -56,6 +62,11 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
     """
     default = Capabilities()
     workspace = tuple(workspace_tool_names(cfg, catalogue=catalogue))
+    # A skill may be written bare or as `source::name`, and the agent file and the
+    # registry need not have chosen the same one -- so skills are compared by the one
+    # skill each spelling means, or an audience written `catalogue::audit` would hide
+    # nothing from a listing that says `audit`.
+    spelling = {"skills": activatable_skills(cfg, catalogue=catalogue).identity}
 
     # What this agent would have held for *someone*, less what it holds for
     # this caller: exactly the names source-id narrowing took away, per field.
@@ -84,7 +95,9 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
         """
         if kind is None or not (lost := denied.get(kind)):
             return names
-        return tuple(name for name in names if name not in lost)
+        same = spelling.get(kind, _as_written)
+        gone = {same(name) for name in lost} - {None}
+        return tuple(name for name in names if same(name) not in gone)
 
     offered = (
         # Built-ins and workspace tools are granted apart, so they are reported
@@ -98,7 +111,7 @@ def withheld_by_kind(  # noqa: PLR0913 -- four of these are the four places
             n for n in registered_tools(graph) or () if n not in set(workspace)
         )),
         ("tool", "tools", "tools", lambda: workspace),
-        ("skill", "skills", None, lambda: available_skills(cfg, catalogue=catalogue)),
+        ("skill", "skills", "skills", lambda: available_skills(cfg, catalogue=catalogue)),
         (
             "subagent",
             "subagents",
