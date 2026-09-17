@@ -503,40 +503,11 @@ def test_the_agent_is_built_from_a_supplied_repository(cfg, session_dir):
     assert defined["ghost"].system_prompt == "You are supplied."
 
 
-def test_a_skills_store_with_no_directory_is_mounted_from_what_it_holds(cfg, session_dir):
-    """A repository that can hand over bytes is mountable whatever backs it."""
-    from kingfisher.layout import SKILLS_ROUTE
-
-    @dataclass(frozen=True)
-    class Nowhere:
-        @property
-        def names(self):
-            return ("imaginary",)
-
-        def files(self, name):
-            if name != "imaginary":
-                raise KeyError(name)
-            return {"SKILL.md": "---\nname: imaginary\ndescription: d\n---\n\nbody\n"}
-
-        @property
-        def root(self):
-            return None
-
-        @property
-        def misplaced(self):
-            return ()
-
-    catalogue = replace(Definitions.from_config(cfg), skills=Nowhere())
-
-    backend = default_backend(cfg, session_dir, catalogue=catalogue)
-
-    assert "body" in str(backend.read(f"{SKILLS_ROUTE}imaginary/SKILL.md"))
-
-
 def test_the_other_two_kinds_need_no_directory_at_all(cfg, session_dir):
-    """The refusal above is about skills specifically, and it would be a bad outcome if
-    it quietly generalised: subagents are documents kingfisher parses and tools are
-    modules it imports, so neither reaches the agent through a route.
+    """Skills need a directory, because deepagents reads them off one and the shell runs
+    their scripts from it. That is about skills specifically, and it would be a bad
+    outcome if it quietly generalised: subagents are documents kingfisher parses and
+    tools are modules it imports, so neither reaches the agent through a route.
     """
     catalogue = replace(
         Definitions.from_config(cfg), subagents=InMemorySubagents({"x": _spec("x")})

@@ -16,9 +16,8 @@ from langchain_core.messages import ToolMessage
 from kingfisher.config import Config, ConfigError
 from kingfisher.domain.ports import CommandRunner
 from kingfisher.domain.references import UnsafeReferenceError, within
-from kingfisher.infrastructure.catalogue import Definitions, catalogue_root
+from kingfisher.infrastructure.catalogue import Definitions
 from kingfisher.infrastructure.sandbox import confinement
-from kingfisher.kinds.skills.backend import skills_backend
 from kingfisher.kinds.subagents.spec import SubagentError
 from kingfisher.layout import (
     AGENT_HOME,
@@ -70,16 +69,7 @@ def shell_env(
         "LC_ALL": "en_US.UTF-8",
         "TMPDIR": str(session_dir / AGENT_TMP),
     }
-    # Only when there is a directory to name. A catalogue held in a store is
-    # readable by the file tools -- `kinds.skills.backend` mounts it -- but a skill's
-    # *scripts* are run by the shell, and a store has no path for the shell to
-    # reach. Setting this to something that is not there would turn "this
-    # deployment cannot run skill scripts" into `no such file or directory` on
-    # a path the operator never configured. Absent, `sh "$KINGFISHER_SKILLS/x"`
-    # fails immediately and says the variable is unset, which is the truth.
-    root = catalogue_root((catalogue or Definitions.from_config(cfg)).skills)
-    if root is not None:
-        env["KINGFISHER_SKILLS"] = str(root)
+    env["KINGFISHER_SKILLS"] = str((catalogue or Definitions.from_config(cfg)).skills.root)
     return env
 
 
@@ -391,21 +381,14 @@ def default_backend(
     adjusting what this built reads `default` and `routes` off it, and the protocol
     carries neither.
     """
-    skills = (catalogue or Definitions.from_config(cfg)).skills
-    # A directory on this host stays a directory: cheaper than copying every
-    # skill into a store, and the only shape whose skills can also be *run*,
-    # since a skill's scripts are executed by the shell against
-    # `$KINGFISHER_SKILLS` and a store has no path for the shell to reach.
-    # Anything else is mounted from what the repository can hand over.
-    skills_dir = catalogue_root(skills)
+    skills_dir = (catalogue or Definitions.from_config(cfg)).skills.root
 
     _require_layout(session_dir)
     # `FilesystemBackend` wants the root to exist. A *supplied* catalogue was
     # already refused by `resolve_definitions` if it did not, so this only ever
     # creates a derived one -- and stays here for the callers that build a
     # backend directly, without a service to have resolved anything for them.
-    if skills_dir is not None:
-        skills_dir.mkdir(parents=True, exist_ok=True)
+    skills_dir.mkdir(parents=True, exist_ok=True)
 
     confined = confinement.shell_confinement(cfg, skills=skills_dir)
     env = shell_env(cfg, session_dir, catalogue=catalogue)
@@ -433,11 +416,7 @@ def default_backend(
     # to the default backend and quietly ignores its own deny rule.
     backing = {
         DATA_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / DATA)),
-        SKILLS_ROUTE: lambda: (
-            FilesystemBackend(root_dir=str(skills_dir))
-            if skills_dir is not None
-            else skills_backend(skills)
-        ),
+        SKILLS_ROUTE: lambda: FilesystemBackend(root_dir=str(skills_dir)),
         MEMORY_ROUTE: lambda: FilesystemBackend(root_dir=str(session_dir / MEMORY)),
         # Mounted so it can be refused. Every operation through it is denied by
         # `read_only_permissions`, and a rule is only expressible against a path

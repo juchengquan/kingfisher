@@ -954,7 +954,7 @@ def test_the_domain_may_name_a_spec_but_not_a_catalogue():
     assert _is_asset_spec("kingfisher.kinds.tools.spec")
     assert _is_asset_spec("kingfisher.kinds.skills.spec")
     assert not _is_asset_spec("kingfisher.kinds.tools.catalogue"), "the disk is not free"
-    assert not _is_asset_spec("kingfisher.kinds.skills.backend"), "the runtime is not free"
+    assert not _is_asset_spec("kingfisher.kinds.skills.registry"), "the runtime is not free"
     assert not _is_asset_spec("kingfisher.application.service")
     assert not _is_asset_spec("kingfisher.kinds.tools.spec.inner")
     assert not _is_asset_spec("kingfisher.application.spec"), "only a kind has a spec"
@@ -993,10 +993,10 @@ THIRD_PARTY: dict[str, frozenset[str]] = {
     # never sees it.
     "infrastructure": frozenset({"sandlock", "yaml"}),
     # Registering skills means handing them to the runtime that reads them: `registry`
-    # asks deepagents which skills an agent will actually have, and `backend` mounts the
-    # directory it reads them from. Neither can be done from outside, and inverting them
-    # behind a port would put one implementation behind an interface derived from it.
-    "kinds/skills": frozenset({"deepagents", "langgraph"}),
+    # asks deepagents which skills an agent will actually have. That cannot be done from
+    # outside, and inverting it behind a port would put one implementation behind an
+    # interface derived from it.
+    "kinds/skills": frozenset({"deepagents"}),
     # Nothing, since the route to the runtime moved out: reading a tool roster off a
     # compiled langgraph object is `infrastructure.harness.tools` now.
     "kinds/tools": frozenset(),
@@ -1092,9 +1092,9 @@ def test_a_subpackage_is_judged_by_its_own_area():
 
     assert _area_of(SRC / "infrastructure" / "harness" / "agent.py") == "infrastructure/harness"
     assert _area_of(SRC / "domain" / "capabilities.py") == "domain"
-    # A kind's module is its own area, which is what lets `kinds/skills/backend.py`
+    # A kind's module is its own area, which is what lets `kinds/skills/registry.py`
     # name the runtime without `domain/` or `kinds/` inheriting the permission.
-    assert _area_of(SRC / "kinds" / "skills" / "backend.py") == "kinds/skills"
+    assert _area_of(SRC / "kinds" / "skills" / "registry.py") == "kinds/skills"
     # And the folder over them is an area of its own, so a kind that arrives
     # without an entry is judged by `kinds` -- which grants nothing -- rather than
     # by the longest prefix happening to be the package root.
@@ -2060,9 +2060,6 @@ SDK_LOADING: frozenset[str] = frozenset({
     "kingfisher.application.run",
     "kingfisher.application.service",
     "kingfisher.application.turn",
-    # The one outside both, and the whole of why the swap boundary is two areas rather
-    # than one: registering skills means handing them to the runtime that reads them.
-    "kingfisher.kinds.skills.backend",
 })
 
 
@@ -2102,12 +2099,12 @@ def test_only_the_named_modules_load_a_provider_sdk():
     )
 
 
-#: One module from each side of that rule, imported for real below. `kinds.skills.backend`
-#: is the only entry outside `harness/` and `application/`, and the registry beside it
-#: is what has to stay clear -- it is the half of skills that does not touch deepagents
-#: until one of its functions is called, and it defers those imports to say so.
+#: One module from each side of that rule, imported for real below. The skill registry is
+#: the negative that matters: it is the one kind module that names the runtime, and it
+#: touches deepagents only once one of its functions is called, deferring those imports
+#: to say so -- while the index that narrows skills imports it at the top.
 SDK_WITNESSES = {
-    "kingfisher.kinds.skills.backend": True,
+    "kingfisher.infrastructure.harness.narrowing": True,
     "kingfisher.kinds.skills.registry": False,
 }
 

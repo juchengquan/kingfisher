@@ -5,10 +5,6 @@ from __future__ import annotations
 from dataclasses import dataclass
 from functools import cached_property
 from pathlib import Path
-from typing import TYPE_CHECKING
-
-if TYPE_CHECKING:
-    from collections.abc import Mapping
 
 from kingfisher.kinds.skills.spec import FILENAME
 
@@ -51,20 +47,6 @@ class LocalSkillRepository:
         if not directory.is_dir():
             return ()
         return tuple(sorted(p.name for p in directory.iterdir() if (p / FILENAME).is_file()))
-
-    def files(self, name: str) -> Mapping[str, str]:
-        """Every file this skill ships, keyed by path relative to the skill."""
-        directory = Path(self.root) / name
-        if not (directory / FILENAME).is_file():
-            msg = f"no skill named {name!r} in {self.root}"
-            raise KeyError(msg)
-        # `replace` rather than strict: see the port. Decoded here, once, so
-        # the mount does not have to know what a skill is made of.
-        return {
-            str(path.relative_to(directory)): path.read_text(encoding="utf-8", errors="replace")
-            for path in sorted(directory.rglob("*"))
-            if path.is_file()
-        }
 
     @cached_property
     def misplaced(self) -> tuple[str, ...]:

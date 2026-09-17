@@ -292,8 +292,19 @@ and `test_nothing_reads_a_repository_member_with_a_default` holds it. It exempts
 read by name, because it is not of a repository: a `SessionStore`'s `root`, which is
 a port a deployment does implement.
 
-Left as it was: skills can still be mounted from a repository with no directory,
-through `files`, and nothing in production does that any more. *(2026-09-16.)*
+Left as it was, and taken out the next day: skills could still be mounted from a
+repository with no directory, through `files`, and nothing in production did that
+any more. *(2026-09-16.)*
+
+**Removed with it: skills mounted from a store.** `kinds.skills` could fill an
+in-memory store from any repository's `files` and mount it read-only, so a skill
+catalogue need not be a directory. Once the repositories were internal, the only
+repositories with no directory were two test fakes. So the store module, `files` on
+the port and the local repository, and the branches for a catalogue with no
+directory are gone, and `SkillRepository` declares `root` as a `Path`. The shell is
+always told `$KINGFISHER_SKILLS`, since there is always a directory to name.
+`kinds/skills` imports `deepagents` alone now, deferred in the registry, and no kind
+module loads a provider SDK at import. *(2026-09-17.)*
 
 ## Agents and delegation
 
@@ -2151,9 +2162,10 @@ one that lists it.
 **What it buys, stated so it can be checked.** The swap boundary is two areas rather
 than four: `infrastructure/harness/` and `kinds/skills`, plus `kinds/middlewares` for
 one `isinstance`. `kinds.subagents` and `kinds.tools` grant nothing at all now, and
-every kind import is 5-6ms and 65 modules. `kinds.skills.backend` is the one kind
-module that still reaches the runtime, and *the swap boundary* entry above is where
-the argument for leaving it there lives.
+every kind import is 5-6ms and 65 modules. The skills store mount was then the one
+kind module that still reached the runtime at import, and *the swap boundary* entry
+above is where the argument for leaving it there lived; it has since been removed,
+under *The catalogue*.
 
 ## Layering
 
@@ -2242,7 +2254,7 @@ for workspace seeding -- so it is not a kinds file, and *"Two modules came up a
 directory, and an import cycle is why"* is why moving it again would need its own
 argument. The cycle that entry records cannot recur here: `kinds/__init__` imports
 nothing, which is also what keeps `kinds.skills` at 6ms rather than the 1,033ms
-a re-export reaching `kinds.skills.backend` would cost every kind import.
+a re-export reaching a module that imports deepagents would cost every kind import.
 
 **`THIRD_PARTY` gained an entry rather than losing four.** Collapsing the five kinds
 into one `kinds` key would hand `kinds/agents` -- the only kind whose set is empty,
